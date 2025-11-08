@@ -1,363 +1,364 @@
 # ETH/BTC Trading Bot
 
-A focused trading bot that connects to Coinbase and implements an automated DCA (Dollar Cost Averaging) strategy for ETH/BTC trading based on MACD signals.
+A sophisticated automated trading bot for ETH/BTC on Coinbase with MACD-based DCA strategy, TradingView-style charts, and comprehensive position management.
 
-## Features
+## ✨ Key Features
 
-- **Automated MACD-based Trading**: Monitors ETH/BTC price and executes trades based on MACD crossover signals
-- **DCA Strategy**: Dollar cost averages into positions when MACD crosses up before selling
-- **Profit Protection**: Only sells when minimum profit threshold is met (default 1%)
-- **Position Management**: Track positions with detailed trade history
-- **Real-time Dashboard**: Monitor account value, positions, and market data
-- **Configurable Parameters**: Adjust trading parameters, MACD settings, and risk limits
+### Trading & Strategy
+- **MACD-Based Trading**: Automated buy/sell signals using MACD crossovers (works above AND below zero baseline)
+- **DCA Strategy**: Dollar Cost Averaging into positions with configurable parameters
+- **Profit Protection**: Minimum profit threshold ensures profitable exits (default 1%)
+- **Position Limits**: Max BTC allocation per position (default 25% of balance)
+- **Power Loss Recovery**: Automatic position recovery from database after restart
+
+### Charts & Visualization
+- **TradingView-Style Charts**: Professional candlestick charts with lightweight-charts library
+- **Multiple Timeframes**: 1m, 5m, 15m, 30m, 1h, 2h, 6h, 1D intervals
+- **Volume Indicator**: Toggle volume bars on/off
+- **MACD Indicator**: Separate panel with MACD line, signal line, and histogram
+- **Real-time Updates**: Live price and candle data from Coinbase
+
+### Management & Control
+- **GUI Configuration**: Manage API keys and all settings through web interface
+- **Test Connection**: Verify Coinbase credentials before saving
 - **Manual Controls**: Pause bot, cancel positions, or force close at market price
-- **USD Tracking**: Track profits in both BTC and USD
+- **Position Tracking**: Track profits in both BTC and USD
+- **Trade History**: Complete record of all buys and sells
 
-## Architecture
+### Technical
+- **Persistence**: SQLite database survives restarts and power outages
+- **Real-time Dashboard**: Monitor account value, positions, and market data
+- **Management Script**: Simple `bot.sh` for start/stop/restart/status/logs
+- **Production Ready**: Includes nginx config and systemd service files
 
-- **Backend**: Python FastAPI with async SQLite database
-- **Frontend**: React + TypeScript with Recharts for visualization
+## 🏗️ Architecture
+
+- **Backend**: Python 3.13 + FastAPI + SQLAlchemy (async) + SQLite
+- **Frontend**: React 18 + TypeScript + Vite + TanStack Query + Lightweight Charts
 - **Exchange**: Coinbase Advanced Trade API
-- **Indicators**: Custom MACD implementation with pandas
+- **Deployment**: uvicorn + nginx + systemd
 
-## Prerequisites
+## 📋 Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- Coinbase account with API credentials
-- BTC and/or ETH in your Coinbase account
+- **Python 3.13+**
+- **Node.js 20+** and npm
+- **Coinbase account** with API credentials
+- **BTC and/or ETH** in your Coinbase account
 
-## Setup
+## 🚀 Quick Start
 
-### 1. Get Coinbase API Credentials
-
-1. Go to [Coinbase Advanced Trade](https://www.coinbase.com/settings/api)
-2. Create a new API key with permissions for:
-   - View accounts
-   - Trade
-3. Save your API Key and API Secret securely
-
-### 2. Backend Setup
+### 1. Clone and Install
 
 ```bash
+# Backend
 cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Create .env file
-cp .env.example .env
-
-# Edit .env and add your Coinbase credentials
-nano .env
-```
-
-Update `.env` with your values:
-```env
-COINBASE_API_KEY=your_api_key_here
-COINBASE_API_SECRET=your_api_secret_here
-
-# Optional: Adjust trading parameters
-INITIAL_BTC_PERCENTAGE=5.0
-DCA_PERCENTAGE=3.0
-MAX_BTC_USAGE_PERCENTAGE=25.0
-MIN_PROFIT_PERCENTAGE=1.0
-```
-
-### 3. Frontend Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Build for production
-npm run build
-```
-
-### 4. Run Locally
-
-**Terminal 1 - Backend:**
-```bash
-cd backend
-source venv/bin/activate
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Terminal 2 - Frontend (development):**
-```bash
-cd frontend
-npm run dev
-```
-
-Access the app at: `http://localhost:5173`
-
-## Deployment to EC2
-
-### 1. Launch EC2 Instance
-
-1. Launch Ubuntu 22.04 LTS instance (t3.small or larger recommended)
-2. Configure security group to allow:
-   - SSH (port 22) from your IP
-   - HTTP (port 80) - optional
-   - HTTPS (port 443) - optional
-
-### 2. Initial Server Setup
-
-```bash
-# SSH into your instance
-ssh -i your-key.pem ubuntu@your-ec2-ip
-
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install Python
-sudo apt install python3.11 python3.11-venv python3-pip -y
-
-# Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Install nginx (for serving frontend)
-sudo apt install nginx -y
-```
-
-### 3. Deploy Application
-
-```bash
-# Clone or upload your code
-git clone <your-repo-url>
-# OR use scp to upload:
-# scp -i your-key.pem -r . ubuntu@your-ec2-ip:~/trading-bot
-
-cd trading-bot
-
-# Backend setup
-cd backend
-python3.11 -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Create .env with your Coinbase credentials
-cp .env.example .env
-nano .env
-
-# Frontend setup
+# Frontend
 cd ../frontend
 npm install
-npm run build
 
-# Copy built frontend to nginx
-sudo cp -r dist/* /var/www/html/
+# Return to project root
+cd ..
 ```
 
-### 4. Setup Systemd Service
+### 2. Get Coinbase API Credentials
 
-Create `/etc/systemd/system/trading-bot.service`:
+1. Go to https://www.coinbase.com/settings/api
+2. Create a new API key with these permissions:
+   - **View**: Read account balances and transaction history
+   - **Trade**: Place buy and sell orders for ETH/BTC
+3. Save your API Key and API Secret
+
+### 3. Start the Bot
 
 ```bash
-sudo nano /etc/systemd/system/trading-bot.service
+# Start both backend and frontend
+./bot.sh start
 ```
 
-```ini
-[Unit]
-Description=ETH/BTC Trading Bot API
-After=network.target
+### 4. Configure via Web UI
 
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/trading-bot/backend
-Environment="PATH=/home/ubuntu/trading-bot/backend/venv/bin"
-ExecStart=/home/ubuntu/trading-bot/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=10
+1. Open http://localhost:5173 in your browser
+2. Go to **Settings**
+3. Enter your Coinbase API Key and Secret
+4. Click **Test Connection** to verify
+5. Click **Save Settings**
 
-[Install]
-WantedBy=multi-user.target
-```
+### 5. Start Trading
+
+1. Go to **Dashboard**
+2. Review the TradingView-style chart
+3. Adjust timeframe and indicators as desired
+4. Click **Start Monitor** to begin automated trading
+
+## 🎮 Using the Bot
+
+### Management Script
 
 ```bash
-# Start and enable service
-sudo systemctl daemon-reload
-sudo systemctl start trading-bot
-sudo systemctl enable trading-bot
-
-# Check status
-sudo systemctl status trading-bot
+./bot.sh start      # Start backend and frontend
+./bot.sh stop       # Stop both services
+./bot.sh restart    # Restart both services
+./bot.sh status     # Check if running
+./bot.sh logs       # View recent logs
 ```
 
-### 5. Configure Nginx
+### Dashboard (http://localhost:5173)
 
-Create `/etc/nginx/sites-available/trading-bot`:
+**Control Bar:**
+- Monitor status indicator (running/stopped)
+- Start/Stop monitor button
+- Current ETH/BTC price
+
+**Stats Cards:**
+- Total positions completed
+- Total profit in BTC
+- Win rate percentage
+- Current position details
+
+**TradingView Chart:**
+- Click timeframe buttons (1m to 1D)
+- Toggle Volume indicator
+- Toggle MACD indicator
+- Interactive candlestick display
+
+**Active Position Panel** (when position is open):
+- Position details and profit
+- **Cancel** button: Cancel position without selling
+- **Force Close** button: Sell at current market price
+
+### Position History (http://localhost:5173/positions)
+
+View all completed positions with:
+- Entry/exit prices and timestamps
+- Total BTC spent and received
+- Profit in BTC and USD
+- Number of trades per position
+
+### Settings (http://localhost:5173/settings)
+
+**Coinbase API Credentials:**
+- Enter API Key and Secret
+- Test connection before saving
+- Clear keys with confirmation
+
+**Trading Parameters:**
+- Initial BTC Percentage (default: 5%)
+- DCA Percentage (default: 3%)
+- Max BTC Usage (default: 25%)
+- Minimum Profit % (default: 1%)
+
+**MACD Indicator:**
+- Candle Interval (1m to 1D)
+- Fast Period (default: 12)
+- Slow Period (default: 26)
+- Signal Period (default: 9)
+
+## 📊 Trading Strategy Explained
+
+### MACD Signals
+
+**Buy Signal (Cross-Up):**
+- MACD line crosses above signal line
+- Works regardless of position relative to zero baseline
+- Opens new position OR adds to existing position (DCA)
+
+**Sell Signal (Cross-Down):**
+- MACD line crosses below signal line
+- Only sells if profit ≥ minimum threshold
+- Closes entire position
+
+### DCA (Dollar Cost Averaging)
+
+**Example with 1 BTC balance:**
+1. MACD Cross-Up → Buy 0.05 BTC worth of ETH (5% initial)
+2. Price drops, MACD Cross-Up → Buy 0.03 BTC more (3% DCA)
+3. Price drops again, MACD Cross-Up → Buy 0.03 BTC more (3% DCA)
+4. Price rises, profit > 1%, MACD Cross-Down → Sell all ETH
+
+**Position Limits:**
+- Maximum 25% of BTC balance per position
+- Prevents over-allocation to single trade
+- DCA buys stop when limit reached
+
+### Choosing Timeframes
+
+**Shorter (1m, 5m, 15m):**
+- More signals, faster trades
+- Good for volatile markets
+- Higher transaction fees
+- More false signals
+
+**Longer (1h, 2h, 6h, 1D):**
+- Fewer signals, longer trends
+- Lower transaction fees
+- Better for swing trading
+- Fewer false signals
+
+**Recommended:** Start with 5-15 minute intervals and adjust based on results.
+
+## 🔄 Persistence & Recovery
+
+### What Happens After Power Loss?
+
+**Scenario:** Bot running with active position, power goes out for 2 weeks.
+
+**On Restart:**
+1. ✅ Loads active position from database
+2. ✅ Reconnects to Coinbase
+3. ✅ Resumes monitoring for signals
+4. ✅ Maintains accurate profit calculations
+5. ✅ Continues DCA strategy if applicable
+
+**Database Stores:**
+- All positions (open, closed, cancelled)
+- Complete trade history with prices
+- MACD signals and market data
+- Profit in BTC and USD
+
+**Manual Backup:**
+```bash
+cp backend/trading.db backend/trading.db.backup
+cp backend/.env backend/.env.backup
+```
+
+## 🚀 Deployment to EC2
+
+### Automated Deployment
 
 ```bash
-sudo nano /etc/nginx/sites-available/trading-bot
+# From your local machine
+cd deployment
+./deploy.sh your-ec2-ip your-key.pem
 ```
 
-```nginx
-server {
-    listen 80;
-    server_name _;
+This script:
+- Installs all dependencies
+- Configures nginx and systemd
+- Sets up the database
+- Starts the services
 
-    root /var/www/html;
-    index index.html;
+### Manual Deployment
 
-    # Frontend
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
+See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed manual deployment instructions.
 
-    # Backend API
-    location /api {
-        proxy_pass http://localhost:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # WebSocket
-    location /ws {
-        proxy_pass http://localhost:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
+### Access Production Bot
 
 ```bash
-# Enable site
-sudo ln -s /etc/nginx/sites-available/trading-bot /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default  # Remove default
-
-# Test and reload nginx
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### 6. Access via SSH Tunnel
-
-Since the app is for personal use, access it securely via SSH port forwarding:
-
-```bash
-# On your local machine
+# Via SSH tunnel (secure)
 ssh -i your-key.pem -L 8080:localhost:80 ubuntu@your-ec2-ip
+
+# Then open: http://localhost:8080
 ```
 
-Then access the app at: `http://localhost:8080`
+## 📖 Full Documentation
 
-## Usage
+See [DOCUMENTATION.md](DOCUMENTATION.md) for:
+- Complete API reference
+- Detailed architecture
+- Troubleshooting guide
+- Development guide
+- Security considerations
 
-### Starting the Bot
-
-1. Open the dashboard
-2. Check that your Coinbase API connection is working (green indicator)
-3. Review and adjust settings if needed
-4. Click "Start Bot" to begin monitoring
-
-### Monitoring
-
-- **Dashboard**: View current position, account value, and MACD chart
-- **Positions**: Browse historical positions and detailed trade logs
-- **Settings**: Adjust trading parameters and MACD settings
-
-### Manual Controls
-
-- **Pause Bot**: Stop monitoring without affecting current positions
-- **Cancel Position**: Close position tracking without selling (ETH remains in account)
-- **Force Close**: Sell entire position at current market price
-
-## Trading Logic
-
-### Buy Signals (MACD Cross Up)
-
-1. **No Position**: Opens new position with initial BTC percentage (default 5%)
-2. **Existing Position**: DCA buys with configured percentage (default 3%) if within max BTC limit
-
-### Sell Signals (MACD Cross Down)
-
-1. Checks current profit
-2. Sells only if profit ≥ minimum threshold (default 1%)
-3. Otherwise holds position
-
-### Risk Management
-
-- **Max BTC Usage**: Limits total BTC allocated per position (default 25% of balance at position open)
-- **DCA Protection**: Prevents over-allocation during market downturns
-- **Profit Threshold**: Ensures trades close profitably
-
-## Configuration
-
-All parameters can be adjusted via the Settings page:
+## 🔧 Configuration Reference
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| Initial BTC % | 5.0% | Percentage of BTC to use for initial buy |
-| DCA % | 3.0% | Percentage of BTC to use for DCA buys |
-| Max BTC Usage % | 25.0% | Maximum BTC allocation per position |
-| Min Profit % | 1.0% | Minimum profit required to sell |
-| MACD Fast Period | 12 | Fast EMA period |
-| MACD Slow Period | 26 | Slow EMA period |
-| MACD Signal Period | 9 | Signal line period |
+| **Coinbase API Key** | - | Your Coinbase API key |
+| **Coinbase API Secret** | - | Your Coinbase API secret |
+| **Initial BTC %** | 5.0% | BTC to spend on first buy |
+| **DCA %** | 3.0% | BTC to spend on additional buys |
+| **Max BTC Usage %** | 25.0% | Max BTC per position |
+| **Min Profit %** | 1.0% | Min profit to sell |
+| **Candle Interval** | 5 min | Timeframe for MACD |
+| **MACD Fast** | 12 | Fast EMA period |
+| **MACD Slow** | 26 | Slow EMA period |
+| **MACD Signal** | 9 | Signal line period |
 
-## Monitoring & Logs
+## 🐛 Troubleshooting
 
-```bash
-# View backend logs
-sudo journalctl -u trading-bot -f
-
-# View nginx logs
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-```
-
-## Troubleshooting
-
-### API Connection Issues
-
-- Verify Coinbase API credentials in `.env`
-- Check API key permissions
-- Ensure API key is not IP-restricted
-
-### Database Issues
-
-```bash
-# Reset database (⚠️ deletes all data)
-cd backend
-rm trading.db
-python -m app.main  # Recreates database
-```
-
-### Service Not Starting
+### Backend won't start
 
 ```bash
 # Check logs
-sudo journalctl -u trading-bot -n 50
+tail -f .pids/backend.log
 
-# Restart service
-sudo systemctl restart trading-bot
+# Common issues:
+# - Missing API credentials (add in Settings)
+# - Port 8000 already in use
+# - Missing dependencies (run pip install -r requirements.txt)
 ```
 
-## Security Notes
+### Chart not displaying
 
-- **Never commit `.env` file** to version control
-- **Use SSH key authentication** for EC2 access
-- **Access via SSH tunnel** rather than exposing publicly
-- **Regularly rotate** API keys
-- **Monitor account** for unexpected activity
+```bash
+# Rebuild frontend
+cd frontend
+npm install
+npm run dev
+```
 
-## License
+### Position not recovering
+
+```bash
+# Check database
+sqlite3 backend/trading.db "SELECT * FROM positions WHERE status='open';"
+
+# Check backend logs
+tail -f .pids/backend.log
+```
+
+### MACD signals not triggering
+
+- Ensure monitor is running (Dashboard shows "Running")
+- Wait for 26+ candles to accumulate (MACD calculation requires history)
+- Verify API credentials are valid
+- Check backend logs for errors
+
+## 🔒 Security Notes
+
+- ⚠️ **Never commit `.env` file** to version control
+- ⚠️ **Test with small amounts** first
+- ⚠️ **Monitor regularly** for unexpected behavior
+- ⚠️ **Use SSH tunnel** for remote access (not public internet)
+- ⚠️ **Rotate API keys** periodically
+- ⚠️ **Trading involves risk** - only invest what you can afford to lose
+
+## 📝 Git Repository
+
+This project uses git for version control:
+
+```bash
+# View status
+git status
+
+# Add changes
+git add .
+
+# Commit changes
+git commit -m "Description"
+
+# View history
+git log --oneline
+```
+
+## 📄 License
 
 Private use only.
 
-## Support
+## ⚠️ Disclaimer
 
-For issues or questions, check the logs and verify your configuration matches this README.
+**This software is for educational purposes only.**
+
+Trading cryptocurrencies involves substantial risk of loss and is not suitable for every investor. Past performance is not indicative of future results. The authors are not responsible for any losses incurred. **Use at your own risk.**
+
+---
+
+🤖 **Generated with Claude Code**
+
+For detailed documentation, see [DOCUMENTATION.md](DOCUMENTATION.md)
+
+For quick start guide, see [QUICKSTART.md](QUICKSTART.md)
