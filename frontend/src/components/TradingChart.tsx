@@ -148,24 +148,25 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
 
     chartRef.current = chart
 
-    // Candlestick series (v5 API)
-    const candlestickSeries = chart.addSeries('Candlestick', {
+    // Candlestick series
+    const candlestickSeries = chart.addCandlestickSeries({
       upColor: '#26a69a',
       downColor: '#ef5350',
       borderVisible: false,
       wickUpColor: '#26a69a',
       wickDownColor: '#ef5350',
-    }) as any
-    candlestickSeriesRef.current = candlestickSeries
+    })
+    candlestickSeriesRef.current = candlestickSeries as any
 
-    // Volume series (v5 API)
-    const volumeSeries = chart.addSeries('Histogram', {
+    // Volume series
+    const volumeSeries = chart.addHistogramSeries({
       color: '#26a69a',
       priceFormat: {
         type: 'volume',
       },
       priceScaleId: 'volume',
-    }) as any
+    })
+    volumeSeriesRef.current = volumeSeries as any
     chart.priceScale('volume').applyOptions({
       scaleMargins: {
         top: 0.8,
@@ -269,16 +270,16 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
           },
         })
 
-        const histogramSeries = macdChartRef.current.addSeries('Histogram', {
+        const histogramSeries = macdChartRef.current.addHistogramSeries({
           priceFormat: {
             type: 'price',
             precision: 8,
             minMove: 0.00000001,
           },
-        }) as any
+        })
         histogramSeries.setData(histogram)
 
-        const macdSeries = macdChartRef.current.addSeries('Line', {
+        const macdSeries = macdChartRef.current.addLineSeries({
           color: '#2196f3',
           lineWidth: 2,
           priceFormat: {
@@ -286,10 +287,10 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
             precision: 8,
             minMove: 0.00000001,
           },
-        }) as any
+        })
         macdSeries.setData(macdLine)
 
-        const signalSeries = macdChartRef.current.addSeries('Line', {
+        const signalSeries = macdChartRef.current.addLineSeries({
           color: '#ff6b6b',
           lineWidth: 2,
           priceFormat: {
@@ -297,7 +298,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
             precision: 8,
             minMove: 0.00000001,
           },
-        }) as any
+        })
         signalSeries.setData(signalLine)
       }
     }
