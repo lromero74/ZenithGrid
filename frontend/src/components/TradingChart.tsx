@@ -47,8 +47,15 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
       const response = await fetch(
         `http://localhost:8000/api/candles?product_id=${productId}&granularity=${interval}&limit=300`
       )
+
+      if (!response.ok) {
+        // API error (401, 500, etc) - likely missing credentials
+        console.warn('Cannot fetch candles - check Coinbase API credentials in Settings')
+        return []
+      }
+
       const data = await response.json()
-      return data.candles as Candle[]
+      return (data.candles || []) as Candle[]
     } catch (error) {
       console.error('Failed to fetch candles:', error)
       return []

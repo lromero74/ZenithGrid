@@ -95,6 +95,13 @@ start_frontend() {
         return 0
     fi
 
+    # Kill any process using port 5173
+    if lsof -Pi :5173 -sTCP:LISTEN -t > /dev/null 2>&1; then
+        echo -e "${YELLOW}Port 5173 is in use. Killing processes...${NC}"
+        lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+
     # Check if node_modules exists
     if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
         echo -e "${YELLOW}node_modules not found. Installing dependencies...${NC}"
