@@ -1,0 +1,15 @@
+[Unit]
+Description=ETH/BTC Trading Bot API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/GetRidOf3CommasBecauseTheyGoDownTooOften/backend
+Environment="PATH=/home/ubuntu/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/venv/bin"
+ExecStart=/home/ubuntu/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
