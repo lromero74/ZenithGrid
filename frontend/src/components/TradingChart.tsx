@@ -1,7 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
-import { createChart, IChartApi, ISeriesApi, ColorType, CandlestickData, LineData, HistogramData } from 'lightweight-charts'
+import { createChart, IChartApi, ISeriesApi, ColorType, Time } from 'lightweight-charts'
 import { TrendingUp, BarChart3, Activity } from 'lucide-react'
 import type { Candle } from '../types'
+
+// Types for lightweight-charts v5
+type CandlestickData = {
+  time: Time
+  open: number
+  high: number
+  low: number
+  close: number
+}
+
+type LineData = {
+  time: Time
+  value: number
+}
+
+type HistogramData = {
+  time: Time
+  value: number
+  color?: string
+}
 
 interface TradingChartProps {
   productId?: string
@@ -128,24 +148,24 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
 
     chartRef.current = chart
 
-    // Candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
+    // Candlestick series (v5 API)
+    const candlestickSeries = chart.addSeries('Candlestick', {
       upColor: '#26a69a',
       downColor: '#ef5350',
       borderVisible: false,
       wickUpColor: '#26a69a',
       wickDownColor: '#ef5350',
-    })
+    }) as any
     candlestickSeriesRef.current = candlestickSeries
 
-    // Volume series
-    const volumeSeries = chart.addHistogramSeries({
+    // Volume series (v5 API)
+    const volumeSeries = chart.addSeries('Histogram', {
       color: '#26a69a',
       priceFormat: {
         type: 'volume',
       },
       priceScaleId: 'volume',
-    })
+    }) as any
     chart.priceScale('volume').applyOptions({
       scaleMargins: {
         top: 0.8,
@@ -249,16 +269,16 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
           },
         })
 
-        const histogramSeries = macdChartRef.current.addHistogramSeries({
+        const histogramSeries = macdChartRef.current.addSeries('Histogram', {
           priceFormat: {
             type: 'price',
             precision: 8,
             minMove: 0.00000001,
           },
-        })
+        }) as any
         histogramSeries.setData(histogram)
 
-        const macdSeries = macdChartRef.current.addLineSeries({
+        const macdSeries = macdChartRef.current.addSeries('Line', {
           color: '#2196f3',
           lineWidth: 2,
           priceFormat: {
@@ -266,10 +286,10 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
             precision: 8,
             minMove: 0.00000001,
           },
-        })
+        }) as any
         macdSeries.setData(macdLine)
 
-        const signalSeries = macdChartRef.current.addLineSeries({
+        const signalSeries = macdChartRef.current.addSeries('Line', {
           color: '#ff6b6b',
           lineWidth: 2,
           priceFormat: {
@@ -277,7 +297,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
             precision: 8,
             minMove: 0.00000001,
           },
-        })
+        }) as any
         signalSeries.setData(signalLine)
       }
     }
