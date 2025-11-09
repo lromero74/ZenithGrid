@@ -232,6 +232,43 @@ function calculateStochastic(
   return { k: kLine, d: dLine }
 }
 
+// Calculate Heikin-Ashi candles from regular candles
+function calculateHeikinAshi(candles: CandleData[]): CandleData[] {
+  if (candles.length === 0) return []
+
+  const haCandles: CandleData[] = []
+  let prevHAOpen = candles[0].open
+  let prevHAClose = candles[0].close
+
+  candles.forEach((candle, i) => {
+    // HA Close = (Open + High + Low + Close) / 4
+    const haClose = (candle.open + candle.high + candle.low + candle.close) / 4
+
+    // HA Open = (Previous HA Open + Previous HA Close) / 2
+    const haOpen = i === 0 ? (candle.open + candle.close) / 2 : (prevHAOpen + prevHAClose) / 2
+
+    // HA High = Max(High, HA Open, HA Close)
+    const haHigh = Math.max(candle.high, haOpen, haClose)
+
+    // HA Low = Min(Low, HA Open, HA Close)
+    const haLow = Math.min(candle.low, haOpen, haClose)
+
+    haCandles.push({
+      time: candle.time,
+      open: haOpen,
+      high: haHigh,
+      low: haLow,
+      close: haClose,
+      volume: candle.volume
+    })
+
+    prevHAOpen = haOpen
+    prevHAClose = haClose
+  })
+
+  return haCandles
+}
+
 // Available indicators
 const AVAILABLE_INDICATORS = [
   {
@@ -314,6 +351,9 @@ function Charts() {
     const saved = localStorage.getItem('chart-type')
     return (saved as any) || 'candlestick'
   })
+  const [useHeikinAshi, setUseHeikinAshi] = useState(() => {
+    return localStorage.getItem('chart-heikin-ashi') === 'true'
+  })
   const [indicators, setIndicators] = useState<IndicatorConfig[]>(() => {
     // Load saved indicators from localStorage
     try {
@@ -359,7 +399,13 @@ function Charts() {
       },
       rightPriceScale: {
         visible: true,
+        borderVisible: true,
         borderColor: '#334155',
+        autoScale: true,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.2,
+        },
       },
       leftPriceScale: {
         visible: false,
@@ -380,8 +426,16 @@ function Charts() {
 
     chart.priceScale('volume').applyOptions({
       scaleMargins: {
-        top: 0.8,
+        top: 0.85,
         bottom: 0,
+      },
+    })
+
+    // Ensure the right price scale is visible
+    chart.priceScale('right').applyOptions({
+      scaleMargins: {
+        top: 0.1,
+        bottom: 0.2,
       },
     })
 
@@ -427,6 +481,10 @@ function Charts() {
     localStorage.setItem('chart-type', chartType)
   }, [chartType])
 
+  useEffect(() => {
+    localStorage.setItem('chart-heikin-ashi', useHeikinAshi.toString())
+  }, [useHeikinAshi])
+
   // Cleanup indicator charts when component unmounts
   useEffect(() => {
     return () => {
@@ -454,6 +512,12 @@ function Charts() {
       mainSeriesRef.current = null
     }
 
+    // Determine price format based on trading pair
+    const isBTCPair = selectedPair.endsWith('-BTC')
+    const priceFormat = isBTCPair
+      ? { type: 'price' as const, precision: 8, minMove: 0.00000001 }
+      : { type: 'price' as const, precision: 2, minMove: 0.01 }
+
     if (chartType === 'candlestick') {
       mainSeriesRef.current = chartRef.current.addCandlestickSeries({
         upColor: '#10b981',
@@ -463,6 +527,7 @@ function Charts() {
         wickUpColor: '#10b981',
         wickDownColor: '#ef4444',
         priceScaleId: 'right',
+        priceFormat: priceFormat,
       })
     } else if (chartType === 'bar') {
       mainSeriesRef.current = chartRef.current.addBarSeries({
@@ -471,12 +536,14 @@ function Charts() {
         openVisible: true,
         thinBars: false,
         priceScaleId: 'right',
+        priceFormat: priceFormat,
       })
     } else if (chartType === 'line') {
       mainSeriesRef.current = chartRef.current.addLineSeries({
         color: '#2196F3',
         lineWidth: 2,
         priceScaleId: 'right',
+        priceFormat: priceFormat,
       })
     } else if (chartType === 'area') {
       mainSeriesRef.current = chartRef.current.addAreaSeries({
@@ -485,6 +552,7 @@ function Charts() {
         lineColor: '#2196F3',
         lineWidth: 2,
         priceScaleId: 'right',
+        priceFormat: priceFormat,
       })
     } else if (chartType === 'baseline') {
       mainSeriesRef.current = chartRef.current.addBaselineSeries({
@@ -496,11 +564,12 @@ function Charts() {
         bottomFillColor2: '#ef444420',
         lineWidth: 2,
         priceScaleId: 'right',
+        priceFormat: priceFormat,
       })
     }
 
     lastUpdateRef.current = ''
-  }, [chartType])
+  }, [chartType, selectedPair])
 
   // Add indicator
   const addIndicator = (indicatorType: string) => {
@@ -575,6 +644,12 @@ function Charts() {
 
     console.log('renderIndicators: rendering', indicators.length, 'indicators')
 
+    // Determine price format based on trading pair
+    const isBTCPair = selectedPair.endsWith('-BTC')
+    const priceFormat = isBTCPair
+      ? { type: 'price' as const, precision: 8, minMove: 0.00000001 }
+      : { type: 'price' as const, precision: 2, minMove: 0.01 }
+
     const closes = candles.map(c => c.close)
     const highs = candles.map(c => c.high)
     const lows = candles.map(c => c.low)
@@ -625,6 +700,7 @@ function Charts() {
           color: indicator.settings.color,
           lineWidth: 2,
           title: `SMA(${indicator.settings.period})`,
+          priceFormat: priceFormat,
         })
         series.setData(smaData)
         newSeries.push(series)
@@ -642,6 +718,7 @@ function Charts() {
           color: indicator.settings.color,
           lineWidth: 2,
           title: `EMA(${indicator.settings.period})`,
+          priceFormat: priceFormat,
         })
         series.setData(emaData)
         newSeries.push(series)
@@ -671,18 +748,21 @@ function Charts() {
           lineWidth: 1,
           lastValueVisible: false,
           priceLineVisible: false,
+          priceFormat: priceFormat,
         })
         const middleLineSeries = chartRef.current!.addLineSeries({
           color: indicator.settings.middleColor,
           lineWidth: 1,
           lastValueVisible: false,
           priceLineVisible: false,
+          priceFormat: priceFormat,
         })
         const lowerLineSeries = chartRef.current!.addLineSeries({
           color: indicator.settings.lowerColor,
           lineWidth: 1,
           lastValueVisible: false,
           priceLineVisible: false,
+          priceFormat: priceFormat,
         })
 
         upperLineSeries.setData(upperLineData)
@@ -1022,11 +1102,14 @@ function Charts() {
         candleDataRef.current = candles
 
         const latestCandleKey = candles.length > 0
-          ? `${candles[candles.length - 1].time}_${candles[candles.length - 1].close}`
+          ? `${candles[candles.length - 1].time}_${candles[candles.length - 1].close}_${useHeikinAshi}`
           : ''
 
         if (latestCandleKey !== lastUpdateRef.current) {
-          const priceData = candles.map((c) => {
+          // Apply Heikin-Ashi transformation if enabled
+          const displayCandles = useHeikinAshi ? calculateHeikinAshi(candles) : candles
+
+          const priceData = displayCandles.map((c) => {
             if (chartType === 'candlestick' || chartType === 'bar') {
               return {
                 time: c.time as Time,
@@ -1048,7 +1131,7 @@ function Charts() {
             }
           })
 
-          const volumeData = candles.map((c) => ({
+          const volumeData = displayCandles.map((c) => ({
             time: c.time as Time,
             value: c.volume,
             color: c.close >= c.open ? '#10b98180' : '#ef444480',
@@ -1087,7 +1170,7 @@ function Charts() {
     const interval = setInterval(fetchCandles, 30000)
 
     return () => clearInterval(interval)
-  }, [selectedPair, selectedInterval, chartType, indicators])
+  }, [selectedPair, selectedInterval, chartType, indicators, useHeikinAshi])
 
   const filteredIndicators = AVAILABLE_INDICATORS.filter(ind =>
     ind.name.toLowerCase().includes(indicatorSearch.toLowerCase()) ||
@@ -1176,6 +1259,21 @@ function Charts() {
             Baseline
           </button>
         </div>
+
+        <div className="w-px h-6 bg-slate-600" />
+
+        {/* Heikin-Ashi Toggle */}
+        <button
+          onClick={() => setUseHeikinAshi(!useHeikinAshi)}
+          className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+            useHeikinAshi
+              ? 'bg-purple-600 text-white'
+              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+          }`}
+          title="Heikin-Ashi Candles"
+        >
+          HA
+        </button>
 
         <div className="w-px h-6 bg-slate-600" />
 
