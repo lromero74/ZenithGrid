@@ -26,7 +26,20 @@
       "Bash(git init:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(./bot.sh status:*)",
+      "WebFetch(domain:tradingview.github.io)",
+      "WebFetch(domain:github.com)",
+      "Bash(./bot.sh stop:*)",
+      "Bash(node:*)",
+      "Bash(pkill:*)",
+      "Bash(git reset:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.cdp.coinbase.com)",
+      "WebFetch(domain:docs.cloud.coinbase.com)",
+      "Bash(python3:*)",
+      "WebFetch(domain:help.3commas.io)"
     ],
     "deny": [],
     "ask": []

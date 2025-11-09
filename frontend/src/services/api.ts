@@ -7,6 +7,10 @@ import type {
   DashboardStats,
   Settings,
   Balances,
+  Bot,
+  BotCreate,
+  BotStats,
+  StrategyDefinition,
 } from '../types';
 
 const api = axios.create({
@@ -61,4 +65,27 @@ export const statusApi = {
   get: () =>
     api.get<{ api_connected: boolean; monitor: any; timestamp: string }>('/status')
       .then((res) => res.data),
+};
+
+export const botsApi = {
+  getStrategies: () =>
+    api.get<StrategyDefinition[]>('/bots/strategies').then((res) => res.data),
+  getStrategy: (strategyId: string) =>
+    api.get<StrategyDefinition>(`/bots/strategies/${strategyId}`).then((res) => res.data),
+  getAll: () =>
+    api.get<Bot[]>('/bots').then((res) => res.data),
+  getById: (id: number) =>
+    api.get<Bot>(`/bots/${id}`).then((res) => res.data),
+  create: (bot: BotCreate) =>
+    api.post<Bot>('/bots', bot).then((res) => res.data),
+  update: (id: number, bot: Partial<BotCreate>) =>
+    api.put<Bot>(`/bots/${id}`, bot).then((res) => res.data),
+  delete: (id: number) =>
+    api.delete<{ message: string }>(`/bots/${id}`).then((res) => res.data),
+  start: (id: number) =>
+    api.post<{ message: string }>(`/bots/${id}/start`).then((res) => res.data),
+  stop: (id: number) =>
+    api.post<{ message: string }>(`/bots/${id}/stop`).then((res) => res.data),
+  getStats: (id: number) =>
+    api.get<BotStats>(`/bots/${id}/stats`).then((res) => res.data),
 };

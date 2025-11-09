@@ -95,11 +95,16 @@ start_frontend() {
         return 0
     fi
 
-    # Kill any process using port 5173
+    # Only kill port 5173 if it's occupied by an unknown process
+    # (After stop, it should be free, so this is only for edge cases)
     if lsof -Pi :5173 -sTCP:LISTEN -t > /dev/null 2>&1; then
-        echo -e "${YELLOW}Port 5173 is in use. Killing processes...${NC}"
-        lsof -ti:5173 | xargs kill -9 2>/dev/null || true
-        sleep 1
+        local port_pid=$(lsof -ti:5173 -sTCP:LISTEN)
+        # Only kill if it's not our tracked PID (which should already be stopped)
+        if [ -n "$port_pid" ]; then
+            echo -e "${YELLOW}Port 5173 occupied by unknown process (PID: $port_pid). Cleaning up...${NC}"
+            kill -9 $port_pid 2>/dev/null || true
+            sleep 0.5
+        fi
     fi
 
     # Check if node_modules exists

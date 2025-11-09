@@ -1,13 +1,40 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy import Column, Integer, Float, String, DateTime, Boolean, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
+
+
+class Bot(Base):
+    __tablename__ = "bots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)  # User-defined bot name
+    description = Column(Text, nullable=True)  # Optional description
+
+    # Strategy configuration
+    strategy_type = Column(String, index=True)  # e.g., "macd_dca", "rsi", "bollinger_bands"
+    strategy_config = Column(JSON)  # JSON object with strategy-specific parameters
+
+    # Trading pair
+    product_id = Column(String, default="ETH-BTC")  # e.g., "ETH-BTC", "BTC-USD"
+
+    # Status
+    is_active = Column(Boolean, default=False)  # Whether bot is currently running
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_signal_check = Column(DateTime, nullable=True)  # Last time signal was checked
+
+    # Relationships
+    positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
 
 
 class Position(Base):
     __tablename__ = "positions"
 
     id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True)  # Link to bot (nullable for backwards compatibility)
     status = Column(String, default="open")  # open, closed
     opened_at = Column(DateTime, default=datetime.utcnow)
     closed_at = Column(DateTime, nullable=True)
@@ -33,6 +60,7 @@ class Position(Base):
     profit_usd = Column(Float, nullable=True)  # Profit in USD
 
     # Relationships
+    bot = relationship("Bot", back_populates="positions")
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")
     signals = relationship("Signal", back_populates="position", cascade="all, delete-orphan")
 

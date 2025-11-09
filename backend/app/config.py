@@ -1,11 +1,28 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from pydantic import field_validator
+from typing import List, Optional
+from pathlib import Path
+import json
+import os
 
 
 class Settings(BaseSettings):
-    # Coinbase API
+    # Coinbase API - Legacy HMAC (if using old keys)
     coinbase_api_key: str = ""
     coinbase_api_secret: str = ""
+
+    # Coinbase CDP API - New EC private key method (recommended)
+    coinbase_cdp_key_file: str = ""  # Path to cdp_api_key.json file
+    coinbase_cdp_key_name: str = ""  # API key name from CDP
+    coinbase_cdp_private_key: str = ""  # EC private key from CDP
+
+    @field_validator('coinbase_cdp_private_key')
+    @classmethod
+    def convert_newlines(cls, v: str) -> str:
+        """Convert literal \\n to actual newlines in private key"""
+        if v:
+            return v.replace('\\n', '\n')
+        return v
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./trading.db"

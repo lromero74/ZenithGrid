@@ -1,0 +1,1 @@
+- if you create bots while we are developing, please do not create them started.

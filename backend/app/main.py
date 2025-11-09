@@ -7,16 +7,23 @@ from datetime import datetime, timedelta
 import asyncio
 import json
 import os
+import time
 
 from app.database import get_db, init_db
 from app.config import settings
-from app.models import Position, Trade, Signal, MarketData, Settings as SettingsModel
+from app.models import Position, Trade, Signal, MarketData, Settings as SettingsModel, Bot
 from app.coinbase_client import CoinbaseClient
-from app.price_monitor import PriceMonitor
+from app.coinbase_cdp_client import CoinbaseCDPClient
+from app.multi_bot_monitor import MultiBotMonitor
 from app.trading_engine import TradingEngine
 from app.indicators import MACDCalculator
+from app.routers import bots_router
+import os
 
 app = FastAPI(title="ETH/BTC Trading Bot")
+
+# Include routers
+app.include_router(bots_router)
 
 # CORS middleware
 app.add_middleware(
@@ -27,9 +34,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global instances
-coinbase_client = CoinbaseClient()
-price_monitor = PriceMonitor(coinbase_client, interval_seconds=60)
+# Global instances - Auto-detect CDP vs Legacy API
+if settings.coinbase_cdp_key_name and settings.coinbase_cdp_private_key:
+    print("🔑 Using CDP API authentication (EC private key)")
+    coinbase_client = CoinbaseCDPClient(
+        key_name=settings.coinbase_cdp_key_name,
+        private_key=settings.coinbase_cdp_private_key
+    )
+elif settings.coinbase_api_key and settings.coinbase_api_secret:
+    print("🔑 Using legacy HMAC API authentication")
+    coinbase_client = CoinbaseClient()
+else:
+    print("⚠️  No API credentials configured")
+    coinbase_client = CoinbaseClient()  # Will fail on actual calls
+
+# Multi-bot monitor - monitors all active bots with their strategies
+price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=60)
 
 
 # Pydantic schemas

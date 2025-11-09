@@ -3,10 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Positions from './pages/Positions'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign } from 'lucide-react'
+import Bots from './pages/Bots'
+import Charts from './pages/Charts'
+import Strategies from './pages/Strategies'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers } from 'lucide-react'
 import { accountApi } from './services/api'
 
-type Page = 'dashboard' | 'positions' | 'settings'
+type Page = 'dashboard' | 'bots' | 'positions' | 'charts' | 'strategies' | 'settings'
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
@@ -30,8 +33,8 @@ function App() {
             <div className="flex items-center space-x-3">
               <Activity className="w-8 h-8 text-blue-500" />
               <div>
-                <h1 className="text-2xl font-bold">ETH/BTC Trading Bot</h1>
-                <p className="text-sm text-slate-400">Automated DCA Strategy</p>
+                <h1 className="text-2xl font-bold">Zenith Grid</h1>
+                <p className="text-sm text-slate-400">Multi-Strategy Trading Platform</p>
               </div>
             </div>
             <div className="flex items-center space-x-6">
@@ -68,6 +71,19 @@ function App() {
               </div>
             </button>
             <button
+              onClick={() => setCurrentPage('bots')}
+              className={`px-4 py-3 font-medium transition-colors ${
+                currentPage === 'bots'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Bot className="w-4 h-4" />
+                <span>Bots</span>
+              </div>
+            </button>
+            <button
               onClick={() => setCurrentPage('positions')}
               className={`px-4 py-3 font-medium transition-colors ${
                 currentPage === 'positions'
@@ -78,6 +94,32 @@ function App() {
               <div className="flex items-center space-x-2">
                 <TrendingUp className="w-4 h-4" />
                 <span>Positions</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setCurrentPage('charts')}
+              className={`px-4 py-3 font-medium transition-colors ${
+                currentPage === 'charts'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <BarChart3 className="w-4 h-4" />
+                <span>Charts</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setCurrentPage('strategies')}
+              className={`px-4 py-3 font-medium transition-colors ${
+                currentPage === 'strategies'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Layers className="w-4 h-4" />
+                <span>Strategies</span>
               </div>
             </button>
             <button
@@ -100,7 +142,10 @@ function App() {
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
         {currentPage === 'dashboard' && <Dashboard />}
+        {currentPage === 'bots' && <Bots />}
         {currentPage === 'positions' && <Positions />}
+        {currentPage === 'charts' && <Charts />}
+        {currentPage === 'strategies' && <Strategies />}
         {currentPage === 'settings' && <Settings />}
       </main>
     </div>

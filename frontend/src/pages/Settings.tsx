@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { settingsApi } from '../services/api'
 import { useState, useEffect } from 'react'
-import { Save, AlertCircle, CheckCircle, Key, TestTube, Trash2, Info } from 'lucide-react'
+import { Save, AlertCircle, CheckCircle, Key, TestTube, Trash2, Info, Eye, EyeOff } from 'lucide-react'
 import type { Settings as SettingsType } from '../types'
 
 export default function Settings() {
@@ -9,6 +9,7 @@ export default function Settings() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
   const [testMessage, setTestMessage] = useState<string>('')
+  const [showApiSecret, setShowApiSecret] = useState(false)
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -154,13 +155,35 @@ export default function Settings() {
               <label className="label">
                 API Secret
               </label>
-              <input
-                type="password"
-                className="input font-mono text-sm"
-                placeholder="Enter your Coinbase API Secret"
-                value={formData.coinbase_api_secret || ''}
-                onChange={(e) => handleChange('coinbase_api_secret', e.target.value)}
-              />
+              <div className="relative">
+                {!showApiSecret && formData.coinbase_api_secret ? (
+                  <div
+                    onClick={() => setShowApiSecret(true)}
+                    className="input font-mono text-sm pr-10 cursor-pointer select-none"
+                    style={{ letterSpacing: '2px' }}
+                  >
+                    {'•'.repeat(formData.coinbase_api_secret.length)}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    className="input font-mono text-sm pr-10"
+                    placeholder="Enter your Coinbase API Secret"
+                    value={formData.coinbase_api_secret || ''}
+                    onChange={(e) => handleChange('coinbase_api_secret', e.target.value)}
+                    onBlur={() => setShowApiSecret(false)}
+                  />
+                )}
+                {formData.coinbase_api_secret && (
+                  <button
+                    type="button"
+                    onClick={() => setShowApiSecret(!showApiSecret)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {showApiSecret ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center space-x-3">

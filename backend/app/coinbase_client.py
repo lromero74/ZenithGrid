@@ -5,6 +5,8 @@ import json
 from typing import Dict, Any, Optional, List
 import httpx
 from app.config import settings
+from app.cache import api_cache
+from app.constants import BALANCE_CACHE_TTL, PRICE_CACHE_TTL
 
 
 class CoinbaseClient:
@@ -82,22 +84,40 @@ class CoinbaseClient:
         return result.get("account", {})
 
     async def get_btc_balance(self) -> float:
-        """Get BTC balance"""
+        """Get BTC balance (cached to reduce API calls)"""
+        cache_key = "balance_btc"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         accounts = await self.get_accounts()
+        balance = 0.0
         for account in accounts:
             if account.get("currency") == "BTC":
                 available = account.get("available_balance", {})
-                return float(available.get("value", 0))
-        return 0.0
+                balance = float(available.get("value", 0))
+                break
+
+        await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
+        return balance
 
     async def get_eth_balance(self) -> float:
-        """Get ETH balance"""
+        """Get ETH balance (cached to reduce API calls)"""
+        cache_key = "balance_eth"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         accounts = await self.get_accounts()
+        balance = 0.0
         for account in accounts:
             if account.get("currency") == "ETH":
                 available = account.get("available_balance", {})
-                return float(available.get("value", 0))
-        return 0.0
+                balance = float(available.get("value", 0))
+                break
+
+        await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
+        return balance
 
     async def get_product(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Get product details"""
@@ -110,14 +130,26 @@ class CoinbaseClient:
         return result
 
     async def get_current_price(self, product_id: str = "ETH-BTC") -> float:
-        """Get current price for ETH/BTC"""
+        """Get current price (cached for 10s to reduce API spam)"""
+        cache_key = f"price_{product_id}"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         ticker = await self.get_ticker(product_id)
-        price = ticker.get("price", "0")
-        return float(price)
+        price = float(ticker.get("price", "0"))
+
+        await api_cache.set(cache_key, price, PRICE_CACHE_TTL)
+        return price
 
     async def get_btc_usd_price(self) -> float:
         """Get current BTC/USD price"""
         return await self.get_current_price("BTC-USD")
+
+    async def invalidate_balance_cache(self):
+        """Invalidate balance cache (call after trades)"""
+        await api_cache.delete("balance_btc")
+        await api_cache.delete("balance_eth")
 
     async def create_market_order(
         self,

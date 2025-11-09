@@ -93,3 +93,52 @@ export interface Balances {
   btc_usd_price: number;
   total_usd_value: number;
 }
+
+export interface StrategyParameter {
+  name: string;
+  description: string;
+  default: number | string | boolean;
+  min_value?: number;
+  max_value?: number;
+  type: 'float' | 'int' | 'string' | 'bool';
+  options?: string[];
+}
+
+export interface StrategyDefinition {
+  id: string;
+  name: string;
+  description: string;
+  parameters: StrategyParameter[];
+}
+
+export interface Bot {
+  id: number;
+  name: string;
+  description: string | null;
+  strategy_type: string;
+  strategy_config: Record<string, any>;
+  product_id: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  last_signal_check: string | null;
+}
+
+export interface BotCreate {
+  name: string;
+  description?: string;
+  strategy_type: string;
+  strategy_config: Record<string, any>;
+  product_id: string;
+}
+
+export interface BotStats {
+  bot: Bot;
+  total_positions: number;
+  open_positions: number;
+  closed_positions: number;
+  total_profit_btc: number;
+  total_profit_usd: number;
+  win_rate: number;
+  avg_profit_per_position: number;
+}
