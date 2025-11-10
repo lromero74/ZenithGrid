@@ -190,6 +190,8 @@ function PhaseConditionSelector({
               >
                 <option value="greater_than">&gt;</option>
                 <option value="less_than">&lt;</option>
+                <option value="crossing_above">Crossing Above</option>
+                <option value="crossing_below">Crossing Below</option>
               </select>
               <input
                 type="number"
@@ -307,6 +309,8 @@ function PhaseConditionSelector({
               >
                 <option value="greater_than">&gt;</option>
                 <option value="less_than">&lt;</option>
+                <option value="crossing_above">Crossing Above</option>
+                <option value="crossing_below">Crossing Below</option>
               </select>
               <input
                 type="number"
@@ -378,6 +382,8 @@ function PhaseConditionSelector({
               >
                 <option value="greater_than">&gt;</option>
                 <option value="less_than">&lt;</option>
+                <option value="crossing_above">Crossing Above</option>
+                <option value="crossing_below">Crossing Below</option>
               </select>
               <input
                 type="number"
@@ -403,6 +409,8 @@ function PhaseConditionSelector({
             >
               <option value="greater_than">&gt;</option>
               <option value="less_than">&lt;</option>
+              <option value="crossing_above">Crossing Above</option>
+              <option value="crossing_below">Crossing Below</option>
             </select>
             <input
               type="number"
@@ -426,6 +434,8 @@ function PhaseConditionSelector({
             >
               <option value="greater_than">&gt;</option>
               <option value="less_than">&lt;</option>
+              <option value="crossing_above">Crossing Above</option>
+              <option value="crossing_below">Crossing Below</option>
             </select>
             <input
               type="number"
