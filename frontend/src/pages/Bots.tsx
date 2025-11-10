@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { botsApi } from '../services/api'
 import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
 import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity } from 'lucide-react'
+import ConditionalStrategyForm from '../components/ConditionalStrategyForm'
 
 const TRADING_PAIRS = [
   { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC Pairs' },
@@ -363,7 +364,9 @@ function Bots() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className={`bg-slate-800 rounded-lg w-full max-h-[90vh] overflow-y-auto ${
+            formData.strategy_type === 'conditional_dca' ? 'max-w-6xl' : 'max-w-2xl'
+          }`}>
             <div className="p-6 border-b border-slate-700">
               <h3 className="text-xl font-bold">
                 {editingBot ? 'Edit Bot' : 'Create New Bot'}
@@ -444,7 +447,16 @@ function Bots() {
               </div>
 
               {/* Dynamic Strategy Parameters */}
-              {selectedStrategy && selectedStrategy.parameters.length > 0 && (
+              {selectedStrategy && formData.strategy_type === 'conditional_dca' ? (
+                <div className="border-t border-slate-700 pt-6">
+                  <ConditionalStrategyForm
+                    config={formData.strategy_config}
+                    onChange={(newConfig) =>
+                      setFormData({ ...formData, strategy_config: newConfig })
+                    }
+                  />
+                </div>
+              ) : selectedStrategy && selectedStrategy.parameters.length > 0 ? (
                 <div className="border-t border-slate-700 pt-6">
                   <h4 className="text-lg font-semibold mb-4">Strategy Parameters</h4>
                   <div className="space-y-4">
@@ -463,7 +475,7 @@ function Bots() {
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Actions */}
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-700">
