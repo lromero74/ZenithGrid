@@ -19,15 +19,8 @@ from app.strategies import (
     StrategyParameter,
     StrategyRegistry
 )
-from app.conditions import (
-    Condition,
-    ConditionGroup,
-    ConditionEvaluator,
-    ComparisonOperator,
-    IndicatorType,
-    LogicOperator
-)
 from app.indicator_calculator import IndicatorCalculator
+from app.phase_conditions import PhaseConditionEvaluator
 
 
 @StrategyRegistry.register
@@ -226,31 +219,22 @@ class ConditionalDCAStrategy(TradingStrategy):
                 if param.max_value is not None and value > param.max_value:
                     raise ValueError(f"{param.display_name} must be <= {param.max_value}")
 
-        # Initialize indicator calculator and condition evaluator
+        # Initialize indicator calculator and phase condition evaluator
         self.indicator_calculator = IndicatorCalculator()
-        self.condition_evaluator = ConditionEvaluator(self.indicator_calculator)
+        self.phase_evaluator = PhaseConditionEvaluator(self.indicator_calculator)
 
-        # Parse conditions from config
-        self.buy_conditions = self._parse_condition_group(
-            self.config.get("buy_conditions")
-        )
-        self.sell_conditions = self._parse_condition_group(
-            self.config.get("sell_conditions")
-        )
+        # Get phase conditions from config
+        self.base_order_conditions = self.config.get("base_order_conditions", [])
+        self.base_order_logic = self.config.get("base_order_logic", "and")
+
+        self.safety_order_conditions = self.config.get("safety_order_conditions", [])
+        self.safety_order_logic = self.config.get("safety_order_logic", "and")
+
+        self.take_profit_conditions = self.config.get("take_profit_conditions", [])
+        self.take_profit_logic = self.config.get("take_profit_logic", "and")
 
         # Track previous indicators for crossing detection
         self.previous_indicators = None
-
-    def _parse_condition_group(self, condition_dict: Optional[Dict]) -> Optional[ConditionGroup]:
-        """Parse condition group from dictionary"""
-        if not condition_dict:
-            return None
-
-        try:
-            return ConditionGroup(**condition_dict)
-        except Exception as e:
-            print(f"Error parsing condition group: {e}")
-            return None
 
     async def analyze_signal(
         self,
@@ -258,32 +242,24 @@ class ConditionalDCAStrategy(TradingStrategy):
         current_price: float
     ) -> Optional[Dict[str, Any]]:
         """
-        Analyze market data and evaluate conditions
+        Analyze market data and evaluate phase conditions
 
         Returns:
             Signal data dict with:
-            - buy_conditions_met: bool
-            - sell_conditions_met: bool
+            - base_order_signal: bool
+            - safety_order_signal: bool
+            - take_profit_signal: bool
             - indicators: dict of all indicator values
             - price: current price
         """
         if len(candles) < 50:  # Need enough data for indicators
             return None
 
-        # Extract required indicators from conditions
+        # Extract required indicators from all phase conditions
         required = set()
-        if self.buy_conditions:
-            required.update(
-                self.indicator_calculator.extract_required_indicators({
-                    "buy_conditions": self.config.get("buy_conditions", {})
-                })
-            )
-        if self.sell_conditions:
-            required.update(
-                self.indicator_calculator.extract_required_indicators({
-                    "sell_conditions": self.config.get("sell_conditions", {})
-                })
-            )
+        required.update(self.phase_evaluator.get_required_indicators(self.base_order_conditions))
+        required.update(self.phase_evaluator.get_required_indicators(self.safety_order_conditions))
+        required.update(self.phase_evaluator.get_required_indicators(self.take_profit_conditions))
 
         # Calculate current indicators
         current_indicators = self.indicator_calculator.calculate_all_indicators(
@@ -291,20 +267,32 @@ class ConditionalDCAStrategy(TradingStrategy):
             required
         )
 
-        # Evaluate buy conditions
-        buy_met = False
-        if self.buy_conditions:
-            buy_met = self.condition_evaluator.evaluate_group(
-                self.buy_conditions,
+        # Evaluate base order conditions
+        base_order_signal = False
+        if self.base_order_conditions:
+            base_order_signal = self.phase_evaluator.evaluate_phase_conditions(
+                self.base_order_conditions,
+                self.base_order_logic,
                 current_indicators,
                 self.previous_indicators
             )
 
-        # Evaluate sell conditions
-        sell_met = False
-        if self.sell_conditions:
-            sell_met = self.condition_evaluator.evaluate_group(
-                self.sell_conditions,
+        # Evaluate safety order conditions
+        safety_order_signal = False
+        if self.safety_order_conditions:
+            safety_order_signal = self.phase_evaluator.evaluate_phase_conditions(
+                self.safety_order_conditions,
+                self.safety_order_logic,
+                current_indicators,
+                self.previous_indicators
+            )
+
+        # Evaluate take profit conditions
+        take_profit_signal = False
+        if self.take_profit_conditions:
+            take_profit_signal = self.phase_evaluator.evaluate_phase_conditions(
+                self.take_profit_conditions,
+                self.take_profit_logic,
                 current_indicators,
                 self.previous_indicators
             )
@@ -313,9 +301,10 @@ class ConditionalDCAStrategy(TradingStrategy):
         self.previous_indicators = current_indicators.copy()
 
         return {
-            "signal_type": "condition_check",
-            "buy_conditions_met": buy_met,
-            "sell_conditions_met": sell_met,
+            "signal_type": "phase_condition_check",
+            "base_order_signal": base_order_signal,
+            "safety_order_signal": safety_order_signal,
+            "take_profit_signal": take_profit_signal,
             "indicators": current_indicators,
             "price": current_price
         }
@@ -381,16 +370,17 @@ class ConditionalDCAStrategy(TradingStrategy):
         Determine if we should buy
 
         Logic:
-        1. If no position AND buy conditions met: Create base order
-        2. If position exists: Check if price has dropped enough for next safety order
+        1. If no position: Check base order conditions
+        2. If position exists: Check safety order conditions OR price deviation
         """
         current_price = signal_data.get("price", 0)
-        buy_conditions_met = signal_data.get("buy_conditions_met", False)
+        base_order_signal = signal_data.get("base_order_signal", False)
+        safety_order_signal = signal_data.get("safety_order_signal", False)
 
         if position is None:
             # Initial base order - check conditions
-            if not buy_conditions_met:
-                return False, 0.0, "Buy conditions not met"
+            if not base_order_signal and len(self.base_order_conditions) > 0:
+                return False, 0.0, "Base order conditions not met"
 
             btc_to_spend = self.calculate_base_order_size(btc_balance)
             if btc_to_spend <= 0 or btc_to_spend > btc_balance:
@@ -399,7 +389,7 @@ class ConditionalDCAStrategy(TradingStrategy):
             return True, btc_to_spend, f"Base order (conditions met): {btc_to_spend:.8f} BTC"
 
         else:
-            # Check for safety order based on price deviation
+            # Safety order logic
             max_safety = self.config["max_safety_orders"]
             if max_safety == 0:
                 return False, 0.0, "Safety orders disabled"
@@ -410,27 +400,27 @@ class ConditionalDCAStrategy(TradingStrategy):
             if safety_orders_count >= max_safety:
                 return False, 0.0, f"Max safety orders reached ({max_safety})"
 
-            # Calculate what the next safety order number would be
             next_order_number = safety_orders_count + 1
-
-            # Get entry price (average price from position)
             entry_price = position.average_buy_price
 
-            # Calculate trigger price for next safety order
-            trigger_price = self.calculate_safety_order_price(entry_price, next_order_number)
+            # Check safety order conditions if set
+            if len(self.safety_order_conditions) > 0:
+                if not safety_order_signal:
+                    return False, 0.0, "Safety order conditions not met"
+            else:
+                # Fallback to price deviation
+                trigger_price = self.calculate_safety_order_price(entry_price, next_order_number)
+                if current_price > trigger_price:
+                    return False, 0.0, f"Price not low enough for SO #{next_order_number} (need {trigger_price:.8f})"
 
-            # Check if current price has dropped enough
-            if current_price <= trigger_price:
-                # Calculate safety order size
-                base_order_size = position.total_btc_spent / (1 + safety_orders_count)  # Approximate
-                safety_size = self.calculate_safety_order_size(base_order_size, next_order_number)
+            # Calculate safety order size
+            base_order_size = position.total_btc_spent / (1 + safety_orders_count)
+            safety_size = self.calculate_safety_order_size(base_order_size, next_order_number)
 
-                if safety_size > btc_balance:
-                    return False, 0.0, "Insufficient BTC for safety order"
+            if safety_size > btc_balance:
+                return False, 0.0, "Insufficient BTC for safety order"
 
-                return True, safety_size, f"Safety order #{next_order_number} at {current_price:.8f}"
-
-            return False, 0.0, f"Price not low enough for SO #{next_order_number} (need {trigger_price:.8f})"
+            return True, safety_size, f"Safety order #{next_order_number} (conditions met)"
 
     async def should_sell(
         self,
@@ -442,11 +432,12 @@ class ConditionalDCAStrategy(TradingStrategy):
         Determine if we should sell
 
         Logic:
-        1. Check custom sell conditions
-        2. Check take profit / stop loss
-        3. Check trailing take profit if enabled
+        1. Check stop loss first
+        2. Check take profit %
+        3. Check take profit conditions (additional exit signals)
+        4. Handle trailing if enabled
         """
-        sell_conditions_met = signal_data.get("sell_conditions_met", False)
+        take_profit_signal = signal_data.get("take_profit_signal", False)
 
         # Calculate current profit
         avg_price = position.average_buy_price
@@ -460,7 +451,7 @@ class ConditionalDCAStrategy(TradingStrategy):
             if profit_pct <= stop_loss_pct:
                 return True, f"Stop loss triggered at {profit_pct:.2f}%"
 
-        # Check take profit
+        # Check take profit %
         target_profit = self.config["take_profit_percentage"]
 
         if profit_pct >= target_profit:
@@ -468,7 +459,6 @@ class ConditionalDCAStrategy(TradingStrategy):
                 # Trailing take profit logic
                 trailing_dev = self.config["trailing_deviation"]
 
-                # If profit is above target + trailing buffer, check trailing
                 if profit_pct >= target_profit + trailing_dev:
                     return True, f"Trailing take profit: {profit_pct:.2f}%"
 
@@ -477,10 +467,10 @@ class ConditionalDCAStrategy(TradingStrategy):
                 # Simple take profit
                 return True, f"Take profit target reached: {profit_pct:.2f}%"
 
-        # Check custom sell conditions
-        if sell_conditions_met:
-            # Only sell on custom conditions if profit is positive (or close to breakeven)
-            if profit_pct >= -0.5:  # Allow selling at small loss if conditions signal
-                return True, f"Sell conditions met (P&L: {profit_pct:.2f}%)"
+        # Check additional take profit conditions
+        if take_profit_signal and len(self.take_profit_conditions) > 0:
+            # Only sell on conditions if near breakeven or profitable
+            if profit_pct >= -0.5:
+                return True, f"Take profit conditions met (P&L: {profit_pct:.2f}%)"
 
         return False, f"Holding (P&L: {profit_pct:.2f}%, Target: {target_profit}%)"

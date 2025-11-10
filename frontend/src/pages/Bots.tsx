@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { botsApi } from '../services/api'
 import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
 import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity } from 'lucide-react'
-import ConditionalStrategyForm from '../components/ConditionalStrategyForm'
+import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 
 const TRADING_PAIRS = [
   { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC Pairs' },
@@ -449,7 +449,7 @@ function Bots() {
               {/* Dynamic Strategy Parameters */}
               {selectedStrategy && formData.strategy_type === 'conditional_dca' ? (
                 <div className="border-t border-slate-700 pt-6">
-                  <ConditionalStrategyForm
+                  <ThreeCommasStyleForm
                     config={formData.strategy_config}
                     onChange={(newConfig) =>
                       setFormData({ ...formData, strategy_config: newConfig })
