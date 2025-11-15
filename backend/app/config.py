@@ -24,6 +24,10 @@ class Settings(BaseSettings):
             return v.replace('\\n', '\n')
         return v
 
+    # AI Provider API Keys (for AI Autonomous Trading)
+    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+
     # Database
     database_url: str = "sqlite+aiosqlite:///./trading.db"
 
