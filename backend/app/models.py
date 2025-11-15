@@ -18,6 +18,7 @@ class Bot(Base):
     # Trading pairs (support for multi-pair bots)
     product_id = Column(String, default="ETH-BTC", nullable=True)  # Legacy single pair (deprecated)
     product_ids = Column(JSON, default=list)  # List of trading pairs e.g., ["ETH-BTC", "SOL-USD", "BTC-USD"]
+    split_budget_across_pairs = Column(Boolean, default=False)  # Whether to divide budget by number of pairs
 
     # Status
     is_active = Column(Boolean, default=False)  # Whether bot is currently running

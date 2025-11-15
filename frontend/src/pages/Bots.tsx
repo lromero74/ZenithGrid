@@ -28,6 +28,7 @@ interface BotFormData {
   strategy_type: string
   product_id: string  // Legacy - kept for backward compatibility
   product_ids: string[]  // Multi-pair support
+  split_budget_across_pairs: boolean  // Budget splitting toggle
   strategy_config: Record<string, any>
 }
 
@@ -41,6 +42,7 @@ function Bots() {
     strategy_type: '',
     product_id: 'ETH-BTC',  // Legacy fallback
     product_ids: [],  // Start with empty array, user will select
+    split_budget_across_pairs: false,  // Default to independent budgets (3Commas style)
     strategy_config: {},
   })
 
@@ -131,6 +133,7 @@ function Bots() {
       strategy_type: bot.strategy_type,
       product_id: bot.product_id,  // Keep for backward compatibility
       product_ids: productIds,
+      split_budget_across_pairs: (bot as any).split_budget_across_pairs || false,
       strategy_config: bot.strategy_config,
     })
     setShowModal(true)
@@ -178,6 +181,7 @@ function Bots() {
       strategy_type: formData.strategy_type,
       product_id: formData.product_ids[0],  // Legacy - use first pair
       product_ids: formData.product_ids,  // Multi-pair support
+      split_budget_across_pairs: formData.split_budget_across_pairs,  // Budget splitting option
       strategy_config: formData.strategy_config,
     }
 
@@ -471,6 +475,42 @@ function Bots() {
                   </div>
                 )}
               </div>
+
+              {/* Budget Splitting Toggle - Only show for multi-pair */}
+              {formData.product_ids.length > 1 && (
+                <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+                  <label className="flex items-start space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.split_budget_across_pairs}
+                      onChange={(e) => setFormData({ ...formData, split_budget_across_pairs: e.target.checked })}
+                      className="mt-1 rounded border-slate-500"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-white mb-1">Split Budget Across Pairs</div>
+                      <div className="text-sm text-slate-300">
+                        {formData.split_budget_across_pairs ? (
+                          <>
+                            <span className="text-green-400">✓ Enabled:</span> Budget percentages will be divided by {formData.product_ids.length} pairs.
+                            <br />
+                            <span className="text-xs text-slate-400">
+                              Example: 30% max usage ÷ {formData.product_ids.length} = {(30 / formData.product_ids.length).toFixed(1)}% per pair (safer)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-yellow-400">○ Disabled:</span> Each pair gets full budget allocation independently.
+                            <br />
+                            <span className="text-xs text-slate-400">
+                              Example: 30% max usage × {formData.product_ids.length} pairs = up to {30 * formData.product_ids.length}% total (3Commas style)
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              )}
 
               {/* Strategy Selection */}
               <div>

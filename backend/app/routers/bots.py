@@ -25,7 +25,9 @@ class BotCreate(BaseModel):
     description: Optional[str] = None
     strategy_type: str
     strategy_config: dict
-    product_id: str = "ETH-BTC"
+    product_id: str = "ETH-BTC"  # Legacy - kept for backward compatibility
+    product_ids: Optional[List[str]] = None  # Multi-pair support
+    split_budget_across_pairs: bool = False  # Budget splitting toggle
 
 
 class BotUpdate(BaseModel):
@@ -33,6 +35,8 @@ class BotUpdate(BaseModel):
     description: Optional[str] = None
     strategy_config: Optional[dict] = None
     product_id: Optional[str] = None
+    product_ids: Optional[List[str]] = None
+    split_budget_across_pairs: Optional[bool] = None
 
 
 class BotResponse(BaseModel):
@@ -42,6 +46,8 @@ class BotResponse(BaseModel):
     strategy_type: str
     strategy_config: dict
     product_id: str
+    product_ids: Optional[List[str]] = None
+    split_budget_across_pairs: bool = False
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -106,6 +112,8 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
         strategy_type=bot_data.strategy_type,
         strategy_config=bot_data.strategy_config,
         product_id=bot_data.product_id,
+        product_ids=bot_data.product_ids or [],
+        split_budget_across_pairs=bot_data.split_budget_across_pairs,
         is_active=False
     )
 
@@ -225,6 +233,12 @@ async def update_bot(
 
     if bot_update.product_id is not None:
         bot.product_id = bot_update.product_id
+
+    if bot_update.product_ids is not None:
+        bot.product_ids = bot_update.product_ids
+
+    if bot_update.split_budget_across_pairs is not None:
+        bot.split_budget_across_pairs = bot_update.split_budget_across_pairs
 
     bot.updated_at = datetime.utcnow()
 

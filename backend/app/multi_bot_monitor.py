@@ -172,7 +172,29 @@ class MultiBotMonitor:
 
             # Get strategy instance for this bot
             try:
-                strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
+                # Adjust budget percentages if splitting across pairs
+                strategy_config = bot.strategy_config.copy()
+                if bot.split_budget_across_pairs and len(bot.get_trading_pairs()) > 1:
+                    num_pairs = len(bot.get_trading_pairs())
+                    logger.info(f"    Splitting budget across {num_pairs} pairs")
+
+                    # Adjust percentage-based parameters
+                    if "base_order_percentage" in strategy_config:
+                        original = strategy_config["base_order_percentage"]
+                        strategy_config["base_order_percentage"] = original / num_pairs
+                        logger.info(f"      Base order: {original}% → {strategy_config['base_order_percentage']:.2f}%")
+
+                    if "safety_order_percentage" in strategy_config:
+                        original = strategy_config["safety_order_percentage"]
+                        strategy_config["safety_order_percentage"] = original / num_pairs
+                        logger.info(f"      Safety order: {original}% → {strategy_config['safety_order_percentage']:.2f}%")
+
+                    if "max_btc_usage_percentage" in strategy_config:
+                        original = strategy_config["max_btc_usage_percentage"]
+                        strategy_config["max_btc_usage_percentage"] = original / num_pairs
+                        logger.info(f"      Max usage: {original}% → {strategy_config['max_btc_usage_percentage']:.2f}%")
+
+                strategy = StrategyRegistry.get_strategy(bot.strategy_type, strategy_config)
             except ValueError as e:
                 logger.error(f"Unknown strategy: {bot.strategy_type}")
                 return {"error": str(e)}
