@@ -62,12 +62,13 @@
 - ✅ Entry marker on chart (green arrow)
 - ✅ Current price marker on chart (blue dot)
 - ✅ Price legend below chart
-- ⏳ Take profit target line on chart
-- ⏳ Stop loss line on chart
-- ⏳ Safety order price levels on chart
+- ✅ Take profit target line on chart (green dashed, +2%)
+- ✅ Stop loss line on chart (red dashed, -2%)
+- ✅ Safety order price levels on chart (gray dashed lines)
+- ✅ Real-time current price (updates every 5s)
+- ✅ Live P&L calculations with real prices
 - ⏳ Trailing indicators
 - ⏳ Time in position
-- ⏳ Real-time current price (needs API endpoint)
 
 ### Deal Actions
 - ✅ Expandable deal details
@@ -371,14 +372,54 @@
    - Manual refresh button
    - Shared cache across components
 
+### Latest Session Completed (2025-11-15 Evening):
+1. ✅ **Take Profit & Stop Loss Chart Lines**
+   - Green dashed TP line at +2% above entry
+   - Red dashed SL line at -2% below entry
+   - Enhanced legend with color coding
+   - **Branch: chart-tp-sl-lines** → merged to master
+
+2. ✅ **Safety Order Price Level Visualization**
+   - Gray dashed horizontal lines showing DCA ladder
+   - Dynamically calculated from bot config (deviation, step scale, max orders)
+   - Shows first 3 SO levels in legend + count
+   - Adjusts based on bot's DCA strategy
+   - **Branch: chart-safety-order-levels** (with real-time prices)
+
+3. ✅ **Real-Time Price Updates**
+   - New `/api/ticker/{product_id}` endpoint
+   - Live prices fetching every 5 seconds
+   - "Current Price" column in deal cards with ▲/▼ indicators
+   - Accurate unrealized P&L using real-time data
+   - Chart legend shows live current price
+   - **Branch: chart-safety-order-levels** → merged to master
+
+4. ✅ **Dashboard Edit Button Fix**
+   - Fixed broken hash-based navigation
+   - Proper state-based routing via onNavigate prop
+   - Edit button now correctly navigates to Bots page
+   - Committed directly to master
+
 ### Next Priority Items:
-1. ⏳ **Position Product ID** - Track product_id with positions for accurate charts (currently hardcoded to ETH-BTC)
-2. ⏳ **Dashboard Overhaul** - Add total profit, win rate, recent deals
-3. ⏳ **Bot Cards Enhancement** - Better stats display, quick actions
-4. ⏳ **Take Profit/Stop Loss Lines** - Add to chart view
-5. ⏳ **Real-time Current Price** - Show live price in deals vs entry price
+1. 🚧 **MULTI-PAIR BOTS** ⚠️ HIGH PRIORITY - Critical 3Commas feature
+   - Allow 1 bot to trade multiple pairs simultaneously
+   - Architecture: bot → multiple positions (one per pair)
+   - Signal evaluation per pair
+   - Configuration UI for selecting multiple pairs
+
+2. ⏳ **Bot Templates**
+   - Save/load bot configurations
+   - Quick-start from presets
+
+3. ⏳ **Trailing Take Profit / Stop Loss**
+   - Dynamic TP that follows price upward
+   - Implementation in trading engine
+
+4. ⏳ **Position Notifications/Alerts**
+   - Deal opened/closed notifications
+   - TP/SL hit alerts
 
 ---
 
-**Last Updated:** 2025-11-15 23:58
-**Next Milestone:** Product ID tracking + Dashboard overhaul
+**Last Updated:** 2025-11-15 Evening
+**Next Milestone:** Multi-Pair Bots (starting now)
