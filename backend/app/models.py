@@ -41,6 +41,27 @@ class Bot(Base):
             return ["ETH-BTC"]  # Default fallback
 
 
+class BotTemplate(Base):
+    __tablename__ = "bot_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)  # Template name
+    description = Column(Text, nullable=True)  # Optional description
+
+    # Strategy configuration (copied from Bot)
+    strategy_type = Column(String, index=True)
+    strategy_config = Column(JSON)
+
+    # Default trading pairs (optional)
+    product_ids = Column(JSON, default=list)
+    split_budget_across_pairs = Column(Boolean, default=False)
+
+    # Template metadata
+    is_default = Column(Boolean, default=False)  # System preset vs user-created
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Position(Base):
     __tablename__ = "positions"
 

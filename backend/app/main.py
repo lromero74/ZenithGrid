@@ -17,13 +17,14 @@ from app.coinbase_cdp_client import CoinbaseCDPClient
 from app.multi_bot_monitor import MultiBotMonitor
 from app.trading_engine import TradingEngine
 from app.indicators import MACDCalculator
-from app.routers import bots_router
+from app.routers import bots_router, templates_router
 import os
 
 app = FastAPI(title="ETH/BTC Trading Bot")
 
 # Include routers
 app.include_router(bots_router)
+app.include_router(templates_router)
 
 # CORS middleware
 app.add_middleware(

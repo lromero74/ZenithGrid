@@ -95,3 +95,18 @@ export const botsApi = {
   getStats: (id: number) =>
     api.get<BotStats>(`/bots/${id}/stats`).then((res) => res.data),
 };
+
+export const templatesApi = {
+  getAll: () =>
+    api.get<any[]>('/templates').then((res) => res.data),
+  getById: (id: number) =>
+    api.get<any>(`/templates/${id}`).then((res) => res.data),
+  create: (template: any) =>
+    api.post<any>('/templates', template).then((res) => res.data),
+  update: (id: number, template: Partial<any>) =>
+    api.put<any>(`/templates/${id}`, template).then((res) => res.data),
+  delete: (id: number) =>
+    api.delete<{ message: string }>(`/templates/${id}`).then((res) => res.data),
+  seedDefaults: () =>
+    api.post<{ message: string; templates: string[] }>('/templates/seed-defaults').then((res) => res.data),
+};

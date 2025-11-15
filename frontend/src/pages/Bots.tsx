@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { botsApi } from '../services/api'
+import { botsApi, templatesApi } from '../services/api'
 import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
 import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
@@ -59,6 +59,12 @@ function Bots() {
     queryFn: botsApi.getStrategies,
   })
 
+  // Fetch available templates
+  const { data: templates = [] } = useQuery({
+    queryKey: ['templates'],
+    queryFn: templatesApi.getAll,
+  })
+
   // Get selected strategy definition
   const selectedStrategy = strategies.find((s) => s.id === formData.strategy_type)
 
@@ -113,9 +119,26 @@ function Bots() {
       description: '',
       strategy_type: '',
       product_id: 'ETH-BTC',
+      product_ids: [],
+      split_budget_across_pairs: false,
       strategy_config: {},
     })
     setEditingBot(null)
+  }
+
+  const loadTemplate = (templateId: number) => {
+    const template = templates.find((t: any) => t.id === templateId)
+    if (!template) return
+
+    setFormData({
+      name: `${template.name} (Copy)`,  // Prefix to avoid name conflicts
+      description: template.description || '',
+      strategy_type: template.strategy_type,
+      product_id: template.product_ids?.[0] || 'ETH-BTC',
+      product_ids: template.product_ids || [],
+      split_budget_across_pairs: template.split_budget_across_pairs || false,
+      strategy_config: template.strategy_config,
+    })
   }
 
   const handleOpenCreate = () => {
@@ -392,6 +415,34 @@ function Bots() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* Template Selector - Only show when creating new bot */}
+              {!editingBot && templates.length > 0 && (
+                <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-700/50 rounded-lg p-4">
+                  <label className="block text-sm font-medium mb-2">
+                    📝 Start from Template (Optional)
+                  </label>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        loadTemplate(parseInt(e.target.value))
+                      }
+                    }}
+                    className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  >
+                    <option value="">Select a template to pre-fill settings...</option>
+                    {templates.map((template: any) => (
+                      <option key={template.id} value={template.id}>
+                        {template.is_default ? '⭐ ' : ''}{template.name} - {template.description}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-400 mt-2">
+                    Templates provide quick-start configurations. You can customize all settings after selection.
+                  </p>
+                </div>
+              )}
+
               {/* Bot Name */}
               <div>
                 <label className="block text-sm font-medium mb-2">Bot Name *</label>
