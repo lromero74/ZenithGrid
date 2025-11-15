@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { positionsApi } from '../services/api'
+import { positionsApi, botsApi } from '../services/api'
 import { format } from 'date-fns'
 import { useState, useEffect, useRef } from 'react'
 import {
@@ -45,6 +45,13 @@ function DealChart({ position, productId }: { position: Position, productId: str
     { value: 'FOUR_HOUR', label: '4h' },
     { value: 'ONE_DAY', label: '1d' },
   ]
+
+  // Fetch bot configuration
+  const { data: bot } = useQuery({
+    queryKey: ['bot', position.bot_id],
+    queryFn: () => position.bot_id ? botsApi.getById(position.bot_id) : null,
+    enabled: !!position.bot_id,
+  })
 
   // Fetch candle data
   useEffect(() => {
@@ -160,6 +167,80 @@ function DealChart({ position, productId }: { position: Position, productId: str
 
     entryLineSeries.setData(entryLineData)
 
+    // Add Take Profit line (2% above entry as default)
+    const takeProfitPrice = position.average_buy_price * 1.02
+    const takeProfitSeries = chart.addLineSeries({
+      color: '#10b981', // Green
+      lineWidth: 2,
+      lineStyle: 2, // Dashed
+      priceLineVisible: false,
+      lastValueVisible: true,
+      title: 'Take Profit',
+      priceFormat: priceFormat,
+    })
+
+    const takeProfitData = chartData.map((c) => ({
+      time: c.time as Time,
+      value: takeProfitPrice,
+    }))
+
+    takeProfitSeries.setData(takeProfitData)
+
+    // Add Stop Loss line (2% below entry as default - only if position is open)
+    if (position.status === 'open') {
+      const stopLossPrice = position.average_buy_price * 0.98
+      const stopLossSeries = chart.addLineSeries({
+        color: '#ef4444', // Red
+        lineWidth: 2,
+        lineStyle: 2, // Dashed
+        priceLineVisible: false,
+        lastValueVisible: true,
+        title: 'Stop Loss',
+        priceFormat: priceFormat,
+      })
+
+      const stopLossData = chartData.map((c) => ({
+        time: c.time as Time,
+        value: stopLossPrice,
+      }))
+
+      stopLossSeries.setData(stopLossData)
+    }
+
+    // Add Safety Order price levels (gray dashed lines)
+    if (bot && position.status === 'open') {
+      const config = bot.strategy_config
+      const priceDeviation = config.price_deviation || 2.0
+      const stepScale = config.safety_order_step_scale || 1.0
+      const maxSafetyOrders = config.max_safety_orders || 5
+
+      // Calculate safety order price levels
+      let cumulativeDeviation = priceDeviation
+      for (let i = 0; i < maxSafetyOrders; i++) {
+        const soPrice = position.average_buy_price * (1 - cumulativeDeviation / 100)
+
+        const soSeries = chart.addLineSeries({
+          color: '#64748b', // Gray
+          lineWidth: 1,
+          lineStyle: 2, // Dashed
+          priceLineVisible: false,
+          lastValueVisible: false,
+          title: `SO${i + 1}`,
+          priceFormat: priceFormat,
+        })
+
+        const soData = chartData.map((c) => ({
+          time: c.time as Time,
+          value: soPrice,
+        }))
+
+        soSeries.setData(soData)
+
+        // Calculate next safety order deviation
+        cumulativeDeviation += priceDeviation * Math.pow(stepScale, i)
+      }
+    }
+
     // Add current price marker
     if (chartData.length > 0) {
       const lastCandle = chartData[chartData.length - 1]
@@ -198,7 +279,7 @@ function DealChart({ position, productId }: { position: Position, productId: str
         chartRef.current = null
       }
     }
-  }, [chartData, position, productId])
+  }, [chartData, position, productId, bot])
 
   return (
     <div className="space-y-3">
@@ -231,17 +312,61 @@ function DealChart({ position, productId }: { position: Position, productId: str
       </div>
 
       {/* Price Legend */}
-      <div className="flex items-center justify-around text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-0.5 bg-blue-500" style={{ borderTop: '2px dashed' }} />
-          <span className="text-slate-400">Avg Entry: {position.average_buy_price.toFixed(8)}</span>
-        </div>
-        {chartData.length > 0 && (
+      <div className="space-y-2">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-500" />
-            <span className="text-slate-400">Current: {chartData[chartData.length - 1].close.toFixed(8)}</span>
+            <div className="w-8 h-0.5 bg-blue-500" style={{ borderTop: '2px dashed' }} />
+            <span className="text-slate-400">Entry: {position.average_buy_price.toFixed(8)}</span>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-0.5 bg-green-500" style={{ borderTop: '2px dashed' }} />
+            <span className="text-green-400">TP: {(position.average_buy_price * 1.02).toFixed(8)}</span>
+          </div>
+          {position.status === 'open' && (
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-0.5 bg-red-500" style={{ borderTop: '2px dashed' }} />
+              <span className="text-red-400">SL: {(position.average_buy_price * 0.98).toFixed(8)}</span>
+            </div>
+          )}
+          {chartData.length > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              <span className="text-slate-400">Current: {chartData[chartData.length - 1].close.toFixed(8)}</span>
+            </div>
+          )}
+        </div>
+        {/* Safety Order Levels */}
+        {bot && position.status === 'open' && (() => {
+          const config = bot.strategy_config
+          const priceDeviation = config.price_deviation || 2.0
+          const stepScale = config.safety_order_step_scale || 1.0
+          const maxSafetyOrders = config.max_safety_orders || 5
+          const soLevels = []
+
+          let cumulativeDeviation = priceDeviation
+          for (let i = 0; i < Math.min(maxSafetyOrders, 3); i++) {
+            const soPrice = position.average_buy_price * (1 - cumulativeDeviation / 100)
+            soLevels.push({ level: i + 1, price: soPrice })
+            cumulativeDeviation += priceDeviation * Math.pow(stepScale, i)
+          }
+
+          return (
+            <div className="flex items-center gap-3 text-xs flex-wrap">
+              <div className="flex items-center gap-1">
+                <div className="w-6 h-0.5 bg-slate-500" style={{ borderTop: '1px dashed' }} />
+                <span className="text-slate-500">Safety Orders:</span>
+              </div>
+              {soLevels.map(({ level, price }) => (
+                <span key={level} className="text-slate-400">
+                  SO{level}: {price.toFixed(8)}
+                </span>
+              ))}
+              {maxSafetyOrders > 3 && (
+                <span className="text-slate-500">+{maxSafetyOrders - 3} more</span>
+              )}
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
