@@ -48,3 +48,9 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Claude Code
+.claude/
+
+# Process IDs
+.pids/
