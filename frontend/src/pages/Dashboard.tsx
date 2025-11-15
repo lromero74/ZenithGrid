@@ -1,8 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
-import { botsApi, accountApi } from '../services/api'
-import { Activity, TrendingUp, DollarSign, Play, Square, Bot as BotIcon } from 'lucide-react'
-import { Bot } from '../types'
+import { botsApi, positionsApi } from '../services/api'
+import {
+  Activity,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Play,
+  Square,
+  Bot as BotIcon,
+  Target,
+  Award,
+  Clock,
+  BarChart3
+} from 'lucide-react'
+import { Bot, Position } from '../types'
 import { useState } from 'react'
+import { format } from 'date-fns'
 
 export default function Dashboard() {
   // Fetch all bots
@@ -12,94 +25,205 @@ export default function Dashboard() {
     refetchInterval: 5000,
   })
 
-  // Fetch account balances
-  const { data: balances } = useQuery({
-    queryKey: ['account-balances'],
-    queryFn: accountApi.getBalances,
+  // Fetch all positions for metrics
+  const { data: allPositions = [] } = useQuery({
+    queryKey: ['all-positions'],
+    queryFn: () => positionsApi.getAll(undefined, 100),
     refetchInterval: 10000,
   })
 
-  // Fetch stats for all active bots
+  // Fetch portfolio for account value
+  const { data: portfolio } = useQuery({
+    queryKey: ['account-portfolio'],
+    queryFn: async () => {
+      const response = await fetch('/api/account/portfolio')
+      if (!response.ok) throw new Error('Failed to fetch portfolio')
+      return response.json()
+    },
+    refetchInterval: 60000,
+    staleTime: 30000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  })
+
   const activeBots = bots.filter(bot => bot.is_active)
-  const inactiveBots = bots.filter(bot => !bot.is_active)
+  const openPositions = allPositions.filter(p => p.status === 'open')
+  const closedPositions = allPositions.filter(p => p.status === 'closed')
 
-  // Aggregate stats across all bots
-  const totalActiveBots = activeBots.length
-  const totalBots = bots.length
+  // Calculate total profit
+  const totalProfitBTC = closedPositions.reduce((sum, p) => sum + (p.profit_btc || 0), 0)
+  const totalProfitUSD = closedPositions.reduce((sum, p) => sum + (p.profit_usd || 0), 0)
 
-  const formatPrice = (price: number) => price.toFixed(8)
-  const formatBTC = (btc: number) => `${btc.toFixed(8)} BTC`
+  // Calculate win rate
+  const profitablePositions = closedPositions.filter(p => (p.profit_btc || 0) > 0)
+  const winRate = closedPositions.length > 0
+    ? (profitablePositions.length / closedPositions.length) * 100
+    : 0
+
+  // Recent deals (last 5)
+  const recentDeals = [...allPositions]
+    .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
+    .slice(0, 5)
+
+  const formatCrypto = (amount: number, decimals: number = 8) => amount.toFixed(decimals)
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold">Dashboard</h2>
+          <h2 className="text-3xl font-bold text-white">Dashboard</h2>
           <p className="text-slate-400 text-sm mt-1">
-            {totalActiveBots} active bot{totalActiveBots !== 1 ? 's' : ''} running
+            {activeBots.length} active bot{activeBots.length !== 1 ? 's' : ''} • {openPositions.length} open deal{openPositions.length !== 1 ? 's' : ''}
           </p>
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Performance Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="stat-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm">Total Bots</p>
-              <p className="text-2xl font-bold mt-1">{totalBots}</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {totalActiveBots} active, {inactiveBots.length} stopped
-              </p>
-            </div>
-            <BotIcon className="w-10 h-10 text-blue-500 opacity-50" />
+        {/* Total Profit */}
+        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-slate-400 text-sm font-medium">Total Profit</p>
+            {totalProfitBTC >= 0 ? (
+              <TrendingUp className="w-5 h-5 text-green-500" />
+            ) : (
+              <TrendingDown className="w-5 h-5 text-red-500" />
+            )}
           </div>
+          <p className={`text-2xl font-bold ${totalProfitBTC >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {totalProfitBTC >= 0 ? '+' : ''}{formatCrypto(totalProfitBTC, 8)} BTC
+          </p>
+          <p className={`text-sm mt-1 ${totalProfitUSD >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+            {totalProfitUSD >= 0 ? '+' : ''}{formatCurrency(totalProfitUSD)}
+          </p>
         </div>
 
-        <div className="stat-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm">BTC Balance</p>
-              <p className="text-2xl font-bold mt-1">{(balances?.btc || 0).toFixed(6)}</p>
-              <p className="text-xs text-slate-500 mt-1">Available</p>
-            </div>
-            <DollarSign className="w-10 h-10 text-yellow-500 opacity-50" />
+        {/* Win Rate */}
+        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-slate-400 text-sm font-medium">Win Rate</p>
+            <Award className="w-5 h-5 text-blue-500" />
           </div>
+          <p className="text-2xl font-bold text-white">
+            {winRate.toFixed(1)}%
+          </p>
+          <p className="text-sm text-slate-400 mt-1">
+            {profitablePositions.length} / {closedPositions.length} deals
+          </p>
         </div>
 
-        <div className="stat-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm">Total Value</p>
-              <p className="text-2xl font-bold mt-1">{formatBTC(balances?.total_btc_value || 0)}</p>
-              <p className="text-xs text-slate-500 mt-1">
-                ${(balances?.total_usd_value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              </p>
-            </div>
-            <DollarSign className="w-10 h-10 text-green-500 opacity-50" />
+        {/* Active Deals */}
+        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-slate-400 text-sm font-medium">Active Deals</p>
+            <Target className="w-5 h-5 text-orange-500" />
           </div>
+          <p className="text-2xl font-bold text-white">
+            {openPositions.length}
+          </p>
+          <p className="text-sm text-slate-400 mt-1">
+            {closedPositions.length} closed
+          </p>
         </div>
 
-        <div className="stat-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm">ETH Balance</p>
-              <p className="text-2xl font-bold mt-1">{(balances?.eth || 0).toFixed(6)}</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {formatBTC(balances?.eth_value_in_btc || 0)}
-              </p>
-            </div>
-            <Activity className="w-10 h-10 text-purple-500 opacity-50" />
+        {/* Account Value */}
+        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-slate-400 text-sm font-medium">Account Value</p>
+            <DollarSign className="w-5 h-5 text-green-500" />
           </div>
+          <p className="text-2xl font-bold text-white">
+            {formatCrypto(portfolio?.total_btc_value || 0, 6)} BTC
+          </p>
+          <p className="text-sm text-slate-400 mt-1">
+            {formatCurrency(portfolio?.total_usd_value || 0)}
+          </p>
         </div>
       </div>
+
+      {/* Recent Deals */}
+      {recentDeals.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-400" />
+              Recent Deals
+            </h3>
+          </div>
+          <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-900">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Deal</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Opened</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Invested</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Profit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700">
+                  {recentDeals.map((position) => (
+                    <tr key={position.id} className="hover:bg-slate-750 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-white">#{position.id}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                          position.status === 'open'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {position.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-300 text-sm">
+                        {format(new Date(position.opened_at), 'MMM dd, HH:mm')}
+                      </td>
+                      <td className="px-4 py-3 text-right text-white font-mono text-sm">
+                        {formatCrypto(position.total_btc_spent, 8)} BTC
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {position.profit_btc !== null ? (
+                          <div className="flex items-center justify-end gap-1">
+                            {position.profit_btc >= 0 ? (
+                              <TrendingUp className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <TrendingDown className="w-3 h-3 text-red-500" />
+                            )}
+                            <span className={`font-semibold text-sm ${
+                              position.profit_btc >= 0 ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {position.profit_percentage?.toFixed(2)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-sm">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Active Bots */}
       {activeBots.length > 0 && (
         <div>
-          <h3 className="text-xl font-bold mb-4 flex items-center">
-            <Play className="w-5 h-5 mr-2 text-green-500" />
+          <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
+            <Play className="w-5 h-5 text-green-500" />
             Active Bots ({activeBots.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -111,14 +235,14 @@ export default function Dashboard() {
       )}
 
       {/* Inactive Bots */}
-      {inactiveBots.length > 0 && (
+      {bots.filter(b => !b.is_active).length > 0 && (
         <div>
-          <h3 className="text-xl font-bold mb-4 flex items-center">
-            <Square className="w-5 h-5 mr-2 text-slate-500" />
-            Stopped Bots ({inactiveBots.length})
+          <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
+            <Square className="w-5 h-5 text-slate-500" />
+            Stopped Bots ({bots.filter(b => !b.is_active).length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {inactiveBots.map((bot) => (
+            {bots.filter(b => !b.is_active).map((bot) => (
               <BotCard key={bot.id} bot={bot} />
             ))}
           </div>
@@ -126,52 +250,55 @@ export default function Dashboard() {
       )}
 
       {/* No Bots Message */}
-      {totalBots === 0 && (
-        <div className="bg-slate-800 rounded-lg p-12 text-center">
+      {bots.length === 0 && (
+        <div className="bg-slate-800 rounded-lg p-12 text-center border border-slate-700">
           <BotIcon className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">No Bots Created</h3>
+          <h3 className="text-xl font-semibold mb-2 text-white">No Bots Created</h3>
           <p className="text-slate-400 mb-6">
             Get started by creating your first trading bot
           </p>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault()
-              // This would normally trigger navigation to Bots page
-              // For now, just show a message
-              alert('Navigate to the "Bots" tab to create your first bot!')
-            }}
-            className="inline-block bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded font-medium transition-colors"
-          >
-            Go to Bot Management
-          </a>
         </div>
       )}
     </div>
   )
 }
 
-// Bot Card Component
+// Enhanced Bot Card Component
 function BotCard({ bot }: { bot: Bot }) {
   const { data: stats } = useQuery({
     queryKey: ['bot-stats', bot.id],
     queryFn: () => botsApi.getStats(bot.id),
     refetchInterval: 10000,
-    enabled: bot.is_active, // Only fetch stats for active bots
+    enabled: bot.is_active,
   })
 
-  const formatBTC = (btc: number) => `${btc.toFixed(8)} BTC`
+  const formatCrypto = (amount: number, decimals: number = 8) => amount.toFixed(decimals)
+
+  const handleToggleBot = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      if (bot.is_active) {
+        await botsApi.stop(bot.id)
+      } else {
+        await botsApi.start(bot.id)
+      }
+      // Trigger refetch
+      window.location.reload()
+    } catch (err) {
+      alert(`Error: ${err}`)
+    }
+  }
 
   return (
-    <div className={`bg-slate-800 rounded-lg p-5 border transition-colors ${
+    <div className={`bg-slate-800 rounded-lg p-5 border transition-all hover:border-slate-600 ${
       bot.is_active
-        ? 'border-green-500/30 hover:border-green-500/50'
-        : 'border-slate-700 hover:border-slate-600'
+        ? 'border-green-500/30'
+        : 'border-slate-700'
     }`}>
       {/* Bot Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h4 className="text-lg font-semibold truncate">{bot.name}</h4>
+          <h4 className="text-lg font-semibold truncate text-white">{bot.name}</h4>
           {bot.description && (
             <p className="text-sm text-slate-400 truncate mt-1">{bot.description}</p>
           )}
@@ -188,7 +315,7 @@ function BotCard({ bot }: { bot: Bot }) {
       {/* Bot Info */}
       <div className="space-y-2 mb-4">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">Product:</span>
+          <span className="text-slate-400">Pair:</span>
           <span className="text-white font-medium">{bot.product_id}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
@@ -197,50 +324,57 @@ function BotCard({ bot }: { bot: Bot }) {
             {bot.strategy_type.replace('_', ' ').toUpperCase()}
           </span>
         </div>
-        {bot.last_signal_check && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Last Check:</span>
-            <span className="text-slate-500 text-xs">
-              {new Date(bot.last_signal_check).toLocaleTimeString()}
-            </span>
-          </div>
+
+        {/* Bot Stats */}
+        {stats && (
+          <>
+            <div className="flex items-center justify-between text-sm pt-2 border-t border-slate-700">
+              <span className="text-slate-400">Deals:</span>
+              <span className="text-white font-medium">
+                {stats.open_positions} / {stats.total_positions}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">Profit:</span>
+              <span className={`font-semibold ${
+                (stats.total_profit_btc || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {(stats.total_profit_btc || 0) >= 0 ? '+' : ''}{formatCrypto(stats.total_profit_btc || 0, 6)} BTC
+              </span>
+            </div>
+          </>
         )}
       </div>
 
-      {/* Bot Stats (only for active bots with data) */}
-      {bot.is_active && stats && (
-        <div className="border-t border-slate-700 pt-3 space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Positions:</span>
-            <span className="text-white">
-              {stats.open_positions} open, {stats.closed_positions} closed
-            </span>
-          </div>
-          {stats.total_profit_btc !== 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Profit:</span>
-              <span className={stats.total_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}>
-                {formatBTC(stats.total_profit_btc)}
-              </span>
-            </div>
+      {/* Quick Actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleToggleBot}
+          className={`flex-1 px-3 py-2 rounded font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
+            bot.is_active
+              ? 'bg-red-600 hover:bg-red-700 text-white'
+              : 'bg-green-600 hover:bg-green-700 text-white'
+          }`}
+        >
+          {bot.is_active ? (
+            <>
+              <Square size={14} />
+              Stop
+            </>
+          ) : (
+            <>
+              <Play size={14} />
+              Start
+            </>
           )}
-          {stats.closed_positions > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Win Rate:</span>
-              <span className="text-white">{stats.win_rate.toFixed(1)}%</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Idle State for Stopped Bots */}
-      {!bot.is_active && (
-        <div className="border-t border-slate-700 pt-3">
-          <p className="text-sm text-slate-500 text-center">
-            Bot is stopped
-          </p>
-        </div>
-      )}
+        </button>
+        <button
+          onClick={() => window.location.hash = '#bots'}
+          className="px-3 py-2 rounded font-medium text-sm bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+        >
+          Edit
+        </button>
+      </div>
     </div>
   )
 }
