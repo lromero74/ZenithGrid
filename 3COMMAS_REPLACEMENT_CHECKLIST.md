@@ -17,6 +17,8 @@
 - ✅ Edit bots while running (3Commas style)
 - ✅ Start/Stop bots
 - ✅ Multiple bots running simultaneously
+- ✅ Multi-pair bots (trade multiple pairs with one bot)
+- ✅ Budget splitting toggle (divide percentages across pairs)
 - ⏳ Clone/duplicate bots
 - ⏳ Bot templates
 - ⏳ Import/export bot configs
@@ -400,26 +402,43 @@
    - Edit button now correctly navigates to Bots page
    - Committed directly to master
 
-### Next Priority Items:
-1. 🚧 **MULTI-PAIR BOTS** ⚠️ HIGH PRIORITY - Critical 3Commas feature
-   - Allow 1 bot to trade multiple pairs simultaneously
-   - Architecture: bot → multiple positions (one per pair)
-   - Signal evaluation per pair
-   - Configuration UI for selecting multiple pairs
+### Latest Features Completed (2025-11-15 Late Evening):
+1. ✅ **MULTI-PAIR BOTS** 🌟 Critical 3Commas feature
+   - Backend: bot → multiple positions (one per pair)
+   - Signal evaluation runs independently for each pair
+   - Position tracking includes product_id for correct chart display
+   - Trading engine filters by both bot_id AND product_id
+   - **Branch: multi-pair-backend** → merged to master
 
-2. ⏳ **Bot Templates**
+2. ✅ **Multi-Pair Bot UI**
+   - Checkbox multi-select for trading pairs
+   - Shows all selected pairs in bot cards
+   - Backward compatible with single-pair bots
+   - Validation requires at least one pair
+   - **Branch: multi-pair-ui** (initial commit) → merged to master
+
+3. ✅ **Budget Splitting Toggle**
+   - Optional per-bot setting to divide budget across pairs
+   - When enabled: divides base_order_percentage, safety_order_percentage, max_btc_usage_percentage by number of pairs
+   - When disabled: each pair gets full budget independently (3Commas default)
+   - UI shows clear explanations and calculated percentages
+   - Example: 30% max with 3 pairs → 10% per pair (safe) vs 90% total (default)
+   - **Branch: multi-pair-ui** → merged to master
+
+### Next Priority Items:
+1. ⏳ **Bot Templates**
    - Save/load bot configurations
    - Quick-start from presets
 
-3. ⏳ **Trailing Take Profit / Stop Loss**
+2. ⏳ **Trailing Take Profit / Stop Loss**
    - Dynamic TP that follows price upward
    - Implementation in trading engine
 
-4. ⏳ **Position Notifications/Alerts**
+3. ⏳ **Position Notifications/Alerts**
    - Deal opened/closed notifications
    - TP/SL hit alerts
 
 ---
 
-**Last Updated:** 2025-11-15 Evening
-**Next Milestone:** Multi-Pair Bots (starting now)
+**Last Updated:** 2025-11-15 Late Evening
+**Next Milestone:** Bot Templates or Trailing TP/SL
