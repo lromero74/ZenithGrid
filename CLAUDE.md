@@ -1,3 +1,4 @@
 - if you create bots while we are developing, please do not create them started.
 - Always think "How does 3Commas do it?" and do that.
 - new work should be done in dev branches and merged after I confirm good
+- always do git diff check before new git add to make sure we didn't lose functionality we want to keep

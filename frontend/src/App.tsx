@@ -171,7 +171,7 @@ function App() {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
-        {currentPage === 'dashboard' && <Dashboard />}
+        {currentPage === 'dashboard' && <Dashboard onNavigate={setCurrentPage} />}
         {currentPage === 'bots' && <Bots />}
         {currentPage === 'positions' && <Positions />}
         {currentPage === 'portfolio' && <Portfolio />}

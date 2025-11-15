@@ -17,7 +17,13 @@ import { Bot, Position } from '../types'
 import { useState } from 'react'
 import { format } from 'date-fns'
 
-export default function Dashboard() {
+type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
+
+interface DashboardProps {
+  onNavigate: (page: Page) => void
+}
+
+export default function Dashboard({ onNavigate }: DashboardProps) {
   // Fetch all bots
   const { data: bots = [] } = useQuery({
     queryKey: ['bots'],
@@ -228,7 +234,7 @@ export default function Dashboard() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeBots.map((bot) => (
-              <BotCard key={bot.id} bot={bot} />
+              <BotCard key={bot.id} bot={bot} onNavigate={onNavigate} />
             ))}
           </div>
         </div>
@@ -243,7 +249,7 @@ export default function Dashboard() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {bots.filter(b => !b.is_active).map((bot) => (
-              <BotCard key={bot.id} bot={bot} />
+              <BotCard key={bot.id} bot={bot} onNavigate={onNavigate} />
             ))}
           </div>
         </div>
@@ -264,7 +270,7 @@ export default function Dashboard() {
 }
 
 // Enhanced Bot Card Component
-function BotCard({ bot }: { bot: Bot }) {
+function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
   const { data: stats } = useQuery({
     queryKey: ['bot-stats', bot.id],
     queryFn: () => botsApi.getStats(bot.id),
@@ -369,7 +375,7 @@ function BotCard({ bot }: { bot: Bot }) {
           )}
         </button>
         <button
-          onClick={() => window.location.hash = '#bots'}
+          onClick={() => onNavigate('bots')}
           className="px-3 py-2 rounded font-medium text-sm bg-slate-700 hover:bg-slate-600 text-white transition-colors"
         >
           Edit
