@@ -26,7 +26,8 @@ class StrategyTradingEngine:
         db: AsyncSession,
         coinbase: CoinbaseClient,
         bot: Bot,
-        strategy: TradingStrategy
+        strategy: TradingStrategy,
+        product_id: Optional[str] = None
     ):
         """
         Initialize engine for a specific bot with its strategy
@@ -36,17 +37,20 @@ class StrategyTradingEngine:
             coinbase: Coinbase API client
             bot: Bot instance to trade for
             strategy: Strategy instance with bot's configuration
+            product_id: Trading pair to use (defaults to bot's first pair for backward compatibility)
         """
         self.db = db
         self.coinbase = coinbase
         self.bot = bot
         self.strategy = strategy
-        self.product_id = bot.product_id
+        # Use provided product_id, or fallback to bot's first pair
+        self.product_id = product_id or (bot.get_trading_pairs()[0] if hasattr(bot, 'get_trading_pairs') else bot.product_id)
 
     async def get_active_position(self) -> Optional[Position]:
-        """Get currently active position for this bot"""
+        """Get currently active position for this bot/pair combination"""
         query = select(Position).where(
             Position.bot_id == self.bot.id,
+            Position.product_id == self.product_id,  # Filter by pair for multi-pair support
             Position.status == "open"
         ).order_by(desc(Position.opened_at))
 

@@ -15,8 +15,9 @@ class Bot(Base):
     strategy_type = Column(String, index=True)  # e.g., "macd_dca", "rsi", "bollinger_bands"
     strategy_config = Column(JSON)  # JSON object with strategy-specific parameters
 
-    # Trading pair
-    product_id = Column(String, default="ETH-BTC")  # e.g., "ETH-BTC", "BTC-USD"
+    # Trading pairs (support for multi-pair bots)
+    product_id = Column(String, default="ETH-BTC", nullable=True)  # Legacy single pair (deprecated)
+    product_ids = Column(JSON, default=list)  # List of trading pairs e.g., ["ETH-BTC", "SOL-USD", "BTC-USD"]
 
     # Status
     is_active = Column(Boolean, default=False)  # Whether bot is currently running
@@ -28,6 +29,15 @@ class Bot(Base):
 
     # Relationships
     positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
+
+    def get_trading_pairs(self):
+        """Get list of trading pairs for this bot (backward compatible)"""
+        if self.product_ids and len(self.product_ids) > 0:
+            return self.product_ids
+        elif self.product_id:
+            return [self.product_id]
+        else:
+            return ["ETH-BTC"]  # Default fallback
 
 
 class Position(Base):

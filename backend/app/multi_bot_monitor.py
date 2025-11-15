@@ -127,17 +127,48 @@ class MultiBotMonitor:
 
     async def process_bot(self, db: AsyncSession, bot: Bot) -> Dict[str, Any]:
         """
-        Process signals for a single bot
+        Process signals for a single bot across all its trading pairs
 
         Args:
             db: Database session
             bot: Bot instance to process
 
         Returns:
+            Result dictionary with action/signal info for all pairs
+        """
+        try:
+            # Get all trading pairs for this bot (supports multi-pair)
+            trading_pairs = bot.get_trading_pairs()
+            logger.info(f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})")
+
+            # Process each trading pair independently
+            results = {}
+            for product_id in trading_pairs:
+                pair_result = await self.process_bot_pair(db, bot, product_id)
+                results[product_id] = pair_result
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Error processing bot {bot.name}: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": str(e)}
+
+    async def process_bot_pair(self, db: AsyncSession, bot: Bot, product_id: str) -> Dict[str, Any]:
+        """
+        Process signals for a single bot/pair combination
+
+        Args:
+            db: Database session
+            bot: Bot instance to process
+            product_id: Trading pair to evaluate (e.g., "ETH-BTC")
+
+        Returns:
             Result dictionary with action/signal info
         """
         try:
-            logger.info(f"Processing bot: {bot.name} ({bot.product_id}, {bot.strategy_type})")
+            logger.info(f"  Evaluating pair: {product_id}")
 
             # Get strategy instance for this bot
             try:
@@ -147,8 +178,8 @@ class MultiBotMonitor:
                 return {"error": str(e)}
 
             # Get current price
-            current_price = await self.coinbase.get_current_price(bot.product_id)
-            logger.info(f"  Current {bot.product_id} price: {current_price:.8f}")
+            current_price = await self.coinbase.get_current_price(product_id)
+            logger.info(f"    Current {product_id} price: {current_price:.8f}")
 
             # For conditional_dca strategy, extract all timeframes from conditions
             if bot.strategy_type == "conditional_dca":
@@ -185,18 +216,18 @@ class MultiBotMonitor:
                     lookback = lookback_map.get(timeframe, 100)
 
                     tf_candles = await self.get_candles_cached(
-                        product_id=bot.product_id,
+                        product_id=product_id,
                         granularity=timeframe,
                         lookback_candles=lookback
                     )
                     if tf_candles:
-                        logger.info(f"  Got {len(tf_candles)} candles for {timeframe}")
+                        logger.info(f"    Got {len(tf_candles)} candles for {timeframe}")
                         candles_by_timeframe[timeframe] = tf_candles
                     else:
-                        logger.warning(f"  No candles returned for {timeframe}")
+                        logger.warning(f"    No candles returned for {timeframe}")
 
                 if not candles_by_timeframe:
-                    logger.warning(f"  No candles available for {bot.product_id}")
+                    logger.warning(f"    No candles available for {product_id}")
                     return {"error": "No candles available"}
 
                 # Use first timeframe's candles as default for backward compatibility
@@ -208,13 +239,13 @@ class MultiBotMonitor:
 
                 # Get historical candles for signal analysis
                 candles = await self.get_candles_cached(
-                    product_id=bot.product_id,
+                    product_id=product_id,
                     granularity=timeframe,
                     lookback_candles=100
                 )
 
                 if not candles:
-                    logger.warning(f"  No candles available for {bot.product_id}")
+                    logger.warning(f"    No candles available for {product_id}")
                     return {"error": "No candles available"}
 
                 candles_by_timeframe = {timeframe: candles}
@@ -236,12 +267,13 @@ class MultiBotMonitor:
             signal_type = signal_data.get("signal_type")
             logger.info(f"  🔔 Signal detected: {signal_type}")
 
-            # Create trading engine for this bot
+            # Create trading engine for this bot/pair combination
             engine = StrategyTradingEngine(
                 db=db,
                 coinbase=self.coinbase,
                 bot=bot,
-                strategy=strategy
+                strategy=strategy,
+                product_id=product_id  # Specify which pair this engine instance trades
             )
 
             # Process the signal
@@ -320,7 +352,8 @@ class MultiBotMonitor:
                         {
                             "id": bot.id,
                             "name": bot.name,
-                            "product_id": bot.product_id,
+                            "product_ids": bot.get_trading_pairs(),  # Multi-pair support
+                            "product_id": bot.get_trading_pairs()[0] if bot.get_trading_pairs() else None,  # Legacy compatibility
                             "strategy": bot.strategy_type,
                             "last_check": bot.last_signal_check.isoformat() if bot.last_signal_check else None
                         }
