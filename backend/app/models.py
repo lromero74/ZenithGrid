@@ -92,6 +92,13 @@ class Position(Base):
     btc_usd_price_at_close = Column(Float, nullable=True)  # BTC/USD price when position closed
     profit_usd = Column(Float, nullable=True)  # Profit in USD
 
+    # Trailing Take Profit tracking
+    highest_price_since_tp = Column(Float, nullable=True)  # Highest price after hitting TP target
+    trailing_tp_active = Column(Boolean, default=False)  # Whether we've entered trailing TP zone
+
+    # Trailing Stop Loss tracking
+    highest_price_since_entry = Column(Float, nullable=True)  # Highest price since position opened (for trailing SL)
+
     # Relationships
     bot = relationship("Bot", back_populates="positions")
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")

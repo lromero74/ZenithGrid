@@ -191,6 +191,22 @@ class ConditionalDCAStrategy(TradingStrategy):
                     min_value=-50.0,
                     max_value=-0.1
                 ),
+                StrategyParameter(
+                    name="trailing_stop_loss",
+                    display_name="Trailing Stop Loss",
+                    description="Enable trailing stop loss (SL follows price upward to protect profits)",
+                    type="bool",
+                    default=False
+                ),
+                StrategyParameter(
+                    name="trailing_stop_deviation",
+                    display_name="Trailing Stop Deviation %",
+                    description="How far price can drop from peak before stop loss triggers (if trailing SL enabled)",
+                    type="float",
+                    default=5.0,
+                    min_value=0.1,
+                    max_value=20.0
+                ),
 
                 # Condition Settings (stored as JSON in strategy_config)
                 # These are not StrategyParameters but part of config dict:
@@ -479,10 +495,12 @@ class ConditionalDCAStrategy(TradingStrategy):
         Determine if we should sell
 
         Logic:
-        1. Check stop loss first
-        2. Check take profit %
-        3. Check take profit conditions (additional exit signals)
-        4. Handle trailing if enabled
+        1. Update trailing trackers (highest price for TP/SL)
+        2. Check trailing stop loss
+        3. Check stop loss
+        4. Check trailing take profit
+        5. Check simple take profit
+        6. Check take profit conditions
         """
         take_profit_signal = signal_data.get("take_profit_signal", False)
 
@@ -492,7 +510,24 @@ class ConditionalDCAStrategy(TradingStrategy):
         profit_btc = eth_value - position.total_btc_spent
         profit_pct = (profit_btc / position.total_btc_spent) * 100
 
-        # Check stop loss first
+        # Update highest price since entry (for trailing SL)
+        if position.highest_price_since_entry is None:
+            position.highest_price_since_entry = current_price
+        elif current_price > position.highest_price_since_entry:
+            position.highest_price_since_entry = current_price
+
+        # Check trailing stop loss first (if enabled)
+        if self.config.get("trailing_stop_loss", False):
+            trailing_stop_dev = self.config.get("trailing_stop_deviation", 5.0)
+            highest_price = position.highest_price_since_entry or avg_price
+
+            # Calculate trailing SL price: highest_price * (1 - deviation/100)
+            trailing_sl_price = highest_price * (1.0 - trailing_stop_dev / 100.0)
+
+            if current_price <= trailing_sl_price:
+                return True, f"Trailing stop loss triggered (Peak: {highest_price:.8f}, SL: {trailing_sl_price:.8f}, Current: {current_price:.8f})"
+
+        # Check regular stop loss
         if self.config["stop_loss_enabled"]:
             stop_loss_pct = self.config["stop_loss_percentage"]
             if profit_pct <= stop_loss_pct:
@@ -503,13 +538,28 @@ class ConditionalDCAStrategy(TradingStrategy):
 
         if profit_pct >= target_profit:
             if self.config["trailing_take_profit"]:
-                # Trailing take profit logic
+                # Proper trailing take profit logic
                 trailing_dev = self.config["trailing_deviation"]
 
-                if profit_pct >= target_profit + trailing_dev:
-                    return True, f"Trailing take profit: {profit_pct:.2f}%"
+                # Activate trailing TP when we hit target
+                if not position.trailing_tp_active:
+                    position.trailing_tp_active = True
+                    position.highest_price_since_tp = current_price
 
-                return False, f"In profit zone, trailing ({profit_pct:.2f}%)"
+                # Update highest price since TP activated
+                if position.highest_price_since_tp is None:
+                    position.highest_price_since_tp = current_price
+                elif current_price > position.highest_price_since_tp:
+                    position.highest_price_since_tp = current_price
+
+                # Check if price dropped by trailing_deviation from peak
+                peak_price = position.highest_price_since_tp
+                trailing_trigger_price = peak_price * (1.0 - trailing_dev / 100.0)
+
+                if current_price <= trailing_trigger_price:
+                    return True, f"Trailing TP triggered (Peak: {peak_price:.8f}, Trigger: {trailing_trigger_price:.8f}, Profit: {profit_pct:.2f}%)"
+
+                return False, f"Trailing TP active (Peak: {peak_price:.8f}, Current: {current_price:.8f}, Profit: {profit_pct:.2f}%)"
             else:
                 # Simple take profit
                 return True, f"Take profit target reached: {profit_pct:.2f}%"
