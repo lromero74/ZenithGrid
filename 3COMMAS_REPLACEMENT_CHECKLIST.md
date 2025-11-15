@@ -266,7 +266,7 @@
 
 ### Should Have (Important)
 - ✅ Bot templates
-- ⏳ Clone bots
+- ✅ Clone bots (smart name incrementing)
 - ⏳ Multiple exchanges
 - ⏳ Notifications
 - ⏳ Performance analytics
@@ -478,24 +478,39 @@
    - **Branch: trailing-tp-sl** → merged to master
    - Example: Entry $100, TP 3%, Trailing 1% → Price hits $110 → Sells at $108.90 (8.9% profit)
 
-### Latest Session Progress (2025-11-15 Afternoon):
+### Latest Session Progress (2025-11-15 - Full Day):
 1. ✅ **Clone/Duplicate Bots** 🎉
    - Backend: POST /api/bots/{id}/clone endpoint
    - Auto-increments name intelligently (Bot → Bot (Copy) → Bot (Copy 2))
    - Cloned bot starts stopped (safe default)
-   - Frontend: Clone button with Copy icon
+   - Frontend: Clone button with Copy icon between Edit and Delete
    - Preserves all configuration
 
-2. ✅ **AI Bot Reasoning Log Infrastructure** 🧠
+2. ✅ **AI Bot Reasoning Log - Complete** 🧠
    - Database: AIBotLog model (thinking, decision, confidence, context)
-   - Backend API: Save and retrieve AI reasoning logs
-   - Ready for integration into AI autonomous strategy
+   - Backend API: POST/GET /api/bots/{id}/logs endpoints
+   - **Integrated with AI strategy:** Automatically saves every decision
+   - Logs saved after both buy and sell decisions
+   - Only logs for AI autonomous bots (strategy check)
 
-### Next Priority Items (In Progress):
-1. ⏳ **Complete AI Bot Reasoning Log**
-   - Integrate log saving into AI autonomous strategy
-   - Frontend viewer component to display AI thinking
-   - Add custom instructions field to AI bot modal
+3. ✅ **Custom Instructions for AI Bots** 🎯
+   - New parameter: custom_instructions (text type)
+   - Frontend: Textarea with helpful default behavior description
+   - Backend: Instructions appended to Claude API prompt
+   - Examples: "Focus on BTC pairs", "Avoid low volume hours"
+
+### Completed Today - Full Summary:
+✅ Trailing Take Profit / Stop Loss (proper implementation)
+✅ Stopped Bot Position Management (continues managing existing positions)
+✅ Clone/Duplicate Bots
+✅ AI Reasoning Log Infrastructure + Integration
+✅ Custom Instructions for AI Bots
+
+### Next Priority Items:
+1. ⏳ **AI Reasoning Log Viewer (Frontend)**
+   - Display AI thinking/reasoning in bot details
+   - Show decision history with timestamps
+   - Filter by decision type (buy/hold/sell)
 
 2. ⏳ **Position Notifications/Alerts**
    - Deal opened/closed notifications
@@ -504,5 +519,5 @@
 
 ---
 
-**Last Updated:** 2025-11-15 (MacBook - Afternoon)
-**Next Milestone:** AI Log Integration & Notifications
+**Last Updated:** 2025-11-15 (MacBook - Evening)
+**Next Milestone:** AI Log Viewer & Notifications
