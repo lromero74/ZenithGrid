@@ -256,10 +256,21 @@ class StrategyTradingEngine:
         position = await self.get_active_position()
         btc_balance = await self.coinbase.get_btc_balance()
 
-        # Check if we should buy
-        should_buy, btc_amount, buy_reason = await self.strategy.should_buy(
-            signal_data, position, btc_balance
-        )
+        # Check if we should buy (only if bot is active)
+        should_buy = False
+        btc_amount = 0
+        buy_reason = ""
+
+        if self.bot.is_active:
+            should_buy, btc_amount, buy_reason = await self.strategy.should_buy(
+                signal_data, position, btc_balance
+            )
+        else:
+            # Bot is stopped - don't open new positions
+            if position is None:
+                buy_reason = "Bot is stopped - not opening new positions"
+            else:
+                buy_reason = "Bot is stopped - managing existing position only"
 
         if should_buy:
             # Create position if needed

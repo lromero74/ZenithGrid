@@ -50,10 +50,35 @@ class MultiBotMonitor:
         self._cache_ttl = 30  # Cache candles for 30 seconds
 
     async def get_active_bots(self, db: AsyncSession) -> List[Bot]:
-        """Fetch all active bots from database"""
-        query = select(Bot).where(Bot.is_active == True)
-        result = await db.execute(query)
-        return list(result.scalars().all())
+        """
+        Fetch all bots that need processing:
+        - Active bots (is_active == True) - can open new positions and manage existing ones
+        - Inactive bots with open positions - only manage existing positions, no new ones
+        """
+        from app.models import Position
+
+        # Get all active bots
+        active_query = select(Bot).where(Bot.is_active == True)
+        active_result = await db.execute(active_query)
+        active_bots = list(active_result.scalars().all())
+
+        # Get inactive bots that have open positions
+        inactive_with_positions_query = (
+            select(Bot)
+            .join(Position, Position.bot_id == Bot.id)
+            .where(Bot.is_active == False, Position.status == "open")
+            .distinct()
+        )
+        inactive_result = await db.execute(inactive_with_positions_query)
+        inactive_bots_with_positions = list(inactive_result.scalars().all())
+
+        # Combine both lists
+        all_bots = active_bots + inactive_bots_with_positions
+
+        if inactive_bots_with_positions:
+            logger.info(f"Including {len(inactive_bots_with_positions)} stopped bot(s) with open positions")
+
+        return all_bots
 
     def timeframe_to_seconds(self, timeframe: str) -> int:
         """Convert timeframe string to seconds"""
