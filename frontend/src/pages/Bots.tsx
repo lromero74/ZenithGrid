@@ -26,7 +26,8 @@ interface BotFormData {
   name: string
   description: string
   strategy_type: string
-  product_id: string
+  product_id: string  // Legacy - kept for backward compatibility
+  product_ids: string[]  // Multi-pair support
   strategy_config: Record<string, any>
 }
 
@@ -38,7 +39,8 @@ function Bots() {
     name: '',
     description: '',
     strategy_type: '',
-    product_id: 'ETH-BTC',
+    product_id: 'ETH-BTC',  // Legacy fallback
+    product_ids: [],  // Start with empty array, user will select
     strategy_config: {},
   })
 
@@ -121,11 +123,14 @@ function Bots() {
 
   const handleOpenEdit = (bot: Bot) => {
     setEditingBot(bot)
+    // Handle both legacy single pair and new multi-pair bots
+    const productIds = (bot as any).product_ids || (bot.product_id ? [bot.product_id] : [])
     setFormData({
       name: bot.name,
       description: bot.description || '',
       strategy_type: bot.strategy_type,
-      product_id: bot.product_id,
+      product_id: bot.product_id,  // Keep for backward compatibility
+      product_ids: productIds,
       strategy_config: bot.strategy_config,
     })
     setShowModal(true)
@@ -161,11 +166,18 @@ function Bots() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    const botData: BotCreate = {
+    // Validate at least one pair is selected
+    if (formData.product_ids.length === 0) {
+      alert('Please select at least one trading pair')
+      return
+    }
+
+    const botData: any = {
       name: formData.name,
       description: formData.description || undefined,
       strategy_type: formData.strategy_type,
-      product_id: formData.product_id,
+      product_id: formData.product_ids[0],  // Legacy - use first pair
+      product_ids: formData.product_ids,  // Multi-pair support
       strategy_config: formData.strategy_config,
     }
 
@@ -316,8 +328,10 @@ function Bots() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Pair:</span>
-                  <span className="text-white font-medium">{bot.product_id}</span>
+                  <span className="text-slate-400">Pairs:</span>
+                  <span className="text-white font-medium text-xs">
+                    {((bot as any).product_ids || [bot.product_id]).join(', ')}
+                  </span>
                 </div>
               </div>
 
@@ -399,30 +413,63 @@ function Bots() {
                 />
               </div>
 
-              {/* Trading Pair */}
+              {/* Trading Pairs (Multi-Select) */}
               <div>
-                <label className="block text-sm font-medium mb-2">Trading Pair *</label>
-                <select
-                  value={formData.product_id}
-                  onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
-                  className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
-                  required
-                >
-                  <optgroup label="BTC Pairs">
-                    {TRADING_PAIRS.filter((p) => p.group === 'BTC Pairs').map((pair) => (
-                      <option key={pair.value} value={pair.value}>
-                        {pair.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="USD Pairs">
-                    {TRADING_PAIRS.filter((p) => p.group === 'USD Pairs').map((pair) => (
-                      <option key={pair.value} value={pair.value}>
-                        {pair.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
+                <label className="block text-sm font-medium mb-2">
+                  Trading Pairs *
+                  <span className="text-xs text-slate-400 ml-2">(Select one or more pairs)</span>
+                </label>
+                <div className="border border-slate-600 rounded bg-slate-700 p-3 max-h-60 overflow-y-auto">
+                  {/* BTC Pairs */}
+                  <div className="mb-3">
+                    <div className="text-xs font-medium text-slate-400 mb-2">BTC Pairs</div>
+                    <div className="space-y-1">
+                      {TRADING_PAIRS.filter((p) => p.group === 'BTC Pairs').map((pair) => (
+                        <label key={pair.value} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-600 p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData.product_ids.includes(pair.value)}
+                            onChange={(e) => {
+                              const newIds = e.target.checked
+                                ? [...formData.product_ids, pair.value]
+                                : formData.product_ids.filter(id => id !== pair.value)
+                              setFormData({ ...formData, product_ids: newIds, product_id: newIds[0] || 'ETH-BTC' })
+                            }}
+                            className="rounded border-slate-500"
+                          />
+                          <span className="text-sm">{pair.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* USD Pairs */}
+                  <div>
+                    <div className="text-xs font-medium text-slate-400 mb-2">USD Pairs</div>
+                    <div className="space-y-1">
+                      {TRADING_PAIRS.filter((p) => p.group === 'USD Pairs').map((pair) => (
+                        <label key={pair.value} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-600 p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData.product_ids.includes(pair.value)}
+                            onChange={(e) => {
+                              const newIds = e.target.checked
+                                ? [...formData.product_ids, pair.value]
+                                : formData.product_ids.filter(id => id !== pair.value)
+                              setFormData({ ...formData, product_ids: newIds, product_id: newIds[0] || 'ETH-BTC' })
+                            }}
+                            className="rounded border-slate-500"
+                          />
+                          <span className="text-sm">{pair.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {formData.product_ids.length > 0 && (
+                  <div className="mt-2 text-xs text-slate-400">
+                    Selected: {formData.product_ids.join(', ')}
+                  </div>
+                )}
               </div>
 
               {/* Strategy Selection */}
