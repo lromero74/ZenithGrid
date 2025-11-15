@@ -478,18 +478,31 @@
    - **Branch: trailing-tp-sl** → merged to master
    - Example: Entry $100, TP 3%, Trailing 1% → Price hits $110 → Sells at $108.90 (8.9% profit)
 
-### Next Priority Items:
-1. ⏳ **Position Notifications/Alerts**
+### Latest Session Progress (2025-11-15 Afternoon):
+1. ✅ **Clone/Duplicate Bots** 🎉
+   - Backend: POST /api/bots/{id}/clone endpoint
+   - Auto-increments name intelligently (Bot → Bot (Copy) → Bot (Copy 2))
+   - Cloned bot starts stopped (safe default)
+   - Frontend: Clone button with Copy icon
+   - Preserves all configuration
+
+2. ✅ **AI Bot Reasoning Log Infrastructure** 🧠
+   - Database: AIBotLog model (thinking, decision, confidence, context)
+   - Backend API: Save and retrieve AI reasoning logs
+   - Ready for integration into AI autonomous strategy
+
+### Next Priority Items (In Progress):
+1. ⏳ **Complete AI Bot Reasoning Log**
+   - Integrate log saving into AI autonomous strategy
+   - Frontend viewer component to display AI thinking
+   - Add custom instructions field to AI bot modal
+
+2. ⏳ **Position Notifications/Alerts**
    - Deal opened/closed notifications
    - TP/SL hit alerts
    - Safety order filled alerts
-   - AI bot reasoning log viewer
-
-2. ⏳ **Clone/Duplicate Bots**
-   - Quick copy of existing bot configuration
-   - Increment name automatically
 
 ---
 
-**Last Updated:** 2025-11-15 (MacBook)
-**Next Milestone:** Notifications & Clone Bots
+**Last Updated:** 2025-11-15 (MacBook - Afternoon)
+**Next Milestone:** AI Log Integration & Notifications
