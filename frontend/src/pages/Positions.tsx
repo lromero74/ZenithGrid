@@ -160,6 +160,46 @@ function DealChart({ position, productId }: { position: Position, productId: str
 
     entryLineSeries.setData(entryLineData)
 
+    // Add Take Profit line (2% above entry as default)
+    const takeProfitPrice = position.average_buy_price * 1.02
+    const takeProfitSeries = chart.addLineSeries({
+      color: '#10b981', // Green
+      lineWidth: 2,
+      lineStyle: 2, // Dashed
+      priceLineVisible: false,
+      lastValueVisible: true,
+      title: 'Take Profit',
+      priceFormat: priceFormat,
+    })
+
+    const takeProfitData = chartData.map((c) => ({
+      time: c.time as Time,
+      value: takeProfitPrice,
+    }))
+
+    takeProfitSeries.setData(takeProfitData)
+
+    // Add Stop Loss line (2% below entry as default - only if position is open)
+    if (position.status === 'open') {
+      const stopLossPrice = position.average_buy_price * 0.98
+      const stopLossSeries = chart.addLineSeries({
+        color: '#ef4444', // Red
+        lineWidth: 2,
+        lineStyle: 2, // Dashed
+        priceLineVisible: false,
+        lastValueVisible: true,
+        title: 'Stop Loss',
+        priceFormat: priceFormat,
+      })
+
+      const stopLossData = chartData.map((c) => ({
+        time: c.time as Time,
+        value: stopLossPrice,
+      }))
+
+      stopLossSeries.setData(stopLossData)
+    }
+
     // Add current price marker
     if (chartData.length > 0) {
       const lastCandle = chartData[chartData.length - 1]
@@ -231,11 +271,21 @@ function DealChart({ position, productId }: { position: Position, productId: str
       </div>
 
       {/* Price Legend */}
-      <div className="flex items-center justify-around text-xs">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
         <div className="flex items-center gap-2">
           <div className="w-8 h-0.5 bg-blue-500" style={{ borderTop: '2px dashed' }} />
-          <span className="text-slate-400">Avg Entry: {position.average_buy_price.toFixed(8)}</span>
+          <span className="text-slate-400">Entry: {position.average_buy_price.toFixed(8)}</span>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-0.5 bg-green-500" style={{ borderTop: '2px dashed' }} />
+          <span className="text-green-400">TP: {(position.average_buy_price * 1.02).toFixed(8)}</span>
+        </div>
+        {position.status === 'open' && (
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-0.5 bg-red-500" style={{ borderTop: '2px dashed' }} />
+            <span className="text-red-400">SL: {(position.average_buy_price * 0.98).toFixed(8)}</span>
+          </div>
+        )}
         {chartData.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-blue-500" />
