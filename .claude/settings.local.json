@@ -40,7 +40,8 @@
       "WebFetch(domain:docs.cloud.coinbase.com)",
       "Bash(python3:*)",
       "WebFetch(domain:help.3commas.io)",
-      "Bash(time curl -s http://localhost:8000/api/account/portfolio)"
+      "Bash(time curl -s http://localhost:8000/api/account/portfolio)",
+      "Bash(git merge dashboard-overhaul --no-edit)"
     ],
     "deny": [],
     "ask": []
