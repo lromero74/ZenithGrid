@@ -804,6 +804,22 @@ async def get_portfolio():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/ticker/{product_id}")
+async def get_ticker(product_id: str):
+    """Get current ticker/price for a product"""
+    try:
+        ticker = await coinbase_client.get_ticker(product_id)
+        current_price = float(ticker.get("price", 0))
+
+        return {
+            "product_id": product_id,
+            "price": current_price,
+            "time": ticker.get("time", datetime.utcnow().isoformat()),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/products")
 async def get_products():
     """Get all available trading products from Coinbase"""

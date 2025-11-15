@@ -31,7 +31,7 @@ interface CandleData {
 }
 
 // Deal Chart Component
-function DealChart({ position, productId }: { position: Position, productId: string }) {
+function DealChart({ position, productId, currentPrice }: { position: Position, productId: string, currentPrice?: number }) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const [timeframe, setTimeframe] = useState('FIFTEEN_MINUTE')
@@ -279,7 +279,7 @@ function DealChart({ position, productId }: { position: Position, productId: str
         chartRef.current = null
       }
     }
-  }, [chartData, position, productId, bot])
+  }, [chartData, position, productId, bot, currentPrice])
 
   return (
     <div className="space-y-3">
@@ -328,10 +328,12 @@ function DealChart({ position, productId }: { position: Position, productId: str
               <span className="text-red-400">SL: {(position.average_buy_price * 0.98).toFixed(8)}</span>
             </div>
           )}
-          {chartData.length > 0 && (
+          {(currentPrice || chartData.length > 0) && (
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-blue-500" />
-              <span className="text-slate-400">Current: {chartData[chartData.length - 1].close.toFixed(8)}</span>
+              <span className="text-slate-400">
+                Current: {(currentPrice || chartData[chartData.length - 1]?.close || 0).toFixed(8)}
+              </span>
             </div>
           )}
         </div>
@@ -379,12 +381,44 @@ export default function Positions() {
   const [addFundsAmount, setAddFundsAmount] = useState('')
   const [addFundsPositionId, setAddFundsPositionId] = useState<number | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
 
   const { data: allPositions } = useQuery({
     queryKey: ['positions'],
     queryFn: () => positionsApi.getAll(undefined, 100),
     refetchInterval: 5000, // Update every 5 seconds for active deals
   })
+
+  // Fetch real-time prices for all open positions
+  useEffect(() => {
+    const fetchPrices = async () => {
+      if (!allPositions) return
+
+      const openPositions = allPositions.filter(p => p.status === 'open')
+      const pricePromises = openPositions.map(async (position) => {
+        try {
+          const response = await axios.get(`${API_BASE}/api/ticker/${position.product_id || 'ETH-BTC'}`)
+          return { product_id: position.product_id || 'ETH-BTC', price: response.data.price }
+        } catch (err) {
+          console.error(`Error fetching price for ${position.product_id}:`, err)
+          return { product_id: position.product_id || 'ETH-BTC', price: position.average_buy_price }
+        }
+      })
+
+      const prices = await Promise.all(pricePromises)
+      const priceMap = prices.reduce((acc, { product_id, price }) => {
+        acc[product_id] = price
+        return acc
+      }, {} as Record<string, number>)
+
+      setCurrentPrices(priceMap)
+    }
+
+    fetchPrices()
+    const interval = setInterval(fetchPrices, 5000) // Update every 5 seconds
+
+    return () => clearInterval(interval)
+  }, [allPositions])
 
   const { data: trades } = useQuery({
     queryKey: ['position-trades', selectedPosition],
@@ -487,10 +521,12 @@ export default function Positions() {
   }
 
   // Calculate unrealized P&L for open position
-  const calculateUnrealizedPnL = (position: Position, currentPrice: number) => {
+  const calculateUnrealizedPnL = (position: Position, currentPrice?: number) => {
     if (position.status !== 'open') return null
 
-    const currentValue = position.total_eth_acquired * currentPrice
+    // Use real-time price if available, otherwise fall back to average buy price
+    const price = currentPrice || position.average_buy_price
+    const currentValue = position.total_eth_acquired * price
     const costBasis = position.total_btc_spent
     const unrealizedPnL = currentValue - costBasis
     const unrealizedPnLPercent = (unrealizedPnL / costBasis) * 100
@@ -498,7 +534,8 @@ export default function Positions() {
     return {
       btc: unrealizedPnL,
       percent: unrealizedPnLPercent,
-      usd: unrealizedPnL * (position.btc_usd_price_at_open || 0)
+      usd: unrealizedPnL * (position.btc_usd_price_at_open || 0),
+      currentPrice: price
     }
   }
 
@@ -524,7 +561,8 @@ export default function Positions() {
         ) : (
           <div className="space-y-4">
             {openPositions.map((position) => {
-              const pnl = calculateUnrealizedPnL(position, position.average_buy_price) // Would need current price from API
+              const currentPrice = currentPrices[position.product_id || 'ETH-BTC']
+              const pnl = calculateUnrealizedPnL(position, currentPrice)
               const safetyOrders = selectedPosition === position.id ? getSafetyOrders(trades) : []
               const fundsUsedPercent = (position.total_btc_spent / position.max_btc_allowed) * 100
 
@@ -545,7 +583,7 @@ export default function Positions() {
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                           {/* Current P&L */}
                           <div>
                             <p className="text-slate-400 text-xs mb-1">Current Profit</p>
@@ -563,6 +601,19 @@ export default function Positions() {
                                 </div>
                                 <p className={`text-sm ${pnl.btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
                                   {pnl.btc >= 0 ? '+' : ''}{formatCrypto(pnl.btc, 8)} BTC
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Current Price */}
+                          <div>
+                            <p className="text-slate-400 text-xs mb-1">Current Price</p>
+                            {pnl && (
+                              <div>
+                                <p className="text-white font-semibold">{formatPrice(pnl.currentPrice)}</p>
+                                <p className={`text-xs ${pnl.btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                                  {pnl.btc >= 0 ? '▲' : '▼'} {Math.abs(pnl.percent).toFixed(2)}%
                                 </p>
                               </div>
                             )}
@@ -658,7 +709,11 @@ export default function Positions() {
                         </div>
 
                         {/* Deal Chart */}
-                        <DealChart position={position} productId={position.product_id || "ETH-BTC"} />
+                        <DealChart
+                          position={position}
+                          productId={position.product_id || "ETH-BTC"}
+                          currentPrice={currentPrice}
+                        />
 
                         {/* Position Details Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
