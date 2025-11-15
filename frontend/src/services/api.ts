@@ -29,6 +29,12 @@ export const positionsApi = {
     api.get<Position>(`/positions/${id}`).then((res) => res.data),
   getTrades: (id: number) =>
     api.get<Trade[]>(`/positions/${id}/trades`).then((res) => res.data),
+  close: (id: number) =>
+    api.post<{ message: string; profit_btc: number; profit_percentage: number }>(`/positions/${id}/force-close`)
+      .then((res) => res.data),
+  addFunds: (id: number, btcAmount: number) =>
+    api.post<{ message: string; trade_id: number; price: number; eth_acquired: number }>(`/positions/${id}/add-funds`, { btc_amount: btcAmount })
+      .then((res) => res.data),
 };
 
 export const tradesApi = {

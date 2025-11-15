@@ -1,1 +1,2 @@
 - if you create bots while we are developing, please do not create them started.
+- Always think "How does 3Commas do it?" and do that.

@@ -186,6 +186,7 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
 
         {/* Advanced Settings Toggle */}
         <button
+          type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
           className="mt-4 text-blue-400 hover:text-blue-300 text-sm transition-colors"
         >
@@ -255,6 +256,24 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
             />
             <p className="text-xs text-slate-400 mt-1">
               Always active (minimum profit target)
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Min Profit % for Condition Exit
+            </label>
+            <input
+              type="number"
+              value={config.min_profit_for_conditions ?? 0.0}
+              onChange={(e) => updateConfig('min_profit_for_conditions', parseFloat(e.target.value))}
+              min="-50"
+              max="50"
+              step="0.1"
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Min profit to exit on conditions below (0 = breakeven)
             </p>
           </div>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
@@ -6,23 +6,40 @@ import Positions from './pages/Positions'
 import Bots from './pages/Bots'
 import Charts from './pages/Charts'
 import Strategies from './pages/Strategies'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers } from 'lucide-react'
+import Portfolio from './pages/Portfolio'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet } from 'lucide-react'
 import { accountApi } from './services/api'
 
-type Page = 'dashboard' | 'bots' | 'positions' | 'charts' | 'strategies' | 'settings'
+type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard')
-
-  // Fetch account balances (includes BTC/USD price)
-  const { data: balances } = useQuery({
-    queryKey: ['account-balances'],
-    queryFn: accountApi.getBalances,
-    refetchInterval: 5000, // Update every 5 seconds
+  const [currentPage, setCurrentPage] = useState<Page>(() => {
+    // Restore last viewed page from localStorage
+    const saved = localStorage.getItem('current-page')
+    return (saved as Page) || 'dashboard'
   })
 
-  const totalBtcValue = balances?.total_btc_value || 0
-  const totalUsdValue = balances?.total_usd_value || 0
+  // Fetch full portfolio data (all coins)
+  const { data: portfolio } = useQuery({
+    queryKey: ['account-portfolio'],
+    queryFn: async () => {
+      const response = await fetch('/api/account/portfolio')
+      if (!response.ok) throw new Error('Failed to fetch portfolio')
+      return response.json()
+    },
+    refetchInterval: 60000, // Update prices every 60 seconds
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnMount: false, // Don't refetch on page refresh - use cache
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+  })
+
+  const totalBtcValue = portfolio?.total_btc_value || 0
+  const totalUsdValue = portfolio?.total_usd_value || 0
+
+  // Save current page to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('current-page', currentPage)
+  }, [currentPage])
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -97,6 +114,19 @@ function App() {
               </div>
             </button>
             <button
+              onClick={() => setCurrentPage('portfolio')}
+              className={`px-4 py-3 font-medium transition-colors ${
+                currentPage === 'portfolio'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Wallet className="w-4 h-4" />
+                <span>Portfolio</span>
+              </div>
+            </button>
+            <button
               onClick={() => setCurrentPage('charts')}
               className={`px-4 py-3 font-medium transition-colors ${
                 currentPage === 'charts'
@@ -144,6 +174,7 @@ function App() {
         {currentPage === 'dashboard' && <Dashboard />}
         {currentPage === 'bots' && <Bots />}
         {currentPage === 'positions' && <Positions />}
+        {currentPage === 'portfolio' && <Portfolio />}
         {currentPage === 'charts' && <Charts />}
         {currentPage === 'strategies' && <Strategies />}
         {currentPage === 'settings' && <Settings />}

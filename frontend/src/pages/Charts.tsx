@@ -1,18 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineData } from 'lightweight-charts'
+import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { BarChart2, Activity, TrendingUp, ChevronDown, X, Settings, Search } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-const TRADING_PAIRS = [
-  { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC Pairs' },
-  { value: 'SOL-BTC', label: 'SOL/BTC', group: 'BTC Pairs' },
-  { value: 'LINK-BTC', label: 'LINK/BTC', group: 'BTC Pairs' },
-  { value: 'BTC-USD', label: 'BTC/USD', group: 'USD Pairs' },
-  { value: 'ETH-USD', label: 'ETH/USD', group: 'USD Pairs' },
-  { value: 'SOL-USD', label: 'SOL/USD', group: 'USD Pairs' },
-]
 
 const TIME_INTERVALS = [
   { value: 'ONE_MINUTE', label: '1m' },
@@ -334,6 +326,66 @@ const AVAILABLE_INDICATORS = [
 ]
 
 function Charts() {
+  // Fetch portfolio to get coins we hold (uses shared cache)
+  const { data: portfolio } = useQuery({
+    queryKey: ['account-portfolio'],
+    queryFn: async () => {
+      const response = await fetch('/api/account/portfolio')
+      if (!response.ok) throw new Error('Failed to fetch portfolio')
+      return response.json()
+    },
+    refetchInterval: 60000,
+    staleTime: 30000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  })
+
+  // Fetch all available products from Coinbase
+  const { data: productsData } = useQuery({
+    queryKey: ['available-products'],
+    queryFn: async () => {
+      const response = await fetch('/api/products')
+      if (!response.ok) throw new Error('Failed to fetch products')
+      return response.json()
+    },
+    staleTime: 3600000, // Cache for 1 hour (product list rarely changes)
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  })
+
+  // Generate trading pairs from all available products
+  const TRADING_PAIRS = (() => {
+    if (!productsData?.products) {
+      // Fallback to default pairs while loading
+      return [
+        { value: 'BTC-USD', label: 'BTC/USD', group: 'USD Pairs', inPortfolio: false },
+        { value: 'ETH-USD', label: 'ETH/USD', group: 'USD Pairs', inPortfolio: false },
+        { value: 'SOL-USD', label: 'SOL/USD', group: 'USD Pairs', inPortfolio: false },
+      ]
+    }
+
+    // Get list of assets in portfolio
+    const portfolioAssets = new Set(
+      portfolio?.holdings?.map((h: any) => h.asset) || []
+    )
+
+    // Convert products to trading pairs with portfolio indicator
+    const pairs = productsData.products.map((product: any) => {
+      const base = product.base_currency
+      const quote = product.quote_currency
+      const inPortfolio = portfolioAssets.has(base)
+
+      return {
+        value: product.product_id,
+        label: `${base}/${quote}`,
+        group: quote === 'USD' ? 'USD Pairs' : 'BTC Pairs',
+        inPortfolio: inPortfolio
+      }
+    })
+
+    return pairs
+  })()
+
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
@@ -342,7 +394,9 @@ function Charts() {
   const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
 
   const [selectedPair, setSelectedPair] = useState(() => {
-    return localStorage.getItem('chart-selected-pair') || 'ETH-BTC'
+    const saved = localStorage.getItem('chart-selected-pair')
+    // Validate saved pair still exists in trading pairs
+    return saved || 'BTC-USD'
   })
   const [selectedInterval, setSelectedInterval] = useState(() => {
     return localStorage.getItem('chart-selected-interval') || 'FIFTEEN_MINUTE'
@@ -1192,11 +1246,20 @@ function Charts() {
           onChange={(e) => setSelectedPair(e.target.value)}
           className="bg-slate-700 text-white px-3 py-2 rounded text-sm font-medium border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          {TRADING_PAIRS.map((pair) => (
-            <option key={pair.value} value={pair.value}>
-              {pair.label}
-            </option>
-          ))}
+          <optgroup label="USD Pairs">
+            {TRADING_PAIRS.filter(p => p.group === 'USD Pairs').map((pair) => (
+              <option key={pair.value} value={pair.value}>
+                {pair.inPortfolio ? '• ' : ''}{pair.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="BTC Pairs">
+            {TRADING_PAIRS.filter(p => p.group === 'BTC Pairs').map((pair) => (
+              <option key={pair.value} value={pair.value}>
+                {pair.inPortfolio ? '• ' : ''}{pair.label}
+              </option>
+            ))}
+          </optgroup>
         </select>
 
         <div className="w-px h-6 bg-slate-600" />

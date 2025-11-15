@@ -39,17 +39,9 @@ class ConditionalDCAStrategy(TradingStrategy):
             id="conditional_dca",
             name="Conditional DCA (Custom Conditions)",
             description="Advanced DCA with user-defined buy/sell conditions. "
-                       "Mix and match any indicators with operators like >, <, crossing above, etc.",
+                       "Mix and match any indicators with operators like >, <, crossing above, etc. "
+                       "Each condition can use its own timeframe.",
             parameters=[
-                StrategyParameter(
-                    name="timeframe",
-                    display_name="Timeframe / Candle Interval",
-                    description="Timeframe for indicator analysis",
-                    type="str",
-                    default="FIVE_MINUTE",
-                    options=["ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR", "TWO_HOUR", "SIX_HOUR", "ONE_DAY"]
-                ),
-
                 # Base Order Settings
                 StrategyParameter(
                     name="base_order_type",
@@ -157,6 +149,15 @@ class ConditionalDCAStrategy(TradingStrategy):
                     max_value=50.0
                 ),
                 StrategyParameter(
+                    name="min_profit_for_conditions",
+                    display_name="Min Profit % for Condition Exit",
+                    description="Minimum profit % required to exit on take profit conditions (set negative to allow selling at a loss)",
+                    type="float",
+                    default=0.0,
+                    min_value=-50.0,
+                    max_value=50.0
+                ),
+                StrategyParameter(
                     name="trailing_take_profit",
                     display_name="Trailing Take Profit",
                     description="Enable trailing take profit (follows price up)",
@@ -239,7 +240,8 @@ class ConditionalDCAStrategy(TradingStrategy):
     async def analyze_signal(
         self,
         candles: List[Dict[str, Any]],
-        current_price: float
+        current_price: float,
+        candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Analyze market data and evaluate phase conditions
@@ -252,8 +254,13 @@ class ConditionalDCAStrategy(TradingStrategy):
             - indicators: dict of all indicator values
             - price: current price
         """
-        if len(candles) < 50:  # Need enough data for indicators
+        # Need fewer candles for longer timeframes (30min needs less data than 5min)
+        min_candles_needed = 30  # Reduced from 50 to work with longer timeframes
+        if len(candles) < min_candles_needed:
+            print(f"[CONDITIONAL_DCA] Not enough candles: got {len(candles)}, need {min_candles_needed}")
             return None
+
+        print(f"[CONDITIONAL_DCA] Analyzing with {len(candles)} candles for {len(timeframes_needed) if 'timeframes_needed' in locals() else 'unknown'} timeframes")
 
         # Extract required indicators from all phase conditions
         required = set()
@@ -261,11 +268,51 @@ class ConditionalDCAStrategy(TradingStrategy):
         required.update(self.phase_evaluator.get_required_indicators(self.safety_order_conditions))
         required.update(self.phase_evaluator.get_required_indicators(self.take_profit_conditions))
 
-        # Calculate current indicators
-        current_indicators = self.indicator_calculator.calculate_all_indicators(
-            candles,
-            required
-        )
+        # Extract unique timeframes from required indicators
+        timeframes_needed = set()
+        for indicator_key in required:
+            # Extract timeframe from keys like "FIVE_MINUTE_rsi_14"
+            parts = indicator_key.split('_', 2)
+            if len(parts) >= 2:
+                # Reconstruct timeframe (handles ONE_MINUTE, FIVE_MINUTE, etc.)
+                if parts[0] in ['ONE', 'FIVE', 'FIFTEEN', 'THIRTY', 'TWO', 'SIX']:
+                    timeframe = f"{parts[0]}_{parts[1]}"
+                    timeframes_needed.add(timeframe)
+
+        # Use provided candles_by_timeframe or fallback to default candles
+        if candles_by_timeframe is None:
+            candles_by_timeframe = {'FIVE_MINUTE': candles}
+
+        # Calculate indicators for each timeframe using actual candles
+        current_indicators = {}
+
+        for timeframe in timeframes_needed:
+            # Get candles for this timeframe (fallback to default if not available)
+            tf_candles = candles_by_timeframe.get(timeframe, candles)
+
+            print(f"[CONDITIONAL_DCA] Timeframe {timeframe}: got {len(tf_candles)} candles")
+
+            if len(tf_candles) < min_candles_needed:
+                print(f"[CONDITIONAL_DCA] Skipping {timeframe}: only {len(tf_candles)} candles, need {min_candles_needed}")
+                continue  # Not enough data for this timeframe
+
+            # Extract just the indicator names (without timeframe prefix) for this timeframe
+            tf_required = set()
+            for indicator_key in required:
+                if indicator_key.startswith(f"{timeframe}_"):
+                    # Remove timeframe prefix
+                    indicator_name = indicator_key[len(timeframe) + 1:]
+                    tf_required.add(indicator_name)
+
+            # Calculate indicators for this timeframe
+            indicators_for_tf = self.indicator_calculator.calculate_all_indicators(
+                tf_candles,
+                tf_required
+            )
+
+            # Prefix each indicator with the timeframe
+            for key, value in indicators_for_tf.items():
+                current_indicators[f"{timeframe}_{key}"] = value
 
         # Evaluate base order conditions
         base_order_signal = False
@@ -469,8 +516,11 @@ class ConditionalDCAStrategy(TradingStrategy):
 
         # Check additional take profit conditions
         if take_profit_signal and len(self.take_profit_conditions) > 0:
-            # Only sell on conditions if near breakeven or profitable
-            if profit_pct >= -0.5:
-                return True, f"Take profit conditions met (P&L: {profit_pct:.2f}%)"
+            # Only sell on conditions if profit meets minimum threshold
+            min_profit = self.config.get("min_profit_for_conditions", 0.0)
+            if profit_pct >= min_profit:
+                return True, f"Take profit conditions met (P&L: {profit_pct:.2f}%, Min: {min_profit}%)"
+            else:
+                return False, f"Conditions met but profit too low ({profit_pct:.2f}% < {min_profit}%)"
 
         return False, f"Holding (P&L: {profit_pct:.2f}%, Target: {target_profit}%)"

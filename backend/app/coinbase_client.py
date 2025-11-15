@@ -119,6 +119,20 @@ class CoinbaseClient:
         await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
         return balance
 
+    async def list_products(self) -> List[Dict[str, Any]]:
+        """Get all available products/trading pairs"""
+        cache_key = "all_products"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        result = await self._request("GET", "/api/v3/brokerage/products")
+        products = result.get("products", [])
+
+        # Cache for 1 hour (product list doesn't change often)
+        await api_cache.set(cache_key, products, ttl_seconds=3600)
+        return products
+
     async def get_product(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Get product details"""
         result = await self._request("GET", f"/api/v3/brokerage/products/{product_id}")

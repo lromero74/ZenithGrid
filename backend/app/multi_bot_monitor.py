@@ -102,12 +102,16 @@ class MultiBotMonitor:
             end_time = int(time.time())
             start_time = end_time - (lookback_candles * granularity_seconds)
 
+            logger.info(f"  Requesting {lookback_candles} {granularity} candles for {product_id} (time range: {start_time} to {end_time})")
+
             candles = await self.coinbase.get_candles(
                 product_id=product_id,
                 start=start_time,
                 end=end_time,
                 granularity=granularity
             )
+
+            logger.info(f"  Coinbase returned {len(candles)} candles")
 
             # Coinbase returns newest first, reverse to get oldest first
             candles = list(reversed(candles))
@@ -146,27 +150,88 @@ class MultiBotMonitor:
             current_price = await self.coinbase.get_current_price(bot.product_id)
             logger.info(f"  Current {bot.product_id} price: {current_price:.8f}")
 
-            # Get bot's configured timeframe (default to FIVE_MINUTE if not set)
-            timeframe = bot.strategy_config.get("timeframe", "FIVE_MINUTE")
-            logger.info(f"  Using timeframe: {timeframe}")
+            # For conditional_dca strategy, extract all timeframes from conditions
+            if bot.strategy_type == "conditional_dca":
+                # Extract unique timeframes from all conditions
+                timeframes_needed = set()
+                for phase_key in ['base_order_conditions', 'safety_order_conditions', 'take_profit_conditions']:
+                    conditions = bot.strategy_config.get(phase_key, [])
+                    for condition in conditions:
+                        tf = condition.get('timeframe', 'FIVE_MINUTE')
+                        timeframes_needed.add(tf)
 
-            # Get historical candles for signal analysis
-            candles = await self.get_candles_cached(
-                product_id=bot.product_id,
-                granularity=timeframe,
-                lookback_candles=100
-            )
+                # If no conditions, use default
+                if not timeframes_needed:
+                    timeframes_needed.add('FIVE_MINUTE')
 
-            if not candles:
-                logger.warning(f"  No candles available for {bot.product_id}")
-                return {"error": "No candles available"}
+                logger.info(f"  Fetching candles for timeframes: {timeframes_needed}")
+
+                # Fetch candles for each unique timeframe
+                # Use more lookback for longer timeframes to ensure we get enough data
+                candles_by_timeframe = {}
+                for timeframe in timeframes_needed:
+                    # Coinbase limits: ~300 candles max per request
+                    # Stay conservative to ensure we get data
+                    lookback_map = {
+                        'ONE_MINUTE': 200,
+                        'FIVE_MINUTE': 200,
+                        'FIFTEEN_MINUTE': 150,
+                        'THIRTY_MINUTE': 100,  # 100 candles = 50 hours
+                        'ONE_HOUR': 100,       # 100 candles = 4 days
+                        'TWO_HOUR': 100,
+                        'SIX_HOUR': 100,
+                        'ONE_DAY': 100
+                    }
+                    lookback = lookback_map.get(timeframe, 100)
+
+                    tf_candles = await self.get_candles_cached(
+                        product_id=bot.product_id,
+                        granularity=timeframe,
+                        lookback_candles=lookback
+                    )
+                    if tf_candles:
+                        logger.info(f"  Got {len(tf_candles)} candles for {timeframe}")
+                        candles_by_timeframe[timeframe] = tf_candles
+                    else:
+                        logger.warning(f"  No candles returned for {timeframe}")
+
+                if not candles_by_timeframe:
+                    logger.warning(f"  No candles available for {bot.product_id}")
+                    return {"error": "No candles available"}
+
+                # Use first timeframe's candles as default for backward compatibility
+                candles = list(candles_by_timeframe.values())[0]
+            else:
+                # Legacy: Get bot's configured timeframe (default to FIVE_MINUTE if not set)
+                timeframe = bot.strategy_config.get("timeframe", "FIVE_MINUTE")
+                logger.info(f"  Using timeframe: {timeframe}")
+
+                # Get historical candles for signal analysis
+                candles = await self.get_candles_cached(
+                    product_id=bot.product_id,
+                    granularity=timeframe,
+                    lookback_candles=100
+                )
+
+                if not candles:
+                    logger.warning(f"  No candles available for {bot.product_id}")
+                    return {"error": "No candles available"}
+
+                candles_by_timeframe = {timeframe: candles}
 
             # Analyze signal using strategy
-            signal_data = await strategy.analyze_signal(candles, current_price)
+            # For conditional_dca, pass the candles_by_timeframe dict
+            if bot.strategy_type == "conditional_dca":
+                logger.info(f"  Analyzing conditional_dca signals...")
+                signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe)
+            else:
+                signal_data = await strategy.analyze_signal(candles, current_price)
 
             if not signal_data:
-                logger.debug(f"  No signal from strategy")
+                logger.warning(f"  No signal from strategy (returned None)")
                 return {"action": "none", "reason": "No signal"}
+
+            logger.info(f"  Signal data: base_order={signal_data.get('base_order_signal')}, safety_order={signal_data.get('safety_order_signal')}, take_profit={signal_data.get('take_profit_signal')}")
 
             signal_type = signal_data.get("signal_type")
             logger.info(f"  🔔 Signal detected: {signal_type}")

@@ -609,6 +609,60 @@ async def force_close_position(position_id: int, db: AsyncSession = Depends(get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class AddFundsRequest(BaseModel):
+    btc_amount: float
+
+
+@app.post("/api/positions/{position_id}/add-funds")
+async def add_funds_to_position(
+    position_id: int,
+    request: AddFundsRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Manually add funds to a position (manual safety order)"""
+    btc_amount = request.btc_amount
+    try:
+        query = select(Position).where(Position.id == position_id)
+        result = await db.execute(query)
+        position = result.scalars().first()
+
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        if position.status != "open":
+            raise HTTPException(status_code=400, detail="Position is not open")
+
+        # Check if adding funds would exceed max allowed
+        if position.total_btc_spent + btc_amount > position.max_btc_allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Adding {btc_amount} BTC would exceed max allowed ({position.max_btc_allowed} BTC)"
+            )
+
+        # Get current price
+        current_price = await coinbase_client.get_current_price()
+
+        # Execute DCA buy
+        engine = TradingEngine(db, coinbase_client)
+        trade = await engine.execute_dca_buy(
+            position=position,
+            btc_amount=btc_amount,
+            current_price=current_price,
+            trade_type="manual_safety_order"
+        )
+
+        return {
+            "message": f"Added {btc_amount} BTC to position {position_id}",
+            "trade_id": trade.id,
+            "price": current_price,
+            "eth_acquired": trade.eth_amount
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/account/balances")
 async def get_balances():
     """Get current account balances"""
@@ -628,6 +682,168 @@ async def get_balances():
             "current_eth_btc_price": current_price,
             "btc_usd_price": btc_usd_price,
             "total_usd_value": total_btc_value * btc_usd_price
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/account/portfolio")
+async def get_portfolio():
+    """Get full portfolio breakdown (all coins like 3Commas)"""
+    try:
+        # Get portfolio breakdown with all holdings
+        breakdown = await coinbase_client.get_portfolio_breakdown()
+        spot_positions = breakdown.get("spot_positions", [])
+
+        # Get BTC/USD price for valuations
+        btc_usd_price = await coinbase_client.get_btc_usd_price()
+
+        portfolio_holdings = []
+        total_usd_value = 0.0
+        total_btc_value = 0.0
+
+        # Major assets that we know have liquid markets
+        major_assets = {
+            'BTC', 'ETH', 'SOL', 'USDC', 'USDT', 'USD', 'LTC', 'BCH', 'LINK',
+            'DOT', 'UNI', 'MATIC', 'AVAX', 'ATOM', 'XLM', 'ADA', 'DOGE', 'SHIB',
+            'APT', 'ARB', 'OP', 'NEAR', 'FTM', 'AAVE', 'MKR', 'SNX', 'COMP',
+            'YFI', 'CRV', 'SUSHI', 'BAL', 'UMA', 'REN', 'LRC', 'ZRX'
+        }
+
+        for position in spot_positions:
+            asset = position.get("asset", "")
+            total_balance = float(position.get("total_balance_crypto", 0))
+            available = float(position.get("available_to_trade_crypto", 0))
+            hold = total_balance - available
+
+            # Don't filter by coin amount - small amounts can still be valuable
+            # We'll filter by USD value later after pricing
+
+            # Skip obscure assets to avoid timeouts
+            if asset not in major_assets:
+                print(f"Skipping non-major asset: {asset}")
+                continue
+
+            # Get USD value for this asset
+            usd_value = 0.0
+            btc_value = 0.0
+            current_price_usd = 0.0
+
+            if asset == "USD" or asset == "USDC":
+                usd_value = total_balance
+                btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
+                current_price_usd = 1.0
+            elif asset == "BTC":
+                usd_value = total_balance * btc_usd_price
+                btc_value = total_balance
+                current_price_usd = btc_usd_price
+            else:
+                # Try to get price for other assets (with timeout protection)
+                try:
+                    # First try ASSET-USD pair
+                    try:
+                        asset_usd_price = await coinbase_client.get_current_price(f"{asset}-USD")
+                        usd_value = total_balance * asset_usd_price
+                        current_price_usd = asset_usd_price
+                    except:
+                        # Try ASSET-BTC pair and convert to USD
+                        try:
+                            asset_btc_price = await coinbase_client.get_current_price(f"{asset}-BTC")
+                            btc_value = total_balance * asset_btc_price
+                            usd_value = btc_value * btc_usd_price
+                            current_price_usd = asset_btc_price * btc_usd_price
+                        except:
+                            # Can't get price for this asset, skip it
+                            print(f"Could not get price for {asset}, skipping")
+                            continue
+
+                    # Calculate BTC value if not already set
+                    if btc_value == 0 and btc_usd_price > 0:
+                        btc_value = usd_value / btc_usd_price
+                except Exception as e:
+                    # If we can't get price, skip this asset
+                    print(f"Error pricing {asset}: {e}")
+                    continue
+
+            # Skip assets worth less than $0.01 USD
+            if usd_value < 0.01:
+                continue
+
+            total_usd_value += usd_value
+            total_btc_value += btc_value
+
+            portfolio_holdings.append({
+                "asset": asset,
+                "total_balance": total_balance,
+                "available": available,
+                "hold": hold,
+                "current_price_usd": current_price_usd,
+                "usd_value": usd_value,
+                "btc_value": btc_value,
+                "percentage": 0.0  # Will calculate after we know total
+            })
+
+        # Calculate percentages
+        for holding in portfolio_holdings:
+            if total_usd_value > 0:
+                holding["percentage"] = (holding["usd_value"] / total_usd_value) * 100
+
+        # Sort by USD value descending
+        portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
+
+        return {
+            "total_usd_value": total_usd_value,
+            "total_btc_value": total_btc_value,
+            "btc_usd_price": btc_usd_price,
+            "holdings": portfolio_holdings,
+            "holdings_count": len(portfolio_holdings)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/products")
+async def get_products():
+    """Get all available trading products from Coinbase"""
+    try:
+        products = await coinbase_client.list_products()
+
+        # Filter to only USD and BTC pairs that are tradeable
+        filtered_products = []
+        for product in products:
+            product_id = product.get("product_id", "")
+            status = product.get("status", "")
+
+            # Only include online/active products
+            if status != "online":
+                continue
+
+            # Only include USD and BTC pairs
+            if product_id.endswith("-USD") or product_id.endswith("-BTC"):
+                base_currency = product.get("base_currency_id", "")
+                quote_currency = product.get("quote_currency_id", "")
+
+                filtered_products.append({
+                    "product_id": product_id,
+                    "base_currency": base_currency,
+                    "quote_currency": quote_currency,
+                    "display_name": product.get("display_name", product_id),
+                })
+
+        # Sort: BTC-USD first, then alphabetically
+        def sort_key(p):
+            if p["product_id"] == "BTC-USD":
+                return "0"
+            elif p["quote_currency"] == "USD":
+                return "1_" + p["product_id"]
+            else:  # BTC pairs
+                return "2_" + p["product_id"]
+
+        filtered_products.sort(key=sort_key)
+
+        return {
+            "products": filtered_products,
+            "count": len(filtered_products)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -200,9 +200,8 @@ async def update_bot(
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
 
-    # Don't allow updates while bot is active
-    if bot.is_active:
-        raise HTTPException(status_code=400, detail="Cannot update bot while it is active. Stop it first.")
+    # Allow updates while bot is active (3Commas style)
+    # Changes will apply to new signals/positions, not existing open positions
 
     # Update fields
     if bot_update.name is not None:

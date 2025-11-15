@@ -14,11 +14,22 @@ export type ConditionType =
 
 export type Operator = 'greater_than' | 'less_than' | 'crossing_above' | 'crossing_below'
 
+export type Timeframe =
+  | 'ONE_MINUTE'
+  | 'FIVE_MINUTE'
+  | 'FIFTEEN_MINUTE'
+  | 'THIRTY_MINUTE'
+  | 'ONE_HOUR'
+  | 'TWO_HOUR'
+  | 'SIX_HOUR'
+  | 'ONE_DAY'
+
 export interface PhaseCondition {
   id: string
   type: ConditionType
   operator: Operator
   value: number
+  timeframe: Timeframe
   period?: number
   fast_period?: number
   slow_period?: number
@@ -79,6 +90,17 @@ const OPERATORS: Record<Operator, string> = {
   crossing_below: 'Crossing Below',
 }
 
+const TIMEFRAMES: Record<Timeframe, string> = {
+  ONE_MINUTE: '1m',
+  FIVE_MINUTE: '5m',
+  FIFTEEN_MINUTE: '15m',
+  THIRTY_MINUTE: '30m',
+  ONE_HOUR: '1h',
+  TWO_HOUR: '2h',
+  SIX_HOUR: '6h',
+  ONE_DAY: '1d',
+}
+
 function PhaseConditionSelector({
   title,
   description,
@@ -94,6 +116,7 @@ function PhaseConditionSelector({
       type: 'rsi',
       operator: 'less_than',
       value: 30,
+      timeframe: 'FIVE_MINUTE',
       period: 14,
     }
     onChange([...conditions, newCondition])
@@ -113,6 +136,7 @@ function PhaseConditionSelector({
           const newCondition: PhaseCondition = {
             ...c,
             type: updates.type,
+            timeframe: c.timeframe || 'FIVE_MINUTE',
           }
 
           // Set default parameters based on type
@@ -451,24 +475,25 @@ function PhaseConditionSelector({
 
   const getReadableCondition = (condition: PhaseCondition): string => {
     const op = OPERATORS[condition.operator]
+    const tf = TIMEFRAMES[condition.timeframe || 'FIVE_MINUTE']
 
     switch (condition.type) {
       case 'rsi':
-        return `RSI(${condition.period || 14}) ${op} ${condition.value}`
+        return `[${tf}] RSI(${condition.period || 14}) ${op} ${condition.value}`
       case 'macd':
-        return `MACD Histogram(${condition.fast_period},${condition.slow_period},${condition.signal_period}) ${op} ${condition.value}`
+        return `[${tf}] MACD Histogram(${condition.fast_period},${condition.slow_period},${condition.signal_period}) ${op} ${condition.value}`
       case 'bb_percent':
-        return `BB%(${condition.period},${condition.std_dev}) ${op} ${condition.value}%`
+        return `[${tf}] BB%(${condition.period},${condition.std_dev}) ${op} ${condition.value}%`
       case 'ema_cross':
-        return `Price ${op} EMA(${condition.period})`
+        return `[${tf}] Price ${op} EMA(${condition.period})`
       case 'sma_cross':
-        return `Price ${op} SMA(${condition.period})`
+        return `[${tf}] Price ${op} SMA(${condition.period})`
       case 'stochastic':
-        return `Stochastic(${condition.period}) ${op} ${condition.value}`
+        return `[${tf}] Stochastic(${condition.period}) ${op} ${condition.value}`
       case 'price_change':
-        return `Price Change ${op} ${condition.value}%`
+        return `[${tf}] Price Change ${op} ${condition.value}%`
       case 'volume':
-        return `Volume ${op} ${condition.value}`
+        return `[${tf}] Volume ${op} ${condition.value}`
       default:
         return 'Unknown condition'
     }
@@ -488,6 +513,7 @@ function PhaseConditionSelector({
               {index > 0 && allowMultiple && onLogicChange && (
                 <div className="flex items-center justify-center my-2">
                   <button
+                    type="button"
                     onClick={() => onLogicChange(logic === 'and' ? 'or' : 'and')}
                     className={`px-3 py-1 rounded text-xs font-medium ${
                       logic === 'and' ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'
@@ -501,24 +527,41 @@ function PhaseConditionSelector({
               <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
                 <div className="flex items-start gap-2 mb-2">
                   <div className="flex-1">
-                    <select
-                      value={condition.type}
-                      onChange={(e) =>
-                        updateCondition(condition.id, { type: e.target.value as ConditionType })
-                      }
-                      className="w-full bg-slate-600 text-white px-3 py-2 rounded text-sm border border-slate-500 font-medium"
-                    >
-                      {Object.entries(CONDITION_TYPES).map(([value, { label }]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <div className="flex gap-2 mb-2">
+                      <select
+                        value={condition.type}
+                        onChange={(e) =>
+                          updateCondition(condition.id, { type: e.target.value as ConditionType })
+                        }
+                        className="flex-1 bg-slate-600 text-white px-3 py-2 rounded text-sm border border-slate-500 font-medium"
+                      >
+                        {Object.entries(CONDITION_TYPES).map(([value, { label }]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={condition.timeframe || 'FIVE_MINUTE'}
+                        onChange={(e) =>
+                          updateCondition(condition.id, { timeframe: e.target.value as Timeframe })
+                        }
+                        className="bg-slate-600 text-white px-3 py-2 rounded text-sm border border-slate-500 font-medium"
+                        title="Timeframe"
+                      >
+                        {Object.entries(TIMEFRAMES).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs text-slate-400">
                       {CONDITION_TYPES[condition.type].description}
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => removeCondition(condition.id)}
                     className="text-red-400 hover:text-red-300 transition-colors p-1"
                     title="Remove condition"
@@ -545,6 +588,7 @@ function PhaseConditionSelector({
 
       {(allowMultiple || conditions.length === 0) && (
         <button
+          type="button"
           onClick={addCondition}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm transition-colors w-full justify-center"
         >

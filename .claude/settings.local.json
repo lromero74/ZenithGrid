@@ -39,7 +39,8 @@
       "WebFetch(domain:docs.cdp.coinbase.com)",
       "WebFetch(domain:docs.cloud.coinbase.com)",
       "Bash(python3:*)",
-      "WebFetch(domain:help.3commas.io)"
+      "WebFetch(domain:help.3commas.io)",
+      "Bash(time curl -s http://localhost:8000/api/account/portfolio)"
     ],
     "deny": [],
     "ask": []
