@@ -313,7 +313,18 @@
 ## Recent Updates (2025-11-15)
 
 ### Completed This Session (Latest First):
-1. ✅ **Position Product ID Tracking**
+1. ✅ **Dashboard Overhaul (3Commas Style)** 🌟
+   - Total profit metrics (BTC & USD) with trend indicators
+   - Win rate calculation with profitable/total ratio
+   - Active deals count prominently displayed
+   - Account value from portfolio
+   - Recent deals table (last 5 deals)
+   - Enhanced bot cards with Start/Stop quick actions
+   - Per-bot profit and deal stats
+   - Real-time updates every 5-10 seconds
+   - **Branch: dashboard-overhaul** (ready for review)
+
+2. ✅ **Position Product ID Tracking**
    - Added product_id column to Position model
    - Positions now store their trading pair (e.g., "SOL-USD", "ETH-BTC")
    - Charts in deal view now show correct pair
