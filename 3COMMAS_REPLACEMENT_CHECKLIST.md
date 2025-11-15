@@ -31,8 +31,8 @@
 - ✅ Take Profit conditions
 - ✅ Min profit threshold for conditional exits
 - ✅ **AI Autonomous Trading** (Claude AI-powered)
-- ⏳ Trailing take profit
-- ⏳ Trailing stop loss
+- ✅ **Trailing take profit** (tracks peak, sells on drop from peak)
+- ✅ **Trailing stop loss** (follows price up, protects profits)
 - ⏳ Multiple take profit targets
 - ⏳ DCA strategy presets (Aggressive, Conservative, etc.)
 
@@ -259,13 +259,13 @@
 - ✅ Edit running bots
 - ✅ Real-time deal tracking
 - ✅ Safety order ladder
-- 🚧 Charts with price markers
-- ⏳ Panic sell
-- ⏳ Add funds
-- ⏳ Trailing TP/SL
+- ✅ Charts with price markers
+- ✅ Panic sell (close position)
+- ✅ Add funds (manual safety order)
+- ✅ Trailing TP/SL
 
 ### Should Have (Important)
-- ⏳ Bot templates
+- ✅ Bot templates
 - ⏳ Clone bots
 - ⏳ Multiple exchanges
 - ⏳ Notifications
@@ -467,23 +467,29 @@
    - Requires ANTHROPIC_API_KEY in .env
    - **Branch: ai-autonomous-bot** (in progress)
 
-### Next Priority Items:
-1. ⏳ **Trailing Take Profit / Stop Loss**
-   - Dynamic TP that follows price upward
-   - Dynamic SL that follows price downward (for shorts)
-   - Implementation in trading engine
-   - UI configuration in bot form
+### Latest Session Completed (2025-11-15 - MacBook Migration + Trailing TP/SL):
+1. ✅ **Trailing Take Profit / Stop Loss** 🌟
+   - Proper trailing TP that tracks peak price after hitting target
+   - Sells when price drops by X% from peak (not just target + deviation)
+   - Trailing SL that follows price upward to protect profits
+   - Database: Added highest_price_since_tp, trailing_tp_active, highest_price_since_entry columns
+   - Implemented in conditional_dca and advanced_dca strategies
+   - New parameters: trailing_stop_loss (bool), trailing_stop_deviation (%)
+   - **Branch: trailing-tp-sl** → merged to master
+   - Example: Entry $100, TP 3%, Trailing 1% → Price hits $110 → Sells at $108.90 (8.9% profit)
 
-2. ⏳ **Position Notifications/Alerts**
+### Next Priority Items:
+1. ⏳ **Position Notifications/Alerts**
    - Deal opened/closed notifications
    - TP/SL hit alerts
    - Safety order filled alerts
+   - AI bot reasoning log viewer
 
-3. ⏳ **Clone/Duplicate Bots**
+2. ⏳ **Clone/Duplicate Bots**
    - Quick copy of existing bot configuration
    - Increment name automatically
 
 ---
 
-**Last Updated:** 2025-11-15 Night
-**Next Milestone:** Trailing TP/SL
+**Last Updated:** 2025-11-15 (MacBook)
+**Next Milestone:** Notifications & Clone Bots
