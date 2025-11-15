@@ -114,6 +114,14 @@ class AIAutonomousStrategy(TradingStrategy):
                     default=1.0,
                     min_value=0.1,
                     max_value=10.0
+                ),
+                StrategyParameter(
+                    name="custom_instructions",
+                    display_name="Custom Instructions (Optional)",
+                    description="Additional instructions to guide the AI's trading decisions",
+                    type="text",
+                    default="",
+                    required=False
                 )
             ]
         )
@@ -276,6 +284,7 @@ class AIAutonomousStrategy(TradingStrategy):
 
         risk_tolerance = self.config.get("risk_tolerance", "moderate")
         market_focus = self.config.get("market_focus", "BTC")
+        custom_instructions = self.config.get("custom_instructions", "").strip()
 
         sentiment_info = ""
         if "sentiment" in market_context:
@@ -302,6 +311,7 @@ class AIAutonomousStrategy(TradingStrategy):
 **Trading Parameters:**
 - Risk Tolerance: {risk_tolerance}
 - Market Focus: {market_focus} pairs
+{f"- Custom Instructions: {custom_instructions}" if custom_instructions else ""}
 
 **Your Task:**
 Analyze this data (including sentiment/news if provided) and provide a trading recommendation. Consider both technical patterns AND real-world sentiment/news. Respond ONLY with a JSON object (no markdown formatting) in this exact format:

@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Position, Trade, Signal, Bot
+from app.models import Position, Trade, Signal, Bot, AIBotLog
 from app.coinbase_client import CoinbaseClient
 from app.strategies import TradingStrategy
 
@@ -45,6 +45,42 @@ class StrategyTradingEngine:
         self.strategy = strategy
         # Use provided product_id, or fallback to bot's first pair
         self.product_id = product_id or (bot.get_trading_pairs()[0] if hasattr(bot, 'get_trading_pairs') else bot.product_id)
+
+    async def save_ai_log(
+        self,
+        signal_data: Dict[str, Any],
+        decision: str,
+        current_price: float,
+        position: Optional[Position]
+    ):
+        """Save AI bot reasoning log if this is an AI autonomous bot"""
+        # Only save logs for AI autonomous strategy
+        if self.bot.strategy_type != "ai_autonomous":
+            return
+
+        # Extract AI thinking/reasoning from signal_data
+        thinking = signal_data.get("reasoning", "No reasoning provided")
+        confidence = signal_data.get("confidence", None)
+
+        # Determine position status
+        position_status = "none"
+        if position:
+            position_status = position.status
+
+        # Save log
+        ai_log = AIBotLog(
+            bot_id=self.bot.id,
+            thinking=thinking,
+            decision=decision,
+            confidence=confidence,
+            current_price=current_price,
+            position_status=position_status,
+            context=signal_data,  # Store full signal data for reference
+            timestamp=datetime.utcnow()
+        )
+
+        self.db.add(ai_log)
+        await self.db.commit()
 
     async def get_active_position(self) -> Optional[Position]:
         """Get currently active position for this bot/pair combination"""
@@ -272,6 +308,11 @@ class StrategyTradingEngine:
             else:
                 buy_reason = "Bot is stopped - managing existing position only"
 
+        # Save AI log for buy decision (if AI bot)
+        if self.bot.strategy_type == "ai_autonomous":
+            decision = "buy" if should_buy else "hold"
+            await self.save_ai_log(signal_data, decision, current_price, position)
+
         if should_buy:
             # Create position if needed
             if position is None:
@@ -314,6 +355,11 @@ class StrategyTradingEngine:
             should_sell, sell_reason = await self.strategy.should_sell(
                 signal_data, position, current_price
             )
+
+            # Save AI log for sell decision (if AI bot)
+            if self.bot.strategy_type == "ai_autonomous":
+                decision = "sell" if should_sell else "hold"
+                await self.save_ai_log(signal_data, decision, current_price, position)
 
             if should_sell:
                 # Execute sell

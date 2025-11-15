@@ -266,6 +266,27 @@ function Bots() {
       )
     }
 
+    // Handle text type (multiline textarea)
+    if (param.type === 'text') {
+      return (
+        <div>
+          <textarea
+            value={value || ''}
+            onChange={(e) => handleParamChange(param.name, e.target.value)}
+            rows={4}
+            placeholder={param.name === 'custom_instructions' ? 'Add any specific instructions for the AI (e.g., "Focus on BTC pairs", "Avoid trading during low volume hours")' : param.description}
+            className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white resize-y"
+          />
+          {param.name === 'custom_instructions' && (
+            <div className="mt-2 text-xs text-slate-400 bg-slate-800/50 rounded p-3 border border-slate-700">
+              <p className="font-medium text-slate-300 mb-1">📋 Default AI Instructions:</p>
+              <p className="text-slate-400">The AI will analyze market data, sentiment, and news to make intelligent trading decisions. It will be {formData.strategy_config?.risk_tolerance || 'moderate'} in its recommendations and will never sell at a loss. Your custom instructions will be added to guide its specific trading behavior.</p>
+            </div>
+          )}
+        </div>
+      )
+    }
+
     const inputType = param.type === 'int' || param.type === 'float' ? 'number' : 'text'
     const step = param.type === 'float' ? 'any' : param.type === 'int' ? '1' : undefined
 
