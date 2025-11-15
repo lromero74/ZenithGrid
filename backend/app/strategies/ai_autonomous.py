@@ -13,6 +13,7 @@ import anthropic
 import os
 
 from app.strategies import TradingStrategy, StrategyDefinition, StrategyParameter, StrategyRegistry
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +52,10 @@ class AIAutonomousStrategy(TradingStrategy):
             provider = self.config.get("ai_provider", "claude").lower()
 
             if provider == "claude":
-                api_key = os.getenv("ANTHROPIC_API_KEY")
+                api_key = settings.anthropic_api_key
                 if not api_key:
                     raise ValueError(
-                        "ANTHROPIC_API_KEY environment variable not set. "
+                        "ANTHROPIC_API_KEY not set in .env file. "
                         "Please add it to your .env file to use AI Autonomous trading with Claude."
                     )
                 self._client = anthropic.Anthropic(api_key=api_key)
@@ -368,8 +369,8 @@ Remember:
 
         try:
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=500,  # Keep response short to save tokens
+                model="claude-sonnet-4-5-20250929",  # Claude Sonnet 4.5 (latest)
+                max_tokens=1000,  # Allow for detailed reasoning
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -448,9 +449,9 @@ Remember:
             }
 
         # Initialize Gemini client
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = settings.gemini_api_key
         if not api_key:
-            logger.error("GEMINI_API_KEY environment variable not set")
+            logger.error("GEMINI_API_KEY not set in .env file")
             return {
                 "signal_type": "hold",
                 "confidence": 0,

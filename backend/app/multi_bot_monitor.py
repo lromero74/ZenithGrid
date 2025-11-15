@@ -324,7 +324,7 @@ class MultiBotMonitor:
             )
 
             # Process the signal
-            result = await engine.process_signal(signal_type, signal_data)
+            result = await engine.process_signal(candles, current_price)
 
             logger.info(f"  Result: {result['action']} - {result['reason']}")
 
