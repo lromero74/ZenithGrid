@@ -40,7 +40,9 @@
       "WebFetch(domain:docs.cloud.coinbase.com)",
       "Bash(python3:*)",
       "WebFetch(domain:help.3commas.io)",
-      "Bash(time curl -s http://localhost:8000/api/account/portfolio)"
+      "Bash(time curl -s http://localhost:8000/api/account/portfolio)",
+      "Bash(sqlite3 trading_bot.db \"ALTER TABLE positions ADD COLUMN product_id TEXT DEFAULT ''ETH-BTC'';\")",
+      "Bash(git checkout -b dashboard-overhaul)"
     ],
     "deny": [],
     "ask": []
