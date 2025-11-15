@@ -20,7 +20,8 @@
 - ✅ Multi-pair bots (trade multiple pairs with one bot)
 - ✅ Budget splitting toggle (divide percentages across pairs)
 - ✅ Bot templates (presets and custom templates)
-- ⏳ Clone/duplicate bots
+- ✅ Clone/duplicate bots
+- ✅ 3Commas-style UI (toggle switches, ... menu)
 - ⏳ Import/export bot configs
 
 ### Strategy Support
@@ -31,6 +32,9 @@
 - ✅ Take Profit conditions
 - ✅ Min profit threshold for conditional exits
 - ✅ **AI Autonomous Trading** (Claude AI-powered)
+- ✅ **AI Provider Selection** (Claude or Gemini)
+- ✅ **AI Reasoning Log Viewer** (view AI decision history)
+- ✅ **Custom AI Instructions** (guide AI behavior)
 - ✅ **Trailing take profit** (tracks peak, sells on drop from peak)
 - ✅ **Trailing stop loss** (follows price up, protects profits)
 - ⏳ Multiple take profit targets
@@ -506,18 +510,59 @@
 ✅ AI Reasoning Log Infrastructure + Integration
 ✅ Custom Instructions for AI Bots
 
-### Next Priority Items:
-1. ⏳ **AI Reasoning Log Viewer (Frontend)**
-   - Display AI thinking/reasoning in bot details
-   - Show decision history with timestamps
-   - Filter by decision type (buy/hold/sell)
+### Latest Session Completed (2025-11-15 - Late Night):
+1. ✅ **AI Reasoning Log Viewer** 🧠
+   - Full modal component with filtering and auto-refresh
+   - Filter by decision type (all/buy/sell/hold)
+   - Color-coded confidence levels (green/yellow/red)
+   - Auto-refresh every 10 seconds
+   - Shows AI thinking, decision, confidence, price, position status
+   - Integrated into Bots page with "AI Logs" button
 
-2. ⏳ **Position Notifications/Alerts**
+2. ✅ **AI Provider Selection (Claude/Gemini)** 🤖
+   - Choose between Claude or Gemini for AI autonomous trading
+   - Full Gemini API integration with token tracking
+   - Lazy loading of Gemini library
+   - Both providers use identical prompts
+   - API keys configured in .env
+
+3. ✅ **Dynamic Trading Pairs** 🔄
+   - Replaced hardcoded pairs with dynamic API fetch
+   - Bot creation and Charts page now use identical pair lists
+   - Auto-updates when new pairs available on Coinbase
+   - Grouped by BTC/USD pairs
+
+4. ✅ **3Commas-Style Bot UI** 🎨
+   - Toggle switches for enable/disable (green when active)
+   - "..." dropdown menu for edit, clone, delete
+   - Click-outside handler for menus
+   - Status indicator (Running/Stopped)
+   - Clean, professional 3Commas-inspired design
+
+### Next Priority Items:
+1. ⏳ **Position Notifications/Alerts**
    - Deal opened/closed notifications
    - TP/SL hit alerts
    - Safety order filled alerts
+   - Browser notifications or in-app alerts
+
+2. ⏳ **Dashboard Statistics**
+   - Total profit (all time, 24h, 7d, 30d)
+   - Active deals count
+   - Win rate calculation
+   - Best/worst performing bot
+
+3. ⏳ **Import/Export Bot Configs**
+   - Export bot configuration to JSON
+   - Import bot from JSON file
+   - Share bot templates between users
+
+4. ⏳ **Multiple Take Profit Targets**
+   - Set multiple TP levels (e.g., 2% for 50%, 5% for 50%)
+   - Partial position closing
+   - Ladder-style profit taking
 
 ---
 
-**Last Updated:** 2025-11-15 (MacBook - Evening)
-**Next Milestone:** AI Log Viewer & Notifications
+**Last Updated:** 2025-11-15 (MacBook - Late Night)
+**Next Milestone:** Notifications & Dashboard Analytics
