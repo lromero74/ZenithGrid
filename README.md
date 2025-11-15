@@ -1,48 +1,48 @@
-# ETH/BTC Trading Bot
+# 3Commas Replacement - Advanced Trading Bot Platform
 
-A sophisticated automated trading bot for ETH/BTC on Coinbase with MACD-based DCA strategy, TradingView-style charts, and comprehensive position management.
+A sophisticated self-hosted cryptocurrency trading platform with **AI-powered autonomous trading**, advanced DCA strategies, and professional chart analysis. Built to replace 3Commas with enhanced features and full control.
 
-## ✨ Key Features
+## 🌟 Unique Features
 
-### Trading & Strategy
-- **MACD-Based Trading**: Automated buy/sell signals using MACD crossovers (works above AND below zero baseline)
-- **DCA Strategy**: Dollar Cost Averaging into positions with configurable parameters
-- **Profit Protection**: Minimum profit threshold ensures profitable exits (default 1%)
-- **Position Limits**: Max BTC allocation per position (default 25% of balance)
-- **Power Loss Recovery**: Automatic position recovery from database after restart
+### 🤖 **AI Autonomous Trading Bot** (NEW!)
+The first and only DCA bot platform with built-in AI decision-making:
+- **Claude AI Integration**: Uses Anthropic's Claude 3.5 Sonnet for market analysis
+- **Autonomous Trading**: AI analyzes markets and makes intelligent buy/sell decisions
+- **Never Sells at a Loss**: Hard-coded safety to protect capital
+- **Token Optimized**: Smart caching, batching, and rate limiting
+- **Sentiment Ready**: Framework for Twitter, news, and Reddit integration
+- **Configurable Risk**: Conservative, Moderate, or Aggressive modes
 
-### Charts & Visualization
-- **TradingView-Style Charts**: Professional candlestick charts with lightweight-charts library
-- **Multiple Timeframes**: 1m, 5m, 15m, 30m, 1h, 2h, 6h, 1D intervals
-- **Volume Indicator**: Toggle volume bars on/off
-- **MACD Indicator**: Separate panel with MACD line, signal line, and histogram
-- **Real-time Updates**: Live price and candle data from Coinbase
+### 🎯 Advanced DCA Strategies
+- **Multi-Pair Bots**: One bot trades multiple pairs simultaneously
+- **Budget Splitting**: Optional budget division across pairs for safer allocation
+- **Conditional DCA**: Custom conditions per phase (base order, safety orders, take profit)
+- **Multi-Timeframe**: Different timeframes per indicator
+- **Bot Templates**: Quick-start from Conservative/Balanced/Aggressive presets
+- **7 Strategies**: MACD, RSI, Bollinger Bands, Conditional DCA, AI, and more
 
-### Management & Control
-- **GUI Configuration**: Manage API keys and all settings through web interface
-- **Test Connection**: Verify Coinbase credentials before saving
-- **Manual Controls**: Pause bot, cancel positions, or force close at market price
-- **Position Tracking**: Track profits in both BTC and USD
-- **Trade History**: Complete record of all buys and sells
-
-### Technical
-- **Persistence**: SQLite database survives restarts and power outages
-- **Real-time Dashboard**: Monitor account value, positions, and market data
-- **Management Script**: Simple `bot.sh` for start/stop/restart/status/logs
-- **Production Ready**: Includes nginx config and systemd service files
+### 📊 Professional Dashboard
+- **3Commas-Style Deals**: Active positions with real-time P&L
+- **TradingView Charts**: Professional candlestick charts with indicators
+- **Position Markers**: Entry price, TP/SL lines, safety order levels
+- **Portfolio Tracking**: Real-time portfolio value and allocation
+- **Trade History**: Complete audit trail of all trades
+- **Performance Metrics**: Win rate, total profit, active deals
 
 ## 🏗️ Architecture
 
 - **Backend**: Python 3.13 + FastAPI + SQLAlchemy (async) + SQLite
-- **Frontend**: React 18 + TypeScript + Vite + TanStack Query + Lightweight Charts
+- **Frontend**: React 18 + TypeScript + Vite + TanStack Query + TradingView Charts
 - **Exchange**: Coinbase Advanced Trade API
-- **Deployment**: uvicorn + nginx + systemd
+- **AI**: Anthropic Claude 3.5 Sonnet API
+- **Deployment**: uvicorn + nginx + systemd (optional)
 
 ## 📋 Prerequisites
 
 - **Python 3.13+**
-- **Node.js 20+** and npm
+- **Node.js 18+** and npm
 - **Coinbase account** with API credentials
+- **Anthropic API key** (optional, for AI bot only)
 - **BTC and/or ETH** in your Coinbase account
 
 ## 🚀 Quick Start
@@ -50,300 +50,259 @@ A sophisticated automated trading bot for ETH/BTC on Coinbase with MACD-based DC
 ### 1. Clone and Install
 
 ```bash
-# Backend
+# Clone repository
+git clone <your-repo-url>
+cd GetRidOf3CommasBecauseTheyGoDownTooOften
+
+# Backend setup
 cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Frontend
+# Frontend setup
 cd ../frontend
 npm install
 
-# Return to project root
+# Return to root
 cd ..
 ```
 
-### 2. Get Coinbase API Credentials
-
-1. Go to https://www.coinbase.com/settings/api
-2. Create a new API key with these permissions:
-   - **View**: Read account balances and transaction history
-   - **Trade**: Place buy and sell orders for ETH/BTC
-3. Save your API Key and API Secret
-
-### 3. Start the Bot
+### 2. Configure API Keys
 
 ```bash
-# Start both backend and frontend
+cd backend
+cp .env.example .env
+nano .env
+```
+
+Add your API keys:
+```bash
+# Required for all bots
+COINBASE_API_KEY=your_coinbase_key
+COINBASE_API_SECRET=your_coinbase_secret
+
+# Optional - for AI Autonomous Bot only
+ANTHROPIC_API_KEY=your_anthropic_key
+```
+
+**Get API Keys:**
+- **Coinbase**: https://portal.cdp.coinbase.com/
+- **Anthropic**: https://console.anthropic.com/
+
+### 3. Start the Platform
+
+```bash
 ./bot.sh start
 ```
 
-### 4. Configure via Web UI
+Access at: **http://localhost:5173**
 
-1. Open http://localhost:5173 in your browser
-2. Go to **Settings**
-3. Enter your Coinbase API Key and Secret
-4. Click **Test Connection** to verify
-5. Click **Save Settings**
+## 🎮 Usage
 
-### 5. Start Trading
+### Create Your First Bot
 
-1. Go to **Dashboard**
-2. Review the TradingView-style chart
-3. Adjust timeframe and indicators as desired
-4. Click **Start Monitor** to begin automated trading
+1. Open http://localhost:5173
+2. Navigate to **"Bots"** page
+3. Click **"Create New Bot"**
+4. (Optional) Select a template: Conservative/Balanced/Aggressive
+5. Choose strategy:
+   - **AI Autonomous** - Claude AI-powered (NEW!)
+   - **Conditional DCA** - Custom conditions
+   - **MACD DCA** - MACD-based DCA
+   - **RSI** - RSI-based trading
+   - **Bollinger Bands** - BB strategy
+6. Select trading pair(s)
+7. Configure parameters
+8. Click **"Start Bot"**
 
-## 🎮 Using the Bot
+### Available Strategies
 
-### Management Script
+1. **🤖 AI Autonomous** - Claude AI analyzes markets and makes decisions
+2. **📊 Conditional DCA** - Custom conditions per phase
+3. **📈 MACD DCA** - MACD-based DCA
+4. **🎯 RSI** - RSI-based trading
+5. **📉 Bollinger Bands** - Bollinger Band strategy
+6. **💰 Simple DCA** - Basic DCA
+7. **⚡ Advanced DCA** - Advanced DCA
 
-```bash
-./bot.sh start      # Start backend and frontend
-./bot.sh stop       # Stop both services
-./bot.sh restart    # Restart both services
-./bot.sh status     # Check if running
-./bot.sh logs       # View recent logs
+## 💡 AI Bot Quick Start
+
+### Configuration Example:
+```json
+{
+  "name": "AI Trader Pro",
+  "strategy_type": "ai_autonomous",
+  "product_ids": ["ETH-BTC", "SOL-BTC"],
+  "split_budget_across_pairs": true,
+  "strategy_config": {
+    "market_focus": "BTC",
+    "initial_budget_percentage": 10.0,
+    "max_position_size_percentage": 25.0,
+    "risk_tolerance": "moderate",
+    "analysis_interval_minutes": 15,
+    "min_profit_percentage": 1.0
+  }
+}
 ```
 
-### Dashboard (http://localhost:5173)
+### How It Works:
+1. Every 15 minutes (configurable), fetches market data
+2. Summarizes price trends, volatility, and key metrics
+3. Calls Claude AI for analysis
+4. Claude returns: buy/hold/sell + confidence score + reasoning
+5. Bot executes if confident enough (60%+ buy, 70%+ sell)
+6. **Never sells at a loss** - waits for profit
+7. Budget grows with successful trades
 
-**Control Bar:**
-- Monitor status indicator (running/stopped)
-- Start/Stop monitor button
-- Current ETH/BTC price
+### Token Optimization:
+- Analysis caching (5min TTL)
+- Configurable intervals (5-120min)
+- Summarized data (not raw candles)
+- Structured prompts for concise responses
+- Usage tracking and logging
 
-**Stats Cards:**
-- Total positions completed
-- Total profit in BTC
-- Win rate percentage
-- Current position details
+**Estimated Cost**: $0.10-0.50/day per bot (depends on interval)
 
-**TradingView Chart:**
-- Click timeframe buttons (1m to 1D)
-- Toggle Volume indicator
-- Toggle MACD indicator
-- Interactive candlestick display
+## 🔧 Commands
 
-**Active Position Panel** (when position is open):
-- Position details and profit
-- **Cancel** button: Cancel position without selling
-- **Force Close** button: Sell at current market price
+```bash
+./bot.sh start      # Start backend + frontend
+./bot.sh stop       # Stop both
+./bot.sh restart    # Restart both
+./bot.sh status     # Check status
+./bot.sh logs       # View logs
+```
 
-### Position History (http://localhost:5173/positions)
+## 📊 Features Comparison
 
-View all completed positions with:
-- Entry/exit prices and timestamps
-- Total BTC spent and received
-- Profit in BTC and USD
-- Number of trades per position
+| Feature | 3Commas | This Platform |
+|---------|---------|---------------|
+| DCA Bots | ✅ | ✅ |
+| Multi-Pair Bots | ✅ | ✅ |
+| Conditional Trading | ✅ | ✅ |
+| Bot Templates | ✅ | ✅ |
+| **AI-Powered Trading** | ❌ | ✅ **Unique!** |
+| **Self-Hosted** | ❌ | ✅ |
+| **No Monthly Fees** | ❌ | ✅ |
+| **Full Source Control** | ❌ | ✅ |
+| Multi-Timeframe | Limited | ✅ Full |
+| Budget Splitting | Basic | ✅ Advanced |
+| Real-time Charts | ✅ | ✅ TradingView |
+| Position Management | ✅ | ✅ |
 
-### Settings (http://localhost:5173/settings)
+## 🛡️ Safety Features
 
-**Coinbase API Credentials:**
-- Enter API Key and Secret
-- Test connection before saving
-- Clear keys with confirmation
+- **Never Sell at a Loss** (AI bot)
+- **Budget Limits** per bot
+- **Position Size Limits**
+- **Confirmation Dialogs** for destructive actions
+- **Real-time P&L** tracking
+- **Stop Loss** support
+- **Take Profit** targets
+- **Safety Order** ladder
 
-**Trading Parameters:**
-- Initial BTC Percentage (default: 5%)
-- DCA Percentage (default: 3%)
-- Max BTC Usage (default: 25%)
-- Minimum Profit % (default: 1%)
+## 📖 Documentation
 
-**MACD Indicator:**
-- Candle Interval (1m to 1D)
-- Fast Period (default: 12)
-- Slow Period (default: 26)
-- Signal Period (default: 9)
-
-## 📊 Trading Strategy Explained
-
-### MACD Signals
-
-**Buy Signal (Cross-Up):**
-- MACD line crosses above signal line
-- Works regardless of position relative to zero baseline
-- Opens new position OR adds to existing position (DCA)
-
-**Sell Signal (Cross-Down):**
-- MACD line crosses below signal line
-- Only sells if profit ≥ minimum threshold
-- Closes entire position
-
-### DCA (Dollar Cost Averaging)
-
-**Example with 1 BTC balance:**
-1. MACD Cross-Up → Buy 0.05 BTC worth of ETH (5% initial)
-2. Price drops, MACD Cross-Up → Buy 0.03 BTC more (3% DCA)
-3. Price drops again, MACD Cross-Up → Buy 0.03 BTC more (3% DCA)
-4. Price rises, profit > 1%, MACD Cross-Down → Sell all ETH
-
-**Position Limits:**
-- Maximum 25% of BTC balance per position
-- Prevents over-allocation to single trade
-- DCA buys stop when limit reached
-
-### Choosing Timeframes
-
-**Shorter (1m, 5m, 15m):**
-- More signals, faster trades
-- Good for volatile markets
-- Higher transaction fees
-- More false signals
-
-**Longer (1h, 2h, 6h, 1D):**
-- Fewer signals, longer trends
-- Lower transaction fees
-- Better for swing trading
-- Fewer false signals
-
-**Recommended:** Start with 5-15 minute intervals and adjust based on results.
+- **[📄 Handoff Document](HANDOFF_DOCUMENT.md)** - Complete setup & migration guide
+- **[✅ Feature Checklist](3COMMAS_REPLACEMENT_CHECKLIST.md)** - Progress tracker
+- **[🔌 API Docs](http://localhost:8000/docs)** - FastAPI auto-docs (when running)
 
 ## 🔄 Persistence & Recovery
 
 ### What Happens After Power Loss?
 
-**Scenario:** Bot running with active position, power goes out for 2 weeks.
+**Scenario:** Bot running with active position, power outage for 2 weeks.
 
 **On Restart:**
 1. ✅ Loads active position from database
 2. ✅ Reconnects to Coinbase
 3. ✅ Resumes monitoring for signals
 4. ✅ Maintains accurate profit calculations
-5. ✅ Continues DCA strategy if applicable
+5. ✅ Continues strategy execution
 
 **Database Stores:**
 - All positions (open, closed, cancelled)
 - Complete trade history with prices
-- MACD signals and market data
+- Bot configurations and templates
+- Market data and signals
 - Profit in BTC and USD
 
-**Manual Backup:**
-```bash
-cp backend/trading.db backend/trading.db.backup
-cp backend/.env backend/.env.backup
-```
+## 🌱 Roadmap
 
-## 🚀 Deployment to EC2
-
-### Automated Deployment
-
-```bash
-# From your local machine
-cd deployment
-./deploy.sh your-ec2-ip your-key.pem
-```
-
-This script:
-- Installs all dependencies
-- Configures nginx and systemd
-- Sets up the database
-- Starts the services
-
-### Manual Deployment
-
-See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed manual deployment instructions.
-
-### Access Production Bot
-
-```bash
-# Via SSH tunnel (secure)
-ssh -i your-key.pem -L 8080:localhost:80 ubuntu@your-ec2-ip
-
-# Then open: http://localhost:8080
-```
-
-## 📖 Full Documentation
-
-See [DOCUMENTATION.md](DOCUMENTATION.md) for:
-- Complete API reference
-- Detailed architecture
-- Troubleshooting guide
-- Development guide
-- Security considerations
-
-## 🔧 Configuration Reference
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| **Coinbase API Key** | - | Your Coinbase API key |
-| **Coinbase API Secret** | - | Your Coinbase API secret |
-| **Initial BTC %** | 5.0% | BTC to spend on first buy |
-| **DCA %** | 3.0% | BTC to spend on additional buys |
-| **Max BTC Usage %** | 25.0% | Max BTC per position |
-| **Min Profit %** | 1.0% | Min profit to sell |
-| **Candle Interval** | 5 min | Timeframe for MACD |
-| **MACD Fast** | 12 | Fast EMA period |
-| **MACD Slow** | 26 | Slow EMA period |
-| **MACD Signal** | 9 | Signal line period |
+- [x] Multi-pair bots
+- [x] Budget splitting
+- [x] Bot templates (Conservative/Balanced/Aggressive)
+- [x] **AI autonomous trading** 🤖
+- [ ] **Sentiment analysis** (Twitter, news, Reddit)
+- [ ] Trailing take profit / stop loss
+- [ ] Position notifications / alerts
+- [ ] Performance analytics dashboard
+- [ ] Backtesting system
+- [ ] Multiple exchange support
+- [ ] Mobile app (React Native)
 
 ## 🐛 Troubleshooting
 
 ### Backend won't start
-
 ```bash
 # Check logs
 tail -f .pids/backend.log
 
 # Common issues:
-# - Missing API credentials (add in Settings)
-# - Port 8000 already in use
-# - Missing dependencies (run pip install -r requirements.txt)
+# - Missing API credentials (add to .env)
+# - Port 8000 in use
+# - Missing dependencies (pip install -r requirements.txt)
+```
+
+### AI Bot not working
+```bash
+# Check if ANTHROPIC_API_KEY is set
+grep ANTHROPIC_API_KEY backend/.env
+
+# Verify strategy is loaded
+curl http://localhost:8000/api/bots/strategies | grep ai_autonomous
+
+# Check logs for API errors
+tail -f .pids/backend.log | grep "Claude"
 ```
 
 ### Chart not displaying
-
 ```bash
-# Rebuild frontend
 cd frontend
 npm install
 npm run dev
 ```
 
-### Position not recovering
-
-```bash
-# Check database
-sqlite3 backend/trading.db "SELECT * FROM positions WHERE status='open';"
-
-# Check backend logs
-tail -f .pids/backend.log
-```
-
-### MACD signals not triggering
-
-- Ensure monitor is running (Dashboard shows "Running")
-- Wait for 26+ candles to accumulate (MACD calculation requires history)
-- Verify API credentials are valid
-- Check backend logs for errors
-
 ## 🔒 Security Notes
 
-- ⚠️ **Never commit `.env` file** to version control
+- ⚠️ **Never commit `.env`** to version control
 - ⚠️ **Test with small amounts** first
 - ⚠️ **Monitor regularly** for unexpected behavior
-- ⚠️ **Use SSH tunnel** for remote access (not public internet)
+- ⚠️ **Use SSH tunnel** for remote access
 - ⚠️ **Rotate API keys** periodically
 - ⚠️ **Trading involves risk** - only invest what you can afford to lose
 
-## 📝 Git Repository
+## 📝 Recent Updates
 
-This project uses git for version control:
+### 2025-11-15 - AI Autonomous Bot
+- ✅ Claude AI integration for autonomous trading
+- ✅ Token-optimized analysis (caching, batching)
+- ✅ Never sells at a loss safety rule
+- ✅ Configurable risk tolerance
+- ✅ Sentiment analysis framework
 
-```bash
-# View status
-git status
+### 2025-11-15 - Templates & Multi-Pair
+- ✅ Bot templates (3 default presets)
+- ✅ Multi-pair bot support
+- ✅ Budget splitting toggle
+- ✅ Template selector in bot form
 
-# Add changes
-git add .
-
-# Commit changes
-git commit -m "Description"
-
-# View history
-git log --oneline
-```
+### 2025-11-10 - Chart Enhancements
+- ✅ Take Profit / Stop Loss lines
+- ✅ Safety order price levels
+- ✅ Real-time price updates (5s interval)
+- ✅ Live P&L calculations
 
 ## 📄 License
 
@@ -355,10 +314,10 @@ Private use only.
 
 Trading cryptocurrencies involves substantial risk of loss and is not suitable for every investor. Past performance is not indicative of future results. The authors are not responsible for any losses incurred. **Use at your own risk.**
 
+The AI trading bot is experimental. AI decisions are not guaranteed to be profitable. Always monitor your bots and start with small amounts.
+
 ---
 
-🤖 **Generated with Claude Code**
+🤖 **Built with Claude Code**
 
-For detailed documentation, see [DOCUMENTATION.md](DOCUMENTATION.md)
-
-For quick start guide, see [QUICKSTART.md](QUICKSTART.md)
+For detailed documentation, see [HANDOFF_DOCUMENT.md](HANDOFF_DOCUMENT.md)
