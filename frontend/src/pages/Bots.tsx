@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { botsApi, templatesApi } from '../services/api'
 import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
-import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity } from 'lucide-react'
+import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 
 const TRADING_PAIRS = [
@@ -108,6 +108,14 @@ function Bots() {
   // Stop bot mutation
   const stopBot = useMutation({
     mutationFn: (id: number) => botsApi.stop(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bots'] })
+    },
+  })
+
+  // Clone bot mutation
+  const cloneBot = useMutation({
+    mutationFn: (id: number) => botsApi.clone(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bots'] })
     },
@@ -387,6 +395,13 @@ function Bots() {
                   title="Edit"
                 >
                   <Edit className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => cloneBot.mutate(bot.id)}
+                  className="p-2 bg-slate-700 hover:bg-blue-600/20 text-blue-400 rounded transition-colors"
+                  title="Clone Bot"
+                >
+                  <Copy className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleDelete(bot)}

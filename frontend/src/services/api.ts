@@ -92,6 +92,8 @@ export const botsApi = {
     api.post<{ message: string }>(`/bots/${id}/start`).then((res) => res.data),
   stop: (id: number) =>
     api.post<{ message: string }>(`/bots/${id}/stop`).then((res) => res.data),
+  clone: (id: number) =>
+    api.post<Bot>(`/bots/${id}/clone`).then((res) => res.data),
   getStats: (id: number) =>
     api.get<BotStats>(`/bots/${id}/stats`).then((res) => res.data),
 };

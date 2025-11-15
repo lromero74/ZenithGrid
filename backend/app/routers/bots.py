@@ -12,7 +12,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import Bot, Position
+from app.models import Bot, Position, AIBotLog
 from app.strategies import StrategyRegistry, StrategyDefinition
 
 
@@ -319,6 +319,80 @@ async def stop_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": f"Bot '{bot.name}' stopped successfully"}
 
 
+@router.post("/{bot_id}/clone", response_model=BotResponse, status_code=201)
+async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Clone/duplicate a bot configuration
+
+    Creates a copy of the bot with:
+    - Same strategy and configuration
+    - Same trading pairs
+    - Incremented name (e.g., "My Bot" → "My Bot (Copy)")
+    - Starts in stopped state (is_active = False)
+    - No positions copied (fresh start)
+    """
+    # Get original bot
+    query = select(Bot).where(Bot.id == bot_id)
+    result = await db.execute(query)
+    original_bot = result.scalars().first()
+
+    if not original_bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    # Generate new name with (Copy) suffix
+    new_name = original_bot.name
+
+    # Check if name already has (Copy X) pattern
+    import re
+    copy_match = re.search(r'\(Copy(?: (\d+))?\)$', new_name)
+
+    if copy_match:
+        # Name already has (Copy) or (Copy N), increment
+        copy_num = copy_match.group(1)
+        if copy_num:
+            # (Copy N) → (Copy N+1)
+            next_num = int(copy_num) + 1
+            new_name = re.sub(r'\(Copy \d+\)$', f'(Copy {next_num})', new_name)
+        else:
+            # (Copy) → (Copy 2)
+            new_name = re.sub(r'\(Copy\)$', '(Copy 2)', new_name)
+    else:
+        # No (Copy) yet → add (Copy)
+        new_name = f"{new_name} (Copy)"
+
+    # Ensure name is unique (in case of conflicts)
+    counter = 2
+    base_new_name = new_name
+    while True:
+        name_check_query = select(Bot).where(Bot.name == new_name)
+        name_check_result = await db.execute(name_check_query)
+        if not name_check_result.scalars().first():
+            break
+        new_name = f"{base_new_name} {counter}"
+        counter += 1
+
+    # Create cloned bot
+    cloned_bot = Bot(
+        name=new_name,
+        description=original_bot.description,
+        strategy_type=original_bot.strategy_type,
+        strategy_config=original_bot.strategy_config.copy() if original_bot.strategy_config else {},
+        product_id=original_bot.product_id,
+        product_ids=original_bot.product_ids.copy() if original_bot.product_ids else [],
+        split_budget_across_pairs=original_bot.split_budget_across_pairs,
+        is_active=False,  # Start stopped
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+
+    db.add(cloned_bot)
+    await db.commit()
+    await db.refresh(cloned_bot)
+
+    bot_response = BotResponse.model_validate(cloned_bot)
+    return bot_response
+
+
 @router.get("/{bot_id}/stats", response_model=BotStats)
 async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
     """Get statistics for a specific bot"""
@@ -351,3 +425,93 @@ async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
         total_profit_btc=total_profit,
         win_rate=win_rate
     )
+
+
+# AI Bot Reasoning Log Endpoints
+
+class AIBotLogCreate(BaseModel):
+    thinking: str
+    decision: str
+    confidence: Optional[float] = None
+    current_price: Optional[float] = None
+    position_status: Optional[str] = None
+    context: Optional[dict] = None
+
+
+class AIBotLogResponse(BaseModel):
+    id: int
+    bot_id: int
+    timestamp: datetime
+    thinking: str
+    decision: str
+    confidence: Optional[float]
+    current_price: Optional[float]
+    position_status: Optional[str]
+    context: Optional[dict]
+
+    class Config:
+        from_attributes = True
+
+
+@router.post("/{bot_id}/logs", response_model=AIBotLogResponse, status_code=201)
+async def create_ai_bot_log(
+    bot_id: int,
+    log_data: AIBotLogCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Save AI bot reasoning/thinking log"""
+    # Verify bot exists
+    bot_query = select(Bot).where(Bot.id == bot_id)
+    bot_result = await db.execute(bot_query)
+    bot = bot_result.scalars().first()
+
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    # Create log entry
+    log_entry = AIBotLog(
+        bot_id=bot_id,
+        thinking=log_data.thinking,
+        decision=log_data.decision,
+        confidence=log_data.confidence,
+        current_price=log_data.current_price,
+        position_status=log_data.position_status,
+        context=log_data.context,
+        timestamp=datetime.utcnow()
+    )
+
+    db.add(log_entry)
+    await db.commit()
+    await db.refresh(log_entry)
+
+    return AIBotLogResponse.model_validate(log_entry)
+
+
+@router.get("/{bot_id}/logs", response_model=List[AIBotLogResponse])
+async def get_ai_bot_logs(
+    bot_id: int,
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get AI bot reasoning logs (most recent first)"""
+    # Verify bot exists
+    bot_query = select(Bot).where(Bot.id == bot_id)
+    bot_result = await db.execute(bot_query)
+    bot = bot_result.scalars().first()
+
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    # Get logs
+    logs_query = (
+        select(AIBotLog)
+        .where(AIBotLog.bot_id == bot_id)
+        .order_by(desc(AIBotLog.timestamp))
+        .limit(limit)
+        .offset(offset)
+    )
+    logs_result = await db.execute(logs_query)
+    logs = logs_result.scalars().all()
+
+    return [AIBotLogResponse.model_validate(log) for log in logs]

@@ -183,3 +183,23 @@ class MarketData(Base):
 
     # For potential future use
     volume = Column(Float, nullable=True)
+
+
+class AIBotLog(Base):
+    __tablename__ = "ai_bot_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # AI thinking/reasoning content
+    thinking = Column(Text)  # The AI's reasoning process
+    decision = Column(String)  # buy, sell, hold, etc.
+    confidence = Column(Float, nullable=True)  # 0-100 confidence level
+
+    # Market context at time of decision
+    current_price = Column(Float, nullable=True)
+    position_status = Column(String, nullable=True)  # open, closed, none
+
+    # Additional context (JSON for flexibility)
+    context = Column(JSON, nullable=True)  # Market conditions, indicators, etc.
