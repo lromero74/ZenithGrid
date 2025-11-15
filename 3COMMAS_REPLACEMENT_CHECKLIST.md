@@ -17,6 +17,7 @@
 - ✅ Edit bots while running (3Commas style)
 - ✅ Start/Stop bots
 - ✅ Multiple bots running simultaneously
+- ❌ **Multi-Pair Bots** (Critical 3Commas feature - HIGH PRIORITY)
 - ⏳ Clone/duplicate bots
 - ⏳ Bot templates
 - ⏳ Import/export bot configs
@@ -361,11 +362,18 @@
    - Shared cache across components
 
 ### Next Priority Items:
-1. ⏳ **Position Product ID** - Track product_id with positions for accurate charts (currently hardcoded to ETH-BTC)
-2. ⏳ **Dashboard Overhaul** - Add total profit, win rate, recent deals
-3. ⏳ **Bot Cards Enhancement** - Better stats display, quick actions
-4. ⏳ **Take Profit/Stop Loss Lines** - Add to chart view
-5. ⏳ **Real-time Current Price** - Show live price in deals vs entry price
+1. 🚧 **Take Profit/Stop Loss Chart Lines** - Visual TP/SL on deal charts (in progress)
+2. ⏳ **Multi-Pair Bots** 🌟 **[CRITICAL 3COMMAS FEATURE]**
+   - One bot trades multiple pairs (like 3Commas)
+   - Bot model: product_id → product_ids array
+   - Multi-select pairs in bot creation UI
+   - Monitor signals across all pairs
+   - Max concurrent deals limit per bot
+   - Capital allocation across pairs
+   - Same strategy applied to all pairs
+3. ⏳ **Real-time Current Price** - Show live price in deals vs entry
+4. ⏳ **Trailing Take Profit/Stop Loss** - Dynamic exit targets
+5. ⏳ **Bot Templates** - Pre-configured strategy templates price
 
 ---
 
