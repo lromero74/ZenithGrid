@@ -33,7 +33,7 @@ class AIAutonomousStrategy(TradingStrategy):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
 
-        # Lazy initialization of Claude client (only when needed)
+        # Lazy initialization of AI client (only when needed)
         self._client = None
 
         # Token optimization: Cache recent analyses
@@ -46,23 +46,41 @@ class AIAutonomousStrategy(TradingStrategy):
 
     @property
     def client(self):
-        """Lazy initialization of Claude client"""
+        """Lazy initialization of AI client based on selected provider"""
         if self._client is None:
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-            if not api_key:
-                raise ValueError(
-                    "ANTHROPIC_API_KEY environment variable not set. "
-                    "Please add it to your .env file to use AI Autonomous trading."
-                )
-            self._client = anthropic.Anthropic(api_key=api_key)
+            provider = self.config.get("ai_provider", "claude").lower()
+
+            if provider == "claude":
+                api_key = os.getenv("ANTHROPIC_API_KEY")
+                if not api_key:
+                    raise ValueError(
+                        "ANTHROPIC_API_KEY environment variable not set. "
+                        "Please add it to your .env file to use AI Autonomous trading with Claude."
+                    )
+                self._client = anthropic.Anthropic(api_key=api_key)
+            elif provider == "gemini":
+                # Gemini client will be initialized when needed
+                # Import is deferred to avoid requiring google-generativeai for Claude users
+                pass
+            else:
+                raise ValueError(f"Unknown AI provider: {provider}. Must be 'claude' or 'gemini'.")
+
         return self._client
 
     def get_definition(self) -> StrategyDefinition:
         return StrategyDefinition(
             id="ai_autonomous",
             name="AI Autonomous Trading",
-            description="Claude AI-powered autonomous trading that analyzes markets and makes intelligent decisions to maximize profit. Never sells at a loss.",
+            description="AI-powered autonomous trading that analyzes markets and makes intelligent decisions to maximize profit. Never sells at a loss.",
             parameters=[
+                StrategyParameter(
+                    name="ai_provider",
+                    display_name="AI Provider",
+                    description="Which AI model to use for market analysis",
+                    type="string",
+                    default="claude",
+                    options=["claude", "gemini"]
+                ),
                 StrategyParameter(
                     name="market_focus",
                     display_name="Market Focus",
@@ -129,6 +147,7 @@ class AIAutonomousStrategy(TradingStrategy):
     def validate_config(self):
         """Validate configuration parameters"""
         required = [
+            "ai_provider",
             "market_focus",
             "initial_budget_percentage",
             "max_position_size_percentage",
@@ -170,9 +189,16 @@ class AIAutonomousStrategy(TradingStrategy):
             # Prepare market context (summarized to save tokens)
             market_context = self._prepare_market_context(candles, current_price)
 
-            # Call Claude for analysis
-            logger.info("🤖 Calling Claude AI for market analysis...")
-            analysis = await self._get_claude_analysis(market_context)
+            # Call AI for analysis based on selected provider
+            provider = self.config.get("ai_provider", "claude").lower()
+            logger.info(f"🤖 Calling {provider.upper()} AI for market analysis...")
+
+            if provider == "claude":
+                analysis = await self._get_claude_analysis(market_context)
+            elif provider == "gemini":
+                analysis = await self._get_gemini_analysis(market_context)
+            else:
+                raise ValueError(f"Unknown AI provider: {provider}")
 
             # Cache the result
             cache_key = f"{current_price}_{len(candles)}"
@@ -385,6 +411,147 @@ Remember:
             }
         except Exception as e:
             logger.error(f"Error calling Claude API: {e}", exc_info=True)
+            return {
+                "signal_type": "hold",
+                "confidence": 0,
+                "reasoning": f"Error: {str(e)}",
+                "suggested_allocation_pct": 0,
+                "expected_profit_pct": 0
+            }
+
+    async def _get_gemini_analysis(self, market_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Call Gemini API for market analysis
+
+        Uses structured prompt to get concise, parseable responses
+        """
+        try:
+            # Lazy import of Gemini library
+            import google.generativeai as genai
+        except ImportError:
+            logger.error("google-generativeai not installed. Run: pip install google-generativeai")
+            return {
+                "signal_type": "hold",
+                "confidence": 0,
+                "reasoning": "Gemini library not installed",
+                "suggested_allocation_pct": 0,
+                "expected_profit_pct": 0
+            }
+
+        # Initialize Gemini client
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            logger.error("GEMINI_API_KEY environment variable not set")
+            return {
+                "signal_type": "hold",
+                "confidence": 0,
+                "reasoning": "Gemini API key not configured",
+                "suggested_allocation_pct": 0,
+                "expected_profit_pct": 0
+            }
+
+        genai.configure(api_key=api_key)
+
+        risk_tolerance = self.config.get("risk_tolerance", "moderate")
+        market_focus = self.config.get("market_focus", "BTC")
+        custom_instructions = self.config.get("custom_instructions", "").strip()
+
+        sentiment_info = ""
+        if "sentiment" in market_context:
+            sent = market_context["sentiment"]
+            sentiment_info = f"""
+**Market Sentiment & News:**
+- Twitter Sentiment: {sent.get('twitter_sentiment', 'N/A')}
+- News Headlines: {', '.join(sent.get('news_headlines', [])[:3])}
+- Reddit Sentiment: {sent.get('reddit_sentiment', 'N/A')}
+- Fear & Greed Index: {sent.get('fear_greed_index', 'N/A')}/100
+- Summary: {sent.get('summary', 'No sentiment data available')}
+"""
+
+        prompt = f"""You are an expert cryptocurrency trading AI analyzing market data.
+
+**Current Market Data:**
+- Current Price: {market_context['current_price']}
+- 24h Change: {market_context['price_change_24h_pct']}%
+- Period High: {market_context['period_high']}
+- Period Low: {market_context['period_low']}
+- Volatility: {market_context['volatility']}%
+- Recent Price Trend: {market_context['recent_prices'][-5:]}
+{sentiment_info}
+**Trading Parameters:**
+- Risk Tolerance: {risk_tolerance}
+- Market Focus: {market_focus} pairs
+{f"- Custom Instructions: {custom_instructions}" if custom_instructions else ""}
+
+**Your Task:**
+Analyze this data (including sentiment/news if provided) and provide a trading recommendation. Consider both technical patterns AND real-world sentiment/news. Respond ONLY with a JSON object (no markdown formatting) in this exact format:
+
+{{
+  "action": "buy" or "hold" or "sell",
+  "confidence": 0-100,
+  "reasoning": "brief explanation (1-2 sentences)",
+  "suggested_allocation_pct": 0-100,
+  "expected_profit_pct": 0-10
+}}
+
+Remember:
+- Only suggest "buy" if you see clear profit opportunity
+- Only suggest "sell" if you're confident price will drop
+- Suggest "hold" if market is unclear
+- Be {risk_tolerance} in your recommendations
+- Keep reasoning concise"""
+
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt)
+
+            # Parse response
+            response_text = response.text.strip()
+
+            # Remove markdown code blocks if present
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+                response_text = response_text.strip()
+
+            analysis = json.loads(response_text)
+
+            # Track token usage (Gemini provides usage metadata)
+            if hasattr(response, 'usage_metadata'):
+                input_tokens = response.usage_metadata.prompt_token_count
+                output_tokens = response.usage_metadata.candidates_token_count
+                self._total_tokens_used += input_tokens + output_tokens
+                logger.info(f"📊 Gemini API - Input: {input_tokens} tokens, Output: {output_tokens} tokens, Total: {self._total_tokens_used}")
+
+            # Convert to our signal format
+            signal_type = "none"
+            if analysis["action"] == "buy":
+                signal_type = "buy"
+            elif analysis["action"] == "sell":
+                signal_type = "sell"
+
+            return {
+                "signal_type": signal_type,
+                "confidence": analysis.get("confidence", 50),
+                "reasoning": analysis.get("reasoning", "AI analysis"),
+                "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
+                "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
+                "raw_analysis": analysis
+            }
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Gemini response as JSON: {response_text}")
+            logger.error(f"JSON error: {e}")
+            return {
+                "signal_type": "hold",
+                "confidence": 0,
+                "reasoning": "Failed to parse AI response",
+                "suggested_allocation_pct": 0,
+                "expected_profit_pct": 0
+            }
+        except Exception as e:
+            logger.error(f"Error calling Gemini API: {e}", exc_info=True)
             return {
                 "signal_type": "hold",
                 "confidence": 0,

@@ -44,6 +44,18 @@ export interface Signal {
   reason: string | null;
 }
 
+export interface AIBotLog {
+  id: number;
+  bot_id: number;
+  timestamp: string;
+  thinking: string;
+  decision: string;
+  confidence: number | null;
+  current_price: number | null;
+  position_status: string | null;
+  context: any;
+}
+
 export interface MarketData {
   id: number;
   timestamp: string;

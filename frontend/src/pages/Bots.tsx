@@ -1,26 +1,11 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { botsApi, templatesApi } from '../services/api'
 import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
-import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy } from 'lucide-react'
+import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
-
-const TRADING_PAIRS = [
-  { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC Pairs' },
-  { value: 'SOL-BTC', label: 'SOL/BTC', group: 'BTC Pairs' },
-  { value: 'LINK-BTC', label: 'LINK/BTC', group: 'BTC Pairs' },
-  { value: 'MATIC-BTC', label: 'MATIC/BTC', group: 'BTC Pairs' },
-  { value: 'AVAX-BTC', label: 'AVAX/BTC', group: 'BTC Pairs' },
-  { value: 'DOT-BTC', label: 'DOT/BTC', group: 'BTC Pairs' },
-  { value: 'UNI-BTC', label: 'UNI/BTC', group: 'BTC Pairs' },
-  { value: 'ATOM-BTC', label: 'ATOM/BTC', group: 'BTC Pairs' },
-  { value: 'LTC-BTC', label: 'LTC/BTC', group: 'BTC Pairs' },
-  { value: 'XLM-BTC', label: 'XLM/BTC', group: 'BTC Pairs' },
-  { value: 'BTC-USD', label: 'BTC/USD', group: 'USD Pairs' },
-  { value: 'ETH-USD', label: 'ETH/USD', group: 'USD Pairs' },
-  { value: 'SOL-USD', label: 'SOL/USD', group: 'USD Pairs' },
-  { value: 'USDC-USD', label: 'USDC/USD', group: 'USD Pairs' },
-]
+import AIBotLogs from '../components/AIBotLogs'
+import axios from 'axios'
 
 interface BotFormData {
   name: string
@@ -36,6 +21,8 @@ function Bots() {
   const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
   const [editingBot, setEditingBot] = useState<Bot | null>(null)
+  const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [formData, setFormData] = useState<BotFormData>({
     name: '',
     description: '',
@@ -65,8 +52,66 @@ function Bots() {
     queryFn: templatesApi.getAll,
   })
 
+  // Fetch available trading pairs from Coinbase
+  const { data: productsData } = useQuery({
+    queryKey: ['available-products'],
+    queryFn: async () => {
+      const response = await axios.get('/api/products')
+      return response.data
+    },
+    staleTime: 3600000, // Cache for 1 hour (product list rarely changes)
+  })
+
+  // Generate trading pairs from all available products
+  const TRADING_PAIRS = useMemo(() => {
+    if (!productsData?.products) {
+      // Fallback to default pairs while loading
+      return [
+        { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC Pairs' },
+        { value: 'BTC-USD', label: 'BTC/USD', group: 'USD Pairs' },
+        { value: 'ETH-USD', label: 'ETH/USD', group: 'USD Pairs' },
+      ]
+    }
+
+    // Convert products to trading pairs with grouping
+    const pairs = productsData.products.map((product: any) => {
+      const base = product.base_currency
+      const quote = product.quote_currency
+      const group = quote === 'USD' ? 'USD Pairs' : 'BTC Pairs'
+
+      return {
+        value: product.product_id,
+        label: `${base}/${quote}`,
+        group
+      }
+    })
+
+    // Sort by group then by label
+    return pairs.sort((a: any, b: any) => {
+      if (a.group !== b.group) {
+        return a.group === 'BTC Pairs' ? -1 : 1
+      }
+      return a.label.localeCompare(b.label)
+    })
+  }, [productsData])
+
   // Get selected strategy definition
   const selectedStrategy = strategies.find((s) => s.id === formData.strategy_type)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openMenuId !== null) {
+        const target = event.target as Element
+        if (!target.closest('.relative')) {
+          setOpenMenuId(null)
+        }
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [openMenuId])
 
   // Create bot mutation
   const createBot = useMutation({
@@ -356,7 +401,7 @@ function Bots() {
               key={bot.id}
               className="bg-slate-800 rounded-lg p-6 border border-slate-700 hover:border-slate-600 transition-colors"
             >
-              {/* Bot Header */}
+              {/* Bot Header with Toggle */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold">{bot.name}</h3>
@@ -364,15 +409,22 @@ function Bots() {
                     <p className="text-sm text-slate-400 mt-1">{bot.description}</p>
                   )}
                 </div>
-                <div
-                  className={`px-2 py-1 rounded text-xs font-medium ${
-                    bot.is_active
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-slate-700 text-slate-400'
-                  }`}
-                >
-                  {bot.is_active ? 'Active' : 'Stopped'}
-                </div>
+                {/* Toggle Switch */}
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bot.is_active}
+                    onChange={() => {
+                      if (bot.is_active) {
+                        stopBot.mutate(bot.id)
+                      } else {
+                        startBot.mutate(bot.id)
+                      }
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                </label>
               </div>
 
               {/* Bot Details */}
@@ -389,49 +441,73 @@ function Bots() {
                     {((bot as any).product_ids || [bot.product_id]).join(', ')}
                   </span>
                 </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-400">Status:</span>
+                  <span className={`font-medium ${bot.is_active ? 'text-green-400' : 'text-slate-400'}`}>
+                    {bot.is_active ? 'Running' : 'Stopped'}
+                  </span>
+                </div>
               </div>
 
               {/* Actions */}
               <div className="flex items-center space-x-2">
-                {bot.is_active ? (
+                {bot.strategy_type === 'ai_autonomous' && (
                   <button
-                    onClick={() => stopBot.mutate(bot.id)}
-                    className="flex-1 flex items-center justify-center space-x-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 px-3 py-2 rounded transition-colors"
+                    onClick={() => setAiLogsBotId(bot.id)}
+                    className="flex-1 flex items-center justify-center space-x-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 px-3 py-2 rounded transition-colors"
+                    title="View AI Reasoning Logs"
                   >
-                    <Square className="w-4 h-4" />
-                    <span>Stop</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => startBot.mutate(bot.id)}
-                    className="flex-1 flex items-center justify-center space-x-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 px-3 py-2 rounded transition-colors"
-                  >
-                    <Play className="w-4 h-4" />
-                    <span>Start</span>
+                    <Brain className="w-4 h-4" />
+                    <span>AI Logs</span>
                   </button>
                 )}
-                <button
-                  onClick={() => handleOpenEdit(bot)}
-                  className="p-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
-                  title="Edit"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => cloneBot.mutate(bot.id)}
-                  className="p-2 bg-slate-700 hover:bg-blue-600/20 text-blue-400 rounded transition-colors"
-                  title="Clone Bot"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(bot)}
-                  className="p-2 bg-slate-700 hover:bg-red-600/20 text-red-400 rounded transition-colors"
-                  title="Delete"
-                  disabled={bot.is_active}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {/* ... Menu */}
+                <div className="relative">
+                  <button
+                    onClick={() => setOpenMenuId(openMenuId === bot.id ? null : bot.id)}
+                    className="p-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
+                    title="More actions"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {openMenuId === bot.id && (
+                    <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-10">
+                      <button
+                        onClick={() => {
+                          handleOpenEdit(bot)
+                          setOpenMenuId(null)
+                        }}
+                        className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-t-lg transition-colors"
+                      >
+                        <Edit className="w-4 h-4" />
+                        <span>Edit Bot</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          cloneBot.mutate(bot.id)
+                          setOpenMenuId(null)
+                        }}
+                        className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
+                      >
+                        <Copy className="w-4 h-4 text-blue-400" />
+                        <span>Clone Bot</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleDelete(bot)
+                          setOpenMenuId(null)
+                        }}
+                        disabled={bot.is_active}
+                        className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-b-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-400" />
+                        <span>Delete Bot</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -678,6 +754,15 @@ function Bots() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* AI Bot Logs Modal */}
+      {aiLogsBotId !== null && (
+        <AIBotLogs
+          botId={aiLogsBotId}
+          isOpen={aiLogsBotId !== null}
+          onClose={() => setAiLogsBotId(null)}
+        />
       )}
     </div>
   )
