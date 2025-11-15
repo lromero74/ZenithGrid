@@ -1,5 +1,7 @@
 export interface Position {
   id: number;
+  bot_id?: number | null;
+  product_id?: string;
   status: string;
   opened_at: string;
   closed_at: string | null;

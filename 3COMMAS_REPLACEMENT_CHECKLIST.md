@@ -313,7 +313,14 @@
 ## Recent Updates (2025-11-15)
 
 ### Completed This Session (Latest First):
-1. ✅ **Deal Action Buttons (3Commas Critical Features)**
+1. ✅ **Position Product ID Tracking**
+   - Added product_id column to Position model
+   - Positions now store their trading pair (e.g., "SOL-USD", "ETH-BTC")
+   - Charts in deal view now show correct pair
+   - Removed hardcoded "ETH-BTC" limitation
+   - Bot product_id automatically assigned to positions
+
+2. ✅ **Deal Action Buttons (3Commas Critical Features)**
    - Close Position (panic sell) - Force close at market price
    - Add Funds modal with amount input
    - Confirmation dialogs for destructive actions

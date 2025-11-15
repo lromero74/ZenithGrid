@@ -58,6 +58,8 @@ from pydantic import BaseModel
 
 class PositionResponse(BaseModel):
     id: int
+    bot_id: Optional[int] = None
+    product_id: str = "ETH-BTC"
     status: str
     opened_at: datetime
     closed_at: Optional[datetime]

@@ -35,6 +35,7 @@ class Position(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True)  # Link to bot (nullable for backwards compatibility)
+    product_id = Column(String, default="ETH-BTC")  # Trading pair (e.g., "ETH-BTC", "SOL-USD")
     status = Column(String, default="open")  # open, closed
     opened_at = Column(DateTime, default=datetime.utcnow)
     closed_at = Column(DateTime, nullable=True)

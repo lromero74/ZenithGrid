@@ -533,7 +533,7 @@ export default function Positions() {
                         </div>
 
                         {/* Deal Chart */}
-                        <DealChart position={position} productId="ETH-BTC" />
+                        <DealChart position={position} productId={position.product_id || "ETH-BTC"} />
 
                         {/* Position Details Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
