@@ -82,6 +82,15 @@ class AIAutonomousStrategy(TradingStrategy):
                     options=["claude", "gemini"]
                 ),
                 StrategyParameter(
+                    name="max_concurrent_deals",
+                    display_name="Max Concurrent Deals",
+                    description="Maximum number of positions that can be open at the same time",
+                    type="int",
+                    default=1,
+                    min_value=1,
+                    max_value=10
+                ),
+                StrategyParameter(
                     name="market_focus",
                     display_name="Market Focus",
                     description="Which market pairs to analyze (BTC pairs or USD pairs)",

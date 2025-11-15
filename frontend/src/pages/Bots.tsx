@@ -435,6 +435,14 @@ function Bots() {
                     {strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type}
                   </span>
                 </div>
+                {bot.strategy_type === 'ai_autonomous' && bot.strategy_config?.ai_provider && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">AI Provider:</span>
+                    <span className="text-purple-400 font-medium">
+                      {bot.strategy_config.ai_provider === 'claude' ? '🤖 Claude' : '🤖 Gemini'}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Pairs:</span>
                   <span className="text-white font-medium text-xs">

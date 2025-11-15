@@ -93,6 +93,16 @@ class StrategyTradingEngine:
         result = await self.db.execute(query)
         return result.scalars().first()
 
+    async def get_open_positions_count(self) -> int:
+        """Get count of all open positions for this bot (across all pairs)"""
+        from sqlalchemy import func
+        query = select(func.count(Position.id)).where(
+            Position.bot_id == self.bot.id,
+            Position.status == "open"
+        )
+        result = await self.db.execute(query)
+        return result.scalar() or 0
+
     async def create_position(self, btc_balance: float, btc_amount: float) -> Position:
         """
         Create a new position for this bot
@@ -298,9 +308,23 @@ class StrategyTradingEngine:
         buy_reason = ""
 
         if self.bot.is_active:
-            should_buy, btc_amount, buy_reason = await self.strategy.should_buy(
-                signal_data, position, btc_balance
-            )
+            # Check max concurrent deals limit (3Commas style)
+            if position is None:  # Only check when considering opening a NEW position
+                open_positions_count = await self.get_open_positions_count()
+                max_deals = self.strategy.config.get("max_concurrent_deals", 1)
+
+                if open_positions_count >= max_deals:
+                    should_buy = False
+                    buy_reason = f"Max concurrent deals limit reached ({open_positions_count}/{max_deals})"
+                else:
+                    should_buy, btc_amount, buy_reason = await self.strategy.should_buy(
+                        signal_data, position, btc_balance
+                    )
+            else:
+                # Position already exists for this pair - check for DCA
+                should_buy, btc_amount, buy_reason = await self.strategy.should_buy(
+                    signal_data, position, btc_balance
+                )
         else:
             # Bot is stopped - don't open new positions
             if position is None:

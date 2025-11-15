@@ -42,6 +42,17 @@ class ConditionalDCAStrategy(TradingStrategy):
                        "Mix and match any indicators with operators like >, <, crossing above, etc. "
                        "Each condition can use its own timeframe.",
             parameters=[
+                # Deal Management
+                StrategyParameter(
+                    name="max_concurrent_deals",
+                    display_name="Max Concurrent Deals",
+                    description="Maximum number of positions that can be open at the same time (3Commas style)",
+                    type="int",
+                    default=1,
+                    min_value=1,
+                    max_value=20
+                ),
+
                 # Base Order Settings
                 StrategyParameter(
                     name="base_order_type",
