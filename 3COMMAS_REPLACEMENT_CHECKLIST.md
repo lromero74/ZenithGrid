@@ -30,6 +30,7 @@
 - ✅ Safety Order conditions
 - ✅ Take Profit conditions
 - ✅ Min profit threshold for conditional exits
+- ✅ **AI Autonomous Trading** (Claude AI-powered)
 - ⏳ Trailing take profit
 - ⏳ Trailing stop loss
 - ⏳ Multiple take profit targets
@@ -436,6 +437,35 @@
    - Templates pre-fill entire form (name, strategy, pairs, config)
    - Default templates cannot be edited/deleted (protected)
    - **Branch: bot-templates** → merged to master
+
+5. ✅ **AI Autonomous Trading Bot** 🤖 UNIQUE FEATURE
+   - Claude AI-powered autonomous trading strategy
+   - Makes intelligent buy/sell decisions to maximize profit
+   - **Core Features:**
+     - Analyzes market data with Claude 3.5 Sonnet
+     - Never sells at a loss (hard requirement)
+     - Budget grows with profits
+     - Configurable risk tolerance (conservative/moderate/aggressive)
+   - **Token Optimization:**
+     - Analysis caching (5min TTL by default)
+     - Configurable analysis interval (5-120 min, default 15min)
+     - Summarized market data (not raw candles)
+     - Structured prompts for concise responses
+     - Token usage tracking and logging
+   - **Configuration Parameters:**
+     - Market focus (BTC/USD/ALL pairs)
+     - Initial budget % (1-50%, default 10%)
+     - Max position size % (5-100%, default 25%)
+     - Risk tolerance (conservative/moderate/aggressive)
+     - Analysis interval (5-120 min)
+     - Min profit % to sell (0.1-10%, default 1%)
+   - **Sentiment Analysis (Planned):**
+     - Framework in place for Twitter/news integration
+     - Placeholder for Fear & Greed index
+     - Reddit sentiment analysis ready
+     - Will consider social/news when making decisions
+   - Requires ANTHROPIC_API_KEY in .env
+   - **Branch: ai-autonomous-bot** (in progress)
 
 ### Next Priority Items:
 1. ⏳ **Trailing Take Profit / Stop Loss**

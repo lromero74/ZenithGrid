@@ -163,7 +163,7 @@ class StrategyRegistry:
 
 
 # Import all strategy implementations to trigger registration
-from app.strategies import macd_dca, rsi, bollinger, simple_dca, advanced_dca, conditional_dca
+from app.strategies import macd_dca, rsi, bollinger, simple_dca, advanced_dca, conditional_dca, ai_autonomous
 
 __all__ = [
     'TradingStrategy',
