@@ -19,8 +19,8 @@
 - ✅ Multiple bots running simultaneously
 - ✅ Multi-pair bots (trade multiple pairs with one bot)
 - ✅ Budget splitting toggle (divide percentages across pairs)
+- ✅ Bot templates (presets and custom templates)
 - ⏳ Clone/duplicate bots
-- ⏳ Bot templates
 - ⏳ Import/export bot configs
 
 ### Strategy Support
@@ -402,7 +402,7 @@
    - Edit button now correctly navigates to Bots page
    - Committed directly to master
 
-### Latest Features Completed (2025-11-15 Late Evening):
+### Latest Features Completed (2025-11-15 Night):
 1. ✅ **MULTI-PAIR BOTS** 🌟 Critical 3Commas feature
    - Backend: bot → multiple positions (one per pair)
    - Signal evaluation runs independently for each pair
@@ -425,20 +425,35 @@
    - Example: 30% max with 3 pairs → 10% per pair (safe) vs 90% total (default)
    - **Branch: multi-pair-ui** → merged to master
 
+4. ✅ **Bot Templates System** 📝 3Commas feature
+   - BotTemplate model with full strategy configuration
+   - Templates API with CRUD operations + seed endpoint
+   - Template selector in bot creation form (dropdown at top)
+   - 3 default presets: Conservative, Balanced, Aggressive DCA
+   - Conservative: 2% base, 3 SOs, 1.5% profit, -5% SL
+   - Balanced: 5% base, 4 SOs, 2% profit, -10% SL
+   - Aggressive: 10% base, 5 SOs, 3% profit, no SL
+   - Templates pre-fill entire form (name, strategy, pairs, config)
+   - Default templates cannot be edited/deleted (protected)
+   - **Branch: bot-templates** → merged to master
+
 ### Next Priority Items:
-1. ⏳ **Bot Templates**
-   - Save/load bot configurations
-   - Quick-start from presets
-
-2. ⏳ **Trailing Take Profit / Stop Loss**
+1. ⏳ **Trailing Take Profit / Stop Loss**
    - Dynamic TP that follows price upward
+   - Dynamic SL that follows price downward (for shorts)
    - Implementation in trading engine
+   - UI configuration in bot form
 
-3. ⏳ **Position Notifications/Alerts**
+2. ⏳ **Position Notifications/Alerts**
    - Deal opened/closed notifications
    - TP/SL hit alerts
+   - Safety order filled alerts
+
+3. ⏳ **Clone/Duplicate Bots**
+   - Quick copy of existing bot configuration
+   - Increment name automatically
 
 ---
 
-**Last Updated:** 2025-11-15 Late Evening
-**Next Milestone:** Bot Templates or Trailing TP/SL
+**Last Updated:** 2025-11-15 Night
+**Next Milestone:** Trailing TP/SL
