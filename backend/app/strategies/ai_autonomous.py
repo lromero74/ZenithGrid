@@ -601,6 +601,13 @@ Remember:
 
         # Use lesser of AI suggestion and max allowed
         use_pct = min(suggested_pct, max_pct)
+
+        # Smart budget division by max concurrent deals (3Commas style)
+        max_deals = self.config.get("max_concurrent_deals", 1)
+        if max_deals > 1:
+            # Divide budget equally among max concurrent deals
+            use_pct = use_pct / max_deals
+
         btc_amount = btc_balance * (use_pct / 100.0)
 
         if btc_amount <= 0:

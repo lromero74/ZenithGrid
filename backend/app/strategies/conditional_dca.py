@@ -384,9 +384,25 @@ class ConditionalDCAStrategy(TradingStrategy):
         }
 
     def calculate_base_order_size(self, btc_balance: float) -> float:
-        """Calculate base order size based on configuration"""
+        """
+        Calculate base order size based on configuration
+
+        Smart budget allocation:
+        - If max_concurrent_deals > 1, divide budget by max_deals
+        - Example: 30% budget, 3 max deals → 10% per deal
+        - This ensures each concurrent position gets equal budget
+        """
         if self.config["base_order_type"] == "percentage":
-            return btc_balance * (self.config["base_order_percentage"] / 100.0)
+            base_percentage = self.config["base_order_percentage"]
+
+            # Smart budget division by max concurrent deals (3Commas style)
+            max_deals = self.config.get("max_concurrent_deals", 1)
+            if max_deals > 1:
+                # Divide budget equally among max concurrent deals
+                per_deal_percentage = base_percentage / max_deals
+                return btc_balance * (per_deal_percentage / 100.0)
+            else:
+                return btc_balance * (base_percentage / 100.0)
         else:  # fixed_btc
             return self.config["base_order_btc"]
 
