@@ -356,12 +356,12 @@ class AIAutonomousStrategy(TradingStrategy):
         prompt = f"""You are an expert cryptocurrency trading AI analyzing market data.
 
 **Current Market Data:**
-- Current Price: {market_context['current_price']}
+- Current Price: {market_context['current_price']:.8f} BTC
 - 24h Change: {market_context['price_change_24h_pct']}%
-- Period High: {market_context['period_high']}
-- Period Low: {market_context['period_low']}
+- Period High: {market_context['period_high']:.8f} BTC
+- Period Low: {market_context['period_low']:.8f} BTC
 - Volatility: {market_context['volatility']}%
-- Recent Price Trend: {market_context['recent_prices'][-5:]}
+- Recent Price Trend: {[f"{p:.8f}" for p in market_context['recent_prices'][-5:]]}
 {sentiment_info}
 **Trading Parameters:**
 - Risk Tolerance: {risk_tolerance}
@@ -500,12 +500,12 @@ Remember:
         prompt = f"""You are an expert cryptocurrency trading AI analyzing market data.
 
 **Current Market Data:**
-- Current Price: {market_context['current_price']}
+- Current Price: {market_context['current_price']:.8f} BTC
 - 24h Change: {market_context['price_change_24h_pct']}%
-- Period High: {market_context['period_high']}
-- Period Low: {market_context['period_low']}
+- Period High: {market_context['period_high']:.8f} BTC
+- Period Low: {market_context['period_low']:.8f} BTC
 - Volatility: {market_context['volatility']}%
-- Recent Price Trend: {market_context['recent_prices'][-5:]}
+- Recent Price Trend: {[f"{p:.8f}" for p in market_context['recent_prices'][-5:]]}
 {sentiment_info}
 **Trading Parameters:**
 - Risk Tolerance: {risk_tolerance}
@@ -654,9 +654,9 @@ Remember:
             ctx = data.get("market_context", {})
             pairs_summary.append(f"""
 **{product_id}:**
-- Current Price: {ctx.get('current_price', 0)}
-- 24h Change: {ctx.get('price_change_24h_pct', 0)}%
-- Volatility: {ctx.get('volatility', 0)}%
+- Current Price: {ctx.get('current_price', 0):.8f} BTC
+- 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
+- Volatility: {ctx.get('volatility', 0):.2f}%
 - Recent Trend: {ctx.get('recent_prices', [])[-3:]}""")
 
         prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
@@ -903,9 +903,9 @@ Respond ONLY with a JSON object (no markdown) in this exact format:
             ctx = data.get("market_context", {})
             pairs_summary.append(f"""
 **{product_id}:**
-- Current Price: {ctx.get('current_price', 0)}
-- 24h Change: {ctx.get('price_change_24h_pct', 0)}%
-- Volatility: {ctx.get('volatility', 0)}%""")
+- Current Price: {ctx.get('current_price', 0):.8f} BTC
+- 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
+- Volatility: {ctx.get('volatility', 0):.2f}%""")
 
         prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs. Provide trading recommendations for ALL pairs in JSON.
 
