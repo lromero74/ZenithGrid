@@ -4,9 +4,9 @@ Simple in-memory cache for API responses
 Reduces API spam by caching balance and price checks.
 """
 
-from typing import Any, Optional, Dict
-from datetime import datetime, timedelta
 import asyncio
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 
 class CacheEntry:

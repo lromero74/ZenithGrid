@@ -10,14 +10,15 @@ Sells when %B indicates overbought (> 0.8) with profit target.
 - %B < 0: Price below lower band
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+import math
+from typing import Any, Dict, List, Optional, Tuple
+
 from app.strategies import (
-    TradingStrategy,
     StrategyDefinition,
     StrategyParameter,
-    StrategyRegistry
+    StrategyRegistry,
+    TradingStrategy,
 )
-import math
 
 
 def calculate_sma(prices: List[float], period: int) -> List[float]:

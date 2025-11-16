@@ -6,10 +6,11 @@ Each strategy implements its own signal detection and decision logic.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any, Dict, List, Optional, Tuple
+
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class StrategyParameter(BaseModel):
@@ -163,7 +164,15 @@ class StrategyRegistry:
 
 
 # Import all strategy implementations to trigger registration
-from app.strategies import macd_dca, rsi, bollinger, simple_dca, advanced_dca, conditional_dca, ai_autonomous
+from app.strategies import (
+    advanced_dca,
+    ai_autonomous,
+    bollinger,
+    conditional_dca,
+    macd_dca,
+    rsi,
+    simple_dca,
+)
 
 __all__ = [
     'TradingStrategy',

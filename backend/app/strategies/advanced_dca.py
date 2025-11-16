@@ -9,12 +9,13 @@ Full-featured DCA strategy with:
 - Price deviation controls
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 from app.strategies import (
-    TradingStrategy,
     StrategyDefinition,
     StrategyParameter,
-    StrategyRegistry
+    StrategyRegistry,
+    TradingStrategy,
 )
 
 

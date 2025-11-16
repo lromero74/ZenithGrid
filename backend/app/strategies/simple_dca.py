@@ -6,13 +6,14 @@ Buys a fixed amount at regular intervals regardless of price.
 Sells when profit target is reached.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
+
 from app.strategies import (
-    TradingStrategy,
     StrategyDefinition,
     StrategyParameter,
-    StrategyRegistry
+    StrategyRegistry,
+    TradingStrategy,
 )
 
 

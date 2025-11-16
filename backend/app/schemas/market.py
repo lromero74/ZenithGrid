@@ -1,7 +1,8 @@
 """Market data and signal-related Pydantic schemas"""
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class SignalResponse(BaseModel):

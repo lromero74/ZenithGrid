@@ -4,18 +4,20 @@ Bot Management Router
 Handles CRUD operations for trading bots and strategy listing.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, desc
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+import logging
 from datetime import datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot, Position, AIBotLog
-from app.strategies import StrategyRegistry, StrategyDefinition
+from app.models import AIBotLog, Bot, Position
+from app.strategies import StrategyDefinition, StrategyRegistry
 
-
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/bots", tags=["bots"])
 
 

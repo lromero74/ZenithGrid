@@ -12,15 +12,16 @@ Example Conditions:
 - Sell when: RSI > 70 OR Price > Bollinger Upper
 """
 
-from typing import Dict, Any, List, Optional, Tuple
-from app.strategies import (
-    TradingStrategy,
-    StrategyDefinition,
-    StrategyParameter,
-    StrategyRegistry
-)
+from typing import Any, Dict, List, Optional, Tuple
+
 from app.indicator_calculator import IndicatorCalculator
 from app.phase_conditions import PhaseConditionEvaluator
+from app.strategies import (
+    StrategyDefinition,
+    StrategyParameter,
+    StrategyRegistry,
+    TradingStrategy,
+)
 
 
 @StrategyRegistry.register

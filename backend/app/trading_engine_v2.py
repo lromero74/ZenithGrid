@@ -7,15 +7,17 @@ Supports both BTC and USD quote currencies.
 """
 
 import logging
-from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime
-from sqlalchemy import select, desc
+from typing import Any, Dict, List, Optional, Tuple
+
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Position, Trade, Signal, Bot, AIBotLog
+
 from app.coinbase_client import CoinbaseClient
-from app.trading_client import TradingClient
 from app.currency_utils import format_with_usd, get_quote_currency
+from app.models import AIBotLog, Bot, Position, Signal, Trade
 from app.strategies import TradingStrategy
+from app.trading_client import TradingClient
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +125,7 @@ class StrategyTradingEngine:
         # Get BTC/USD price for USD tracking
         try:
             btc_usd_price = await self.coinbase.get_btc_usd_price()
-        except:
+        except Exception:
             btc_usd_price = None
 
         position = Position(
@@ -255,7 +257,7 @@ class StrategyTradingEngine:
                 profit_usd = profit_quote * btc_usd_price_at_close
             else:  # quote is USD
                 profit_usd = profit_quote
-        except:
+        except Exception:
             btc_usd_price_at_close = None
             profit_usd = None
 
@@ -331,6 +333,7 @@ class StrategyTradingEngine:
 
             # Subtract amount already in open positions for this bot
             from sqlalchemy import select
+
             from app.models import Position
             query = select(Position).where(
                 Position.bot_id == self.bot.id,
@@ -397,7 +400,7 @@ class StrategyTradingEngine:
             # Get BTC/USD price for logging
             try:
                 btc_usd_price = await self.coinbase.get_btc_usd_price()
-            except:
+            except Exception:
                 btc_usd_price = None
 
             quote_formatted = format_with_usd(quote_amount, self.product_id, btc_usd_price)
@@ -417,7 +420,7 @@ class StrategyTradingEngine:
                 # For new positions, we need to create position for the trade to reference
                 # BUT we do it in a transaction that will rollback if trade fails
                 if is_new_position:
-                    logger.info(f"  📝 Creating position (will commit only if trade succeeds)...")
+                    logger.info("  📝 Creating position (will commit only if trade succeeds)...")
                     position = await self.create_position(quote_balance, quote_amount)
                     logger.info(f"  ✅ Position created: ID={position.id} (pending trade execution)")
 

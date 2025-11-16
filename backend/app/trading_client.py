@@ -6,7 +6,8 @@ Automatically detects quote currency and calls appropriate methods.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
 from app.coinbase_client import CoinbaseClient
 from app.currency_utils import get_quote_currency
 

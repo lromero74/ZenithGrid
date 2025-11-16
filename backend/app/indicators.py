@@ -1,11 +1,12 @@
+from datetime import datetime
+from typing import List, Optional, Tuple
+
 import pandas as pd
-import numpy as np
-from typing import Tuple, Optional, List
-from datetime import datetime, timedelta
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import MarketData
+
 from app.config import settings
+from app.models import MarketData
 
 
 class MACDCalculator:

@@ -13,8 +13,9 @@ Allows mixing and matching indicators with comparison operators:
 Conditions can be combined with AND/OR logic.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 

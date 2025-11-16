@@ -4,7 +4,7 @@ Currency utilities for multi-quote-currency support
 Handles detection and formatting for both BTC and USD quote currencies.
 """
 
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 
 def get_currencies_from_pair(product_id: str) -> Tuple[str, str]:

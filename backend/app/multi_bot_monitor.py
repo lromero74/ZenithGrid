@@ -7,16 +7,16 @@ Monitors prices for all active bots and processes signals using their configured
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Bot, MarketData
 from app.coinbase_client import CoinbaseClient
-from app.strategies import StrategyRegistry, TradingStrategy
-from app.trading_engine_v2 import StrategyTradingEngine
 from app.database import async_session_maker
-from app.config import settings
+from app.models import Bot
+from app.strategies import StrategyRegistry
+from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +176,7 @@ class MultiBotMonitor:
                 logger.info(f"🚀 Using BATCH analysis mode - {len(trading_pairs)} pairs in 1 API call!")
                 return await self.process_bot_batch(db, bot, trading_pairs, strategy)
             else:
-                logger.info(f"Using sequential analysis mode")
+                logger.info("Using sequential analysis mode")
                 # Original sequential processing logic
                 # Process trading pairs in batches to avoid Coinbase API throttling
                 results = {}
@@ -206,7 +206,7 @@ class MultiBotMonitor:
 
                     # Add delay between batches (if not last batch)
                     if i + batch_size < len(trading_pairs):
-                        logger.info(f"  Waiting 1s before next batch to avoid API throttling...")
+                        logger.info("  Waiting 1s before next batch to avoid API throttling...")
                         await asyncio.sleep(1)
 
                 return results
@@ -291,7 +291,7 @@ class MultiBotMonitor:
                     logger.info(f"  📊 After volume filter: {len(pairs_to_analyze)} pairs remain")
 
             if not pairs_to_analyze:
-                logger.info(f"  ⏭️  No pairs to analyze")
+                logger.info("  ⏭️  No pairs to analyze")
                 return {}
 
             # Collect market data for pairs we're analyzing
@@ -427,7 +427,8 @@ class MultiBotMonitor:
                 # Check if there's an existing position for this pair
                 # If yes, use frozen config snapshot (like 3Commas)
                 # If no, use current bot config (will be frozen when position is created)
-                from sqlalchemy import select, desc
+                from sqlalchemy import desc, select
+
                 from app.models import Position
                 query = select(Position).where(
                     Position.bot_id == bot.id,
@@ -444,7 +445,7 @@ class MultiBotMonitor:
                 else:
                     # Use current bot config (for new positions or legacy positions without snapshot)
                     strategy_config = bot.strategy_config.copy()
-                    logger.info(f"    Using CURRENT bot strategy config")
+                    logger.info("    Using CURRENT bot strategy config")
 
                     # Adjust budget percentages if splitting across pairs (only for new positions)
                     if bot.split_budget_across_pairs and len(bot.get_trading_pairs()) > 1:
@@ -474,7 +475,7 @@ class MultiBotMonitor:
 
             # Use provided pair_data if available (from batch), otherwise fetch market data
             if pair_data:
-                logger.info(f"    Using pre-fetched market data")
+                logger.info("    Using pre-fetched market data")
                 current_price = pair_data.get("current_price", 0)
                 candles = pair_data.get("candles", [])
                 candles_by_timeframe = {"FIVE_MINUTE": candles}  # Simplified for batch mode
@@ -560,19 +561,19 @@ class MultiBotMonitor:
 
             # Use pre-analyzed signal if provided (from batch analysis), otherwise analyze now
             if pre_analyzed_signal:
-                logger.info(f"  Using pre-analyzed signal from batch")
+                logger.info("  Using pre-analyzed signal from batch")
                 signal_data = pre_analyzed_signal
             else:
                 # Analyze signal using strategy
                 # For conditional_dca, pass the candles_by_timeframe dict
                 if bot.strategy_type == "conditional_dca":
-                    logger.info(f"  Analyzing conditional_dca signals...")
+                    logger.info("  Analyzing conditional_dca signals...")
                     signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe)
                 else:
                     signal_data = await strategy.analyze_signal(candles, current_price)
 
             if not signal_data:
-                logger.warning(f"  No signal from strategy (returned None)")
+                logger.warning("  No signal from strategy (returned None)")
                 return {"action": "none", "reason": "No signal"}
 
             logger.info(f"  Signal data: base_order={signal_data.get('base_order_signal')}, safety_order={signal_data.get('safety_order_signal')}, take_profit={signal_data.get('take_profit_signal')}")

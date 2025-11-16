@@ -5,14 +5,15 @@ Buys on MACD crossover (bullish signal) with Dollar Cost Averaging.
 Sells on MACD cross down when profit target is reached.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from app.indicators import MACDCalculator
 from app.strategies import (
-    TradingStrategy,
     StrategyDefinition,
     StrategyParameter,
-    StrategyRegistry
+    StrategyRegistry,
+    TradingStrategy,
 )
-from app.indicators import MACDCalculator
 
 
 @StrategyRegistry.register

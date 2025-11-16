@@ -1,9 +1,7 @@
-from pydantic_settings import BaseSettings
+from typing import List
+
 from pydantic import field_validator
-from typing import List, Optional
-from pathlib import Path
-import json
-import os
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):

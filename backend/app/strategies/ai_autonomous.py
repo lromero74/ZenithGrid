@@ -7,13 +7,18 @@ Maximizes profit while never selling at a loss.
 
 import json
 import logging
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
-import anthropic
-import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
-from app.strategies import TradingStrategy, StrategyDefinition, StrategyParameter, StrategyRegistry
+import anthropic
+
 from app.config import settings
+from app.strategies import (
+    StrategyDefinition,
+    StrategyParameter,
+    StrategyRegistry,
+    TradingStrategy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -819,7 +824,7 @@ Rules:
                     logger.warning(f"⏰ Gemini API quota exceeded - back off for {retry_seconds} seconds")
                     # TODO: Store this in bot's last_check_time + retry_delay
                 else:
-                    logger.warning(f"⏰ Gemini API quota exceeded (429) - backing off")
+                    logger.warning("⏰ Gemini API quota exceeded (429) - backing off")
 
             return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
                     for pid in pairs_data.keys()}

@@ -5,12 +5,13 @@ Buys when RSI indicates oversold conditions (< 30).
 Sells when RSI indicates overbought conditions (> 70) with profit target.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 from app.strategies import (
-    TradingStrategy,
     StrategyDefinition,
     StrategyParameter,
-    StrategyRegistry
+    StrategyRegistry,
+    TradingStrategy,
 )
 
 

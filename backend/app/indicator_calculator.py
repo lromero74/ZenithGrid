@@ -14,8 +14,8 @@ Supports:
 - Volume
 """
 
-from typing import Dict, Any, List, Set
 import math
+from typing import Any, Dict, List, Set
 
 
 class IndicatorCalculator:

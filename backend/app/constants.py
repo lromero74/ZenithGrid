@@ -4,7 +4,7 @@ Application Constants
 Centralized constants for trading pairs, timeframes, etc.
 """
 
-from typing import List, Dict
+from typing import Dict
 
 # Popular Coinbase trading pairs
 # Focus on X/BTC pairs as requested

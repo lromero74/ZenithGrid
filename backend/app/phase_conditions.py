@@ -9,7 +9,8 @@ Simpler condition system with three phases:
 Each phase has simple conditions without deep nesting.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from app.indicator_calculator import IndicatorCalculator
 
 
@@ -83,12 +84,12 @@ class PhaseConditionEvaluator:
         # Handle crossing operators
         if operator in ['crossing_above', 'crossing_below']:
             if previous_indicators is None:
-                print(f"[DEBUG] Crossing check: no previous indicators available")
+                print("[DEBUG] Crossing check: no previous indicators available")
                 return False
 
             previous_val = self._get_indicator_value(condition_type, condition, previous_indicators)
             if previous_val is None:
-                print(f"[DEBUG] Crossing check: previous indicator value is None")
+                print("[DEBUG] Crossing check: previous indicator value is None")
                 return False
 
             print(f"[DEBUG] Crossing check: previous={previous_val}, current={current_val}, threshold={value}")

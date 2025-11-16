@@ -1,12 +1,17 @@
-import hmac
 import hashlib
-import time
+import hmac
 import json
-from typing import Dict, Any, Optional, List
+import logging
+import time
+from typing import Any, Dict, List, Optional
+
 import httpx
-from app.config import settings
+
 from app.cache import api_cache
+from app.config import settings
 from app.constants import BALANCE_CACHE_TTL, PRICE_CACHE_TTL
+
+logger = logging.getLogger(__name__)
 
 
 class CoinbaseClient:

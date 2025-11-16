@@ -4,17 +4,17 @@ Bot Template Router
 Handles CRUD operations for bot templates.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, desc
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import BotTemplate
 from app.strategies import StrategyRegistry
-
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 

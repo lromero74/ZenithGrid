@@ -7,12 +7,13 @@ This is the new recommended authentication method for Coinbase Advanced Trade AP
 
 import json
 import time
+from typing import Any, Dict, List, Optional
+
 import httpx
-from typing import Dict, Any, Optional, List
-from pathlib import Path
 import jwt
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+
 from app.cache import api_cache
 
 

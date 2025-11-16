@@ -1,25 +1,24 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select, desc, func
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
-from datetime import datetime, timedelta
-import asyncio
-import json
 import logging
 import os
 import time
+from datetime import datetime, timedelta
+from typing import List, Optional
 
-from app.database import get_db, init_db
-from app.config import settings
-from app.models import Position, Trade, Signal, MarketData, Settings as SettingsModel, Bot
-from app.coinbase_client import CoinbaseClient
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.coinbase_cdp_client import CoinbaseCDPClient
+from app.coinbase_client import CoinbaseClient
+from app.config import settings
+from app.database import get_db, init_db
+from app.models import Bot, MarketData, Position, Signal, Trade
 from app.multi_bot_monitor import MultiBotMonitor
-from app.trading_engine_v2 import StrategyTradingEngine
-from app.trading_client import TradingClient
-from app.indicators import MACDCalculator
 from app.routers import bots_router, templates_router
+from app.trading_client import TradingClient
+from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,6 @@ app = FastAPI(
 )
 
 # Import custom middleware
-from app.middleware import DatetimeTimezoneMiddleware
 
 # Temporarily disabled - causing API hangs
 # app.add_middleware(DatetimeTimezoneMiddleware)
@@ -69,13 +67,13 @@ price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=300)
 
 # Import Pydantic schemas from centralized schemas module
 from app.schemas import (
-    PositionResponse,
-    TradeResponse,
-    SignalResponse,
+    DashboardStats,
     MarketDataResponse,
+    PositionResponse,
     SettingsUpdate,
+    SignalResponse,
     TestConnectionRequest,
-    DashboardStats
+    TradeResponse,
 )
 
 
@@ -685,14 +683,14 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
                         asset_usd_price = await coinbase_client.get_current_price(f"{asset}-USD")
                         usd_value = total_balance * asset_usd_price
                         current_price_usd = asset_usd_price
-                    except:
+                    except Exception:
                         # Try ASSET-BTC pair and convert to USD
                         try:
                             asset_btc_price = await coinbase_client.get_current_price(f"{asset}-BTC")
                             btc_value = total_balance * asset_btc_price
                             usd_value = btc_value * btc_usd_price
                             current_price_usd = asset_btc_price * btc_usd_price
-                        except:
+                        except Exception:
                             # Can't get price for this asset, skip it
                             print(f"Could not get price for {asset}, skipping")
                             continue
@@ -882,7 +880,7 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
-            except:
+            except Exception:
                 pass
 
 
