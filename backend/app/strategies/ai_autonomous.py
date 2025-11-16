@@ -634,6 +634,11 @@ Remember:
 
         # Calculate current profit
         entry_price = position.average_buy_price
+
+        # Handle case where no trades have been executed yet (average_buy_price = 0)
+        if entry_price == 0:
+            return False, "No entry price yet - position has no trades"
+
         profit_pct = ((current_price - entry_price) / entry_price * 100)
 
         min_profit = self.config.get("min_profit_percentage", 1.0)
