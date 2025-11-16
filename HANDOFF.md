@@ -29,8 +29,27 @@ Reduce large files (11 files over 500 lines) through systematic modularization w
 
 **Commit**: `a488859` - "Refactor: Extract shared indicator utilities to eliminate code duplication"
 
-### ⏳ Step 2: Extract FastAPI Schemas from main.py (PENDING)
-Extract Pydantic models to dedicated schema files (~200 line reduction expected)
+### ✅ Step 2: Extract FastAPI Schemas from main.py (COMPLETE)
+**Impact**: Organized Pydantic schemas by domain for better maintainability
+
+**Created Modular Structure:**
+- `backend/app/schemas/position.py` (45 lines) - Position and Trade response schemas
+- `backend/app/schemas/market.py` (31 lines) - Signal and MarketData response schemas
+- `backend/app/schemas/settings.py` (21 lines) - Settings update and test connection schemas
+- `backend/app/schemas/dashboard.py` (15 lines) - Dashboard stats schema
+- `backend/app/schemas/__init__.py` (20 lines) - Central exports
+
+**Files Refactored:**
+- `backend/app/main.py`: 1,016 → 927 lines (-89 lines, -8.8%)
+
+**Benefits:**
+- Clear separation of concerns (schemas in dedicated module)
+- Easier to maintain and find schema definitions
+- Reusable across multiple routers
+- Follows FastAPI best practices
+- Better organization by domain
+
+**Commit**: `9d54e10` - "Refactor: Extract Pydantic schemas to centralized schemas module"
 
 ### ⏳ Step 3: Extract Simple Utilities and Constants (PENDING)
 Chart utilities, formatters, type definitions (~300 line reduction expected)
@@ -39,6 +58,8 @@ Chart utilities, formatters, type definitions (~300 line reduction expected)
 1. ✅ `frontend/src/pages/Positions.tsx` - Removed duplicate indicator code
 2. ✅ `frontend/src/pages/Charts.tsx` - Removed duplicate indicator code
 3. ✅ `frontend/src/utils/indicators/*` - Created new modular structure (4 files)
+4. ✅ `backend/app/main.py` - Removed Pydantic schema definitions
+5. ✅ `backend/app/schemas/*` - Created new schemas module (5 files)
 
 ---
 
