@@ -136,12 +136,22 @@ Added extensive logging:
 **Test**: Check if position appears momentarily then disappears
 **Status**: Unlikely - position persists
 
-### Hypothesis #4: Monitor Not Processing Bots
-**Theory**: Monitor queries bots but doesn't call process_bot()
-**Test**: Check for "Processing bot: AI Bot" logs
+### Hypothesis #4: Monitor Not Processing Bots ⭐ MOST LIKELY
+**Theory**: Monitor.start() is never called OR monitor loop crashes silently
+**Test**: Check for "Monitoring X active bot(s)" logs
 **Files**:
-- `backend/app/multi_bot_monitor.py:167` - should log this
-- **OBSERVATION**: These logs are missing!
+- `backend/app/main.py:161` - price_monitor.start() in startup event
+- `backend/app/multi_bot_monitor.py:383` - should log "Monitoring {len(bots)} active bot(s)"
+- **OBSERVATION**: NO monitor logs appear! This means:
+  - Either startup event doesn't fire
+  - OR monitor.start() fails silently
+  - OR monitor_loop() crashes immediately
+
+**Evidence**:
+- We see DB queries for bots (from API requests)
+- We see AI logs being created (from... where? 🤔)
+- We DON'T see any monitor_loop logs
+- Position gets created somehow but not from monitor
 
 ---
 
@@ -270,12 +280,14 @@ curl -s http://localhost:8000/api/bots/1/logs?limit=5 | jq '.[].decision'
 ## Key Questions to Answer
 
 1. **Is monitor.start() being called?**
-   - Check main.py startup code
-   - Look for "Multi-bot monitor task started" log
+   - ✅ Code exists: main.py line 161 - `price_monitor.start()`
+   - ❓ But no "Multi-bot monitor task started" log appears
+   - **CRITICAL**: Startup event may not be firing!
 
 2. **Is monitor_loop() actually running?**
-   - Should see "Monitoring X active bot(s)" every 60 seconds
-   - Currently: logs show DB queries but not monitor logs
+   - Should see "Monitoring X active bot(s)" every 60 seconds (line 383)
+   - Currently: **THESE LOGS ARE MISSING**
+   - DB queries happen (bot status checks) but not from monitor loop
 
 3. **Is process_bot() being called?**
    - Should see "Processing bot: AI Bot" logs
