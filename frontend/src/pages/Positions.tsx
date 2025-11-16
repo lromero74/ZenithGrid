@@ -241,6 +241,34 @@ function DealChart({ position, productId }: { position: Position, productId: str
     }
   }, [chartData, position, productId])
 
+  // Calculate gain/loss metrics
+  const calculateGainLoss = () => {
+    const currentPriceValue = chartData.length > 0 ? chartData[chartData.length - 1].close : 0
+    const entryPrice = position.average_buy_price
+    const profitTarget = entryPrice * 1.02
+    const profitLoss = currentPriceValue - entryPrice
+    const profitLossPercent = ((currentPriceValue - entryPrice) / entryPrice) * 100
+    const toTargetPercent = ((profitTarget - currentPriceValue) / currentPriceValue) * 100
+
+    return {
+      currentPrice: currentPriceValue,
+      entryPrice,
+      profitTarget,
+      profitLoss,
+      profitLossPercent,
+      toTargetPercent,
+      isProfit: profitLoss > 0
+    }
+  }
+
+  const gainLoss = calculateGainLoss()
+
+  // Format price based on product pair
+  const formatPrice = (price: number, productPair: string) => {
+    const isBTCPair = productPair.endsWith('-BTC')
+    return isBTCPair ? price.toFixed(8) : price.toFixed(2)
+  }
+
   return (
     <div className="space-y-3">
       {/* Timeframe Selector */}
@@ -263,6 +291,32 @@ function DealChart({ position, productId }: { position: Position, productId: str
               {tf.label}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Gain/Loss Line */}
+      <div className={`rounded-lg p-3 ${gainLoss.isProfit ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div>
+            <p className="text-slate-400 text-xs mb-0.5">Entry Price</p>
+            <p className="text-white font-semibold">{formatPrice(gainLoss.entryPrice, productId)}</p>
+          </div>
+          <div>
+            <p className="text-slate-400 text-xs mb-0.5">Current Price</p>
+            <p className="text-white font-semibold">{formatPrice(gainLoss.currentPrice, productId)}</p>
+          </div>
+          <div>
+            <p className="text-slate-400 text-xs mb-0.5">Profit/Loss</p>
+            <p className={`font-semibold ${gainLoss.isProfit ? 'text-green-400' : 'text-red-400'}`}>
+              {gainLoss.isProfit ? '+' : ''}{gainLoss.profitLossPercent.toFixed(2)}%
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-400 text-xs mb-0.5">To Target (2%)</p>
+            <p className="text-slate-300 font-semibold">
+              {gainLoss.toTargetPercent.toFixed(2)}%
+            </p>
+          </div>
         </div>
       </div>
 
