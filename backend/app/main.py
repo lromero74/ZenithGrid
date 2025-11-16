@@ -17,6 +17,15 @@ from app.database import get_db, init_db
 from app.models import Bot, MarketData, Position, Signal, Trade
 from app.multi_bot_monitor import MultiBotMonitor
 from app.routers import bots_router, templates_router
+from app.schemas import (
+    DashboardStats,
+    MarketDataResponse,
+    PositionResponse,
+    SettingsUpdate,
+    SignalResponse,
+    TestConnectionRequest,
+    TradeResponse,
+)
 from app.trading_client import TradingClient
 from app.trading_engine_v2 import StrategyTradingEngine
 
@@ -63,18 +72,6 @@ else:
 # Monitor loop runs every 60s to check if any bots need processing
 # Each bot can have its own interval optimized for its AI provider quota
 price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=300)
-
-
-# Import Pydantic schemas from centralized schemas module
-from app.schemas import (
-    DashboardStats,
-    MarketDataResponse,
-    PositionResponse,
-    SettingsUpdate,
-    SignalResponse,
-    TestConnectionRequest,
-    TradeResponse,
-)
 
 
 # Startup/Shutdown events
