@@ -1672,6 +1672,82 @@ export default function Positions() {
                             />
                           </div>
                         </div>
+
+                        {/* Price Position Bar */}
+                        {pnl && (
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-slate-400">Price Movement</span>
+                              <span className="text-slate-300">
+                                Target: {formatPrice(position.average_buy_price * 1.02)}
+                              </span>
+                            </div>
+                            <div className="relative w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                              {(() => {
+                                const entryPrice = position.average_buy_price
+                                const currentPriceValue = pnl.currentPrice
+                                const targetPrice = entryPrice * 1.02
+
+                                // Calculate range for visualization (show from -5% to +5% of entry)
+                                const minPrice = entryPrice * 0.95
+                                const maxPrice = entryPrice * 1.05
+                                const priceRange = maxPrice - minPrice
+
+                                // Calculate positions as percentages
+                                const entryPosition = ((entryPrice - minPrice) / priceRange) * 100
+                                const currentPosition = ((currentPriceValue - minPrice) / priceRange) * 100
+                                const targetPosition = ((targetPrice - minPrice) / priceRange) * 100
+
+                                const isProfit = currentPriceValue >= entryPrice
+                                const fillStart = Math.min(entryPosition, currentPosition)
+                                const fillWidth = Math.abs(currentPosition - entryPosition)
+
+                                return (
+                                  <>
+                                    {/* Fill between entry and current price */}
+                                    <div
+                                      className={`absolute h-full ${isProfit ? 'bg-green-500' : 'bg-red-500'}`}
+                                      style={{
+                                        left: `${Math.max(0, Math.min(100, fillStart))}%`,
+                                        width: `${Math.max(0, Math.min(100 - fillStart, fillWidth))}%`
+                                      }}
+                                    />
+
+                                    {/* Entry Price Marker (Cost Basis) */}
+                                    <div
+                                      className="absolute top-0 bottom-0 w-0.5 bg-yellow-400"
+                                      style={{ left: `${Math.max(0, Math.min(100, entryPosition))}%` }}
+                                      title={`Entry: ${formatPrice(entryPrice)}`}
+                                    />
+
+                                    {/* Current Price Marker */}
+                                    <div
+                                      className={`absolute top-0 bottom-0 w-1 ${isProfit ? 'bg-green-300' : 'bg-red-300'}`}
+                                      style={{ left: `${Math.max(0, Math.min(100, currentPosition))}%` }}
+                                      title={`Current: ${formatPrice(currentPriceValue)}`}
+                                    />
+
+                                    {/* Target Price Marker */}
+                                    <div
+                                      className="absolute top-0 bottom-0 w-0.5 bg-blue-400"
+                                      style={{ left: `${Math.max(0, Math.min(100, targetPosition))}%` }}
+                                      title={`Target: ${formatPrice(targetPrice)}`}
+                                    />
+                                  </>
+                                )
+                              })()}
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] mt-1 text-slate-500">
+                              <span>-5%</span>
+                              <div className="flex gap-3">
+                                <span className="text-yellow-400">● Entry</span>
+                                <span className={pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}>● Current</span>
+                                <span className="text-blue-400">● Target</span>
+                              </div>
+                              <span>+5%</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Right: Expand Icon */}
