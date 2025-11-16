@@ -162,7 +162,7 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                         {log.current_price && (
                           <span className="flex items-center space-x-1">
                             <Target className="w-3 h-3" />
-                            <span>Price: ${log.current_price.toFixed(8)}</span>
+                            <span>{log.current_price.toFixed(8)} BTC</span>
                           </span>
                         )}
                         {log.position_status && (

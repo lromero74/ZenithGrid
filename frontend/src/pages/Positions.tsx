@@ -578,6 +578,9 @@ export default function Positions() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-4">
                           <h3 className="text-xl font-bold text-white">Deal #{position.id}</h3>
+                          <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs font-medium">
+                            {position.product_id || 'ETH-BTC'}
+                          </span>
                           <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-medium">
                             ACTIVE
                           </span>
@@ -792,7 +795,12 @@ export default function Positions() {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Deal</p>
-                    <p className="font-semibold text-white">#{position.id}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-white">#{position.id}</p>
+                      <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-xs font-medium">
+                        {position.product_id || 'ETH-BTC'}
+                      </span>
+                    </div>
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Opened</p>
