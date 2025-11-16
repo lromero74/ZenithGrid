@@ -321,7 +321,8 @@ export default function Positions() {
   const openPositions = allPositions?.filter(p => p.status === 'open') || []
   const closedPositions = allPositions?.filter(p => p.status === 'closed') || []
 
-  const formatCrypto = (amount: number, decimals: number = 8) => {
+  const formatCrypto = (amount: number | undefined | null, decimals: number = 8) => {
+    if (amount === undefined || amount === null) return '0.' + '0'.repeat(decimals)
     return amount.toFixed(decimals)
   }
 
@@ -333,7 +334,7 @@ export default function Positions() {
     setIsProcessing(true)
     try {
       const result = await positionsApi.close(positionId)
-      alert(`Position closed successfully!\nProfit: ${result.profit_btc.toFixed(8)} BTC (${result.profit_percentage.toFixed(2)}%)`)
+      alert(`Position closed successfully!\nProfit: ${result.profit_quote.toFixed(8)} (${result.profit_percentage.toFixed(2)}%)`)
       // Refetch positions
       window.location.reload()
     } catch (err: any) {
@@ -344,7 +345,7 @@ export default function Positions() {
   }
 
   const openAddFundsModal = (positionId: number, position: Position) => {
-    const remaining = position.max_btc_allowed - position.total_btc_spent
+    const remaining = position.max_quote_allowed - position.total_quote_spent
     setAddFundsPositionId(positionId)
     setAddFundsAmount(remaining.toFixed(8))
     setShowAddFundsModal(true)
@@ -416,8 +417,8 @@ export default function Positions() {
   const calculateUnrealizedPnL = (position: Position, currentPrice: number) => {
     if (position.status !== 'open') return null
 
-    const currentValue = position.total_eth_acquired * currentPrice
-    const costBasis = position.total_btc_spent
+    const currentValue = position.total_base_acquired * currentPrice
+    const costBasis = position.total_quote_spent
     const unrealizedPnL = currentValue - costBasis
     const unrealizedPnLPercent = (unrealizedPnL / costBasis) * 100
 
@@ -452,7 +453,7 @@ export default function Positions() {
             {openPositions.map((position) => {
               const pnl = calculateUnrealizedPnL(position, position.average_buy_price) // Would need current price from API
               const safetyOrders = selectedPosition === position.id ? getSafetyOrders(trades) : []
-              const fundsUsedPercent = (position.total_btc_spent / position.max_btc_allowed) * 100
+              const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
 
               return (
                 <div key={position.id} className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
@@ -497,7 +498,7 @@ export default function Positions() {
                           {/* Invested */}
                           <div>
                             <p className="text-slate-400 text-xs mb-1">Invested</p>
-                            <p className="text-white font-semibold">{formatCrypto(position.total_btc_spent, 8)} BTC</p>
+                            <p className="text-white font-semibold">{formatCrypto(position.total_quote_spent, 8)} BTC</p>
                             <p className="text-slate-400 text-xs">{position.trade_count} orders filled</p>
                           </div>
 
@@ -521,7 +522,7 @@ export default function Positions() {
                           <div className="flex items-center justify-between text-xs mb-1">
                             <span className="text-slate-400">Funds Used</span>
                             <span className="text-slate-300">
-                              {formatCrypto(position.total_btc_spent, 8)} / {formatCrypto(position.max_btc_allowed, 8)} BTC
+                              {formatCrypto(position.total_quote_spent, 8)} / {formatCrypto(position.max_quote_allowed, 8)} BTC
                               <span className="text-slate-400 ml-1">({fundsUsedPercent.toFixed(0)}%)</span>
                             </span>
                           </div>
@@ -590,16 +591,16 @@ export default function Positions() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Total Acquired</p>
-                            <p className="text-white font-semibold">{formatCrypto(position.total_eth_acquired, 6)} ETH</p>
+                            <p className="text-white font-semibold">{formatCrypto(position.total_base_acquired, 6)} ETH</p>
                           </div>
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Max Funds</p>
-                            <p className="text-white font-semibold">{formatCrypto(position.max_btc_allowed, 8)} BTC</p>
+                            <p className="text-white font-semibold">{formatCrypto(position.max_quote_allowed, 8)} BTC</p>
                           </div>
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Remaining</p>
                             <p className="text-white font-semibold">
-                              {formatCrypto(position.max_btc_allowed - position.total_btc_spent, 8)} BTC
+                              {formatCrypto(position.max_quote_allowed - position.total_quote_spent, 8)} BTC
                             </p>
                           </div>
                         </div>
@@ -679,7 +680,7 @@ export default function Positions() {
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Invested</p>
-                    <p className="font-semibold text-white">{formatCrypto(position.total_btc_spent, 8)} BTC</p>
+                    <p className="font-semibold text-white">{formatCrypto(position.total_quote_spent, 8)} BTC</p>
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Orders</p>
@@ -687,20 +688,20 @@ export default function Positions() {
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Profit</p>
-                    {position.profit_btc !== null ? (
+                    {position.profit_quote !== null ? (
                       <div>
                         <div className="flex items-center gap-1">
-                          {position.profit_btc >= 0 ? (
+                          {position.profit_quote >= 0 ? (
                             <TrendingUp className="w-3 h-3 text-green-500" />
                           ) : (
                             <TrendingDown className="w-3 h-3 text-red-500" />
                           )}
-                          <span className={`font-semibold ${position.profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <span className={`font-semibold ${position.profit_quote >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {position.profit_percentage?.toFixed(2)}%
                           </span>
                         </div>
-                        <p className={`text-xs ${position.profit_btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                          {formatCrypto(position.profit_btc, 8)} BTC
+                        <p className={`text-xs ${position.profit_quote >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                          {formatCrypto(position.profit_quote, 8)} BTC
                         </p>
                       </div>
                     ) : (
