@@ -307,7 +307,7 @@ class MultiBotMonitor:
 
             # Process each pair's analysis result
             results = {}
-            for product_id in pairs_to_analyze:
+            for product_id in pairs_data.keys():
                 try:
                     signal_data = batch_analyses.get(product_id, {
                         "signal_type": "hold",
