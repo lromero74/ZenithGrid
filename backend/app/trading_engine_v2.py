@@ -303,6 +303,18 @@ class StrategyTradingEngine:
         position = await self.get_active_position()
         btc_balance = await self.coinbase.get_btc_balance()
 
+        # Log AI thinking immediately after analysis (if AI bot)
+        if self.bot.strategy_type == "ai_autonomous":
+            # Log what the AI thinks, not what the bot will do
+            ai_signal = signal_data.get("signal_type", "none")
+            if ai_signal == "buy":
+                decision = "buy"
+            elif ai_signal == "sell":
+                decision = "sell"
+            else:
+                decision = "hold"
+            await self.save_ai_log(signal_data, decision, current_price, position)
+
         # Check if we should buy (only if bot is active)
         should_buy = False
         btc_amount = 0
@@ -332,11 +344,6 @@ class StrategyTradingEngine:
                 buy_reason = "Bot is stopped - not opening new positions"
             else:
                 buy_reason = "Bot is stopped - managing existing position only"
-
-        # Save AI log for buy decision (if AI bot)
-        if self.bot.strategy_type == "ai_autonomous":
-            decision = "buy" if should_buy else "hold"
-            await self.save_ai_log(signal_data, decision, current_price, position)
 
         if should_buy:
             # Create position if needed
@@ -380,11 +387,6 @@ class StrategyTradingEngine:
             should_sell, sell_reason = await self.strategy.should_sell(
                 signal_data, position, current_price
             )
-
-            # Save AI log for sell decision (if AI bot)
-            if self.bot.strategy_type == "ai_autonomous":
-                decision = "sell" if should_sell else "hold"
-                await self.save_ai_log(signal_data, decision, current_price, position)
 
             if should_sell:
                 # Execute sell
