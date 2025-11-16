@@ -276,16 +276,20 @@ class MultiBotMonitor:
 
             for product_id in pairs_to_analyze:
                 try:
-                    # Get current price using get_current_price (which handles caching and proper parsing)
-                    current_price = await self.coinbase.get_current_price(product_id)
+                    # Get candles first (they have reliable prices!)
+                    candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
+
+                    # Get current price from most recent candle (more reliable than ticker!)
+                    if not candles or len(candles) == 0:
+                        logger.warning(f"  No candles available for {product_id}, skipping")
+                        continue
+
+                    current_price = float(candles[-1].get("close", 0))
 
                     # Validate price
                     if current_price is None or current_price <= 0:
                         logger.warning(f"  Invalid price for {product_id}: {current_price}, skipping")
                         continue
-
-                    # Get candles
-                    candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
 
                     # Prepare market context
                     market_context = strategy._prepare_market_context(candles, current_price)
@@ -428,11 +432,17 @@ class MultiBotMonitor:
                 logger.info(f"    Using pre-fetched market data")
                 current_price = pair_data.get("current_price", 0)
                 candles = pair_data.get("candles", [])
-                candles_by_timeframe = {" FIVE_MINUTE": candles}  # Simplified for batch mode
+                candles_by_timeframe = {"FIVE_MINUTE": candles}  # Simplified for batch mode
             else:
-                # Get current price
-                current_price = await self.coinbase.get_current_price(product_id)
-                logger.info(f"    Current {product_id} price: {current_price:.8f}")
+                # Fetch candles first to get reliable price
+                temp_candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
+                if temp_candles and len(temp_candles) > 0:
+                    current_price = float(temp_candles[-1].get("close", 0))
+                    logger.info(f"    Current {product_id} price (from candles): {current_price:.8f}")
+                else:
+                    logger.warning(f"    No candles available for {product_id}, using fallback ticker")
+                    current_price = await self.coinbase.get_current_price(product_id)
+                    logger.info(f"    Current {product_id} price (from ticker): {current_price:.8f}")
 
             # For conditional_dca strategy, extract all timeframes from conditions
             if bot.strategy_type == "conditional_dca":

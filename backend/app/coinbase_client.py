@@ -151,7 +151,15 @@ class CoinbaseClient:
             return cached
 
         ticker = await self.get_ticker(product_id)
+
+        # Debug logging for price issues
+        if "price" not in ticker or not ticker.get("price"):
+            logger.error(f"❌ Ticker response for {product_id} missing price! Response: {ticker}")
+
         price = float(ticker.get("price", "0"))
+
+        if price == 0.0:
+            logger.warning(f"⚠️  Price is 0.0 for {product_id}. Ticker response: {ticker}")
 
         await api_cache.set(cache_key, price, PRICE_CACHE_TTL)
         return price
