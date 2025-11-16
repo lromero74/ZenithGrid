@@ -63,7 +63,8 @@ class DatetimeTimezoneMiddleware(BaseHTTPMiddleware):
 
         return response
 
-app.add_middleware(DatetimeTimezoneMiddleware)
+# Temporarily disabled - causing API hangs
+# app.add_middleware(DatetimeTimezoneMiddleware)
 
 # Include routers
 app.include_router(bots_router)
@@ -93,10 +94,11 @@ else:
     coinbase_client = CoinbaseClient()  # Will fail on actual calls
 
 # Multi-bot monitor - monitors all active bots with their strategies
-# Increased to 10 minutes (600s) to avoid hitting AI API quotas
-# With 27 pairs: 27 calls/10min = ~3,888 calls/day (still over Gemini's 250/day limit)
-# TODO: Implement smarter caching or use Claude API with higher limits
-price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=600)
+# Gemini free tier: 250 calls/day
+# With 27 pairs: Need 27 * interval_checks_per_day <= 250
+# 250 / 27 = 9.26 checks/day = 2.6 hours between checks
+# Using 3 hours (10800s) to stay safely within limits: 27 * 8 = 216 calls/day
+price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=10800)
 
 
 # Pydantic schemas

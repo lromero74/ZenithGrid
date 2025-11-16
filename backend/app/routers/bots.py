@@ -493,9 +493,20 @@ async def get_ai_bot_logs(
     bot_id: int,
     limit: int = 50,
     offset: int = 0,
+    product_id: Optional[str] = None,
+    since: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get AI bot reasoning logs (most recent first)"""
+    """
+    Get AI bot reasoning logs (most recent first)
+
+    Args:
+        bot_id: Bot ID to get logs for
+        limit: Maximum number of logs to return
+        offset: Pagination offset
+        product_id: Optional filter by trading pair (e.g., "ETH-BTC")
+        since: Optional filter for logs since this timestamp
+    """
     # Verify bot exists
     bot_query = select(Bot).where(Bot.id == bot_id)
     bot_result = await db.execute(bot_query)
@@ -504,14 +515,22 @@ async def get_ai_bot_logs(
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
 
-    # Get logs
+    # Build query with optional filters
+    logs_query = select(AIBotLog).where(AIBotLog.bot_id == bot_id)
+
+    if product_id:
+        logs_query = logs_query.where(AIBotLog.product_id == product_id)
+
+    if since:
+        logs_query = logs_query.where(AIBotLog.timestamp >= since)
+
     logs_query = (
-        select(AIBotLog)
-        .where(AIBotLog.bot_id == bot_id)
+        logs_query
         .order_by(desc(AIBotLog.timestamp))
         .limit(limit)
         .offset(offset)
     )
+
     logs_result = await db.execute(logs_query)
     logs = logs_result.scalars().all()
 

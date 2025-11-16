@@ -13,11 +13,13 @@ import {
   Clock,
   Target,
   DollarSign,
-  BarChart3
+  BarChart3,
+  Brain
 } from 'lucide-react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import axios from 'axios'
 import type { Position, Trade } from '../types'
+import PositionLogsModal from '../components/PositionLogsModal'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -382,6 +384,8 @@ export default function Positions() {
   const [addFundsPositionId, setAddFundsPositionId] = useState<number | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
+  const [showLogsModal, setShowLogsModal] = useState(false)
+  const [logsModalPosition, setLogsModalPosition] = useState<Position | null>(null)
 
   const { data: allPositions } = useQuery({
     queryKey: ['positions'],
@@ -739,6 +743,17 @@ export default function Positions() {
                         {/* Action Buttons */}
                         <div className="flex gap-3">
                           <button
+                            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setLogsModalPosition(position)
+                              setShowLogsModal(true)
+                            }}
+                          >
+                            <Brain size={18} />
+                            View AI Logs
+                          </button>
+                          <button
                             className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={(e) => {
                               e.stopPropagation()
@@ -905,6 +920,20 @@ export default function Positions() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Position AI Logs Modal */}
+      {logsModalPosition && (
+        <PositionLogsModal
+          botId={logsModalPosition.bot_id}
+          productId={logsModalPosition.product_id || 'ETH-BTC'}
+          positionOpenedAt={logsModalPosition.opened_at}
+          isOpen={showLogsModal}
+          onClose={() => {
+            setShowLogsModal(false)
+            setLogsModalPosition(null)
+          }}
+        />
       )}
     </div>
   )

@@ -96,8 +96,15 @@ export const botsApi = {
     api.post<Bot>(`/bots/${id}/clone`).then((res) => res.data),
   getStats: (id: number) =>
     api.get<BotStats>(`/bots/${id}/stats`).then((res) => res.data),
-  getLogs: (id: number, limit = 50, offset = 0) =>
-    api.get<any[]>(`/bots/${id}/logs?limit=${limit}&offset=${offset}`).then((res) => res.data),
+  getLogs: (id: number, limit = 50, offset = 0, productId?: string, since?: string) => {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+    });
+    if (productId) params.append('product_id', productId);
+    if (since) params.append('since', since);
+    return api.get<any[]>(`/bots/${id}/logs?${params}`).then((res) => res.data);
+  },
 };
 
 export const templatesApi = {
