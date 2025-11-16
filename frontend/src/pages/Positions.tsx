@@ -1570,9 +1570,12 @@ export default function Positions() {
                                 const currentPriceValue = pnl.currentPrice
                                 const targetPrice = entryPrice * 1.02
 
-                                // Calculate range for visualization (show from -5% to +5% of entry)
-                                const minPrice = entryPrice * 0.95
-                                const maxPrice = entryPrice * 1.05
+                                // Calculate dynamic range to always show current price and target
+                                // Extend range if current price is outside the default -5% to +5% range
+                                const defaultMin = entryPrice * 0.95
+                                const defaultMax = entryPrice * 1.05
+                                const minPrice = Math.min(defaultMin, currentPriceValue * 0.98)
+                                const maxPrice = Math.max(defaultMax, targetPrice * 1.01, currentPriceValue * 1.02)
                                 const priceRange = maxPrice - minPrice
 
                                 // Calculate positions as percentages
