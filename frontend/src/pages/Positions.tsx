@@ -1474,6 +1474,19 @@ export default function Positions() {
 
   const formatPrice = (price: number) => price.toFixed(8)
 
+  const getQuoteCurrency = (productId: string) => {
+    const quote = productId?.split('-')[1] || 'BTC'
+    return {
+      symbol: quote,
+      decimals: quote === 'USD' ? 2 : 8
+    }
+  }
+
+  const formatQuoteAmount = (amount: number, productId: string) => {
+    const { symbol, decimals } = getQuoteCurrency(productId)
+    return `${amount.toFixed(decimals)} ${symbol}`
+  }
+
   const togglePosition = (positionId: number) => {
     if (selectedPosition === positionId) {
       setSelectedPosition(null)
@@ -1589,7 +1602,7 @@ export default function Positions() {
                                   </span>
                                 </div>
                                 <p className={`text-sm ${pnl.btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                                  {pnl.btc >= 0 ? '+' : ''}{formatCrypto(pnl.btc, 8)} BTC
+                                  {pnl.btc >= 0 ? '+' : ''}{formatQuoteAmount(pnl.btc, position.product_id || 'ETH-BTC')}
                                 </p>
                               </div>
                             )}
@@ -1611,7 +1624,7 @@ export default function Positions() {
                           {/* Invested */}
                           <div>
                             <p className="text-slate-400 text-xs mb-1">Invested</p>
-                            <p className="text-white font-semibold">{formatCrypto(position.total_btc_spent, 8)} BTC</p>
+                            <p className="text-white font-semibold">{formatQuoteAmount(position.total_btc_spent, position.product_id || 'ETH-BTC')}</p>
                             <p className="text-slate-400 text-xs">{position.trade_count} orders filled</p>
                           </div>
 
@@ -1635,7 +1648,7 @@ export default function Positions() {
                           <div className="flex items-center justify-between text-xs mb-1">
                             <span className="text-slate-400">Funds Used</span>
                             <span className="text-slate-300">
-                              {formatCrypto(position.total_btc_spent, 8)} / {formatCrypto(position.max_btc_allowed, 8)} BTC
+                              {formatQuoteAmount(position.total_btc_spent, position.product_id || 'ETH-BTC')} / {formatQuoteAmount(position.max_btc_allowed, position.product_id || 'ETH-BTC')}
                               <span className="text-slate-400 ml-1">({fundsUsedPercent.toFixed(0)}%)</span>
                             </span>
                           </div>
@@ -1822,7 +1835,7 @@ export default function Positions() {
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Invested</p>
-                    <p className="font-semibold text-white">{formatCrypto(position.total_btc_spent, 8)} BTC</p>
+                    <p className="font-semibold text-white">{formatQuoteAmount(position.total_btc_spent, position.product_id || 'ETH-BTC')}</p>
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Orders</p>
@@ -1843,7 +1856,7 @@ export default function Positions() {
                           </span>
                         </div>
                         <p className={`text-xs ${position.profit_btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                          {formatCrypto(position.profit_btc, 8)} BTC
+                          {formatQuoteAmount(position.profit_btc, position.product_id || 'ETH-BTC')}
                         </p>
                       </div>
                     ) : (
