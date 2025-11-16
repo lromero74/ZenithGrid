@@ -396,10 +396,12 @@ class MultiBotMonitor:
                 context=additional_context  # Only store additional context, not duplicate fields
             )
             db.add(log_entry)
-            await db.flush()
+            # Don't flush here - let the session commit handle it to avoid greenlet async issues
 
         except Exception as e:
             logger.error(f"Error logging AI decision for {product_id}: {e}")
+            # Rollback on error to prevent session state issues
+            await db.rollback()
 
     async def execute_trading_logic(
         self,
