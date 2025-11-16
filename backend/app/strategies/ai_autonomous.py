@@ -259,7 +259,16 @@ class AIAutonomousStrategy(TradingStrategy):
         - Sentiment data (news, social media) - when available
         """
         if not candles:
-            return {"current_price": current_price, "data_points": 0}
+            return {
+                "current_price": current_price,
+                "price_24h_ago": current_price,
+                "price_change_24h_pct": 0.0,
+                "period_high": current_price,
+                "period_low": current_price,
+                "recent_prices": [current_price],
+                "data_points": 0,
+                "volatility": 0.0
+            }
 
         recent_candles = candles[-10:] if len(candles) > 10 else candles
 
