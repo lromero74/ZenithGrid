@@ -6,6 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import asyncio
 import json
+import logging
 import os
 import time
 
@@ -18,7 +19,8 @@ from app.multi_bot_monitor import MultiBotMonitor
 from app.trading_engine import TradingEngine
 from app.indicators import MACDCalculator
 from app.routers import bots_router, templates_router
-import os
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ETH/BTC Trading Bot")
 
@@ -156,14 +158,24 @@ class DashboardStats(BaseModel):
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
+    print("🚀 ========================================")
+    print("🚀 FastAPI startup event triggered")
+    print("🚀 Initializing database...")
     await init_db()
+    print("🚀 Database initialized successfully")
+    print("🚀 Starting price monitor...")
     # Start price monitor
     price_monitor.start()
+    print("🚀 Price monitor started - bot monitoring active")
+    print("🚀 Startup complete!")
+    print("🚀 ========================================")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    logger.info("🛑 Shutting down - stopping price monitor...")
     await price_monitor.stop()
+    logger.info("🛑 Price monitor stopped - shutdown complete")
 
 
 # API Endpoints

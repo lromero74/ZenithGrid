@@ -225,6 +225,81 @@ class CoinbaseCDPClient:
         result = await self._request("GET", f"/api/v3/brokerage/products/{product_id}/candles", params=params)
         return result.get("candles", [])
 
+    async def create_market_order(
+        self,
+        product_id: str,
+        side: str,  # "BUY" or "SELL"
+        size: Optional[str] = None,  # Amount of base currency (e.g., ETH)
+        funds: Optional[str] = None  # Amount of quote currency (e.g., BTC) to spend
+    ) -> Dict[str, Any]:
+        """
+        Create a market order
+
+        Args:
+            product_id: Trading pair (e.g., "ETH-BTC", "AAVE-BTC")
+            side: "BUY" or "SELL"
+            size: Amount of base currency to buy/sell
+            funds: Amount of quote currency to spend (for buy orders)
+
+        Note: Use either size OR funds, not both
+        """
+        import time
+
+        order_config = {
+            "market_market_ioc": {}
+        }
+
+        if size:
+            order_config["market_market_ioc"]["base_size"] = str(size)
+        elif funds:
+            order_config["market_market_ioc"]["quote_size"] = str(funds)
+        else:
+            raise ValueError("Must specify either size or funds")
+
+        data = {
+            "client_order_id": f"{int(time.time() * 1000)}",
+            "product_id": product_id,
+            "side": side,
+            "order_configuration": order_config
+        }
+
+        result = await self._request("POST", "/api/v3/brokerage/orders", data=data)
+        return result
+
+    async def buy_eth_with_btc(self, btc_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
+        """
+        Buy crypto with specified amount of BTC
+
+        Args:
+            btc_amount: Amount of BTC to spend
+            product_id: Trading pair (e.g., "ETH-BTC", "AAVE-BTC")
+
+        Returns:
+            Order response
+        """
+        return await self.create_market_order(
+            product_id=product_id,
+            side="BUY",
+            funds=f"{btc_amount:.8f}"
+        )
+
+    async def sell_eth_for_btc(self, eth_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
+        """
+        Sell crypto for BTC
+
+        Args:
+            eth_amount: Amount of crypto to sell
+            product_id: Trading pair (e.g., "ETH-BTC", "AAVE-BTC")
+
+        Returns:
+            Order response
+        """
+        return await self.create_market_order(
+            product_id=product_id,
+            side="SELL",
+            size=f"{eth_amount:.8f}"
+        )
+
     async def test_connection(self) -> bool:
         """Test if API connection works"""
         try:

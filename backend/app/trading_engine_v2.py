@@ -5,6 +5,7 @@ Refactored to support multiple strategies and bots.
 Works with any TradingStrategy implementation.
 """
 
+import logging
 from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime
 from sqlalchemy import select, desc
@@ -12,6 +13,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Position, Trade, Signal, Bot, AIBotLog
 from app.coinbase_client import CoinbaseClient
 from app.strategies import TradingStrategy
+
+logger = logging.getLogger(__name__)
+
+
+def format_btc_with_usd(btc_amount: float, btc_usd_price: Optional[float] = None) -> str:
+    """
+    Format BTC amount with USD equivalent for better readability in logs
+
+    Args:
+        btc_amount: Amount in BTC
+        btc_usd_price: Current BTC/USD price (if known)
+
+    Returns:
+        Formatted string like "0.00057000 BTC ($54.15 USD)" or "0.00057000 BTC" if price unknown
+    """
+    btc_str = f"{btc_amount:.8f} BTC"
+    if btc_usd_price:
+        usd_value = btc_amount * btc_usd_price
+        return f"{btc_str} (${usd_value:.2f} USD)"
+    return btc_str
 
 
 class StrategyTradingEngine:
@@ -132,8 +153,9 @@ class StrategyTradingEngine:
         )
 
         self.db.add(position)
-        await self.db.commit()
-        await self.db.refresh(position)
+        # Don't commit here - let caller commit after trade succeeds
+        # This ensures position only persists if trade is successful
+        await self.db.flush()  # Flush to get position.id but don't commit
 
         return position
 
@@ -187,10 +209,14 @@ class StrategyTradingEngine:
 
         self.db.add(trade)
 
-        # Update position
+        # Update position totals
         position.total_btc_spent += btc_amount
         position.total_eth_acquired += eth_amount
-        position.update_averages()
+        # Update average buy price manually (don't use update_averages() - it triggers lazy loading)
+        if position.total_eth_acquired > 0:
+            position.average_buy_price = position.total_btc_spent / position.total_eth_acquired
+        else:
+            position.average_buy_price = 0.0
 
         await self.db.commit()
         await self.db.refresh(trade)
@@ -348,7 +374,14 @@ class StrategyTradingEngine:
                 buy_reason = "Bot is stopped - managing existing position only"
 
         if should_buy:
-            logger.info(f"  💰 BUY DECISION: will buy {btc_amount:.8f} BTC worth of {self.product_id}")
+            # Get BTC/USD price for logging
+            try:
+                btc_usd_price = await self.coinbase.get_btc_usd_price()
+            except:
+                btc_usd_price = None
+
+            btc_formatted = format_btc_with_usd(btc_amount, btc_usd_price)
+            logger.info(f"  💰 BUY DECISION: will buy {btc_formatted} worth of {self.product_id}")
 
             # Determine trade type
             is_new_position = position is None
