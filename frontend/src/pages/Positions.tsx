@@ -1348,7 +1348,6 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
 
 export default function Positions() {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null)
-  const [showHistory, setShowHistory] = useState(false)
   const [showAddFundsModal, setShowAddFundsModal] = useState(false)
   const [addFundsAmount, setAddFundsAmount] = useState('')
   const [addFundsPositionId, setAddFundsPositionId] = useState<number | null>(null)
@@ -1421,7 +1420,6 @@ export default function Positions() {
   })
 
   const openPositions = allPositions?.filter(p => p.status === 'open') || []
-  const closedPositions = allPositions?.filter(p => p.status === 'closed') || []
 
   const formatCrypto = (amount: number, decimals: number = 8) => {
     return amount.toFixed(decimals)
@@ -1870,91 +1868,6 @@ export default function Positions() {
                 </div>
               )
             })}
-          </div>
-        )}
-      </div>
-
-      {/* Closed Position History */}
-      <div>
-        <div
-          className="flex items-center justify-between cursor-pointer hover:bg-slate-800/50 rounded-lg p-4 transition-colors"
-          onClick={() => setShowHistory(!showHistory)}
-        >
-          <h2 className="text-2xl font-bold text-white">Position History</h2>
-          <div className="flex items-center gap-3">
-            <span className="text-slate-400">{closedPositions.length} closed</span>
-            {showHistory ? (
-              <ChevronUp className="w-5 h-5 text-slate-400" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-slate-400" />
-            )}
-          </div>
-        </div>
-
-        {showHistory && closedPositions.length > 0 && (
-          <div className="mt-4 space-y-3">
-            {closedPositions.map((position) => (
-              <div key={position.id} className="bg-slate-800 rounded-lg border border-slate-700 p-4">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                  <div>
-                    <p className="text-slate-400 text-xs mb-1">Deal</p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-white">#{position.id}</p>
-                      {bots && position.bot_id && (
-                        <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-xs font-medium">
-                          {bots.find(b => b.id === position.bot_id)?.name || `Bot #${position.bot_id}`}
-                        </span>
-                      )}
-                      <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-xs font-medium">
-                        {position.product_id || 'ETH-BTC'}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs mb-1">Opened</p>
-                    <p className="font-semibold text-white">
-                      {format(new Date(position.opened_at), 'MMM dd, HH:mm')}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs mb-1">Closed</p>
-                    <p className="font-semibold text-white">
-                      {position.closed_at ? format(new Date(position.closed_at), 'MMM dd, HH:mm') : '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs mb-1">Invested</p>
-                    <p className="font-semibold text-white">{formatQuoteAmount(position.total_btc_spent, position.product_id || 'ETH-BTC')}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs mb-1">Orders</p>
-                    <p className="font-semibold text-white">{position.trade_count}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs mb-1">Profit</p>
-                    {position.profit_btc !== null ? (
-                      <div>
-                        <div className="flex items-center gap-1">
-                          {position.profit_btc >= 0 ? (
-                            <TrendingUp className="w-3 h-3 text-green-500" />
-                          ) : (
-                            <TrendingDown className="w-3 h-3 text-red-500" />
-                          )}
-                          <span className={`font-semibold ${position.profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {position.profit_percentage?.toFixed(2)}%
-                          </span>
-                        </div>
-                        <p className={`text-xs ${position.profit_btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                          {formatQuoteAmount(position.profit_btc, position.product_id || 'ETH-BTC')}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="font-semibold text-slate-400">-</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </div>

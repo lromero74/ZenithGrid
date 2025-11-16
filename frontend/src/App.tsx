@@ -3,14 +3,15 @@ import { useQuery } from '@tanstack/react-query'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Positions from './pages/Positions'
+import ClosedPositions from './pages/ClosedPositions'
 import Bots from './pages/Bots'
 import Charts from './pages/Charts'
 import Strategies from './pages/Strategies'
 import Portfolio from './pages/Portfolio'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet } from 'lucide-react'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History } from 'lucide-react'
 import { accountApi } from './services/api'
 
-type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
+type Page = 'dashboard' | 'bots' | 'positions' | 'closedPositions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>(() => {
@@ -114,6 +115,19 @@ function App() {
               </div>
             </button>
             <button
+              onClick={() => setCurrentPage('closedPositions')}
+              className={`px-4 py-3 font-medium transition-colors ${
+                currentPage === 'closedPositions'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <History className="w-4 h-4" />
+                <span>History</span>
+              </div>
+            </button>
+            <button
               onClick={() => setCurrentPage('portfolio')}
               className={`px-4 py-3 font-medium transition-colors ${
                 currentPage === 'portfolio'
@@ -174,6 +188,7 @@ function App() {
         {currentPage === 'dashboard' && <Dashboard onNavigate={setCurrentPage} />}
         {currentPage === 'bots' && <Bots />}
         {currentPage === 'positions' && <Positions />}
+        {currentPage === 'closedPositions' && <ClosedPositions />}
         {currentPage === 'portfolio' && <Portfolio />}
         {currentPage === 'charts' && <Charts />}
         {currentPage === 'strategies' && <Strategies />}
