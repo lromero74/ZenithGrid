@@ -45,6 +45,14 @@ class AIAutonomousStrategy(TradingStrategy):
         self._total_tokens_used = 0
         self._last_analysis_time = None
 
+    def _format_price(self, price: float, product_id: str) -> str:
+        """Format price with correct precision and currency based on product_id"""
+        quote_currency = product_id.split('-')[1] if '-' in product_id else 'BTC'
+        if quote_currency == 'USD':
+            return f"{price:.2f} USD"
+        else:
+            return f"{price:.8f} BTC"
+
     @property
     def client(self):
         """Lazy initialization of AI client based on selected provider"""
@@ -652,9 +660,10 @@ Remember:
         pairs_summary = []
         for product_id, data in pairs_data.items():
             ctx = data.get("market_context", {})
+            price_str = self._format_price(ctx.get('current_price', 0), product_id)
             pairs_summary.append(f"""
 **{product_id}:**
-- Current Price: {ctx.get('current_price', 0):.8f} BTC
+- Current Price: {price_str}
 - 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
 - Volatility: {ctx.get('volatility', 0):.2f}%
 - Recent Trend: {ctx.get('recent_prices', [])[-3:]}""")
