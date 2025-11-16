@@ -663,13 +663,17 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
     ind.category.toLowerCase().includes(indicatorSearch.toLowerCase())
   )
 
-  // Calculate gain/loss info
+  // Calculate gain/loss info (matches the main position P&L calculation)
   const calculateGainLoss = () => {
     const currentPriceValue = currentPrice || (chartData.length > 0 ? chartData[chartData.length - 1].close : 0)
     const entryPrice = position.average_buy_price
     const profitTarget = entryPrice * 1.02
-    const profitLoss = currentPriceValue - entryPrice
-    const profitLossPercent = ((currentPriceValue - entryPrice) / entryPrice) * 100
+
+    // Use the same calculation as calculateUnrealizedPnL for consistency
+    const currentValue = position.total_base_acquired * currentPriceValue
+    const costBasis = position.total_quote_spent
+    const profitLoss = currentValue - costBasis
+    const profitLossPercent = (profitLoss / costBasis) * 100
     const toTargetPercent = ((profitTarget - currentPriceValue) / currentPriceValue) * 100
 
     return {
