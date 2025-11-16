@@ -726,16 +726,20 @@ export default function Positions() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Total Acquired</p>
-                            <p className="text-white font-semibold">{formatCrypto(position.total_eth_acquired, 6)} ETH</p>
+                            <p className="text-white font-semibold">
+                              {formatCrypto(position.total_eth_acquired, 6)} {(position.product_id || 'ETH-BTC').split('-')[0]}
+                            </p>
                           </div>
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Max Funds</p>
-                            <p className="text-white font-semibold">{formatCrypto(position.max_btc_allowed, 8)} BTC</p>
+                            <p className="text-white font-semibold">
+                              {formatCrypto(position.max_btc_allowed, 8)} {(position.product_id || 'ETH-BTC').split('-')[1]}
+                            </p>
                           </div>
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Remaining</p>
                             <p className="text-white font-semibold">
-                              {formatCrypto(position.max_btc_allowed - position.total_btc_spent, 8)} BTC
+                              {formatCrypto(position.max_btc_allowed - position.total_btc_spent, 8)} {(position.product_id || 'ETH-BTC').split('-')[1]}
                             </p>
                           </div>
                         </div>
