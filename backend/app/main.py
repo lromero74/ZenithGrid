@@ -802,13 +802,13 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
 async def get_ticker(product_id: str):
     """Get current ticker/price for a product"""
     try:
-        ticker = await coinbase_client.get_ticker(product_id)
-        current_price = float(ticker.get("price", 0))
+        # Use get_current_price() which properly calculates mid-price from best_bid/best_ask
+        current_price = await coinbase_client.get_current_price(product_id)
 
         return {
             "product_id": product_id,
             "price": current_price,
-            "time": ticker.get("time", datetime.utcnow().isoformat()),
+            "time": datetime.utcnow().isoformat(),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
