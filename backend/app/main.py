@@ -22,7 +22,48 @@ from app.routers import bots_router, templates_router
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ETH/BTC Trading Bot")
+app = FastAPI(
+    title="ETH/BTC Trading Bot"
+)
+
+# Middleware to add 'Z' suffix to datetime fields in JSON responses
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response, StreamingResponse
+import re
+
+class DatetimeTimezoneMiddleware(BaseHTTPMiddleware):
+    """Add 'Z' suffix to ISO datetime strings in JSON responses to indicate UTC"""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        # Only modify JSON responses (not streaming responses)
+        if (response.headers.get("content-type", "").startswith("application/json") and
+            not isinstance(response, StreamingResponse)):
+            # Read response body
+            body = b""
+            async for chunk in response.body_iterator:
+                body += chunk
+
+            # Add 'Z' suffix to ISO datetime strings without timezone
+            # Pattern: "2025-11-16T01:50:13.090200" -> "2025-11-16T01:50:13.090200Z"
+            modified_body = re.sub(
+                rb'"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)"',
+                rb'"\1Z"',
+                body
+            )
+
+            return Response(
+                content=modified_body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=response.media_type,
+            )
+
+        return response
+
+app.add_middleware(DatetimeTimezoneMiddleware)
 
 # Include routers
 app.include_router(bots_router)
@@ -52,7 +93,10 @@ else:
     coinbase_client = CoinbaseClient()  # Will fail on actual calls
 
 # Multi-bot monitor - monitors all active bots with their strategies
-price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=60)
+# Increased to 10 minutes (600s) to avoid hitting AI API quotas
+# With 27 pairs: 27 calls/10min = ~3,888 calls/day (still over Gemini's 250/day limit)
+# TODO: Implement smarter caching or use Claude API with higher limits
+price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=600)
 
 
 # Pydantic schemas
