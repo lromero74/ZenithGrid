@@ -176,12 +176,16 @@ class MultiBotMonitor:
                 batch = trading_pairs[i:i + batch_size]
                 logger.info(f"  Processing batch {i // batch_size + 1} ({len(batch)} pairs): {batch}")
 
-                # Process batch in parallel
-                batch_tasks = [
-                    self.process_bot_pair(db, bot, product_id)
-                    for product_id in batch
-                ]
-                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+                # Process batch sequentially to avoid DB session conflicts
+                # TODO: Could optimize later with separate sessions per task
+                batch_results = []
+                for product_id in batch:
+                    try:
+                        result = await self.process_bot_pair(db, bot, product_id)
+                        batch_results.append(result)
+                    except Exception as e:
+                        logger.error(f"  Error processing {product_id}: {e}")
+                        batch_results.append({"error": str(e)})
 
                 # Store results
                 for product_id, result in zip(batch, batch_results):

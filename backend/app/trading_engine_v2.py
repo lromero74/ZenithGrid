@@ -67,7 +67,7 @@ class StrategyTradingEngine:
         if position:
             position_status = position.status
 
-        # Save log
+        # Save log (don't commit - let caller handle transaction)
         ai_log = AIBotLog(
             bot_id=self.bot.id,
             thinking=thinking,
@@ -81,7 +81,7 @@ class StrategyTradingEngine:
         )
 
         self.db.add(ai_log)
-        await self.db.commit()
+        # Don't commit here - let the main process_signal flow commit everything together
 
     async def get_active_position(self) -> Optional[Position]:
         """Get currently active position for this bot/pair combination"""
@@ -351,11 +351,14 @@ class StrategyTradingEngine:
                 position = await self.create_position(btc_balance, btc_amount)
 
             # Execute buy
+            # Determine trade type based on position's spend (avoid lazy loading trades)
+            trade_type = "initial" if position.total_btc_spent == 0 else "dca"
+
             trade = await self.execute_buy(
                 position=position,
                 btc_amount=btc_amount,
                 current_price=current_price,
-                trade_type="initial" if len(position.trades) == 0 else "dca",
+                trade_type=trade_type,
                 signal_data=signal_data
             )
 
@@ -442,6 +445,9 @@ class StrategyTradingEngine:
                     "signal": signal_data,
                     "position": position
                 }
+
+        # Commit any pending changes (like AI logs)
+        await self.db.commit()
 
         return {
             "action": "none",
