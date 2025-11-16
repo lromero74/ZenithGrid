@@ -23,6 +23,10 @@ class Bot(Base):
     # Status
     is_active = Column(Boolean, default=False)  # Whether bot is currently running
 
+    # Check interval (seconds between signal checks)
+    # Default varies by AI provider: Gemini=10800s (3h), Claude=300s (5min)
+    check_interval_seconds = Column(Integer, default=300, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

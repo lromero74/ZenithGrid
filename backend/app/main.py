@@ -94,11 +94,10 @@ else:
     coinbase_client = CoinbaseClient()  # Will fail on actual calls
 
 # Multi-bot monitor - monitors all active bots with their strategies
-# Gemini free tier: 250 calls/day
-# With 27 pairs: Need 27 * interval_checks_per_day <= 250
-# 250 / 27 = 9.26 checks/day = 2.6 hours between checks
-# Using 3 hours (10800s) to stay safely within limits: 27 * 8 = 216 calls/day
-price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=10800)
+# Now using per-bot check_interval_seconds (set in database)
+# Monitor loop runs every 60s to check if any bots need processing
+# Each bot can have its own interval optimized for its AI provider quota
+price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=300)
 
 
 # Pydantic schemas

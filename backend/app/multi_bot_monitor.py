@@ -382,17 +382,28 @@ class MultiBotMonitor:
                     else:
                         logger.info(f"Monitoring {len(bots)} active bot(s)")
 
-                        # Process each bot independently
+                        # Process each bot independently based on their individual check intervals
                         for bot in bots:
                             try:
+                                # Check if enough time has elapsed since last check
+                                check_interval = bot.check_interval_seconds or self.interval_seconds
+                                now = datetime.utcnow()
+
+                                if bot.last_signal_check:
+                                    time_since_last_check = (now - bot.last_signal_check).total_seconds()
+                                    if time_since_last_check < check_interval:
+                                        logger.debug(f"Skipping {bot.name} - last checked {time_since_last_check:.0f}s ago (interval: {check_interval}s)")
+                                        continue
+
+                                logger.info(f"Processing {bot.name} (interval: {check_interval}s)")
                                 await self.process_bot(db, bot)
                             except Exception as e:
                                 logger.error(f"Error processing bot {bot.name}: {e}")
                                 # Continue with other bots even if one fails
                                 continue
 
-                # Wait for next interval
-                await asyncio.sleep(self.interval_seconds)
+                # Wait for next interval (use minimum bot interval or default)
+                await asyncio.sleep(60)  # Check every minute for bots that need processing
 
             except Exception as e:
                 logger.error(f"Error in monitor loop: {e}", exc_info=True)
