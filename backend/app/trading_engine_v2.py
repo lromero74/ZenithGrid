@@ -350,25 +350,46 @@ class StrategyTradingEngine:
         if should_buy:
             logger.info(f"  💰 BUY DECISION: will buy {btc_amount:.8f} BTC worth of {self.product_id}")
 
-            # Create position if needed
-            if position is None:
-                logger.info(f"  📝 Creating new position for {self.product_id}")
-                position = await self.create_position(btc_balance, btc_amount)
-                logger.info(f"  ✅ Position created: ID={position.id}")
+            # Determine trade type
+            is_new_position = position is None
+            trade_type = "initial" if is_new_position else "dca"
 
-            # Execute buy
-            # Determine trade type based on position's spend (avoid lazy loading trades)
-            trade_type = "initial" if position.total_btc_spent == 0 else "dca"
-            logger.info(f"  🔨 Executing {trade_type} buy order...")
+            if is_new_position:
+                logger.info(f"  🔨 Executing {trade_type} buy order FIRST (position will be created after success)...")
+            else:
+                logger.info(f"  🔨 Executing {trade_type} buy order for existing position...")
 
-            trade = await self.execute_buy(
-                position=position,
-                btc_amount=btc_amount,
-                current_price=current_price,
-                trade_type=trade_type,
-                signal_data=signal_data
-            )
-            logger.info(f"  ✅ Trade executed: ID={trade.id}, Order={trade.order_id}")
+            # Execute buy FIRST - don't create position until we know trade succeeds
+            try:
+                # For new positions, we need to create position for the trade to reference
+                # BUT we do it in a transaction that will rollback if trade fails
+                if is_new_position:
+                    logger.info(f"  📝 Creating position (will commit only if trade succeeds)...")
+                    position = await self.create_position(btc_balance, btc_amount)
+                    logger.info(f"  ✅ Position created: ID={position.id} (pending trade execution)")
+
+                # Execute the actual trade
+                trade = await self.execute_buy(
+                    position=position,
+                    btc_amount=btc_amount,
+                    current_price=current_price,
+                    trade_type=trade_type,
+                    signal_data=signal_data
+                )
+                logger.info(f"  ✅ Trade executed: ID={trade.id}, Order={trade.order_id}")
+
+            except Exception as e:
+                logger.error(f"  ❌ Trade execution failed: {e}")
+                # If this was a new position and trade failed, rollback the position
+                if is_new_position and position:
+                    logger.warning(f"  🗑️ Rolling back position {position.id} due to failed trade")
+                    await self.db.rollback()
+                    return {
+                        "action": "none",
+                        "reason": f"Buy failed: {str(e)}",
+                        "signal": signal_data
+                    }
+                raise  # Re-raise for existing positions (DCA failures)
 
             # Record signal
             signal = Signal(
