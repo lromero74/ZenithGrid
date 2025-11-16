@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { botsApi } from '../services/api'
-import { Brain, TrendingUp, TrendingDown, Minus, Clock, Target } from 'lucide-react'
+import { Brain, TrendingUp, TrendingDown, Minus, Clock, Target, CircleDot } from 'lucide-react'
 
 interface AIBotLogsProps {
   botId: number
@@ -52,7 +52,7 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
       case 'sell':
         return <TrendingDown className="w-5 h-5 text-red-400" />
       case 'hold':
-        return <Minus className="w-5 h-5 text-yellow-400" />
+        return <CircleDot className="w-5 h-5 text-yellow-400" />
       default:
         return <Brain className="w-5 h-5 text-blue-400" />
     }
