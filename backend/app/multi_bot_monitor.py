@@ -378,6 +378,13 @@ class MultiBotMonitor:
         try:
             from app.models import AIBotLog
 
+            # Extract only additional context (avoid duplicating fields already in columns)
+            additional_context = signal_data.get("context", {})  # Get nested context if exists
+            if not additional_context and isinstance(signal_data, dict):
+                # Build minimal context from signal_data, excluding fields that have dedicated columns
+                excluded_fields = {"reasoning", "signal_type", "confidence"}
+                additional_context = {k: v for k, v in signal_data.items() if k not in excluded_fields}
+
             log_entry = AIBotLog(
                 bot_id=bot.id,
                 thinking=signal_data.get("reasoning", ""),
@@ -386,7 +393,7 @@ class MultiBotMonitor:
                 current_price=pair_data.get("current_price"),
                 position_status="unknown",  # Will be determined by trading logic
                 product_id=product_id,
-                context=signal_data
+                context=additional_context  # Only store additional context, not duplicate fields
             )
             db.add(log_entry)
             await db.flush()
