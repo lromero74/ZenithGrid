@@ -100,105 +100,16 @@ else:
 price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=300)
 
 
-# Pydantic schemas
-from pydantic import BaseModel
-
-
-class PositionResponse(BaseModel):
-    id: int
-    bot_id: Optional[int] = None
-    product_id: str = "ETH-BTC"
-    status: str
-    opened_at: datetime
-    closed_at: Optional[datetime]
-    strategy_config_snapshot: Optional[dict] = None  # Frozen config from bot at position creation
-    initial_quote_balance: float  # BTC or USD
-    max_quote_allowed: float      # BTC or USD
-    total_quote_spent: float      # BTC or USD
-    total_base_acquired: float    # ETH, ADA, etc.
-    average_buy_price: float
-    sell_price: Optional[float]
-    total_quote_received: Optional[float]  # BTC or USD
-    profit_quote: Optional[float]  # BTC or USD
-    profit_percentage: Optional[float]
-    btc_usd_price_at_open: Optional[float]
-    btc_usd_price_at_close: Optional[float]
-    profit_usd: Optional[float]
-    trade_count: int = 0
-
-    class Config:
-        from_attributes = True
-
-
-class TradeResponse(BaseModel):
-    id: int
-    position_id: int
-    timestamp: datetime
-    side: str
-    quote_amount: float  # BTC or USD
-    base_amount: float   # ETH, ADA, etc.
-    price: float
-    trade_type: str
-    order_id: Optional[str]
-
-    class Config:
-        from_attributes = True
-
-
-class SignalResponse(BaseModel):
-    id: int
-    timestamp: datetime
-    signal_type: str
-    macd_value: float
-    macd_signal: float
-    macd_histogram: float
-    price: float
-    action_taken: Optional[str]
-    reason: Optional[str]
-
-    class Config:
-        from_attributes = True
-
-
-class MarketDataResponse(BaseModel):
-    id: int
-    timestamp: datetime
-    price: float
-    macd_value: Optional[float]
-    macd_signal: Optional[float]
-    macd_histogram: Optional[float]
-
-    class Config:
-        from_attributes = True
-
-
-class SettingsUpdate(BaseModel):
-    coinbase_api_key: Optional[str] = None
-    coinbase_api_secret: Optional[str] = None
-    initial_btc_percentage: Optional[float] = None
-    dca_percentage: Optional[float] = None
-    max_btc_usage_percentage: Optional[float] = None
-    min_profit_percentage: Optional[float] = None
-    macd_fast_period: Optional[int] = None
-    macd_slow_period: Optional[int] = None
-    macd_signal_period: Optional[int] = None
-    candle_interval: Optional[str] = None
-
-
-class TestConnectionRequest(BaseModel):
-    coinbase_api_key: str
-    coinbase_api_secret: str
-
-
-class DashboardStats(BaseModel):
-    current_position: Optional[PositionResponse]
-    total_positions: int
-    total_profit_btc: float
-    win_rate: float
-    current_price: float
-    btc_balance: float
-    eth_balance: float
-    monitor_running: bool
+# Import Pydantic schemas from centralized schemas module
+from app.schemas import (
+    PositionResponse,
+    TradeResponse,
+    SignalResponse,
+    MarketDataResponse,
+    SettingsUpdate,
+    TestConnectionRequest,
+    DashboardStats
+)
 
 
 # Startup/Shutdown events
