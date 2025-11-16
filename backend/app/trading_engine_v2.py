@@ -320,6 +320,8 @@ class StrategyTradingEngine:
         btc_amount = 0
         buy_reason = ""
 
+        logger.info(f"  🤖 Bot active: {self.bot.is_active}, Position exists: {position is not None}")
+
         if self.bot.is_active:
             # Check max concurrent deals limit (3Commas style)
             if position is None:  # Only check when considering opening a NEW position
@@ -346,13 +348,18 @@ class StrategyTradingEngine:
                 buy_reason = "Bot is stopped - managing existing position only"
 
         if should_buy:
+            logger.info(f"  💰 BUY DECISION: will buy {btc_amount:.8f} BTC worth of {self.product_id}")
+
             # Create position if needed
             if position is None:
+                logger.info(f"  📝 Creating new position for {self.product_id}")
                 position = await self.create_position(btc_balance, btc_amount)
+                logger.info(f"  ✅ Position created: ID={position.id}")
 
             # Execute buy
             # Determine trade type based on position's spend (avoid lazy loading trades)
             trade_type = "initial" if position.total_btc_spent == 0 else "dca"
+            logger.info(f"  🔨 Executing {trade_type} buy order...")
 
             trade = await self.execute_buy(
                 position=position,
@@ -361,6 +368,7 @@ class StrategyTradingEngine:
                 trade_type=trade_type,
                 signal_data=signal_data
             )
+            logger.info(f"  ✅ Trade executed: ID={trade.id}, Order={trade.order_id}")
 
             # Record signal
             signal = Signal(
