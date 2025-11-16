@@ -120,7 +120,7 @@ class StrategyTradingEngine:
 
         position = Position(
             bot_id=self.bot.id,
-            product_id=self.bot.product_id,
+            product_id=self.product_id,  # Use the engine's product_id (specific pair being traded)
             status="open",
             opened_at=datetime.utcnow(),
             initial_btc_balance=btc_balance,

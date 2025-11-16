@@ -166,11 +166,35 @@ class MultiBotMonitor:
             trading_pairs = bot.get_trading_pairs()
             logger.info(f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})")
 
-            # Process each trading pair independently
+            # Process trading pairs in parallel batches to avoid Coinbase API throttling
+            # Coinbase public API allows ~10 requests/second per IP
+            # With safety margin: process 5 pairs per batch with 1s delay between batches
             results = {}
-            for product_id in trading_pairs:
-                pair_result = await self.process_bot_pair(db, bot, product_id)
-                results[product_id] = pair_result
+            batch_size = 5
+
+            for i in range(0, len(trading_pairs), batch_size):
+                batch = trading_pairs[i:i + batch_size]
+                logger.info(f"  Processing batch {i // batch_size + 1} ({len(batch)} pairs): {batch}")
+
+                # Process batch in parallel
+                batch_tasks = [
+                    self.process_bot_pair(db, bot, product_id)
+                    for product_id in batch
+                ]
+                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+
+                # Store results
+                for product_id, result in zip(batch, batch_results):
+                    if isinstance(result, Exception):
+                        logger.error(f"  Error processing {product_id}: {result}")
+                        results[product_id] = {"error": str(result)}
+                    else:
+                        results[product_id] = result
+
+                # Add delay between batches (if not last batch)
+                if i + batch_size < len(trading_pairs):
+                    logger.info(f"  Waiting 1s before next batch to avoid API throttling...")
+                    await asyncio.sleep(1)
 
             return results
 
