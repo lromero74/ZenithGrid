@@ -52,6 +52,27 @@ type LineData = {
   value: number
 }
 
+// Utility functions for price formatting
+const getQuoteCurrency = (productId: string) => {
+  const quote = productId?.split('-')[1] || 'BTC'
+  return {
+    symbol: quote,
+    decimals: quote === 'USD' ? 2 : 8
+  }
+}
+
+const formatPrice = (price: number, productId: string = 'ETH-BTC') => {
+  const { symbol, decimals } = getQuoteCurrency(productId)
+  if (symbol === 'USD') {
+    return `$${price.toFixed(decimals)}`
+  }
+  return `${price.toFixed(decimals)} ${symbol}`
+}
+
+const formatQuoteAmount = (amount: number, productId: string) => {
+  const { symbol, decimals } = getQuoteCurrency(productId)
+  return `${amount.toFixed(decimals)} ${symbol}`
+}
 
 // Deal Chart Component with full Charts page functionality
 function DealChart({ position, productId: initialProductId, currentPrice }: { position: Position, productId: string, currentPrice?: number }) {
@@ -1280,27 +1301,6 @@ export default function Positions() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value)
-  }
-
-  const getQuoteCurrency = (productId: string) => {
-    const quote = productId?.split('-')[1] || 'BTC'
-    return {
-      symbol: quote,
-      decimals: quote === 'USD' ? 2 : 8
-    }
-  }
-
-  const formatPrice = (price: number, productId: string) => {
-    const { symbol, decimals } = getQuoteCurrency(productId)
-    if (symbol === 'USD') {
-      return `$${price.toFixed(decimals)}`
-    }
-    return `${price.toFixed(decimals)} ${symbol}`
-  }
-
-  const formatQuoteAmount = (amount: number, productId: string) => {
-    const { symbol, decimals } = getQuoteCurrency(productId)
-    return `${amount.toFixed(decimals)} ${symbol}`
   }
 
   const togglePosition = (positionId: number) => {
