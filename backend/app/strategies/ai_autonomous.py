@@ -765,14 +765,125 @@ Rules:
         """
         Analyze multiple pairs in a single Claude API call
         """
-        # Similar implementation for Claude
-        # For now, fallback to individual calls
-        logger.info("Claude batch analysis not yet implemented, using individual calls")
-        results = {}
+        try:
+            from anthropic import AsyncAnthropic
+        except ImportError:
+            logger.error("anthropic library not installed")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "Anthropic library not installed"}
+                    for pid in pairs_data.keys()}
+
+        api_key = settings.anthropic_api_key
+        if not api_key:
+            logger.error("ANTHROPIC_API_KEY not set")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
+                    for pid in pairs_data.keys()}
+
+        risk_tolerance = self.config.get("risk_tolerance", "moderate")
+
+        # Build batch prompt with all pairs
+        pairs_summary = []
         for product_id, data in pairs_data.items():
-            market_context = data.get("market_context", {})
-            results[product_id] = await self._get_claude_analysis(market_context)
-        return results
+            ctx = data.get("market_context", {})
+            pairs_summary.append(f"""
+**{product_id}:**
+- Current Price: {ctx.get('current_price', 0):.8f} BTC
+- 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
+- Volatility: {ctx.get('volatility', 0):.2f}%
+- Recent Trend: {ctx.get('recent_prices', [])[-3:]}""")
+
+        prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
+
+**Market Data for All Pairs:**
+{''.join(pairs_summary)}
+
+**Trading Parameters:**
+- Risk Tolerance: {risk_tolerance}
+
+**Your Task:**
+Analyze ALL pairs and respond with a JSON object where keys are product IDs and values are analysis objects. Format:
+
+{{
+  "ETH-BTC": {{
+    "action": "buy" | "hold" | "sell",
+    "confidence": 0-100,
+    "reasoning": "brief 1-2 sentence explanation",
+    "suggested_allocation_pct": 0-100,
+    "expected_profit_pct": 0-10
+  }},
+  "SOL-BTC": {{...}},
+  ...
+}}
+
+Rules:
+- Analyze each pair independently
+- Only suggest "buy" if clear profit opportunity
+- Be {risk_tolerance} in recommendations
+- Keep reasoning concise
+- Return valid JSON only (no markdown, no code blocks)"""
+
+        try:
+            client = AsyncAnthropic(api_key=api_key)
+            response = await client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = response.content[0].text.strip()
+
+            # Remove markdown if present
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+                response_text = response_text.strip()
+
+            batch_analysis = json.loads(response_text)
+
+            # Track token usage
+            if hasattr(response, 'usage'):
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
+                self._total_tokens_used += input_tokens + output_tokens
+                logger.info(f"📊 Claude BATCH API - {len(pairs_data)} pairs - Input: {input_tokens} tokens, Output: {output_tokens} tokens")
+                logger.info(f"   🎯 Efficiency: {len(pairs_data)} pairs in 1 call (saved {len(pairs_data)-1} API calls!)")
+
+            # Convert to our signal format for each pair
+            results = {}
+            for product_id in pairs_data.keys():
+                if product_id in batch_analysis:
+                    analysis = batch_analysis[product_id]
+                    signal_type = "none"
+                    if analysis.get("action") == "buy":
+                        signal_type = "buy"
+                    elif analysis.get("action") == "sell":
+                        signal_type = "sell"
+
+                    results[product_id] = {
+                        "signal_type": signal_type,
+                        "confidence": analysis.get("confidence", 50),
+                        "reasoning": analysis.get("reasoning", "AI batch analysis"),
+                        "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
+                        "expected_profit_pct": analysis.get("expected_profit_pct", 1.0)
+                    }
+                else:
+                    # Pair missing from response
+                    results[product_id] = {
+                        "signal_type": "hold",
+                        "confidence": 0,
+                        "reasoning": "Not analyzed in batch response"
+                    }
+
+            return results
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Claude batch response: {e}")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "Failed to parse batch response"}
+                    for pid in pairs_data.keys()}
+        except Exception as e:
+            logger.error(f"Claude batch analysis error: {e}")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
+                    for pid in pairs_data.keys()}
 
     async def _get_grok_analysis(self, market_context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -924,7 +1035,7 @@ Respond with JSON (no markdown):
         try:
             client = AsyncOpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
             response = await client.chat.completions.create(
-                model="grok-beta",
+                model="grok-3",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7
             )
