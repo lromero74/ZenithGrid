@@ -1378,8 +1378,21 @@ export default function Positions() {
       const openPositions = allPositions.filter(p => p.status === 'open')
       const pricePromises = openPositions.map(async (position) => {
         try {
-          const response = await axios.get(`${API_BASE}/api/ticker/${position.product_id || 'ETH-BTC'}`)
-          return { product_id: position.product_id || 'ETH-BTC', price: response.data.price }
+          // Use candles API (more reliable than ticker for getting current price)
+          const response = await axios.get(`${API_BASE}/api/candles`, {
+            params: {
+              product_id: position.product_id || 'ETH-BTC',
+              granularity: 'ONE_MINUTE',
+              limit: 1
+            }
+          })
+          const candles = response.data.candles || []
+          if (candles.length > 0) {
+            return { product_id: position.product_id || 'ETH-BTC', price: candles[0].close }
+          }
+          // Fallback to ticker if no candles
+          const tickerResponse = await axios.get(`${API_BASE}/api/ticker/${position.product_id || 'ETH-BTC'}`)
+          return { product_id: position.product_id || 'ETH-BTC', price: tickerResponse.data.price }
         } catch (err) {
           console.error(`Error fetching price for ${position.product_id}:`, err)
           return { product_id: position.product_id || 'ETH-BTC', price: position.average_buy_price }
