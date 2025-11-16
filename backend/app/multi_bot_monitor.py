@@ -235,11 +235,46 @@ class MultiBotMonitor:
             Result dictionary with action/signal info for all pairs
         """
         try:
-            # Collect market data for all pairs
-            pairs_data = {}
-            logger.info(f"  Fetching market data for {len(trading_pairs)} pairs...")
+            from app.models import Position
 
-            for product_id in trading_pairs:
+            # Check how many open positions this bot has
+            open_positions_query = (
+                select(Position)
+                .where(Position.bot_id == bot.id, Position.status == "open")
+            )
+            open_positions_result = await db.execute(open_positions_query)
+            open_positions = list(open_positions_result.scalars().all())
+            open_count = len(open_positions)
+
+            # Get max concurrent deals from strategy config
+            max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+
+            # Determine which pairs to analyze
+            pairs_to_analyze = trading_pairs
+
+            if open_count >= max_concurrent_deals:
+                # At capacity - only analyze pairs with open positions (for sell signals)
+                pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+                pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
+
+                if len(pairs_to_analyze) < len(trading_pairs):
+                    logger.info(f"  📊 Bot at max capacity ({open_count}/{max_concurrent_deals} positions)")
+                    logger.info(f"  🎯 Analyzing only {len(pairs_to_analyze)} pairs with open positions: {pairs_to_analyze}")
+                    logger.info(f"  ⏭️  Skipping {len(trading_pairs) - len(pairs_to_analyze)} pairs without positions")
+            else:
+                # Below capacity - analyze all configured pairs (looking for buy + sell signals)
+                logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
+                logger.info(f"  🔍 Analyzing all {len(trading_pairs)} pairs for opportunities")
+
+            if not pairs_to_analyze:
+                logger.info(f"  ⏭️  No pairs to analyze")
+                return {}
+
+            # Collect market data for pairs we're analyzing
+            pairs_data = {}
+            logger.info(f"  Fetching market data for {len(pairs_to_analyze)} pairs...")
+
+            for product_id in pairs_to_analyze:
                 try:
                     # Get current price
                     ticker = await self.coinbase.get_ticker(product_id)
@@ -270,7 +305,7 @@ class MultiBotMonitor:
 
             # Process each pair's analysis result
             results = {}
-            for product_id in trading_pairs:
+            for product_id in pairs_to_analyze:
                 try:
                     signal_data = batch_analyses.get(product_id, {
                         "signal_type": "hold",

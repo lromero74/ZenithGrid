@@ -439,7 +439,10 @@ function Bots() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-400">AI Provider:</span>
                     <span className="text-purple-400 font-medium">
-                      {bot.strategy_config.ai_provider === 'claude' ? '🤖 Claude' : '🤖 Gemini'}
+                      {bot.strategy_config.ai_provider === 'claude' ? '🤖 Claude'
+                        : bot.strategy_config.ai_provider === 'gemini' ? '🤖 Gemini'
+                        : bot.strategy_config.ai_provider === 'grok' ? '🤖 Grok'
+                        : `🤖 ${bot.strategy_config.ai_provider}`}
                     </span>
                   </div>
                 )}
