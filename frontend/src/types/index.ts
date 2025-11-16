@@ -5,14 +5,14 @@ export interface Position {
   status: string;
   opened_at: string;
   closed_at: string | null;
-  initial_btc_balance: number;
-  max_btc_allowed: number;
-  total_btc_spent: number;
-  total_eth_acquired: number;
+  initial_quote_balance: number;  // BTC or USD
+  max_quote_allowed: number;      // BTC or USD
+  total_quote_spent: number;      // BTC or USD
+  total_base_acquired: number;    // ETH, ADA, etc.
   average_buy_price: number;
   sell_price: number | null;
-  total_btc_received: number | null;
-  profit_btc: number | null;
+  total_quote_received: number | null;  // BTC or USD
+  profit_quote: number | null;    // BTC or USD
   profit_percentage: number | null;
   trade_count: number;
   btc_usd_price_at_open?: number;
@@ -25,8 +25,8 @@ export interface Trade {
   position_id: number;
   timestamp: string;
   side: string;
-  btc_amount: number;
-  eth_amount: number;
+  quote_amount: number;  // BTC or USD
+  base_amount: number;   // ETH, ADA, etc.
   price: number;
   trade_type: string;
   order_id: string | null;
@@ -68,7 +68,7 @@ export interface MarketData {
 export interface DashboardStats {
   current_position: Position | null;
   total_positions: number;
-  total_profit_btc: number;
+  total_profit_quote: number;  // Total profit in quote currency
   win_rate: number;
   current_price: number;
   btc_balance: number;
@@ -132,6 +132,8 @@ export interface Bot {
   strategy_type: string;
   strategy_config: Record<string, any>;
   product_id: string;
+  reserved_btc_balance: number;
+  reserved_usd_balance: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -144,6 +146,8 @@ export interface BotCreate {
   strategy_type: string;
   strategy_config: Record<string, any>;
   product_id: string;
+  reserved_btc_balance?: number;
+  reserved_usd_balance?: number;
 }
 
 export interface BotStats {
@@ -151,7 +155,7 @@ export interface BotStats {
   total_positions: number;
   open_positions: number;
   closed_positions: number;
-  total_profit_btc: number;
+  total_profit_quote: number;  // Total profit in quote currency
   total_profit_usd: number;
   win_rate: number;
   avg_profit_per_position: number;

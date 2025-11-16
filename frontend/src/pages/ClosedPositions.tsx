@@ -86,7 +86,7 @@ function ClosedPositions() {
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Invested</p>
-                    <p className="font-semibold text-white">{formatQuoteAmount(position.total_btc_spent, position.product_id || 'ETH-BTC')}</p>
+                    <p className="font-semibold text-white">{formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}</p>
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Orders</p>
@@ -94,20 +94,20 @@ function ClosedPositions() {
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Profit</p>
-                    {position.profit_btc !== null ? (
+                    {position.profit_quote !== null ? (
                       <div>
                         <div className="flex items-center gap-1">
-                          {position.profit_btc >= 0 ? (
+                          {position.profit_quote >= 0 ? (
                             <TrendingUp className="w-3 h-3 text-green-500" />
                           ) : (
                             <TrendingDown className="w-3 h-3 text-red-500" />
                           )}
-                          <span className={`font-semibold ${position.profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <span className={`font-semibold ${position.profit_quote >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {position.profit_percentage?.toFixed(2)}%
                           </span>
                         </div>
-                        <p className={`text-xs ${position.profit_btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                          {formatQuoteAmount(position.profit_btc, position.product_id || 'ETH-BTC')}
+                        <p className={`text-xs ${position.profit_quote >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                          {formatQuoteAmount(position.profit_quote, position.product_id || 'ETH-BTC')}
                         </p>
                       </div>
                     ) : (

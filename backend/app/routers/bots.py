@@ -28,6 +28,8 @@ class BotCreate(BaseModel):
     product_id: str = "ETH-BTC"  # Legacy - kept for backward compatibility
     product_ids: Optional[List[str]] = None  # Multi-pair support
     split_budget_across_pairs: bool = False  # Budget splitting toggle
+    reserved_btc_balance: float = 0.0  # BTC allocated to this bot
+    reserved_usd_balance: float = 0.0  # USD allocated to this bot
 
 
 class BotUpdate(BaseModel):
@@ -37,6 +39,8 @@ class BotUpdate(BaseModel):
     product_id: Optional[str] = None
     product_ids: Optional[List[str]] = None
     split_budget_across_pairs: Optional[bool] = None
+    reserved_btc_balance: Optional[float] = None
+    reserved_usd_balance: Optional[float] = None
 
 
 class BotResponse(BaseModel):
@@ -48,6 +52,8 @@ class BotResponse(BaseModel):
     product_id: str
     product_ids: Optional[List[str]] = None
     split_budget_across_pairs: bool = False
+    reserved_btc_balance: float = 0.0
+    reserved_usd_balance: float = 0.0
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -105,6 +111,36 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
     if result.scalars().first():
         raise HTTPException(status_code=400, detail=f"Bot with name '{bot_data.name}' already exists")
 
+    # Validate all pairs use the same quote currency (BTC or USD, not mixed)
+    all_pairs = bot_data.product_ids if bot_data.product_ids else ([bot_data.product_id] if bot_data.product_id else [])
+    quote_currency = None
+    if all_pairs and len(all_pairs) > 0:
+        quote_currencies = set()
+        for pair in all_pairs:
+            if '-' in pair:
+                quote = pair.split('-')[1]
+                quote_currencies.add(quote)
+
+        if len(quote_currencies) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail=f"All trading pairs must use the same quote currency. Found: {', '.join(sorted(quote_currencies))}. "
+                       f"Please use only BTC-based pairs OR only USD-based pairs, not a mix."
+            )
+
+        # Set quote_currency for market_focus correction
+        quote_currency = quote_currencies.pop() if quote_currencies else None
+
+    # Auto-correct market_focus for AI autonomous bots based on quote currency
+    if bot_data.strategy_type == "ai_autonomous" and quote_currency:
+        if "market_focus" in bot_data.strategy_config:
+            if bot_data.strategy_config["market_focus"] != quote_currency:
+                logger.warning(
+                    f"Auto-correcting market_focus from '{bot_data.strategy_config['market_focus']}' to '{quote_currency}' "
+                    f"to match {quote_currency}-based trading pairs"
+                )
+                bot_data.strategy_config["market_focus"] = quote_currency
+
     # Create bot
     bot = Bot(
         name=bot_data.name,
@@ -114,6 +150,8 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
         product_id=bot_data.product_id,
         product_ids=bot_data.product_ids or [],
         split_budget_across_pairs=bot_data.split_budget_across_pairs,
+        reserved_btc_balance=bot_data.reserved_btc_balance,
+        reserved_usd_balance=bot_data.reserved_usd_balance,
         is_active=False
     )
 
@@ -239,6 +277,42 @@ async def update_bot(
 
     if bot_update.split_budget_across_pairs is not None:
         bot.split_budget_across_pairs = bot_update.split_budget_across_pairs
+
+    if bot_update.reserved_btc_balance is not None:
+        bot.reserved_btc_balance = bot_update.reserved_btc_balance
+
+    if bot_update.reserved_usd_balance is not None:
+        bot.reserved_usd_balance = bot_update.reserved_usd_balance
+
+    # Validate all pairs use the same quote currency after update
+    final_pairs = bot.product_ids if bot.product_ids else ([bot.product_id] if bot.product_id else [])
+    quote_currency = None
+    if final_pairs and len(final_pairs) > 0:
+        quote_currencies = set()
+        for pair in final_pairs:
+            if '-' in pair:
+                quote = pair.split('-')[1]
+                quote_currencies.add(quote)
+
+        if len(quote_currencies) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail=f"All trading pairs must use the same quote currency. Found: {', '.join(sorted(quote_currencies))}. "
+                       f"Please use only BTC-based pairs OR only USD-based pairs, not a mix."
+            )
+
+        # Set quote_currency for market_focus correction
+        quote_currency = quote_currencies.pop() if quote_currencies else None
+
+    # Auto-correct market_focus for AI autonomous bots based on quote currency
+    if bot.strategy_type == "ai_autonomous" and quote_currency:
+        if "market_focus" in bot.strategy_config:
+            if bot.strategy_config["market_focus"] != quote_currency:
+                logger.warning(
+                    f"Auto-correcting market_focus from '{bot.strategy_config['market_focus']}' to '{quote_currency}' "
+                    f"to match {quote_currency}-based trading pairs for bot '{bot.name}'"
+                )
+                bot.strategy_config["market_focus"] = quote_currency
 
     bot.updated_at = datetime.utcnow()
 
@@ -380,6 +454,8 @@ async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
         product_id=original_bot.product_id,
         product_ids=original_bot.product_ids.copy() if original_bot.product_ids else [],
         split_budget_across_pairs=original_bot.split_budget_across_pairs,
+        reserved_btc_balance=0.0,  # Don't copy reserved balances - user must allocate fresh
+        reserved_usd_balance=0.0,
         is_active=False,  # Start stopped
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()

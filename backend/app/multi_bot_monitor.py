@@ -167,6 +167,8 @@ class MultiBotMonitor:
             logger.info(f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})")
 
             # Check if strategy supports batch analysis (AI strategies)
+            # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis
+            # Individual positions will still use frozen config in process_bot_pair
             strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
             supports_batch = hasattr(strategy, 'analyze_multiple_pairs_batch') and len(trading_pairs) > 1
 
@@ -265,6 +267,28 @@ class MultiBotMonitor:
                 # Below capacity - analyze all configured pairs (looking for buy + sell signals)
                 logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
                 logger.info(f"  🔍 Analyzing all {len(trading_pairs)} pairs for opportunities")
+
+                # Filter by minimum daily volume (only for new positions, not existing ones)
+                min_daily_volume = strategy.config.get("min_daily_volume", 0.0)
+                if min_daily_volume > 0:
+                    logger.info(f"  📊 Filtering pairs by minimum 24h volume: {min_daily_volume}")
+                    filtered_pairs = []
+                    for product_id in pairs_to_analyze:
+                        try:
+                            stats = await self.coinbase.get_product_stats(product_id)
+                            volume_24h = stats.get("volume_24h", 0.0)
+
+                            if volume_24h >= min_daily_volume:
+                                filtered_pairs.append(product_id)
+                                logger.info(f"    ✅ {product_id}: Volume {volume_24h:.2f} (meets threshold)")
+                            else:
+                                logger.info(f"    ⏭️  {product_id}: Volume {volume_24h:.2f} (below {min_daily_volume})")
+                        except Exception as e:
+                            logger.warning(f"    ⚠️  {product_id}: Could not fetch volume stats ({e}), including anyway")
+                            filtered_pairs.append(product_id)  # Include pairs where we can't get stats
+
+                    pairs_to_analyze = filtered_pairs
+                    logger.info(f"  📊 After volume filter: {len(pairs_to_analyze)} pairs remain")
 
             if not pairs_to_analyze:
                 logger.info(f"  ⏭️  No pairs to analyze")
@@ -400,27 +424,48 @@ class MultiBotMonitor:
 
             # Get strategy instance for this bot
             try:
-                # Adjust budget percentages if splitting across pairs
-                strategy_config = bot.strategy_config.copy()
-                if bot.split_budget_across_pairs and len(bot.get_trading_pairs()) > 1:
-                    num_pairs = len(bot.get_trading_pairs())
-                    logger.info(f"    Splitting budget across {num_pairs} pairs")
+                # Check if there's an existing position for this pair
+                # If yes, use frozen config snapshot (like 3Commas)
+                # If no, use current bot config (will be frozen when position is created)
+                from sqlalchemy import select, desc
+                from app.models import Position
+                query = select(Position).where(
+                    Position.bot_id == bot.id,
+                    Position.product_id == product_id,
+                    Position.status == "open"
+                ).order_by(desc(Position.opened_at))
+                result = await db.execute(query)
+                existing_position = result.scalars().first()
 
-                    # Adjust percentage-based parameters
-                    if "base_order_percentage" in strategy_config:
-                        original = strategy_config["base_order_percentage"]
-                        strategy_config["base_order_percentage"] = original / num_pairs
-                        logger.info(f"      Base order: {original}% → {strategy_config['base_order_percentage']:.2f}%")
+                if existing_position and existing_position.strategy_config_snapshot:
+                    # Use frozen config from position (like 3Commas)
+                    strategy_config = existing_position.strategy_config_snapshot.copy()
+                    logger.info(f"    Using FROZEN strategy config from position #{existing_position.id}")
+                else:
+                    # Use current bot config (for new positions or legacy positions without snapshot)
+                    strategy_config = bot.strategy_config.copy()
+                    logger.info(f"    Using CURRENT bot strategy config")
 
-                    if "safety_order_percentage" in strategy_config:
-                        original = strategy_config["safety_order_percentage"]
-                        strategy_config["safety_order_percentage"] = original / num_pairs
-                        logger.info(f"      Safety order: {original}% → {strategy_config['safety_order_percentage']:.2f}%")
+                    # Adjust budget percentages if splitting across pairs (only for new positions)
+                    if bot.split_budget_across_pairs and len(bot.get_trading_pairs()) > 1:
+                        num_pairs = len(bot.get_trading_pairs())
+                        logger.info(f"    Splitting budget across {num_pairs} pairs")
 
-                    if "max_btc_usage_percentage" in strategy_config:
-                        original = strategy_config["max_btc_usage_percentage"]
-                        strategy_config["max_btc_usage_percentage"] = original / num_pairs
-                        logger.info(f"      Max usage: {original}% → {strategy_config['max_btc_usage_percentage']:.2f}%")
+                        # Adjust percentage-based parameters
+                        if "base_order_percentage" in strategy_config:
+                            original = strategy_config["base_order_percentage"]
+                            strategy_config["base_order_percentage"] = original / num_pairs
+                            logger.info(f"      Base order: {original}% → {strategy_config['base_order_percentage']:.2f}%")
+
+                        if "safety_order_percentage" in strategy_config:
+                            original = strategy_config["safety_order_percentage"]
+                            strategy_config["safety_order_percentage"] = original / num_pairs
+                            logger.info(f"      Safety order: {original}% → {strategy_config['safety_order_percentage']:.2f}%")
+
+                        if "max_btc_usage_percentage" in strategy_config:
+                            original = strategy_config["max_btc_usage_percentage"]
+                            strategy_config["max_btc_usage_percentage"] = original / num_pairs
+                            logger.info(f"      Max usage: {original}% → {strategy_config['max_btc_usage_percentage']:.2f}%")
 
                 strategy = StrategyRegistry.get_strategy(bot.strategy_type, strategy_config)
             except ValueError as e:

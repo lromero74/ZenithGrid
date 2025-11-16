@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi } from '../services/api'
 import { format } from 'date-fns'
 import { useState, useEffect, useRef } from 'react'
+import { formatDateTime, formatDateTimeCompact } from '../utils/dateFormat'
 import {
   TrendingUp,
   TrendingDown,
@@ -1122,11 +1123,11 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div>
             <p className="text-slate-400 text-xs mb-0.5">Entry Price</p>
-            <p className="text-white font-semibold">{gainLoss.entryPrice.toFixed(8)}</p>
+            <p className="text-white font-semibold">{formatPrice(gainLoss.entryPrice, position.product_id || 'ETH-BTC')}</p>
           </div>
           <div>
             <p className="text-slate-400 text-xs mb-0.5">Current Price</p>
-            <p className="text-white font-semibold">{gainLoss.currentPrice.toFixed(8)}</p>
+            <p className="text-white font-semibold">{formatPrice(gainLoss.currentPrice, position.product_id || 'ETH-BTC')}</p>
           </div>
           <div>
             <p className="text-slate-400 text-xs mb-0.5">Profit/Loss</p>
@@ -1356,6 +1357,13 @@ export default function Positions() {
   const [showLogsModal, setShowLogsModal] = useState(false)
   const [logsModalPosition, setLogsModalPosition] = useState<Position | null>(null)
 
+  // Filtering and sorting state (like 3Commas)
+  const [filterBot, setFilterBot] = useState<number | 'all'>('all')
+  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>('all')
+  const [filterPair, setFilterPair] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<'created' | 'pnl' | 'invested' | 'pair'>('created')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
   const { data: allPositions } = useQuery({
     queryKey: ['positions'],
     queryFn: () => positionsApi.getAll(undefined, 100),
@@ -1371,6 +1379,8 @@ export default function Positions() {
 
   // Fetch real-time prices for all open positions
   useEffect(() => {
+    const abortController = new AbortController()
+
     const fetchPrices = async () => {
       if (!allPositions) return
 
@@ -1383,16 +1393,23 @@ export default function Positions() {
               product_id: position.product_id || 'ETH-BTC',
               granularity: 'ONE_MINUTE',
               limit: 1
-            }
+            },
+            signal: abortController.signal
           })
           const candles = response.data.candles || []
           if (candles.length > 0) {
             return { product_id: position.product_id || 'ETH-BTC', price: candles[0].close }
           }
           // Fallback to ticker if no candles
-          const tickerResponse = await axios.get(`${API_BASE}/api/ticker/${position.product_id || 'ETH-BTC'}`)
+          const tickerResponse = await axios.get(`${API_BASE}/api/ticker/${position.product_id || 'ETH-BTC'}`, {
+            signal: abortController.signal
+          })
           return { product_id: position.product_id || 'ETH-BTC', price: tickerResponse.data.price }
         } catch (err) {
+          // Ignore abort errors (they're expected when component unmounts)
+          if (axios.isCancel(err) || (err as any)?.code === 'ECONNABORTED') {
+            return { product_id: position.product_id || 'ETH-BTC', price: position.average_buy_price }
+          }
           console.error(`Error fetching price for ${position.product_id}:`, err)
           return { product_id: position.product_id || 'ETH-BTC', price: position.average_buy_price }
         }
@@ -1410,7 +1427,10 @@ export default function Positions() {
     fetchPrices()
     const interval = setInterval(fetchPrices, 5000) // Update every 5 seconds
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      abortController.abort() // Cancel any in-flight requests
+    }
   }, [allPositions])
 
   const { data: trades } = useQuery({
@@ -1419,7 +1439,79 @@ export default function Positions() {
     enabled: selectedPosition !== null,
   })
 
-  const openPositions = allPositions?.filter(p => p.status === 'open') || []
+  // Calculate unrealized P&L for open position (needed for sorting)
+  const calculateUnrealizedPnL = (position: Position, currentPrice?: number) => {
+    if (position.status !== 'open') return null
+
+    // Use real-time price if available, otherwise fall back to average buy price
+    const price = currentPrice || position.average_buy_price
+    const currentValue = position.total_base_acquired * price
+    const costBasis = position.total_quote_spent
+    const unrealizedPnL = currentValue - costBasis
+    const unrealizedPnLPercent = (unrealizedPnL / costBasis) * 100
+
+    return {
+      btc: unrealizedPnL,
+      percent: unrealizedPnLPercent,
+      usd: unrealizedPnL * (position.btc_usd_price_at_open || 0),
+      currentPrice: price
+    }
+  }
+
+  // Apply filters and sorting (like 3Commas)
+  const openPositions = allPositions?.filter(p => {
+    if (p.status !== 'open') return false
+
+    // Filter by bot
+    if (filterBot !== 'all' && p.bot_id !== filterBot) return false
+
+    // Filter by market (USD-based or BTC-based)
+    if (filterMarket !== 'all') {
+      const quoteCurrency = (p.product_id || 'ETH-BTC').split('-')[1]
+      if (filterMarket === 'USD' && quoteCurrency !== 'USD') return false
+      if (filterMarket === 'BTC' && quoteCurrency !== 'BTC') return false
+    }
+
+    // Filter by specific pair
+    if (filterPair !== 'all' && p.product_id !== filterPair) return false
+
+    return true
+  }).sort((a, b) => {
+    let aVal: any, bVal: any
+
+    switch (sortBy) {
+      case 'created':
+        aVal = new Date(a.opened_at).getTime()
+        bVal = new Date(b.opened_at).getTime()
+        break
+      case 'pnl':
+        const aPnl = calculateUnrealizedPnL(a, currentPrices[a.product_id || 'ETH-BTC'])?.percent || 0
+        const bPnl = calculateUnrealizedPnL(b, currentPrices[b.product_id || 'ETH-BTC'])?.percent || 0
+        aVal = aPnl
+        bVal = bPnl
+        break
+      case 'invested':
+        aVal = a.total_quote_spent
+        bVal = b.total_quote_spent
+        break
+      case 'pair':
+        aVal = a.product_id || 'ETH-BTC'
+        bVal = b.product_id || 'ETH-BTC'
+        break
+      default:
+        aVal = 0
+        bVal = 0
+    }
+
+    if (sortOrder === 'asc') {
+      return aVal > bVal ? 1 : -1
+    } else {
+      return aVal < bVal ? 1 : -1
+    }
+  }) || []
+
+  // Get unique pairs for filter dropdown
+  const uniquePairs = Array.from(new Set(allPositions?.filter(p => p.status === 'open').map(p => p.product_id || 'ETH-BTC') || []))
 
   const formatCrypto = (amount: number, decimals: number = 8) => {
     return amount.toFixed(decimals)
@@ -1444,7 +1536,7 @@ export default function Positions() {
   }
 
   const openAddFundsModal = (positionId: number, position: Position) => {
-    const remaining = position.max_btc_allowed - position.total_btc_spent
+    const remaining = position.max_quote_allowed - position.total_quote_spent
     setAddFundsPositionId(positionId)
     setAddFundsAmount(remaining.toFixed(8))
     setShowAddFundsModal(true)
@@ -1483,14 +1575,20 @@ export default function Positions() {
     }).format(value)
   }
 
-  const formatPrice = (price: number) => price.toFixed(8)
-
   const getQuoteCurrency = (productId: string) => {
     const quote = productId?.split('-')[1] || 'BTC'
     return {
       symbol: quote,
       decimals: quote === 'USD' ? 2 : 8
     }
+  }
+
+  const formatPrice = (price: number, productId: string) => {
+    const { symbol, decimals } = getQuoteCurrency(productId)
+    if (symbol === 'USD') {
+      return `$${price.toFixed(decimals)}`
+    }
+    return `${price.toFixed(decimals)} ${symbol}`
   }
 
   const formatQuoteAmount = (amount: number, productId: string) => {
@@ -1517,8 +1615,8 @@ export default function Positions() {
     return buyTrades.map((trade, index) => ({
       orderNumber: index,
       type: index === 0 ? 'Base Order' : `Safety Order ${index}`,
-      btcAmount: trade.btc_amount,
-      ethAmount: trade.eth_amount,
+      quoteAmount: trade.quote_amount,
+      baseAmount: trade.base_amount,
       price: trade.price,
       timestamp: trade.timestamp,
       filled: true
@@ -1526,24 +1624,6 @@ export default function Positions() {
   }
 
   // Calculate unrealized P&L for open position
-  const calculateUnrealizedPnL = (position: Position, currentPrice?: number) => {
-    if (position.status !== 'open') return null
-
-    // Use real-time price if available, otherwise fall back to average buy price
-    const price = currentPrice || position.average_buy_price
-    const currentValue = position.total_eth_acquired * price
-    const costBasis = position.total_btc_spent
-    const unrealizedPnL = currentValue - costBasis
-    const unrealizedPnLPercent = (unrealizedPnL / costBasis) * 100
-
-    return {
-      btc: unrealizedPnL,
-      percent: unrealizedPnLPercent,
-      usd: unrealizedPnL * (position.btc_usd_price_at_open || 0),
-      currentPrice: price
-    }
-  }
-
   return (
     <div className="space-y-6">
       {/* Active Deals Section */}
@@ -1553,6 +1633,99 @@ export default function Positions() {
           <div className="flex items-center gap-2">
             <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-medium">
               {openPositions.length} Active
+            </div>
+          </div>
+        </div>
+
+        {/* Filters and Sorting (like 3Commas) */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-300">Filters & Sorting</h3>
+            <button
+              onClick={() => {
+                setFilterBot('all')
+                setFilterMarket('all')
+                setFilterPair('all')
+                setSortBy('created')
+                setSortOrder('desc')
+              }}
+              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors flex items-center gap-2"
+            >
+              <X className="w-4 h-4" />
+              Clear Filters
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* Bot Filter */}
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Bot</label>
+              <select
+                value={filterBot}
+                onChange={(e) => setFilterBot(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="all">All Bots</option>
+                {bots?.map(bot => (
+                  <option key={bot.id} value={bot.id}>{bot.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Market Filter */}
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Market</label>
+              <select
+                value={filterMarket}
+                onChange={(e) => setFilterMarket(e.target.value as 'all' | 'USD' | 'BTC')}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="all">All Markets</option>
+                <option value="USD">USD-based</option>
+                <option value="BTC">BTC-based</option>
+              </select>
+            </div>
+
+            {/* Pair Filter */}
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Pair</label>
+              <select
+                value={filterPair}
+                onChange={(e) => setFilterPair(e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="all">All Pairs</option>
+                {uniquePairs.map(pair => (
+                  <option key={pair} value={pair}>{pair}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sort By */}
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'created' | 'pnl' | 'invested' | 'pair')}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="created">Created Date</option>
+                <option value="pnl">PnL %</option>
+                <option value="invested">Invested</option>
+                <option value="pair">Pair</option>
+              </select>
+            </div>
+
+            {/* Sort Order */}
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Order</label>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
             </div>
           </div>
         </div>
@@ -1569,7 +1742,7 @@ export default function Positions() {
               const currentPrice = currentPrices[position.product_id || 'ETH-BTC']
               const pnl = calculateUnrealizedPnL(position, currentPrice)
               const safetyOrders = selectedPosition === position.id ? getSafetyOrders(trades) : []
-              const fundsUsedPercent = (position.total_btc_spent / position.max_btc_allowed) * 100
+              const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
 
               return (
                 <div key={position.id} className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
@@ -1624,7 +1797,7 @@ export default function Positions() {
                             <p className="text-slate-400 text-xs mb-1">Current Price</p>
                             {pnl && (
                               <div>
-                                <p className="text-white font-semibold">{formatPrice(pnl.currentPrice)}</p>
+                                <p className="text-white font-semibold">{formatPrice(pnl.currentPrice, position.product_id || 'ETH-BTC')}</p>
                                 <p className={`text-xs ${pnl.btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
                                   {pnl.btc >= 0 ? '▲' : '▼'} {Math.abs(pnl.percent).toFixed(2)}%
                                 </p>
@@ -1635,21 +1808,21 @@ export default function Positions() {
                           {/* Invested */}
                           <div>
                             <p className="text-slate-400 text-xs mb-1">Invested</p>
-                            <p className="text-white font-semibold">{formatQuoteAmount(position.total_btc_spent, position.product_id || 'ETH-BTC')}</p>
+                            <p className="text-white font-semibold">{formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}</p>
                             <p className="text-slate-400 text-xs">{position.trade_count} orders filled</p>
                           </div>
 
                           {/* Average Price */}
                           <div>
                             <p className="text-slate-400 text-xs mb-1">Avg Entry Price</p>
-                            <p className="text-white font-semibold">{formatPrice(position.average_buy_price)}</p>
+                            <p className="text-white font-semibold">{formatPrice(position.average_buy_price, position.product_id || 'ETH-BTC')}</p>
                           </div>
 
                           {/* Opened */}
                           <div>
                             <p className="text-slate-400 text-xs mb-1">Opened</p>
-                            <p className="text-white font-semibold">
-                              {format(new Date(position.opened_at), 'MMM dd, HH:mm')}
+                            <p className="text-white font-semibold text-sm">
+                              {formatDateTimeCompact(position.opened_at)}
                             </p>
                           </div>
                         </div>
@@ -1659,7 +1832,7 @@ export default function Positions() {
                           <div className="flex items-center justify-between text-xs mb-1">
                             <span className="text-slate-400">Funds Used</span>
                             <span className="text-slate-300">
-                              {formatQuoteAmount(position.total_btc_spent, position.product_id || 'ETH-BTC')} / {formatQuoteAmount(position.max_btc_allowed, position.product_id || 'ETH-BTC')}
+                              {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')} / {formatQuoteAmount(position.max_quote_allowed, position.product_id || 'ETH-BTC')}
                               <span className="text-slate-400 ml-1">({fundsUsedPercent.toFixed(0)}%)</span>
                             </span>
                           </div>
@@ -1677,7 +1850,7 @@ export default function Positions() {
                             <div className="flex items-center justify-between text-xs mb-1">
                               <span className="text-slate-400">Price Movement</span>
                               <span className="text-slate-300">
-                                Target: {formatPrice(position.average_buy_price * 1.02)}
+                                Target: {formatPrice(position.average_buy_price * 1.02, position.product_id || 'ETH-BTC')}
                               </span>
                             </div>
                             <div className="relative w-full h-2 bg-slate-700 rounded-full overflow-hidden">
@@ -1781,13 +1954,13 @@ export default function Positions() {
                                     <div>
                                       <p className="text-sm font-medium text-white">{order.type}</p>
                                       <p className="text-xs text-slate-400">
-                                        {format(new Date(order.timestamp), 'MMM dd, HH:mm:ss')}
+                                        {formatDateTimeCompact(order.timestamp)}
                                       </p>
                                     </div>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-sm text-white font-mono">{formatCrypto(order.btcAmount, 8)} BTC</p>
-                                    <p className="text-xs text-slate-400">@ {formatPrice(order.price)}</p>
+                                    <p className="text-sm text-white font-mono">{formatQuoteAmount(order.quoteAmount, position.product_id || 'ETH-BTC')}</p>
+                                    <p className="text-xs text-slate-400">@ {formatPrice(order.price, position.product_id || 'ETH-BTC')}</p>
                                   </div>
                                 </div>
                               ))}
@@ -1809,19 +1982,19 @@ export default function Positions() {
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Total Acquired</p>
                             <p className="text-white font-semibold">
-                              {formatCrypto(position.total_eth_acquired, 6)} {(position.product_id || 'ETH-BTC').split('-')[0]}
+                              {formatCrypto(position.total_base_acquired, 6)} {(position.product_id || 'ETH-BTC').split('-')[0]}
                             </p>
                           </div>
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Max Funds</p>
                             <p className="text-white font-semibold">
-                              {formatCrypto(position.max_btc_allowed, 8)} {(position.product_id || 'ETH-BTC').split('-')[1]}
+                              {formatCrypto(position.max_quote_allowed, 8)} {(position.product_id || 'ETH-BTC').split('-')[1]}
                             </p>
                           </div>
                           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                             <p className="text-slate-400 text-xs mb-1">Remaining</p>
                             <p className="text-white font-semibold">
-                              {formatCrypto(position.max_btc_allowed - position.total_btc_spent, 8)} {(position.product_id || 'ETH-BTC').split('-')[1]}
+                              {formatCrypto(position.max_quote_allowed - position.total_quote_spent, 8)} {(position.product_id || 'ETH-BTC').split('-')[1]}
                             </p>
                           </div>
                         </div>

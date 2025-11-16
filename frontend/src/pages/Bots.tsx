@@ -14,6 +14,8 @@ interface BotFormData {
   product_id: string  // Legacy - kept for backward compatibility
   product_ids: string[]  // Multi-pair support
   split_budget_across_pairs: boolean  // Budget splitting toggle
+  reserved_btc_balance: number  // BTC allocated to this bot
+  reserved_usd_balance: number  // USD allocated to this bot
   strategy_config: Record<string, any>
 }
 
@@ -30,6 +32,8 @@ function Bots() {
     product_id: 'ETH-BTC',  // Legacy fallback
     product_ids: [],  // Start with empty array, user will select
     split_budget_across_pairs: false,  // Default to independent budgets (3Commas style)
+    reserved_btc_balance: 0,  // No reserved balance by default
+    reserved_usd_balance: 0,  // No reserved balance by default
     strategy_config: {},
   })
 
@@ -206,6 +210,8 @@ function Bots() {
     setFormData({
       name: bot.name,
       description: bot.description || '',
+      reserved_btc_balance: bot.reserved_btc_balance || 0,
+      reserved_usd_balance: bot.reserved_usd_balance || 0,
       strategy_type: bot.strategy_type,
       product_id: bot.product_id,  // Keep for backward compatibility
       product_ids: productIds,
@@ -258,6 +264,8 @@ function Bots() {
       product_id: formData.product_ids[0],  // Legacy - use first pair
       product_ids: formData.product_ids,  // Multi-pair support
       split_budget_across_pairs: formData.split_budget_across_pairs,  // Budget splitting option
+      reserved_btc_balance: formData.reserved_btc_balance,
+      reserved_usd_balance: formData.reserved_usd_balance,
       strategy_config: formData.strategy_config,
     }
 
@@ -685,6 +693,43 @@ function Bots() {
                   </label>
                 </div>
               )}
+
+              {/* Reserved Balance Configuration */}
+              <div className="bg-orange-900/20 border border-orange-700/50 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-white mb-3">💰 Balance Allocation (Optional)</h4>
+                <p className="text-xs text-slate-300 mb-4">
+                  Reserve a specific balance for this bot to prevent it from borrowing from other bots.
+                  Leave at 0 to use total portfolio balance.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-2">Reserved BTC</label>
+                    <input
+                      type="number"
+                      step="0.00000001"
+                      min="0"
+                      value={formData.reserved_btc_balance}
+                      onChange={(e) => setFormData({ ...formData, reserved_btc_balance: parseFloat(e.target.value) || 0 })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                      placeholder="0.0"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">BTC allocated to this bot</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-2">Reserved USD</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.reserved_usd_balance}
+                      onChange={(e) => setFormData({ ...formData, reserved_usd_balance: parseFloat(e.target.value) || 0 })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">USD allocated to this bot</p>
+                  </div>
+                </div>
+              </div>
 
               {/* Strategy Selection */}
               <div>

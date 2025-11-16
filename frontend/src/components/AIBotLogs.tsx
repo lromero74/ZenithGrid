@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { botsApi } from '../services/api'
 import { Brain, TrendingUp, TrendingDown, Minus, Clock, Target, CircleDot } from 'lucide-react'
+import { formatDateTime } from '../utils/dateFormat'
 
 interface AIBotLogsProps {
   botId: number
@@ -152,7 +153,7 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                       <div className="flex items-center space-x-3 mt-1 text-xs text-slate-400">
                         <span className="flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
-                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                          <span>{formatDateTime(log.timestamp)}</span>
                         </span>
                         {log.product_id && (
                           <span className="px-1.5 py-0.5 bg-purple-600/20 border border-purple-600/50 rounded text-xs font-medium text-purple-300">

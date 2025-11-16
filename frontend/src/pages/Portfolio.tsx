@@ -26,12 +26,23 @@ interface Holding {
   percentage: number
 }
 
+interface BalanceBreakdown {
+  total: number
+  reserved_by_bots: number
+  in_open_positions: number
+  free: number
+}
+
 interface PortfolioData {
   total_usd_value: number
   total_btc_value: number
   btc_usd_price: number
   holdings: Holding[]
   holdings_count: number
+  balance_breakdown?: {
+    btc: BalanceBreakdown
+    usd: BalanceBreakdown
+  }
 }
 
 type SortColumn = 'asset' | 'total_balance' | 'usd_value' | 'btc_value' | 'percentage'
@@ -349,6 +360,61 @@ function Portfolio() {
             </p>
           </div>
         </div>
+
+        {/* Free Balance Cards (Balance Breakdown) */}
+        {portfolio.balance_breakdown && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <div className="flex items-center gap-2 mb-4">
+                <Bitcoin size={20} className="text-orange-400" />
+                <p className="text-slate-300 text-sm font-semibold">BTC Balance Breakdown</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 text-sm">Total:</span>
+                  <span className="text-white font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.total)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 text-sm">Reserved by Bots:</span>
+                  <span className="text-orange-400 font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.reserved_by_bots)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 text-sm">In Open Positions:</span>
+                  <span className="text-yellow-400 font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.in_open_positions)}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
+                  <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
+                  <span className="text-green-400 font-mono text-lg font-bold">{formatCrypto(portfolio.balance_breakdown.btc.free)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <div className="flex items-center gap-2 mb-4">
+                <DollarSign size={20} className="text-green-400" />
+                <p className="text-slate-300 text-sm font-semibold">USD Balance Breakdown</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 text-sm">Total:</span>
+                  <span className="text-white font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.total)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 text-sm">Reserved by Bots:</span>
+                  <span className="text-orange-400 font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.reserved_by_bots)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 text-sm">In Open Positions:</span>
+                  <span className="text-yellow-400 font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.in_open_positions)}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
+                  <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
+                  <span className="text-green-400 font-mono text-lg font-bold">{formatCurrency(portfolio.balance_breakdown.usd.free)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Holdings Table */}
         <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">

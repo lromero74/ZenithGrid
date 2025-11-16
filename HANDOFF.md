@@ -1,6 +1,144 @@
-# Major Refactoring: Multi-Quote Currency Support (BTC + USD)
+# Bot Balance Isolation System (Prevent Bots from Borrowing from Each Other)
 **Date:** November 16, 2025
 **Status:** IN PROGRESS 🚧
+
+## Problem
+Currently, all bots share the same portfolio balance. This means:
+- Bot A can "borrow" funds that Bot B has allocated
+- No way to limit how much each bot can use
+- Can't track which funds are "free" (not allocated to any bot or deal)
+
+## Solution: Reserved Balance System
+Each bot gets its own allocated balance (reserved_btc_balance or reserved_usd_balance). Bots can only trade with their reserved funds.
+
+### Progress
+
+**✅ Step 1: Database Schema**
+- Added `reserved_btc_balance` column to bots table (default: 0.0)
+- Added `reserved_usd_balance` column to bots table (default: 0.0)
+- Created migration: `backend/migrations/add_bot_balance_reservations.py`
+- Migration executed successfully
+
+**✅ Step 2: Bot Model Updates**
+- Added `get_quote_currency()` method - determines if bot uses BTC or USD
+- Added `get_reserved_balance()` method - returns the appropriate reserved balance
+- File: `backend/app/models.py` (lines 30-68)
+
+**✅ Step 3: Free Balance Calculation**
+- Implemented: Free = Total Portfolio - (Bot Reservations + Open Position Balances)
+- Shows in portfolio API as "balance_breakdown" with total, reserved_by_bots, in_open_positions, free
+- File: `backend/app/main.py` (lines 855-922)
+
+**✅ Step 4: Update Bot Endpoints**
+- Added reserved_btc_balance and reserved_usd_balance to BotCreate/BotUpdate/BotResponse schemas
+- Bots can now set reserved balances when creating/updating
+- Clone bot sets reserved balances to 0 (user must allocate fresh)
+- File: `backend/app/routers/bots.py` (lines 23-43, 130-141, 267-271, 429-430)
+
+**✅ Step 5: Multi Bot Monitor Integration**
+- Trading engine now uses bot.get_reserved_balance() when available
+- Falls back to total portfolio balance for backward compatibility (when reserved = 0)
+- Calculates available balance: reserved - amount_in_open_positions
+- File: `backend/app/trading_engine_v2.py` (lines 325-350)
+
+**✅ Step 6: Frontend UI - Portfolio Free Balances**
+- Added balance_breakdown interface to PortfolioData type
+- Created Balance Breakdown cards showing BTC and USD breakdowns
+- Displays: Total, Reserved by Bots, In Open Positions, Free (Available)
+- Color-coded: Total (white), Reserved (orange), In Positions (yellow), Free (green)
+- File: `frontend/src/pages/Portfolio.tsx` (lines 29-46, 364-417)
+
+**✅ Step 7: Frontend UI - Bot Reserved Balance Configuration**
+- Added reserved_btc_balance and reserved_usd_balance to Bot and BotCreate types
+- Updated BotFormData interface to include reserved balance fields
+- Added Balance Allocation section in bot create/edit modal
+- Shows as optional orange-highlighted section with BTC and USD inputs
+- Includes helpful text explaining balance isolation purpose
+- File: `frontend/src/types/index.ts` (lines 135-136, 149-150)
+- File: `frontend/src/pages/Bots.tsx` (lines 17-18, 35-36, 213-214, 265-266, 697-732)
+
+### Files Modified
+1. ✅ `backend/app/models.py` - Added reservation columns and helper methods
+2. ✅ `backend/migrations/add_bot_balance_reservations.py` - Created and executed
+3. ✅ `backend/app/main.py` - Portfolio endpoint (free balance calculation)
+4. ✅ `backend/app/routers/bots.py` - Bot create/update endpoints
+5. ✅ `backend/app/trading_engine_v2.py` - Use reserved balances
+6. ✅ `frontend/src/types/index.ts` - Added reserved balance fields to types
+7. ✅ `frontend/src/pages/Portfolio.tsx` - Display free balances
+8. ✅ `frontend/src/pages/Bots.tsx` - Configure reserved balances
+9. ✅ `frontend/src/utils/dateFormat.ts` - Fixed timezone parsing (append 'Z' to UTC timestamps)
+
+---
+
+# Timezone Display Fix
+**Date:** November 16, 2025
+**Status:** COMPLETE ✅
+
+## Problem
+AI Bot logs were showing timestamps 5 hours in the future (e.g., "9:26 PM EST" when it was actually 4:26 PM EST).
+
+## Root Cause
+- Backend stores UTC timestamps as `"2025-11-16T21:27:50.565539"` (missing timezone indicator)
+- JavaScript's `new Date()` interprets timestamps without 'Z' or timezone offset as **local time**, not UTC
+- So `21:27` UTC was being displayed as `21:27` local time (9:27 PM EST) instead of converting to local (4:27 PM EST)
+
+## Solution
+Updated date formatting utilities to append 'Z' to UTC timestamps before parsing:
+```typescript
+if (typeof date === 'string') {
+  // If string doesn't end with 'Z' or timezone offset, assume it's UTC and append 'Z'
+  const dateStr = date.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(date) ? date : date + 'Z'
+  d = new Date(dateStr)
+}
+```
+
+## Files Modified
+- `frontend/src/utils/dateFormat.ts` - Updated formatDateTime() and formatDateTimeCompact()
+
+## Result
+Timestamps now display correctly in user's local timezone with proper conversion from UTC.
+
+---
+
+# Historical Chart Data Persistence
+**Date:** November 16, 2025
+**Status:** NOT STARTED 📋
+
+## Problem
+Charts currently only show limited historical data from Coinbase API:
+- Can't go back very far in time
+- Each chart load fetches fresh data from API (slow, rate-limited)
+- Would be nice to examine longer time periods for analysis
+
+## Solution: Local Candle Data Storage
+Store candle data in database and build up historical data over time.
+- Similar to monitoring agent charts in RomeroTechSolutions project
+- Fast loading: Query local DB instead of external API
+- Incremental updates: Only fetch new candles, not entire history
+- Support multiple timeframes: 1min, 5min, 1hour, 1day
+
+### Approach (from RomeroTechSolutions)
+1. **Database Table**: Store candles with (product_id, granularity, timestamp, open, high, low, close, volume)
+2. **Background Task**: Periodically fetch latest candles and append to DB
+3. **API Endpoint**: Query DB for chart data with date range filter
+4. **Smart Fetch**: If user requests range not in DB, fetch from Coinbase and backfill
+5. **Index Optimization**: Index on (product_id, granularity, timestamp) for fast queries
+
+### Files to Create/Modify
+- `backend/app/models.py` - Add Candle model
+- `backend/migrations/` - Create candles table
+- `backend/app/candle_sync.py` - Background sync task
+- `backend/app/main.py` - Add /api/candles/history endpoint
+- `frontend/src/pages/Charts.tsx` - Use historical data endpoint
+
+### Status
+⏳ Not started - Documented for future implementation
+
+---
+
+# Major Refactoring: Multi-Quote Currency Support (BTC + USD)
+**Date:** November 16, 2025
+**Status:** COMPLETE ✅ - READY FOR TESTING
 
 ## Problem
 Trading engine was hardcoded to only support BTC as quote currency. USD trading pairs were being treated as BTC pairs, causing:
@@ -34,44 +172,74 @@ Refactoring entire system to support both BTC and USD (and future) quote currenc
 - Updated `Trade` model with new column names
 - All SQLAlchemy models now use quote/base terminology
 
-**🚧 Step 3: Trading Engine Refactoring** (IN PROGRESS)
-- Need to update `backend/app/trading_engine_v2.py`:
-  - Detect quote currency from product_id
-  - Update `create_position()` to accept quote_balance and quote_amount
-  - Update `execute_buy()` to be currency-agnostic
-  - Update `execute_sell()` to be currency-agnostic
-  - Replace all btc_* variable names with quote_*
-  - Replace all eth_* variable names with base_*
+**✅ Step 3: Trading Engine Refactoring** (COMPLETED)
+- Updated `backend/app/trading_engine_v2.py`:
+  - ✅ Added TradingClient and currency_utils imports
+  - ✅ Added `self.trading_client` and `self.quote_currency` to __init__
+  - ✅ Updated `create_position()` to accept quote_balance and quote_amount
+  - ✅ Updated `execute_buy()` to use TradingClient.buy() (currency-agnostic)
+  - ✅ Updated `execute_sell()` to use TradingClient.sell() (currency-agnostic)
+  - ✅ Updated `process_signal()` to use quote_balance and quote_amount
+  - ✅ Replaced all btc_* variable names with quote_*
+  - ✅ Replaced all eth_* variable names with base_*
 
-**⏳ Step 4: Coinbase Client Updates** (PENDING)
-- Need to update `backend/app/coinbase_client.py`:
-  - Add `get_balance(currency)` method (generic)
-  - Add `buy_with_quote()` method (detects BTC vs USD)
-  - Keep backwards compatible methods (`get_btc_balance()`, `buy_eth_with_btc()`)
+**✅ Step 4: Coinbase Client Updates** (COMPLETED)
+- Updated `backend/app/coinbase_client.py`:
+  - ✅ Added `get_usd_balance()` method
+  - ✅ Added `buy_with_usd()` method
+  - ✅ Added `sell_for_usd()` method
+  - ✅ Kept backwards compatible methods (`get_btc_balance()`, `buy_eth_with_btc()`)
 
-**⏳ Step 5: Bot Monitor Updates** (PENDING)
-- Need to update `backend/app/multi_bot_monitor.py`:
-  - Detect quote currency for each product_id
-  - Fetch correct balance (USD for USD pairs, BTC for BTC pairs)
-  - Pass correct balance to trading engine
+**✅ Step 5: Bot Monitor Updates** (COMPLETED - NO CHANGES NEEDED)
+- `backend/app/multi_bot_monitor.py`:
+  - ✅ Already passes product_id to StrategyTradingEngine
+  - ✅ Trading engine handles quote currency detection internally
+  - ✅ TradingClient fetches correct balance based on product_id
+  - ✅ No changes required!
 
-**⏳ Step 6: Frontend Updates** (PENDING)
-- Already partially done (formatQuoteAmount helper exists)
-- Need to verify all displays use quote currency correctly
+**✅ Step 6: Frontend Updates** (COMPLETED)
+- ✅ Updated Position and Trade types to use quote/base terminology
+- ✅ Updated all component references to new column names
+- ✅ Verified formatQuoteAmount helper used correctly throughout
+- ✅ Added currency-aware price formatting (2 decimals for USD, 8 for BTC)
+- ✅ Added currency symbols to all price displays
 
-**⏳ Step 7: Testing** (PENDING)
+**✅ Step 7: Strategy Config Freezing** (COMPLETED - LIKE 3COMMAS)
+- ✅ Added `strategy_config_snapshot` column to Position model
+- ✅ Created and ran database migration (`backend/migrations/add_strategy_config_snapshot_async.py`)
+- ✅ Updated `trading_engine_v2.py` to freeze bot's strategy_config when creating positions
+- ✅ Updated `multi_bot_monitor.py` to use frozen config for existing positions
+- ✅ New positions: Use current bot.strategy_config (will be frozen at creation)
+- ✅ Existing positions: Use position.strategy_config_snapshot (frozen at creation)
+- ✅ Behavior now matches 3Commas: modifying bot parameters doesn't affect existing deals
+
+**⏳ Step 8: Testing** (READY FOR USER TESTING - ALL CODE COMPLETE)
+- Frontend and backend fully implemented
+- Backend enforces balance isolation when reserved_balance > 0
+- Falls back to total portfolio when reserved_balance = 0 (backward compatible)
+- Portfolio page shows free balances for BTC and USD
+- Bot create/edit form allows setting reserved balances
+- Ready for real-world testing
 - Test BTC pairs (ETH-BTC, SOL-BTC) still work
 - Test USD pairs (AAVE-USD, ADA-USD) work correctly
 - Verify invested amounts show correct currency
 - Verify PnL calculations correct for both types
+- Test config freezing: Modify bot parameters and verify existing positions unaffected
 
 ### Files Modified
 1. ✅ `backend/migrations/rename_btc_to_quote_currency.py` - Created
-2. ✅ `backend/app/models.py` - Position and Trade models updated
-3. 🚧 `backend/app/trading_engine_v2.py` - IN PROGRESS
-4. ⏳ `backend/app/coinbase_client.py` - PENDING
-5. ⏳ `backend/app/multi_bot_monitor.py` - PENDING
-6. ⏳ `frontend/src/pages/Positions.tsx` - Verify formatQuoteAmount usage
+2. ✅ `backend/migrations/add_strategy_config_snapshot_async.py` - Created (config freezing)
+3. ✅ `backend/app/models.py` - Position and Trade models updated + strategy_config_snapshot column
+4. ✅ `backend/app/currency_utils.py` - Created modular currency utilities
+5. ✅ `backend/app/trading_client.py` - Created currency-agnostic trading wrapper
+6. ✅ `backend/app/trading_engine_v2.py` - Fully refactored to use TradingClient + save config snapshot
+7. ✅ `backend/app/coinbase_client.py` - Added USD methods
+8. ✅ `backend/app/multi_bot_monitor.py` - Added config snapshot detection and usage
+9. ✅ `backend/app/main.py` - Updated Pydantic response schemas (PositionResponse, TradeResponse)
+10. ✅ `frontend/src/types/index.ts` - Updated Position and Trade interfaces
+11. ✅ `frontend/src/pages/Positions.tsx` - Updated all column references + currency-aware formatting
+12. ✅ `frontend/src/pages/ClosedPositions.tsx` - Updated all column references
+13. ✅ `frontend/src/pages/Dashboard.tsx` - Updated all column references
 
 ### Rollback Plan
 If needed, run: `python3 backend/migrations/rename_btc_to_quote_currency.py rollback`

@@ -66,7 +66,7 @@ start_backend() {
     # Start backend
     cd "$BACKEND_DIR"
     source venv/bin/activate
-    nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$PID_DIR/backend.log" 2>&1 &
+    nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-config log_config.json > "$PID_DIR/backend.log" 2>&1 &
     echo $! > "$PID_DIR/backend.pid"
     deactivate
     cd "$PROJECT_DIR"

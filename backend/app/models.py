@@ -27,6 +27,11 @@ class Bot(Base):
     # Default varies by AI provider: Gemini=10800s (3h), Claude=300s (5min)
     check_interval_seconds = Column(Integer, default=300, nullable=True)
 
+    # Balance Reservations (prevents bots from borrowing from each other)
+    # Each bot has its own allocated balance that it can use
+    reserved_btc_balance = Column(Float, default=0.0)  # BTC reserved for this bot
+    reserved_usd_balance = Column(Float, default=0.0)  # USD reserved for this bot
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -43,6 +48,24 @@ class Bot(Base):
             return [self.product_id]
         else:
             return ["ETH-BTC"]  # Default fallback
+
+    def get_quote_currency(self):
+        """Get the quote currency for this bot's trading pairs (BTC or USD)"""
+        pairs = self.get_trading_pairs()
+        if pairs and len(pairs) > 0:
+            # All pairs should have same quote currency (enforced in validation)
+            first_pair = pairs[0]
+            if '-' in first_pair:
+                return first_pair.split('-')[1]
+        return "BTC"  # Default
+
+    def get_reserved_balance(self):
+        """Get the reserved balance for this bot's quote currency"""
+        quote = self.get_quote_currency()
+        if quote == "USD":
+            return self.reserved_usd_balance
+        else:
+            return self.reserved_btc_balance
 
 
 class BotTemplate(Base):
@@ -75,6 +98,9 @@ class Position(Base):
     status = Column(String, default="open")  # open, closed
     opened_at = Column(DateTime, default=datetime.utcnow)
     closed_at = Column(DateTime, nullable=True)
+
+    # Strategy config snapshot (frozen at position creation - like 3Commas)
+    strategy_config_snapshot = Column(JSON, nullable=True)  # Bot's strategy_config at time of position creation
 
     # Initial balance tracking (quote currency = BTC for BTC pairs, USD for USD pairs)
     initial_quote_balance = Column(Float)

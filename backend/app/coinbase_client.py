@@ -186,6 +186,33 @@ class CoinbaseClient:
         """Get current BTC/USD price"""
         return await self.get_current_price("BTC-USD")
 
+    async def get_product_stats(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
+        """
+        Get 24-hour stats for a product including volume
+
+        Returns dict with keys like:
+        - volume: 24h volume in quote currency
+        - volume_percentage_change_24h: % change in volume
+        - price_percentage_change_24h: % change in price
+        """
+        cache_key = f"stats_{product_id}"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        result = await self._request("GET", f"/api/v3/brokerage/products/{product_id}")
+
+        # Extract 24h stats from product data
+        stats = {
+            "volume_24h": float(result.get("volume_24h", 0)),
+            "volume_percentage_change_24h": float(result.get("volume_percentage_change_24h", 0)),
+            "price_percentage_change_24h": float(result.get("price_percentage_change_24h", 0))
+        }
+
+        # Cache for 5 minutes (volume doesn't change that quickly)
+        await api_cache.set(cache_key, stats, 300)
+        return stats
+
     async def invalidate_balance_cache(self):
         """Invalidate balance cache (call after trades)"""
         await api_cache.delete("balance_btc")

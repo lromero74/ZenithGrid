@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { botsApi } from '../services/api'
 import { Brain, TrendingUp, TrendingDown, CircleDot, Clock, Target, X } from 'lucide-react'
+import { formatDateTime, formatDateTimeCompact } from '../utils/dateFormat'
 
 interface PositionLogsModalProps {
   botId: number
@@ -90,7 +91,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
             <div>
               <h3 className="text-xl font-bold">AI Reasoning for Position</h3>
               <p className="text-sm text-slate-400">
-                {productId} - Since {new Date(positionOpenedAt).toLocaleString()}
+                {productId} - Since {formatDateTimeCompact(positionOpenedAt)}
               </p>
             </div>
           </div>
@@ -156,7 +157,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
                       <div className="flex items-center space-x-3 mt-1 text-xs text-slate-400">
                         <span className="flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
-                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                          <span>{formatDateTime(log.timestamp)}</span>
                         </span>
                         {log.current_price && (
                           <span className="flex items-center space-x-1">

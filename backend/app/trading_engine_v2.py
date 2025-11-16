@@ -3,6 +3,7 @@ Strategy-Based Trading Engine
 
 Refactored to support multiple strategies and bots.
 Works with any TradingStrategy implementation.
+Supports both BTC and USD quote currencies.
 """
 
 import logging
@@ -12,27 +13,11 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Position, Trade, Signal, Bot, AIBotLog
 from app.coinbase_client import CoinbaseClient
+from app.trading_client import TradingClient
+from app.currency_utils import format_with_usd, get_quote_currency
 from app.strategies import TradingStrategy
 
 logger = logging.getLogger(__name__)
-
-
-def format_btc_with_usd(btc_amount: float, btc_usd_price: Optional[float] = None) -> str:
-    """
-    Format BTC amount with USD equivalent for better readability in logs
-
-    Args:
-        btc_amount: Amount in BTC
-        btc_usd_price: Current BTC/USD price (if known)
-
-    Returns:
-        Formatted string like "0.00057000 BTC ($54.15 USD)" or "0.00057000 BTC" if price unknown
-    """
-    btc_str = f"{btc_amount:.8f} BTC"
-    if btc_usd_price:
-        usd_value = btc_amount * btc_usd_price
-        return f"{btc_str} (${usd_value:.2f} USD)"
-    return btc_str
 
 
 class StrategyTradingEngine:
@@ -62,10 +47,12 @@ class StrategyTradingEngine:
         """
         self.db = db
         self.coinbase = coinbase
+        self.trading_client = TradingClient(coinbase)  # Currency-agnostic wrapper
         self.bot = bot
         self.strategy = strategy
         # Use provided product_id, or fallback to bot's first pair
         self.product_id = product_id or (bot.get_trading_pairs()[0] if hasattr(bot, 'get_trading_pairs') else bot.product_id)
+        self.quote_currency = get_quote_currency(self.product_id)
 
     async def save_ai_log(
         self,
@@ -125,15 +112,15 @@ class StrategyTradingEngine:
         result = await self.db.execute(query)
         return result.scalar() or 0
 
-    async def create_position(self, btc_balance: float, btc_amount: float) -> Position:
+    async def create_position(self, quote_balance: float, quote_amount: float) -> Position:
         """
         Create a new position for this bot
 
         Args:
-            btc_balance: Current total BTC balance
-            btc_amount: Amount of BTC being spent on initial buy
+            quote_balance: Current total quote currency balance (BTC or USD)
+            quote_amount: Amount of quote currency being spent on initial buy
         """
-        # Get BTC/USD price for tracking
+        # Get BTC/USD price for USD tracking
         try:
             btc_usd_price = await self.coinbase.get_btc_usd_price()
         except:
@@ -144,12 +131,13 @@ class StrategyTradingEngine:
             product_id=self.product_id,  # Use the engine's product_id (specific pair being traded)
             status="open",
             opened_at=datetime.utcnow(),
-            initial_btc_balance=btc_balance,
-            max_btc_allowed=btc_balance,  # Strategy determines actual limits
-            total_btc_spent=0.0,
-            total_eth_acquired=0.0,
+            initial_quote_balance=quote_balance,
+            max_quote_allowed=quote_balance,  # Strategy determines actual limits
+            total_quote_spent=0.0,
+            total_base_acquired=0.0,
             average_buy_price=0.0,
-            btc_usd_price_at_open=btc_usd_price
+            btc_usd_price_at_open=btc_usd_price,
+            strategy_config_snapshot=self.bot.strategy_config  # Freeze config at position creation (like 3Commas)
         )
 
         self.db.add(position)
@@ -162,7 +150,7 @@ class StrategyTradingEngine:
     async def execute_buy(
         self,
         position: Position,
-        btc_amount: float,
+        quote_amount: float,
         current_price: float,
         trade_type: str,
         signal_data: Optional[Dict[str, Any]] = None
@@ -172,33 +160,34 @@ class StrategyTradingEngine:
 
         Args:
             position: Current position
-            btc_amount: Amount of BTC to spend
+            quote_amount: Amount of quote currency to spend (BTC or USD)
             current_price: Current market price
             trade_type: 'initial' or 'dca' or strategy-specific type
             signal_data: Optional signal metadata
         """
-        # Calculate amount to buy
-        eth_amount = btc_amount / current_price
+        # Calculate amount of base currency to buy
+        base_amount = quote_amount / current_price
 
-        # Execute order via Coinbase
+        # Execute order via TradingClient (currency-agnostic)
         order_id = None
         try:
-            order_response = await self.coinbase.buy_eth_with_btc(
-                btc_amount=btc_amount,
-                product_id=self.product_id
+            order_response = await self.trading_client.buy(
+                product_id=self.product_id,
+                quote_amount=quote_amount
             )
             success_response = order_response.get("success_response", {})
             order_id = success_response.get("order_id", "")
         except Exception as e:
-            print(f"Error executing buy order: {e}")
+            logger.error(f"Error executing buy order: {e}")
+            raise
 
         # Record trade
         trade = Trade(
             position_id=position.id,
             timestamp=datetime.utcnow(),
             side="buy",
-            btc_amount=btc_amount,
-            eth_amount=eth_amount,
+            quote_amount=quote_amount,
+            base_amount=base_amount,
             price=current_price,
             trade_type=trade_type,
             order_id=order_id,
@@ -210,11 +199,11 @@ class StrategyTradingEngine:
         self.db.add(trade)
 
         # Update position totals
-        position.total_btc_spent += btc_amount
-        position.total_eth_acquired += eth_amount
+        position.total_quote_spent += quote_amount
+        position.total_base_acquired += base_amount
         # Update average buy price manually (don't use update_averages() - it triggers lazy loading)
-        if position.total_eth_acquired > 0:
-            position.average_buy_price = position.total_btc_spent / position.total_eth_acquired
+        if position.total_base_acquired > 0:
+            position.average_buy_price = position.total_quote_spent / position.total_base_acquired
         else:
             position.average_buy_price = 0.0
 
@@ -222,7 +211,7 @@ class StrategyTradingEngine:
         await self.db.refresh(trade)
 
         # Invalidate balance cache after trade
-        await self.coinbase.invalidate_balance_cache()
+        await self.trading_client.invalidate_balance_cache()
 
         return trade
 
@@ -236,31 +225,36 @@ class StrategyTradingEngine:
         Execute a sell order for entire position
 
         Returns:
-            Tuple of (trade, profit_btc, profit_percentage)
+            Tuple of (trade, profit_quote, profit_percentage)
         """
-        eth_amount = position.total_eth_acquired
-        btc_received = eth_amount * current_price
+        base_amount = position.total_base_acquired
+        quote_received = base_amount * current_price
 
-        # Execute order via Coinbase
+        # Execute order via TradingClient (currency-agnostic)
         order_id = None
         try:
-            order_response = await self.coinbase.sell_eth_for_btc(
-                eth_amount=eth_amount,
-                product_id=self.product_id
+            order_response = await self.trading_client.sell(
+                product_id=self.product_id,
+                base_amount=base_amount
             )
             success_response = order_response.get("success_response", {})
             order_id = success_response.get("order_id", "")
         except Exception as e:
-            print(f"Error executing sell order: {e}")
+            logger.error(f"Error executing sell order: {e}")
+            raise
 
         # Calculate profit
-        profit_btc = btc_received - position.total_btc_spent
-        profit_percentage = (profit_btc / position.total_btc_spent) * 100
+        profit_quote = quote_received - position.total_quote_spent
+        profit_percentage = (profit_quote / position.total_quote_spent) * 100
 
         # Get BTC/USD price for USD profit tracking
         try:
             btc_usd_price_at_close = await self.coinbase.get_btc_usd_price()
-            profit_usd = profit_btc * btc_usd_price_at_close
+            # Convert profit to USD if quote is BTC
+            if self.quote_currency == "BTC":
+                profit_usd = profit_quote * btc_usd_price_at_close
+            else:  # quote is USD
+                profit_usd = profit_quote
         except:
             btc_usd_price_at_close = None
             profit_usd = None
@@ -270,8 +264,8 @@ class StrategyTradingEngine:
             position_id=position.id,
             timestamp=datetime.utcnow(),
             side="sell",
-            btc_amount=btc_received,
-            eth_amount=eth_amount,
+            quote_amount=quote_received,
+            base_amount=base_amount,
             price=current_price,
             trade_type="sell",
             order_id=order_id,
@@ -286,8 +280,8 @@ class StrategyTradingEngine:
         position.status = "closed"
         position.closed_at = datetime.utcnow()
         position.sell_price = current_price
-        position.total_btc_received = btc_received
-        position.profit_btc = profit_btc
+        position.total_quote_received = quote_received
+        position.profit_quote = profit_quote
         position.profit_percentage = profit_percentage
         position.btc_usd_price_at_close = btc_usd_price_at_close
         position.profit_usd = profit_usd
@@ -296,9 +290,9 @@ class StrategyTradingEngine:
         await self.db.refresh(trade)
 
         # Invalidate balance cache after trade
-        await self.coinbase.invalidate_balance_cache()
+        await self.trading_client.invalidate_balance_cache()
 
-        return trade, profit_btc, profit_percentage
+        return trade, profit_quote, profit_percentage
 
     async def process_signal(
         self,
@@ -327,7 +321,33 @@ class StrategyTradingEngine:
 
         # Get current state
         position = await self.get_active_position()
-        btc_balance = await self.coinbase.get_btc_balance()
+
+        # Get bot's available balance (reserved balance or total portfolio)
+        reserved_balance = self.bot.get_reserved_balance()
+        if reserved_balance > 0:
+            # Bot has reserved balance - use it instead of total portfolio
+            # Calculate how much is available (reserved - already in positions)
+            quote_balance = reserved_balance
+
+            # Subtract amount already in open positions for this bot
+            from sqlalchemy import select
+            from app.models import Position
+            query = select(Position).where(
+                Position.bot_id == self.bot.id,
+                Position.status == "open",
+                Position.product_id == self.product_id
+            )
+            result = await self.db.execute(query)
+            open_positions = result.scalars().all()
+
+            total_in_positions = sum(p.total_quote_spent for p in open_positions)
+            quote_balance -= total_in_positions
+
+            logger.info(f"  💰 Bot reserved balance: {reserved_balance}, In positions: {total_in_positions}, Available: {quote_balance}")
+        else:
+            # No reserved balance - use total portfolio balance (backward compatibility)
+            quote_balance = await self.trading_client.get_quote_balance(self.product_id)
+            logger.info(f"  💰 Using total portfolio balance: {quote_balance}")
 
         # Log AI thinking immediately after analysis (if AI bot)
         if self.bot.strategy_type == "ai_autonomous":
@@ -343,7 +363,7 @@ class StrategyTradingEngine:
 
         # Check if we should buy (only if bot is active)
         should_buy = False
-        btc_amount = 0
+        quote_amount = 0
         buy_reason = ""
 
         logger.info(f"  🤖 Bot active: {self.bot.is_active}, Position exists: {position is not None}")
@@ -358,13 +378,13 @@ class StrategyTradingEngine:
                     should_buy = False
                     buy_reason = f"Max concurrent deals limit reached ({open_positions_count}/{max_deals})"
                 else:
-                    should_buy, btc_amount, buy_reason = await self.strategy.should_buy(
-                        signal_data, position, btc_balance
+                    should_buy, quote_amount, buy_reason = await self.strategy.should_buy(
+                        signal_data, position, quote_balance
                     )
             else:
                 # Position already exists for this pair - check for DCA
-                should_buy, btc_amount, buy_reason = await self.strategy.should_buy(
-                    signal_data, position, btc_balance
+                should_buy, quote_amount, buy_reason = await self.strategy.should_buy(
+                    signal_data, position, quote_balance
                 )
         else:
             # Bot is stopped - don't open new positions
@@ -380,8 +400,8 @@ class StrategyTradingEngine:
             except:
                 btc_usd_price = None
 
-            btc_formatted = format_btc_with_usd(btc_amount, btc_usd_price)
-            logger.info(f"  💰 BUY DECISION: will buy {btc_formatted} worth of {self.product_id}")
+            quote_formatted = format_with_usd(quote_amount, self.product_id, btc_usd_price)
+            logger.info(f"  💰 BUY DECISION: will buy {quote_formatted} worth of {self.product_id}")
 
             # Determine trade type
             is_new_position = position is None
@@ -398,13 +418,13 @@ class StrategyTradingEngine:
                 # BUT we do it in a transaction that will rollback if trade fails
                 if is_new_position:
                     logger.info(f"  📝 Creating position (will commit only if trade succeeds)...")
-                    position = await self.create_position(btc_balance, btc_amount)
+                    position = await self.create_position(quote_balance, quote_amount)
                     logger.info(f"  ✅ Position created: ID={position.id} (pending trade execution)")
 
                 # Execute the actual trade
                 trade = await self.execute_buy(
                     position=position,
-                    btc_amount=btc_amount,
+                    quote_amount=quote_amount,
                     current_price=current_price,
                     trade_type=trade_type,
                     signal_data=signal_data
@@ -455,7 +475,7 @@ class StrategyTradingEngine:
 
             if should_sell:
                 # Execute sell
-                trade, profit_btc, profit_pct = await self.execute_sell(
+                trade, profit_quote, profit_pct = await self.execute_sell(
                     position=position,
                     current_price=current_price,
                     signal_data=signal_data
@@ -482,7 +502,7 @@ class StrategyTradingEngine:
                     "signal": signal_data,
                     "trade": trade,
                     "position": position,
-                    "profit_btc": profit_btc,
+                    "profit_quote": profit_quote,
                     "profit_percentage": profit_pct
                 }
             else:

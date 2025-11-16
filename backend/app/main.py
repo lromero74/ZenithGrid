@@ -111,14 +111,15 @@ class PositionResponse(BaseModel):
     status: str
     opened_at: datetime
     closed_at: Optional[datetime]
-    initial_btc_balance: float
-    max_btc_allowed: float
-    total_btc_spent: float
-    total_eth_acquired: float
+    strategy_config_snapshot: Optional[dict] = None  # Frozen config from bot at position creation
+    initial_quote_balance: float  # BTC or USD
+    max_quote_allowed: float      # BTC or USD
+    total_quote_spent: float      # BTC or USD
+    total_base_acquired: float    # ETH, ADA, etc.
     average_buy_price: float
     sell_price: Optional[float]
-    total_btc_received: Optional[float]
-    profit_btc: Optional[float]
+    total_quote_received: Optional[float]  # BTC or USD
+    profit_quote: Optional[float]  # BTC or USD
     profit_percentage: Optional[float]
     btc_usd_price_at_open: Optional[float]
     btc_usd_price_at_close: Optional[float]
@@ -134,8 +135,8 @@ class TradeResponse(BaseModel):
     position_id: int
     timestamp: datetime
     side: str
-    btc_amount: float
-    eth_amount: float
+    quote_amount: float  # BTC or USD
+    base_amount: float   # ETH, ADA, etc.
     price: float
     trade_type: str
     order_id: Optional[str]
@@ -748,7 +749,7 @@ async def get_balances():
 
 
 @app.get("/api/account/portfolio")
-async def get_portfolio():
+async def get_portfolio(db: AsyncSession = Depends(get_db)):
     """Get full portfolio breakdown (all coins like 3Commas)"""
     try:
         # Get portfolio breakdown with all holdings
@@ -762,26 +763,14 @@ async def get_portfolio():
         total_usd_value = 0.0
         total_btc_value = 0.0
 
-        # Major assets that we know have liquid markets
-        major_assets = {
-            'BTC', 'ETH', 'SOL', 'USDC', 'USDT', 'USD', 'LTC', 'BCH', 'LINK',
-            'DOT', 'UNI', 'MATIC', 'AVAX', 'ATOM', 'XLM', 'ADA', 'DOGE', 'SHIB',
-            'APT', 'ARB', 'OP', 'NEAR', 'FTM', 'AAVE', 'MKR', 'SNX', 'COMP',
-            'YFI', 'CRV', 'SUSHI', 'BAL', 'UMA', 'REN', 'LRC', 'ZRX'
-        }
-
         for position in spot_positions:
             asset = position.get("asset", "")
             total_balance = float(position.get("total_balance_crypto", 0))
             available = float(position.get("available_to_trade_crypto", 0))
             hold = total_balance - available
 
-            # Don't filter by coin amount - small amounts can still be valuable
-            # We'll filter by USD value later after pricing
-
-            # Skip obscure assets to avoid timeouts
-            if asset not in major_assets:
-                print(f"Skipping non-major asset: {asset}")
+            # Skip if zero balance
+            if total_balance == 0:
                 continue
 
             # Get USD value for this asset
@@ -851,12 +840,73 @@ async def get_portfolio():
         # Sort by USD value descending
         portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
 
+        # Calculate free (unreserved) balances for BTC and USD
+        # Free = Total Portfolio - (Bot Reservations + Open Position Balances)
+
+        # Get all bots and sum their reservations
+        bots_query = select(Bot)
+        bots_result = await db.execute(bots_query)
+        all_bots = bots_result.scalars().all()
+
+        total_reserved_btc = sum(bot.reserved_btc_balance for bot in all_bots)
+        total_reserved_usd = sum(bot.reserved_usd_balance for bot in all_bots)
+
+        # Get all open positions and sum their balances
+        positions_query = select(Position).where(Position.status == "open")
+        positions_result = await db.execute(positions_query)
+        open_positions = positions_result.scalars().all()
+
+        total_in_positions_btc = 0.0
+        total_in_positions_usd = 0.0
+
+        for position in open_positions:
+            quote = position.get_quote_currency()
+            if quote == "USD":
+                total_in_positions_usd += position.total_quote_spent
+            else:
+                total_in_positions_btc += position.total_quote_spent
+
+        # Get total portfolio balances from Coinbase
+        total_portfolio_btc = 0.0
+        total_portfolio_usd = 0.0
+
+        for position in spot_positions:
+            asset = position.get("asset", "")
+            total_balance = float(position.get("total_balance_crypto", 0))
+
+            if asset == "BTC":
+                total_portfolio_btc = total_balance
+            elif asset in ["USD", "USDC"]:
+                total_portfolio_usd += total_balance
+
+        # Calculate free balances
+        free_btc = total_portfolio_btc - (total_reserved_btc + total_in_positions_btc)
+        free_usd = total_portfolio_usd - (total_reserved_usd + total_in_positions_usd)
+
+        # Ensure free balances don't go negative
+        free_btc = max(0.0, free_btc)
+        free_usd = max(0.0, free_usd)
+
         return {
             "total_usd_value": total_usd_value,
             "total_btc_value": total_btc_value,
             "btc_usd_price": btc_usd_price,
             "holdings": portfolio_holdings,
-            "holdings_count": len(portfolio_holdings)
+            "holdings_count": len(portfolio_holdings),
+            "balance_breakdown": {
+                "btc": {
+                    "total": total_portfolio_btc,
+                    "reserved_by_bots": total_reserved_btc,
+                    "in_open_positions": total_in_positions_btc,
+                    "free": free_btc
+                },
+                "usd": {
+                    "total": total_portfolio_usd,
+                    "reserved_by_bots": total_reserved_usd,
+                    "in_open_positions": total_in_positions_usd,
+                    "free": free_usd
+                }
+            }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

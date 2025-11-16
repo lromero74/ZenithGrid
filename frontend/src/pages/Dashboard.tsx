@@ -57,11 +57,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const closedPositions = allPositions.filter(p => p.status === 'closed')
 
   // Calculate total profit
-  const totalProfitBTC = closedPositions.reduce((sum, p) => sum + (p.profit_btc || 0), 0)
+  const totalProfitQuote = closedPositions.reduce((sum, p) => sum + (p.profit_quote || 0), 0)
   const totalProfitUSD = closedPositions.reduce((sum, p) => sum + (p.profit_usd || 0), 0)
 
   // Calculate win rate
-  const profitablePositions = closedPositions.filter(p => (p.profit_btc || 0) > 0)
+  const profitablePositions = closedPositions.filter(p => (p.profit_quote || 0) > 0)
   const winRate = closedPositions.length > 0
     ? (profitablePositions.length / closedPositions.length) * 100
     : 0
@@ -196,18 +196,18 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         {format(new Date(position.opened_at), 'MMM dd, HH:mm')}
                       </td>
                       <td className="px-4 py-3 text-right text-white font-mono text-sm">
-                        {formatCrypto(position.total_btc_spent, 8)} BTC
+                        {formatCrypto(position.total_quote_spent, 8)} {(position.product_id || 'ETH-BTC').split('-')[1]}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {position.profit_btc !== null ? (
+                        {position.profit_quote !== null ? (
                           <div className="flex items-center justify-end gap-1">
-                            {position.profit_btc >= 0 ? (
+                            {position.profit_quote >= 0 ? (
                               <TrendingUp className="w-3 h-3 text-green-500" />
                             ) : (
                               <TrendingDown className="w-3 h-3 text-red-500" />
                             )}
                             <span className={`font-semibold text-sm ${
-                              position.profit_btc >= 0 ? 'text-green-400' : 'text-red-400'
+                              position.profit_quote >= 0 ? 'text-green-400' : 'text-red-400'
                             }`}>
                               {position.profit_percentage?.toFixed(2)}%
                             </span>
@@ -343,9 +343,9 @@ function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => vo
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-400">Profit:</span>
               <span className={`font-semibold ${
-                (stats.total_profit_btc || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                totalProfitQuote >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {(stats.total_profit_btc || 0) >= 0 ? '+' : ''}{formatCrypto(stats.total_profit_btc || 0, 6)} BTC
+                {totalProfitQuote >= 0 ? '+' : ''}{formatCrypto(totalProfitQuote, 6)} Quote
               </span>
             </div>
           </>

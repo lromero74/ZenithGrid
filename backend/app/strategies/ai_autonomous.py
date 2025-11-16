@@ -160,6 +160,58 @@ class AIAutonomousStrategy(TradingStrategy):
                     options=["cost_basis", "base_order"]
                 ),
                 StrategyParameter(
+                    name="enable_dca",
+                    display_name="Enable DCA (Dollar Cost Averaging)",
+                    description="Allow AI to add to existing positions when confident",
+                    type="bool",
+                    default=True
+                ),
+                StrategyParameter(
+                    name="max_safety_orders",
+                    display_name="Max Safety Orders (DCA Buys)",
+                    description="Maximum number of additional buys (DCA) per position",
+                    type="int",
+                    default=3,
+                    min_value=0,
+                    max_value=10
+                ),
+                StrategyParameter(
+                    name="safety_order_percentage",
+                    display_name="Safety Order Size %",
+                    description="Percentage of budget for each DCA buy",
+                    type="float",
+                    default=5.0,
+                    min_value=1.0,
+                    max_value=25.0
+                ),
+                StrategyParameter(
+                    name="min_price_drop_for_dca",
+                    display_name="Min Price Drop for DCA %",
+                    description="Minimum price drop from average before allowing DCA (helps average down)",
+                    type="float",
+                    default=2.0,
+                    min_value=0.0,
+                    max_value=20.0
+                ),
+                StrategyParameter(
+                    name="dca_confidence_threshold",
+                    display_name="DCA Confidence Threshold %",
+                    description="AI confidence required to DCA (higher = more selective)",
+                    type="int",
+                    default=70,
+                    min_value=50,
+                    max_value=95
+                ),
+                StrategyParameter(
+                    name="min_daily_volume",
+                    display_name="Minimum Daily Volume",
+                    description="Minimum 24h trading volume in quote currency (BTC or USD). Pairs below this threshold are filtered out.",
+                    type="float",
+                    default=100.0,
+                    min_value=0.0,
+                    max_value=1000000.0
+                ),
+                StrategyParameter(
                     name="custom_instructions",
                     display_name="Custom Instructions (Optional)",
                     description="Additional instructions to guide the AI's trading decisions",
@@ -433,6 +485,7 @@ Remember:
                 "reasoning": analysis.get("reasoning", "AI analysis"),
                 "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
                 "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
+                "current_price": current_price,  # Include current price for DCA logic
                 "raw_analysis": analysis
             }
 
@@ -574,6 +627,7 @@ Remember:
                 "reasoning": analysis.get("reasoning", "AI analysis"),
                 "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
                 "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
+                "current_price": current_price,  # Include current price for DCA logic
                 "raw_analysis": analysis
             }
 
@@ -1105,19 +1159,72 @@ Respond with JSON (no markdown):
         Rules:
         - Only buy if AI suggests it with good confidence
         - Respect budget limits
-        - Don't buy if we already have a position (for now)
+        - Support DCA (Dollar Cost Averaging) for existing positions
         """
 
         if signal_data.get("signal_type") != "buy":
             return False, 0.0, "AI did not suggest buying"
 
         confidence = signal_data.get("confidence", 0)
+
+        # Check if we have an existing position (DCA scenario)
+        if position is not None:
+            # Check if DCA is enabled
+            enable_dca = self.config.get("enable_dca", True)
+            if not enable_dca:
+                return False, 0.0, "DCA disabled - already have open position for this pair"
+
+            # Check DCA limits
+            max_safety_orders = self.config.get("max_safety_orders", 3)
+            current_safety_orders = len([t for t in position.trades if t.side == "buy" and t.trade_type != "initial"])
+
+            if current_safety_orders >= max_safety_orders:
+                return False, 0.0, f"Max safety orders reached ({current_safety_orders}/{max_safety_orders})"
+
+            # Check if we have budget left for DCA
+            if position.total_quote_spent >= position.max_quote_allowed:
+                return False, 0.0, "Position budget fully used"
+
+            # Get current price from signal_data or position
+            current_price = signal_data.get("current_price", 0)
+            if current_price == 0:
+                return False, 0.0, "Cannot determine current price for DCA"
+
+            # Check if price has dropped enough to justify DCA (smart averaging down)
+            min_price_drop_pct = self.config.get("min_price_drop_for_dca", 2.0)
+            price_drop_pct = ((position.average_buy_price - current_price) / position.average_buy_price) * 100
+
+            if price_drop_pct < min_price_drop_pct:
+                return False, 0.0, f"Price drop {price_drop_pct:.2f}% below minimum {min_price_drop_pct}% for DCA"
+
+            # Check DCA confidence threshold (higher bar for adding to positions)
+            dca_confidence_threshold = self.config.get("dca_confidence_threshold", 70)
+            if confidence < dca_confidence_threshold:
+                return False, 0.0, f"DCA confidence {confidence}% below threshold {dca_confidence_threshold}%"
+
+            # Calculate DCA amount
+            safety_order_pct = self.config.get("safety_order_percentage", 5.0)
+
+            # Smart budget division by max concurrent deals (3Commas style)
+            max_deals = self.config.get("max_concurrent_deals", 1)
+            if max_deals > 1:
+                safety_order_pct = safety_order_pct / max_deals
+
+            btc_amount = btc_balance * (safety_order_pct / 100.0)
+
+            # Don't exceed position budget
+            remaining_budget = position.max_quote_allowed - position.total_quote_spent
+            btc_amount = min(btc_amount, remaining_budget)
+
+            if btc_amount <= 0:
+                return False, 0.0, "Insufficient balance or budget for DCA"
+
+            reasoning = signal_data.get("reasoning", "AI recommends DCA")
+            return True, btc_amount, f"AI DCA #{current_safety_orders + 1} ({confidence}% confidence, {price_drop_pct:.2f}% drop): {reasoning}"
+
+        # New position (base order)
         if confidence < 60:
             return False, 0.0, f"AI confidence too low ({confidence}%)"
-
-        # Don't open multiple positions for same pair (simplified for now)
-        if position is not None:
-            return False, 0.0, "Already have open position for this pair"
 
         # Calculate buy amount based on AI suggestion and budget
         suggested_pct = signal_data.get("suggested_allocation_pct", 10)
