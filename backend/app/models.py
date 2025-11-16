@@ -200,6 +200,7 @@ class AIBotLog(Base):
     # Market context at time of decision
     current_price = Column(Float, nullable=True)
     position_status = Column(String, nullable=True)  # open, closed, none
+    product_id = Column(String, nullable=True)  # Trading pair (e.g., "AAVE-BTC")
 
     # Additional context (JSON for flexibility)
     context = Column(JSON, nullable=True)  # Market conditions, indicators, etc.

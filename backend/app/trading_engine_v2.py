@@ -75,6 +75,7 @@ class StrategyTradingEngine:
             confidence=confidence,
             current_price=current_price,
             position_status=position_status,
+            product_id=self.product_id,  # Track which pair this analysis is for
             context=signal_data,  # Store full signal data for reference
             timestamp=datetime.utcnow()
         )

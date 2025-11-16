@@ -336,16 +336,20 @@ function PhaseConditionSelector({
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
               </select>
-              <input
-                type="number"
-                value={condition.value}
-                onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
-                min="0"
-                max="100"
-                step="1"
-                className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
-              />
-              <span className="text-xs text-slate-400">%</span>
+              {(condition.operator === 'greater_than' || condition.operator === 'less_than') && (
+                <>
+                  <input
+                    type="number"
+                    value={condition.value ?? ''}
+                    onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                    min="0"
+                    max="100"
+                    step="1"
+                    className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                  />
+                  <span className="text-xs text-slate-400">%</span>
+                </>
+              )}
             </div>
           </>
         )

@@ -26,6 +26,18 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
     }
   }, [isOpen, refetch])
 
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const filteredLogs = logs.filter((log: any) => {
@@ -142,6 +154,11 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                           <Clock className="w-3 h-3" />
                           <span>{new Date(log.timestamp).toLocaleString()}</span>
                         </span>
+                        {log.product_id && (
+                          <span className="px-1.5 py-0.5 bg-purple-600/20 border border-purple-600/50 rounded text-xs font-medium text-purple-300">
+                            {log.product_id}
+                          </span>
+                        )}
                         {log.current_price && (
                           <span className="flex items-center space-x-1">
                             <Target className="w-3 h-3" />

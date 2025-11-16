@@ -512,7 +512,7 @@ Remember:
 - Keep reasoning concise"""
 
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')  # Latest Gemini 2.5 Flash
             response = model.generate_content(prompt)
 
             # Parse response
