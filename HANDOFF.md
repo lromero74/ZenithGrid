@@ -1,6 +1,50 @@
-# Bot Balance Isolation System (Prevent Bots from Borrowing from Each Other)
+# Code Modularization - Phase 1
 **Date:** November 16, 2025
 **Status:** IN PROGRESS 🚧
+
+## Goal
+Reduce large files (11 files over 500 lines) through systematic modularization while preserving all functionality. Target: 73% reduction (10,754 lines → 2,850 lines).
+
+## Progress
+
+### ✅ Step 1: Extract Shared Indicator Utilities (COMPLETE)
+**Impact**: Eliminated 589 lines of duplicate code between Charts.tsx and Positions.tsx
+
+**Created Modular Structure:**
+- `frontend/src/utils/indicators/calculations.ts` (272 lines) - All technical indicator calculation functions
+- `frontend/src/utils/indicators/definitions.ts` (70 lines) - AVAILABLE_INDICATORS constant and TIME_INTERVALS
+- `frontend/src/utils/indicators/types.ts` (55 lines) - TypeScript interfaces for indicators
+- `frontend/src/utils/indicators/index.ts` (28 lines) - Central export file
+
+**Files Refactored:**
+- `frontend/src/pages/Positions.tsx`: 2,119 → 1,826 lines (-293 lines, -14%)
+- `frontend/src/pages/Charts.tsx`: 1,749 → 1,453 lines (-296 lines, -17%)
+
+**Benefits:**
+- Single source of truth for all indicator calculations
+- Eliminated code duplication (SMA, EMA, RSI, MACD, Bollinger Bands, Stochastic, Heikin-Ashi)
+- Reusable across entire app
+- Easier to test and maintain
+- Net reduction: 164 lines (613 removed - 449 added)
+
+**Commit**: `a488859` - "Refactor: Extract shared indicator utilities to eliminate code duplication"
+
+### ⏳ Step 2: Extract FastAPI Schemas from main.py (PENDING)
+Extract Pydantic models to dedicated schema files (~200 line reduction expected)
+
+### ⏳ Step 3: Extract Simple Utilities and Constants (PENDING)
+Chart utilities, formatters, type definitions (~300 line reduction expected)
+
+### Files Modified
+1. ✅ `frontend/src/pages/Positions.tsx` - Removed duplicate indicator code
+2. ✅ `frontend/src/pages/Charts.tsx` - Removed duplicate indicator code
+3. ✅ `frontend/src/utils/indicators/*` - Created new modular structure (4 files)
+
+---
+
+# Bot Balance Isolation System (Prevent Bots from Borrowing from Each Other)
+**Date:** November 16, 2025
+**Status:** COMPLETE ✅
 
 ## Problem
 Currently, all bots share the same portfolio balance. This means:
