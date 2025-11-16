@@ -1622,14 +1622,33 @@ export default function Positions() {
                                 )
                               })()}
                             </div>
-                            <div className="flex items-center justify-between text-[10px] mt-1 text-slate-500">
-                              <span>-5%</span>
-                              <div className="flex gap-3">
+                            <div className="flex items-center justify-between text-[10px] mt-1">
+                              {/* Left: Current P&L % and price */}
+                              <div className="flex flex-col items-start">
+                                <span className={pnl.btc >= 0 ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
+                                  {pnl.percent >= 0 ? '+' : ''}{pnl.percent.toFixed(2)}%
+                                </span>
+                                <span className="text-slate-500">
+                                  {formatPrice(pnl.currentPrice, position.product_id || 'ETH-BTC')}
+                                </span>
+                              </div>
+
+                              {/* Center: Legend */}
+                              <div className="flex gap-3 text-slate-500">
                                 <span className="text-yellow-400">● Avg Entry</span>
                                 <span className={pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}>● Current</span>
                                 <span className="text-blue-400">● Target</span>
                               </div>
-                              <span>+5%</span>
+
+                              {/* Right: Buy price and MP (Market Price / Target) */}
+                              <div className="flex flex-col items-end">
+                                <span className="text-slate-500">
+                                  Buy {formatPrice(position.average_buy_price, position.product_id || 'ETH-BTC')}
+                                </span>
+                                <span className="text-emerald-400">
+                                  MP {formatPrice(position.average_buy_price * 1.02, position.product_id || 'ETH-BTC')}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         )}
