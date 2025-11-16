@@ -166,41 +166,48 @@ class MultiBotMonitor:
             trading_pairs = bot.get_trading_pairs()
             logger.info(f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})")
 
-            # Process trading pairs in parallel batches to avoid Coinbase API throttling
-            # Coinbase public API allows ~10 requests/second per IP
-            # With safety margin: process 5 pairs per batch with 1s delay between batches
-            results = {}
-            batch_size = 5
+            # Check if strategy supports batch analysis (AI strategies)
+            strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
+            supports_batch = hasattr(strategy, 'analyze_multiple_pairs_batch') and len(trading_pairs) > 1
 
-            for i in range(0, len(trading_pairs), batch_size):
-                batch = trading_pairs[i:i + batch_size]
-                logger.info(f"  Processing batch {i // batch_size + 1} ({len(batch)} pairs): {batch}")
+            if supports_batch:
+                logger.info(f"🚀 Using BATCH analysis mode - {len(trading_pairs)} pairs in 1 API call!")
+                return await self.process_bot_batch(db, bot, trading_pairs, strategy)
+            else:
+                logger.info(f"Using sequential analysis mode")
+                # Original sequential processing logic
+                # Process trading pairs in batches to avoid Coinbase API throttling
+                results = {}
+                batch_size = 5
 
-                # Process batch sequentially to avoid DB session conflicts
-                # TODO: Could optimize later with separate sessions per task
-                batch_results = []
-                for product_id in batch:
-                    try:
-                        result = await self.process_bot_pair(db, bot, product_id)
-                        batch_results.append(result)
-                    except Exception as e:
-                        logger.error(f"  Error processing {product_id}: {e}")
-                        batch_results.append({"error": str(e)})
+                for i in range(0, len(trading_pairs), batch_size):
+                    batch = trading_pairs[i:i + batch_size]
+                    logger.info(f"  Processing batch {i // batch_size + 1} ({len(batch)} pairs): {batch}")
 
-                # Store results
-                for product_id, result in zip(batch, batch_results):
-                    if isinstance(result, Exception):
-                        logger.error(f"  Error processing {product_id}: {result}")
-                        results[product_id] = {"error": str(result)}
-                    else:
-                        results[product_id] = result
+                    # Process batch sequentially to avoid DB session conflicts
+                    batch_results = []
+                    for product_id in batch:
+                        try:
+                            result = await self.process_bot_pair(db, bot, product_id)
+                            batch_results.append(result)
+                        except Exception as e:
+                            logger.error(f"  Error processing {product_id}: {e}")
+                            batch_results.append({"error": str(e)})
 
-                # Add delay between batches (if not last batch)
-                if i + batch_size < len(trading_pairs):
-                    logger.info(f"  Waiting 1s before next batch to avoid API throttling...")
-                    await asyncio.sleep(1)
+                    # Store results
+                    for product_id, result in zip(batch, batch_results):
+                        if isinstance(result, Exception):
+                            logger.error(f"  Error processing {product_id}: {result}")
+                            results[product_id] = {"error": str(result)}
+                        else:
+                            results[product_id] = result
 
-            return results
+                    # Add delay between batches (if not last batch)
+                    if i + batch_size < len(trading_pairs):
+                        logger.info(f"  Waiting 1s before next batch to avoid API throttling...")
+                        await asyncio.sleep(1)
+
+                return results
 
         except Exception as e:
             logger.error(f"Error processing bot {bot.name}: {e}")
@@ -208,7 +215,134 @@ class MultiBotMonitor:
             traceback.print_exc()
             return {"error": str(e)}
 
-    async def process_bot_pair(self, db: AsyncSession, bot: Bot, product_id: str) -> Dict[str, Any]:
+    async def process_bot_batch(
+        self,
+        db: AsyncSession,
+        bot: Bot,
+        trading_pairs: List[str],
+        strategy: Any
+    ) -> Dict[str, Any]:
+        """
+        Process multiple trading pairs using AI batch analysis (single API call for all pairs)
+
+        Args:
+            db: Database session
+            bot: Bot instance
+            trading_pairs: List of product IDs to analyze
+            strategy: Strategy instance that supports batch analysis
+
+        Returns:
+            Result dictionary with action/signal info for all pairs
+        """
+        try:
+            # Collect market data for all pairs
+            pairs_data = {}
+            logger.info(f"  Fetching market data for {len(trading_pairs)} pairs...")
+
+            for product_id in trading_pairs:
+                try:
+                    # Get current price
+                    ticker = await self.coinbase.get_ticker(product_id)
+                    current_price = float(ticker.get('price', 0))
+
+                    # Get candles
+                    candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
+
+                    # Prepare market context
+                    market_context = strategy._prepare_market_context(candles, current_price)
+
+                    pairs_data[product_id] = {
+                        "current_price": current_price,
+                        "candles": candles,
+                        "market_context": market_context
+                    }
+
+                except Exception as e:
+                    logger.error(f"  Error fetching data for {product_id}: {e}")
+                    pairs_data[product_id] = {
+                        "error": str(e),
+                        "market_context": {"current_price": 0}
+                    }
+
+            # Call batch AI analysis (1 API call for ALL pairs!)
+            logger.info(f"  🧠 Calling AI for batch analysis of {len(pairs_data)} pairs...")
+            batch_analyses = await strategy.analyze_multiple_pairs_batch(pairs_data)
+
+            # Process each pair's analysis result
+            results = {}
+            for product_id in trading_pairs:
+                try:
+                    signal_data = batch_analyses.get(product_id, {
+                        "signal_type": "hold",
+                        "confidence": 0,
+                        "reasoning": "No analysis result"
+                    })
+
+                    # Log AI decision
+                    await self.log_ai_decision(db, bot, product_id, signal_data, pairs_data.get(product_id, {}))
+
+                    # Execute trading logic based on signal
+                    result = await self.execute_trading_logic(db, bot, product_id, signal_data, pairs_data.get(product_id, {}))
+                    results[product_id] = result
+
+                except Exception as e:
+                    logger.error(f"  Error processing {product_id} result: {e}")
+                    results[product_id] = {"error": str(e)}
+
+            # Update bot's last check time
+            bot.last_signal_check = datetime.utcnow()
+            await db.commit()
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Error in batch processing: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": str(e)}
+
+    async def log_ai_decision(
+        self,
+        db: AsyncSession,
+        bot: Bot,
+        product_id: str,
+        signal_data: Dict[str, Any],
+        pair_data: Dict[str, Any]
+    ):
+        """Log AI decision to database"""
+        try:
+            from app.models import AIBotLog
+
+            log_entry = AIBotLog(
+                bot_id=bot.id,
+                thinking=signal_data.get("reasoning", ""),
+                decision=signal_data.get("signal_type", "hold"),
+                confidence=signal_data.get("confidence", 0),
+                current_price=pair_data.get("current_price"),
+                position_status="unknown",  # Will be determined by trading logic
+                product_id=product_id,
+                context=signal_data
+            )
+            db.add(log_entry)
+            await db.flush()
+
+        except Exception as e:
+            logger.error(f"Error logging AI decision for {product_id}: {e}")
+
+    async def execute_trading_logic(
+        self,
+        db: AsyncSession,
+        bot: Bot,
+        product_id: str,
+        signal_data: Dict[str, Any],
+        pair_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Execute trading logic for a single pair based on AI signal"""
+        # Reuse existing process_bot_pair logic but with pre-analyzed signal
+        # This avoids code duplication
+        return await self.process_bot_pair(db, bot, product_id, pre_analyzed_signal=signal_data, pair_data=pair_data)
+
+    async def process_bot_pair(self, db: AsyncSession, bot: Bot, product_id: str, pre_analyzed_signal=None, pair_data=None) -> Dict[str, Any]:
         """
         Process signals for a single bot/pair combination
 
@@ -252,9 +386,16 @@ class MultiBotMonitor:
                 logger.error(f"Unknown strategy: {bot.strategy_type}")
                 return {"error": str(e)}
 
-            # Get current price
-            current_price = await self.coinbase.get_current_price(product_id)
-            logger.info(f"    Current {product_id} price: {current_price:.8f}")
+            # Use provided pair_data if available (from batch), otherwise fetch market data
+            if pair_data:
+                logger.info(f"    Using pre-fetched market data")
+                current_price = pair_data.get("current_price", 0)
+                candles = pair_data.get("candles", [])
+                candles_by_timeframe = {" FIVE_MINUTE": candles}  # Simplified for batch mode
+            else:
+                # Get current price
+                current_price = await self.coinbase.get_current_price(product_id)
+                logger.info(f"    Current {product_id} price: {current_price:.8f}")
 
             # For conditional_dca strategy, extract all timeframes from conditions
             if bot.strategy_type == "conditional_dca":
@@ -325,13 +466,18 @@ class MultiBotMonitor:
 
                 candles_by_timeframe = {timeframe: candles}
 
-            # Analyze signal using strategy
-            # For conditional_dca, pass the candles_by_timeframe dict
-            if bot.strategy_type == "conditional_dca":
-                logger.info(f"  Analyzing conditional_dca signals...")
-                signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe)
+            # Use pre-analyzed signal if provided (from batch analysis), otherwise analyze now
+            if pre_analyzed_signal:
+                logger.info(f"  Using pre-analyzed signal from batch")
+                signal_data = pre_analyzed_signal
             else:
-                signal_data = await strategy.analyze_signal(candles, current_price)
+                # Analyze signal using strategy
+                # For conditional_dca, pass the candles_by_timeframe dict
+                if bot.strategy_type == "conditional_dca":
+                    logger.info(f"  Analyzing conditional_dca signals...")
+                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe)
+                else:
+                    signal_data = await strategy.analyze_signal(candles, current_price)
 
             if not signal_data:
                 logger.warning(f"  No signal from strategy (returned None)")

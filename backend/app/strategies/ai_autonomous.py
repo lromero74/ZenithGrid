@@ -578,6 +578,187 @@ Remember:
                 "expected_profit_pct": 0
             }
 
+    async def analyze_multiple_pairs_batch(
+        self,
+        pairs_data: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Analyze multiple trading pairs in a single AI API call (batch mode)
+
+        This dramatically reduces API calls: 27 pairs = 1 call instead of 27 calls!
+
+        Args:
+            pairs_data: Dict mapping product_id to market context data
+                       e.g., {"ETH-BTC": {candles, current_price}, "SOL-BTC": {...}}
+
+        Returns:
+            Dict mapping product_id to analysis result
+        """
+        provider = self.config.get("ai_provider", "claude").lower()
+
+        if provider == "gemini":
+            return await self._get_gemini_batch_analysis(pairs_data)
+        elif provider == "claude":
+            return await self._get_claude_batch_analysis(pairs_data)
+        else:
+            # Fallback to individual calls if batch not supported
+            logger.warning(f"Batch analysis not supported for {provider}, falling back to individual calls")
+            results = {}
+            for product_id, data in pairs_data.items():
+                market_context = data.get("market_context", {})
+                if provider == "claude":
+                    results[product_id] = await self._get_claude_analysis(market_context)
+                elif provider == "gemini":
+                    results[product_id] = await self._get_gemini_analysis(market_context)
+            return results
+
+    async def _get_gemini_batch_analysis(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """
+        Analyze multiple pairs in a single Gemini API call
+        """
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            logger.error("google-generativeai not installed")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "Gemini library not installed"}
+                    for pid in pairs_data.keys()}
+
+        api_key = settings.gemini_api_key
+        if not api_key:
+            logger.error("GEMINI_API_KEY not set")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
+                    for pid in pairs_data.keys()}
+
+        genai.configure(api_key=api_key)
+
+        risk_tolerance = self.config.get("risk_tolerance", "moderate")
+
+        # Build batch prompt with all pairs
+        pairs_summary = []
+        for product_id, data in pairs_data.items():
+            ctx = data.get("market_context", {})
+            pairs_summary.append(f"""
+**{product_id}:**
+- Current Price: {ctx.get('current_price', 0)}
+- 24h Change: {ctx.get('price_change_24h_pct', 0)}%
+- Volatility: {ctx.get('volatility', 0)}%
+- Recent Trend: {ctx.get('recent_prices', [])[-3:]}""")
+
+        prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
+
+**Market Data for All Pairs:**
+{''.join(pairs_summary)}
+
+**Trading Parameters:**
+- Risk Tolerance: {risk_tolerance}
+
+**Your Task:**
+Analyze ALL pairs and respond with a JSON object where keys are product IDs and values are analysis objects. Format:
+
+{{
+  "ETH-BTC": {{
+    "action": "buy" | "hold" | "sell",
+    "confidence": 0-100,
+    "reasoning": "brief 1-2 sentence explanation",
+    "suggested_allocation_pct": 0-100,
+    "expected_profit_pct": 0-10
+  }},
+  "SOL-BTC": {{...}},
+  ...
+}}
+
+Rules:
+- Analyze each pair independently
+- Only suggest "buy" if clear profit opportunity
+- Be {risk_tolerance} in recommendations
+- Keep reasoning concise
+- Return valid JSON only (no markdown)"""
+
+        try:
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(prompt)
+            response_text = response.text.strip()
+
+            # Remove markdown if present
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+                response_text = response_text.strip()
+
+            batch_analysis = json.loads(response_text)
+
+            # Track token usage
+            if hasattr(response, 'usage_metadata'):
+                input_tokens = response.usage_metadata.prompt_token_count
+                output_tokens = response.usage_metadata.candidates_token_count
+                self._total_tokens_used += input_tokens + output_tokens
+                logger.info(f"📊 Gemini BATCH API - {len(pairs_data)} pairs - Input: {input_tokens} tokens, Output: {output_tokens} tokens")
+                logger.info(f"   🎯 Efficiency: {len(pairs_data)} pairs in 1 call (saved {len(pairs_data)-1} API calls!)")
+
+            # Convert to our signal format for each pair
+            results = {}
+            for product_id in pairs_data.keys():
+                if product_id in batch_analysis:
+                    analysis = batch_analysis[product_id]
+                    signal_type = "none"
+                    if analysis.get("action") == "buy":
+                        signal_type = "buy"
+                    elif analysis.get("action") == "sell":
+                        signal_type = "sell"
+
+                    results[product_id] = {
+                        "signal_type": signal_type,
+                        "confidence": analysis.get("confidence", 50),
+                        "reasoning": analysis.get("reasoning", "AI batch analysis"),
+                        "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
+                        "expected_profit_pct": analysis.get("expected_profit_pct", 1.0)
+                    }
+                else:
+                    # Pair missing from response
+                    results[product_id] = {
+                        "signal_type": "hold",
+                        "confidence": 0,
+                        "reasoning": "Not analyzed in batch response"
+                    }
+
+            return results
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Gemini batch response: {e}")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "Failed to parse batch response"}
+                    for pid in pairs_data.keys()}
+        except Exception as e:
+            logger.error(f"Gemini batch analysis error: {e}")
+            # Check for rate limit error with retry_delay
+            error_str = str(e)
+            if "retry_delay" in error_str or "429" in error_str:
+                # Extract retry delay if present (Gemini includes this in error)
+                import re
+                match = re.search(r'retry_delay.*?seconds:\s*(\d+)', error_str)
+                if match:
+                    retry_seconds = int(match.group(1))
+                    logger.warning(f"⏰ Gemini API quota exceeded - back off for {retry_seconds} seconds")
+                    # TODO: Store this in bot's last_check_time + retry_delay
+                else:
+                    logger.warning(f"⏰ Gemini API quota exceeded (429) - backing off")
+
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
+                    for pid in pairs_data.keys()}
+
+    async def _get_claude_batch_analysis(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """
+        Analyze multiple pairs in a single Claude API call
+        """
+        # Similar implementation for Claude
+        # For now, fallback to individual calls
+        logger.info("Claude batch analysis not yet implemented, using individual calls")
+        results = {}
+        for product_id, data in pairs_data.items():
+            market_context = data.get("market_context", {})
+            results[product_id] = await self._get_claude_analysis(market_context)
+        return results
+
     async def should_buy(
         self,
         signal_data: Dict[str, Any],
