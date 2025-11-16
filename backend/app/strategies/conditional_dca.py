@@ -184,6 +184,14 @@ class ConditionalDCAStrategy(TradingStrategy):
                     min_value=0.1,
                     max_value=10.0
                 ),
+                StrategyParameter(
+                    name="profit_calculation_method",
+                    display_name="Profit Calculation Method",
+                    description="How to calculate profit: from average cost (cost_basis) or from initial entry (base_order)",
+                    type="string",
+                    default="cost_basis",
+                    options=["cost_basis", "base_order"]
+                ),
 
                 # Stop Loss Settings
                 StrategyParameter(
@@ -531,8 +539,23 @@ class ConditionalDCAStrategy(TradingStrategy):
         """
         take_profit_signal = signal_data.get("take_profit_signal", False)
 
+        # Determine profit calculation method
+        profit_method = self.config.get("profit_calculation_method", "cost_basis")
+
+        # Get entry price based on selected method
+        if profit_method == "base_order":
+            # Calculate from first trade (base order) only
+            buy_trades = [t for t in position.trades if t.side == "buy"]
+            if not buy_trades:
+                return False, "No entry price yet - position has no trades"
+            # Sort by timestamp to get first trade
+            buy_trades.sort(key=lambda t: t.timestamp)
+            avg_price = buy_trades[0].price
+        else:
+            # Default: cost_basis - use average buy price across all trades
+            avg_price = position.average_buy_price
+
         # Calculate current profit
-        avg_price = position.average_buy_price
         eth_value = position.total_eth_acquired * current_price
         profit_btc = eth_value - position.total_btc_spent
         profit_pct = (profit_btc / position.total_btc_spent) * 100

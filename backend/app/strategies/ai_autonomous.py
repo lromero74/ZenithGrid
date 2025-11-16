@@ -144,6 +144,14 @@ class AIAutonomousStrategy(TradingStrategy):
                     max_value=10.0
                 ),
                 StrategyParameter(
+                    name="profit_calculation_method",
+                    display_name="Profit Calculation Method",
+                    description="How to calculate profit: from average cost (cost_basis) or from initial entry (base_order)",
+                    type="string",
+                    default="cost_basis",
+                    options=["cost_basis", "base_order"]
+                ),
+                StrategyParameter(
                     name="custom_instructions",
                     display_name="Custom Instructions (Optional)",
                     description="Additional instructions to guide the AI's trading decisions",
@@ -630,14 +638,26 @@ Remember:
         - NEVER sell at a loss (user requirement)
         - Only sell if profit >= min_profit_percentage
         - Consider AI recommendation
+        - Calculate profit based on selected method (cost_basis or base_order)
         """
 
-        # Calculate current profit
-        entry_price = position.average_buy_price
+        # Determine profit calculation method
+        profit_method = self.config.get("profit_calculation_method", "cost_basis")
 
-        # Handle case where no trades have been executed yet (average_buy_price = 0)
-        if entry_price == 0:
-            return False, "No entry price yet - position has no trades"
+        # Get entry price based on selected method
+        if profit_method == "base_order":
+            # Calculate from first trade (base order) only
+            buy_trades = [t for t in position.trades if t.side == "buy"]
+            if not buy_trades:
+                return False, "No entry price yet - position has no trades"
+            # Sort by timestamp to get first trade
+            buy_trades.sort(key=lambda t: t.timestamp)
+            entry_price = buy_trades[0].price
+        else:
+            # Default: cost_basis - use average buy price across all trades
+            entry_price = position.average_buy_price
+            if entry_price == 0:
+                return False, "No entry price yet - position has no trades"
 
         profit_pct = ((current_price - entry_price) / entry_price * 100)
 
