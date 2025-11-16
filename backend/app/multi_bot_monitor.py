@@ -276,9 +276,13 @@ class MultiBotMonitor:
 
             for product_id in pairs_to_analyze:
                 try:
-                    # Get current price
-                    ticker = await self.coinbase.get_ticker(product_id)
-                    current_price = float(ticker.get('price', 0))
+                    # Get current price using get_current_price (which handles caching and proper parsing)
+                    current_price = await self.coinbase.get_current_price(product_id)
+
+                    # Validate price
+                    if current_price is None or current_price <= 0:
+                        logger.warning(f"  Invalid price for {product_id}: {current_price}, skipping")
+                        continue
 
                     # Get candles
                     candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
@@ -294,10 +298,8 @@ class MultiBotMonitor:
 
                 except Exception as e:
                     logger.error(f"  Error fetching data for {product_id}: {e}")
-                    pairs_data[product_id] = {
-                        "error": str(e),
-                        "market_context": {"current_price": 0}
-                    }
+                    # Skip pairs with errors instead of adding them with invalid data
+                    continue
 
             # Call batch AI analysis (1 API call for ALL pairs!)
             logger.info(f"  🧠 Calling AI for batch analysis of {len(pairs_data)} pairs...")
