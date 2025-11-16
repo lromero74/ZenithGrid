@@ -1740,7 +1740,7 @@ export default function Positions() {
                             <div className="flex items-center justify-between text-[10px] mt-1 text-slate-500">
                               <span>-5%</span>
                               <div className="flex gap-3">
-                                <span className="text-yellow-400">● Entry</span>
+                                <span className="text-yellow-400">● Avg Entry</span>
                                 <span className={pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}>● Current</span>
                                 <span className="text-blue-400">● Target</span>
                               </div>
