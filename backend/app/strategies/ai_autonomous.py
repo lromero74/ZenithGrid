@@ -80,7 +80,7 @@ class AIAutonomousStrategy(TradingStrategy):
                     description="Which AI model to use for market analysis",
                     type="string",
                     default="claude",
-                    options=["claude", "gemini"]
+                    options=["claude", "gemini", "grok"]
                 ),
                 StrategyParameter(
                     name="max_concurrent_deals",
@@ -215,6 +215,8 @@ class AIAutonomousStrategy(TradingStrategy):
                 analysis = await self._get_claude_analysis(market_context)
             elif provider == "gemini":
                 analysis = await self._get_gemini_analysis(market_context)
+            elif provider == "grok":
+                analysis = await self._get_grok_analysis(market_context)
             else:
                 raise ValueError(f"Unknown AI provider: {provider}")
 
@@ -598,6 +600,8 @@ Remember:
 
         if provider == "gemini":
             return await self._get_gemini_batch_analysis(pairs_data)
+        elif provider == "grok":
+            return await self._get_grok_batch_analysis(pairs_data)
         elif provider == "claude":
             return await self._get_claude_batch_analysis(pairs_data)
         else:
@@ -610,6 +614,8 @@ Remember:
                     results[product_id] = await self._get_claude_analysis(market_context)
                 elif provider == "gemini":
                     results[product_id] = await self._get_gemini_analysis(market_context)
+                elif provider == "grok":
+                    results[product_id] = await self._get_grok_analysis(market_context)
             return results
 
     async def _get_gemini_batch_analysis(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -758,6 +764,205 @@ Rules:
             market_context = data.get("market_context", {})
             results[product_id] = await self._get_claude_analysis(market_context)
         return results
+
+    async def _get_grok_analysis(self, market_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Call Grok API for market analysis (uses OpenAI-compatible API)
+        """
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            logger.error("openai library not installed. Run: pip install openai")
+            return {
+                "signal_type": "hold",
+                "confidence": 0,
+                "reasoning": "OpenAI library not installed",
+                "suggested_allocation_pct": 0,
+                "expected_profit_pct": 0
+            }
+
+        api_key = settings.grok_api_key
+        if not api_key:
+            logger.error("GROK_API_KEY not set in .env file")
+            return {
+                "signal_type": "hold",
+                "confidence": 0,
+                "reasoning": "Grok API key not configured",
+                "suggested_allocation_pct": 0,
+                "expected_profit_pct": 0
+            }
+
+        risk_tolerance = self.config.get("risk_tolerance", "moderate")
+
+        prompt = f"""You are an expert cryptocurrency trading AI analyzing market data.
+
+**Current Market Data:**
+- Current Price: {market_context['current_price']}
+- 24h Change: {market_context['price_change_24h_pct']}%
+- Period High: {market_context['period_high']}
+- Period Low: {market_context['period_low']}
+- Volatility: {market_context['volatility']}%
+
+**Trading Parameters:**
+- Risk Tolerance: {risk_tolerance}
+
+Respond ONLY with a JSON object (no markdown) in this exact format:
+{{
+  "action": "buy" or "hold" or "sell",
+  "confidence": 0-100,
+  "reasoning": "brief explanation (1-2 sentences)",
+  "suggested_allocation_pct": 0-100,
+  "expected_profit_pct": 0-10
+}}"""
+
+        try:
+            client = AsyncOpenAI(
+                api_key=api_key,
+                base_url="https://api.x.ai/v1"
+            )
+
+            response = await client.chat.completions.create(
+                model="grok-beta",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7
+            )
+
+            response_text = response.choices[0].message.content.strip()
+
+            # Remove markdown if present
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+                response_text = response_text.strip()
+
+            analysis = json.loads(response_text)
+
+            # Track token usage
+            if hasattr(response, 'usage'):
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+                self._total_tokens_used += input_tokens + output_tokens
+                logger.info(f"📊 Grok API - Input: {input_tokens} tokens, Output: {output_tokens} tokens")
+
+            signal_type = "none"
+            if analysis["action"] == "buy":
+                signal_type = "buy"
+            elif analysis["action"] == "sell":
+                signal_type = "sell"
+
+            return {
+                "signal_type": signal_type,
+                "confidence": analysis.get("confidence", 50),
+                "reasoning": analysis.get("reasoning", "AI analysis"),
+                "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
+                "expected_profit_pct": analysis.get("expected_profit_pct", 1.0)
+            }
+
+        except Exception as e:
+            logger.error(f"Grok API error: {e}")
+            return {
+                "signal_type": "hold",
+                "confidence": 0,
+                "reasoning": f"Error: {str(e)[:100]}",
+                "suggested_allocation_pct": 0,
+                "expected_profit_pct": 0
+            }
+
+    async def _get_grok_batch_analysis(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """
+        Analyze multiple pairs in a single Grok API call
+        """
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            logger.error("openai library not installed")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "OpenAI library not installed"}
+                    for pid in pairs_data.keys()}
+
+        api_key = settings.grok_api_key
+        if not api_key:
+            logger.error("GROK_API_KEY not set")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
+                    for pid in pairs_data.keys()}
+
+        risk_tolerance = self.config.get("risk_tolerance", "moderate")
+
+        # Build batch prompt
+        pairs_summary = []
+        for product_id, data in pairs_data.items():
+            ctx = data.get("market_context", {})
+            pairs_summary.append(f"""
+**{product_id}:**
+- Current Price: {ctx.get('current_price', 0)}
+- 24h Change: {ctx.get('price_change_24h_pct', 0)}%
+- Volatility: {ctx.get('volatility', 0)}%""")
+
+        prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs. Provide trading recommendations for ALL pairs in JSON.
+
+**Market Data:**
+{''.join(pairs_summary)}
+
+**Parameters:** Risk Tolerance: {risk_tolerance}
+
+Respond with JSON (no markdown):
+{{
+  "ETH-BTC": {{"action": "buy"|"hold"|"sell", "confidence": 0-100, "reasoning": "brief", "suggested_allocation_pct": 0-100, "expected_profit_pct": 0-10}},
+  "SOL-BTC": {{...}},
+  ...
+}}"""
+
+        try:
+            client = AsyncOpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+            response = await client.chat.completions.create(
+                model="grok-beta",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+                response_text = response_text.strip()
+
+            batch_analysis = json.loads(response_text)
+
+            if hasattr(response, 'usage'):
+                logger.info(f"📊 Grok BATCH - {len(pairs_data)} pairs - Input: {response.usage.prompt_tokens}, Output: {response.usage.completion_tokens}")
+                logger.info(f"   🎯 Efficiency: {len(pairs_data)} pairs in 1 call!")
+
+            results = {}
+            for product_id in pairs_data.keys():
+                if product_id in batch_analysis:
+                    analysis = batch_analysis[product_id]
+                    signal_type = "none"
+                    if analysis.get("action") == "buy":
+                        signal_type = "buy"
+                    elif analysis.get("action") == "sell":
+                        signal_type = "sell"
+
+                    results[product_id] = {
+                        "signal_type": signal_type,
+                        "confidence": analysis.get("confidence", 50),
+                        "reasoning": analysis.get("reasoning", "AI batch analysis"),
+                        "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
+                        "expected_profit_pct": analysis.get("expected_profit_pct", 1.0)
+                    }
+                else:
+                    results[product_id] = {
+                        "signal_type": "hold",
+                        "confidence": 0,
+                        "reasoning": "Not analyzed in batch response"
+                    }
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Grok batch analysis error: {e}")
+            return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
+                    for pid in pairs_data.keys()}
 
     async def should_buy(
         self,

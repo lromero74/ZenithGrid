@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # AI Provider API Keys (for AI Autonomous Trading)
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
+    grok_api_key: str = ""  # x.AI Grok API
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./trading.db"
