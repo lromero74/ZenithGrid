@@ -58,7 +58,7 @@ class MultiBotMonitor:
         from app.models import Position
 
         # Get all active bots
-        active_query = select(Bot).where(Bot.is_active == True)
+        active_query = select(Bot).where(Bot.is_active)
         active_result = await db.execute(active_query)
         active_bots = list(active_result.scalars().all())
 
@@ -66,7 +66,7 @@ class MultiBotMonitor:
         inactive_with_positions_query = (
             select(Bot)
             .join(Position, Position.bot_id == Bot.id)
-            .where(Bot.is_active == False, Position.status == "open")
+            .where(not Bot.is_active, Position.status == "open")
             .distinct()
         )
         inactive_result = await db.execute(inactive_with_positions_query)

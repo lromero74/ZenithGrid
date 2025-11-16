@@ -62,7 +62,7 @@ async def create_template(
     """Create a new bot template"""
     # Validate strategy exists
     try:
-        strategy_def = StrategyRegistry.get_definition(template_data.strategy_type)
+        _strategy_def = StrategyRegistry.get_definition(template_data.strategy_type)  # noqa: F841
     except ValueError:
         raise HTTPException(
             status_code=400,
@@ -230,7 +230,7 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db)):
     """Seed the database with default bot templates (one-time setup)"""
 
     # Check if defaults already exist
-    query = select(BotTemplate).where(BotTemplate.is_default == True)
+    query = select(BotTemplate).where(BotTemplate.is_default)
     result = await db.execute(query)
     existing_defaults = result.scalars().all()
 

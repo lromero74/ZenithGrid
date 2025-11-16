@@ -62,7 +62,7 @@ class IndicatorCalculator:
         closes = [float(c["close"]) for c in candles]
         highs = [float(c["high"]) for c in candles]
         lows = [float(c["low"]) for c in candles]
-        volumes = [float(c["volume"]) for c in candles]
+        _volumes = [float(c["volume"]) for c in candles]  # Reserved for future volume-based indicators
 
         # Calculate indicators based on what's required
         for indicator_key in required_indicators:
@@ -102,7 +102,7 @@ class IndicatorCalculator:
                 # bb_upper_20_2, bb_middle_20_2, bb_lower_20_2
                 parts = indicator_key.split("_")
                 if len(parts) >= 4:
-                    band_type = parts[1]  # upper, middle, lower
+                    _band_type = parts[1]  # upper, middle, lower (parsed but not used - returns all bands)
                     period = int(parts[2])
                     std_dev = float(parts[3])
                     upper, middle, lower = self.calculate_bollinger_bands(
@@ -117,7 +117,7 @@ class IndicatorCalculator:
                 # stoch_k_14_3, stoch_d_14_3
                 parts = indicator_key.split("_")
                 if len(parts) >= 4:
-                    line_type = parts[1]  # k or d
+                    _line_type = parts[1]  # k or d (parsed but not used - returns both k and d)
                     k_period = int(parts[2])
                     d_period = int(parts[3])
                     k_value, d_value = self.calculate_stochastic(

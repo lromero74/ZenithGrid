@@ -296,7 +296,8 @@ class ConditionalDCAStrategy(TradingStrategy):
             print(f"[CONDITIONAL_DCA] Not enough candles: got {len(candles)}, need {min_candles_needed}")
             return None
 
-        print(f"[CONDITIONAL_DCA] Analyzing with {len(candles)} candles for {len(timeframes_needed) if 'timeframes_needed' in locals() else 'unknown'} timeframes")
+        timeframes_count = len(candles_by_timeframe) if candles_by_timeframe else 0
+        print(f"[CONDITIONAL_DCA] Analyzing with {len(candles)} candles for {timeframes_count} timeframes")
 
         # Extract required indicators from all phase conditions
         required = set()

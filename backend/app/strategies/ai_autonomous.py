@@ -490,7 +490,7 @@ Remember:
                 "reasoning": analysis.get("reasoning", "AI analysis"),
                 "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
                 "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
-                "current_price": current_price,  # Include current price for DCA logic
+                "current_price": market_context['current_price'],  # Include current price for DCA logic
                 "raw_analysis": analysis
             }
 
@@ -632,7 +632,7 @@ Remember:
                 "reasoning": analysis.get("reasoning", "AI analysis"),
                 "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
                 "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
-                "current_price": current_price,  # Include current price for DCA logic
+                "current_price": market_context['current_price'],  # Include current price for DCA logic
                 "raw_analysis": analysis
             }
 

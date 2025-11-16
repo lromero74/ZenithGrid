@@ -97,7 +97,7 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
     """Create a new trading bot"""
     # Validate strategy exists
     try:
-        strategy_def = StrategyRegistry.get_definition(bot_data.strategy_type)
+        _strategy_def = StrategyRegistry.get_definition(bot_data.strategy_type)  # noqa: F841
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {bot_data.strategy_type}")
 
@@ -178,7 +178,7 @@ async def list_bots(
     query = select(Bot).order_by(desc(Bot.created_at))
 
     if active_only:
-        query = query.where(Bot.is_active == True)
+        query = query.where(Bot.is_active)
 
     result = await db.execute(query)
     bots = result.scalars().all()

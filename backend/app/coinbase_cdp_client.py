@@ -148,7 +148,7 @@ class CoinbaseCDPClient:
             for pos in spot_positions:
                 if pos.get("asset") == "BTC":
                     return float(pos.get("available_to_trade_crypto", 0))
-        except:
+        except Exception:
             pass
         return 0.0
 
@@ -160,7 +160,7 @@ class CoinbaseCDPClient:
             for pos in spot_positions:
                 if pos.get("asset") == "ETH":
                     return float(pos.get("available_to_trade_crypto", 0))
-        except:
+        except Exception:
             pass
         return 0.0
 
@@ -306,5 +306,5 @@ class CoinbaseCDPClient:
         try:
             await self.get_accounts()
             return True
-        except:
+        except Exception:
             return False
