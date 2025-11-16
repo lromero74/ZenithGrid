@@ -99,14 +99,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
           <div className="flex items-center justify-between mb-2">
             <p className="text-slate-400 text-sm font-medium">Total Profit</p>
-            {totalProfitBTC >= 0 ? (
+            {totalProfitQuote >= 0 ? (
               <TrendingUp className="w-5 h-5 text-green-500" />
             ) : (
               <TrendingDown className="w-5 h-5 text-red-500" />
             )}
           </div>
-          <p className={`text-2xl font-bold ${totalProfitBTC >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {totalProfitBTC >= 0 ? '+' : ''}{formatCrypto(totalProfitBTC, 8)} BTC
+          <p className={`text-2xl font-bold ${totalProfitQuote >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {totalProfitQuote >= 0 ? '+' : ''}{formatCrypto(totalProfitQuote, 8)}
           </p>
           <p className={`text-sm mt-1 ${totalProfitUSD >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
             {totalProfitUSD >= 0 ? '+' : ''}{formatCurrency(totalProfitUSD)}
