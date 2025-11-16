@@ -76,19 +76,19 @@ class Position(Base):
     opened_at = Column(DateTime, default=datetime.utcnow)
     closed_at = Column(DateTime, nullable=True)
 
-    # Initial balance tracking
-    initial_btc_balance = Column(Float)
-    max_btc_allowed = Column(Float)  # 25% of initial balance (configurable)
+    # Initial balance tracking (quote currency = BTC for BTC pairs, USD for USD pairs)
+    initial_quote_balance = Column(Float)
+    max_quote_allowed = Column(Float)  # 25% of initial balance (configurable)
 
     # Position totals
-    total_btc_spent = Column(Float, default=0.0)
-    total_eth_acquired = Column(Float, default=0.0)
-    average_buy_price = Column(Float, default=0.0)
+    total_quote_spent = Column(Float, default=0.0)  # Amount of quote currency spent (BTC or USD)
+    total_base_acquired = Column(Float, default=0.0)  # Amount of base currency acquired (ETH, ADA, etc.)
+    average_buy_price = Column(Float, default=0.0)  # Average price paid (quote/base)
 
     # Closing metrics
     sell_price = Column(Float, nullable=True)
-    total_btc_received = Column(Float, nullable=True)
-    profit_btc = Column(Float, nullable=True)
+    total_quote_received = Column(Float, nullable=True)  # Amount of quote currency received from selling
+    profit_quote = Column(Float, nullable=True)  # Profit in quote currency
     profit_percentage = Column(Float, nullable=True)
 
     # USD tracking
@@ -108,15 +108,21 @@ class Position(Base):
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")
     signals = relationship("Signal", back_populates="position", cascade="all, delete-orphan")
 
+    def get_quote_currency(self) -> str:
+        """Get the quote currency from product_id (e.g., 'BTC' from 'ETH-BTC', 'USD' from 'ADA-USD')"""
+        if self.product_id and '-' in self.product_id:
+            return self.product_id.split('-')[1]
+        return 'BTC'  # Default fallback
+
     def update_averages(self):
         """Recalculate average buy price and totals from trades"""
         buy_trades = [t for t in self.trades if t.side == "buy"]
         if buy_trades:
-            total_btc = sum(t.btc_amount for t in buy_trades)
-            total_eth = sum(t.eth_amount for t in buy_trades)
-            self.total_btc_spent = total_btc
-            self.total_eth_acquired = total_eth
-            self.average_buy_price = total_btc / total_eth if total_eth > 0 else 0.0
+            total_quote = sum(t.quote_amount for t in buy_trades)
+            total_base = sum(t.base_amount for t in buy_trades)
+            self.total_quote_spent = total_quote
+            self.total_base_acquired = total_base
+            self.average_buy_price = total_quote / total_base if total_base > 0 else 0.0
 
 
 class Trade(Base):
@@ -127,13 +133,13 @@ class Trade(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     side = Column(String)  # buy, sell
-    btc_amount = Column(Float)
-    eth_amount = Column(Float)
-    price = Column(Float)  # ETH/BTC price
+    quote_amount = Column(Float)  # Amount of quote currency (BTC or USD)
+    base_amount = Column(Float)  # Amount of base currency (ETH, ADA, etc.)
+    price = Column(Float)  # Price (base/quote, e.g., ETH/BTC or ADA/USD)
 
     # Trade context
     trade_type = Column(String)  # initial, dca, sell
-    order_id = Column(String, nullable=True)  # 3Commas order ID
+    order_id = Column(String, nullable=True)  # Coinbase order ID
 
     # MACD values at time of trade
     macd_value = Column(Float, nullable=True)

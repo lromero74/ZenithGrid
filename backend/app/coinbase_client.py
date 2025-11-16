@@ -119,6 +119,24 @@ class CoinbaseClient:
         await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
         return balance
 
+    async def get_usd_balance(self) -> float:
+        """Get USD balance (cached to reduce API calls)"""
+        cache_key = "balance_usd"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        accounts = await self.get_accounts()
+        balance = 0.0
+        for account in accounts:
+            if account.get("currency") == "USD":
+                available = account.get("available_balance", {})
+                balance = float(available.get("value", 0))
+                break
+
+        await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
+        return balance
+
     async def list_products(self) -> List[Dict[str, Any]]:
         """Get all available products/trading pairs"""
         cache_key = "all_products"
@@ -172,6 +190,7 @@ class CoinbaseClient:
         """Invalidate balance cache (call after trades)"""
         await api_cache.delete("balance_btc")
         await api_cache.delete("balance_eth")
+        await api_cache.delete("balance_usd")
 
     async def create_market_order(
         self,
@@ -244,6 +263,40 @@ class CoinbaseClient:
             product_id=product_id,
             side="SELL",
             size=f"{eth_amount:.8f}"
+        )
+
+    async def buy_with_usd(self, usd_amount: float, product_id: str) -> Dict[str, Any]:
+        """
+        Buy crypto with specified amount of USD
+
+        Args:
+            usd_amount: Amount of USD to spend
+            product_id: Trading pair (e.g., "ADA-USD", "ETH-USD")
+
+        Returns:
+            Order response
+        """
+        return await self.create_market_order(
+            product_id=product_id,
+            side="BUY",
+            funds=f"{usd_amount:.2f}"
+        )
+
+    async def sell_for_usd(self, base_amount: float, product_id: str) -> Dict[str, Any]:
+        """
+        Sell crypto for USD
+
+        Args:
+            base_amount: Amount of base currency to sell (e.g., ETH, ADA)
+            product_id: Trading pair (e.g., "ADA-USD", "ETH-USD")
+
+        Returns:
+            Order response
+        """
+        return await self.create_market_order(
+            product_id=product_id,
+            side="SELL",
+            size=f"{base_amount:.8f}"
         )
 
     async def get_order(self, order_id: str) -> Dict[str, Any]:
