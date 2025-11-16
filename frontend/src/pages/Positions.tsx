@@ -393,6 +393,13 @@ export default function Positions() {
     refetchInterval: 5000, // Update every 5 seconds for active deals
   })
 
+  // Fetch all bots to display bot names
+  const { data: bots } = useQuery({
+    queryKey: ['bots'],
+    queryFn: botsApi.getAll,
+    refetchInterval: 10000,
+  })
+
   // Fetch real-time prices for all open positions
   useEffect(() => {
     const fetchPrices = async () => {
@@ -582,6 +589,11 @@ export default function Positions() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-4">
                           <h3 className="text-xl font-bold text-white">Deal #{position.id}</h3>
+                          {bots && position.bot_id && (
+                            <span className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded text-xs font-medium">
+                              {bots.find(b => b.id === position.bot_id)?.name || `Bot #${position.bot_id}`}
+                            </span>
+                          )}
                           <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs font-medium">
                             {position.product_id || 'ETH-BTC'}
                           </span>
@@ -814,8 +826,13 @@ export default function Positions() {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div>
                     <p className="text-slate-400 text-xs mb-1">Deal</p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-white">#{position.id}</p>
+                      {bots && position.bot_id && (
+                        <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-xs font-medium">
+                          {bots.find(b => b.id === position.bot_id)?.name || `Bot #${position.bot_id}`}
+                        </span>
+                      )}
                       <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-xs font-medium">
                         {position.product_id || 'ETH-BTC'}
                       </span>
