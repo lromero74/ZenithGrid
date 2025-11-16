@@ -16,7 +16,8 @@ from app.models import Position, Trade, Signal, MarketData, Settings as Settings
 from app.coinbase_client import CoinbaseClient
 from app.coinbase_cdp_client import CoinbaseCDPClient
 from app.multi_bot_monitor import MultiBotMonitor
-from app.trading_engine import TradingEngine
+from app.trading_engine_v2 import StrategyTradingEngine
+from app.trading_client import TradingClient
 from app.indicators import MACDCalculator
 from app.routers import bots_router, templates_router
 
@@ -528,12 +529,18 @@ async def force_close_position(position_id: int, db: AsyncSession = Depends(get_
         # Get current price
         current_price = await coinbase_client.get_current_price()
 
-        # Execute sell
-        engine = TradingEngine(db, coinbase_client)
+        # Execute sell using new trading engine
+        trading_client = TradingClient(coinbase_client)
+        engine = StrategyTradingEngine(
+            db=db,
+            trading_client=trading_client,
+            bot=None,  # Manual operation, no bot
+            product_id=position.product_id
+        )
         trade, profit_btc, profit_percentage = await engine.execute_sell(
             position=position,
             current_price=current_price,
-            macd_data=None
+            signal_data=None
         )
 
         return {
@@ -580,13 +587,20 @@ async def add_funds_to_position(
         # Get current price
         current_price = await coinbase_client.get_current_price()
 
-        # Execute DCA buy
-        engine = TradingEngine(db, coinbase_client)
-        trade = await engine.execute_dca_buy(
+        # Execute DCA buy using new trading engine
+        trading_client = TradingClient(coinbase_client)
+        engine = StrategyTradingEngine(
+            db=db,
+            trading_client=trading_client,
+            bot=None,  # Manual operation, no bot
+            product_id=position.product_id
+        )
+        trade = await engine.execute_buy(
             position=position,
-            btc_amount=btc_amount,
+            quote_amount=btc_amount,  # New engine uses quote_amount (multi-currency)
             current_price=current_price,
-            trade_type="manual_safety_order"
+            trade_type="manual_safety_order",
+            signal_data=None
         )
 
         return {
