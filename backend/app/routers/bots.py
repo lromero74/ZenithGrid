@@ -447,6 +447,7 @@ class AIBotLogResponse(BaseModel):
     confidence: Optional[float]
     current_price: Optional[float]
     position_status: Optional[str]
+    product_id: Optional[str]
     context: Optional[dict]
 
     class Config:
