@@ -22,6 +22,7 @@ import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight
 import axios from 'axios'
 import type { Position, Trade } from '../types'
 import PositionLogsModal from '../components/PositionLogsModal'
+import TradingViewChartModal from '../components/TradingViewChartModal'
 import {
   calculateSMA,
   calculateEMA,
@@ -1101,6 +1102,9 @@ export default function Positions() {
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
   const [showLogsModal, setShowLogsModal] = useState(false)
   const [logsModalPosition, setLogsModalPosition] = useState<Position | null>(null)
+  const [showChartModal, setShowChartModal] = useState(false)
+  const [chartModalSymbol, setChartModalSymbol] = useState<string>('')
+  const [chartModalPosition, setChartModalPosition] = useState<Position | null>(null)
 
   // Filtering and sorting state (like 3Commas)
   const [filterBot, setFilterBot] = useState<number | 'all'>('all')
@@ -1636,7 +1640,14 @@ export default function Positions() {
                       </div>
 
                       {/* Column 2: Pair + Exchange (1.5 cols) */}
-                      <div className="col-span-2 flex items-start gap-2">
+                      <div
+                        className="col-span-2 flex items-start gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          setChartModalSymbol(position.product_id || 'ETH-BTC')
+                          setChartModalPosition(position)
+                          setShowChartModal(true)
+                        }}
+                      >
                         <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-xs">
                           {position.product_id?.split('-')[0]?.substring(0, 1) || 'Ƀ'}
                         </div>
@@ -1939,6 +1950,14 @@ export default function Positions() {
           }}
         />
       )}
+
+      {/* TradingView Chart Modal */}
+      <TradingViewChartModal
+        isOpen={showChartModal}
+        onClose={() => setShowChartModal(false)}
+        symbol={chartModalSymbol}
+        position={chartModalPosition}
+      />
     </div>
   )
 }
