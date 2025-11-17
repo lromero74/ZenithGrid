@@ -466,7 +466,14 @@ export default function LightweightChartModal({
     if (!chartRef.current || !position) return
 
     const avgBuyPrice = position.average_buy_price
-    const targetPrice = avgBuyPrice * 1.02
+
+    // Get profit target from strategy config (min_profit_percentage or take_profit_percentage)
+    const profitTarget = position.strategy_config_snapshot?.min_profit_percentage
+      || position.strategy_config_snapshot?.take_profit_percentage
+      || position.bot_config?.min_profit_percentage
+      || position.bot_config?.take_profit_percentage
+      || 2.0  // Default to 2% if not configured
+    const targetPrice = avgBuyPrice * (1 + profitTarget / 100)
 
     // Entry price line (orange)
     const entrySeries = chartRef.current.addLineSeries({
@@ -485,7 +492,7 @@ export default function LightweightChartModal({
       color: '#10b981',
       lineWidth: 2,
       lineStyle: LineStyle.Dashed,
-      title: 'Target',
+      title: `Target (${profitTarget}%)`,
       priceLineVisible: false,
       lastValueVisible: false,
     })
@@ -602,29 +609,38 @@ export default function LightweightChartModal({
             </h2>
             <div className="text-sm text-slate-400">{symbol}</div>
 
-            {position && (
-              <div className="flex items-center gap-3 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-0.5 bg-orange-500"></div>
-                  <span className="text-slate-400">Entry:</span>
-                  <span className="text-orange-400 font-semibold">{position.average_buy_price?.toFixed(8)}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-0.5 bg-green-500"></div>
-                  <span className="text-slate-400">Target:</span>
-                  <span className="text-green-400 font-semibold">{(position.average_buy_price * 1.02)?.toFixed(8)}</span>
-                </div>
-                {position.bot_config?.safety_order_step_percentage && (
+            {position && (() => {
+              const profitTarget = position.strategy_config_snapshot?.min_profit_percentage
+                || position.strategy_config_snapshot?.take_profit_percentage
+                || position.bot_config?.min_profit_percentage
+                || position.bot_config?.take_profit_percentage
+                || 2.0
+              const targetPrice = position.average_buy_price * (1 + profitTarget / 100)
+
+              return (
+                <div className="flex items-center gap-3 text-xs">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-0.5 bg-blue-500"></div>
-                    <span className="text-slate-400">Next SO:</span>
-                    <span className="text-blue-400 font-semibold">
-                      {(position.average_buy_price * (1 - position.bot_config.safety_order_step_percentage / 100))?.toFixed(8)}
-                    </span>
+                    <div className="w-3 h-0.5 bg-orange-500"></div>
+                    <span className="text-slate-400">Entry:</span>
+                    <span className="text-orange-400 font-semibold">{position.average_buy_price?.toFixed(8)}</span>
                   </div>
-                )}
-              </div>
-            )}
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-0.5 bg-green-500"></div>
+                    <span className="text-slate-400">Target ({profitTarget}%):</span>
+                    <span className="text-green-400 font-semibold">{targetPrice?.toFixed(8)}</span>
+                  </div>
+                  {position.bot_config?.safety_order_step_percentage && (
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-0.5 bg-blue-500"></div>
+                      <span className="text-slate-400">Next SO:</span>
+                      <span className="text-blue-400 font-semibold">
+                        {(position.average_buy_price * (1 - position.bot_config.safety_order_step_percentage / 100))?.toFixed(8)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
           <button
             onClick={onClose}
