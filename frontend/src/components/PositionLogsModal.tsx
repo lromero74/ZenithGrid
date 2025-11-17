@@ -17,7 +17,13 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
 
   const { data: logs = [], isLoading, refetch } = useQuery({
     queryKey: ['position-logs', botId, productId, positionOpenedAt],
-    queryFn: () => botsApi.getLogs(botId, 200, 0, productId, positionOpenedAt),
+    queryFn: () => {
+      // Look 60 seconds before position opened to catch the initial AI analysis that triggered the buy
+      const openedDate = new Date(positionOpenedAt)
+      const lookbackDate = new Date(openedDate.getTime() - 60000) // 60 seconds before
+      const since = lookbackDate.toISOString()
+      return botsApi.getLogs(botId, 200, 0, productId, since)
+    },
     enabled: isOpen,
     refetchInterval: isOpen ? 10000 : false, // Refresh every 10 seconds when open
   })

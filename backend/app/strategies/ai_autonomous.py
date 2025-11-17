@@ -1026,7 +1026,7 @@ Respond ONLY with a JSON object (no markdown) in this exact format:
             )
 
             response = await client.chat.completions.create(
-                model="grok-beta",
+                model="grok-3",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0  # Deterministic responses (eliminates flip-flopping)
             )

@@ -16,7 +16,8 @@ import {
   Activity,
   Settings,
   Search,
-  BarChart2
+  BarChart2,
+  Minus
 } from 'lucide-react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import axios from 'axios'
@@ -1094,6 +1095,54 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
   )
 }
 
+// AI Sentiment Icon Component
+function AISentimentIcon({ botId, productId }: { botId: number, productId: string }) {
+  const { data: aiLog } = useQuery({
+    queryKey: ['ai-sentiment', botId, productId],
+    queryFn: async () => {
+      const response = await axios.get(`/api/bots/${botId}/logs`, {
+        params: { product_id: productId, limit: 1 }
+      })
+      return response.data[0] || null
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+    enabled: !!botId && !!productId,
+  })
+
+  if (!aiLog || !aiLog.decision) return null
+
+  const decision = aiLog.decision.toLowerCase()
+  const confidence = aiLog.confidence || 0
+
+  // Map decision to icon and color
+  const getIcon = () => {
+    switch (decision) {
+      case 'buy':
+        return <TrendingUp size={14} className="text-green-400" />
+      case 'sell':
+        return <TrendingDown size={14} className="text-red-400" />
+      case 'hold':
+        return <Minus size={14} className="text-yellow-400" />
+      default:
+        return null
+    }
+  }
+
+  const getTooltip = () => {
+    return `AI: ${decision.toUpperCase()} (${confidence.toFixed(0)}%)\n${aiLog.thinking || ''}`
+  }
+
+  return (
+    <div
+      className="flex items-center gap-1 cursor-help"
+      title={getTooltip()}
+    >
+      {getIcon()}
+      <span className="text-[10px] text-slate-400">{confidence.toFixed(0)}%</span>
+    </div>
+  )
+}
+
 export default function Positions() {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null)
   const [showAddFundsModal, setShowAddFundsModal] = useState(false)
@@ -1669,6 +1718,13 @@ export default function Positions() {
                                 setShowLightweightChart(true)
                               }}
                             />
+                            {/* AI Sentiment Indicator */}
+                            {position.bot_id && (
+                              <AISentimentIcon
+                                botId={position.bot_id}
+                                productId={position.product_id || 'ETH-BTC'}
+                              />
+                            )}
                           </div>
                           <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>
                         </div>
@@ -1790,6 +1846,45 @@ export default function Positions() {
                                         </div>
                                         {targetPos === 'top' && <div className="w-px h-3 bg-emerald-400" />}
                                       </div>
+
+                                      {/* DCA Level Tick Marks */}
+                                      {(() => {
+                                        const minPriceDropForDCA = strategyConfig.min_price_drop_for_dca
+                                        const maxDCAOrders = strategyConfig.max_safety_orders || 3
+
+                                        if (!minPriceDropForDCA || position.status !== 'open') return null
+
+                                        const dcaLevels = []
+                                        const maxDCA = Math.min(maxDCAOrders, 3) // Limit to 3 to avoid clutter
+
+                                        for (let i = 1; i <= maxDCA; i++) {
+                                          const dropPercentage = minPriceDropForDCA * i
+                                          const dcaPrice = entryPrice * (1 - dropPercentage / 100)
+                                          const dcaPosition = ((dcaPrice - minPrice) / priceRange) * 100
+
+                                          // Only show if visible on the bar (between 0-100%)
+                                          if (dcaPosition >= 0 && dcaPosition <= 100) {
+                                            dcaLevels.push(
+                                              <div
+                                                key={`dca-${i}`}
+                                                className="absolute flex flex-col items-center"
+                                                style={{
+                                                  left: `${dcaPosition}%`,
+                                                  transform: 'translateX(-50%)',
+                                                  bottom: '100%'
+                                                }}
+                                              >
+                                                <div className="text-[8px] text-purple-400 whitespace-nowrap mb-0.5">
+                                                  DCA{i}
+                                                </div>
+                                                <div className="w-px h-2 bg-purple-400" />
+                                              </div>
+                                            )
+                                          }
+                                        }
+
+                                        return dcaLevels
+                                      })()}
                                     </>
                                   )
                                 })()}

@@ -201,6 +201,23 @@ function Bots() {
     },
   })
 
+  // ESC key handler to close modal
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showModal) {
+        setShowModal(false)
+        resetForm()
+      }
+    }
+
+    if (showModal) {
+      document.addEventListener('keydown', handleEscape)
+      return () => {
+        document.removeEventListener('keydown', handleEscape)
+      }
+    }
+  }, [showModal])
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -416,23 +433,6 @@ function Bots() {
       </div>
     )
   }
-
-  // ESC key handler to close modal
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && showModal) {
-        setShowModal(false)
-        resetForm()
-      }
-    }
-
-    if (showModal) {
-      document.addEventListener('keydown', handleEscape)
-      return () => {
-        document.removeEventListener('keydown', handleEscape)
-      }
-    }
-  }, [showModal])
 
   return (
     <div>

@@ -767,6 +767,34 @@ export default function LightweightChartModal({
         positionLinesRef.current.push(soSeries)
       }
     }
+
+    // DCA level lines (magenta) - show minimum price drops for next DCA orders
+    const minPriceDropForDCA = position.strategy_config_snapshot?.min_price_drop_for_dca
+      || position.bot_config?.min_price_drop_for_dca
+    const maxDCAOrders = position.strategy_config_snapshot?.max_safety_orders
+      || position.bot_config?.max_safety_orders
+      || 3
+
+    if (minPriceDropForDCA && position.status === 'open') {
+      const maxDCA = Math.min(maxDCAOrders, 5) // Limit to 5 lines
+
+      for (let i = 1; i <= maxDCA; i++) {
+        const dropPercentage = minPriceDropForDCA * i
+        const dcaPrice = avgBuyPrice * (1 - dropPercentage / 100)
+
+        const dcaSeries = chartRef.current!.addLineSeries({
+          color: '#a855f7', // Purple/magenta to distinguish from safety orders
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          title: `DCA${i} (-${dropPercentage.toFixed(1)}%)`,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        })
+        const dcaData = chartData.map(d => ({ time: d.time, value: dcaPrice }))
+        dcaSeries.setData(dcaData)
+        positionLinesRef.current.push(dcaSeries)
+      }
+    }
   }
 
   // Add markers for entry and current price
