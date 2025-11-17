@@ -47,7 +47,7 @@ export default function TradingViewChartModal({
       // Get saved chart settings from localStorage
       const savedSettings = localStorage.getItem(`chart_settings_${symbol}`)
       const settings = savedSettings ? JSON.parse(savedSettings) : {
-        interval: '12h',
+        interval: 'D',  // Default to daily chart
         studies: ['BB@tv-basicstudies', 'RSI@tv-basicstudies', 'MACD@tv-basicstudies'],
         theme: 'dark'
       }
@@ -56,7 +56,7 @@ export default function TradingViewChartModal({
         container_id: containerRef.current.id,
         autosize: true,
         symbol: tvSymbol,
-        interval: settings.interval || '12h',
+        interval: settings.interval || 'D',
         timezone: 'Etc/UTC',
         theme: 'dark',
         style: '1',
@@ -82,56 +82,6 @@ export default function TradingViewChartModal({
           }
         })
       })
-
-      // Save settings when user changes them
-      if (widgetRef.current) {
-        widgetRef.current.onChartReady(() => {
-          const chart = widgetRef.current.chart()
-
-          // Save interval changes
-          chart.onIntervalChanged().subscribe(null, (interval: string) => {
-            const currentSettings = JSON.parse(localStorage.getItem(`chart_settings_${symbol}`) || '{}')
-            localStorage.setItem(`chart_settings_${symbol}`, JSON.stringify({
-              ...currentSettings,
-              interval
-            }))
-          })
-
-          // Add horizontal lines for position if available
-          if (position) {
-            // Entry price line
-            chart.createShape(
-              { time: Date.now() / 1000, price: position.average_buy_price },
-              {
-                shape: 'horizontal_line',
-                text: `Buy Price: ${position.average_buy_price}`,
-                overrides: {
-                  linecolor: '#fbbf24',
-                  linewidth: 2,
-                  linestyle: 0,
-                  showLabel: true
-                }
-              }
-            )
-
-            // Target price line (2% profit)
-            const targetPrice = position.average_buy_price * 1.02
-            chart.createShape(
-              { time: Date.now() / 1000, price: targetPrice },
-              {
-                shape: 'horizontal_line',
-                text: `Target: ${targetPrice.toFixed(8)}`,
-                overrides: {
-                  linecolor: '#10b981',
-                  linewidth: 2,
-                  linestyle: 2,
-                  showLabel: true
-                }
-              }
-            )
-          }
-        })
-      }
     }
 
     return () => {
