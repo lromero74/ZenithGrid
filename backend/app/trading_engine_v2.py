@@ -211,6 +211,11 @@ class StrategyTradingEngine:
             )
             success_response = order_response.get("success_response", {})
             order_id = success_response.get("order_id", "")
+
+            # CRITICAL: Validate order_id is present
+            if not order_id:
+                raise ValueError("No order_id returned from Coinbase - buy order may have failed")
+
         except Exception as e:
             logger.error(f"Error executing buy order: {e}")
             raise
@@ -339,6 +344,11 @@ class StrategyTradingEngine:
             )
             success_response = order_response.get("success_response", {})
             order_id = success_response.get("order_id", "")
+
+            # CRITICAL: Validate order_id is present
+            if not order_id:
+                raise ValueError("No order_id returned from Coinbase - sell order may have failed")
+
         except Exception as e:
             logger.error(f"Error executing sell order: {e}")
             raise
