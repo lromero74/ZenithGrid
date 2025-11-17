@@ -1651,8 +1651,8 @@ export default function Positions() {
               )
             })}
           </div>
-        )
-      }
+        )}
+      </div>
 
       {/* Add Funds Modal */}
       {showAddFundsModal && (
