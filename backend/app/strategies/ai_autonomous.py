@@ -203,7 +203,7 @@ class AIAutonomousStrategy(TradingStrategy):
                     display_name="DCA Confidence Threshold %",
                     description="AI confidence required to DCA (higher = more selective)",
                     type="int",
-                    default=70,
+                    default=80,
                     min_value=50,
                     max_value=95
                 ),
@@ -1219,7 +1219,7 @@ Respond with JSON (no markdown):
                 return False, 0.0, f"Price drop {price_drop_pct:.2f}% below minimum {min_price_drop_pct}% for DCA"
 
             # Check DCA confidence threshold (higher bar for adding to positions)
-            dca_confidence_threshold = self.config.get("dca_confidence_threshold", 70)
+            dca_confidence_threshold = self.config.get("dca_confidence_threshold", 80)
             if confidence < dca_confidence_threshold:
                 return False, 0.0, f"DCA confidence {confidence}% below threshold {dca_confidence_threshold}%"
 
@@ -1244,8 +1244,8 @@ Respond with JSON (no markdown):
             return True, btc_amount, f"AI DCA #{current_safety_orders + 1} ({confidence}% confidence, {price_drop_pct:.2f}% drop): {reasoning}"
 
         # New position (base order)
-        if confidence < 60:
-            return False, 0.0, f"AI confidence too low ({confidence}%)"
+        if confidence < 80:
+            return False, 0.0, f"AI confidence too low ({confidence}% - need 80%+ to open position)"
 
         # Calculate buy amount based on AI suggestion and budget
         suggested_pct = signal_data.get("suggested_allocation_pct", 10)
