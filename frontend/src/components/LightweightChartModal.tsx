@@ -301,6 +301,7 @@ export default function LightweightChartModal({
           color: indicator.settings.color || '#FF9800',
           lineWidth: 2,
           title: `SMA(${period})`,
+          priceScaleId: 'right',
         })
         smaSeries.setData(smaData)
         indicatorSeriesRef.current.set(indicator.id, [smaSeries])
@@ -316,6 +317,7 @@ export default function LightweightChartModal({
           color: indicator.settings.color || '#9C27B0',
           lineWidth: 2,
           title: `EMA(${period})`,
+          priceScaleId: 'right',
         })
         emaSeries.setData(emaData)
         indicatorSeriesRef.current.set(indicator.id, [emaSeries])
@@ -339,6 +341,7 @@ export default function LightweightChartModal({
           color: indicator.settings.upperColor || '#2196F3',
           lineWidth: 1,
           title: `BB Upper(${period})`,
+          priceScaleId: 'right',
         })
         upperSeries.setData(upperData)
 
@@ -346,6 +349,7 @@ export default function LightweightChartModal({
           color: indicator.settings.middleColor || '#FF9800',
           lineWidth: 1,
           title: `BB Middle(${period})`,
+          priceScaleId: 'right',
         })
         middleSeries.setData(middleData)
 
@@ -353,6 +357,7 @@ export default function LightweightChartModal({
           color: indicator.settings.lowerColor || '#2196F3',
           lineWidth: 1,
           title: `BB Lower(${period})`,
+          priceScaleId: 'right',
         })
         lowerSeries.setData(lowerData)
 
@@ -373,16 +378,103 @@ export default function LightweightChartModal({
         })
         rsiSeries.setData(rsiData)
 
+        // Configure RSI scale with 0-100 range and positioned at bottom
         chartRef.current!.priceScale('rsi').applyOptions({
           scaleMargins: { top: 0.8, bottom: 0 },
           borderColor: '#334155',
+          visible: true,
+          autoScale: false,  // Don't auto-scale, use fixed range
         })
 
-        indicatorSeriesRef.current.set(indicator.id, [rsiSeries])
+        // Add horizontal lines for overbought/oversold levels
+        const overbought = indicator.settings.overbought || 70
+        const oversold = indicator.settings.oversold || 30
+
+        const overboughtSeries = chartRef.current!.addLineSeries({
+          color: 'rgba(239, 83, 80, 0.5)',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceScaleId: 'rsi',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        overboughtSeries.setData(chartData.map(c => ({ time: c.time, value: overbought })))
+
+        const oversoldSeries = chartRef.current!.addLineSeries({
+          color: 'rgba(38, 166, 154, 0.5)',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceScaleId: 'rsi',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        oversoldSeries.setData(chartData.map(c => ({ time: c.time, value: oversold })))
+
+        indicatorSeriesRef.current.set(indicator.id, [rsiSeries, overboughtSeries, oversoldSeries])
+
+      } else if (indicator.type === 'macd') {
+        const fastPeriod = indicator.settings.fastPeriod || 12
+        const slowPeriod = indicator.settings.slowPeriod || 26
+        const signalPeriod = indicator.settings.signalPeriod || 9
+        const macdResult = calculateMACD(closes, fastPeriod, slowPeriod, signalPeriod)
+
+        const macdData = chartData
+          .map((c, i) => ({ time: c.time, value: macdResult.macd[i] ?? 0 }))
+          .filter((d, i) => macdResult.macd[i] !== null)
+        const signalData = chartData
+          .map((c, i) => ({ time: c.time, value: macdResult.signal[i] ?? 0 }))
+          .filter((d, i) => macdResult.signal[i] !== null)
+        const histogramData = chartData
+          .map((c, i) => ({ time: c.time, value: macdResult.histogram[i] ?? 0 }))
+          .filter((d, i) => macdResult.histogram[i] !== null)
+
+        // MACD line
+        const macdSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.macdColor || '#2196F3',
+          lineWidth: 2,
+          title: 'MACD',
+          priceScaleId: 'macd',
+        })
+        macdSeries.setData(macdData)
+
+        // Signal line
+        const signalSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.signalColor || '#FF5722',
+          lineWidth: 2,
+          title: 'Signal',
+          priceScaleId: 'macd',
+        })
+        signalSeries.setData(signalData)
+
+        // Histogram (as line series for now - lightweight-charts doesn't have native histogram)
+        const histogramSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.histogramColor || '#4CAF50',
+          lineWidth: 2,
+          title: 'Histogram',
+          priceScaleId: 'macd',
+        })
+        histogramSeries.setData(histogramData)
+
+        // Configure MACD scale positioned above RSI if present
+        chartRef.current!.priceScale('macd').applyOptions({
+          scaleMargins: { top: 0.6, bottom: 0.2 },
+          borderColor: '#334155',
+          visible: true,
+        })
+
+        indicatorSeriesRef.current.set(indicator.id, [macdSeries, signalSeries, histogramSeries])
       }
-      // Note: MACD and Stochastic would need separate chart containers for proper display
+      // Note: Stochastic would need a separate pane as well
     })
-  }, [indicators, chartData])
+
+    // Ensure right price scale remains visible after adding indicators
+    if (chartRef.current) {
+      chartRef.current.priceScale('right').applyOptions({
+        borderColor: '#334155',
+        visible: true,
+      })
+    }
+  }, [indicators, chartData, chartType, useHeikinAshi])
 
   // Add position reference lines
   const addPositionLines = () => {
