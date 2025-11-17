@@ -1315,9 +1315,10 @@ Respond with JSON (no markdown):
             return False, f"Profit {profit_pct:.2f}% below minimum {min_profit}%"
 
         # RULE 3: Consider AI recommendation
+        # Lower threshold for sells (50%) since we have profit protection (never sell at loss + min profit)
         if signal_data.get("signal_type") == "sell":
             confidence = signal_data.get("confidence", 0)
-            if confidence >= 70:
+            if confidence >= 50:
                 reasoning = signal_data.get("reasoning", "AI recommends selling")
                 return True, f"AI SELL ({confidence}% confidence, {profit_pct:.2f}% profit): {reasoning}"
 
