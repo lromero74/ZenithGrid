@@ -23,6 +23,7 @@ import axios from 'axios'
 import type { Position, Trade } from '../types'
 import PositionLogsModal from '../components/PositionLogsModal'
 import TradingViewChartModal from '../components/TradingViewChartModal'
+import LightweightChartModal from '../components/LightweightChartModal'
 import {
   calculateSMA,
   calculateEMA,
@@ -1105,6 +1106,9 @@ export default function Positions() {
   const [showChartModal, setShowChartModal] = useState(false)
   const [chartModalSymbol, setChartModalSymbol] = useState<string>('')
   const [chartModalPosition, setChartModalPosition] = useState<Position | null>(null)
+  const [showLightweightChart, setShowLightweightChart] = useState(false)
+  const [lightweightChartSymbol, setLightweightChartSymbol] = useState<string>('')
+  const [lightweightChartPosition, setLightweightChartPosition] = useState<Position | null>(null)
 
   // Filtering and sorting state (like 3Commas)
   const [filterBot, setFilterBot] = useState<number | 'all'>('all')
@@ -1640,19 +1644,32 @@ export default function Positions() {
                       </div>
 
                       {/* Column 2: Pair + Exchange (1.5 cols) */}
-                      <div
-                        className="col-span-2 flex items-start gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => {
-                          setChartModalSymbol(position.product_id || 'ETH-BTC')
-                          setChartModalPosition(position)
-                          setShowChartModal(true)
-                        }}
-                      >
+                      <div className="col-span-2 flex items-start gap-2">
                         <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-xs">
                           {position.product_id?.split('-')[0]?.substring(0, 1) || 'Ƀ'}
                         </div>
-                        <div>
-                          <div className="text-white font-semibold">{position.product_id || 'ETH-BTC'}</div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="text-white font-semibold cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => {
+                                setChartModalSymbol(position.product_id || 'ETH-BTC')
+                                setChartModalPosition(position)
+                                setShowChartModal(true)
+                              }}
+                            >
+                              {position.product_id || 'ETH-BTC'}
+                            </span>
+                            <BarChart2
+                              size={14}
+                              className="text-slate-400 hover:text-blue-400 cursor-pointer transition-colors"
+                              onClick={() => {
+                                setLightweightChartSymbol(position.product_id || 'ETH-BTC')
+                                setLightweightChartPosition(position)
+                                setShowLightweightChart(true)
+                              }}
+                            />
+                          </div>
                           <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>
                         </div>
                       </div>
@@ -1957,6 +1974,14 @@ export default function Positions() {
         onClose={() => setShowChartModal(false)}
         symbol={chartModalSymbol}
         position={chartModalPosition}
+      />
+
+      {/* Lightweight Chart Modal */}
+      <LightweightChartModal
+        isOpen={showLightweightChart}
+        onClose={() => setShowLightweightChart(false)}
+        symbol={lightweightChartSymbol}
+        position={lightweightChartPosition}
       />
     </div>
   )
