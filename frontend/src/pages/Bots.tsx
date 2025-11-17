@@ -796,39 +796,31 @@ function Bots() {
                           const groupPairs = TRADING_PAIRS.filter(p => p.group === group)
                           if (groupPairs.length === 0) return null
 
-                          // Determine if this market group should be disabled
-                          const isGroupDisabled = isMarketLocked && selectedMarket !== group
+                          // Hide this market group if locked and not the selected market
+                          const isGroupHidden = isMarketLocked && selectedMarket !== group
+                          if (isGroupHidden) return null
 
                           return (
-                            <div key={group} className={`mb-3 last:mb-0 ${isGroupDisabled ? 'opacity-40' : ''}`}>
+                            <div key={group} className="mb-3 last:mb-0">
                               <div className="text-xs font-medium text-slate-400 mb-1.5">
                                 {group} Pairs
-                                {isGroupDisabled && <span className="ml-2 text-slate-500">(locked)</span>}
                               </div>
                               <div className="grid grid-cols-2 gap-1">
                                 {groupPairs.map((pair) => {
                                   const isChecked = formData.product_ids.includes(pair.value)
-                                  const isDisabled = isGroupDisabled && !isChecked
 
                                   return (
                                     <label
                                       key={pair.value}
-                                      className={`flex items-center space-x-2 px-2 py-1 rounded text-sm ${
-                                        isDisabled
-                                          ? 'cursor-not-allowed'
-                                          : 'cursor-pointer hover:bg-slate-600'
-                                      }`}
+                                      className="flex items-center space-x-2 px-2 py-1 rounded text-sm cursor-pointer hover:bg-slate-600"
                                     >
                                       <input
                                         type="checkbox"
                                         checked={isChecked}
-                                        disabled={isDisabled}
                                         onChange={(e) => handlePairToggle(pair.value, e.target.checked)}
                                         className="rounded border-slate-500"
                                       />
-                                      <span className={`text-xs ${isDisabled ? 'text-slate-500' : ''}`}>
-                                        {pair.label}
-                                      </span>
+                                      <span className="text-xs">{pair.label}</span>
                                     </label>
                                   )
                                 })}
