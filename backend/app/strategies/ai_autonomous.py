@@ -463,6 +463,7 @@ Remember:
             response = self.client.messages.create(
                 model="claude-sonnet-4-5-20250929",  # Claude Sonnet 4.5 (latest)
                 max_tokens=1000,  # Allow for detailed reasoning
+                temperature=0,  # Deterministic responses (eliminates flip-flopping)
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -605,7 +606,10 @@ Remember:
 - Keep reasoning concise"""
 
         try:
-            model = genai.GenerativeModel('gemini-2.5-flash')  # Latest Gemini 2.5 Flash
+            model = genai.GenerativeModel(
+                'gemini-2.5-flash',  # Latest Gemini 2.5 Flash
+                generation_config={"temperature": 0}  # Deterministic responses
+            )
             response = model.generate_content(prompt)
 
             # Parse response
@@ -766,7 +770,10 @@ Rules:
 - Return valid JSON only (no markdown)"""
 
         try:
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel(
+                'gemini-2.5-flash',
+                generation_config={"temperature": 0}  # Deterministic responses
+            )
             response = model.generate_content(prompt)
             response_text = response.text.strip()
 
@@ -902,6 +909,7 @@ Rules:
             response = await client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=4096,
+                temperature=0,  # Deterministic responses (eliminates flip-flopping)
                 messages=[{"role": "user", "content": prompt}]
             )
 
@@ -1020,7 +1028,7 @@ Respond ONLY with a JSON object (no markdown) in this exact format:
             response = await client.chat.completions.create(
                 model="grok-beta",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7
+                temperature=0  # Deterministic responses (eliminates flip-flopping)
             )
 
             response_text = response.choices[0].message.content.strip()
@@ -1113,7 +1121,7 @@ Respond with JSON (no markdown):
             response = await client.chat.completions.create(
                 model="grok-3",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7
+                temperature=0  # Deterministic responses (eliminates flip-flopping)
             )
 
             response_text = response.choices[0].message.content.strip()
