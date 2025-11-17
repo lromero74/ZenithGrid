@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_client import CoinbaseClient
 from app.currency_utils import format_with_usd, get_quote_currency
-from app.models import AIBotLog, Bot, Position, Signal, Trade
+from app.models import AIBotLog, Bot, PendingOrder, Position, Signal, Trade
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
 
@@ -158,7 +158,10 @@ class StrategyTradingEngine:
         signal_data: Optional[Dict[str, Any]] = None
     ) -> Trade:
         """
-        Execute a buy order
+        Execute a buy order (market or limit based on configuration)
+
+        For safety orders, checks position's strategy_config_snapshot for safety_order_type.
+        If "limit", places a limit order instead of executing immediately.
 
         Args:
             position: Current position
@@ -166,7 +169,36 @@ class StrategyTradingEngine:
             current_price: Current market price
             trade_type: 'initial' or 'dca' or strategy-specific type
             signal_data: Optional signal metadata
+
+        Returns:
+            Trade record (for market orders only; limit orders return None)
         """
+        # Check if this is a safety order that should use limit orders
+        is_safety_order = trade_type.startswith("safety_order")
+        config = position.strategy_config_snapshot or {}
+        safety_order_type = config.get("safety_order_type", "market")
+
+        if is_safety_order and safety_order_type == "limit":
+            # Place limit order instead of market order
+            # Calculate limit price (use current price as-is for now)
+            # Note: In the future, this could apply a discount or use strategy-specific logic
+            limit_price = current_price
+
+            logger.info(f"  📋 Placing limit buy order: {quote_amount:.8f} {self.quote_currency} @ {limit_price:.8f}")
+
+            pending_order = await self.execute_limit_buy(
+                position=position,
+                quote_amount=quote_amount,
+                limit_price=limit_price,
+                trade_type=trade_type,
+                signal_data=signal_data
+            )
+
+            # Return None for limit orders (no Trade created yet)
+            # The order monitoring service will create the Trade when filled
+            return None
+
+        # Execute market order (immediate execution)
         # Calculate amount of base currency to buy
         base_amount = quote_amount / current_price
 
@@ -216,6 +248,72 @@ class StrategyTradingEngine:
         await self.trading_client.invalidate_balance_cache()
 
         return trade
+
+    async def execute_limit_buy(
+        self,
+        position: Position,
+        quote_amount: float,
+        limit_price: float,
+        trade_type: str,
+        signal_data: Optional[Dict[str, Any]] = None
+    ) -> PendingOrder:
+        """
+        Place a limit buy order and track it in pending_orders table
+
+        Args:
+            position: Current position
+            quote_amount: Amount of quote currency to spend (BTC or USD)
+            limit_price: Target price for the limit order
+            trade_type: 'safety_order_1', 'safety_order_2', etc.
+            signal_data: Optional signal metadata
+
+        Returns:
+            PendingOrder record
+        """
+        # Calculate base amount at limit price
+        base_amount = quote_amount / limit_price
+
+        # Place limit order via TradingClient
+        order_id = None
+        try:
+            order_response = await self.trading_client.buy_limit(
+                product_id=self.product_id,
+                limit_price=limit_price,
+                quote_amount=quote_amount
+            )
+            success_response = order_response.get("success_response", {})
+            order_id = success_response.get("order_id", "")
+
+            if not order_id:
+                raise ValueError("No order_id returned from Coinbase")
+
+        except Exception as e:
+            logger.error(f"Error placing limit buy order: {e}")
+            raise
+
+        # Create PendingOrder record
+        pending_order = PendingOrder(
+            position_id=position.id,
+            bot_id=self.bot.id,
+            order_id=order_id,
+            product_id=self.product_id,
+            side="BUY",
+            order_type="LIMIT",
+            limit_price=limit_price,
+            quote_amount=quote_amount,
+            base_amount=base_amount,
+            trade_type=trade_type,
+            status="pending",
+            created_at=datetime.utcnow()
+        )
+
+        self.db.add(pending_order)
+        await self.db.commit()
+        await self.db.refresh(pending_order)
+
+        logger.info(f"✅ Placed limit buy order: {quote_amount:.8f} {self.quote_currency} @ {limit_price:.8f} (Order ID: {order_id})")
+
+        return pending_order
 
     async def execute_sell(
         self,
@@ -432,7 +530,13 @@ class StrategyTradingEngine:
                     trade_type=trade_type,
                     signal_data=signal_data
                 )
-                logger.info(f"  ✅ Trade executed: ID={trade.id}, Order={trade.order_id}")
+
+                if trade is None:
+                    # Limit order was placed instead
+                    logger.info(f"  ✅ Limit order placed (pending fill)")
+                else:
+                    # Market order executed immediately
+                    logger.info(f"  ✅ Trade executed: ID={trade.id}, Order={trade.order_id}")
 
             except Exception as e:
                 logger.error(f"  ❌ Trade execution failed: {e}")

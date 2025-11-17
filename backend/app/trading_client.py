@@ -72,7 +72,7 @@ class TradingClient:
         quote_amount: float
     ) -> Dict[str, Any]:
         """
-        Buy base currency with quote currency
+        Buy base currency with quote currency (market order)
 
         Automatically detects quote currency and uses appropriate method.
 
@@ -99,6 +99,30 @@ class TradingClient:
             )
         else:
             raise ValueError(f"Unsupported quote currency: {quote_currency}")
+
+    async def buy_limit(
+        self,
+        product_id: str,
+        limit_price: float,
+        quote_amount: float
+    ) -> Dict[str, Any]:
+        """
+        Buy base currency with quote currency using a limit order
+
+        Args:
+            product_id: Trading pair (e.g., "ETH-BTC", "ADA-USD")
+            limit_price: Limit price for the order
+            quote_amount: Amount of quote currency to spend
+
+        Returns:
+            Order response from Coinbase
+        """
+        return await self.coinbase.create_limit_order(
+            product_id=product_id,
+            side="BUY",
+            limit_price=limit_price,
+            funds=str(quote_amount)
+        )
 
     async def sell(
         self,
