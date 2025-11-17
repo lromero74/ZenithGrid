@@ -1461,7 +1461,36 @@ export default function Positions() {
             <p className="text-slate-500 text-sm mt-2">Start a bot to open new positions</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2">
+            {/* Column Headers - 3Commas Style */}
+            <div className="bg-slate-800/50 rounded-lg border border-slate-700/50 px-4 py-2">
+              <div className="grid grid-cols-12 gap-4 items-center text-xs text-slate-400">
+                <div className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300">
+                  Bot ↕
+                </div>
+                <div className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300">
+                  Pair ↕
+                </div>
+                <div className="col-span-4 flex items-center gap-1 cursor-pointer hover:text-slate-300">
+                  <span className="flex items-center gap-1">
+                    <span className="w-4 h-4 rounded-full bg-slate-600 flex items-center justify-center text-[9px]">?</span>
+                    uPnL
+                  </span>
+                  ↕
+                </div>
+                <div className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300">
+                  Volume ↕
+                </div>
+                <div className="col-span-1 flex items-center gap-1 cursor-pointer hover:text-slate-300">
+                  Status ↕
+                </div>
+                <div className="col-span-1 flex items-center gap-1 cursor-pointer hover:text-slate-300">
+                  Created ↕
+                </div>
+              </div>
+            </div>
+
+            {/* Group positions by bot */}
             {openPositions.map((position) => {
               const currentPrice = currentPrices[position.product_id || 'ETH-BTC']
               const pnl = calculateUnrealizedPnL(position, currentPrice)
@@ -1655,7 +1684,7 @@ export default function Positions() {
                         </div>
                       </div>
 
-                      {/* Column 6: Avg O + Timestamp (1 col) */}
+                      {/* Column 6: Created (1 col) */}
                       <div className="col-span-1">
                         <div className="text-[10px] space-y-0.5">
                           <div className="text-slate-400">ID: {position.id}</div>
