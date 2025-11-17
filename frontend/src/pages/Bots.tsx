@@ -691,101 +691,155 @@ function Bots() {
                   <span className="text-blue-400">3.</span> Markets & Trading Pairs
                 </h3>
 
-                {/* Trading Pairs (3Commas Style Multi-Select) */}
+                {/* Trading Pairs (3Commas Style Multi-Select with Single Market Constraint) */}
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Pairs
                 </label>
 
-                {/* Header with count and unselect all */}
-                <div className="flex items-center justify-between mb-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-t">
-                  <span className="text-sm text-slate-300">{formData.product_ids.length} pairs</span>
-                  {formData.product_ids.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, product_ids: [], product_id: 'ETH-BTC' })}
-                      className="text-xs text-blue-400 hover:text-blue-300"
-                    >
-                      Unselect all ({formData.product_ids.length})
-                    </button>
-                  )}
-                </div>
+                {/* Determine current market (quote currency) based on selected pairs */}
+                {(() => {
+                  // Helper: get market from pair ID (e.g., "ETH-BTC" -> "BTC")
+                  const getMarket = (pairId: string) => pairId.split('-')[1]
 
-                {/* Quick filter buttons */}
-                <div className="flex flex-wrap gap-2 mb-3 px-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const usdcPairs = TRADING_PAIRS.filter(p => p.group === 'USDC').map(p => p.value)
-                      setFormData({ ...formData, product_ids: usdcPairs, product_id: usdcPairs[0] || 'ETH-BTC' })
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
-                  >
-                    USDC All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const usdPairs = TRADING_PAIRS.filter(p => p.group === 'USD').map(p => p.value)
-                      setFormData({ ...formData, product_ids: usdPairs, product_id: usdPairs[0] || 'BTC-USD' })
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
-                  >
-                    USD All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const usdtPairs = TRADING_PAIRS.filter(p => p.group === 'USDT').map(p => p.value)
-                      setFormData({ ...formData, product_ids: usdtPairs, product_id: usdtPairs[0] || 'ETH-BTC' })
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
-                  >
-                    USDT All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const btcPairs = TRADING_PAIRS.filter(p => p.group === 'BTC').map(p => p.value)
-                      setFormData({ ...formData, product_ids: btcPairs, product_id: btcPairs[0] || 'ETH-BTC' })
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
-                  >
-                    BTC All
-                  </button>
-                </div>
+                  // Determine which market is currently selected
+                  const selectedMarket = formData.product_ids.length > 0
+                    ? getMarket(formData.product_ids[0])
+                    : null
 
-                {/* Pair list - grouped by quote currency, sorted by volume */}
-                <div className="border border-slate-600 border-t-0 rounded-b bg-slate-700 p-3 max-h-72 overflow-y-auto">
-                  {['BTC', 'USD', 'USDC', 'USDT'].map((group) => {
-                    const groupPairs = TRADING_PAIRS.filter(p => p.group === group)
-                    if (groupPairs.length === 0) return null
+                  // Check if a market is locked (2+ pairs selected from same market)
+                  const isMarketLocked = formData.product_ids.length >= 2
 
-                    return (
-                      <div key={group} className="mb-3 last:mb-0">
-                        <div className="text-xs font-medium text-slate-400 mb-1.5">{group} Pairs</div>
-                        <div className="grid grid-cols-2 gap-1">
-                          {groupPairs.map((pair) => (
-                            <label key={pair.value} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-600 px-2 py-1 rounded text-sm">
-                              <input
-                                type="checkbox"
-                                checked={formData.product_ids.includes(pair.value)}
-                                onChange={(e) => {
-                                  const newIds = e.target.checked
-                                    ? [...formData.product_ids, pair.value]
-                                    : formData.product_ids.filter(id => id !== pair.value)
-                                  setFormData({ ...formData, product_ids: newIds, product_id: newIds[0] || 'ETH-BTC' })
-                                }}
-                                className="rounded border-slate-500"
-                              />
-                              <span className="text-xs">{pair.label}</span>
-                            </label>
-                          ))}
-                        </div>
+                  // Handler for pair checkbox change with 3Commas logic
+                  const handlePairToggle = (pairValue: string, isChecked: boolean) => {
+                    const pairMarket = getMarket(pairValue)
+
+                    if (isChecked) {
+                      // Adding a pair
+                      if (!selectedMarket) {
+                        // No pairs selected yet - just add this one
+                        setFormData({ ...formData, product_ids: [pairValue], product_id: pairValue })
+                      } else if (pairMarket === selectedMarket) {
+                        // Adding from same market - just add it
+                        setFormData({
+                          ...formData,
+                          product_ids: [...formData.product_ids, pairValue],
+                          product_id: formData.product_ids[0] || pairValue
+                        })
+                      } else {
+                        // Switching markets - clear previous selections and select only this pair
+                        setFormData({ ...formData, product_ids: [pairValue], product_id: pairValue })
+                      }
+                    } else {
+                      // Removing a pair
+                      const newIds = formData.product_ids.filter(id => id !== pairValue)
+                      setFormData({
+                        ...formData,
+                        product_ids: newIds,
+                        product_id: newIds[0] || 'ETH-BTC'
+                      })
+                    }
+                  }
+
+                  return (
+                    <>
+                      {/* Header with count and unselect all */}
+                      <div className="flex items-center justify-between mb-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-t">
+                        <span className="text-sm text-slate-300">
+                          {formData.product_ids.length} pairs
+                          {selectedMarket && <span className="text-slate-400 ml-2">({selectedMarket} market)</span>}
+                        </span>
+                        {formData.product_ids.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, product_ids: [], product_id: 'ETH-BTC' })}
+                            className="text-xs text-blue-400 hover:text-blue-300"
+                          >
+                            Unselect all ({formData.product_ids.length})
+                          </button>
+                        )}
                       </div>
-                    )
-                  })}
-                </div>
+
+                      {/* Quick filter buttons */}
+                      <div className="flex flex-wrap gap-2 mb-3 px-1">
+                        {['USDC', 'USD', 'USDT', 'BTC'].map((market) => {
+                          const marketPairs = TRADING_PAIRS.filter(p => p.group === market).map(p => p.value)
+                          const isDisabled = isMarketLocked && selectedMarket !== market
+
+                          return (
+                            <button
+                              key={market}
+                              type="button"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  product_ids: marketPairs,
+                                  product_id: marketPairs[0] || 'ETH-BTC'
+                                })
+                              }}
+                              disabled={isDisabled}
+                              className={`px-3 py-1.5 text-xs font-medium rounded border ${
+                                isDisabled
+                                  ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-50'
+                                  : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600'
+                              }`}
+                            >
+                              {market} All
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {/* Pair list - grouped by quote currency, sorted by volume */}
+                      <div className="border border-slate-600 border-t-0 rounded-b bg-slate-700 p-3 max-h-72 overflow-y-auto">
+                        {['BTC', 'USD', 'USDC', 'USDT'].map((group) => {
+                          const groupPairs = TRADING_PAIRS.filter(p => p.group === group)
+                          if (groupPairs.length === 0) return null
+
+                          // Determine if this market group should be disabled
+                          const isGroupDisabled = isMarketLocked && selectedMarket !== group
+
+                          return (
+                            <div key={group} className={`mb-3 last:mb-0 ${isGroupDisabled ? 'opacity-40' : ''}`}>
+                              <div className="text-xs font-medium text-slate-400 mb-1.5">
+                                {group} Pairs
+                                {isGroupDisabled && <span className="ml-2 text-slate-500">(locked)</span>}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                {groupPairs.map((pair) => {
+                                  const isChecked = formData.product_ids.includes(pair.value)
+                                  const isDisabled = isGroupDisabled && !isChecked
+
+                                  return (
+                                    <label
+                                      key={pair.value}
+                                      className={`flex items-center space-x-2 px-2 py-1 rounded text-sm ${
+                                        isDisabled
+                                          ? 'cursor-not-allowed'
+                                          : 'cursor-pointer hover:bg-slate-600'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        disabled={isDisabled}
+                                        onChange={(e) => handlePairToggle(pair.value, e.target.checked)}
+                                        className="rounded border-slate-500"
+                                      />
+                                      <span className={`text-xs ${isDisabled ? 'text-slate-500' : ''}`}>
+                                        {pair.label}
+                                      </span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
               </div>
 
