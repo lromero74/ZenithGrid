@@ -49,6 +49,14 @@ export default function LightweightChartModal({
   const candleDataRef = useRef<CandleData[]>([])
   const isCleanedUpRef = useRef<boolean>(false)
 
+  // Oscillator chart containers and instances
+  const rsiContainerRef = useRef<HTMLDivElement>(null)
+  const rsiChartRef = useRef<IChartApi | null>(null)
+  const macdContainerRef = useRef<HTMLDivElement>(null)
+  const macdChartRef = useRef<IChartApi | null>(null)
+  const stochasticContainerRef = useRef<HTMLDivElement>(null)
+  const stochasticChartRef = useRef<IChartApi | null>(null)
+
   const [timeframe, setTimeframe] = useState('FIFTEEN_MINUTE')
   const [chartData, setChartData] = useState<CandleData[]>([])
   const [chartType, setChartType] = useState<'candlestick' | 'bar' | 'line' | 'area' | 'baseline'>('candlestick')
@@ -139,6 +147,7 @@ export default function LightweightChartModal({
         borderColor: '#334155',
         scaleMargins: { top: 0.1, bottom: 0.2 },
         autoScale: true,
+        minimumWidth: 100,
       },
     })
 
@@ -363,108 +372,8 @@ export default function LightweightChartModal({
 
         indicatorSeriesRef.current.set(indicator.id, [upperSeries, middleSeries, lowerSeries])
 
-      } else if (indicator.type === 'rsi') {
-        const period = indicator.settings.period || 14
-        const rsiValues = calculateRSI(closes, period)
-        const rsiData = chartData
-          .map((c, i) => ({ time: c.time, value: rsiValues[i] ?? 0 }))
-          .filter((d, i) => rsiValues[i] !== null)
-
-        const rsiSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.color || '#2196F3',
-          lineWidth: 2,
-          title: `RSI(${period})`,
-          priceScaleId: 'rsi',
-        })
-        rsiSeries.setData(rsiData)
-
-        // Configure RSI scale with 0-100 range and positioned at bottom
-        chartRef.current!.priceScale('rsi').applyOptions({
-          scaleMargins: { top: 0.8, bottom: 0 },
-          borderColor: '#334155',
-          visible: true,
-          autoScale: false,  // Don't auto-scale, use fixed range
-        })
-
-        // Add horizontal lines for overbought/oversold levels
-        const overbought = indicator.settings.overbought || 70
-        const oversold = indicator.settings.oversold || 30
-
-        const overboughtSeries = chartRef.current!.addLineSeries({
-          color: 'rgba(239, 83, 80, 0.5)',
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
-          priceScaleId: 'rsi',
-          lastValueVisible: false,
-          priceLineVisible: false,
-        })
-        overboughtSeries.setData(chartData.map(c => ({ time: c.time, value: overbought })))
-
-        const oversoldSeries = chartRef.current!.addLineSeries({
-          color: 'rgba(38, 166, 154, 0.5)',
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
-          priceScaleId: 'rsi',
-          lastValueVisible: false,
-          priceLineVisible: false,
-        })
-        oversoldSeries.setData(chartData.map(c => ({ time: c.time, value: oversold })))
-
-        indicatorSeriesRef.current.set(indicator.id, [rsiSeries, overboughtSeries, oversoldSeries])
-
-      } else if (indicator.type === 'macd') {
-        const fastPeriod = indicator.settings.fastPeriod || 12
-        const slowPeriod = indicator.settings.slowPeriod || 26
-        const signalPeriod = indicator.settings.signalPeriod || 9
-        const macdResult = calculateMACD(closes, fastPeriod, slowPeriod, signalPeriod)
-
-        const macdData = chartData
-          .map((c, i) => ({ time: c.time, value: macdResult.macd[i] ?? 0 }))
-          .filter((d, i) => macdResult.macd[i] !== null)
-        const signalData = chartData
-          .map((c, i) => ({ time: c.time, value: macdResult.signal[i] ?? 0 }))
-          .filter((d, i) => macdResult.signal[i] !== null)
-        const histogramData = chartData
-          .map((c, i) => ({ time: c.time, value: macdResult.histogram[i] ?? 0 }))
-          .filter((d, i) => macdResult.histogram[i] !== null)
-
-        // MACD line
-        const macdSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.macdColor || '#2196F3',
-          lineWidth: 2,
-          title: 'MACD',
-          priceScaleId: 'macd',
-        })
-        macdSeries.setData(macdData)
-
-        // Signal line
-        const signalSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.signalColor || '#FF5722',
-          lineWidth: 2,
-          title: 'Signal',
-          priceScaleId: 'macd',
-        })
-        signalSeries.setData(signalData)
-
-        // Histogram (as line series for now - lightweight-charts doesn't have native histogram)
-        const histogramSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.histogramColor || '#4CAF50',
-          lineWidth: 2,
-          title: 'Histogram',
-          priceScaleId: 'macd',
-        })
-        histogramSeries.setData(histogramData)
-
-        // Configure MACD scale positioned above RSI if present
-        chartRef.current!.priceScale('macd').applyOptions({
-          scaleMargins: { top: 0.6, bottom: 0.2 },
-          borderColor: '#334155',
-          visible: true,
-        })
-
-        indicatorSeriesRef.current.set(indicator.id, [macdSeries, signalSeries, histogramSeries])
       }
-      // Note: Stochastic would need a separate pane as well
+      // Oscillators (RSI, MACD, Stochastic) are rendered in separate charts below
     })
 
     // Ensure right price scale remains visible after adding indicators
@@ -473,6 +382,316 @@ export default function LightweightChartModal({
         borderColor: '#334155',
         visible: true,
       })
+    }
+  }, [indicators, chartData, chartType, useHeikinAshi])
+
+  // RSI Oscillator Chart
+  useEffect(() => {
+    const rsiIndicator = indicators.find(ind => ind.type === 'rsi')
+    if (!rsiIndicator || !rsiContainerRef.current || chartData.length === 0) {
+      // Clean up if RSI was removed
+      if (rsiChartRef.current) {
+        rsiChartRef.current.remove()
+        rsiChartRef.current = null
+      }
+      return
+    }
+
+    // Create RSI chart if it doesn't exist
+    if (!rsiChartRef.current) {
+      const rsiChart = createChart(rsiContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#0f172a' },
+          textColor: '#94a3b8',
+        },
+        grid: {
+          vertLines: { color: '#1e293b' },
+          horzLines: { color: '#1e293b' },
+        },
+        width: rsiContainerRef.current.clientWidth,
+        height: 120,
+        timeScale: {
+          timeVisible: true,
+          borderColor: '#334155',
+          fixLeftEdge: true,
+          fixRightEdge: true,
+        },
+        rightPriceScale: {
+          borderColor: '#334155',
+          minimumWidth: 100,
+        },
+        handleScroll: false,
+        handleScale: false,
+      })
+      rsiChartRef.current = rsiChart
+
+      // Synchronize time scale with main chart (one-way: main -> RSI)
+      if (chartRef.current) {
+        chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
+          if (rsiChartRef.current && timeRange) {
+            rsiChartRef.current.timeScale().setVisibleRange(timeRange)
+          }
+        })
+      }
+    }
+
+    // Add RSI series
+    const period = rsiIndicator.settings.period || 14
+    const closes = chartData.map(c => c.close)
+    const rsiValues = calculateRSI(closes, period)
+    const rsiData = chartData
+      .map((c, i) => ({ time: c.time, value: rsiValues[i] ?? 0 }))
+      .filter((d, i) => rsiValues[i] !== null)
+
+    const rsiSeries = rsiChartRef.current.addLineSeries({
+      color: rsiIndicator.settings.color || '#2196F3',
+      lineWidth: 2,
+      title: `RSI(${period})`,
+    })
+    rsiSeries.setData(rsiData)
+
+    // Add overbought/oversold lines
+    const overbought = rsiIndicator.settings.overbought || 70
+    const oversold = rsiIndicator.settings.oversold || 30
+
+    const overboughtSeries = rsiChartRef.current.addLineSeries({
+      color: 'rgba(239, 83, 80, 0.5)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    overboughtSeries.setData(chartData.map(c => ({ time: c.time, value: overbought })))
+
+    const oversoldSeries = rsiChartRef.current.addLineSeries({
+      color: 'rgba(38, 166, 154, 0.5)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    oversoldSeries.setData(chartData.map(c => ({ time: c.time, value: oversold })))
+
+    rsiChartRef.current.timeScale().fitContent()
+
+    // Cleanup
+    return () => {
+      if (rsiChartRef.current) {
+        rsiChartRef.current.removeSeries(rsiSeries)
+        rsiChartRef.current.removeSeries(overboughtSeries)
+        rsiChartRef.current.removeSeries(oversoldSeries)
+      }
+    }
+  }, [indicators, chartData, chartType, useHeikinAshi])
+
+  // MACD Oscillator Chart
+  useEffect(() => {
+    const macdIndicator = indicators.find(ind => ind.type === 'macd')
+    if (!macdIndicator || !macdContainerRef.current || chartData.length === 0) {
+      // Clean up if MACD was removed
+      if (macdChartRef.current) {
+        macdChartRef.current.remove()
+        macdChartRef.current = null
+      }
+      return
+    }
+
+    // Create MACD chart if it doesn't exist
+    if (!macdChartRef.current) {
+      const macdChart = createChart(macdContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#0f172a' },
+          textColor: '#94a3b8',
+        },
+        grid: {
+          vertLines: { color: '#1e293b' },
+          horzLines: { color: '#1e293b' },
+        },
+        width: macdContainerRef.current.clientWidth,
+        height: 120,
+        timeScale: {
+          timeVisible: true,
+          borderColor: '#334155',
+          fixLeftEdge: true,
+          fixRightEdge: true,
+        },
+        rightPriceScale: {
+          borderColor: '#334155',
+          minimumWidth: 100,
+        },
+        handleScroll: false,
+        handleScale: false,
+      })
+      macdChartRef.current = macdChart
+
+      // Synchronize time scale with main chart (one-way: main -> MACD)
+      if (chartRef.current) {
+        chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
+          if (macdChartRef.current && timeRange) {
+            macdChartRef.current.timeScale().setVisibleRange(timeRange)
+          }
+        })
+      }
+    }
+
+    // Add MACD series
+    const fastPeriod = macdIndicator.settings.fastPeriod || 12
+    const slowPeriod = macdIndicator.settings.slowPeriod || 26
+    const signalPeriod = macdIndicator.settings.signalPeriod || 9
+    const closes = chartData.map(c => c.close)
+    const macdResult = calculateMACD(closes, fastPeriod, slowPeriod, signalPeriod)
+
+    const macdData = chartData
+      .map((c, i) => ({ time: c.time, value: macdResult.macd[i] ?? 0 }))
+      .filter((d, i) => macdResult.macd[i] !== null)
+    const signalData = chartData
+      .map((c, i) => ({ time: c.time, value: macdResult.signal[i] ?? 0 }))
+      .filter((d, i) => macdResult.signal[i] !== null)
+    const histogramData = chartData
+      .map((c, i) => ({ time: c.time, value: macdResult.histogram[i] ?? 0 }))
+      .filter((d, i) => macdResult.histogram[i] !== null)
+
+    const macdSeries = macdChartRef.current.addLineSeries({
+      color: macdIndicator.settings.macdColor || '#2196F3',
+      lineWidth: 2,
+      title: 'MACD',
+    })
+    macdSeries.setData(macdData)
+
+    const signalSeries = macdChartRef.current.addLineSeries({
+      color: macdIndicator.settings.signalColor || '#FF5722',
+      lineWidth: 2,
+      title: 'Signal',
+    })
+    signalSeries.setData(signalData)
+
+    const histogramSeries = macdChartRef.current.addLineSeries({
+      color: macdIndicator.settings.histogramColor || '#4CAF50',
+      lineWidth: 2,
+      title: 'Histogram',
+    })
+    histogramSeries.setData(histogramData)
+
+    macdChartRef.current.timeScale().fitContent()
+
+    // Cleanup
+    return () => {
+      if (macdChartRef.current) {
+        macdChartRef.current.removeSeries(macdSeries)
+        macdChartRef.current.removeSeries(signalSeries)
+        macdChartRef.current.removeSeries(histogramSeries)
+      }
+    }
+  }, [indicators, chartData, chartType, useHeikinAshi])
+
+  // Stochastic Oscillator Chart
+  useEffect(() => {
+    const stochasticIndicator = indicators.find(ind => ind.type === 'stochastic')
+    if (!stochasticIndicator || !stochasticContainerRef.current || chartData.length === 0) {
+      // Clean up if Stochastic was removed
+      if (stochasticChartRef.current) {
+        stochasticChartRef.current.remove()
+        stochasticChartRef.current = null
+      }
+      return
+    }
+
+    // Create Stochastic chart if it doesn't exist
+    if (!stochasticChartRef.current) {
+      const stochasticChart = createChart(stochasticContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#0f172a' },
+          textColor: '#94a3b8',
+        },
+        grid: {
+          vertLines: { color: '#1e293b' },
+          horzLines: { color: '#1e293b' },
+        },
+        width: stochasticContainerRef.current.clientWidth,
+        height: 120,
+        timeScale: {
+          timeVisible: true,
+          borderColor: '#334155',
+          fixLeftEdge: true,
+          fixRightEdge: true,
+        },
+        rightPriceScale: {
+          borderColor: '#334155',
+          minimumWidth: 100,
+        },
+        handleScroll: false,
+        handleScale: false,
+      })
+      stochasticChartRef.current = stochasticChart
+
+      // Synchronize time scale with main chart (one-way: main -> Stochastic)
+      if (chartRef.current) {
+        chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
+          if (stochasticChartRef.current && timeRange) {
+            stochasticChartRef.current.timeScale().setVisibleRange(timeRange)
+          }
+        })
+      }
+    }
+
+    // Add Stochastic series
+    const kPeriod = stochasticIndicator.settings.kPeriod || 14
+    const dPeriod = stochasticIndicator.settings.dPeriod || 3
+    const highs = chartData.map(c => c.high)
+    const lows = chartData.map(c => c.low)
+    const closes = chartData.map(c => c.close)
+    const stochasticResult = calculateStochastic(highs, lows, closes, kPeriod, dPeriod)
+
+    const kData = chartData
+      .map((c, i) => ({ time: c.time, value: stochasticResult.k[i] ?? 0 }))
+      .filter((d, i) => stochasticResult.k[i] !== null)
+    const dData = chartData
+      .map((c, i) => ({ time: c.time, value: stochasticResult.d[i] ?? 0 }))
+      .filter((d, i) => stochasticResult.d[i] !== null)
+
+    const kSeries = stochasticChartRef.current.addLineSeries({
+      color: stochasticIndicator.settings.kColor || '#2196F3',
+      lineWidth: 2,
+      title: '%K',
+    })
+    kSeries.setData(kData)
+
+    const dSeries = stochasticChartRef.current.addLineSeries({
+      color: stochasticIndicator.settings.dColor || '#FF5722',
+      lineWidth: 2,
+      title: '%D',
+    })
+    dSeries.setData(dData)
+
+    // Add 80/20 reference lines
+    const overboughtSeries = stochasticChartRef.current.addLineSeries({
+      color: 'rgba(239, 83, 80, 0.5)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    overboughtSeries.setData(chartData.map(c => ({ time: c.time, value: 80 })))
+
+    const oversoldSeries = stochasticChartRef.current.addLineSeries({
+      color: 'rgba(38, 166, 154, 0.5)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    oversoldSeries.setData(chartData.map(c => ({ time: c.time, value: 20 })))
+
+    stochasticChartRef.current.timeScale().fitContent()
+
+    // Cleanup
+    return () => {
+      if (stochasticChartRef.current) {
+        stochasticChartRef.current.removeSeries(kSeries)
+        stochasticChartRef.current.removeSeries(dSeries)
+        stochasticChartRef.current.removeSeries(overboughtSeries)
+        stochasticChartRef.current.removeSeries(oversoldSeries)
+      }
     }
   }, [indicators, chartData, chartType, useHeikinAshi])
 
@@ -739,9 +958,31 @@ export default function LightweightChartModal({
           </button>
         </div>
 
-        {/* Chart Container */}
-        <div className="flex-1 relative p-4 overflow-hidden">
-          <div ref={chartContainerRef} className="w-full h-full" />
+        {/* Chart Containers */}
+        <div className="flex-1 relative p-4 overflow-hidden flex flex-col gap-2">
+          {/* Main Price Chart */}
+          <div ref={chartContainerRef} className="w-full flex-1 min-h-[300px]" />
+
+          {/* MACD Oscillator */}
+          {indicators.some(ind => ind.type === 'macd') && (
+            <div className="w-full h-[120px] border-t border-slate-700">
+              <div ref={macdContainerRef} className="w-full h-full" />
+            </div>
+          )}
+
+          {/* RSI Oscillator */}
+          {indicators.some(ind => ind.type === 'rsi') && (
+            <div className="w-full h-[120px] border-t border-slate-700">
+              <div ref={rsiContainerRef} className="w-full h-full" />
+            </div>
+          )}
+
+          {/* Stochastic Oscillator */}
+          {indicators.some(ind => ind.type === 'stochastic') && (
+            <div className="w-full h-[120px] border-t border-slate-700">
+              <div ref={stochasticContainerRef} className="w-full h-full" />
+            </div>
+          )}
         </div>
 
         {/* Footer */}
