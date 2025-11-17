@@ -33,8 +33,15 @@ export interface IndicatorSettings {
 export interface IndicatorDefinition {
   id: string
   name: string
+  description: string
   category: string
   defaultSettings: IndicatorSettings
+}
+
+export interface IndicatorConfig {
+  id: string
+  type: string
+  settings: IndicatorSettings
 }
 
 export interface MACDResult {

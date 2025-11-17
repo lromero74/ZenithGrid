@@ -255,6 +255,212 @@ export default function LightweightChartModal({
     chartRef.current.timeScale().fitContent()
   }, [chartData, chartType, useHeikinAshi, position, symbol])
 
+  // Render indicators on chart
+  useEffect(() => {
+    if (!chartRef.current || chartData.length === 0) return
+
+    // Clear existing indicator series
+    indicatorSeriesRef.current.forEach((seriesList) => {
+      seriesList.forEach((series) => {
+        try {
+          chartRef.current?.removeSeries(series)
+        } catch (e) {
+          // Series may already be removed
+        }
+      })
+    })
+    indicatorSeriesRef.current.clear()
+
+    // Clear existing indicator charts (oscillators)
+    indicatorChartsRef.current.forEach((chart) => {
+      try {
+        chart.remove()
+      } catch (e) {
+        // Chart may already be removed
+      }
+    })
+    indicatorChartsRef.current.clear()
+
+    // Render each indicator
+    indicators.forEach((indicator) => {
+      const closes = chartData.map(c => c.close)
+      const highs = chartData.map(c => c.high)
+      const lows = chartData.map(c => c.low)
+
+      if (indicator.type === 'sma') {
+        // Simple Moving Average - overlay on main chart
+        const period = indicator.settings.period || 20
+        const smaValues = calculateSMA(closes, period)
+        const smaData = chartData
+          .map((c, i) => ({ time: c.time, value: smaValues[i] ?? 0 }))
+          .filter((d) => smaValues[chartData.indexOf(chartData.find(c => c.time === d.time)!)] !== null)
+
+        const smaSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.color || '#FF9800',
+          lineWidth: 2,
+          title: `SMA(${period})`,
+        })
+        smaSeries.setData(smaData)
+        indicatorSeriesRef.current.set(indicator.id, [smaSeries])
+
+      } else if (indicator.type === 'ema') {
+        // Exponential Moving Average - overlay on main chart
+        const period = indicator.settings.period || 12
+        const emaValues = calculateEMA(closes, period)
+        const emaData = chartData
+          .map((c, i) => ({ time: c.time, value: emaValues[i] ?? 0 }))
+          .filter((d, i) => emaValues[i] !== null)
+
+        const emaSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.color || '#9C27B0',
+          lineWidth: 2,
+          title: `EMA(${period})`,
+        })
+        emaSeries.setData(emaData)
+        indicatorSeriesRef.current.set(indicator.id, [emaSeries])
+
+      } else if (indicator.type === 'bollinger') {
+        // Bollinger Bands - overlay on main chart
+        const period = indicator.settings.period || 20
+        const stdDev = indicator.settings.stdDev || 2
+        const bands = calculateBollingerBands(closes, period, stdDev)
+
+        const upperData = chartData
+          .map((c, i) => ({ time: c.time, value: bands.upper[i] ?? 0 }))
+          .filter((d, i) => bands.upper[i] !== null)
+        const middleData = chartData
+          .map((c, i) => ({ time: c.time, value: bands.middle[i] ?? 0 }))
+          .filter((d, i) => bands.middle[i] !== null)
+        const lowerData = chartData
+          .map((c, i) => ({ time: c.time, value: bands.lower[i] ?? 0 }))
+          .filter((d, i) => bands.lower[i] !== null)
+
+        const upperSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.upperColor || '#2196F3',
+          lineWidth: 1,
+          title: `BB Upper(${period})`,
+        })
+        upperSeries.setData(upperData)
+
+        const middleSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.middleColor || '#FF9800',
+          lineWidth: 1,
+          title: `BB Middle(${period})`,
+        })
+        middleSeries.setData(middleData)
+
+        const lowerSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.lowerColor || '#2196F3',
+          lineWidth: 1,
+          title: `BB Lower(${period})`,
+        })
+        lowerSeries.setData(lowerData)
+
+        indicatorSeriesRef.current.set(indicator.id, [upperSeries, middleSeries, lowerSeries])
+
+      } else if (indicator.type === 'rsi') {
+        // RSI - separate chart below main chart
+        // Note: Full implementation would create a separate chart container
+        // For now, we'll overlay it on main chart with scaling (not ideal but functional)
+        const period = indicator.settings.period || 14
+        const rsiValues = calculateRSI(closes, period)
+        const rsiData = chartData
+          .map((c, i) => ({ time: c.time, value: rsiValues[i] ?? 0 }))
+          .filter((d, i) => rsiValues[i] !== null)
+
+        const rsiSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.color || '#2196F3',
+          lineWidth: 2,
+          title: `RSI(${period})`,
+          priceScaleId: 'rsi',
+        })
+        rsiSeries.setData(rsiData)
+
+        // Configure RSI price scale (0-100)
+        chartRef.current!.priceScale('rsi').applyOptions({
+          scaleMargins: { top: 0.8, bottom: 0 },
+          borderColor: '#334155',
+        })
+
+        indicatorSeriesRef.current.set(indicator.id, [rsiSeries])
+
+      } else if (indicator.type === 'macd') {
+        // MACD - would need separate chart
+        // For now, overlay on main chart with scaling
+        const fastPeriod = indicator.settings.fastPeriod || 12
+        const slowPeriod = indicator.settings.slowPeriod || 26
+        const signalPeriod = indicator.settings.signalPeriod || 9
+
+        const macd = calculateMACD(closes, fastPeriod, slowPeriod, signalPeriod)
+        const macdData = chartData
+          .map((c, i) => ({ time: c.time, value: macd.macd[i] ?? 0 }))
+          .filter((d, i) => macd.macd[i] !== null)
+        const signalData = chartData
+          .map((c, i) => ({ time: c.time, value: macd.signal[i] ?? 0 }))
+          .filter((d, i) => macd.signal[i] !== null)
+
+        const macdSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.macdColor || '#2196F3',
+          lineWidth: 2,
+          title: 'MACD',
+          priceScaleId: 'macd',
+        })
+        macdSeries.setData(macdData)
+
+        const signalSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.signalColor || '#FF5722',
+          lineWidth: 2,
+          title: 'Signal',
+          priceScaleId: 'macd',
+        })
+        signalSeries.setData(signalData)
+
+        chartRef.current!.priceScale('macd').applyOptions({
+          scaleMargins: { top: 0.8, bottom: 0 },
+          borderColor: '#334155',
+        })
+
+        indicatorSeriesRef.current.set(indicator.id, [macdSeries, signalSeries])
+
+      } else if (indicator.type === 'stochastic') {
+        // Stochastic - would need separate chart
+        const kPeriod = indicator.settings.kPeriod || 14
+        const dPeriod = indicator.settings.dPeriod || 3
+
+        const stoch = calculateStochastic(highs, lows, closes, kPeriod, dPeriod)
+        const kData = chartData
+          .map((c, i) => ({ time: c.time, value: stoch.k[i] ?? 0 }))
+          .filter((d, i) => stoch.k[i] !== null)
+        const dData = chartData
+          .map((c, i) => ({ time: c.time, value: stoch.d[i] ?? 0 }))
+          .filter((d, i) => stoch.d[i] !== null)
+
+        const kSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.kColor || '#2196F3',
+          lineWidth: 2,
+          title: '%K',
+          priceScaleId: 'stoch',
+        })
+        kSeries.setData(kData)
+
+        const dSeries = chartRef.current!.addLineSeries({
+          color: indicator.settings.dColor || '#FF5722',
+          lineWidth: 2,
+          title: '%D',
+          priceScaleId: 'stoch',
+        })
+        dSeries.setData(dData)
+
+        chartRef.current!.priceScale('stoch').applyOptions({
+          scaleMargins: { top: 0.8, bottom: 0 },
+          borderColor: '#334155',
+        })
+
+        indicatorSeriesRef.current.set(indicator.id, [kSeries, dSeries])
+      }
+    })
+  }, [indicators, chartData, chartRef.current])
+
   // Add position reference lines
   const addPositionLines = () => {
     if (!chartRef.current || !position) return
@@ -552,19 +758,40 @@ export default function LightweightChartModal({
                   <div className="text-xs font-semibold text-slate-400 mb-2 mt-4 first:mt-0">
                     {category}
                   </div>
-                  {categoryIndicators.map((ind) => (
-                    <button
-                      key={ind.id}
-                      onClick={() => {
-                        // TODO: Add indicator
-                        setShowIndicatorModal(false)
-                      }}
-                      className="w-full text-left p-3 rounded bg-slate-700 hover:bg-slate-600 transition-colors mb-2"
-                    >
-                      <div className="font-semibold text-white">{ind.name}</div>
-                      <div className="text-xs text-slate-400">{ind.description}</div>
-                    </button>
-                  ))}
+                  {categoryIndicators.map((ind) => {
+                    const alreadyAdded = indicators.some(i => i.type === ind.id)
+                    return (
+                      <button
+                        key={ind.id}
+                        onClick={() => {
+                          if (alreadyAdded) {
+                            // Remove indicator
+                            setIndicators(indicators.filter(i => i.type !== ind.id))
+                          } else {
+                            // Add indicator with default settings
+                            const newIndicator: IndicatorConfig = {
+                              id: `${ind.id}-${Date.now()}`,
+                              type: ind.id,
+                              settings: ind.defaultSettings
+                            }
+                            setIndicators([...indicators, newIndicator])
+                          }
+                          setShowIndicatorModal(false)
+                        }}
+                        className={`w-full text-left p-3 rounded transition-colors mb-2 ${
+                          alreadyAdded
+                            ? 'bg-blue-600 hover:bg-blue-700'
+                            : 'bg-slate-700 hover:bg-slate-600'
+                        }`}
+                      >
+                        <div className="font-semibold text-white flex items-center justify-between">
+                          {ind.name}
+                          {alreadyAdded && <span className="text-xs">✓ Added</span>}
+                        </div>
+                        <div className="text-xs text-slate-400">{ind.description}</div>
+                      </button>
+                    )
+                  })}
                 </div>
               ))}
             </div>
