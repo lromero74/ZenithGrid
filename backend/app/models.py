@@ -51,6 +51,7 @@ class Bot(Base):
 
     # Relationships
     positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
+    pending_orders = relationship("PendingOrder", back_populates="bot", cascade="all, delete-orphan")
 
     def get_trading_pairs(self):
         """Get list of trading pairs for this bot (backward compatible)"""
@@ -145,6 +146,7 @@ class Position(Base):
     bot = relationship("Bot", back_populates="positions")
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")
     signals = relationship("Signal", back_populates="position", cascade="all, delete-orphan")
+    pending_orders = relationship("PendingOrder", back_populates="position", cascade="all, delete-orphan")
 
     def get_quote_currency(self) -> str:
         """Get the quote currency from product_id (e.g., 'BTC' from 'ETH-BTC', 'USD' from 'ADA-USD')"""
@@ -252,3 +254,44 @@ class AIBotLog(Base):
 
     # Additional context (JSON for flexibility)
     context = Column(JSON, nullable=True)  # Market conditions, indicators, etc.
+
+
+class PendingOrder(Base):
+    """
+    Pending limit orders that haven't been filled yet.
+    Used by DCA strategies to track safety order limit orders.
+    """
+    __tablename__ = "pending_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    position_id = Column(Integer, ForeignKey("positions.id"), nullable=False)
+    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=False)
+
+    # Order details
+    order_id = Column(String, nullable=False, unique=True, index=True)  # Coinbase order ID
+    product_id = Column(String, nullable=False)  # e.g., "ETH-BTC"
+    side = Column(String, nullable=False)  # "BUY" or "SELL"
+    order_type = Column(String, nullable=False)  # "LIMIT", "STOP_LOSS", etc.
+
+    # Amounts
+    limit_price = Column(Float, nullable=False)  # Target price for limit order
+    quote_amount = Column(Float, nullable=False)  # Amount of quote currency (BTC/USD)
+    base_amount = Column(Float, nullable=True)  # Amount of base currency (ETH, etc.) - may be null until filled
+
+    # Order purpose
+    trade_type = Column(String, nullable=False)  # "safety_order_1", "safety_order_2", etc.
+
+    # Status tracking
+    status = Column(String, nullable=False, default="pending")  # "pending", "filled", "canceled", "expired"
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    filled_at = Column(DateTime, nullable=True)
+    canceled_at = Column(DateTime, nullable=True)
+
+    # Filled details (populated when order fills)
+    filled_price = Column(Float, nullable=True)  # Actual fill price
+    filled_quote_amount = Column(Float, nullable=True)  # Actual quote spent
+    filled_base_amount = Column(Float, nullable=True)  # Actual base acquired
+
+    # Relationships
+    position = relationship("Position", back_populates="pending_orders")
+    bot = relationship("Bot", back_populates="pending_orders")

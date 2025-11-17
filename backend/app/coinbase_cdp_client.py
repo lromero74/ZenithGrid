@@ -267,6 +267,83 @@ class CoinbaseCDPClient:
         result = await self._request("POST", "/api/v3/brokerage/orders", data=data)
         return result
 
+    async def create_limit_order(
+        self,
+        product_id: str,
+        side: str,  # "BUY" or "SELL"
+        limit_price: float,  # Target price
+        size: Optional[str] = None,  # Amount of base currency (e.g., ETH)
+        funds: Optional[str] = None  # Amount of quote currency (e.g., BTC) to spend
+    ) -> Dict[str, Any]:
+        """
+        Create a limit order (Good-Til-Cancelled)
+
+        Args:
+            product_id: Trading pair (e.g., "ETH-BTC", "AAVE-BTC")
+            side: "BUY" or "SELL"
+            limit_price: Target price for the order
+            size: Amount of base currency to buy/sell
+            funds: Amount of quote currency to spend (for buy orders)
+
+        Note: Use either size OR funds, not both
+        """
+        import time
+
+        order_config = {
+            "limit_limit_gtc": {
+                "limit_price": str(limit_price),
+                "post_only": False  # Allow immediate partial fills
+            }
+        }
+
+        if size:
+            order_config["limit_limit_gtc"]["base_size"] = str(size)
+        elif funds:
+            # For limit orders with funds, we calculate base size from limit price
+            base_size = float(funds) / limit_price
+            order_config["limit_limit_gtc"]["base_size"] = f"{base_size:.8f}"
+        else:
+            raise ValueError("Must specify either size or funds")
+
+        data = {
+            "client_order_id": f"{int(time.time() * 1000)}",
+            "product_id": product_id,
+            "side": side,
+            "order_configuration": order_config
+        }
+
+        result = await self._request("POST", "/api/v3/brokerage/orders", data=data)
+        return result
+
+    async def get_order(self, order_id: str) -> Dict[str, Any]:
+        """
+        Get order details
+
+        Args:
+            order_id: Coinbase order ID
+
+        Returns:
+            Order details including status
+        """
+        result = await self._request("GET", f"/api/v3/brokerage/orders/historical/{order_id}")
+        return result
+
+    async def cancel_order(self, order_id: str) -> Dict[str, Any]:
+        """
+        Cancel an open order
+
+        Args:
+            order_id: Coinbase order ID
+
+        Returns:
+            Cancellation result
+        """
+        data = {
+            "order_ids": [order_id]
+        }
+        result = await self._request("POST", "/api/v3/brokerage/orders/batch_cancel", data=data)
+        return result
+
     async def buy_eth_with_btc(self, btc_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """
         Buy crypto with specified amount of BTC
