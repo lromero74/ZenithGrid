@@ -16,6 +16,8 @@ interface BotFormData {
   split_budget_across_pairs: boolean  // Budget splitting toggle
   reserved_btc_balance: number  // BTC allocated to this bot
   reserved_usd_balance: number  // USD allocated to this bot
+  check_interval_seconds: number  // How often bot monitors positions
+  analysis_interval_minutes: number  // How often AI analyzes (for AI bots)
   strategy_config: Record<string, any>
 }
 
@@ -34,6 +36,8 @@ function Bots() {
     split_budget_across_pairs: false,  // Default to independent budgets (3Commas style)
     reserved_btc_balance: 0,  // No reserved balance by default
     reserved_usd_balance: 0,  // No reserved balance by default
+    check_interval_seconds: 300,  // Default: 5 minutes
+    analysis_interval_minutes: 15,  // Default: 15 minutes (for AI bots)
     strategy_config: {},
   })
 
@@ -71,30 +75,57 @@ function Bots() {
     if (!productsData?.products) {
       // Fallback to default pairs while loading
       return [
-        { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC Pairs' },
-        { value: 'BTC-USD', label: 'BTC/USD', group: 'USD Pairs' },
-        { value: 'ETH-USD', label: 'ETH/USD', group: 'USD Pairs' },
+        { value: 'BTC-USD', label: 'BTC/USD', group: 'USD', base: 'BTC' },
+        { value: 'ETH-USD', label: 'ETH/USD', group: 'USD', base: 'ETH' },
+        { value: 'ETH-BTC', label: 'ETH/BTC', group: 'BTC', base: 'ETH' },
       ]
     }
+
+    // Popularity order (by market cap / trading volume)
+    const popularityOrder = [
+      'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE', 'ADA', 'AVAX', 'LINK', 'DOT',
+      'MATIC', 'UNI', 'LTC', 'ATOM', 'XLM', 'ALGO', 'AAVE', 'COMP', 'MKR',
+      'SNX', 'CRV', 'SUSHI', 'YFI', '1INCH', 'BAT', 'ZRX', 'ENJ', 'MANA',
+      'GRT', 'FIL', 'ICP', 'VET', 'FTM', 'SAND', 'AXS', 'GALA', 'CHZ'
+    ]
 
     // Convert products to trading pairs with grouping
     const pairs = productsData.products.map((product: any) => {
       const base = product.base_currency
       const quote = product.quote_currency
-      const group = quote === 'USD' ? 'USD Pairs' : 'BTC Pairs'
+      // Group by quote currency type
+      const group = quote === 'USD' ? 'USD' : quote === 'USDT' ? 'USDT' : quote === 'USDC' ? 'USDC' : 'BTC'
 
       return {
         value: product.product_id,
         label: `${base}/${quote}`,
-        group
+        group,
+        base
       }
     })
 
-    // Sort by group then by label
+    // Sort by: 1) group, 2) popularity order
     return pairs.sort((a: any, b: any) => {
-      if (a.group !== b.group) {
-        return a.group === 'BTC Pairs' ? -1 : 1
+      // Group priority: BTC > USD > USDC > USDT > others
+      const groupOrder: Record<string, number> = { 'BTC': 1, 'USD': 2, 'USDC': 3, 'USDT': 4 }
+      const aGroupPriority = groupOrder[a.group] || 99
+      const bGroupPriority = groupOrder[b.group] || 99
+
+      if (aGroupPriority !== bGroupPriority) {
+        return aGroupPriority - bGroupPriority
       }
+
+      // Within same group, sort by popularity
+      const aPopularity = popularityOrder.indexOf(a.base)
+      const bPopularity = popularityOrder.indexOf(b.base)
+      const aRank = aPopularity === -1 ? 999 : aPopularity
+      const bRank = bPopularity === -1 ? 999 : bPopularity
+
+      if (aRank !== bRank) {
+        return aRank - bRank
+      }
+
+      // If both unlisted, sort alphabetically
       return a.label.localeCompare(b.label)
     })
   }, [productsData])
@@ -178,6 +209,10 @@ function Bots() {
       product_id: 'ETH-BTC',
       product_ids: [],
       split_budget_across_pairs: false,
+      reserved_btc_balance: 0,
+      reserved_usd_balance: 0,
+      check_interval_seconds: 300,
+      analysis_interval_minutes: 15,
       strategy_config: {},
     })
     setEditingBot(null)
@@ -194,6 +229,10 @@ function Bots() {
       product_id: template.product_ids?.[0] || 'ETH-BTC',
       product_ids: template.product_ids || [],
       split_budget_across_pairs: template.split_budget_across_pairs || false,
+      reserved_btc_balance: template.reserved_btc_balance || 0,
+      reserved_usd_balance: template.reserved_usd_balance || 0,
+      check_interval_seconds: template.check_interval_seconds || 300,
+      analysis_interval_minutes: template.strategy_config?.analysis_interval_minutes || 15,
       strategy_config: template.strategy_config,
     })
   }
@@ -212,6 +251,8 @@ function Bots() {
       description: bot.description || '',
       reserved_btc_balance: bot.reserved_btc_balance || 0,
       reserved_usd_balance: bot.reserved_usd_balance || 0,
+      check_interval_seconds: (bot as any).check_interval_seconds || 300,
+      analysis_interval_minutes: (bot.strategy_config as any)?.analysis_interval_minutes || 15,
       strategy_type: bot.strategy_type,
       product_id: bot.product_id,  // Keep for backward compatibility
       product_ids: productIds,
@@ -266,7 +307,11 @@ function Bots() {
       split_budget_across_pairs: formData.split_budget_across_pairs,  // Budget splitting option
       reserved_btc_balance: formData.reserved_btc_balance,
       reserved_usd_balance: formData.reserved_usd_balance,
-      strategy_config: formData.strategy_config,
+      check_interval_seconds: formData.check_interval_seconds,  // Monitoring interval
+      strategy_config: {
+        ...formData.strategy_config,
+        analysis_interval_minutes: formData.analysis_interval_minutes  // For AI bots
+      },
     }
 
     if (editingBot) {
@@ -599,63 +644,101 @@ function Bots() {
                 />
               </div>
 
-              {/* Trading Pairs (Multi-Select) */}
+              {/* Trading Pairs (3Commas Style Multi-Select) */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Trading Pairs *
-                  <span className="text-xs text-slate-400 ml-2">(Select one or more pairs)</span>
+                  Pairs
                 </label>
-                <div className="border border-slate-600 rounded bg-slate-700 p-3 max-h-60 overflow-y-auto">
-                  {/* BTC Pairs */}
-                  <div className="mb-3">
-                    <div className="text-xs font-medium text-slate-400 mb-2">BTC Pairs</div>
-                    <div className="space-y-1">
-                      {TRADING_PAIRS.filter((p) => p.group === 'BTC Pairs').map((pair) => (
-                        <label key={pair.value} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-600 p-1 rounded">
-                          <input
-                            type="checkbox"
-                            checked={formData.product_ids.includes(pair.value)}
-                            onChange={(e) => {
-                              const newIds = e.target.checked
-                                ? [...formData.product_ids, pair.value]
-                                : formData.product_ids.filter(id => id !== pair.value)
-                              setFormData({ ...formData, product_ids: newIds, product_id: newIds[0] || 'ETH-BTC' })
-                            }}
-                            className="rounded border-slate-500"
-                          />
-                          <span className="text-sm">{pair.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  {/* USD Pairs */}
-                  <div>
-                    <div className="text-xs font-medium text-slate-400 mb-2">USD Pairs</div>
-                    <div className="space-y-1">
-                      {TRADING_PAIRS.filter((p) => p.group === 'USD Pairs').map((pair) => (
-                        <label key={pair.value} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-600 p-1 rounded">
-                          <input
-                            type="checkbox"
-                            checked={formData.product_ids.includes(pair.value)}
-                            onChange={(e) => {
-                              const newIds = e.target.checked
-                                ? [...formData.product_ids, pair.value]
-                                : formData.product_ids.filter(id => id !== pair.value)
-                              setFormData({ ...formData, product_ids: newIds, product_id: newIds[0] || 'ETH-BTC' })
-                            }}
-                            className="rounded border-slate-500"
-                          />
-                          <span className="text-sm">{pair.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+
+                {/* Header with count and unselect all */}
+                <div className="flex items-center justify-between mb-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-t">
+                  <span className="text-sm text-slate-300">{formData.product_ids.length} pairs</span>
+                  {formData.product_ids.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, product_ids: [], product_id: 'ETH-BTC' })}
+                      className="text-xs text-blue-400 hover:text-blue-300"
+                    >
+                      Unselect all ({formData.product_ids.length})
+                    </button>
+                  )}
                 </div>
-                {formData.product_ids.length > 0 && (
-                  <div className="mt-2 text-xs text-slate-400">
-                    Selected: {formData.product_ids.join(', ')}
-                  </div>
-                )}
+
+                {/* Quick filter buttons */}
+                <div className="flex flex-wrap gap-2 mb-3 px-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const usdcPairs = TRADING_PAIRS.filter(p => p.group === 'USDC').map(p => p.value)
+                      setFormData({ ...formData, product_ids: usdcPairs, product_id: usdcPairs[0] || 'ETH-BTC' })
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
+                  >
+                    USDC All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const usdPairs = TRADING_PAIRS.filter(p => p.group === 'USD').map(p => p.value)
+                      setFormData({ ...formData, product_ids: usdPairs, product_id: usdPairs[0] || 'BTC-USD' })
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
+                  >
+                    USD All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const usdtPairs = TRADING_PAIRS.filter(p => p.group === 'USDT').map(p => p.value)
+                      setFormData({ ...formData, product_ids: usdtPairs, product_id: usdtPairs[0] || 'ETH-BTC' })
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
+                  >
+                    USDT All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const btcPairs = TRADING_PAIRS.filter(p => p.group === 'BTC').map(p => p.value)
+                      setFormData({ ...formData, product_ids: btcPairs, product_id: btcPairs[0] || 'ETH-BTC' })
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600"
+                  >
+                    BTC All
+                  </button>
+                </div>
+
+                {/* Pair list - grouped by quote currency, sorted by volume */}
+                <div className="border border-slate-600 border-t-0 rounded-b bg-slate-700 p-3 max-h-72 overflow-y-auto">
+                  {['BTC', 'USD', 'USDC', 'USDT'].map((group) => {
+                    const groupPairs = TRADING_PAIRS.filter(p => p.group === group)
+                    if (groupPairs.length === 0) return null
+
+                    return (
+                      <div key={group} className="mb-3 last:mb-0">
+                        <div className="text-xs font-medium text-slate-400 mb-1.5">{group} Pairs</div>
+                        <div className="grid grid-cols-2 gap-1">
+                          {groupPairs.map((pair) => (
+                            <label key={pair.value} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-600 px-2 py-1 rounded text-sm">
+                              <input
+                                type="checkbox"
+                                checked={formData.product_ids.includes(pair.value)}
+                                onChange={(e) => {
+                                  const newIds = e.target.checked
+                                    ? [...formData.product_ids, pair.value]
+                                    : formData.product_ids.filter(id => id !== pair.value)
+                                  setFormData({ ...formData, product_ids: newIds, product_id: newIds[0] || 'ETH-BTC' })
+                                }}
+                                className="rounded border-slate-500"
+                              />
+                              <span className="text-xs">{pair.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
 
               {/* Budget Splitting Toggle - Only show for multi-pair */}
@@ -727,6 +810,54 @@ function Bots() {
                       placeholder="0.00"
                     />
                     <p className="text-xs text-slate-400 mt-1">USD allocated to this bot</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bot Monitoring Intervals */}
+              <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <h4 className="text-sm font-semibold text-white mb-3">Monitoring Intervals</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      Check Interval (seconds)
+                    </label>
+                    <input
+                      type="number"
+                      step="60"
+                      min="60"
+                      max="3600"
+                      value={formData.check_interval_seconds}
+                      onChange={(e) => setFormData({ ...formData, check_interval_seconds: parseInt(e.target.value) || 300 })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                      placeholder="300"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      How often to monitor positions (default: 300s / 5min)
+                      <br />
+                      <span className="text-yellow-400">⚠️ Gemini: use 1800s (30min) to avoid quota limits</span>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      AI Analysis Interval (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      step="5"
+                      min="5"
+                      max="120"
+                      value={formData.analysis_interval_minutes}
+                      onChange={(e) => setFormData({ ...formData, analysis_interval_minutes: parseInt(e.target.value) || 15 })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                      placeholder="15"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      How often AI analyzes markets (AI bots only, default: 15min)
+                      <br />
+                      <span className="text-yellow-400">⚠️ Gemini: use 60min to conserve API quota</span>
+                    </p>
                   </div>
                 </div>
               </div>
