@@ -1455,108 +1455,190 @@ export default function Positions() {
               const safetyOrders = selectedPosition === position.id ? getSafetyOrders(trades) : []
               const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
 
+              const bot = bots?.find(b => b.id === position.bot_id)
+              const strategyConfig = position.strategy_config_snapshot || bot?.strategy_config || {}
+
               return (
                 <div key={position.id} className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-                  {/* Deal Header */}
+                  {/* Deal Row - 3Commas Style Horizontal Layout */}
                   <div
-                    className="p-6 cursor-pointer hover:bg-slate-750 transition-colors"
+                    className="p-4 cursor-pointer hover:bg-slate-750 transition-colors"
                     onClick={() => togglePosition(position.id)}
                   >
-                    <div className="flex items-start justify-between">
-                      {/* Left: Deal Info */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-4">
-                          <h3 className="text-xl font-bold text-white">Deal #{position.id}</h3>
-                          {bots && position.bot_id && (
-                            <span className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded text-xs font-medium">
-                              {bots.find(b => b.id === position.bot_id)?.name || `Bot #${position.bot_id}`}
-                            </span>
+                    <div className="grid grid-cols-12 gap-4 items-start text-sm">
+                      {/* Column 1: Bot Info + Strategy (2 cols) */}
+                      <div className="col-span-2">
+                        <div className="text-white font-semibold mb-1">
+                          {bot?.name || `Bot #${position.bot_id || 'N/A'}`}
+                        </div>
+                        <div className="text-[10px] text-slate-400 space-y-0.5">
+                          {bot?.strategy_type && (
+                            <div>[{bot.strategy_type.toUpperCase()}]</div>
                           )}
-                          <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs font-medium">
-                            {position.product_id || 'ETH-BTC'}
-                          </span>
-                          <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-medium">
-                            ACTIVE
-                          </span>
+                          {strategyConfig.take_profit_percent && (
+                            <div>MP: {strategyConfig.take_profit_percent}%</div>
+                          )}
+                          {strategyConfig.base_order_size && (
+                            <div>BO: {strategyConfig.base_order_size}</div>
+                          )}
                         </div>
+                      </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                          {/* Current P&L */}
-                          <div>
-                            <p className="text-slate-400 text-xs mb-1">Current Profit</p>
-                            {pnl && (
-                              <div>
-                                <div className="flex items-center gap-1">
-                                  {pnl.btc >= 0 ? (
-                                    <TrendingUp className="w-4 h-4 text-green-500" />
-                                  ) : (
-                                    <TrendingDown className="w-4 h-4 text-red-500" />
-                                  )}
-                                  <span className={`text-lg font-bold ${pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {pnl.percent >= 0 ? '+' : ''}{pnl.percent.toFixed(2)}%
-                                  </span>
-                                </div>
-                                <p className={`text-sm ${pnl.btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                                  {pnl.btc >= 0 ? '+' : ''}{formatQuoteAmount(pnl.btc, position.product_id || 'ETH-BTC')}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Current Price */}
-                          <div>
-                            <p className="text-slate-400 text-xs mb-1">Current Price</p>
-                            {pnl && (
-                              <div>
-                                <p className="text-white font-semibold">{formatPrice(pnl.currentPrice, position.product_id || 'ETH-BTC')}</p>
-                                <p className={`text-xs ${pnl.btc >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                                  {pnl.btc >= 0 ? '▲' : '▼'} {Math.abs(pnl.percent).toFixed(2)}%
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Invested */}
-                          <div>
-                            <p className="text-slate-400 text-xs mb-1">Invested</p>
-                            <p className="text-white font-semibold">{formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}</p>
-                            <p className="text-slate-400 text-xs">{position.trade_count} orders filled</p>
-                          </div>
-
-                          {/* Average Price */}
-                          <div>
-                            <p className="text-slate-400 text-xs mb-1">Avg Entry Price</p>
-                            <p className="text-white font-semibold">{formatPrice(position.average_buy_price, position.product_id || 'ETH-BTC')}</p>
-                          </div>
-
-                          {/* Opened */}
-                          <div>
-                            <p className="text-slate-400 text-xs mb-1">Opened</p>
-                            <p className="text-white font-semibold text-sm">
-                              {formatDateTimeCompact(position.opened_at)}
-                            </p>
-                          </div>
+                      {/* Column 2: Pair + Exchange (1.5 cols) */}
+                      <div className="col-span-2 flex items-start gap-2">
+                        <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-xs">
+                          {position.product_id?.split('-')[0]?.substring(0, 1) || 'Ƀ'}
                         </div>
-
-                        {/* Funds Usage Bar */}
-                        <div className="mt-4">
-                          <div className="flex items-center justify-between text-xs mb-1">
-                            <span className="text-slate-400">Funds Used</span>
-                            <span className="text-slate-300">
-                              {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')} / {formatQuoteAmount(position.max_quote_allowed, position.product_id || 'ETH-BTC')}
-                              <span className="text-slate-400 ml-1">({fundsUsedPercent.toFixed(0)}%)</span>
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-700 rounded-full h-2">
-                            <div
-                              className="bg-blue-500 h-2 rounded-full transition-all"
-                              style={{ width: `${Math.min(fundsUsedPercent, 100)}%` }}
-                            />
-                          </div>
+                        <div>
+                          <div className="text-white font-semibold">{position.product_id || 'ETH-BTC'}</div>
+                          <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>
                         </div>
+                      </div>
 
-                        {/* Price Position Bar */}
+                      {/* Column 3: uPnL + Price Bar (4 cols) */}
+                      <div className="col-span-4">
                         {pnl && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] text-blue-400">Filled {fundsUsedPercent.toFixed(2)}%</span>
+                              <span className="text-[10px] text-slate-400">{formatPrice(position.total_base_acquired, position.product_id || 'ETH-BTC')}</span>
+                            </div>
+                            {/* Compact Price Bar */}
+                            <div className="relative w-full h-6 mb-1">
+                              <div className="relative w-full h-1.5 bg-slate-700 rounded-full">
+                                {(() => {
+                                  const entryPrice = position.average_buy_price
+                                  const currentPriceValue = pnl.currentPrice
+                                  const targetPrice = entryPrice * 1.02
+
+                                  const defaultMin = entryPrice * 0.95
+                                  const defaultMax = entryPrice * 1.05
+                                  const minPrice = Math.min(defaultMin, currentPriceValue * 0.98)
+                                  const maxPrice = Math.max(defaultMax, targetPrice * 1.01, currentPriceValue * 1.02)
+                                  const priceRange = maxPrice - minPrice
+
+                                  const entryPosition = ((entryPrice - minPrice) / priceRange) * 100
+                                  const currentPosition = ((currentPriceValue - minPrice) / priceRange) * 100
+                                  const targetPosition = ((targetPrice - minPrice) / priceRange) * 100
+
+                                  const isProfit = currentPriceValue >= entryPrice
+                                  const fillStart = Math.min(entryPosition, currentPosition)
+                                  const fillWidth = Math.abs(currentPosition - entryPosition)
+
+                                  return (
+                                    <>
+                                      <div
+                                        className={`absolute h-full ${isProfit ? 'bg-green-500' : 'bg-red-500'}`}
+                                        style={{
+                                          left: `${Math.max(0, Math.min(100, fillStart))}%`,
+                                          width: `${Math.max(0, Math.min(100 - fillStart, fillWidth))}%`
+                                        }}
+                                      />
+                                      {/* Tick marks - compact version */}
+                                      <div className="absolute -top-4 text-[9px] whitespace-nowrap" style={{ left: `${Math.max(0, Math.min(100, currentPosition))}%`, transform: 'translateX(-50%)' }}>
+                                        <span className={isProfit ? 'text-green-400' : 'text-red-400'}>
+                                          {pnl.percent >= 0 ? '+' : ''}{pnl.percent.toFixed(2)}% {formatPrice(currentPriceValue, position.product_id || 'ETH-BTC')}
+                                        </span>
+                                      </div>
+                                      <div className="absolute -bottom-3 text-[9px] text-slate-400" style={{ left: `${Math.max(0, Math.min(100, entryPosition))}%`, transform: 'translateX(-50%)' }}>
+                                        Buy {formatPrice(entryPrice, position.product_id || 'ETH-BTC')}
+                                      </div>
+                                      <div className="absolute -bottom-3 text-[9px] text-emerald-400" style={{ left: `${Math.max(0, Math.min(100, targetPosition))}%`, transform: 'translateX(-50%)' }}>
+                                        MP {formatPrice(targetPrice, position.product_id || 'ETH-BTC')}
+                                      </div>
+                                    </>
+                                  )
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Column 4: Volume (2 cols) */}
+                      <div className="col-span-2">
+                        <div className="text-[10px] space-y-0.5">
+                          <div className="text-white">{formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}</div>
+                          <div className="text-slate-400">{formatPrice(position.total_base_acquired, position.product_id || 'ETH-BTC')}</div>
+                          {pnl && pnl.usd !== undefined && (
+                            <div className={pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}>
+                              {pnl.btc >= 0 ? '+' : ''}${Math.abs(pnl.usd).toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Column 5: Status (1 col) */}
+                      <div className="col-span-1">
+                        <div className="text-[10px] space-y-0.5">
+                          <div className="text-slate-400">Completed: {position.trade_count || 0}</div>
+                          <div className="text-slate-400">Active: 0</div>
+                          <div className="text-slate-400">Max: {Math.ceil(position.max_quote_allowed / position.total_quote_spent * position.trade_count) || 2}</div>
+                        </div>
+                      </div>
+
+                      {/* Column 6: Avg O + Timestamp (1 col) */}
+                      <div className="col-span-1">
+                        <div className="text-[10px] space-y-0.5">
+                          <div className="text-slate-400">ID: {position.id}</div>
+                          <div className="text-slate-400">Start: {formatDateTimeCompact(position.opened_at)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Our Special "Better than 3Commas" Funds Usage Bar */}
+                    <div className="mt-3 px-4">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-slate-400">Funds Used</span>
+                        <span className="text-slate-300">
+                          {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')} / {formatQuoteAmount(position.max_quote_allowed, position.product_id || 'ETH-BTC')}
+                          <span className="text-slate-400 ml-1">({fundsUsedPercent.toFixed(0)}%)</span>
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div
+                          className="bg-blue-500 h-2 rounded-full transition-all"
+                          style={{ width: `${Math.min(fundsUsedPercent, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action Buttons Row */}
+                    <div className="mt-3 px-4 flex items-center gap-3">
+                      <button className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+                        <span>🚫</span> Cancel
+                      </button>
+                      <button className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                        <span>💱</span> Close at market price
+                      </button>
+                      <button
+                        className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowLogsModal(true)
+                          setLogsModalPosition(position)
+                        }}
+                      >
+                        <span>📊</span> AI Reasoning
+                      </button>
+                      <button className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                        <span>💰</span> Add funds
+                      </button>
+                      <button className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1">
+                        <span>🔄</span> Refresh
+                      </button>
+                    </div>
+
+                    {/* Notes Section */}
+                    <div className="mt-3 px-4 pb-3">
+                      <div className="text-xs text-slate-500 italic flex items-center gap-2">
+                        <span>📝</span> You can place a note here
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expandable Details Section (keep existing chart/details) */}
+                  {selectedPosition === position.id && (
                           <div className="mt-4">
                             <div className="flex items-center justify-between text-xs mb-1">
                               <span className="text-slate-400">Price Movement</span>
