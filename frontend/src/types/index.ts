@@ -18,6 +18,7 @@ export interface Position {
   btc_usd_price_at_open?: number;
   btc_usd_price_at_close?: number;
   profit_usd?: number;
+  strategy_config_snapshot?: Record<string, any>;  // Snapshot of bot config when position opened
 }
 
 export interface Trade {

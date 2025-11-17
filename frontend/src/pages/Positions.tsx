@@ -1812,12 +1812,12 @@ export default function Positions() {
                         </div>
                       </div>
 
-                      {/* Column 5: Status (1 col) */}
+                      {/* Column 5: Avg. O (Averaging Orders) - Like 3Commas (1 col) */}
                       <div className="col-span-1">
                         <div className="text-[10px] space-y-0.5">
-                          <div className="text-slate-400">Completed: {position.trade_count || 0}</div>
+                          <div className="text-slate-400">Completed: {Math.max(0, (position.trade_count || 1) - 1)}</div>
                           <div className="text-slate-400">Active: 0</div>
-                          <div className="text-slate-400">Max: {Math.ceil(position.max_quote_allowed / position.total_quote_spent * position.trade_count) || 2}</div>
+                          <div className="text-slate-400">Max: {position.strategy_config_snapshot?.max_safety_orders || 0}</div>
                         </div>
                       </div>
 
