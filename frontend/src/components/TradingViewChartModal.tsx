@@ -65,7 +65,7 @@ export default function TradingViewChartModal({
         theme: 'dark'
       }
 
-      widgetRef.current = new window.TradingView.widget({
+      const widget = new window.TradingView.widget({
         container_id: containerRef.current.id,
         autosize: true,
         symbol: tvSymbol,
@@ -87,14 +87,13 @@ export default function TradingViewChartModal({
         show_popup_button: true,
         popup_width: '1000',
         popup_height: '650',
-        // Add position reference lines if we have a position
-        ...(position && {
-          studies_overrides: {
-            'volume.volume.color.0': '#ef5350',
-            'volume.volume.color.1': '#26a69a'
-          }
-        })
+        studies_overrides: {
+          'volume.volume.color.0': '#ef5350',
+          'volume.volume.color.1': '#26a69a'
+        }
       })
+
+      widgetRef.current = widget
     }
 
     return () => {
@@ -119,16 +118,33 @@ export default function TradingViewChartModal({
       <div className="bg-slate-900 rounded-lg w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <h2 className="text-xl font-bold text-white">TV Chart</h2>
-            <div className="text-sm text-slate-400">
-              {symbol}
-              {position && (
-                <span className="ml-2 text-xs">
-                  • Position: {position.total_base_acquired?.toFixed(6)} @ {position.average_buy_price?.toFixed(8)}
-                </span>
-              )}
-            </div>
+            <div className="text-sm text-slate-400">{symbol}</div>
+
+            {position && (
+              <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-0.5 bg-orange-500"></div>
+                  <span className="text-slate-400">Avg. Buy Price:</span>
+                  <span className="text-orange-400 font-semibold">{position.average_buy_price?.toFixed(8)}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-0.5 bg-green-500"></div>
+                  <span className="text-slate-400">Target (+2%):</span>
+                  <span className="text-green-400 font-semibold">{(position.average_buy_price * 1.02)?.toFixed(8)}</span>
+                </div>
+                {position.bot_config?.safety_order_step_percentage && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-0.5 bg-blue-500"></div>
+                    <span className="text-slate-400">Next SO (-{position.bot_config.safety_order_step_percentage}%):</span>
+                    <span className="text-blue-400 font-semibold">
+                      {(position.average_buy_price * (1 - position.bot_config.safety_order_step_percentage / 100))?.toFixed(8)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
