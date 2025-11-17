@@ -467,7 +467,6 @@ export default function LightweightChartModal({
 
     const avgBuyPrice = position.average_buy_price
     const targetPrice = avgBuyPrice * 1.02
-    const stopPrice = avgBuyPrice * 0.98
 
     // Entry price line (orange)
     const entrySeries = chartRef.current.addLineSeries({
@@ -492,18 +491,6 @@ export default function LightweightChartModal({
     })
     const targetData = chartData.map(d => ({ time: d.time, value: targetPrice }))
     targetSeries.setData(targetData)
-
-    // Stop loss line (red)
-    const stopSeries = chartRef.current.addLineSeries({
-      color: '#ef4444',
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-      title: 'Stop',
-      priceLineVisible: false,
-      lastValueVisible: false,
-    })
-    const stopData = chartData.map(d => ({ time: d.time, value: stopPrice }))
-    stopSeries.setData(stopData)
 
     // Safety order lines (blue) if configured
     if (position.bot_config?.safety_order_step_percentage && position.bot_config?.max_safety_orders) {
