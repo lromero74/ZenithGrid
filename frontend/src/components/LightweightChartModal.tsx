@@ -85,14 +85,23 @@ export default function LightweightChartModal({
         })
 
         const candles = response.data.candles || []
-        const formattedCandles = candles.map((c: any) => ({
-          time: Math.floor(new Date(c.start).getTime() / 1000) as Time,
-          open: parseFloat(c.open),
-          high: parseFloat(c.high),
-          low: parseFloat(c.low),
-          close: parseFloat(c.close),
-          volume: parseFloat(c.volume || 0),
-        })).sort((a: CandleData, b: CandleData) => (a.time as number) - (b.time as number))
+        const formattedCandles = candles
+          .map((c: any) => ({
+            time: Math.floor(new Date(c.start).getTime() / 1000) as Time,
+            open: parseFloat(c.open),
+            high: parseFloat(c.high),
+            low: parseFloat(c.low),
+            close: parseFloat(c.close),
+            volume: parseFloat(c.volume || 0),
+          }))
+          .filter((c: CandleData) =>
+            !isNaN(c.time as number) &&
+            !isNaN(c.open) &&
+            !isNaN(c.high) &&
+            !isNaN(c.low) &&
+            !isNaN(c.close)
+          )
+          .sort((a: CandleData, b: CandleData) => (a.time as number) - (b.time as number))
 
         candleDataRef.current = formattedCandles
         setChartData(formattedCandles)
