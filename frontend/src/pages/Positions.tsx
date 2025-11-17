@@ -1499,9 +1499,8 @@ export default function Positions() {
                       <div className="col-span-4">
                         {pnl && (
                           <div>
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="mb-1">
                               <span className="text-[10px] text-blue-400">Filled {fundsUsedPercent.toFixed(2)}%</span>
-                              <span className="text-[10px] text-slate-400">{formatPrice(position.total_base_acquired, position.product_id || 'ETH-BTC')}</span>
                             </div>
                             {/* Price Bar - 3Commas Style */}
                             <div className="relative w-full pt-6 pb-6">
