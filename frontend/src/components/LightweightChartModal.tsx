@@ -197,6 +197,7 @@ export default function LightweightChartModal({
         wickUpColor: '#26a69a',
         wickDownColor: '#ef5350',
         priceFormat,
+        priceScaleId: 'right',
       })
       series.setData(data)
       mainSeriesRef.current = series
@@ -205,6 +206,7 @@ export default function LightweightChartModal({
         upColor: '#26a69a',
         downColor: '#ef5350',
         priceFormat,
+        priceScaleId: 'right',
       })
       series.setData(data)
       mainSeriesRef.current = series
@@ -213,6 +215,7 @@ export default function LightweightChartModal({
         color: '#2196F3',
         lineWidth: 2,
         priceFormat,
+        priceScaleId: 'right',
       })
       series.setData(data.map(d => ({ time: d.time, value: d.close })))
       mainSeriesRef.current = series
@@ -223,6 +226,7 @@ export default function LightweightChartModal({
         lineColor: 'rgba(33, 150, 243, 1)',
         lineWidth: 2,
         priceFormat,
+        priceScaleId: 'right',
       })
       series.setData(data.map(d => ({ time: d.time, value: d.close })))
       mainSeriesRef.current = series
@@ -237,10 +241,17 @@ export default function LightweightChartModal({
         bottomFillColor1: 'rgba(239, 83, 80, 0.05)',
         bottomFillColor2: 'rgba(239, 83, 80, 0.28)',
         priceFormat,
+        priceScaleId: 'right',
       })
       series.setData(data.map(d => ({ time: d.time, value: d.close })))
       mainSeriesRef.current = series
     }
+
+    // Ensure right price scale is visible and properly configured
+    chartRef.current.priceScale('right').applyOptions({
+      borderColor: '#334155',
+      visible: true,
+    })
 
     // Add position reference lines if we have position data
     if (position && mainSeriesRef.current) {
