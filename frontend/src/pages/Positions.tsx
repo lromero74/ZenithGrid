@@ -1515,27 +1515,86 @@ export default function Positions() {
             {/* Column Headers - 3Commas Style */}
             <div className="bg-slate-800/50 rounded-lg border border-slate-700/50 px-4 py-2">
               <div className="grid grid-cols-12 gap-4 items-center text-xs text-slate-400">
-                <div className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300">
-                  Bot ↕
+                <div
+                  className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300"
+                  onClick={() => {
+                    if (sortBy === 'bot') {
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+                    } else {
+                      setSortBy('bot' as any)
+                      setSortOrder('asc')
+                    }
+                  }}
+                >
+                  <span>Bot</span>
+                  {sortBy === 'bot' && <span>{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                  {sortBy !== 'bot' && <span className="opacity-30">↕</span>}
                 </div>
-                <div className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300">
-                  Pair ↕
+                <div
+                  className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300"
+                  onClick={() => {
+                    if (sortBy === 'pair') {
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+                    } else {
+                      setSortBy('pair')
+                      setSortOrder('asc')
+                    }
+                  }}
+                >
+                  <span>Pair</span>
+                  {sortBy === 'pair' && <span>{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                  {sortBy !== 'pair' && <span className="opacity-30">↕</span>}
                 </div>
-                <div className="col-span-4 flex items-center gap-1 cursor-pointer hover:text-slate-300">
+                <div
+                  className="col-span-4 flex items-center gap-1 cursor-pointer hover:text-slate-300"
+                  onClick={() => {
+                    if (sortBy === 'pnl') {
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+                    } else {
+                      setSortBy('pnl')
+                      setSortOrder('desc')
+                    }
+                  }}
+                >
                   <span className="flex items-center gap-1">
                     <span className="w-4 h-4 rounded-full bg-slate-600 flex items-center justify-center text-[9px]">?</span>
                     uPnL
                   </span>
-                  ↕
+                  {sortBy === 'pnl' && <span>{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                  {sortBy !== 'pnl' && <span className="opacity-30">↕</span>}
                 </div>
-                <div className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300">
-                  Volume ↕
+                <div
+                  className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300"
+                  onClick={() => {
+                    if (sortBy === 'invested') {
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+                    } else {
+                      setSortBy('invested')
+                      setSortOrder('desc')
+                    }
+                  }}
+                >
+                  <span>Volume</span>
+                  {sortBy === 'invested' && <span>{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                  {sortBy !== 'invested' && <span className="opacity-30">↕</span>}
                 </div>
-                <div className="col-span-1 flex items-center gap-1 cursor-pointer hover:text-slate-300">
-                  Status ↕
+                <div className="col-span-1 flex items-center gap-1 text-slate-500">
+                  <span>Status</span>
                 </div>
-                <div className="col-span-1 flex items-center gap-1 cursor-pointer hover:text-slate-300">
-                  Created ↕
+                <div
+                  className="col-span-1 flex items-center gap-1 cursor-pointer hover:text-slate-300"
+                  onClick={() => {
+                    if (sortBy === 'created') {
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+                    } else {
+                      setSortBy('created')
+                      setSortOrder('desc')
+                    }
+                  }}
+                >
+                  <span>Created</span>
+                  {sortBy === 'created' && <span>{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                  {sortBy !== 'created' && <span className="opacity-30">↕</span>}
                 </div>
               </div>
             </div>
