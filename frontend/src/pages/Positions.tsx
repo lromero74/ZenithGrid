@@ -1347,7 +1347,30 @@ export default function Positions() {
     }))
   }
 
-  // Calculate unrealized P&L for open position
+  // Calculate overall statistics
+  const calculateOverallStats = () => {
+    const totalFundsLocked = openPositions.reduce((sum, pos) => sum + pos.total_quote_spent, 0)
+    const totalUPnL = openPositions.reduce((sum, pos) => {
+      const currentPrice = currentPrices[pos.product_id || 'ETH-BTC']
+      const pnl = calculateUnrealizedPnL(pos, currentPrice)
+      return sum + (pnl?.btc || 0)
+    }, 0)
+    const totalUPnLUSD = openPositions.reduce((sum, pos) => {
+      const currentPrice = currentPrices[pos.product_id || 'ETH-BTC']
+      const pnl = calculateUnrealizedPnL(pos, currentPrice)
+      return sum + (pnl?.usd || 0)
+    }, 0)
+
+    return {
+      activeTrades: openPositions.length,
+      fundsLocked: totalFundsLocked,
+      uPnL: totalUPnL,
+      uPnLUSD: totalUPnLUSD
+    }
+  }
+
+  const stats = calculateOverallStats()
+
   return (
     <div className="space-y-6">
       {/* Active Deals Section */}
@@ -1361,25 +1384,94 @@ export default function Positions() {
           </div>
         </div>
 
-        {/* Filters and Sorting (like 3Commas) */}
+        {/* Overall Stats Panel - 3Commas Style */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Overall Stats */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">Overall stats</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Active trades:</span>
+                  <span className="text-white font-medium">{stats.activeTrades}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Funds locked in DCA bot trades:</span>
+                  <span className="text-white font-medium">{stats.fundsLocked.toFixed(8)} BTC</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">uPnL of active Bot trades:</span>
+                  <span className={`font-medium ${stats.uPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stats.uPnL >= 0 ? '+' : ''}{stats.uPnL.toFixed(8)} BTC
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Completed Trades Profit (placeholder for now) */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">Completed trades profit</h3>
+              <div className="space-y-2 text-sm">
+                <div className="text-slate-400">Coming soon...</div>
+              </div>
+            </div>
+
+            {/* Balances */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center justify-between">
+                Balances
+                <button className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                  🔄 Refresh
+                </button>
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between text-slate-400">
+                  <span>Reserved</span>
+                  <span>Available</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-300">BTC</span>
+                  <div className="flex gap-4">
+                    <span className="text-white">{stats.fundsLocked.toFixed(8)}</span>
+                    <span className="text-white">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters - 3Commas Style (Account, Bot, Pair) */}
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-slate-300">Filters & Sorting</h3>
+            <h3 className="text-sm font-semibold text-slate-300">Filters</h3>
             <button
               onClick={() => {
                 setFilterBot('all')
                 setFilterMarket('all')
                 setFilterPair('all')
-                setSortBy('created')
-                setSortOrder('desc')
               }}
               className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors flex items-center gap-2"
             >
               <X className="w-4 h-4" />
-              Clear Filters
+              Clear
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Account Filter (Market in our case) */}
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Account</label>
+              <select
+                value={filterMarket}
+                onChange={(e) => setFilterMarket(e.target.value as 'all' | 'USD' | 'BTC')}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="all">All</option>
+                <option value="USD">USD Markets</option>
+                <option value="BTC">BTC Markets</option>
+              </select>
+            </div>
+
             {/* Bot Filter */}
             <div>
               <label className="block text-sm font-medium text-slate-400 mb-2">Bot</label>
@@ -1388,24 +1480,10 @@ export default function Positions() {
                 onChange={(e) => setFilterBot(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
                 className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
               >
-                <option value="all">All Bots</option>
+                <option value="all">All</option>
                 {bots?.map(bot => (
                   <option key={bot.id} value={bot.id}>{bot.name}</option>
                 ))}
-              </select>
-            </div>
-
-            {/* Market Filter */}
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Market</label>
-              <select
-                value={filterMarket}
-                onChange={(e) => setFilterMarket(e.target.value as 'all' | 'USD' | 'BTC')}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-              >
-                <option value="all">All Markets</option>
-                <option value="USD">USD-based</option>
-                <option value="BTC">BTC-based</option>
               </select>
             </div>
 
@@ -1417,38 +1495,10 @@ export default function Positions() {
                 onChange={(e) => setFilterPair(e.target.value)}
                 className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
               >
-                <option value="all">All Pairs</option>
+                <option value="all">All</option>
                 {uniquePairs.map(pair => (
                   <option key={pair} value={pair}>{pair}</option>
                 ))}
-              </select>
-            </div>
-
-            {/* Sort By */}
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Sort By</label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'created' | 'pnl' | 'invested' | 'pair')}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-              >
-                <option value="created">Created Date</option>
-                <option value="pnl">PnL %</option>
-                <option value="invested">Invested</option>
-                <option value="pair">Pair</option>
-              </select>
-            </div>
-
-            {/* Sort Order */}
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Order</label>
-              <select
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-              >
-                <option value="desc">Descending</option>
-                <option value="asc">Ascending</option>
               </select>
             </div>
           </div>
