@@ -24,6 +24,19 @@ export default function TradingViewChartModal({
   const widgetRef = useRef<any>(null)
 
   useEffect(() => {
+    // Prevent body scroll when modal is open
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen])
+
+  useEffect(() => {
     if (!isOpen || !containerRef.current) return
 
     // Load TradingView widget script if not already loaded
