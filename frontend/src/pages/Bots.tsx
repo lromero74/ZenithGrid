@@ -760,10 +760,14 @@ function Bots() {
                         )}
                       </div>
 
-                      {/* Quick filter buttons */}
+                      {/* Quick filter buttons - only show for markets with pairs */}
                       <div className="flex flex-wrap gap-2 mb-3 px-1">
-                        {['USDC', 'USD', 'USDT', 'BTC'].map((market) => {
+                        {['BTC', 'USD', 'USDC', 'USDT'].map((market) => {
                           const marketPairs = TRADING_PAIRS.filter(p => p.group === market).map(p => p.value)
+
+                          // Don't show button if market has no pairs
+                          if (marketPairs.length === 0) return null
+
                           const isDisabled = isMarketLocked && selectedMarket !== market
 
                           return (
