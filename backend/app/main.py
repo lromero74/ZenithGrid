@@ -17,7 +17,6 @@ from app.database import get_db, init_db
 from app.models import Bot, MarketData, PendingOrder, Position, Signal, Trade
 from app.multi_bot_monitor import MultiBotMonitor
 from app.routers import bots_router, templates_router
-from app.services.order_monitor import OrderMonitor
 from app.schemas import (
     DashboardStats,
     MarketDataResponse,
@@ -72,10 +71,8 @@ else:
 # Now using per-bot check_interval_seconds (set in database)
 # Monitor loop runs every 60s to check if any bots need processing
 # Each bot can have its own interval optimized for its AI provider quota
+# Order monitor is integrated within MultiBotMonitor (checks pending limit orders)
 price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=300)
-
-# Order monitor - checks pending limit orders and creates trades when filled
-order_monitor = OrderMonitor(coinbase_client, check_interval=30)
 
 
 # Startup/Shutdown events
@@ -86,14 +83,10 @@ async def startup_event():
     print("🚀 Initializing database...")
     await init_db()
     print("🚀 Database initialized successfully")
-    print("🚀 Starting price monitor...")
-    # Start price monitor
+    print("🚀 Starting multi-bot monitor (includes order monitor)...")
+    # Start price monitor (which includes order monitor)
     price_monitor.start()
-    print("🚀 Price monitor started - bot monitoring active")
-    print("🚀 Starting order monitor...")
-    # Start order monitor
-    await order_monitor.start()
-    print("🚀 Order monitor started - checking pending limit orders")
+    print("🚀 Multi-bot monitor started - bot monitoring & order tracking active")
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
@@ -102,7 +95,6 @@ async def startup_event():
 async def shutdown_event():
     logger.info("🛑 Shutting down - stopping monitors...")
     await price_monitor.stop()
-    await order_monitor.stop()
     logger.info("🛑 Monitors stopped - shutdown complete")
 
 

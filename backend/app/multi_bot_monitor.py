@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_client import CoinbaseClient
 from app.database import async_session_maker
 from app.models import Bot
+from app.services.order_monitor import OrderMonitor
 from app.strategies import StrategyRegistry
 from app.trading_engine_v2 import StrategyTradingEngine
 
@@ -44,6 +45,9 @@ class MultiBotMonitor:
         self.interval_seconds = interval_seconds
         self.running = False
         self.task: Optional[asyncio.Task] = None
+
+        # Initialize order monitor for tracking limit orders
+        self.order_monitor = OrderMonitor(coinbase, check_interval=30)
 
         # Cache for candle data (to avoid fetching same data multiple times)
         self._candle_cache: Dict[str, tuple] = {}  # product_id -> (timestamp, candles)
@@ -667,11 +671,15 @@ class MultiBotMonitor:
         """Start the monitoring task"""
         if not self.running:
             self.task = asyncio.create_task(self.monitor_loop())
+            # Start order monitor alongside bot monitor
+            asyncio.create_task(self.order_monitor.start())
             logger.info("Multi-bot monitor task started")
 
     async def stop(self):
         """Stop the monitoring task"""
         self.running = False
+        # Stop order monitor
+        await self.order_monitor.stop()
         if self.task:
             await self.task
             logger.info("Multi-bot monitor task stopped")
