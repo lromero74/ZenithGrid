@@ -1503,9 +1503,9 @@ export default function Positions() {
                               <span className="text-[10px] text-blue-400">Filled {fundsUsedPercent.toFixed(2)}%</span>
                               <span className="text-[10px] text-slate-400">{formatPrice(position.total_base_acquired, position.product_id || 'ETH-BTC')}</span>
                             </div>
-                            {/* Compact Price Bar */}
-                            <div className="relative w-full h-6 mb-1">
-                              <div className="relative w-full h-1.5 bg-slate-700 rounded-full">
+                            {/* Price Bar - 3Commas Style */}
+                            <div className="relative w-full pt-6 pb-1">
+                              <div className="relative w-full h-2 bg-slate-700 rounded-full">
                                 {(() => {
                                   const entryPrice = position.average_buy_price
                                   const currentPriceValue = pnl.currentPrice
@@ -1527,24 +1527,46 @@ export default function Positions() {
 
                                   return (
                                     <>
+                                      {/* Fill color between entry and current */}
                                       <div
-                                        className={`absolute h-full ${isProfit ? 'bg-green-500' : 'bg-red-500'}`}
+                                        className={`absolute h-full rounded-full ${isProfit ? 'bg-green-500' : 'bg-red-500'}`}
                                         style={{
                                           left: `${Math.max(0, Math.min(100, fillStart))}%`,
                                           width: `${Math.max(0, Math.min(100 - fillStart, fillWidth))}%`
                                         }}
                                       />
-                                      {/* Tick marks - compact version */}
-                                      <div className="absolute -top-4 text-[9px] whitespace-nowrap" style={{ left: `${Math.max(0, Math.min(100, currentPosition))}%`, transform: 'translateX(-50%)' }}>
-                                        <span className={isProfit ? 'text-green-400' : 'text-red-400'}>
+
+                                      {/* Buy Price - Left */}
+                                      <div
+                                        className="absolute flex flex-col items-center"
+                                        style={{ left: `${Math.max(0, Math.min(100, entryPosition))}%`, transform: 'translateX(-50%)', bottom: '100%' }}
+                                      >
+                                        <div className="text-[9px] text-slate-400 mb-0.5 whitespace-nowrap">
+                                          Buy {formatPrice(entryPrice, position.product_id || 'ETH-BTC')}
+                                        </div>
+                                        <div className="w-px h-3 bg-slate-400" />
+                                      </div>
+
+                                      {/* Current Price - Center */}
+                                      <div
+                                        className="absolute flex flex-col items-center"
+                                        style={{ left: `${Math.max(0, Math.min(100, currentPosition))}%`, transform: 'translateX(-50%)', bottom: '100%' }}
+                                      >
+                                        <div className={`text-[9px] mb-0.5 whitespace-nowrap font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
                                           {pnl.percent >= 0 ? '+' : ''}{pnl.percent.toFixed(2)}% {formatPrice(currentPriceValue, position.product_id || 'ETH-BTC')}
-                                        </span>
+                                        </div>
+                                        <div className={`w-px h-3 ${isProfit ? 'bg-green-400' : 'bg-red-400'}`} />
                                       </div>
-                                      <div className="absolute -bottom-3 text-[9px] text-slate-400" style={{ left: `${Math.max(0, Math.min(100, entryPosition))}%`, transform: 'translateX(-50%)' }}>
-                                        Buy {formatPrice(entryPrice, position.product_id || 'ETH-BTC')}
-                                      </div>
-                                      <div className="absolute -bottom-3 text-[9px] text-emerald-400" style={{ left: `${Math.max(0, Math.min(100, targetPosition))}%`, transform: 'translateX(-50%)' }}>
-                                        MP {formatPrice(targetPrice, position.product_id || 'ETH-BTC')}
+
+                                      {/* Target Price (MP) - Right */}
+                                      <div
+                                        className="absolute flex flex-col items-center"
+                                        style={{ left: `${Math.max(0, Math.min(100, targetPosition))}%`, transform: 'translateX(-50%)', bottom: '100%' }}
+                                      >
+                                        <div className="text-[9px] text-emerald-400 mb-0.5 whitespace-nowrap">
+                                          MP {formatPrice(targetPrice, position.product_id || 'ETH-BTC')}
+                                        </div>
+                                        <div className="w-px h-3 bg-emerald-400" />
                                       </div>
                                     </>
                                   )
