@@ -85,8 +85,16 @@ export default function TradingViewChartModal({
     }
 
     return () => {
-      if (widgetRef.current && widgetRef.current.remove) {
-        widgetRef.current.remove()
+      if (widgetRef.current) {
+        try {
+          if (typeof widgetRef.current.remove === 'function') {
+            widgetRef.current.remove()
+          }
+        } catch (error) {
+          // Silently ignore cleanup errors
+          console.log('TradingView widget cleanup skipped')
+        }
+        widgetRef.current = null
       }
     }
   }, [isOpen, symbol, position])
