@@ -361,6 +361,52 @@ function Portfolio() {
           </div>
         </div>
 
+        {/* PnL Stats - Today */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={20} className={portfolio.pnl?.today?.usd >= 0 ? "text-green-400" : "text-red-400"} />
+              <p className="text-slate-400 text-sm font-medium">Today PnL (USD)</p>
+            </div>
+            <p className={`text-3xl font-bold ${portfolio.pnl?.today?.usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {portfolio.pnl?.today?.usd >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.today?.usd || 0)}
+            </p>
+          </div>
+
+          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={20} className={portfolio.pnl?.today?.btc >= 0 ? "text-green-400" : "text-red-400"} />
+              <p className="text-slate-400 text-sm font-medium">Today PnL (BTC)</p>
+            </div>
+            <p className={`text-3xl font-bold ${portfolio.pnl?.today?.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {portfolio.pnl?.today?.btc >= 0 ? '+' : ''}{formatCrypto(portfolio.pnl?.today?.btc || 0)} BTC
+            </p>
+          </div>
+        </div>
+
+        {/* PnL Stats - All Time */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={20} className={portfolio.pnl?.all_time?.usd >= 0 ? "text-green-400" : "text-red-400"} />
+              <p className="text-slate-400 text-sm font-medium">All-Time PnL (USD)</p>
+            </div>
+            <p className={`text-3xl font-bold ${portfolio.pnl?.all_time?.usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {portfolio.pnl?.all_time?.usd >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.all_time?.usd || 0)}
+            </p>
+          </div>
+
+          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={20} className={portfolio.pnl?.all_time?.btc >= 0 ? "text-green-400" : "text-red-400"} />
+              <p className="text-slate-400 text-sm font-medium">All-Time PnL (BTC)</p>
+            </div>
+            <p className={`text-3xl font-bold ${portfolio.pnl?.all_time?.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {portfolio.pnl?.all_time?.btc >= 0 ? '+' : ''}{formatCrypto(portfolio.pnl?.all_time?.btc || 0)} BTC
+            </p>
+          </div>
+        </div>
+
         {/* Free Balance Cards (Balance Breakdown) */}
         {portfolio.balance_breakdown && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

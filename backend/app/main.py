@@ -800,6 +800,36 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
         free_btc = max(0.0, free_btc)
         free_usd = max(0.0, free_usd)
 
+        # Calculate realized PnL from closed positions
+        # All-time PnL
+        closed_positions_query = select(Position).where(Position.status == "closed")
+        closed_positions_result = await db.execute(closed_positions_query)
+        closed_positions = closed_positions_result.scalars().all()
+
+        pnl_all_time_usd = 0.0
+        pnl_all_time_btc = 0.0
+        pnl_today_usd = 0.0
+        pnl_today_btc = 0.0
+
+        today = datetime.utcnow().date()
+
+        for position in closed_positions:
+            if position.profit_quote is not None:
+                quote = position.get_quote_currency()
+
+                # All-time PnL
+                if quote == "USD":
+                    pnl_all_time_usd += position.profit_quote
+                else:  # BTC
+                    pnl_all_time_btc += position.profit_quote
+
+                # Today's PnL
+                if position.closed_at and position.closed_at.date() == today:
+                    if quote == "USD":
+                        pnl_today_usd += position.profit_quote
+                    else:  # BTC
+                        pnl_today_btc += position.profit_quote
+
         return {
             "total_usd_value": total_usd_value,
             "total_btc_value": total_btc_value,
@@ -818,6 +848,16 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
                     "reserved_by_bots": total_reserved_usd,
                     "in_open_positions": total_in_positions_usd,
                     "free": free_usd
+                }
+            },
+            "pnl": {
+                "today": {
+                    "usd": pnl_today_usd,
+                    "btc": pnl_today_btc
+                },
+                "all_time": {
+                    "usd": pnl_all_time_usd,
+                    "btc": pnl_all_time_btc
                 }
             }
         }
