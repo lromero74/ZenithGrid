@@ -87,7 +87,8 @@ export default function LightweightChartModal({
         const candles = response.data.candles || []
         const formattedCandles = candles
           .map((c: any) => ({
-            time: Math.floor(new Date(c.start).getTime() / 1000) as Time,
+            // API returns 'time' as Unix timestamp, not 'start' as ISO string
+            time: (typeof c.time === 'number' ? c.time : Math.floor(new Date(c.start || c.time).getTime() / 1000)) as Time,
             open: parseFloat(c.open),
             high: parseFloat(c.high),
             low: parseFloat(c.low),
