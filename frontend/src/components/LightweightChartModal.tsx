@@ -45,6 +45,7 @@ export default function LightweightChartModal({
   const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map())
   const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
+  const positionLinesRef = useRef<ISeriesApi<any>[]>([])
   const candleDataRef = useRef<CandleData[]>([])
   const isCleanedUpRef = useRef<boolean>(false)
 
@@ -387,6 +388,16 @@ export default function LightweightChartModal({
   const addPositionLines = () => {
     if (!chartRef.current || !position) return
 
+    // Clear existing position lines
+    positionLinesRef.current.forEach(series => {
+      try {
+        chartRef.current?.removeSeries(series)
+      } catch (e) {
+        // Series may already be removed
+      }
+    })
+    positionLinesRef.current = []
+
     const avgBuyPrice = position.average_buy_price
 
     // Get profit target from strategy config (min_profit_percentage or take_profit_percentage)
@@ -408,6 +419,7 @@ export default function LightweightChartModal({
     })
     const entryData = chartData.map(d => ({ time: d.time, value: avgBuyPrice }))
     entrySeries.setData(entryData)
+    positionLinesRef.current.push(entrySeries)
 
     // Target price line (green)
     const targetSeries = chartRef.current.addLineSeries({
@@ -420,6 +432,7 @@ export default function LightweightChartModal({
     })
     const targetData = chartData.map(d => ({ time: d.time, value: targetPrice }))
     targetSeries.setData(targetData)
+    positionLinesRef.current.push(targetSeries)
 
     // Safety order lines (blue) if configured
     if (position.bot_config?.safety_order_step_percentage && position.bot_config?.max_safety_orders) {
@@ -440,6 +453,7 @@ export default function LightweightChartModal({
         })
         const soData = chartData.map(d => ({ time: d.time, value: soPrice }))
         soSeries.setData(soData)
+        positionLinesRef.current.push(soSeries)
       }
     }
   }
