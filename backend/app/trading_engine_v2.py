@@ -450,8 +450,8 @@ class StrategyTradingEngine:
             quote_balance = await self.trading_client.get_quote_balance(self.product_id)
             logger.info(f"  💰 Using total portfolio balance: {quote_balance}")
 
-        # Log AI thinking immediately after analysis (if AI bot)
-        if self.bot.strategy_type == "ai_autonomous":
+        # Log AI thinking immediately after analysis (if AI bot and not already logged in batch mode)
+        if self.bot.strategy_type == "ai_autonomous" and not signal_data.get("_already_logged", False):
             # Log what the AI thinks, not what the bot will do
             ai_signal = signal_data.get("signal_type", "none")
             if ai_signal == "buy":

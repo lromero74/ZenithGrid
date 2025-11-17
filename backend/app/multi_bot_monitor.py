@@ -346,6 +346,9 @@ class MultiBotMonitor:
                     # Log AI decision
                     await self.log_ai_decision(db, bot, product_id, signal_data, pairs_data.get(product_id, {}))
 
+                    # Mark signal as already logged to prevent duplicate logging in trading_engine_v2.py
+                    signal_data["_already_logged"] = True
+
                     # Execute trading logic based on signal
                     result = await self.execute_trading_logic(db, bot, product_id, signal_data, pairs_data.get(product_id, {}))
                     results[product_id] = result
