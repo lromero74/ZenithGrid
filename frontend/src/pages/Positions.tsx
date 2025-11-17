@@ -61,12 +61,25 @@ const getQuoteCurrency = (productId: string) => {
   }
 }
 
+const getBaseCurrency = (productId: string) => {
+  const base = productId?.split('-')[0] || 'ETH'
+  return {
+    symbol: base,
+    decimals: 6  // Most altcoins use 6 decimals for display
+  }
+}
+
 const formatPrice = (price: number, productId: string = 'ETH-BTC') => {
   const { symbol, decimals } = getQuoteCurrency(productId)
   if (symbol === 'USD') {
     return `$${price.toFixed(decimals)}`
   }
   return `${price.toFixed(decimals)} ${symbol}`
+}
+
+const formatBaseAmount = (amount: number, productId: string = 'ETH-BTC') => {
+  const { symbol, decimals } = getBaseCurrency(productId)
+  return `${amount.toFixed(decimals)} ${symbol}`
 }
 
 const formatQuoteAmount = (amount: number, productId: string) => {
@@ -1624,7 +1637,7 @@ export default function Positions() {
                       <div className="col-span-2">
                         <div className="text-[10px] space-y-0.5">
                           <div className="text-white">{formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}</div>
-                          <div className="text-slate-400">{formatPrice(position.total_base_acquired, position.product_id || 'ETH-BTC')}</div>
+                          <div className="text-slate-400">{formatBaseAmount(position.total_base_acquired, position.product_id || 'ETH-BTC')}</div>
                           {pnl && pnl.usd !== undefined && (
                             <div className={pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}>
                               {pnl.btc >= 0 ? '+' : ''}${Math.abs(pnl.usd).toFixed(2)}
