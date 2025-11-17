@@ -208,6 +208,14 @@ class AIAutonomousStrategy(TradingStrategy):
                     max_value=95
                 ),
                 StrategyParameter(
+                    name="safety_order_type",
+                    display_name="Safety Order Type",
+                    description="Market orders execute immediately; limit orders wait at target price (AI bots use market)",
+                    type="string",
+                    default="market",
+                    options=["market", "limit"]
+                ),
+                StrategyParameter(
                     name="min_daily_volume",
                     display_name="Minimum Daily Volume",
                     description="Minimum 24h trading volume in quote currency (BTC or USD). Pairs below this threshold are filtered out.",
