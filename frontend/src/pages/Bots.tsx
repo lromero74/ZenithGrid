@@ -619,32 +619,79 @@ function Bots() {
                 </div>
               )}
 
-              {/* Bot Name */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Bot Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
-                  placeholder="My Trading Bot"
-                  required
-                />
+              {/* ============================================ */}
+              {/* SECTION 1: BASIC INFORMATION */}
+              {/* ============================================ */}
+              <div className="border-b border-slate-700 pb-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <span className="text-blue-400">1.</span> Basic Information
+                </h3>
+
+                {/* Bot Name */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">Bot Name *</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                    placeholder="My Trading Bot"
+                    required
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Description</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                    placeholder="Optional description"
+                    rows={2}
+                  />
+                </div>
               </div>
 
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
-                  placeholder="Optional description"
-                  rows={2}
-                />
+              {/* ============================================ */}
+              {/* SECTION 2: STRATEGY */}
+              {/* ============================================ */}
+              <div className="border-b border-slate-700 pb-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <span className="text-blue-400">2.</span> Strategy
+                </h3>
+
+                {/* Strategy Selection */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Trading Strategy *</label>
+                  <select
+                    value={formData.strategy_type}
+                    onChange={(e) => handleStrategyChange(e.target.value)}
+                    className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                    required
+                  >
+                    <option value="">Select a strategy...</option>
+                    {strategies.map((strategy) => (
+                      <option key={strategy.id} value={strategy.id}>
+                        {strategy.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedStrategy && (
+                    <p className="text-sm text-slate-400 mt-2">{selectedStrategy.description}</p>
+                  )}
+                </div>
               </div>
 
-              {/* Trading Pairs (3Commas Style Multi-Select) */}
+              {/* ============================================ */}
+              {/* SECTION 3: MARKETS & PAIRS */}
+              {/* ============================================ */}
+              <div className="border-b border-slate-700 pb-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <span className="text-blue-400">3.</span> Markets & Trading Pairs
+                </h3>
+
+                {/* Trading Pairs (3Commas Style Multi-Select) */}
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Pairs
@@ -740,9 +787,105 @@ function Bots() {
                   })}
                 </div>
               </div>
+              </div>
 
-              {/* Budget Splitting Toggle - Only show for multi-pair */}
-              {formData.product_ids.length > 1 && (
+              {/* ============================================ */}
+              {/* SECTION 4: MONITORING & TIMING */}
+              {/* ============================================ */}
+              <div className="border-b border-slate-700 pb-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <span className="text-blue-400">4.</span> Monitoring & Timing
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Check Interval (seconds)
+                    </label>
+                    <input
+                      type="number"
+                      step="60"
+                      min="60"
+                      max="3600"
+                      value={formData.check_interval_seconds}
+                      onChange={(e) => setFormData({ ...formData, check_interval_seconds: parseInt(e.target.value) || 300 })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                      placeholder="300"
+                    />
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      How often to monitor positions<br/>
+                      <span className="text-slate-500">Default: 300s (5 min) • Gemini: 1800s (30 min)</span>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      AI Analysis Interval (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      step="5"
+                      min="5"
+                      max="120"
+                      value={formData.analysis_interval_minutes}
+                      onChange={(e) => setFormData({ ...formData, analysis_interval_minutes: parseInt(e.target.value) || 15 })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                      placeholder="15"
+                    />
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      How often AI analyzes markets (AI bots only)<br/>
+                      <span className="text-slate-500">Default: 15 min • Gemini: 60 min</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ============================================ */}
+              {/* SECTION 5: BUDGET & RISK MANAGEMENT */}
+              {/* ============================================ */}
+              <div className="border-b border-slate-700 pb-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <span className="text-blue-400">5.</span> Budget & Risk Management
+                </h3>
+
+                {/* Reserved Balance Configuration */}
+                <div className="bg-orange-900/20 border border-orange-700/50 rounded-lg p-4 mb-4">
+                  <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                    💰 Balance Allocation <span className="text-xs font-normal text-slate-400">(Optional)</span>
+                  </h4>
+                  <p className="text-xs text-slate-300 mb-3">
+                    Reserve specific balance for this bot. Leave at 0 to use total portfolio balance.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Reserved BTC</label>
+                      <input
+                        type="number"
+                        step="0.00000001"
+                        min="0"
+                        value={formData.reserved_btc_balance}
+                        onChange={(e) => setFormData({ ...formData, reserved_btc_balance: parseFloat(e.target.value) || 0 })}
+                        className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                        placeholder="0.0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Reserved USD</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.reserved_usd_balance}
+                        onChange={(e) => setFormData({ ...formData, reserved_usd_balance: parseFloat(e.target.value) || 0 })}
+                        className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Budget Splitting Toggle - Only show for multi-pair */}
+                {formData.product_ids.length > 1 && (
                 <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
                   <label className="flex items-start space-x-3 cursor-pointer">
                     <input
@@ -776,143 +919,44 @@ function Bots() {
                   </label>
                 </div>
               )}
-
-              {/* Reserved Balance Configuration */}
-              <div className="bg-orange-900/20 border border-orange-700/50 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-white mb-3">💰 Balance Allocation (Optional)</h4>
-                <p className="text-xs text-slate-300 mb-4">
-                  Reserve a specific balance for this bot to prevent it from borrowing from other bots.
-                  Leave at 0 to use total portfolio balance.
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-2">Reserved BTC</label>
-                    <input
-                      type="number"
-                      step="0.00000001"
-                      min="0"
-                      value={formData.reserved_btc_balance}
-                      onChange={(e) => setFormData({ ...formData, reserved_btc_balance: parseFloat(e.target.value) || 0 })}
-                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
-                      placeholder="0.0"
-                    />
-                    <p className="text-xs text-slate-400 mt-1">BTC allocated to this bot</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-2">Reserved USD</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.reserved_usd_balance}
-                      onChange={(e) => setFormData({ ...formData, reserved_usd_balance: parseFloat(e.target.value) || 0 })}
-                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
-                      placeholder="0.00"
-                    />
-                    <p className="text-xs text-slate-400 mt-1">USD allocated to this bot</p>
-                  </div>
-                </div>
               </div>
 
-              {/* Bot Monitoring Intervals */}
-              <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-                <h4 className="text-sm font-semibold text-white mb-3">Monitoring Intervals</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Check Interval (seconds)
-                    </label>
-                    <input
-                      type="number"
-                      step="60"
-                      min="60"
-                      max="3600"
-                      value={formData.check_interval_seconds}
-                      onChange={(e) => setFormData({ ...formData, check_interval_seconds: parseInt(e.target.value) || 300 })}
-                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
-                      placeholder="300"
-                    />
-                    <p className="text-xs text-slate-400 mt-1">
-                      How often to monitor positions (default: 300s / 5min)
-                      <br />
-                      <span className="text-yellow-400">⚠️ Gemini: use 1800s (30min) to avoid quota limits</span>
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      AI Analysis Interval (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      step="5"
-                      min="5"
-                      max="120"
-                      value={formData.analysis_interval_minutes}
-                      onChange={(e) => setFormData({ ...formData, analysis_interval_minutes: parseInt(e.target.value) || 15 })}
-                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
-                      placeholder="15"
-                    />
-                    <p className="text-xs text-slate-400 mt-1">
-                      How often AI analyzes markets (AI bots only, default: 15min)
-                      <br />
-                      <span className="text-yellow-400">⚠️ Gemini: use 60min to conserve API quota</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Strategy Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Strategy *</label>
-                <select
-                  value={formData.strategy_type}
-                  onChange={(e) => handleStrategyChange(e.target.value)}
-                  className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
-                  required
-                >
-                  <option value="">Select a strategy...</option>
-                  {strategies.map((strategy) => (
-                    <option key={strategy.id} value={strategy.id}>
-                      {strategy.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedStrategy && (
-                  <p className="text-sm text-slate-400 mt-2">{selectedStrategy.description}</p>
-                )}
-              </div>
+              {/* ============================================ */}
+              {/* SECTION 6: STRATEGY CONFIGURATION */}
+              {/* ============================================ */}
+              {selectedStrategy && (selectedStrategy.id === 'conditional_dca' || selectedStrategy.parameters.length > 0) && (
+              <div className="border-b border-slate-700 pb-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <span className="text-blue-400">6.</span> Strategy Parameters
+                </h3>
 
               {/* Dynamic Strategy Parameters */}
-              {selectedStrategy && formData.strategy_type === 'conditional_dca' ? (
-                <div className="border-t border-slate-700 pt-6">
-                  <ThreeCommasStyleForm
-                    config={formData.strategy_config}
-                    onChange={(newConfig) =>
-                      setFormData({ ...formData, strategy_config: newConfig })
-                    }
-                  />
-                </div>
-              ) : selectedStrategy && selectedStrategy.parameters.length > 0 ? (
-                <div className="border-t border-slate-700 pt-6">
-                  <h4 className="text-lg font-semibold mb-4">Strategy Parameters</h4>
-                  <div className="space-y-4">
-                    {selectedStrategy.parameters.map((param) => (
-                      <div key={param.name}>
-                        <label className="block text-sm font-medium mb-2">
-                          {param.description}
-                          {param.min_value !== undefined && param.max_value !== undefined && (
-                            <span className="text-slate-400 text-xs ml-2">
-                              ({param.min_value} - {param.max_value})
-                            </span>
-                          )}
-                        </label>
-                        {renderParameterInput(param)}
-                      </div>
-                    ))}
-                  </div>
+              {formData.strategy_type === 'conditional_dca' ? (
+                <ThreeCommasStyleForm
+                  config={formData.strategy_config}
+                  onChange={(newConfig) =>
+                    setFormData({ ...formData, strategy_config: newConfig })
+                  }
+                />
+              ) : selectedStrategy.parameters.length > 0 ? (
+                <div className="space-y-4">
+                  {selectedStrategy.parameters.map((param) => (
+                    <div key={param.name}>
+                      <label className="block text-sm font-medium mb-2">
+                        {param.description}
+                        {param.min_value !== undefined && param.max_value !== undefined && (
+                          <span className="text-slate-400 text-xs ml-2">
+                            ({param.min_value} - {param.max_value})
+                          </span>
+                        )}
+                      </label>
+                      {renderParameterInput(param)}
+                    </div>
+                  ))}
                 </div>
               ) : null}
+              </div>
+              )}
 
               {/* Actions */}
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-700">
