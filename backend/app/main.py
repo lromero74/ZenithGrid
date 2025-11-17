@@ -14,7 +14,7 @@ from app.coinbase_cdp_client import CoinbaseCDPClient
 from app.coinbase_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db, init_db
-from app.models import Bot, MarketData, Position, Signal, Trade
+from app.models import Bot, MarketData, PendingOrder, Position, Signal, Trade
 from app.multi_bot_monitor import MultiBotMonitor
 from app.routers import bots_router, templates_router
 from app.schemas import (
@@ -204,8 +204,17 @@ async def get_positions(
         trade_count_result = await db.execute(trade_count_query)
         trade_count = trade_count_result.scalar()
 
+        # Count pending orders
+        pending_count_query = select(func.count(PendingOrder.id)).where(
+            PendingOrder.position_id == pos.id,
+            PendingOrder.status == "pending"
+        )
+        pending_count_result = await db.execute(pending_count_query)
+        pending_count = pending_count_result.scalar()
+
         pos_response = PositionResponse.model_validate(pos)
         pos_response.trade_count = trade_count
+        pos_response.pending_orders_count = pending_count
         response.append(pos_response)
 
     return response
@@ -226,8 +235,17 @@ async def get_position(position_id: int, db: AsyncSession = Depends(get_db)):
     trade_count_result = await db.execute(trade_count_query)
     trade_count = trade_count_result.scalar()
 
+    # Count pending orders
+    pending_count_query = select(func.count(PendingOrder.id)).where(
+        PendingOrder.position_id == position.id,
+        PendingOrder.status == "pending"
+    )
+    pending_count_result = await db.execute(pending_count_query)
+    pending_count = pending_count_result.scalar()
+
     pos_response = PositionResponse.model_validate(position)
     pos_response.trade_count = trade_count
+    pos_response.pending_orders_count = pending_count
 
     return pos_response
 

@@ -1816,7 +1816,7 @@ export default function Positions() {
                       <div className="col-span-1">
                         <div className="text-[10px] space-y-0.5">
                           <div className="text-slate-400">Completed: {Math.max(0, (position.trade_count || 1) - 1)}</div>
-                          <div className="text-slate-400">Active: 0</div>
+                          <div className="text-slate-400">Active: {position.pending_orders_count || 0}</div>
                           <div className="text-slate-400">Max: {position.strategy_config_snapshot?.max_safety_orders || 0}</div>
                         </div>
                       </div>

@@ -26,6 +26,7 @@ class PositionResponse(BaseModel):
     btc_usd_price_at_close: Optional[float]
     profit_usd: Optional[float]
     trade_count: int = 0
+    pending_orders_count: int = 0  # Count of unfilled limit orders
 
     class Config:
         from_attributes = True

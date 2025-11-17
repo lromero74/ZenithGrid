@@ -19,6 +19,7 @@ export interface Position {
   btc_usd_price_at_close?: number;
   profit_usd?: number;
   strategy_config_snapshot?: Record<string, any>;  // Snapshot of bot config when position opened
+  pending_orders_count?: number;  // Count of unfilled limit orders (for Active orders display)
 }
 
 export interface Trade {
