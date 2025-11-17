@@ -1504,7 +1504,7 @@ export default function Positions() {
                               <span className="text-[10px] text-slate-400">{formatPrice(position.total_base_acquired, position.product_id || 'ETH-BTC')}</span>
                             </div>
                             {/* Price Bar - 3Commas Style */}
-                            <div className="relative w-full pt-6 pb-1">
+                            <div className="relative w-full pt-6 pb-6">
                               <div className="relative w-full h-2 bg-slate-700 rounded-full">
                                 {(() => {
                                   const entryPrice = position.average_buy_price
@@ -1525,6 +1525,35 @@ export default function Positions() {
                                   const fillStart = Math.min(entryPosition, currentPosition)
                                   const fillWidth = Math.abs(currentPosition - entryPosition)
 
+                                  // Collision detection - if labels are too close (< 15%), stagger them
+                                  const buyCurrentGap = Math.abs(currentPosition - entryPosition)
+                                  const currentTargetGap = Math.abs(targetPosition - currentPosition)
+                                  const buyTargetGap = Math.abs(targetPosition - entryPosition)
+
+                                  // Determine positioning: top or bottom
+                                  let buyPos = 'top'
+                                  let currentPos = 'top'
+                                  let targetPos = 'top'
+
+                                  // If buy and current are close, put current below
+                                  if (buyCurrentGap < 15) {
+                                    currentPos = 'bottom'
+                                  }
+
+                                  // If current and target are close, alternate
+                                  if (currentTargetGap < 15) {
+                                    if (currentPos === 'top') {
+                                      targetPos = 'bottom'
+                                    } else {
+                                      targetPos = 'top'
+                                    }
+                                  }
+
+                                  // If buy and target are close but current is far, alternate them
+                                  if (buyTargetGap < 15 && buyCurrentGap >= 15 && currentTargetGap >= 15) {
+                                    targetPos = 'bottom'
+                                  }
+
                                   return (
                                     <>
                                       {/* Fill color between entry and current */}
@@ -1536,37 +1565,52 @@ export default function Positions() {
                                         }}
                                       />
 
-                                      {/* Buy Price - Left */}
+                                      {/* Buy Price */}
                                       <div
                                         className="absolute flex flex-col items-center"
-                                        style={{ left: `${Math.max(0, Math.min(100, entryPosition))}%`, transform: 'translateX(-50%)', bottom: '100%' }}
+                                        style={{
+                                          left: `${Math.max(0, Math.min(100, entryPosition))}%`,
+                                          transform: 'translateX(-50%)',
+                                          ...(buyPos === 'top' ? { bottom: '100%' } : { top: '100%' })
+                                        }}
                                       >
-                                        <div className="text-[9px] text-slate-400 mb-0.5 whitespace-nowrap">
+                                        {buyPos === 'bottom' && <div className="w-px h-3 bg-slate-400" />}
+                                        <div className={`text-[9px] text-slate-400 whitespace-nowrap ${buyPos === 'top' ? 'mb-0.5' : 'mt-0.5'}`}>
                                           Buy {formatPrice(entryPrice, position.product_id || 'ETH-BTC')}
                                         </div>
-                                        <div className="w-px h-3 bg-slate-400" />
+                                        {buyPos === 'top' && <div className="w-px h-3 bg-slate-400" />}
                                       </div>
 
-                                      {/* Current Price - Center */}
+                                      {/* Current Price */}
                                       <div
                                         className="absolute flex flex-col items-center"
-                                        style={{ left: `${Math.max(0, Math.min(100, currentPosition))}%`, transform: 'translateX(-50%)', bottom: '100%' }}
+                                        style={{
+                                          left: `${Math.max(0, Math.min(100, currentPosition))}%`,
+                                          transform: 'translateX(-50%)',
+                                          ...(currentPos === 'top' ? { bottom: '100%' } : { top: '100%' })
+                                        }}
                                       >
-                                        <div className={`text-[9px] mb-0.5 whitespace-nowrap font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                                        {currentPos === 'bottom' && <div className={`w-px h-3 ${isProfit ? 'bg-green-400' : 'bg-red-400'}`} />}
+                                        <div className={`text-[9px] whitespace-nowrap font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'} ${currentPos === 'top' ? 'mb-0.5' : 'mt-0.5'}`}>
                                           {pnl.percent >= 0 ? '+' : ''}{pnl.percent.toFixed(2)}% {formatPrice(currentPriceValue, position.product_id || 'ETH-BTC')}
                                         </div>
-                                        <div className={`w-px h-3 ${isProfit ? 'bg-green-400' : 'bg-red-400'}`} />
+                                        {currentPos === 'top' && <div className={`w-px h-3 ${isProfit ? 'bg-green-400' : 'bg-red-400'}`} />}
                                       </div>
 
-                                      {/* Target Price (MP) - Right */}
+                                      {/* Target Price (MP) */}
                                       <div
                                         className="absolute flex flex-col items-center"
-                                        style={{ left: `${Math.max(0, Math.min(100, targetPosition))}%`, transform: 'translateX(-50%)', bottom: '100%' }}
+                                        style={{
+                                          left: `${Math.max(0, Math.min(100, targetPosition))}%`,
+                                          transform: 'translateX(-50%)',
+                                          ...(targetPos === 'top' ? { bottom: '100%' } : { top: '100%' })
+                                        }}
                                       >
-                                        <div className="text-[9px] text-emerald-400 mb-0.5 whitespace-nowrap">
+                                        {targetPos === 'bottom' && <div className="w-px h-3 bg-emerald-400" />}
+                                        <div className={`text-[9px] text-emerald-400 whitespace-nowrap ${targetPos === 'top' ? 'mb-0.5' : 'mt-0.5'}`}>
                                           MP {formatPrice(targetPrice, position.product_id || 'ETH-BTC')}
                                         </div>
-                                        <div className="w-px h-3 bg-emerald-400" />
+                                        {targetPos === 'top' && <div className="w-px h-3 bg-emerald-400" />}
                                       </div>
                                     </>
                                   )
