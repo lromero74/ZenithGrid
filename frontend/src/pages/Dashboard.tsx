@@ -343,9 +343,9 @@ function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => vo
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-400">Profit:</span>
               <span className={`font-semibold ${
-                totalProfitQuote >= 0 ? 'text-green-400' : 'text-red-400'
+                stats.total_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {totalProfitQuote >= 0 ? '+' : ''}{formatCrypto(totalProfitQuote, 6)} Quote
+                {stats.total_profit_btc >= 0 ? '+' : ''}{formatCrypto(stats.total_profit_btc, 6)} BTC
               </span>
             </div>
           </>
