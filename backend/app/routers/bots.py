@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import AIBotLog, Bot, Position
 from app.strategies import StrategyDefinition, StrategyRegistry
+from app.coinbase_client import get_coinbase_client
+from app.order_validation import calculate_minimum_budget_percentage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/bots", tags=["bots"])
@@ -613,3 +615,122 @@ async def get_ai_bot_logs(
     logs = logs_result.scalars().all()
 
     return [AIBotLogResponse.model_validate(log) for log in logs]
+
+
+# Validation Schemas
+class ValidateBotConfigRequest(BaseModel):
+    product_ids: List[str]
+    strategy_config: dict
+    quote_balance: Optional[float] = None  # Will use actual balance if not provided
+
+
+class ValidationWarning(BaseModel):
+    product_id: str
+    issue: str
+    suggested_minimum_pct: float
+    current_pct: float
+
+
+class ValidateBotConfigResponse(BaseModel):
+    is_valid: bool
+    warnings: List[ValidationWarning]
+    message: str
+
+
+@router.post("/validate-config", response_model=ValidateBotConfigResponse)
+async def validate_bot_config(
+    request: ValidateBotConfigRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Validate if bot configuration meets minimum order size requirements
+
+    Checks if the configured budget percentages will result in orders
+    that meet Coinbase's minimum order sizes for each product.
+
+    Returns warnings with suggested minimum percentages if validation fails.
+    """
+    coinbase = get_coinbase_client()
+
+    # Get quote balance if not provided
+    quote_balance = request.quote_balance
+    if quote_balance is None:
+        # Use first product to determine quote currency
+        if not request.product_ids:
+            raise HTTPException(status_code=400, detail="No product_ids provided")
+
+        first_product = request.product_ids[0]
+        quote_currency = first_product.split('-')[1] if '-' in first_product else "BTC"
+
+        if quote_currency == "BTC":
+            quote_balance = await coinbase.get_btc_balance()
+        elif quote_currency == "USD":
+            # Get USD balance from portfolio
+            breakdown = await coinbase.get_portfolio_breakdown()
+            spot_positions = breakdown.get("spot_positions", [])
+            for pos in spot_positions:
+                if pos.get("asset") == "USD":
+                    quote_balance = float(pos.get("available_to_trade_fiat", 0))
+                    break
+        else:
+            quote_balance = 100.0  # Default fallback
+
+    if quote_balance <= 0:
+        return ValidateBotConfigResponse(
+            is_valid=False,
+            warnings=[],
+            message="No quote currency balance available. Cannot validate."
+        )
+
+    # Extract relevant percentages from config
+    base_order_pct = request.strategy_config.get("base_order_percentage", 0)
+    safety_order_pct = request.strategy_config.get("safety_order_percentage", 0)
+    initial_budget_pct = request.strategy_config.get("initial_budget_percentage", 0)
+
+    # Use whichever is configured (different strategies use different field names)
+    order_pct = max(base_order_pct, safety_order_pct, initial_budget_pct)
+
+    if order_pct <= 0:
+        return ValidateBotConfigResponse(
+            is_valid=False,
+            warnings=[],
+            message="No order percentage configured. Please set base_order_percentage, safety_order_percentage, or initial_budget_percentage."
+        )
+
+    # Check each product
+    warnings = []
+    for product_id in request.product_ids:
+        # Calculate actual order amount
+        order_amount = (order_pct / 100) * quote_balance
+
+        # Get minimum required percentage for this product
+        try:
+            min_pct = await calculate_minimum_budget_percentage(
+                coinbase,
+                product_id,
+                quote_balance
+            )
+
+            if order_pct < min_pct:
+                warnings.append(ValidationWarning(
+                    product_id=product_id,
+                    issue=f"Order size will be below Coinbase minimum",
+                    suggested_minimum_pct=min_pct,
+                    current_pct=order_pct
+                ))
+        except Exception as e:
+            logger.warning(f"Failed to validate {product_id}: {e}")
+            # Continue checking other products
+
+    is_valid = len(warnings) == 0
+
+    if is_valid:
+        message = "Bot configuration is valid. All orders meet minimum size requirements."
+    else:
+        message = f"Warning: {len(warnings)} product(s) may fail due to minimum order size requirements."
+
+    return ValidateBotConfigResponse(
+        is_valid=is_valid,
+        warnings=warnings,
+        message=message
+    )

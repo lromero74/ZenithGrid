@@ -18,6 +18,7 @@ from app.currency_utils import format_with_usd, get_quote_currency
 from app.models import AIBotLog, Bot, PendingOrder, Position, Signal, Trade
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
+from app.order_validation import validate_order_size
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +204,21 @@ class StrategyTradingEngine:
             return None
 
         # Execute market order (immediate execution)
+        # Validate order meets minimum size requirements
+        is_valid, error_msg = await validate_order_size(
+            self.coinbase,
+            self.product_id,
+            quote_amount=quote_amount
+        )
+
+        if not is_valid:
+            logger.warning(f"Order validation failed: {error_msg}")
+            # Save error to position for UI display
+            position.last_error_message = error_msg
+            position.last_error_timestamp = datetime.utcnow()
+            await self.db.commit()
+            raise ValueError(error_msg)
+
         # Calculate amount of base currency to buy
         base_amount = quote_amount / current_price
 
