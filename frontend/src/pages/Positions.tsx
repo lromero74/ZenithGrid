@@ -1158,6 +1158,8 @@ export default function Positions() {
   const [showLightweightChart, setShowLightweightChart] = useState(false)
   const [lightweightChartSymbol, setLightweightChartSymbol] = useState<string>('')
   const [lightweightChartPosition, setLightweightChartPosition] = useState<Position | null>(null)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [closeConfirmPositionId, setCloseConfirmPositionId] = useState<number | null>(null)
 
   // Filtering and sorting state (like 3Commas)
   const [filterBot, setFilterBot] = useState<number | 'all'>('all')
@@ -1166,7 +1168,7 @@ export default function Positions() {
   const [sortBy, setSortBy] = useState<'created' | 'pnl' | 'invested' | 'pair'>('created')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
-  const { data: allPositions } = useQuery({
+  const { data: allPositions, refetch: refetchPositions } = useQuery({
     queryKey: ['positions'],
     queryFn: () => positionsApi.getAll(undefined, 100),
     refetchInterval: 5000, // Update every 5 seconds for active deals
@@ -1319,17 +1321,18 @@ export default function Positions() {
     return amount.toFixed(decimals)
   }
 
-  const handleClosePosition = async (positionId: number) => {
-    if (!confirm('Are you sure you want to close this position at market price? This action cannot be undone.')) {
-      return
-    }
+  const handleClosePosition = async () => {
+    if (!closeConfirmPositionId) return
 
     setIsProcessing(true)
     try {
-      const result = await positionsApi.close(positionId)
+      const result = await positionsApi.close(closeConfirmPositionId)
+      setShowCloseConfirm(false)
+      setCloseConfirmPositionId(null)
+      // Refetch positions instead of full page reload
+      refetchPositions()
+      // Show success notification
       alert(`Position closed successfully!\nProfit: ${result.profit_btc.toFixed(8)} BTC (${result.profit_percentage.toFixed(2)}%)`)
-      // Refetch positions
-      window.location.reload()
     } catch (err: any) {
       alert(`Error closing position: ${err.response?.data?.detail || err.message}`)
     } finally {
@@ -1356,11 +1359,11 @@ export default function Positions() {
     setIsProcessing(true)
     try {
       const result = await positionsApi.addFunds(addFundsPositionId, amount)
-      alert(`Funds added successfully!\nAcquired: ${result.eth_acquired.toFixed(6)} ETH at price ${result.price.toFixed(8)}`)
       setShowAddFundsModal(false)
       setAddFundsAmount('')
-      // Refetch positions
-      window.location.reload()
+      // Refetch positions instead of full page reload
+      refetchPositions()
+      alert(`Funds added successfully!\nAcquired: ${result.eth_acquired.toFixed(6)} ETH at price ${result.price.toFixed(8)}`)
     } catch (err: any) {
       alert(`Error adding funds: ${err.response?.data?.detail || err.message}`)
     } finally {
@@ -1944,10 +1947,23 @@ export default function Positions() {
 
                     {/* Action Buttons Row */}
                     <div className="mt-3 px-4 flex items-center gap-3">
-                      <button className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+                      <button
+                        className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedPosition(null)
+                        }}
+                      >
                         <span>🚫</span> Cancel
                       </button>
-                      <button className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                      <button
+                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCloseConfirmPositionId(position.id)
+                          setShowCloseConfirm(true)
+                        }}
+                      >
                         <span>💱</span> Close at market price
                       </button>
                       <button
@@ -1960,10 +1976,22 @@ export default function Positions() {
                       >
                         <span>📊</span> AI Reasoning
                       </button>
-                      <button className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                      <button
+                        className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openAddFundsModal(position.id, position)
+                        }}
+                      >
                         <span>💰</span> Add funds
                       </button>
-                      <button className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1">
+                      <button
+                        className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          refetchPositions()
+                        }}
+                      >
                         <span>🔄</span> Refresh
                       </button>
                     </div>
