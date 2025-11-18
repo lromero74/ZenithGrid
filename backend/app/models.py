@@ -41,8 +41,9 @@ class Bot(Base):
 
     # Balance Reservations (prevents bots from borrowing from each other)
     # Each bot has its own allocated balance that it can use
-    reserved_btc_balance = Column(Float, default=0.0)  # BTC reserved for this bot
-    reserved_usd_balance = Column(Float, default=0.0)  # USD reserved for this bot
+    reserved_btc_balance = Column(Float, default=0.0)  # BTC reserved for this bot (legacy)
+    reserved_usd_balance = Column(Float, default=0.0)  # USD reserved for this bot (legacy)
+    budget_percentage = Column(Float, default=0.0)  # % of aggregate BTC value (preferred method)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -72,9 +73,33 @@ class Bot(Base):
                 return first_pair.split('-')[1]
         return "BTC"  # Default
 
-    def get_reserved_balance(self):
-        """Get the reserved balance for this bot's quote currency"""
+    def get_reserved_balance(self, aggregate_value: float = None):
+        """
+        Get the reserved balance for this bot's quote currency
+
+        Args:
+            aggregate_value: Total value of portfolio in bot's quote currency.
+                            For BTC bots: total BTC value (BTC + all pairs as BTC)
+                            For USD bots: total USD value (USD + all pairs as USD)
+                            If provided and budget_percentage is set, calculates from percentage.
+
+        Returns:
+            Reserved balance in quote currency (BTC or USD)
+        """
         quote = self.get_quote_currency()
+
+        # If budget_percentage is set and aggregate_value provided, calculate from percentage
+        if self.budget_percentage > 0 and aggregate_value is not None:
+            # Bot gets budget_percentage of aggregate value
+            bot_budget = aggregate_value * (self.budget_percentage / 100.0)
+
+            # Divide by max_concurrent_deals if configured
+            max_deals = self.strategy_config.get("max_concurrent_deals", 1) if self.strategy_config else 1
+            per_deal_budget = bot_budget / max(max_deals, 1)
+
+            return per_deal_budget
+
+        # Fallback to legacy reserved balances
         if quote == "USD":
             return self.reserved_usd_balance
         else:
@@ -302,3 +327,38 @@ class PendingOrder(Base):
     # Relationships
     position = relationship("Position", back_populates="pending_orders")
     bot = relationship("Bot", back_populates="pending_orders")
+
+
+class OrderHistory(Base):
+    """
+    Tracks all order attempts (successful and failed) for audit trail and debugging.
+    Similar to 3Commas order history.
+    """
+    __tablename__ = "order_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Bot and position references
+    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=False)
+    position_id = Column(Integer, ForeignKey("positions.id"), nullable=True)  # NULL for failed base orders
+
+    # Order details
+    product_id = Column(String, nullable=False)  # e.g., "ETH-BTC"
+    side = Column(String, nullable=False)  # "BUY" or "SELL"
+    order_type = Column(String, nullable=False)  # "MARKET", "LIMIT", etc.
+    trade_type = Column(String, nullable=False)  # "initial", "dca", "safety_order_1", etc.
+
+    # Amounts
+    quote_amount = Column(Float, nullable=False)  # Amount attempted
+    base_amount = Column(Float, nullable=True)  # Amount acquired (NULL for failed orders)
+    price = Column(Float, nullable=True)  # Price at time of order
+
+    # Status and result
+    status = Column(String, nullable=False, index=True)  # "success", "failed", "canceled"
+    order_id = Column(String, nullable=True)  # Coinbase order ID (NULL for failed orders)
+    error_message = Column(Text, nullable=True)  # Error details if failed
+
+    # Relationships
+    bot = relationship("Bot")
+    position = relationship("Position")

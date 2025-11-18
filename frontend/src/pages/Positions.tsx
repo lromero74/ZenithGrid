@@ -1253,7 +1253,9 @@ export default function Positions() {
     const currentValue = position.total_base_acquired * price
     const costBasis = position.total_quote_spent
     const unrealizedPnL = currentValue - costBasis
-    const unrealizedPnLPercent = (unrealizedPnL / costBasis) * 100
+
+    // Prevent division by zero for new positions with no trades yet
+    const unrealizedPnLPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0
 
     return {
       btc: unrealizedPnL,
@@ -1790,6 +1792,12 @@ export default function Positions() {
                               <div className="relative w-full h-2 bg-slate-700 rounded-full">
                                 {(() => {
                                   const entryPrice = position.average_buy_price
+
+                                  // Don't render price markers for new positions with no fills yet
+                                  if (!entryPrice || entryPrice === 0) {
+                                    return null
+                                  }
+
                                   const currentPriceValue = pnl.currentPrice
                                   const targetPrice = entryPrice * 1.02
 
@@ -1895,17 +1903,24 @@ export default function Positions() {
                                         {targetPos === 'top' && <div className="w-px h-3 bg-emerald-400" />}
                                       </div>
 
-                                      {/* DCA Level Tick Marks */}
+                                      {/* DCA Level Tick Marks (only for non-AI bots with fixed DCA targets) */}
                                       {(() => {
+                                        // Skip DCA tick marks for AI-controlled bots (they make dynamic DCA decisions)
+                                        if (bot?.strategy_type === 'ai_autonomous') return null
+
                                         const minPriceDropForDCA = strategyConfig.min_price_drop_for_dca
                                         const maxDCAOrders = strategyConfig.max_safety_orders || 3
 
                                         if (!minPriceDropForDCA || position.status !== 'open') return null
 
+                                        // Calculate completed DCAs (trade_count - 1 for initial trade)
+                                        const completedDCAs = Math.max(0, (position.trade_count || 0) - 1)
+
                                         const dcaLevels = []
                                         const maxDCA = Math.min(maxDCAOrders, 3) // Limit to 3 to avoid clutter
 
-                                        for (let i = 1; i <= maxDCA; i++) {
+                                        // Only show unfilled DCAs (start from completedDCAs + 1)
+                                        for (let i = completedDCAs + 1; i <= maxDCA; i++) {
                                           const dropPercentage = minPriceDropForDCA * i
                                           const dcaPrice = entryPrice * (1 - dropPercentage / 100)
                                           const dcaPosition = ((dcaPrice - minPrice) / priceRange) * 100
@@ -1919,13 +1934,13 @@ export default function Positions() {
                                                 style={{
                                                   left: `${dcaPosition}%`,
                                                   transform: 'translateX(-50%)',
-                                                  bottom: '100%'
+                                                  top: '100%'
                                                 }}
                                               >
-                                                <div className="text-[8px] text-purple-400 whitespace-nowrap mb-0.5">
+                                                <div className="w-px h-2 bg-purple-400" />
+                                                <div className="text-[8px] text-purple-400 whitespace-nowrap mt-0.5">
                                                   DCA{i}
                                                 </div>
-                                                <div className="w-px h-2 bg-purple-400" />
                                               </div>
                                             )
                                           }
@@ -1960,19 +1975,28 @@ export default function Positions() {
                         <div className="text-[10px] space-y-0.5">
                           <div className="text-slate-400">
                             Completed: {(() => {
-                              // Calculate auto vs manual safety orders (3Commas style: "auto (+manual)")
-                              const positionTrades = trades?.filter(t => t.position_id === position.id && t.side === 'buy') || []
-                              const autoSO = positionTrades.filter(t => t.trade_type === 'dca').length
-                              const manualSO = positionTrades.filter(t => t.trade_type === 'manual_safety_order').length
+                              // Calculate DCA count from trade_count (total trades - 1 initial = DCA count)
+                              // If trades array is available, use it for more detail
+                              if (trades && trades.length > 0) {
+                                const positionTrades = trades.filter(t => t.position_id === position.id && t.side === 'buy') || []
+                                const autoSO = positionTrades.filter(t => t.trade_type === 'dca').length
+                                const manualSO = positionTrades.filter(t => t.trade_type === 'manual_safety_order').length
 
-                              if (manualSO > 0) {
-                                return `${autoSO} (+${manualSO})`
+                                if (manualSO > 0) {
+                                  return `${autoSO} (+${manualSO})`
+                                }
+                                return autoSO
                               }
-                              return autoSO
+
+                              // Fallback: use trade_count from position (trade_count - 1 = DCA count)
+                              const dcaCount = Math.max(0, (position.trade_count || 0) - 1)
+                              return dcaCount
                             })()}
                           </div>
                           <div className="text-slate-400">Active: {position.pending_orders_count || 0}</div>
-                          <div className="text-slate-400">Max: {position.strategy_config_snapshot?.max_safety_orders || 0}</div>
+                          <div className="text-slate-400">
+                            Max: {bot?.strategy_type === 'ai_autonomous' ? 'None' : (position.strategy_config_snapshot?.max_safety_orders || 0)}
+                          </div>
                         </div>
                       </div>
 
@@ -1985,10 +2009,10 @@ export default function Positions() {
                       </div>
                     </div>
 
-                    {/* Our Special "Better than 3Commas" Funds Usage Bar */}
+                    {/* Our Special "Better than 3Commas" Budget Usage Bar */}
                     <div className="mt-3 px-4">
                       <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-slate-400">Funds Used</span>
+                        <span className="text-slate-400">Budget Used</span>
                         <span className="text-slate-300">
                           {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')} / {formatQuoteAmount(position.max_quote_allowed, position.product_id || 'ETH-BTC')}
                           <span className="text-slate-400 ml-1">({fundsUsedPercent.toFixed(0)}%)</span>

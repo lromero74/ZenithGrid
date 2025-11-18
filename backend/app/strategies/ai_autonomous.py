@@ -1168,6 +1168,150 @@ Respond with JSON (no markdown):
             return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
                     for pid in pairs_data.keys()}
 
+    async def _ask_ai_for_dca_decision(
+        self,
+        position: Any,
+        current_price: float,
+        remaining_budget: float,
+        market_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Ask AI if we should add to an existing position and how much
+
+        Args:
+            position: Current position object
+            current_price: Current market price
+            remaining_budget: How much quote currency is left in position budget
+            market_context: Recent market data
+
+        Returns:
+            Dict with AI's decision: {"should_buy": bool, "amount": float, "reasoning": str}
+        """
+        price_drop_pct = ((position.average_buy_price - current_price) / position.average_buy_price) * 100
+        profit_pct = ((current_price - position.average_buy_price) / position.average_buy_price) * 100
+
+        current_dcas = len([t for t in position.trades if t.side == "buy" and t.trade_type != "initial"])
+        max_dcas = self.config.get("max_safety_orders", 3)
+
+        # Format quote currency correctly
+        quote_currency = position.get_quote_currency()
+        if quote_currency == "USD":
+            budget_str = f"${remaining_budget:.2f} USD"
+            spent_str = f"${position.total_quote_spent:.2f} USD"
+            avg_price_str = f"${position.average_buy_price:.2f} USD"
+            curr_price_str = f"${current_price:.2f} USD"
+        else:
+            budget_str = f"{remaining_budget:.8f} BTC"
+            spent_str = f"{position.total_quote_spent:.8f} BTC"
+            avg_price_str = f"{position.average_buy_price:.8f} BTC"
+            curr_price_str = f"{current_price:.8f} BTC"
+
+        prompt = f"""You are an autonomous trading AI managing real cryptocurrency positions. Your goal is to maximize profit through intelligent DCA decisions.
+
+**Your Objective:**
+Your job is to grow this portfolio. The better you perform, the more resources you'll have access to (better AI models, more trading budget, additional features). Outstanding performance means an upgraded AI subscription with more capabilities.
+
+**Current Position State:**
+- Product: {position.product_id}
+- Average Entry Price: {avg_price_str}
+- Current Price: {curr_price_str}
+- Price Change: {profit_pct:+.2f}% ({"profit" if profit_pct > 0 else "loss"})
+- Already Invested: {spent_str}
+- Remaining Budget: {budget_str}
+- DCA Buys So Far: {current_dcas}/{max_dcas}
+
+**Recent Market Action:**
+- 24h Change: {market_context.get('price_change_24h_pct', 0):.2f}%
+- Volatility: {market_context.get('volatility', 0):.2f}%
+- Recent Prices: {market_context.get('recent_prices', [])[-5:]}
+
+**Your Decision:**
+Should you add to this position now (DCA)? If yes, how much should you invest from the remaining budget?
+
+You have complete freedom to:
+- Buy any amount from 0% to 100% of remaining budget
+- Wait for better opportunities
+- Scale in gradually or go big when confident
+- Make strategic decisions based on market conditions
+
+Respond ONLY with JSON (no markdown):
+{{
+  "should_buy": true or false,
+  "amount_percentage": 0-100,
+  "confidence": 0-100,
+  "reasoning": "brief 1-2 sentence explanation of why you're buying or waiting"
+}}
+
+Strategic Considerations:
+- Is the price drop an opportunity or a warning sign?
+- How much budget should you save for future opportunities?
+- What's the market momentum and volatility telling you?
+- Only buy if you see genuine value, not just because price dropped
+- Remember: Your goal is to maximize long-term profit, not to spend budget quickly"""
+
+        try:
+            provider = self.config.get("ai_provider", "claude").lower()
+
+            if provider == "claude":
+                response = self.client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=500,
+                    temperature=0,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                response_text = response.content[0].text.strip()
+
+                # Log token usage
+                self._total_tokens_used += response.usage.input_tokens + response.usage.output_tokens
+                logger.info(f"📊 DCA Decision - Input: {response.usage.input_tokens}, Output: {response.usage.output_tokens}")
+
+            elif provider == "gemini":
+                import google.generativeai as genai
+                genai.configure(api_key=settings.gemini_api_key)
+                model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"temperature": 0})
+                response = model.generate_content(prompt)
+                response_text = response.text.strip()
+
+            elif provider == "grok":
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=settings.grok_api_key, base_url="https://api.x.ai/v1")
+                response = await client.chat.completions.create(
+                    model="grok-3",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0
+                )
+                response_text = response.choices[0].message.content.strip()
+
+            # Remove markdown if present
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+                response_text = response_text.strip()
+
+            decision = json.loads(response_text)
+
+            # Calculate actual amount from percentage
+            amount_pct = decision.get("amount_percentage", 0)
+            amount = remaining_budget * (amount_pct / 100.0)
+
+            return {
+                "should_buy": decision.get("should_buy", False),
+                "amount": round(amount, 8),
+                "amount_percentage": amount_pct,
+                "confidence": decision.get("confidence", 0),
+                "reasoning": decision.get("reasoning", "AI DCA decision")
+            }
+
+        except Exception as e:
+            logger.error(f"Error asking AI for DCA decision: {e}", exc_info=True)
+            return {
+                "should_buy": False,
+                "amount": 0,
+                "confidence": 0,
+                "reasoning": f"Error: {str(e)}"
+            }
+
     async def should_buy(
         self,
         signal_data: Dict[str, Any],
@@ -1180,7 +1324,7 @@ Respond with JSON (no markdown):
         Rules:
         - Only buy if AI suggests it with good confidence
         - Respect budget limits
-        - Support DCA (Dollar Cost Averaging) for existing positions
+        - For DCA: AI makes dynamic decisions about timing and amount (no fixed rules)
         """
 
         if signal_data.get("signal_type") != "buy":
@@ -1211,37 +1355,46 @@ Respond with JSON (no markdown):
             if current_price == 0:
                 return False, 0.0, "Cannot determine current price for DCA"
 
-            # Check if price has dropped enough to justify DCA (smart averaging down)
-            min_price_drop_pct = self.config.get("min_price_drop_for_dca", 2.0)
-            price_drop_pct = ((position.average_buy_price - current_price) / position.average_buy_price) * 100
+            # Calculate remaining budget
+            remaining_budget = position.max_quote_allowed - position.total_quote_spent
 
-            if price_drop_pct < min_price_drop_pct:
-                return False, 0.0, f"Price drop {price_drop_pct:.2f}% below minimum {min_price_drop_pct}% for DCA"
+            # AI-CONTROLLED DCA: Ask AI for dynamic decision
+            # No fixed price drop thresholds or volume percentages
+            # AI decides based on market conditions and position state
+            market_context = {
+                'current_price': current_price,
+                'price_change_24h_pct': signal_data.get('raw_analysis', {}).get('price_change_24h_pct', 0),
+                'volatility': signal_data.get('raw_analysis', {}).get('volatility', 0),
+                'recent_prices': signal_data.get('raw_analysis', {}).get('recent_prices', [])
+            }
 
-            # Check DCA confidence threshold (higher bar for adding to positions)
-            dca_confidence_threshold = self.config.get("dca_confidence_threshold", 80)
-            if confidence < dca_confidence_threshold:
-                return False, 0.0, f"DCA confidence {confidence}% below threshold {dca_confidence_threshold}%"
+            logger.info(f"  🤖 Asking AI for DCA decision (remaining budget: {remaining_budget:.8f}, DCAs: {current_safety_orders}/{max_safety_orders})")
+            dca_decision = await self._ask_ai_for_dca_decision(position, current_price, remaining_budget, market_context)
 
-            # Calculate DCA amount using position's initial balance (3Commas style)
-            # This ensures consistent DCA order sizes regardless of current account balance
-            safety_order_pct = self.config.get("safety_order_percentage", 5.0)
+            if not dca_decision["should_buy"]:
+                return False, 0.0, f"AI decided not to DCA: {dca_decision['reasoning']}"
 
-            # Use the position's initial balance for consistent DCA sizing
-            btc_amount = position.initial_quote_balance * (safety_order_pct / 100.0)
+            btc_amount = dca_decision["amount"]
 
-            # Round to 8 decimal places (satoshi precision) to avoid Coinbase precision errors
+            # Validate amount
+            if btc_amount <= 0:
+                return False, 0.0, "AI suggested 0 amount for DCA"
+
+            if btc_amount > remaining_budget:
+                logger.warning(f"  ⚠️ AI suggested {btc_amount:.8f} but only {remaining_budget:.8f} available, capping")
+                btc_amount = remaining_budget
+
+            # Round to 8 decimal places (satoshi precision)
             btc_amount = round(btc_amount, 8)
 
-            # Don't exceed position budget
-            remaining_budget = position.max_quote_allowed - position.total_quote_spent
-            btc_amount = min(btc_amount, remaining_budget)
-
             if btc_amount <= 0:
-                return False, 0.0, "Insufficient balance or budget for DCA"
+                return False, 0.0, "Insufficient budget for DCA"
 
-            reasoning = signal_data.get("reasoning", "AI recommends DCA")
-            return True, btc_amount, f"AI DCA #{current_safety_orders + 1} ({confidence}% confidence, {price_drop_pct:.2f}% drop): {reasoning}"
+            reasoning = dca_decision["reasoning"]
+            dca_conf = dca_decision["confidence"]
+            amount_pct = dca_decision["amount_percentage"]
+
+            return True, btc_amount, f"AI DCA #{current_safety_orders + 1} ({dca_conf}% confidence, {amount_pct}% of budget): {reasoning}"
 
         # New position (base order)
         if confidence < 80:

@@ -14,8 +14,9 @@ interface BotFormData {
   product_id: string  // Legacy - kept for backward compatibility
   product_ids: string[]  // Multi-pair support
   split_budget_across_pairs: boolean  // Budget splitting toggle
-  reserved_btc_balance: number  // BTC allocated to this bot
-  reserved_usd_balance: number  // USD allocated to this bot
+  reserved_btc_balance: number  // BTC allocated to this bot (legacy)
+  reserved_usd_balance: number  // USD allocated to this bot (legacy)
+  budget_percentage: number  // % of aggregate portfolio value (preferred)
   check_interval_seconds: number  // How often bot monitors positions
   analysis_interval_minutes: number  // How often AI analyzes (for AI bots)
   strategy_config: Record<string, any>
@@ -44,6 +45,7 @@ function Bots() {
     split_budget_across_pairs: false,  // Default to independent budgets (3Commas style)
     reserved_btc_balance: 0,  // No reserved balance by default
     reserved_usd_balance: 0,  // No reserved balance by default
+    budget_percentage: 0,  // No budget percentage by default
     check_interval_seconds: 300,  // Default: 5 minutes
     analysis_interval_minutes: 15,  // Default: 15 minutes (for AI bots)
     strategy_config: {},
@@ -80,7 +82,7 @@ function Bots() {
     }
 
     try {
-      const response = await axios.post('http://localhost:8000/api/bots/validate-config', {
+      const response = await axios.post('/api/bots/validate-config', {
         product_ids: formData.product_ids,
         strategy_config: formData.strategy_config
       })
@@ -279,6 +281,7 @@ function Bots() {
       split_budget_across_pairs: false,
       reserved_btc_balance: 0,
       reserved_usd_balance: 0,
+      budget_percentage: 0,
       check_interval_seconds: 300,
       analysis_interval_minutes: 15,
       strategy_config: {},
@@ -299,6 +302,7 @@ function Bots() {
       split_budget_across_pairs: template.split_budget_across_pairs || false,
       reserved_btc_balance: template.reserved_btc_balance || 0,
       reserved_usd_balance: template.reserved_usd_balance || 0,
+      budget_percentage: template.budget_percentage || 0,
       check_interval_seconds: template.check_interval_seconds || 300,
       analysis_interval_minutes: template.strategy_config?.analysis_interval_minutes || 15,
       strategy_config: template.strategy_config,
@@ -319,6 +323,7 @@ function Bots() {
       description: bot.description || '',
       reserved_btc_balance: bot.reserved_btc_balance || 0,
       reserved_usd_balance: bot.reserved_usd_balance || 0,
+      budget_percentage: bot.budget_percentage || 0,
       check_interval_seconds: (bot as any).check_interval_seconds || 300,
       analysis_interval_minutes: (bot.strategy_config as any)?.analysis_interval_minutes || 15,
       strategy_type: bot.strategy_type,
@@ -375,6 +380,7 @@ function Bots() {
       split_budget_across_pairs: formData.split_budget_across_pairs,  // Budget splitting option
       reserved_btc_balance: formData.reserved_btc_balance,
       reserved_usd_balance: formData.reserved_usd_balance,
+      budget_percentage: formData.budget_percentage,
       check_interval_seconds: formData.check_interval_seconds,  // Monitoring interval
       strategy_config: {
         ...formData.strategy_config,
@@ -573,6 +579,14 @@ function Bots() {
                     {((bot as any).product_ids || [bot.product_id]).join(', ')}
                   </span>
                 </div>
+                {bot.budget_percentage > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">Budget:</span>
+                    <span className="text-emerald-400 font-medium">
+                      {bot.budget_percentage}% of portfolio
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Status:</span>
                   <span className={`font-medium ${bot.is_active ? 'text-green-400' : 'text-slate-400'}`}>
@@ -969,37 +983,65 @@ function Bots() {
                 {/* Reserved Balance Configuration */}
                 <div className="bg-orange-900/20 border border-orange-700/50 rounded-lg p-4 mb-4">
                   <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                    💰 Balance Allocation <span className="text-xs font-normal text-slate-400">(Optional)</span>
+                    💰 Budget Allocation <span className="text-xs font-normal text-slate-400">(Optional)</span>
                   </h4>
                   <p className="text-xs text-slate-300 mb-3">
-                    Reserve specific balance for this bot. Leave at 0 to use total portfolio balance.
+                    Set bot budget as a percentage of aggregate portfolio value. Leave at 0 to use total portfolio balance.
                   </p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Reserved BTC</label>
+
+                  {/* Budget Percentage (Preferred) */}
+                  <div className="mb-4">
+                    <label className="block text-xs font-medium text-emerald-300 mb-1.5">
+                      Budget Percentage <span className="text-slate-400">(% of aggregate portfolio)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        step="0.00000001"
+                        step="0.1"
                         min="0"
-                        value={formData.reserved_btc_balance}
-                        onChange={(e) => setFormData({ ...formData, reserved_btc_balance: parseFloat(e.target.value) || 0 })}
-                        className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                        max="100"
+                        value={formData.budget_percentage}
+                        onChange={(e) => setFormData({ ...formData, budget_percentage: parseFloat(e.target.value) || 0 })}
+                        className="flex-1 rounded border border-emerald-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
                         placeholder="0.0"
                       />
+                      <span className="text-emerald-400 font-medium">%</span>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Reserved USD</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.reserved_usd_balance}
-                        onChange={(e) => setFormData({ ...formData, reserved_usd_balance: parseFloat(e.target.value) || 0 })}
-                        className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
-                        placeholder="0.00"
-                      />
-                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Recommended: 33% for 3 bots, 50% for 2 bots, 100% for 1 bot
+                    </p>
                   </div>
+
+                  {/* Legacy Reserved Balances (Deprecated) */}
+                  <details className="text-xs text-slate-400">
+                    <summary className="cursor-pointer hover:text-slate-300 mb-2">Legacy: Fixed Reserved Balances (deprecated)</summary>
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Reserved BTC</label>
+                        <input
+                          type="number"
+                          step="0.00000001"
+                          min="0"
+                          value={formData.reserved_btc_balance}
+                          onChange={(e) => setFormData({ ...formData, reserved_btc_balance: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                          placeholder="0.0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Reserved USD</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.reserved_usd_balance}
+                          onChange={(e) => setFormData({ ...formData, reserved_usd_balance: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </details>
                 </div>
 
                 {/* Budget Splitting Toggle - Only show for multi-pair */}

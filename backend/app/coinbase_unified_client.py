@@ -23,6 +23,7 @@ from cryptography.hazmat.primitives import serialization
 from app.cache import api_cache
 from app.constants import BALANCE_CACHE_TTL, PRICE_CACHE_TTL
 from app.precision import format_quote_amount, format_base_amount
+from app.product_precision import format_quote_amount_for_product, format_base_amount_for_product
 
 logger = logging.getLogger(__name__)
 
@@ -488,12 +489,13 @@ class CoinbaseClient:
             base_currency, quote_currency = "ETH", "BTC"  # fallback
 
         if size:
-            # Format base amount with proper precision
-            formatted_size = format_base_amount(float(size), base_currency)
+            # Format base amount with product-specific precision
+            formatted_size = format_base_amount_for_product(float(size), product_id)
             order_config["market_market_ioc"]["base_size"] = formatted_size
         elif funds:
-            # Format quote amount with proper precision
-            formatted_funds = format_quote_amount(float(funds), quote_currency)
+            # Format quote amount with product-specific precision
+            # Uses precision lookup table from Coinbase API to ensure exact requirements
+            formatted_funds = format_quote_amount_for_product(float(funds), product_id)
             order_config["market_market_ioc"]["quote_size"] = formatted_funds
         else:
             raise ValueError("Must specify either size or funds")
@@ -701,6 +703,91 @@ class CoinbaseClient:
             side="SELL",
             size=format_base_amount(base_amount, base_currency)
         )
+
+    # ===== Portfolio Aggregation for Bot Budgeting =====
+
+    async def calculate_aggregate_btc_value(self) -> float:
+        """
+        Calculate aggregate BTC value of entire portfolio (BTC + all pairs converted to BTC).
+        This is used for bot budget allocation.
+
+        Returns:
+            Total BTC value across all holdings
+        """
+        try:
+            breakdown = await self.get_portfolio_breakdown()
+            spot_positions = breakdown.get("spot_positions", [])
+            btc_usd_price = await self.get_btc_usd_price()
+
+            total_btc_value = 0.0
+
+            for position in spot_positions:
+                asset = position.get("asset", "")
+                total_balance = float(position.get("total_balance_crypto", 0))
+
+                if total_balance == 0:
+                    continue
+
+                # Convert all assets to BTC value
+                if asset == "BTC":
+                    total_btc_value += total_balance
+                elif asset == "USD" or asset == "USDC":
+                    btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
+                    total_btc_value += btc_value
+                else:
+                    try:
+                        usd_price = await self.get_current_price(f"{asset}-USD")
+                        usd_value = total_balance * usd_price
+                        btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
+                        total_btc_value += btc_value
+                    except Exception:
+                        pass  # Skip assets we can't price
+
+            return total_btc_value
+
+        except Exception as e:
+            logger.error(f"Error calculating aggregate BTC value: {e}")
+            return 0.0
+
+    async def calculate_aggregate_usd_value(self) -> float:
+        """
+        Calculate aggregate USD value of entire portfolio (USD + all pairs converted to USD).
+        This is used for USD-based bot budget allocation.
+
+        Returns:
+            Total USD value across all holdings
+        """
+        try:
+            breakdown = await self.get_portfolio_breakdown()
+            spot_positions = breakdown.get("spot_positions", [])
+            btc_usd_price = await self.get_btc_usd_price()
+
+            total_usd_value = 0.0
+
+            for position in spot_positions:
+                asset = position.get("asset", "")
+                total_balance = float(position.get("total_balance_crypto", 0))
+
+                if total_balance == 0:
+                    continue
+
+                # Convert all assets to USD value
+                if asset == "USD" or asset == "USDC":
+                    total_usd_value += total_balance
+                elif asset == "BTC":
+                    total_usd_value += total_balance * btc_usd_price
+                else:
+                    try:
+                        usd_price = await self.get_current_price(f"{asset}-USD")
+                        total_usd_value += total_balance * usd_price
+                    except Exception:
+                        pass  # Skip assets we can't price
+
+            return total_usd_value
+
+        except Exception as e:
+            logger.error(f"Error calculating aggregate USD value: {e}")
+            return 0.0
 
     # ===== Connection Test =====
 

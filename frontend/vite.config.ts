@@ -11,7 +11,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8100',
         changeOrigin: true,
-        timeout: 10000, // 10 second timeout
+        timeout: 60000, // 60 second timeout (portfolio endpoint needs time to fetch many prices)
       },
       '/ws': {
         target: 'ws://localhost:8100',

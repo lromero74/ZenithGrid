@@ -45,7 +45,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
     setLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:8000/api/candles?product_id=${productId}&granularity=${interval}&limit=300`
+        `/api/candles?product_id=${productId}&granularity=${interval}&limit=300`
       )
 
       if (!response.ok) {

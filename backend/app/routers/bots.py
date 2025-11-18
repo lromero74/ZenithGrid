@@ -32,8 +32,9 @@ class BotCreate(BaseModel):
     product_id: str = "ETH-BTC"  # Legacy - kept for backward compatibility
     product_ids: Optional[List[str]] = None  # Multi-pair support
     split_budget_across_pairs: bool = False  # Budget splitting toggle
-    reserved_btc_balance: float = 0.0  # BTC allocated to this bot
-    reserved_usd_balance: float = 0.0  # USD allocated to this bot
+    reserved_btc_balance: float = 0.0  # BTC allocated to this bot (legacy)
+    reserved_usd_balance: float = 0.0  # USD allocated to this bot (legacy)
+    budget_percentage: float = 0.0  # % of aggregate portfolio value (preferred)
 
 
 class BotUpdate(BaseModel):
@@ -45,6 +46,7 @@ class BotUpdate(BaseModel):
     split_budget_across_pairs: Optional[bool] = None
     reserved_btc_balance: Optional[float] = None
     reserved_usd_balance: Optional[float] = None
+    budget_percentage: Optional[float] = None
 
 
 class BotResponse(BaseModel):
@@ -58,6 +60,7 @@ class BotResponse(BaseModel):
     split_budget_across_pairs: bool = False
     reserved_btc_balance: float = 0.0
     reserved_usd_balance: float = 0.0
+    budget_percentage: float = 0.0
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -156,6 +159,7 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
         split_budget_across_pairs=bot_data.split_budget_across_pairs,
         reserved_btc_balance=bot_data.reserved_btc_balance,
         reserved_usd_balance=bot_data.reserved_usd_balance,
+        budget_percentage=bot_data.budget_percentage,
         is_active=False
     )
 
@@ -287,6 +291,9 @@ async def update_bot(
 
     if bot_update.reserved_usd_balance is not None:
         bot.reserved_usd_balance = bot_update.reserved_usd_balance
+
+    if bot_update.budget_percentage is not None:
+        bot.budget_percentage = bot_update.budget_percentage
 
     # Validate all pairs use the same quote currency after update
     final_pairs = bot.product_ids if bot.product_ids else ([bot.product_id] if bot.product_id else [])

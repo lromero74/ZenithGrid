@@ -16,7 +16,7 @@ from app.config import settings
 from app.database import get_db, init_db
 from app.models import Bot, MarketData, PendingOrder, Position, Signal, Trade
 from app.multi_bot_monitor import MultiBotMonitor
-from app.routers import bots_router, templates_router
+from app.routers import bots_router, order_history_router, templates_router
 from app.schemas import (
     DashboardStats,
     MarketDataResponse,
@@ -31,6 +31,9 @@ from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
 
+
+
+
 app = FastAPI(
     title="ETH/BTC Trading Bot"
 )
@@ -42,6 +45,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(bots_router)
+app.include_router(order_history_router)
 app.include_router(templates_router)
 
 # CORS middleware
@@ -675,6 +679,23 @@ async def get_balances():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/account/aggregate-value")
+async def get_aggregate_value():
+    """Get aggregate portfolio value (BTC + USD) for bot budgeting"""
+    try:
+        aggregate_btc = await coinbase_client.calculate_aggregate_btc_value()
+        aggregate_usd = await coinbase_client.calculate_aggregate_usd_value()
+        btc_usd_price = await coinbase_client.get_btc_usd_price()
+
+        return {
+            "aggregate_btc_value": aggregate_btc,
+            "aggregate_usd_value": aggregate_usd,
+            "btc_usd_price": btc_usd_price
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/account/portfolio")
 async def get_portfolio(db: AsyncSession = Depends(get_db)):
     """Get full portfolio breakdown (all coins like 3Commas)"""
@@ -686,6 +707,42 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
         # Get BTC/USD price for valuations
         btc_usd_price = await coinbase_client.get_btc_usd_price()
 
+        # Prepare list of assets that need pricing
+        assets_to_price = []
+        for position in spot_positions:
+            asset = position.get("asset", "")
+            total_balance = float(position.get("total_balance_crypto", 0))
+
+            # Skip if zero balance
+            if total_balance == 0:
+                continue
+
+            # Skip stablecoins and BTC (we already have prices for these)
+            if asset not in ["USD", "USDC", "BTC"]:
+                assets_to_price.append((asset, total_balance, position))
+
+        # Fetch all prices with rate limiting to avoid 429 errors
+        async def fetch_price(asset: str, delay: float = 0):
+            try:
+                # Add small delay to avoid rate limiting
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                price = await coinbase_client.get_current_price(f"{asset}-USD")
+                return (asset, price)
+            except Exception as e:
+                print(f"Could not get USD price for {asset}, skipping: {e}")
+                return (asset, None)
+
+        # Fetch prices with staggered delays (every 0.1 seconds) to avoid rate limits
+        price_results = await asyncio.gather(*[
+            fetch_price(asset, idx * 0.1)
+            for idx, (asset, _, _) in enumerate(assets_to_price)
+        ])
+
+        # Create price lookup dict
+        prices = {asset: price for asset, price in price_results if price is not None}
+
+        # Now build portfolio with all prices available
         portfolio_holdings = []
         total_usd_value = 0.0
         total_btc_value = 0.0
@@ -714,32 +771,15 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
                 btc_value = total_balance
                 current_price_usd = btc_usd_price
             else:
-                # Try to get price for other assets (with timeout protection)
-                try:
-                    # First try ASSET-USD pair
-                    try:
-                        asset_usd_price = await coinbase_client.get_current_price(f"{asset}-USD")
-                        usd_value = total_balance * asset_usd_price
-                        current_price_usd = asset_usd_price
-                    except Exception:
-                        # Try ASSET-BTC pair and convert to USD
-                        try:
-                            asset_btc_price = await coinbase_client.get_current_price(f"{asset}-BTC")
-                            btc_value = total_balance * asset_btc_price
-                            usd_value = btc_value * btc_usd_price
-                            current_price_usd = asset_btc_price * btc_usd_price
-                        except Exception:
-                            # Can't get price for this asset, skip it
-                            print(f"Could not get price for {asset}, skipping")
-                            continue
-
-                    # Calculate BTC value if not already set
-                    if btc_value == 0 and btc_usd_price > 0:
-                        btc_value = usd_value / btc_usd_price
-                except Exception as e:
-                    # If we can't get price, skip this asset
-                    print(f"Error pricing {asset}: {e}")
+                # Use price from parallel fetch
+                if asset not in prices:
+                    # Skip assets we couldn't price
                     continue
+
+                current_price_usd = prices[asset]
+                usd_value = total_balance * current_price_usd
+                # Calculate BTC value from USD value
+                btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
 
             # Skip assets worth less than $0.01 USD
             if usd_value < 0.01:

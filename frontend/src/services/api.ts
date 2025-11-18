@@ -11,6 +11,7 @@ import type {
   BotCreate,
   BotStats,
   StrategyDefinition,
+  OrderHistory,
 } from '../types';
 
 const api = axios.create({
@@ -120,4 +121,28 @@ export const templatesApi = {
     api.delete<{ message: string }>(`/templates/${id}`).then((res) => res.data),
   seedDefaults: () =>
     api.post<{ message: string; templates: string[] }>('/templates/seed-defaults').then((res) => res.data),
+};
+
+export const orderHistoryApi = {
+  getAll: (botId?: number, status?: string, limit = 100, offset = 0) => {
+    const params: any = { limit, offset };
+    if (botId !== undefined) params.bot_id = botId;
+    if (status) params.status = status;
+    return api.get<OrderHistory[]>('/order-history', { params }).then((res) => res.data);
+  },
+  getFailed: (botId?: number, limit = 50) =>
+    api.get<OrderHistory[]>('/order-history/failed', {
+      params: { bot_id: botId, limit }
+    }).then((res) => res.data),
+  getStats: (botId?: number) =>
+    api.get<{
+      total_orders: number;
+      successful_orders: number;
+      failed_orders: number;
+      canceled_orders: number;
+      success_rate: number;
+      failure_rate: number;
+    }>('/order-history/stats', {
+      params: botId !== undefined ? { bot_id: botId } : undefined
+    }).then((res) => res.data),
 };

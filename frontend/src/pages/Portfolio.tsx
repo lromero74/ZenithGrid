@@ -360,106 +360,126 @@ function Portfolio() {
           </div>
         </div>
 
-        {/* PnL Stats - Today */}
+        {/* PnL Stats & Balance - Organized by Currency */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp size={20} className={portfolio.pnl?.today?.usd >= 0 ? "text-green-400" : "text-red-400"} />
-              <p className="text-slate-400 text-sm font-medium">Today PnL (USD)</p>
+          {/* BTC Column */}
+          <div className="space-y-4">
+            {/* Today PnL (BTC) */}
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={20} className={portfolio.pnl?.today?.btc >= 0 ? "text-green-400" : "text-red-400"} />
+                <p className="text-slate-400 text-sm font-medium">Today PnL (BTC)</p>
+              </div>
+              <p className={`text-3xl font-bold ${portfolio.pnl?.today?.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {portfolio.pnl?.today?.btc >= 0 ? '+' : ''}{formatCrypto(portfolio.pnl?.today?.btc || 0)} BTC
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                ({portfolio.pnl?.today?.btc >= 0 ? '+' : ''}{formatCurrency((portfolio.pnl?.today?.btc || 0) * portfolio.btc_usd_price)})
+              </p>
             </div>
-            <p className={`text-3xl font-bold ${portfolio.pnl?.today?.usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {portfolio.pnl?.today?.usd >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.today?.usd || 0)}
-            </p>
+
+            {/* All-Time PnL (BTC) */}
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={20} className={portfolio.pnl?.all_time?.btc >= 0 ? "text-green-400" : "text-red-400"} />
+                <p className="text-slate-400 text-sm font-medium">All-Time PnL (BTC)</p>
+              </div>
+              <p className={`text-3xl font-bold ${portfolio.pnl?.all_time?.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {portfolio.pnl?.all_time?.btc >= 0 ? '+' : ''}{formatCrypto(portfolio.pnl?.all_time?.btc || 0)} BTC
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                ({portfolio.pnl?.all_time?.btc >= 0 ? '+' : ''}{formatCurrency((portfolio.pnl?.all_time?.btc || 0) * portfolio.btc_usd_price)})
+              </p>
+            </div>
+
+            {/* BTC Balance Breakdown */}
+            {portfolio.balance_breakdown && (
+              <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div className="flex items-center gap-2 mb-4">
+                  <Bitcoin size={20} className="text-orange-400" />
+                  <p className="text-slate-300 text-sm font-semibold">BTC Balance Breakdown</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">Total:</span>
+                    <span className="text-white font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.total)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">Reserved by Bots:</span>
+                    <span className="text-orange-400 font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.reserved_by_bots)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">In Open Positions:</span>
+                    <span className="text-yellow-400 font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.in_open_positions)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
+                    <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
+                    <span className="text-green-400 font-mono text-lg font-bold">{formatCrypto(portfolio.balance_breakdown.btc.free)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp size={20} className={portfolio.pnl?.today?.btc >= 0 ? "text-green-400" : "text-red-400"} />
-              <p className="text-slate-400 text-sm font-medium">Today PnL (BTC)</p>
+          {/* USD Column */}
+          <div className="space-y-4">
+            {/* Today PnL (USD) */}
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={20} className={portfolio.pnl?.today?.usd >= 0 ? "text-green-400" : "text-red-400"} />
+                <p className="text-slate-400 text-sm font-medium">Today PnL (USD)</p>
+              </div>
+              <p className={`text-3xl font-bold ${portfolio.pnl?.today?.usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {portfolio.pnl?.today?.usd >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.today?.usd || 0)}
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                ({portfolio.pnl?.today?.usd >= 0 ? '+' : ''}{formatCrypto((portfolio.pnl?.today?.usd || 0) / portfolio.btc_usd_price)} BTC)
+              </p>
             </div>
-            <p className={`text-3xl font-bold ${portfolio.pnl?.today?.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {portfolio.pnl?.today?.btc >= 0 ? '+' : ''}{formatCrypto(portfolio.pnl?.today?.btc || 0)} BTC
-            </p>
+
+            {/* All-Time PnL (USD) */}
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={20} className={portfolio.pnl?.all_time?.usd >= 0 ? "text-green-400" : "text-red-400"} />
+                <p className="text-slate-400 text-sm font-medium">All-Time PnL (USD)</p>
+              </div>
+              <p className={`text-3xl font-bold ${portfolio.pnl?.all_time?.usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {portfolio.pnl?.all_time?.usd >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.all_time?.usd || 0)}
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                ({portfolio.pnl?.all_time?.usd >= 0 ? '+' : ''}{formatCrypto((portfolio.pnl?.all_time?.usd || 0) / portfolio.btc_usd_price)} BTC)
+              </p>
+            </div>
+
+            {/* USD Balance Breakdown */}
+            {portfolio.balance_breakdown && (
+              <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div className="flex items-center gap-2 mb-4">
+                  <DollarSign size={20} className="text-green-400" />
+                  <p className="text-slate-300 text-sm font-semibold">USD Balance Breakdown</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">Total:</span>
+                    <span className="text-white font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.total)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">Reserved by Bots:</span>
+                    <span className="text-orange-400 font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.reserved_by_bots)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">In Open Positions:</span>
+                    <span className="text-yellow-400 font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.in_open_positions)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
+                    <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
+                    <span className="text-green-400 font-mono text-lg font-bold">{formatCurrency(portfolio.balance_breakdown.usd.free)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* PnL Stats - All Time */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp size={20} className={portfolio.pnl?.all_time?.usd >= 0 ? "text-green-400" : "text-red-400"} />
-              <p className="text-slate-400 text-sm font-medium">All-Time PnL (USD)</p>
-            </div>
-            <p className={`text-3xl font-bold ${portfolio.pnl?.all_time?.usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {portfolio.pnl?.all_time?.usd >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.all_time?.usd || 0)}
-            </p>
-          </div>
-
-          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp size={20} className={portfolio.pnl?.all_time?.btc >= 0 ? "text-green-400" : "text-red-400"} />
-              <p className="text-slate-400 text-sm font-medium">All-Time PnL (BTC)</p>
-            </div>
-            <p className={`text-3xl font-bold ${portfolio.pnl?.all_time?.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {portfolio.pnl?.all_time?.btc >= 0 ? '+' : ''}{formatCrypto(portfolio.pnl?.all_time?.btc || 0)} BTC
-            </p>
-          </div>
-        </div>
-
-        {/* Free Balance Cards (Balance Breakdown) */}
-        {portfolio.balance_breakdown && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center gap-2 mb-4">
-                <Bitcoin size={20} className="text-orange-400" />
-                <p className="text-slate-300 text-sm font-semibold">BTC Balance Breakdown</p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 text-sm">Total:</span>
-                  <span className="text-white font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.total)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 text-sm">Reserved by Bots:</span>
-                  <span className="text-orange-400 font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.reserved_by_bots)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 text-sm">In Open Positions:</span>
-                  <span className="text-yellow-400 font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.btc.in_open_positions)}</span>
-                </div>
-                <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
-                  <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
-                  <span className="text-green-400 font-mono text-lg font-bold">{formatCrypto(portfolio.balance_breakdown.btc.free)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center gap-2 mb-4">
-                <DollarSign size={20} className="text-green-400" />
-                <p className="text-slate-300 text-sm font-semibold">USD Balance Breakdown</p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 text-sm">Total:</span>
-                  <span className="text-white font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.total)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 text-sm">Reserved by Bots:</span>
-                  <span className="text-orange-400 font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.reserved_by_bots)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 text-sm">In Open Positions:</span>
-                  <span className="text-yellow-400 font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usd.in_open_positions)}</span>
-                </div>
-                <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
-                  <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
-                  <span className="text-green-400 font-mono text-lg font-bold">{formatCurrency(portfolio.balance_breakdown.usd.free)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Holdings Table */}
         <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">

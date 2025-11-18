@@ -139,6 +139,7 @@ export interface Bot {
   product_id: string;
   reserved_btc_balance: number;
   reserved_usd_balance: number;
+  budget_percentage: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -153,6 +154,7 @@ export interface BotCreate {
   product_id: string;
   reserved_btc_balance?: number;
   reserved_usd_balance?: number;
+  budget_percentage?: number;
 }
 
 export interface BotStats {
@@ -164,4 +166,22 @@ export interface BotStats {
   total_profit_usd: number;
   win_rate: number;
   avg_profit_per_position: number;
+}
+
+export interface OrderHistory {
+  id: number;
+  timestamp: string;
+  bot_id: number;
+  bot_name: string;
+  position_id: number | null;
+  product_id: string;
+  side: string;
+  order_type: string;
+  trade_type: string;
+  quote_amount: number;
+  base_amount: number | null;
+  price: number | null;
+  status: string;
+  order_id: string | null;
+  error_message: string | null;
 }

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.currency_utils import format_with_usd, get_quote_currency
-from app.models import AIBotLog, Bot, PendingOrder, Position, Signal, Trade
+from app.models import AIBotLog, Bot, OrderHistory, PendingOrder, Position, Signal, Trade
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
 from app.order_validation import validate_order_size
@@ -154,13 +154,65 @@ class StrategyTradingEngine:
 
         return position
 
+    async def log_order_to_history(
+        self,
+        position: Optional[Position],
+        side: str,
+        order_type: str,
+        trade_type: str,
+        quote_amount: float,
+        price: float,
+        status: str,
+        order_id: Optional[str] = None,
+        base_amount: Optional[float] = None,
+        error_message: Optional[str] = None
+    ):
+        """
+        Log order attempt to order_history table for audit trail.
+        Similar to 3Commas order history.
+
+        Args:
+            position: Position (None for failed base orders)
+            side: "BUY" or "SELL"
+            order_type: "MARKET", "LIMIT", etc.
+            trade_type: "initial", "dca", "safety_order_1", etc.
+            quote_amount: Amount of quote currency attempted
+            price: Price at time of order
+            status: "success", "failed", "canceled"
+            order_id: Coinbase order ID (None for failed orders)
+            base_amount: Amount of base currency acquired (None for failed orders)
+            error_message: Error details if failed
+        """
+        try:
+            order_history = OrderHistory(
+                timestamp=datetime.utcnow(),
+                bot_id=self.bot.id,
+                position_id=position.id if position else None,
+                product_id=self.product_id,
+                side=side,
+                order_type=order_type,
+                trade_type=trade_type,
+                quote_amount=quote_amount,
+                base_amount=base_amount,
+                price=price,
+                status=status,
+                order_id=order_id,
+                error_message=error_message
+            )
+            self.db.add(order_history)
+            # Note: Don't commit here - let caller handle commits
+        except Exception as e:
+            logger.error(f"Failed to log order to history: {e}")
+            # Don't fail the entire operation if logging fails
+
     async def execute_buy(
         self,
         position: Position,
         quote_amount: float,
         current_price: float,
         trade_type: str,
-        signal_data: Optional[Dict[str, Any]] = None
+        signal_data: Optional[Dict[str, Any]] = None,
+        commit_on_error: bool = True
     ) -> Trade:
         """
         Execute a buy order (market or limit based on configuration)
@@ -174,6 +226,8 @@ class StrategyTradingEngine:
             current_price: Current market price
             trade_type: 'initial' or 'dca' or strategy-specific type
             signal_data: Optional signal metadata
+            commit_on_error: If True, commit errors to DB (for DCA orders).
+                           If False, don't commit errors (for base orders - let rollback work)
 
         Returns:
             Trade record (for market orders only; limit orders return None)
@@ -213,10 +267,24 @@ class StrategyTradingEngine:
 
         if not is_valid:
             logger.warning(f"Order validation failed: {error_msg}")
-            # Save error to position for UI display
-            position.last_error_message = error_msg
-            position.last_error_timestamp = datetime.utcnow()
-            await self.db.commit()
+
+            # Log failed order to history
+            await self.log_order_to_history(
+                position=position,
+                side="BUY",
+                order_type="MARKET",
+                trade_type=trade_type,
+                quote_amount=quote_amount,
+                price=current_price,
+                status="failed",
+                error_message=error_msg
+            )
+
+            # Save error to position for UI display (only for DCA orders)
+            if commit_on_error:
+                position.last_error_message = error_msg
+                position.last_error_timestamp = datetime.utcnow()
+                await self.db.commit()
             raise ValueError(error_msg)
 
         # Calculate amount of base currency to buy
@@ -266,17 +334,45 @@ class StrategyTradingEngine:
                 else:
                     full_error = "No order_id returned from Coinbase (no error_response provided)"
 
-                # Record error on position
-                position.last_error_message = full_error
-                position.last_error_timestamp = datetime.utcnow()
-                await self.db.commit()
+                # Log failed order to history
+                await self.log_order_to_history(
+                    position=position,
+                    side="BUY",
+                    order_type="MARKET",
+                    trade_type=trade_type,
+                    quote_amount=quote_amount,
+                    price=current_price,
+                    status="failed",
+                    error_message=full_error
+                )
+
+                # Record error on position (only for DCA orders)
+                if commit_on_error:
+                    position.last_error_message = full_error
+                    position.last_error_timestamp = datetime.utcnow()
+                    await self.db.commit()
 
                 raise ValueError(f"Coinbase order failed: {full_error}")
 
         except Exception as e:
             logger.error(f"Error executing buy order: {e}")
-            # Record error on position if it's not already recorded
-            if position and not position.last_error_message:
+
+            # Log failed order to history (only if not already logged)
+            # ValueError exceptions were already logged above, so skip those
+            if not isinstance(e, ValueError):
+                await self.log_order_to_history(
+                    position=position,
+                    side="BUY",
+                    order_type="MARKET",
+                    trade_type=trade_type,
+                    quote_amount=quote_amount,
+                    price=current_price,
+                    status="failed",
+                    error_message=str(e)
+                )
+
+            # Record error on position if it's not already recorded (only for DCA orders)
+            if commit_on_error and position and not position.last_error_message:
                 position.last_error_message = str(e)
                 position.last_error_timestamp = datetime.utcnow()
                 await self.db.commit()
@@ -298,6 +394,19 @@ class StrategyTradingEngine:
         )
 
         self.db.add(trade)
+
+        # Log successful order to history
+        await self.log_order_to_history(
+            position=position,
+            side="BUY",
+            order_type="MARKET",
+            trade_type=trade_type,
+            quote_amount=quote_amount,
+            price=current_price,
+            status="success",
+            order_id=order_id,
+            base_amount=base_amount
+        )
 
         # Clear any previous errors on successful trade
         position.last_error_message = None
@@ -534,8 +643,19 @@ class StrategyTradingEngine:
         # Get current state
         position = await self.get_active_position()
 
-        # Get bot's available balance (reserved balance or total portfolio)
-        reserved_balance = self.bot.get_reserved_balance()
+        # Get bot's available balance (budget-based or total portfolio)
+        # Calculate aggregate portfolio value for bot budgeting
+        aggregate_value = None
+        if self.bot.budget_percentage > 0:
+            # Bot uses percentage-based budgeting - calculate aggregate value
+            if self.quote_currency == "USD":
+                aggregate_value = await self.coinbase.calculate_aggregate_usd_value()
+                logger.info(f"  💰 Aggregate USD value: ${aggregate_value:.2f}")
+            else:
+                aggregate_value = await self.coinbase.calculate_aggregate_btc_value()
+                logger.info(f"  💰 Aggregate BTC value: {aggregate_value:.8f} BTC")
+
+        reserved_balance = self.bot.get_reserved_balance(aggregate_value)
         if reserved_balance > 0:
             # Bot has reserved balance - use it instead of total portfolio
             # Calculate how much is available (reserved - already in positions)
@@ -556,7 +676,10 @@ class StrategyTradingEngine:
             total_in_positions = sum(p.total_quote_spent for p in open_positions)
             quote_balance -= total_in_positions
 
-            logger.info(f"  💰 Bot reserved balance: {reserved_balance}, In positions: {total_in_positions}, Available: {quote_balance}")
+            if self.bot.budget_percentage > 0:
+                logger.info(f"  💰 Bot budget: {self.bot.budget_percentage}% of aggregate ({reserved_balance:.8f}), In positions: {total_in_positions:.8f}, Available: {quote_balance:.8f}")
+            else:
+                logger.info(f"  💰 Bot reserved balance: {reserved_balance}, In positions: {total_in_positions}, Available: {quote_balance}")
         else:
             # No reserved balance - use total portfolio balance (backward compatibility)
             quote_balance = await self.trading_client.get_quote_balance(self.product_id)
@@ -647,7 +770,8 @@ class StrategyTradingEngine:
                     quote_amount=quote_amount,
                     current_price=current_price,
                     trade_type=trade_type,
-                    signal_data=signal_data
+                    signal_data=signal_data,
+                    commit_on_error=not is_new_position  # Don't commit errors for base orders
                 )
 
                 if trade is None:

@@ -1,0 +1,4117 @@
+{
+  "BTC-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "BTC-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ETH-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ETH-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ZEC-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ZEC-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "XRP-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "XRP-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "SOL-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "SOL-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ICP-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.0001"
+  },
+  "ICP-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.0001"
+  },
+  "DOGE-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "DOGE-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ADA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.00000001"
+  },
+  "ADA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.00000001"
+  },
+  "BTC-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "LINK-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "LINK-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "USDT-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "SUI-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SUI-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "FIL-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "FIL-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "HBAR-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "HBAR-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "BTC-USDT": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "LTC-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "LTC-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "UNI-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.000001"
+  },
+  "UNI-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.000001"
+  },
+  "USDC-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "DASH-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "DASH-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ETH-USDT": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "STRK-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "STRK-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "AVAX-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "AVAX-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ZEN-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "ZEN-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "AERO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "AERO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "BTC-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "TAO-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "TAO-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "XLM-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.00000001"
+  },
+  "XLM-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.00000001"
+  },
+  "NEAR-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "NEAR-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "PUMP-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "PUMP-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "USELESS-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "USELESS-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "PENGU-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "PENGU-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "FARTCOIN-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "FARTCOIN-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "EURC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "ETH-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "FET-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "FET-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "XAN-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "XAN-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "PEPE-USD": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "PEPE-USDC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "AAVE-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "AAVE-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "BONK-USD": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "BONK-USDC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "BCH-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "BCH-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ONDO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "ONDO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "WLFI-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "WLFI-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SEI-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SEI-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ETH-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ENA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ENA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CRO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "CRO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "XRP-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "DOT-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.00000001"
+  },
+  "DOT-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.00000001"
+  },
+  "MET-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MET-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "USDC-GBP": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SOL-USDT": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "AVNT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AVNT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CRV-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "CRV-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "APT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "APT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "USDT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SYRUP-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SYRUP-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SOL-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "TOSHI-USD": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "TOSHI-USDC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "BNB-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00001"
+  },
+  "BNB-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00001"
+  },
+  "USDT-EUR": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "RENDER-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "RENDER-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "SPX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SPX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ATOM-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ATOM-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "HBAR-USDT": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ARB-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ARB-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "INJ-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "INJ-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TRUMP-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "TRUMP-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "JASMY-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "JASMY-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "ZORA-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "ZORA-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "ALGO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ALGO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CBETH-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00001"
+  },
+  "CBETH-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00001"
+  },
+  "POL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "POL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "XCN-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "XCN-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SAPIEN-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SAPIEN-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "CLANKER-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "CLANKER-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "WIF-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "WIF-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "SHIB-USD": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "SHIB-USDC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "POPCAT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "POPCAT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "VET-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "VET-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "PAXG-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00001"
+  },
+  "PAXG-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00001"
+  },
+  "USDT-GBP": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "QNT-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "QNT-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "KAITO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "KAITO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MINA-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "MINA-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "SUP-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SUP-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "IP-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "IP-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ZK-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ZK-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "PENDLE-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "PENDLE-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TIA-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TIA-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TRB-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "TRB-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "ETC-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ETC-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "OP-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "OP-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "SOL-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "EDGE-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "EDGE-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "LTC-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "MOODENG-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MOODENG-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "AAVE-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "WLD-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "WLD-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "EOS-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "EOS-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "MORPHO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MORPHO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ADA-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "XRP-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "COTI-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "COTI-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LDO-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "LDO-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "LINK-USDT": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "IMX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "IMX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "APE-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "APE-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ALLO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ALLO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "NOICE-USD": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "NOICE-USDC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "LINK-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "STX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "STX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "USD1-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "USD1-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MOG-USD": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "MOG-USDC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "FLR-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "FLR-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "LINK-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "WCT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "WCT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "YFI-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.000001"
+  },
+  "YFI-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.000001"
+  },
+  "DIA-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "DIA-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "KTA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "KTA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "BAT-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "BAT-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "KITE-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "KITE-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ATH-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "ATH-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "FAI-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "FAI-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "SAND-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SAND-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ZRO-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ZRO-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "MANTLE-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MANTLE-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "HNT-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "HNT-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "BNKR-USD": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "BNKR-USDC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "JTO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "JTO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LINEA-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "LINEA-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "SWFTC-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "SWFTC-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "SQD-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SQD-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SPK-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SPK-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "AKT-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "AKT-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ZKC-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ZKC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "EIGEN-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "EIGEN-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "MAGIC-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MAGIC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "DOGE-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ALCX-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "ALCX-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "DRIFT-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "DRIFT-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "SWELL-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "SWELL-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "SKY-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SKY-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "APR-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "APR-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SUPER-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "SUPER-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "TURBO-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "TURBO-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "SUSHI-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SUSHI-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "AVAX-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "ALGO-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "S-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "S-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "PYTH-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "PYTH-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ICP-USDT": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.0001"
+  },
+  "BCH-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "LOKA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "LOKA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ROSE-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ROSE-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "UNI-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "ADA-GBP": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MANA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MANA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "LA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SNX-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "SNX-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "CVX-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "CVX-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "PROMPT-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "PROMPT-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "GIGA-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "GIGA-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SKL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SKL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "PRIME-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "PRIME-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TRAC-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "TRAC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "GRT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "GRT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ENS-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "ENS-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "PRCL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "PRCL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "VVV-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "VVV-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "MSOL-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "MSOL-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "COOKIE-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "COOKIE-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "COMP-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "COMP-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "ELA-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ELA-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "DAI-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.00001"
+  },
+  "DAI-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.00001"
+  },
+  "DOGE-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AIOZ-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AIOZ-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "W-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "W-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "BERA-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "BERA-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "RECALL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "RECALL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "FET-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "GLM-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "GLM-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AURORA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "AURORA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "FLOCK-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "FLOCK-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AXL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AXL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "DOGE-GBP": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "FIS-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "FIS-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "MKR-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.000001"
+  },
+  "MKR-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.000001"
+  },
+  "API3-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "API3-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "NMR-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "NMR-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "METIS-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "METIS-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "GODS-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "GODS-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "ALEO-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ALEO-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "XTZ-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "XTZ-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "PROVE-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "PROVE-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ETHFI-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ETHFI-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "PERP-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "PERP-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "ZRX-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.00001"
+  },
+  "ZRX-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.00001"
+  },
+  "AAVE-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "MUSE-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "MUSE-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "IO-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "IO-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TREE-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "TREE-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SXT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SXT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LPT-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "LPT-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "OCEAN-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "OCEAN-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "MNDE-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "MNDE-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "FLOKI-USD": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "FLOKI-USDC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "SD-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SD-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "LRC-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "LRC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "C98-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "C98-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "KSM-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "KSM-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "AVAX-USDT": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "ACH-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.1"
+  },
+  "ACH-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.1"
+  },
+  "HOME-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "HOME-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "HFT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "HFT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "TRUST-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "TRUST-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ORCA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ORCA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "AERGO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AERGO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "WELL-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "WELL-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "DOGINME-USD": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "DOGINME-USDC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "CAKE-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "CAKE-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "RSR-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "RSR-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "AUCTION-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "AUCTION-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "BARD-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "BARD-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "EGLD-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "EGLD-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "CLV-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "CLV-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SYND-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SYND-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "1INCH-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "1INCH-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "EUL-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "EUL-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "MAMO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "MAMO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "XLM-EUR": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "AWE-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "AWE-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "SHIB-EUR": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "ERA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ERA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "XYO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "XYO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ILV-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "ILV-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "AXS-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "AXS-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "ATOM-USDT": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "ICP-GBP": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.0001"
+  },
+  "YB-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "YB-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "RARI-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "RARI-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "KARRAT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "KARRAT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ADA-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "RLC-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "RLC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "COW-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "COW-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LCX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LCX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ANKR-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "ANKR-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "BAL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "BAL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "ICP-EUR": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.0001"
+  },
+  "PNG-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "PNG-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "REZ-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "REZ-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "DEGEN-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "DEGEN-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "TROLL-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "TROLL-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "B3-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "B3-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "HONEY-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "HONEY-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LQTY-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "LQTY-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "PRO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "PRO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "GST-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.01"
+  },
+  "GST-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.01"
+  },
+  "BICO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "BICO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "RED-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "RED-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "APE-EUR": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "VELO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "VELO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "AMP-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "AMP-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "DOT-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "LRDS-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "LRDS-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MLN-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "MLN-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "PNUT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "PNUT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SHIB-GBP": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "ABT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ABT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ZETA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ZETA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "TNSR-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TNSR-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "BIGTIME-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "BIGTIME-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "KEYCAT-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "KEYCAT-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "KAVA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "KAVA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "CORECHAIN-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "CORECHAIN-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "VOXEL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "VOXEL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "BIO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "BIO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "NCT-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "NCT-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "HOPR-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "HOPR-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ALEPH-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ALEPH-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ASM-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "ASM-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "NOM-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "NOM-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "OGN-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "OGN-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "ARKM-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ARKM-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "LTC-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "PYR-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "PYR-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "UMA-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "UMA-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "NEAR-USDT": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "RARE-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "RARE-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "XSGD-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "CRO-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "VTHO-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "VTHO-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "CELR-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "CELR-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "GMT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "GMT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "BAT-EUR": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "ME-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ME-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TRU-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "TRU-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "UNI-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "ACX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ACX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CGLD-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "CGLD-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "RSC-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "RSC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "PIRATE-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "PIRATE-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "DIMO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "DIMO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ACS-USD": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "ACS-USDC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "RPL-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "RPL-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "SPA-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "SPA-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "CTSI-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CTSI-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "INDEX-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "INDEX-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "GFI-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "GFI-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "KERNEL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "KERNEL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "LSETH-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00001"
+  },
+  "LSETH-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00001"
+  },
+  "2Z-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "2Z-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "IDEX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "IDEX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "KMNO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "KMNO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "ATOM-GBP": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "SAFE-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SAFE-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "FARM-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "FARM-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "DOT-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "RONIN-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "RONIN-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TOWNS-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "TOWNS-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "HIGH-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "HIGH-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "CRV-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "AUDD-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "JASMY-USDT": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "FOX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "FOX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SEAM-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SEAM-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CTX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "CTX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "FIL-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "REQ-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "REQ-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "EOS-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "NEWT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "NEWT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ALICE-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "ALICE-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "MATH-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "MATH-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "MASK-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "MASK-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "DBR-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "DBR-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "CFG-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CFG-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AGLD-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "AGLD-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "NEON-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "NEON-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.01"
+  },
+  "DOLO-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "DOLO-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "FLOW-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "FLOW-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "VARA-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "VARA-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "NKN-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "NKN-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AVT-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "AVT-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "APE-USDT": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "FORT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "FORT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "GNO-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "GNO-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "SPELL-USD": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "SPELL-USDC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "AST-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AST-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "INV-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "INV-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "L3-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "L3-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.1"
+  },
+  "STORJ-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "STORJ-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "00-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "00-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "FORTH-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "FORTH-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "CHZ-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CHZ-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CVC-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CVC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "BLZ-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "BLZ-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "GRT-GBP": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "PLU-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "PLU-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "WCFG-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "WCFG-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "SAND-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "MDT-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "MDT-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "CRO-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "KNC-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "KNC-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "OMNI-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "OMNI-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "SHDW-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "SHDW-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "SHPING-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "SHPING-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "ATOM-EUR": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "ETC-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "MPLX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "MPLX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "GTC-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "GTC-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "JITOSOL-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "JITOSOL-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "POLS-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "POLS-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ZETACHAIN-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ZETACHAIN-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "BCH-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "SNX-EUR": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "DNT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "DNT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "XLM-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "TIME-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "TIME-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "AUDIO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "AUDIO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LAYER-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "LAYER-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ALGO-GBP": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "BAND-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "BAND-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "OP-USDT": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "BTRST-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "BTRST-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "QI-USD": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "QI-USDC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "1"
+  },
+  "SHIB-USDT": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "1"
+  },
+  "FIDA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "FIDA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ROSE-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "PUNDIX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "PUNDIX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "A8-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "A8-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "GRT-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "BLAST-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "BLAST-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "SUKU-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SUKU-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "TON-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "TON-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "COSMOSDYDX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "COSMOSDYDX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "IOTX-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "IOTX-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "USDS-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "USDS-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "OXT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "OXT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "1"
+  },
+  "BLUR-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "BLUR-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "BOBA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "BOBA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "XTZ-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "OSMO-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "OSMO-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "1INCH-GBP": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "CRV-GBP": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "FIL-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "QNT-USDT": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.0001"
+  },
+  "T-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "T-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "CHZ-GBP": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "SNX-GBP": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "POND-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "POND-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "GHST-USD": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "GHST-USDC": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "DEXT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "DEXT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ALT-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "ALT-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "POWR-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "POWR-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "1INCH-EUR": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "G-USD": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "G-USDC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "STX-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "ARPA-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "ARPA-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "CHZ-EUR": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "BNT-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "BNT-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "BADGER-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "BADGER-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "STG-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "STG-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "DOT-USDT": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "ENS-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "WAXL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "WAXL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "CHZ-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "LRC-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "XTZ-GBP": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "KRL-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "KRL-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.1"
+  },
+  "RAD-USD": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "RAD-USDC": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "MANA-EUR": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "IMX-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "AXS-USDT": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "AXS-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "MINA-EUR": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "MASK-GBP": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "ANKR-EUR": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "ETC-GBP": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "ENS-USDT": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.001"
+  },
+  "CBETH-ETH": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.00001"
+  },
+  "APT-USDT": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.001"
+  },
+  "CGLD-GBP": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.01"
+  },
+  "FLOW-USDT": {
+    "quote_increment": "0.001",
+    "quote_decimals": 3,
+    "base_increment": "0.001"
+  },
+  "ETH-BTC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.00000001"
+  },
+  "PAX-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "PAX-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "SOL-ETH": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.0001"
+  },
+  "LINK-ETH": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.01"
+  },
+  "SOL-BTC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "0.001"
+  },
+  "ANKR-GBP": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "1"
+  },
+  "AVAX-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.001"
+  },
+  "LSETH-ETH": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.00001"
+  },
+  "DOT-BTC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "0.001"
+  },
+  "ICP-BTC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "0.0001"
+  },
+  "AAVE-BTC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.001"
+  },
+  "CRV-BTC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "0.01"
+  },
+  "BCH-BTC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.00000001"
+  },
+  "LTC-BTC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.00000001"
+  },
+  "LINK-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.01"
+  },
+  "DOGE-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.1"
+  },
+  "ADA-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.01"
+  },
+  "UNI-BTC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "0.000001"
+  },
+  "YFI-BTC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.000001"
+  },
+  "BAT-ETH": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "ATOM-BTC": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "0.1"
+  },
+  "XLM-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "FIL-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.001"
+  },
+  "DASH-BTC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.00000001"
+  },
+  "GRT-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.01"
+  },
+  "ADA-ETH": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.01"
+  },
+  "BAT-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.01"
+  },
+  "EOS-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.1"
+  },
+  "COMP-BTC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.001"
+  },
+  "XTZ-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "0.01"
+  },
+  "ALGO-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "ETC-BTC": {
+    "quote_increment": "0.000001",
+    "quote_decimals": 6,
+    "base_increment": "0.00000001"
+  },
+  "MANA-ETH": {
+    "quote_increment": "0.0000001",
+    "quote_decimals": 7,
+    "base_increment": "0.01"
+  },
+  "MKR-BTC": {
+    "quote_increment": "0.00001",
+    "quote_decimals": 5,
+    "base_increment": "0.000001"
+  },
+  "LRC-BTC": {
+    "quote_increment": "0.00000001",
+    "quote_decimals": 8,
+    "base_increment": "1"
+  },
+  "CGLD-EUR": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.01"
+  },
+  "ETH-DAI": {
+    "quote_increment": "0.01",
+    "quote_decimals": 2,
+    "base_increment": "0.00000001"
+  },
+  "RNDR-USD": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  },
+  "RNDR-USDC": {
+    "quote_increment": "0.0001",
+    "quote_decimals": 4,
+    "base_increment": "0.01"
+  }
+}
