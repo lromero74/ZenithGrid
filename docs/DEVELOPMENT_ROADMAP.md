@@ -615,18 +615,57 @@ See `docs/LIMIT_ORDERS_TODO.md` for detailed plan:
 - **Very Large:** 1-2 weeks
 
 ### Workflow
-1. Pick highest priority item that's ⏳ Planned
-2. Create feature branch: `git checkout -b feature/item-name`
-3. Implement with tests
-4. Update this document with ✅ and notes
-5. Create PR and merge to main
-6. Move completed item to "Completed Items" section
+
+**IMPORTANT:** All new development must happen in feature branches. Never develop directly on `main`.
+
+1. **Pick a task:** Choose the highest priority item that's ⏳ Planned
+2. **Create feature branch:**
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b feature/item-name
+   ```
+3. **Implement the feature:**
+   - Write code with tests
+   - Commit frequently with clear messages
+   - Test thoroughly before merging
+4. **Update documentation:**
+   - Update this roadmap: Change ⏳ to ✅
+   - Add implementation notes and commit hash
+   - Update HANDOFF.md with any important changes
+5. **Merge to main:**
+   ```bash
+   git checkout main
+   git pull origin main
+   git merge feature/item-name
+   git push origin main
+   ```
+6. **Clean up the branch:**
+   ```bash
+   git branch -d feature/item-name
+   git push origin --delete feature/item-name
+   ```
+7. **Move completed item:** Move the completed section to "Completed Items" at bottom
+8. **Move to next feature:** DO NOT start the next feature until the current one is merged and cleaned up
 
 ### Branch Naming Convention
 - `feature/notifications` - New features
+- `feature/dashboard-analytics` - Descriptive feature names
 - `fix/bug-name` - Bug fixes
 - `refactor/component-name` - Code refactoring
 - `docs/update-readme` - Documentation updates
+
+### One Feature at a Time Rule
+
+**CRITICAL:** Complete one feature fully before starting the next:
+- ✅ Implement feature in branch
+- ✅ Test thoroughly
+- ✅ Merge to main
+- ✅ Delete feature branch (local and remote)
+- ✅ Update roadmap
+- ✅ THEN start next feature
+
+This keeps the codebase clean and prevents branch conflicts.
 
 ---
 
