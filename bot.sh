@@ -1,14 +1,9 @@
 #!/bin/bash
 
-# ETH/BTC Trading Bot - Local Development Manager
+# ETH/BTC Trading Bot - Systemd Service Manager
 # Usage: ./bot.sh [start|stop|restart|status|logs]
 
 set -e
-
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$PROJECT_DIR/backend"
-FRONTEND_DIR="$PROJECT_DIR/frontend"
-PID_DIR="$PROJECT_DIR/.pids"
 
 # Colors
 RED='\033[0;31m'
@@ -17,70 +12,37 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Create PID directory
-mkdir -p "$PID_DIR"
+# Service names
+BACKEND_SERVICE="trading-bot-backend"
+FRONTEND_SERVICE="trading-bot-frontend"
 
-# Function to check if process is running
-is_running() {
-    local pid_file=$1
-    if [ -f "$pid_file" ]; then
-        local pid=$(cat "$pid_file")
-        if ps -p "$pid" > /dev/null 2>&1; then
-            return 0
-        else
-            rm -f "$pid_file"
-            return 1
-        fi
-    fi
-    return 1
+# Function to check if service is running
+is_service_running() {
+    local service=$1
+    systemctl is-active --quiet "$service"
+    return $?
 }
 
 # Function to start backend
 start_backend() {
     echo -e "${BLUE}Starting backend...${NC}"
 
-    # Check if already running
-    if is_running "$PID_DIR/backend.pid"; then
-        echo -e "${YELLOW}Backend is already running (PID: $(cat $PID_DIR/backend.pid))${NC}"
+    if is_service_running "$BACKEND_SERVICE"; then
+        echo -e "${YELLOW}Backend is already running${NC}"
         return 0
     fi
 
-    # Check if .env exists
-    if [ ! -f "$BACKEND_DIR/.env" ]; then
-        echo -e "${RED}ERROR: $BACKEND_DIR/.env not found${NC}"
-        echo -e "${YELLOW}Please create .env file with your Coinbase credentials${NC}"
-        return 1
-    fi
-
-    # Check if venv exists
-    if [ ! -d "$BACKEND_DIR/venv" ]; then
-        echo -e "${YELLOW}Virtual environment not found. Creating...${NC}"
-        cd "$BACKEND_DIR"
-        python3 -m venv venv
-        source venv/bin/activate
-        pip install -r requirements.txt
-        deactivate
-        cd "$PROJECT_DIR"
-    fi
-
-    # Start backend
-    cd "$BACKEND_DIR"
-    source venv/bin/activate
-    nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-config log_config.json > "$PID_DIR/backend.log" 2>&1 &
-    echo $! > "$PID_DIR/backend.pid"
-    deactivate
-    cd "$PROJECT_DIR"
-
+    sudo systemctl start "$BACKEND_SERVICE"
     sleep 2
 
-    if is_running "$PID_DIR/backend.pid"; then
-        echo -e "${GREEN}✅ Backend started (PID: $(cat $PID_DIR/backend.pid))${NC}"
+    if is_service_running "$BACKEND_SERVICE"; then
+        echo -e "${GREEN}✅ Backend started${NC}"
         echo -e "${GREEN}   API: http://localhost:8000${NC}"
-        echo -e "${GREEN}   Logs: $PID_DIR/backend.log${NC}"
+        echo -e "${GREEN}   Logs: sudo journalctl -u $BACKEND_SERVICE -f${NC}"
         return 0
     else
         echo -e "${RED}❌ Backend failed to start${NC}"
-        echo -e "${YELLOW}Check logs: tail -f $PID_DIR/backend.log${NC}"
+        echo -e "${YELLOW}Check logs: sudo journalctl -u $BACKEND_SERVICE -n 50${NC}"
         return 1
     fi
 }
@@ -89,48 +51,22 @@ start_backend() {
 start_frontend() {
     echo -e "${BLUE}Starting frontend...${NC}"
 
-    # Check if already running
-    if is_running "$PID_DIR/frontend.pid"; then
-        echo -e "${YELLOW}Frontend is already running (PID: $(cat $PID_DIR/frontend.pid))${NC}"
+    if is_service_running "$FRONTEND_SERVICE"; then
+        echo -e "${YELLOW}Frontend is already running${NC}"
         return 0
     fi
 
-    # Only kill port 5173 if it's occupied by an unknown process
-    # (After stop, it should be free, so this is only for edge cases)
-    if lsof -Pi :5173 -sTCP:LISTEN -t > /dev/null 2>&1; then
-        local port_pid=$(lsof -ti:5173 -sTCP:LISTEN)
-        # Only kill if it's not our tracked PID (which should already be stopped)
-        if [ -n "$port_pid" ]; then
-            echo -e "${YELLOW}Port 5173 occupied by unknown process (PID: $port_pid). Cleaning up...${NC}"
-            kill -9 $port_pid 2>/dev/null || true
-            sleep 0.5
-        fi
-    fi
+    sudo systemctl start "$FRONTEND_SERVICE"
+    sleep 2
 
-    # Check if node_modules exists
-    if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
-        echo -e "${YELLOW}node_modules not found. Installing dependencies...${NC}"
-        cd "$FRONTEND_DIR"
-        npm install
-        cd "$PROJECT_DIR"
-    fi
-
-    # Start frontend
-    cd "$FRONTEND_DIR"
-    nohup npm run dev > "$PID_DIR/frontend.log" 2>&1 &
-    echo $! > "$PID_DIR/frontend.pid"
-    cd "$PROJECT_DIR"
-
-    sleep 3
-
-    if is_running "$PID_DIR/frontend.pid"; then
-        echo -e "${GREEN}✅ Frontend started (PID: $(cat $PID_DIR/frontend.pid))${NC}"
+    if is_service_running "$FRONTEND_SERVICE"; then
+        echo -e "${GREEN}✅ Frontend started${NC}"
         echo -e "${GREEN}   URL: http://localhost:5173${NC}"
-        echo -e "${GREEN}   Logs: $PID_DIR/frontend.log${NC}"
+        echo -e "${GREEN}   Logs: sudo journalctl -u $FRONTEND_SERVICE -f${NC}"
         return 0
     else
         echo -e "${RED}❌ Frontend failed to start${NC}"
-        echo -e "${YELLOW}Check logs: tail -f $PID_DIR/frontend.log${NC}"
+        echo -e "${YELLOW}Check logs: sudo journalctl -u $FRONTEND_SERVICE -n 50${NC}"
         return 1
     fi
 }
@@ -139,27 +75,19 @@ start_frontend() {
 stop_backend() {
     echo -e "${BLUE}Stopping backend...${NC}"
 
-    if is_running "$PID_DIR/backend.pid"; then
-        local pid=$(cat "$PID_DIR/backend.pid")
-        kill "$pid" 2>/dev/null || true
+    if ! is_service_running "$BACKEND_SERVICE"; then
+        echo -e "${YELLOW}Backend is not running${NC}"
+        return 0
+    fi
 
-        # Wait for graceful shutdown
-        for i in {1..10}; do
-            if ! ps -p "$pid" > /dev/null 2>&1; then
-                break
-            fi
-            sleep 0.5
-        done
+    sudo systemctl stop "$BACKEND_SERVICE"
+    sleep 1
 
-        # Force kill if still running
-        if ps -p "$pid" > /dev/null 2>&1; then
-            kill -9 "$pid" 2>/dev/null || true
-        fi
-
-        rm -f "$PID_DIR/backend.pid"
+    if ! is_service_running "$BACKEND_SERVICE"; then
         echo -e "${GREEN}✅ Backend stopped${NC}"
     else
-        echo -e "${YELLOW}Backend is not running${NC}"
+        echo -e "${RED}❌ Failed to stop backend${NC}"
+        return 1
     fi
 }
 
@@ -167,25 +95,19 @@ stop_backend() {
 stop_frontend() {
     echo -e "${BLUE}Stopping frontend...${NC}"
 
-    if is_running "$PID_DIR/frontend.pid"; then
-        local pid=$(cat "$PID_DIR/frontend.pid")
+    if ! is_service_running "$FRONTEND_SERVICE"; then
+        echo -e "${YELLOW}Frontend is not running${NC}"
+        return 0
+    fi
 
-        # Kill the process tree (npm and vite)
-        pkill -P "$pid" 2>/dev/null || true
-        kill "$pid" 2>/dev/null || true
+    sudo systemctl stop "$FRONTEND_SERVICE"
+    sleep 1
 
-        # Wait for graceful shutdown
-        sleep 1
-
-        # Force kill if still running
-        if ps -p "$pid" > /dev/null 2>&1; then
-            kill -9 "$pid" 2>/dev/null || true
-        fi
-
-        rm -f "$PID_DIR/frontend.pid"
+    if ! is_service_running "$FRONTEND_SERVICE"; then
         echo -e "${GREEN}✅ Frontend stopped${NC}"
     else
-        echo -e "${YELLOW}Frontend is not running${NC}"
+        echo -e "${RED}❌ Failed to stop frontend${NC}"
+        return 1
     fi
 }
 
@@ -196,8 +118,8 @@ show_status() {
 
     # Backend status
     echo -n "Backend:  "
-    if is_running "$PID_DIR/backend.pid"; then
-        echo -e "${GREEN}RUNNING${NC} (PID: $(cat $PID_DIR/backend.pid))"
+    if is_service_running "$BACKEND_SERVICE"; then
+        echo -e "${GREEN}RUNNING${NC}"
         echo "          http://localhost:8000"
     else
         echo -e "${RED}STOPPED${NC}"
@@ -205,14 +127,19 @@ show_status() {
 
     # Frontend status
     echo -n "Frontend: "
-    if is_running "$PID_DIR/frontend.pid"; then
-        echo -e "${GREEN}RUNNING${NC} (PID: $(cat $PID_DIR/frontend.pid))"
+    if is_service_running "$FRONTEND_SERVICE"; then
+        echo -e "${GREEN}RUNNING${NC}"
         echo "          http://localhost:5173"
     else
         echo -e "${RED}STOPPED${NC}"
     fi
 
     echo ""
+    echo -e "${BLUE}Detailed status:${NC}"
+    echo ""
+    sudo systemctl status "$BACKEND_SERVICE" --no-pager -l || true
+    echo ""
+    sudo systemctl status "$FRONTEND_SERVICE" --no-pager -l || true
 }
 
 # Function to show logs
@@ -220,21 +147,17 @@ show_logs() {
     echo -e "${BLUE}=== Recent Logs ===${NC}"
     echo ""
 
-    if [ -f "$PID_DIR/backend.log" ]; then
-        echo -e "${YELLOW}Backend (last 20 lines):${NC}"
-        tail -n 20 "$PID_DIR/backend.log"
-        echo ""
-    fi
+    echo -e "${YELLOW}Backend (last 20 lines):${NC}"
+    sudo journalctl -u "$BACKEND_SERVICE" -n 20 --no-pager
+    echo ""
 
-    if [ -f "$PID_DIR/frontend.log" ]; then
-        echo -e "${YELLOW}Frontend (last 20 lines):${NC}"
-        tail -n 20 "$PID_DIR/frontend.log"
-        echo ""
-    fi
+    echo -e "${YELLOW}Frontend (last 20 lines):${NC}"
+    sudo journalctl -u "$FRONTEND_SERVICE" -n 20 --no-pager
+    echo ""
 
     echo -e "${BLUE}To follow logs in real-time:${NC}"
-    echo "  Backend:  tail -f $PID_DIR/backend.log"
-    echo "  Frontend: tail -f $PID_DIR/frontend.log"
+    echo "  Backend:  sudo journalctl -u $BACKEND_SERVICE -f"
+    echo "  Frontend: sudo journalctl -u $FRONTEND_SERVICE -f"
 }
 
 # Main script logic
@@ -296,18 +219,16 @@ case "${1:-}" in
         echo -e "${YELLOW}========================================${NC}"
         echo ""
 
-        stop_frontend
-        echo ""
-        stop_backend
-
-        echo ""
-        echo -e "${BLUE}Waiting 2 seconds...${NC}"
+        echo -e "${BLUE}Restarting backend...${NC}"
+        sudo systemctl restart "$BACKEND_SERVICE"
         sleep 2
-        echo ""
+        echo -e "${GREEN}✅ Backend restarted${NC}"
 
-        start_backend
         echo ""
-        start_frontend
+        echo -e "${BLUE}Restarting frontend...${NC}"
+        sudo systemctl restart "$FRONTEND_SERVICE"
+        sleep 2
+        echo -e "${GREEN}✅ Frontend restarted${NC}"
 
         echo ""
         echo -e "${YELLOW}========================================${NC}"
