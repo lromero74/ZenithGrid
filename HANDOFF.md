@@ -434,3 +434,123 @@ After fixing prices, noticed duplicate entries for same pair/time:
 **Key Breakthrough:** User's question about chart prices
 **Final Solution:** 2-line code change (use candles instead of ticker)
 
+
+---
+
+# Pending Frontend Improvements
+**Date:** November 17, 2025
+**Status:** PARTIALLY COMPLETE ⚠️
+
+## Position Action Buttons (frontend/src/pages/Positions.tsx)
+
+### Issue
+Position cards had 5 action buttons that appeared functional but didn't work:
+- 🚫 Cancel - No handler
+- 💱 Close at market price - No handler  
+- 📊 AI Reasoning - ✅ WORKING
+- 💰 Add funds - No handler
+- 🔄 Refresh - No handler
+
+### Current Status
+**Partially Fixed** - Buttons now have onclick handlers:
+- ✅ Cancel - Collapses expanded position view
+- ⚠️ Close at market price - Opens confirmation modal (modal UI NOT YET IMPLEMENTED)
+- ✅ AI Reasoning - Opens AI logs modal (was already working)
+- ✅ Add funds - Opens existing Add Funds modal
+- ✅ Refresh - Refetches position data
+
+### TODO: Implement Close Confirmation Modal
+**Location**: `frontend/src/pages/Positions.tsx` after line ~2025
+
+Need to add modal UI similar to existing Add Funds modal:
+```tsx
+{showCloseConfirm && closeConfirmPositionId && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-slate-800 rounded-lg w-full max-w-md p-6">
+      <h2 className="text-xl font-bold mb-4 text-red-400">⚠️ Close Position at Market Price</h2>
+      
+      <p className="text-slate-300 mb-6">
+        This will immediately sell the entire position at the current market price. 
+        This action cannot be undone.
+      </p>
+      
+      <div className="flex gap-3">
+        <button
+          onClick={() => {
+            setShowCloseConfirm(false)
+            setCloseConfirmPositionId(null)
+          }}
+          className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg"
+          disabled={isProcessing}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleClosePosition}
+          className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold"
+          disabled={isProcessing}
+        >
+          {isProcessing ? 'Closing...' : 'Close Position'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+**Commit**: `74cc29e` - "Wire up position action buttons with proper handlers"
+
+---
+
+# Known Issues
+
+## Duplicate AI Opinions (Minor)
+**Status:** INVESTIGATING 🔍
+
+### Symptoms
+Bot sometimes logs two slightly different AI opinions within milliseconds:
+```
+18:08:18.340 - BUY 85% confidence
+18:08:18.311 - BUY 78% confidence
+```
+
+### Likely Causes
+1. Race condition in monitor loop (bot processed twice before last_signal_check updates)
+2. Batch analysis logging mechanism creating duplicates
+3. Retry logic
+
+### Impact
+- Cosmetic issue - doesn't affect trading
+- Both opinions usually agree on direction (BUY/SELL/HOLD)
+- Confidence percentages differ slightly
+
+### Next Steps
+- Monitor frequency of duplicates
+- Consider adding transaction-level locking
+- Review batch analysis logging flow
+
+## SQLAlchemy Greenlet Errors (Cosmetic)
+**Status:** WORKING BUT NOISY ⚠️
+
+### Symptoms
+```
+Error processing bot: greenlet_spawn has not been called; can't call await_only() here
+```
+
+### Impact
+- Errors appear in logs during cleanup phase
+- **Core functionality works** - AI analysis completes successfully
+- Errors happen AFTER analysis, during commit/cleanup
+
+### Current Mitigations
+- Set `autoflush=False` in async_session_maker
+- Added `pool_pre_ping=True` and `pool_recycle=3600`
+- Bot continues processing despite errors
+
+### Potential Solutions (Future)
+1. Upgrade SQLAlchemy/aiosqlite versions
+2. Refactor to use explicit transaction management
+3. Consider synchronous SQLite for simpler code (trade-off: less concurrent)
+
+**Commit**: `b9ecc71` - "Improve bot monitoring responsiveness and database stability"
+
