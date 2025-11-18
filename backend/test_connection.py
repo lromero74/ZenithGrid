@@ -11,7 +11,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.coinbase_client import CoinbaseClient
+from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 
 

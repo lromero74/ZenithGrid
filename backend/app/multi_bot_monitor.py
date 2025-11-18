@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_client import CoinbaseClient
+from app.coinbase_unified_client import CoinbaseClient
 from app.database import async_session_maker
 from app.models import Bot
 from app.services.order_monitor import OrderMonitor

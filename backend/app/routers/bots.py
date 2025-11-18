@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import AIBotLog, Bot, Position
 from app.strategies import StrategyDefinition, StrategyRegistry
-from app.coinbase_client import CoinbaseClient
+from app.coinbase_unified_client import CoinbaseClient
 from app.order_validation import calculate_minimum_budget_percentage
 
 logger = logging.getLogger(__name__)

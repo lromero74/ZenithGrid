@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_client import CoinbaseClient
+from app.coinbase_unified_client import CoinbaseClient
 from app.currency_utils import format_with_usd, get_quote_currency
 from app.models import AIBotLog, Bot, PendingOrder, Position, Signal, Trade
 from app.strategies import TradingStrategy

@@ -10,8 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_cdp_client import CoinbaseCDPClient
-from app.coinbase_client import CoinbaseClient
+from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db, init_db
 from app.models import Bot, MarketData, PendingOrder, Position, Signal, Trade
@@ -53,19 +52,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global instances - Auto-detect CDP vs Legacy API
-if settings.coinbase_cdp_key_name and settings.coinbase_cdp_private_key:
-    print("🔑 Using CDP API authentication (EC private key)")
-    coinbase_client = CoinbaseCDPClient(
-        key_name=settings.coinbase_cdp_key_name,
-        private_key=settings.coinbase_cdp_private_key
-    )
-elif settings.coinbase_api_key and settings.coinbase_api_secret:
-    print("🔑 Using legacy HMAC API authentication")
-    coinbase_client = CoinbaseClient()
-else:
-    print("⚠️  No API credentials configured")
-    coinbase_client = CoinbaseClient()  # Will fail on actual calls
+# Global instances - Unified client auto-detects CDP vs HMAC authentication
+coinbase_client = CoinbaseClient()  # Auto-detects auth from settings
 
 # Multi-bot monitor - monitors all active bots with their strategies
 # Monitor loop runs every 10s to check if any bots need processing

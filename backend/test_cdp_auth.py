@@ -3,14 +3,14 @@ Test CDP authentication with user's API key
 """
 
 import asyncio
-from app.coinbase_cdp_client import CoinbaseCDPClient
+from app.coinbase_unified_client import CoinbaseClient
 
 
 async def test_cdp_auth():
     """Test CDP client authentication"""
     try:
         # Load from the downloaded key file
-        client = CoinbaseCDPClient(key_file_path="/home/louis/Downloads/cdp_api_key.json")
+        client = CoinbaseClient(key_file_path="/home/louis/Downloads/cdp_api_key.json")
 
         print("Testing CDP authentication...")
 
