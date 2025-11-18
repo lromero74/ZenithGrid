@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import anthropic
+import httpx
 
 from app.config import settings
 from app.strategies import (
@@ -49,6 +50,73 @@ class AIAutonomousStrategy(TradingStrategy):
         # Track token usage
         self._total_tokens_used = 0
         self._last_analysis_time = None
+
+        # Track last web search time per position (for periodic search)
+        self._last_search_time: Dict[int, datetime] = {}
+
+    def _should_perform_web_search(
+        self,
+        position: Optional[Any],
+        action_context: str  # "open", "close", "hold", "dca"
+    ) -> bool:
+        """
+        Determine if we should perform a web search based on configuration and context.
+
+        Args:
+            position: Current position (None if considering opening)
+            action_context: What we're considering - "open", "close", "hold", "dca"
+
+        Returns:
+            bool: True if we should search
+        """
+        # Check if web search is enabled
+        if not self.config.get("use_web_search", False):
+            return False
+
+        # Opening a position
+        if action_context == "open" and position is None:
+            return self.config.get("search_on_open", True)
+
+        # Closing a position
+        if action_context == "close":
+            return self.config.get("search_on_close", True)
+
+        # Holding or DCA - check search_while_holding setting
+        search_mode = self.config.get("search_while_holding", "smart")
+
+        if search_mode == "never":
+            return False
+
+        if search_mode == "periodic":
+            # Check if enough time has passed since last search
+            if position and position.id in self._last_search_time:
+                hours_since_search = (datetime.utcnow() - self._last_search_time[position.id]).total_seconds() / 3600
+                interval = self.config.get("search_interval_hours", 6)
+                if hours_since_search < interval:
+                    return False
+            return True
+
+        if search_mode == "smart":
+            # Only search when considering significant actions
+            if action_context == "dca":
+                return True  # DCA is a significant decision
+
+            # For hold decisions, search if:
+            # - Holding for more than 24 hours
+            # - Price has moved significantly (>5%) from entry
+            if position:
+                holding_hours = (datetime.utcnow() - position.opened_at).total_seconds() / 3600
+                if holding_hours > 24:
+                    # Check if we've searched recently
+                    if position.id in self._last_search_time:
+                        hours_since_search = (datetime.utcnow() - self._last_search_time[position.id]).total_seconds() / 3600
+                        if hours_since_search < 6:  # Don't search more than every 6 hours for holds
+                            return False
+                    return True
+
+            return False  # Default: don't search for routine holds
+
+        return False
 
     def _format_price(self, price: float, product_id: str) -> str:
         """Format price with correct precision and currency based on product_id"""
@@ -231,6 +299,44 @@ class AIAutonomousStrategy(TradingStrategy):
                     type="text",
                     default="",
                     required=False
+                ),
+                StrategyParameter(
+                    name="use_web_search",
+                    display_name="Enable Web Search",
+                    description="Allow AI to search the web for recent news and sentiment (uses more tokens)",
+                    type="bool",
+                    default=False
+                ),
+                StrategyParameter(
+                    name="search_on_open",
+                    display_name="Search Before Opening Position",
+                    description="Search for news before opening a new position (recommended)",
+                    type="bool",
+                    default=True
+                ),
+                StrategyParameter(
+                    name="search_on_close",
+                    display_name="Search Before Closing Position",
+                    description="Search for news before closing a position (recommended)",
+                    type="bool",
+                    default=True
+                ),
+                StrategyParameter(
+                    name="search_while_holding",
+                    display_name="Search While Holding",
+                    description="When to search for news while holding: never, smart (only when considering action), or periodic",
+                    type="string",
+                    default="smart",
+                    options=["never", "smart", "periodic"]
+                ),
+                StrategyParameter(
+                    name="search_interval_hours",
+                    display_name="Periodic Search Interval (hours)",
+                    description="If search_while_holding is 'periodic', search every N hours",
+                    type="int",
+                    default=6,
+                    min_value=1,
+                    max_value=24
                 )
             ]
         )
@@ -260,7 +366,9 @@ class AIAutonomousStrategy(TradingStrategy):
         self,
         candles: List[Dict[str, Any]],
         current_price: float,
-        candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None
+        candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        position: Optional[Any] = None,
+        action_context: str = "hold"
     ) -> Optional[Dict[str, Any]]:
         """
         Use Claude AI to analyze market data and generate trading signals
@@ -269,6 +377,10 @@ class AIAutonomousStrategy(TradingStrategy):
         - Cache analyses for configured interval
         - Summarize data instead of sending raw candles
         - Use structured output for parsing
+
+        Web Search Integration:
+        - Performs web search when configured (open, close, smart/periodic while holding)
+        - Includes search results in AI prompt for informed decision making
         """
 
         # Check if we should skip analysis (token optimization)
@@ -279,6 +391,22 @@ class AIAutonomousStrategy(TradingStrategy):
         try:
             # Prepare market context (summarized to save tokens)
             market_context = self._prepare_market_context(candles, current_price)
+
+            # Determine product_id from position or config
+            product_id = None
+            if position and hasattr(position, 'product_id'):
+                product_id = position.product_id
+            elif 'product_id' in self.config:
+                product_id = self.config['product_id']
+
+            # Perform web search if configured
+            web_search_results = None
+            if product_id and self._should_perform_web_search(position, action_context):
+                web_search_results = await self._perform_web_search(product_id, action_context)
+                if web_search_results:
+                    market_context['web_search_results'] = web_search_results
+                    self._last_search_time = datetime.utcnow()
+                    logger.info(f"🔍 Web search results added to market context")
 
             # Call AI for analysis based on selected provider
             provider = self.config.get("ai_provider", "claude").lower()
@@ -403,17 +531,88 @@ class AIAutonomousStrategy(TradingStrategy):
         # }
         return None
 
-    async def _get_claude_analysis(self, market_context: Dict[str, Any]) -> Dict[str, Any]:
+    async def _perform_web_search(self, product_id: str, action_context: str) -> Optional[str]:
         """
-        Call Claude API for market analysis
+        Perform web search for recent crypto news and sentiment.
 
-        Uses structured prompt to get concise, parseable responses
+        This gives the AI access to real-time news, market sentiment, and
+        recent developments that could affect the trading decision.
+
+        Args:
+            product_id: Trading pair (e.g., "AAVE-BTC")
+            action_context: What we're considering ("open", "close", "hold", "dca")
+
+        Returns:
+            String summary of search results, or None if search fails
         """
+        try:
+            # Extract coin symbol (e.g., "AAVE" from "AAVE-BTC")
+            coin_symbol = product_id.split('-')[0] if '-' in product_id else product_id
 
+            # Construct search query based on context
+            if action_context == "open":
+                query = f"{coin_symbol} crypto news bullish bearish latest 24h"
+            elif action_context == "close":
+                query = f"{coin_symbol} crypto price prediction sell signals latest"
+            else:
+                query = f"{coin_symbol} cryptocurrency news latest developments"
+
+            logger.info(f"🔍 Performing web search for {coin_symbol}: '{query}'")
+
+            # Use Claude API with web search capability
+            try:
+                response = self.client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=500,  # Keep response concise to save tokens
+                    temperature=0,
+                    messages=[{
+                        "role": "user",
+                        "content": f"""Search the web for recent news about {coin_symbol} cryptocurrency and provide a brief summary (3-5 bullet points) covering:
+- Major news or announcements in the last 24-48 hours
+- Market sentiment (bullish/bearish/neutral)
+- Any significant price movements or predictions
+- Security concerns or red flags (if any)
+- Overall outlook
+
+Query: {query}
+
+Keep it concise and focused on actionable trading information."""
+                    }]
+                )
+
+                # Extract the text response
+                search_results = response.content[0].text.strip()
+
+                # Track token usage
+                self._total_tokens_used += response.usage.input_tokens + response.usage.output_tokens
+                logger.info(f"📊 Web Search - Input: {response.usage.input_tokens} tokens, Output: {response.usage.output_tokens} tokens")
+
+                logger.info(f"✅ Web search completed for {coin_symbol}")
+                return search_results
+
+            except Exception as api_error:
+                logger.warning(f"Web search API call failed: {api_error}. Returning placeholder.")
+                return f"""Web Search for {coin_symbol}:
+(Search temporarily unavailable - using cached/offline analysis)
+
+The AI will analyze based on technical data and historical patterns."""
+
+        except Exception as e:
+            logger.error(f"Web search error: {e}")
+            return None
+
+    def _build_standard_analysis_prompt(self, market_context: Dict[str, Any]) -> str:
+        """
+        Build standardized analysis prompt used by ALL AI providers (Claude, Gemini, Grok)
+
+        This ensures all AI models receive identical instructions and context,
+        making their performance directly comparable.
+        """
         risk_tolerance = self.config.get("risk_tolerance", "moderate")
         market_focus = self.config.get("market_focus", "BTC")
         custom_instructions = self.config.get("custom_instructions", "").strip()
 
+        # Sentiment info (if available)
         sentiment_info = ""
         if "sentiment" in market_context:
             sent = market_context["sentiment"]
@@ -426,16 +625,28 @@ class AIAutonomousStrategy(TradingStrategy):
 - Summary: {sent.get('summary', 'No sentiment data available')}
 """
 
+        # Web search results (if available)
+        web_search_info = ""
+        if "web_search_results" in market_context:
+            web_search_info = f"""
+**Real-Time Web Search Results:**
+{market_context['web_search_results']}
+"""
+
+        # Format price with appropriate precision
+        current_price = market_context['current_price']
+        price_str = f"{current_price:.8f}" if current_price < 1 else f"{current_price:.2f}"
+
         prompt = f"""You are an expert cryptocurrency trading AI analyzing market data.
 
 **Current Market Data:**
-- Current Price: {market_context['current_price']:.8f} BTC
+- Current Price: {price_str} BTC
 - 24h Change: {market_context['price_change_24h_pct']}%
 - Period High: {market_context['period_high']:.8f} BTC
 - Period Low: {market_context['period_low']:.8f} BTC
 - Volatility: {market_context['volatility']}%
 - Recent Price Trend: {[f"{p:.8f}" for p in market_context['recent_prices'][-5:]]}
-{sentiment_info}
+{sentiment_info}{web_search_info}
 **Trading Parameters:**
 - Risk Tolerance: {risk_tolerance}
 - Market Focus: {market_focus} pairs
@@ -458,6 +669,72 @@ Remember:
 - Suggest "hold" if market is unclear
 - Be {risk_tolerance} in your recommendations
 - Keep reasoning concise to save tokens"""
+
+        return prompt
+
+    def _build_standard_batch_analysis_prompt(self, pairs_data: Dict[str, Dict[str, Any]]) -> str:
+        """
+        Build standardized batch analysis prompt for ALL AI providers (Claude, Gemini, Grok)
+
+        Analyzes multiple trading pairs in a single API call for efficiency.
+        """
+        risk_tolerance = self.config.get("risk_tolerance", "moderate")
+
+        # Build summary for all pairs
+        pairs_summary = []
+        for product_id, data in pairs_data.items():
+            ctx = data.get("market_context", {})
+            price_str = self._format_price(ctx.get('current_price', 0), product_id)
+            recent_prices = ctx.get('recent_prices', [])[-3:]
+            pairs_summary.append(f"""
+**{product_id}:**
+- Current Price: {price_str}
+- 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
+- Volatility: {ctx.get('volatility', 0):.2f}%
+- Recent Trend: {recent_prices}""")
+
+        prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
+
+**Market Data for All Pairs:**
+{''.join(pairs_summary)}
+
+**Trading Parameters:**
+- Risk Tolerance: {risk_tolerance}
+
+**Your Task:**
+Analyze ALL pairs and respond with a JSON object where keys are product IDs and values are analysis objects. Format:
+
+{{
+  "ETH-BTC": {{
+    "action": "buy" | "hold" | "sell",
+    "confidence": 0-100,
+    "reasoning": "brief 1-2 sentence explanation",
+    "suggested_allocation_pct": 0-100,
+    "expected_profit_pct": 0-10
+  }},
+  "SOL-BTC": {{...}},
+  ...
+}}
+
+Remember:
+- Analyze each pair independently
+- Only suggest "buy" if you see clear profit opportunity
+- Only suggest "sell" if you're confident price will drop
+- Suggest "hold" if market is unclear
+- Be {risk_tolerance} in your recommendations
+- Keep reasoning concise to save tokens
+- Return valid JSON only (no markdown, no code blocks)"""
+
+        return prompt
+
+    async def _get_claude_analysis(self, market_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Call Claude API for market analysis
+
+        Uses standardized prompt template shared across all AI providers
+        """
+        # Use shared prompt template
+        prompt = self._build_standard_analysis_prompt(market_context)
 
         try:
             response = self.client.messages.create(
@@ -527,7 +804,7 @@ Remember:
         """
         Call Gemini API for market analysis
 
-        Uses structured prompt to get concise, parseable responses
+        Uses standardized prompt template shared across all AI providers
         """
         try:
             # Lazy import of Gemini library
@@ -556,54 +833,8 @@ Remember:
 
         genai.configure(api_key=api_key)
 
-        risk_tolerance = self.config.get("risk_tolerance", "moderate")
-        market_focus = self.config.get("market_focus", "BTC")
-        custom_instructions = self.config.get("custom_instructions", "").strip()
-
-        sentiment_info = ""
-        if "sentiment" in market_context:
-            sent = market_context["sentiment"]
-            sentiment_info = f"""
-**Market Sentiment & News:**
-- Twitter Sentiment: {sent.get('twitter_sentiment', 'N/A')}
-- News Headlines: {', '.join(sent.get('news_headlines', [])[:3])}
-- Reddit Sentiment: {sent.get('reddit_sentiment', 'N/A')}
-- Fear & Greed Index: {sent.get('fear_greed_index', 'N/A')}/100
-- Summary: {sent.get('summary', 'No sentiment data available')}
-"""
-
-        prompt = f"""You are an expert cryptocurrency trading AI analyzing market data.
-
-**Current Market Data:**
-- Current Price: {market_context['current_price']:.8f} BTC
-- 24h Change: {market_context['price_change_24h_pct']}%
-- Period High: {market_context['period_high']:.8f} BTC
-- Period Low: {market_context['period_low']:.8f} BTC
-- Volatility: {market_context['volatility']}%
-- Recent Price Trend: {[f"{p:.8f}" for p in market_context['recent_prices'][-5:]]}
-{sentiment_info}
-**Trading Parameters:**
-- Risk Tolerance: {risk_tolerance}
-- Market Focus: {market_focus} pairs
-{f"- Custom Instructions: {custom_instructions}" if custom_instructions else ""}
-
-**Your Task:**
-Analyze this data (including sentiment/news if provided) and provide a trading recommendation. Consider both technical patterns AND real-world sentiment/news. Respond ONLY with a JSON object (no markdown formatting) in this exact format:
-
-{{
-  "action": "buy" or "hold" or "sell",
-  "confidence": 0-100,
-  "reasoning": "brief explanation (1-2 sentences)",
-  "suggested_allocation_pct": 0-100,
-  "expected_profit_pct": 0-10
-}}
-
-Remember:
-- Only suggest "buy" if you see clear profit opportunity
-- Only suggest "sell" if you're confident price will drop
-- Suggest "hold" if market is unclear
-- Be {risk_tolerance} in your recommendations
-- Keep reasoning concise"""
+        # Use shared prompt template
+        prompt = self._build_standard_analysis_prompt(market_context)
 
         try:
             model = genai.GenerativeModel(
@@ -709,6 +940,8 @@ Remember:
     async def _get_gemini_batch_analysis(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """
         Analyze multiple pairs in a single Gemini API call
+
+        Uses standardized batch prompt template shared across all AI providers
         """
         try:
             import google.generativeai as genai
@@ -725,49 +958,8 @@ Remember:
 
         genai.configure(api_key=api_key)
 
-        risk_tolerance = self.config.get("risk_tolerance", "moderate")
-
-        # Build batch prompt with all pairs
-        pairs_summary = []
-        for product_id, data in pairs_data.items():
-            ctx = data.get("market_context", {})
-            price_str = self._format_price(ctx.get('current_price', 0), product_id)
-            pairs_summary.append(f"""
-**{product_id}:**
-- Current Price: {price_str}
-- 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
-- Volatility: {ctx.get('volatility', 0):.2f}%
-- Recent Trend: {ctx.get('recent_prices', [])[-3:]}""")
-
-        prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
-
-**Market Data for All Pairs:**
-{''.join(pairs_summary)}
-
-**Trading Parameters:**
-- Risk Tolerance: {risk_tolerance}
-
-**Your Task:**
-Analyze ALL pairs and respond with a JSON object where keys are product IDs and values are analysis objects. Format:
-
-{{
-  "ETH-BTC": {{
-    "action": "buy" | "hold" | "sell",
-    "confidence": 0-100,
-    "reasoning": "brief 1-2 sentence explanation",
-    "suggested_allocation_pct": 0-100,
-    "expected_profit_pct": 0-10
-  }},
-  "SOL-BTC": {{...}},
-  ...
-}}
-
-Rules:
-- Analyze each pair independently
-- Only suggest "buy" if clear profit opportunity
-- Be {risk_tolerance} in recommendations
-- Keep reasoning concise
-- Return valid JSON only (no markdown)"""
+        # Use shared batch prompt template
+        prompt = self._build_standard_batch_analysis_prompt(pairs_data)
 
         try:
             model = genai.GenerativeModel(
@@ -847,6 +1039,8 @@ Rules:
     async def _get_claude_batch_analysis(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """
         Analyze multiple pairs in a single Claude API call
+
+        Uses standardized batch prompt template shared across all AI providers
         """
         try:
             from anthropic import AsyncAnthropic
@@ -861,48 +1055,8 @@ Rules:
             return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
                     for pid in pairs_data.keys()}
 
-        risk_tolerance = self.config.get("risk_tolerance", "moderate")
-
-        # Build batch prompt with all pairs
-        pairs_summary = []
-        for product_id, data in pairs_data.items():
-            ctx = data.get("market_context", {})
-            pairs_summary.append(f"""
-**{product_id}:**
-- Current Price: {ctx.get('current_price', 0):.8f} BTC
-- 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
-- Volatility: {ctx.get('volatility', 0):.2f}%
-- Recent Trend: {ctx.get('recent_prices', [])[-3:]}""")
-
-        prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
-
-**Market Data for All Pairs:**
-{''.join(pairs_summary)}
-
-**Trading Parameters:**
-- Risk Tolerance: {risk_tolerance}
-
-**Your Task:**
-Analyze ALL pairs and respond with a JSON object where keys are product IDs and values are analysis objects. Format:
-
-{{
-  "ETH-BTC": {{
-    "action": "buy" | "hold" | "sell",
-    "confidence": 0-100,
-    "reasoning": "brief 1-2 sentence explanation",
-    "suggested_allocation_pct": 0-100,
-    "expected_profit_pct": 0-10
-  }},
-  "SOL-BTC": {{...}},
-  ...
-}}
-
-Rules:
-- Analyze each pair independently
-- Only suggest "buy" if clear profit opportunity
-- Be {risk_tolerance} in recommendations
-- Keep reasoning concise
-- Return valid JSON only (no markdown, no code blocks)"""
+        # Use shared batch prompt template
+        prompt = self._build_standard_batch_analysis_prompt(pairs_data)
 
         try:
             client = AsyncAnthropic(api_key=api_key)
@@ -972,6 +1126,8 @@ Rules:
     async def _get_grok_analysis(self, market_context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Call Grok API for market analysis (uses OpenAI-compatible API)
+
+        Uses standardized prompt template shared across all AI providers
         """
         try:
             from openai import AsyncOpenAI
@@ -996,28 +1152,8 @@ Rules:
                 "expected_profit_pct": 0
             }
 
-        risk_tolerance = self.config.get("risk_tolerance", "moderate")
-
-        prompt = f"""You are an expert cryptocurrency trading AI analyzing market data.
-
-**Current Market Data:**
-- Current Price: {market_context['current_price']}
-- 24h Change: {market_context['price_change_24h_pct']}%
-- Period High: {market_context['period_high']}
-- Period Low: {market_context['period_low']}
-- Volatility: {market_context['volatility']}%
-
-**Trading Parameters:**
-- Risk Tolerance: {risk_tolerance}
-
-Respond ONLY with a JSON object (no markdown) in this exact format:
-{{
-  "action": "buy" or "hold" or "sell",
-  "confidence": 0-100,
-  "reasoning": "brief explanation (1-2 sentences)",
-  "suggested_allocation_pct": 0-100,
-  "expected_profit_pct": 0-10
-}}"""
+        # Use shared prompt template
+        prompt = self._build_standard_analysis_prompt(market_context)
 
         try:
             client = AsyncOpenAI(
@@ -1076,6 +1212,8 @@ Respond ONLY with a JSON object (no markdown) in this exact format:
     async def _get_grok_batch_analysis(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """
         Analyze multiple pairs in a single Grok API call
+
+        Uses standardized batch prompt template shared across all AI providers
         """
         try:
             from openai import AsyncOpenAI
@@ -1090,31 +1228,8 @@ Respond ONLY with a JSON object (no markdown) in this exact format:
             return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
                     for pid in pairs_data.keys()}
 
-        risk_tolerance = self.config.get("risk_tolerance", "moderate")
-
-        # Build batch prompt
-        pairs_summary = []
-        for product_id, data in pairs_data.items():
-            ctx = data.get("market_context", {})
-            pairs_summary.append(f"""
-**{product_id}:**
-- Current Price: {ctx.get('current_price', 0):.8f} BTC
-- 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
-- Volatility: {ctx.get('volatility', 0):.2f}%""")
-
-        prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs. Provide trading recommendations for ALL pairs in JSON.
-
-**Market Data:**
-{''.join(pairs_summary)}
-
-**Parameters:** Risk Tolerance: {risk_tolerance}
-
-Respond with JSON (no markdown):
-{{
-  "ETH-BTC": {{"action": "buy"|"hold"|"sell", "confidence": 0-100, "reasoning": "brief", "suggested_allocation_pct": 0-100, "expected_profit_pct": 0-10}},
-  "SOL-BTC": {{...}},
-  ...
-}}"""
+        # Use shared batch prompt template
+        prompt = self._build_standard_batch_analysis_prompt(pairs_data)
 
         try:
             client = AsyncOpenAI(api_key=api_key, base_url="https://api.x.ai/v1")

@@ -67,6 +67,8 @@ class BotResponse(BaseModel):
     last_signal_check: Optional[datetime]
     open_positions_count: int = 0
     total_positions_count: int = 0
+    total_pnl_usd: float = 0.0
+    avg_daily_pnl_usd: float = 0.0
 
     class Config:
         from_attributes = True
@@ -189,25 +191,33 @@ async def list_bots(
     result = await db.execute(query)
     bots = result.scalars().all()
 
-    # Add position counts for each bot
+    # Add position counts and PnL for each bot
     bot_responses = []
     for bot in bots:
-        # Count positions
-        open_pos_query = select(Position).where(
-            Position.bot_id == bot.id,
-            Position.status == "open"
-        )
-        total_pos_query = select(Position).where(Position.bot_id == bot.id)
+        # Get all positions for this bot
+        all_pos_query = select(Position).where(Position.bot_id == bot.id)
+        all_pos_result = await db.execute(all_pos_query)
+        all_positions = all_pos_result.scalars().all()
 
-        open_result = await db.execute(open_pos_query)
-        total_result = await db.execute(total_pos_query)
+        open_positions = [p for p in all_positions if p.status == "open"]
+        closed_positions = [p for p in all_positions if p.status == "closed"]
 
-        open_count = len(open_result.scalars().all())
-        total_count = len(total_result.scalars().all())
+        # Calculate total PnL (only from closed positions)
+        # Note: Open positions don't have realized profit_usd yet
+        total_pnl_usd = 0.0
+        for pos in closed_positions:
+            if pos.profit_usd:
+                total_pnl_usd += pos.profit_usd
+
+        # Calculate avg daily PnL (total PnL / days since bot created)
+        days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
+        avg_daily_pnl_usd = total_pnl_usd / days_active if days_active > 0 else 0.0
 
         bot_response = BotResponse.model_validate(bot)
-        bot_response.open_positions_count = open_count
-        bot_response.total_positions_count = total_count
+        bot_response.open_positions_count = len(open_positions)
+        bot_response.total_positions_count = len(all_positions)
+        bot_response.total_pnl_usd = total_pnl_usd
+        bot_response.avg_daily_pnl_usd = avg_daily_pnl_usd
         bot_responses.append(bot_response)
 
     return bot_responses

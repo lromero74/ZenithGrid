@@ -508,7 +508,7 @@ function Bots() {
         </button>
       </div>
 
-      {/* Bot List */}
+      {/* Bot List - 3Commas-style Table */}
       {bots.length === 0 ? (
         <div className="bg-slate-800 rounded-lg p-12 text-center">
           <Activity className="w-16 h-16 text-slate-600 mx-auto mb-4" />
@@ -522,141 +522,224 @@ function Bots() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {bots.map((bot) => (
-            <div
-              key={bot.id}
-              className="bg-slate-800 rounded-lg p-6 border border-slate-700 hover:border-slate-600 transition-colors"
-            >
-              {/* Bot Header with Toggle */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold">{bot.name}</h3>
-                  {bot.description && (
-                    <p className="text-sm text-slate-400 mt-1">{bot.description}</p>
-                  )}
-                </div>
-                {/* Toggle Switch */}
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={bot.is_active}
-                    onChange={() => {
-                      if (bot.is_active) {
-                        stopBot.mutate(bot.id)
-                      } else {
-                        startBot.mutate(bot.id)
-                      }
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </label>
-              </div>
+        <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-900 border-b border-slate-700">
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Name</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Strategy</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Pair</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Active trades</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">PnL</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Avg. daily PnL</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Budget</th>
+                  <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Status</th>
+                  <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bots.map((bot) => {
+                  const botPairs = ((bot as any).product_ids || [bot.product_id])
+                  const strategyName = strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
+                  const aiProvider = bot.strategy_config?.ai_provider
 
-              {/* Bot Details */}
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Strategy:</span>
-                  <span className="text-white font-medium">
-                    {strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type}
-                  </span>
-                </div>
-                {bot.strategy_type === 'ai_autonomous' && bot.strategy_config?.ai_provider && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-400">AI Provider:</span>
-                    <span className="text-purple-400 font-medium">
-                      {bot.strategy_config.ai_provider === 'claude' ? '🤖 Claude'
-                        : bot.strategy_config.ai_provider === 'gemini' ? '🤖 Gemini'
-                        : bot.strategy_config.ai_provider === 'grok' ? '🤖 Grok'
-                        : `🤖 ${bot.strategy_config.ai_provider}`}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Pairs:</span>
-                  <span className="text-white font-medium text-xs">
-                    {((bot as any).product_ids || [bot.product_id]).join(', ')}
-                  </span>
-                </div>
-                {bot.budget_percentage > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-400">Budget:</span>
-                    <span className="text-emerald-400 font-medium">
-                      {bot.budget_percentage}% of portfolio
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Status:</span>
-                  <span className={`font-medium ${bot.is_active ? 'text-green-400' : 'text-slate-400'}`}>
-                    {bot.is_active ? 'Running' : 'Stopped'}
-                  </span>
-                </div>
-              </div>
+                  return (
+                    <tr
+                      key={bot.id}
+                      className="border-b border-slate-700 hover:bg-slate-750 transition-colors"
+                    >
+                      {/* Name & Description */}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <div className="font-medium text-white">{bot.name}</div>
+                          {bot.description && (
+                            <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                              {bot.description}
+                            </div>
+                          )}
+                        </div>
+                      </td>
 
-              {/* Actions */}
-              <div className="flex items-center space-x-2">
-                {bot.strategy_type === 'ai_autonomous' && (
-                  <button
-                    onClick={() => setAiLogsBotId(bot.id)}
-                    className="flex-1 flex items-center justify-center space-x-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 px-3 py-2 rounded transition-colors"
-                    title="View AI Reasoning Logs"
-                  >
-                    <Brain className="w-4 h-4" />
-                    <span>AI Logs</span>
-                  </button>
-                )}
-                {/* ... Menu */}
-                <div className="relative">
-                  <button
-                    onClick={() => setOpenMenuId(openMenuId === bot.id ? null : bot.id)}
-                    className="p-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
-                    title="More actions"
-                  >
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
+                      {/* Strategy */}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <div className="text-sm text-white">{strategyName}</div>
+                          {aiProvider && (
+                            <div className="text-xs text-purple-400 mt-0.5">
+                              {aiProvider === 'claude' ? '🤖 Claude'
+                                : aiProvider === 'gemini' ? '🤖 Gemini'
+                                : aiProvider === 'grok' ? '🤖 Grok'
+                                : `🤖 ${aiProvider}`}
+                            </div>
+                          )}
+                        </div>
+                      </td>
 
-                  {/* Dropdown Menu */}
-                  {openMenuId === bot.id && (
-                    <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-10">
-                      <button
-                        onClick={() => {
-                          handleOpenEdit(bot)
-                          setOpenMenuId(null)
-                        }}
-                        className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-t-lg transition-colors"
-                      >
-                        <Edit className="w-4 h-4" />
-                        <span>Edit Bot</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          cloneBot.mutate(bot.id)
-                          setOpenMenuId(null)
-                        }}
-                        className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
-                      >
-                        <Copy className="w-4 h-4 text-blue-400" />
-                        <span>Clone Bot</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleDelete(bot)
-                          setOpenMenuId(null)
-                        }}
-                        disabled={bot.is_active}
-                        className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-b-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-400" />
-                        <span>Delete Bot</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+                      {/* Pairs */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          {botPairs.length === 1 ? (
+                            <span className="text-sm text-white font-mono">
+                              {botPairs[0]}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-white font-mono" title={botPairs.join(', ')}>
+                              {botPairs[0]} +{botPairs.length - 1}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Active Trades */}
+                      <td className="px-4 py-3">
+                        {bot.strategy_config?.max_concurrent_deals ? (
+                          <div className="text-sm">
+                            <span className="text-blue-400 font-medium">
+                              {(bot as any).open_positions_count || 0}
+                            </span>
+                            <span className="text-slate-500"> / </span>
+                            <span className="text-slate-400">
+                              {bot.strategy_config.max_concurrent_deals}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-slate-500">—</span>
+                        )}
+                      </td>
+
+                      {/* PnL */}
+                      <td className="px-4 py-3 text-right">
+                        {(() => {
+                          const pnl = (bot as any).total_pnl_usd || 0
+                          const isPositive = pnl > 0
+                          const isNegative = pnl < 0
+                          return (
+                            <span className={`text-sm font-medium ${
+                              isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
+                            }`}>
+                              {isPositive ? '+' : ''}${pnl.toFixed(2)} {isPositive ? '↑' : isNegative ? '↓' : ''}
+                            </span>
+                          )
+                        })()}
+                      </td>
+
+                      {/* Avg Daily PnL */}
+                      <td className="px-4 py-3 text-right">
+                        {(() => {
+                          const avgPnl = (bot as any).avg_daily_pnl_usd || 0
+                          const isPositive = avgPnl > 0
+                          const isNegative = avgPnl < 0
+                          return (
+                            <span className={`text-sm font-medium ${
+                              isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
+                            }`}>
+                              {isPositive ? '+' : ''}${avgPnl.toFixed(2)} {isPositive ? '↑' : isNegative ? '↓' : ''}
+                            </span>
+                          )
+                        })()}
+                      </td>
+
+                      {/* Budget */}
+                      <td className="px-4 py-3">
+                        {bot.budget_percentage > 0 ? (
+                          <span className="text-sm text-emerald-400 font-medium">
+                            {bot.budget_percentage}%
+                          </span>
+                        ) : (
+                          <span className="text-sm text-slate-500">All</span>
+                        )}
+                      </td>
+
+                      {/* Status Toggle */}
+                      <td className="px-4 py-3">
+                        <div className="flex justify-center">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={bot.is_active}
+                              onChange={() => {
+                                if (bot.is_active) {
+                                  stopBot.mutate(bot.id)
+                                } else {
+                                  startBot.mutate(bot.id)
+                                }
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                          </label>
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-2">
+                          {bot.strategy_type === 'ai_autonomous' && (
+                            <button
+                              onClick={() => setAiLogsBotId(bot.id)}
+                              className="p-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded transition-colors"
+                              title="View AI Reasoning Logs"
+                            >
+                              <Brain className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* More Actions Menu */}
+                          <div className="relative">
+                            <button
+                              onClick={() => setOpenMenuId(openMenuId === bot.id ? null : bot.id)}
+                              className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
+                              title="More actions"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            {openMenuId === bot.id && (
+                              <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-10">
+                                <button
+                                  onClick={() => {
+                                    handleOpenEdit(bot)
+                                    setOpenMenuId(null)
+                                  }}
+                                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-t-lg transition-colors"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                  <span>Edit Bot</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    cloneBot.mutate(bot.id)
+                                    setOpenMenuId(null)
+                                  }}
+                                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
+                                >
+                                  <Copy className="w-4 h-4 text-blue-400" />
+                                  <span>Clone Bot</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    handleDelete(bot)
+                                    setOpenMenuId(null)
+                                  }}
+                                  disabled={bot.is_active}
+                                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left rounded-b-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-400" />
+                                  <span>Delete Bot</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
