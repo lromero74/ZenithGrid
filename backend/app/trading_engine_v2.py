@@ -626,13 +626,27 @@ class StrategyTradingEngine:
         Returns:
             Dict with action taken and details
         """
+        # Get current state FIRST (needed for web search context)
+        position = await self.get_active_position()
+
+        # Determine action context for web search
+        action_context = "hold"  # Default for positions that exist
+        if position is None:
+            action_context = "open"  # Considering opening a new position
+        # (We'll update to "close" or "dca" later based on actual decision)
+
         # Use pre-analyzed signal if provided (from batch mode), otherwise analyze now
         if pre_analyzed_signal:
             signal_data = pre_analyzed_signal
             logger.info(f"  Using pre-analyzed signal from batch mode (confidence: {signal_data.get('confidence')}%)")
         else:
-            # Analyze signal using strategy
-            signal_data = await self.strategy.analyze_signal(candles, current_price)
+            # Analyze signal using strategy (with position and context for web search)
+            signal_data = await self.strategy.analyze_signal(
+                candles,
+                current_price,
+                position=position,
+                action_context=action_context
+            )
 
         if not signal_data:
             return {
@@ -640,9 +654,6 @@ class StrategyTradingEngine:
                 "reason": "No signal detected",
                 "signal": None
             }
-
-        # Get current state
-        position = await self.get_active_position()
 
         # Get bot's available balance (budget-based or total portfolio)
         # Calculate aggregate portfolio value for bot budgeting
