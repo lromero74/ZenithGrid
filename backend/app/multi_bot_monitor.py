@@ -300,38 +300,68 @@ class MultiBotMonitor:
 
             # Collect market data for pairs we're analyzing
             pairs_data = {}
+            failed_pairs = {}  # Track pairs that failed to load data
             logger.info(f"  Fetching market data for {len(pairs_to_analyze)} pairs...")
 
+            # Check which pairs have open positions (critical to retry)
+            pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+
             for product_id in pairs_to_analyze:
-                try:
-                    # Get candles first (they have reliable prices!)
-                    candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
+                has_open_position = product_id in pairs_with_positions
+                max_retries = 3 if has_open_position else 1  # Retry more for open positions
 
-                    # Get current price from most recent candle (more reliable than ticker!)
-                    if not candles or len(candles) == 0:
-                        logger.warning(f"  No candles available for {product_id}, skipping")
-                        continue
+                success = False
+                last_error = None
 
-                    current_price = float(candles[-1].get("close", 0))
+                for attempt in range(max_retries):
+                    try:
+                        if attempt > 0:
+                            logger.info(f"  🔄 Retry {attempt}/{max_retries-1} for {product_id}")
+                            await asyncio.sleep(0.5 * attempt)  # Brief backoff
 
-                    # Validate price
-                    if current_price is None or current_price <= 0:
-                        logger.warning(f"  Invalid price for {product_id}: {current_price}, skipping")
-                        continue
+                        # Get candles first (they have reliable prices!)
+                        candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
 
-                    # Prepare market context
-                    market_context = strategy._prepare_market_context(candles, current_price)
+                        # Get current price from most recent candle (more reliable than ticker!)
+                        if not candles or len(candles) == 0:
+                            last_error = "No candles available from API"
+                            if attempt < max_retries - 1:
+                                continue  # Retry
+                            logger.warning(f"  ⚠️  {product_id}: {last_error} after {max_retries} attempts")
+                            break
 
-                    pairs_data[product_id] = {
-                        "current_price": current_price,
-                        "candles": candles,
-                        "market_context": market_context
-                    }
+                        current_price = float(candles[-1].get("close", 0))
 
-                except Exception as e:
-                    logger.error(f"  Error fetching data for {product_id}: {e}")
-                    # Skip pairs with errors instead of adding them with invalid data
-                    continue
+                        # Validate price
+                        if current_price is None or current_price <= 0:
+                            last_error = f"Invalid price: {current_price}"
+                            if attempt < max_retries - 1:
+                                continue  # Retry
+                            logger.warning(f"  ⚠️  {product_id}: {last_error} after {max_retries} attempts")
+                            break
+
+                        # Prepare market context
+                        market_context = strategy._prepare_market_context(candles, current_price)
+
+                        pairs_data[product_id] = {
+                            "current_price": current_price,
+                            "candles": candles,
+                            "market_context": market_context
+                        }
+                        success = True
+                        break  # Success, exit retry loop
+
+                    except Exception as e:
+                        last_error = str(e)
+                        if attempt < max_retries - 1:
+                            logger.warning(f"  ⚠️  {product_id}: Error on attempt {attempt+1}: {e}, retrying...")
+                            continue  # Retry
+                        logger.error(f"  ❌ {product_id}: Error after {max_retries} attempts: {e}")
+
+                # Track failures for open positions
+                if not success and has_open_position:
+                    failed_pairs[product_id] = last_error
+                    logger.error(f"  🚨 CRITICAL: Failed to fetch data for open position {product_id}: {last_error}")
 
             # Call batch AI analysis (1 API call for ALL pairs!)
             logger.info(f"  🧠 Calling AI for batch analysis of {len(pairs_data)} pairs...")
@@ -369,6 +399,18 @@ class MultiBotMonitor:
                 except Exception as e:
                     logger.error(f"  Error processing {product_id} result: {e}")
                     results[product_id] = {"error": str(e)}
+
+            # Log errors to positions that failed to load market data
+            if failed_pairs:
+                from datetime import datetime
+                logger.info(f"  💾 Logging {len(failed_pairs)} market data errors to positions...")
+                for product_id, error_msg in failed_pairs.items():
+                    # Find the position for this product
+                    position = next((p for p in open_positions if p.product_id == product_id), None)
+                    if position:
+                        position.last_error_message = f"Market data fetch failed: {error_msg}"
+                        position.last_error_timestamp = datetime.utcnow()
+                        logger.info(f"    📝 Position #{position.id} ({product_id}): Error logged")
 
             # Note: bot.last_signal_check is updated BEFORE processing starts (in monitor_loop)
             # to prevent race conditions where the same bot gets processed twice
