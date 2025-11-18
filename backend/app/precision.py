@@ -40,10 +40,9 @@ def format_quote_amount(amount: float, quote_currency: str) -> str:
     # Round down to avoid exceeding limits
     rounded = decimal_amount.quantize(Decimal(quantize_str), rounding=ROUND_DOWN)
 
-    # Convert to string and remove trailing zeros and decimal point if not needed
+    # Convert to string - Coinbase requires fixed precision format
+    # DO NOT strip trailing zeros - Coinbase validates exact decimal format
     result = str(rounded)
-    if '.' in result:
-        result = result.rstrip('0').rstrip('.')
 
     return result
 
@@ -75,9 +74,8 @@ def format_base_amount(amount: float, base_currency: str) -> str:
     # Round down to avoid exceeding limits
     rounded = decimal_amount.quantize(Decimal(quantize_str), rounding=ROUND_DOWN)
 
-    # Convert to string and remove trailing zeros
+    # Convert to string - Coinbase requires fixed precision format
+    # DO NOT strip trailing zeros - Coinbase validates exact decimal format
     result = str(rounded)
-    if '.' in result:
-        result = result.rstrip('0').rstrip('.')
 
     return result
