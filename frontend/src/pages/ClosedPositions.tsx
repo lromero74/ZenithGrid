@@ -238,11 +238,13 @@ function ClosedPositions() {
                               <div>
                                 <p className="text-slate-500 text-xs mb-1">Type</p>
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  trade.trade_type === 'initial'
+                                  trade.side === 'sell'
+                                    ? 'bg-purple-500/20 text-purple-400'
+                                    : trade.trade_type === 'initial'
                                     ? 'bg-blue-500/20 text-blue-400'
                                     : 'bg-orange-500/20 text-orange-400'
                                 }`}>
-                                  {trade.trade_type === 'initial' ? 'Base Order' : 'DCA'}
+                                  {trade.side === 'sell' ? 'Take Profit' : trade.trade_type === 'initial' ? 'Base Order' : 'DCA'}
                                 </span>
                               </div>
                               <div>
