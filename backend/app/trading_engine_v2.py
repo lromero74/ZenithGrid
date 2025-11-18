@@ -332,8 +332,15 @@ class StrategyTradingEngine:
         Returns:
             Tuple of (trade, profit_quote, profit_percentage)
         """
-        base_amount = position.total_base_acquired
+        # Sell 99.99% to prevent precision/rounding rejections from Coinbase
+        # Leaves tiny "dust" amount but ensures sell executes successfully
+        # The 0.01% dust can be cleaned up later
+        base_amount = position.total_base_acquired * 0.9999
         quote_received = base_amount * current_price
+
+        # Log the dust amount
+        dust_amount = position.total_base_acquired - base_amount
+        logger.info(f"  💰 Selling {base_amount:.8f} {self.product_id.split('-')[0]} (leaving {dust_amount:.8f} dust)")
 
         # Execute order via TradingClient (currency-agnostic)
         order_id = None
