@@ -1230,6 +1230,9 @@ Respond with JSON (no markdown):
             # Use the position's initial balance for consistent DCA sizing
             btc_amount = position.initial_quote_balance * (safety_order_pct / 100.0)
 
+            # Round to 8 decimal places (satoshi precision) to avoid Coinbase precision errors
+            btc_amount = round(btc_amount, 8)
+
             # Don't exceed position budget
             remaining_budget = position.max_quote_allowed - position.total_quote_spent
             btc_amount = min(btc_amount, remaining_budget)
