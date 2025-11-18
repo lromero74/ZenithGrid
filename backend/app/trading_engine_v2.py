@@ -95,7 +95,11 @@ class StrategyTradingEngine:
 
     async def get_active_position(self) -> Optional[Position]:
         """Get currently active position for this bot/pair combination"""
-        query = select(Position).where(
+        from sqlalchemy.orm import selectinload
+
+        query = select(Position).options(
+            selectinload(Position.trades)  # Eager load trades to avoid greenlet errors in should_buy()
+        ).where(
             Position.bot_id == self.bot.id,
             Position.product_id == self.product_id,  # Filter by pair for multi-pair support
             Position.status == "open"
