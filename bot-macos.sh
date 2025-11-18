@@ -25,6 +25,15 @@ is_running() {
 
 # Start backend
 start_backend() {
+    # Kill any orphaned backend server processes on port 8100
+    # Use -sTCP:LISTEN to only get the server process, not connected clients
+    local orphaned=$(lsof -ti:8100 -sTCP:LISTEN 2>/dev/null)
+    if [ -n "$orphaned" ]; then
+        echo -e "${YELLOW}Killing orphaned backend server on port 8100...${NC}"
+        kill -9 $orphaned 2>/dev/null
+        sleep 1
+    fi
+
     if is_running "$BACKEND_PID"; then
         echo -e "${YELLOW}Backend already running (PID: $(cat $BACKEND_PID))${NC}"
         return
@@ -41,6 +50,15 @@ start_backend() {
 
 # Start frontend
 start_frontend() {
+    # Kill any orphaned frontend server processes on port 5173
+    # Use -sTCP:LISTEN to only get the server process, not connected clients (browsers)
+    local orphaned=$(lsof -ti:5173 -sTCP:LISTEN 2>/dev/null)
+    if [ -n "$orphaned" ]; then
+        echo -e "${YELLOW}Killing orphaned frontend server on port 5173...${NC}"
+        kill -9 $orphaned 2>/dev/null
+        sleep 1
+    fi
+
     if is_running "$FRONTEND_PID"; then
         echo -e "${YELLOW}Frontend already running (PID: $(cat $FRONTEND_PID))${NC}"
         return
