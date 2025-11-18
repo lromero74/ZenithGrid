@@ -251,10 +251,20 @@ class CoinbaseCDPClient:
             "market_market_ioc": {}
         }
 
+        # Extract currencies from product_id for proper precision formatting
+        if '-' in product_id:
+            base_currency, quote_currency = product_id.split('-')
+        else:
+            base_currency, quote_currency = "ETH", "BTC"  # fallback
+
         if size:
-            order_config["market_market_ioc"]["base_size"] = str(size)
+            # Format base amount with proper precision
+            formatted_size = format_base_amount(float(size), base_currency)
+            order_config["market_market_ioc"]["base_size"] = formatted_size
         elif funds:
-            order_config["market_market_ioc"]["quote_size"] = str(funds)
+            # Format quote amount with proper precision
+            formatted_funds = format_quote_amount(float(funds), quote_currency)
+            order_config["market_market_ioc"]["quote_size"] = formatted_funds
         else:
             raise ValueError("Must specify either size or funds")
 
@@ -297,12 +307,22 @@ class CoinbaseCDPClient:
             }
         }
 
+        # Extract currencies from product_id for proper precision formatting
+        if '-' in product_id:
+            base_currency, quote_currency = product_id.split('-')
+        else:
+            base_currency, quote_currency = "ETH", "BTC"  # fallback
+
         if size:
-            order_config["limit_limit_gtc"]["base_size"] = str(size)
+            # Format base amount with proper precision
+            formatted_size = format_base_amount(float(size), base_currency)
+            order_config["limit_limit_gtc"]["base_size"] = formatted_size
         elif funds:
             # For limit orders with funds, we calculate base size from limit price
             base_size = float(funds) / limit_price
-            order_config["limit_limit_gtc"]["base_size"] = f"{base_size:.8f}"
+            # Format with proper precision
+            formatted_base_size = format_base_amount(base_size, base_currency)
+            order_config["limit_limit_gtc"]["base_size"] = formatted_base_size
         else:
             raise ValueError("Must specify either size or funds")
 
