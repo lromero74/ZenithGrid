@@ -22,6 +22,7 @@ export interface Position {
   pending_orders_count?: number;  // Count of unfilled limit orders (for Active orders display)
   last_error_message?: string | null;  // Last error message (like 3Commas - for UI display)
   last_error_timestamp?: string | null;  // When the error occurred
+  notes?: string | null;  // User notes for position (like 3Commas)
 }
 
 export interface Trade {

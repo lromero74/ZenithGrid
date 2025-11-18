@@ -146,6 +146,9 @@ class Position(Base):
     last_error_message = Column(String, nullable=True)  # Last error message (e.g., from failed DCA)
     last_error_timestamp = Column(DateTime, nullable=True)  # When the error occurred
 
+    # Notes (like 3Commas - user can add notes to positions)
+    notes = Column(Text, nullable=True)  # User notes for this position
+
     # Relationships
     bot = relationship("Bot", back_populates="positions")
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")

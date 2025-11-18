@@ -1159,6 +1159,9 @@ export default function Positions() {
   const [lightweightChartPosition, setLightweightChartPosition] = useState<Position | null>(null)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [closeConfirmPositionId, setCloseConfirmPositionId] = useState<number | null>(null)
+  const [showNotesModal, setShowNotesModal] = useState(false)
+  const [editingNotesPositionId, setEditingNotesPositionId] = useState<number | null>(null)
+  const [notesText, setNotesText] = useState('')
 
   // Filtering and sorting state (like 3Commas)
   const [filterBot, setFilterBot] = useState<number | 'all'>('all')
@@ -1365,6 +1368,32 @@ export default function Positions() {
       alert(`Funds added successfully!\nAcquired: ${result.eth_acquired.toFixed(6)} ETH at price ${result.price.toFixed(8)}`)
     } catch (err: any) {
       alert(`Error adding funds: ${err.response?.data?.detail || err.message}`)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const openNotesModal = (position: Position) => {
+    setEditingNotesPositionId(position.id)
+    setNotesText(position.notes || '')
+    setShowNotesModal(true)
+  }
+
+  const handleSaveNotes = async () => {
+    if (!editingNotesPositionId) return
+
+    setIsProcessing(true)
+    try {
+      await axios.patch(`${API_BASE_URL}/api/positions/${editingNotesPositionId}/notes`, {
+        notes: notesText
+      })
+      setShowNotesModal(false)
+      setEditingNotesPositionId(null)
+      setNotesText('')
+      // Refetch positions to show updated notes
+      refetchPositions()
+    } catch (err: any) {
+      alert(`Error saving notes: ${err.response?.data?.detail || err.message}`)
     } finally {
       setIsProcessing(false)
     }
@@ -2025,10 +2054,21 @@ export default function Positions() {
                       </button>
                     </div>
 
-                    {/* Notes Section */}
+                    {/* Notes Section (like 3Commas) */}
                     <div className="mt-3 px-4 pb-3">
-                      <div className="text-xs text-slate-500 italic flex items-center gap-2">
-                        <span>📝</span> You can place a note here
+                      <div
+                        className="text-xs flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openNotesModal(position)
+                        }}
+                      >
+                        <span>📝</span>
+                        {position.notes ? (
+                          <span className="text-slate-300">{position.notes}</span>
+                        ) : (
+                          <span className="text-slate-500 italic">You can place a note here</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2174,6 +2214,58 @@ export default function Positions() {
         symbol={lightweightChartSymbol}
         position={lightweightChartPosition}
       />
+
+      {/* Notes Modal (like 3Commas) */}
+      {showNotesModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg w-full max-w-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-white">Edit Note</h3>
+              <button
+                onClick={() => setShowNotesModal(false)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <textarea
+                value={notesText}
+                onChange={(e) => setNotesText(e.target.value)}
+                onKeyDown={(e) => {
+                  // Save on Cmd+Enter or Ctrl+Enter
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    handleSaveNotes()
+                  }
+                }}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] resize-y"
+                placeholder="Add a note for this position..."
+                autoFocus
+                disabled={isProcessing}
+              />
+              <p className="text-xs text-slate-400 mt-2">Cmd + Enter to save</p>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowNotesModal(false)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+                disabled={isProcessing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveNotes}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                disabled={isProcessing}
+              >
+                <span>✓</span> Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

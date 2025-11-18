@@ -571,6 +571,10 @@ class AddFundsRequest(BaseModel):
     btc_amount: float
 
 
+class UpdateNotesRequest(BaseModel):
+    notes: str
+
+
 @app.post("/api/positions/{position_id}/add-funds")
 async def add_funds_to_position(
     position_id: int,
@@ -621,6 +625,36 @@ async def add_funds_to_position(
             "trade_id": trade.id,
             "price": current_price,
             "eth_acquired": trade.eth_amount
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/positions/{position_id}/notes")
+async def update_position_notes(
+    position_id: int,
+    request: UpdateNotesRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update notes for a position (like 3Commas)"""
+    try:
+        query = select(Position).where(Position.id == position_id)
+        result = await db.execute(query)
+        position = result.scalars().first()
+
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        # Update notes
+        position.notes = request.notes
+
+        await db.commit()
+
+        return {
+            "message": f"Notes updated for position {position_id}",
+            "notes": position.notes
         }
     except HTTPException:
         raise
