@@ -54,6 +54,63 @@ class AIAutonomousStrategy(TradingStrategy):
         # Track last web search time per position (for periodic search)
         self._last_search_time: Dict[int, datetime] = {}
 
+    def _get_confidence_threshold_for_action(self, action_type: str) -> int:
+        """
+        Get confidence threshold for a specific action type.
+
+        Uses risk tolerance to set intelligent defaults, but allows user override.
+
+        Confidence Threshold Matrix:
+        ┌──────────────┬──────┬──────┬──────┐
+        │              │ Open │ DCA  │ Sell │
+        ├──────────────┼──────┼──────┼──────┤
+        │ Aggressive   │  65  │  60  │  70  │
+        │ Moderate     │  70  │  65  │  75  │
+        │ Conservative │  80  │  75  │  85  │
+        └──────────────┴──────┴──────┴──────┘
+
+        Args:
+            action_type: "open", "dca", or "close"
+
+        Returns:
+            Confidence threshold percentage (0-100)
+        """
+        risk_tolerance = self.config.get("risk_tolerance", "moderate")
+
+        # Define threshold matrix
+        thresholds = {
+            "aggressive": {
+                "open": 65,
+                "dca": 60,
+                "close": 70
+            },
+            "moderate": {
+                "open": 70,
+                "dca": 65,
+                "close": 75
+            },
+            "conservative": {
+                "open": 80,
+                "dca": 75,
+                "close": 85
+            }
+        }
+
+        # Get default based on risk tolerance
+        default_threshold = thresholds.get(risk_tolerance, thresholds["moderate"])[action_type]
+
+        # Allow user override via explicit config
+        config_key_map = {
+            "open": "min_confidence_to_open",
+            "dca": "min_confidence_for_dca",
+            "close": "min_confidence_to_close"
+        }
+
+        config_key = config_key_map[action_type]
+
+        # Return user's explicit setting if provided, otherwise use risk-based default
+        return self.config.get(config_key, default_threshold)
+
     def _should_perform_web_search(
         self,
         position: Optional[Any],
@@ -207,13 +264,52 @@ class AIAutonomousStrategy(TradingStrategy):
                     options=["conservative", "moderate", "aggressive"]
                 ),
                 StrategyParameter(
+                    name="min_confidence_to_open",
+                    display_name="Min Confidence to Open Position (%)",
+                    description="Minimum AI confidence to open position. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=65, Moderate=70, Conservative=80)",
+                    type="int",
+                    default=None,
+                    min_value=50,
+                    max_value=100,
+                    required=False
+                ),
+                StrategyParameter(
+                    name="min_confidence_for_dca",
+                    display_name="Min Confidence for DCA (%)",
+                    description="Minimum AI confidence for DCA orders. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=60, Moderate=65, Conservative=75)",
+                    type="int",
+                    default=None,
+                    min_value=50,
+                    max_value=100,
+                    required=False
+                ),
+                StrategyParameter(
+                    name="min_confidence_to_close",
+                    display_name="Min Confidence to Close Position (%)",
+                    description="Minimum AI confidence to sell. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=70, Moderate=75, Conservative=85)",
+                    type="int",
+                    default=None,
+                    min_value=50,
+                    max_value=100,
+                    required=False
+                ),
+                StrategyParameter(
                     name="analysis_interval_minutes",
                     display_name="Analysis Interval (minutes)",
-                    description="How often to ask Claude for new analysis (minimum 5 minutes to save tokens)",
+                    description="How often to ask AI for new analysis when looking for new positions. For Gemini free tier (250/day), use minimum 6 minutes to stay under limit.",
                     type="int",
                     default=15,
                     min_value=5,
                     max_value=120
+                ),
+                StrategyParameter(
+                    name="position_management_interval_minutes",
+                    display_name="Position Management Interval (minutes)",
+                    description="How often to ask AI for analysis when at max concurrent deals (only managing positions, not opening new ones). For Gemini free tier (250/day limit), use minimum 6 minutes.",
+                    type="int",
+                    default=6,
+                    min_value=1,
+                    max_value=60
                 ),
                 StrategyParameter(
                     name="min_profit_percentage",
@@ -384,7 +480,8 @@ class AIAutonomousStrategy(TradingStrategy):
         """
 
         # Check if we should skip analysis (token optimization)
-        if self._should_skip_analysis():
+        # Pass position to determine if we're in position management mode
+        if await self._should_skip_analysis(position):
             logger.info("Skipping analysis (within cache interval)")
             return self._get_cached_analysis()
 
@@ -432,12 +529,32 @@ class AIAutonomousStrategy(TradingStrategy):
             logger.error(f"Error in AI analysis: {e}", exc_info=True)
             return None
 
-    def _should_skip_analysis(self) -> bool:
-        """Check if we should skip analysis to save tokens"""
+    async def _should_skip_analysis(self, position: Optional[Any] = None) -> bool:
+        """
+        Check if we should skip analysis to save tokens
+
+        Uses adaptive intervals:
+        - position_management_interval_minutes when we have open positions (faster, more frequent monitoring)
+        - analysis_interval_minutes when looking for new positions (slower, less frequent)
+
+        This allows bots at max concurrent deals to monitor positions more frequently
+        while still doing less frequent scans when looking for new entry opportunities.
+        """
         if not self._last_analysis_time:
             return False
 
-        interval_minutes = self.config.get("analysis_interval_minutes", 15)
+        # If we have a position, we're in position management mode
+        # Use faster interval for managing existing positions
+        in_position_management = position is not None
+
+        # Choose interval based on mode
+        if in_position_management:
+            interval_minutes = self.config.get("position_management_interval_minutes", 5)
+            logger.debug(f"Using position management interval: {interval_minutes} minutes (managing existing position)")
+        else:
+            interval_minutes = self.config.get("analysis_interval_minutes", 15)
+            logger.debug(f"Using standard analysis interval: {interval_minutes} minutes (looking for new positions)")
+
         time_since_last = (datetime.utcnow() - self._last_analysis_time).total_seconds() / 60
 
         return time_since_last < interval_minutes
@@ -1489,6 +1606,12 @@ Strategic Considerations:
             if not dca_decision["should_buy"]:
                 return False, 0.0, f"AI decided not to DCA: {dca_decision['reasoning']}"
 
+            # Check DCA confidence threshold
+            dca_conf = dca_decision["confidence"]
+            min_dca_confidence = self._get_confidence_threshold_for_action("dca")
+            if dca_conf < min_dca_confidence:
+                return False, 0.0, f"AI DCA confidence too low ({dca_conf}% - need {min_dca_confidence}%+)"
+
             btc_amount = dca_decision["amount"]
 
             # Validate amount
@@ -1506,14 +1629,14 @@ Strategic Considerations:
                 return False, 0.0, "Insufficient budget for DCA"
 
             reasoning = dca_decision["reasoning"]
-            dca_conf = dca_decision["confidence"]
             amount_pct = dca_decision["amount_percentage"]
 
             return True, btc_amount, f"AI DCA #{current_safety_orders + 1} ({dca_conf}% confidence, {amount_pct}% of budget): {reasoning}"
 
         # New position (base order)
-        if confidence < 80:
-            return False, 0.0, f"AI confidence too low ({confidence}% - need 80%+ to open position)"
+        min_confidence = self._get_confidence_threshold_for_action("open")
+        if confidence < min_confidence:
+            return False, 0.0, f"AI confidence too low ({confidence}% - need {min_confidence}%+ to open position)"
 
         # Calculate buy amount based on AI suggestion and budget
         suggested_pct = signal_data.get("suggested_allocation_pct", 10)
@@ -1583,12 +1706,14 @@ Strategic Considerations:
             return False, f"Profit {profit_pct:.2f}% below minimum {min_profit}%"
 
         # RULE 3: AI decides when to sell (with profit protection from rules 1 & 2)
-        # Lower threshold for sells (65%) since we have profit protection (never sell at loss + min profit)
         if signal_data.get("signal_type") == "sell":
             confidence = signal_data.get("confidence", 0)
-            if confidence >= 65:
+            min_sell_confidence = self._get_confidence_threshold_for_action("close")
+            if confidence >= min_sell_confidence:
                 reasoning = signal_data.get("reasoning", "AI recommends selling")
                 return True, f"AI SELL ({confidence}% confidence, {profit_pct:.2f}% profit): {reasoning}"
+            else:
+                return False, f"AI sell confidence too low ({confidence}% - need {min_sell_confidence}%+)"
 
         # Don't sell unless AI recommends it
         # The AI is in full control of sell decisions (as long as we have profit)
