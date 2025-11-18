@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { botsApi } from '../services/api'
-import { Brain, TrendingUp, TrendingDown, Minus, Clock, Target, CircleDot } from 'lucide-react'
+import { Brain, TrendingUp, TrendingDown, Clock, Target, CircleDot } from 'lucide-react'
 import { formatDateTime } from '../utils/dateFormat'
 
 interface AIBotLogsProps {

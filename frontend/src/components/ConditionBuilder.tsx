@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Plus, X, Trash2 } from 'lucide-react'
 
 // Types matching backend enums
@@ -253,7 +252,7 @@ function ConditionBuilder({ group, onChange, level = 0 }: ConditionBuilderProps)
 
       {/* Conditions */}
       <div className="space-y-3">
-        {group.conditions.map((condition, index) => (
+        {group.conditions.map((condition) => (
           <div
             key={condition.id}
             className="bg-slate-700/50 rounded-lg p-3 border border-slate-600"
@@ -402,7 +401,7 @@ function ConditionBuilder({ group, onChange, level = 0 }: ConditionBuilderProps)
                 <>
                   (
                   {Object.entries(condition.indicator_params)
-                    .map(([k, v]) => v)
+                    .map(([_k, v]) => v)
                     .join(', ')}
                   )
                 </>
@@ -418,7 +417,7 @@ function ConditionBuilder({ group, onChange, level = 0 }: ConditionBuilderProps)
                       <>
                         (
                         {Object.entries(condition.compare_indicator_params)
-                          .map(([k, v]) => v)
+                          .map(([_k, v]) => v)
                           .join(', ')}
                         )
                       </>

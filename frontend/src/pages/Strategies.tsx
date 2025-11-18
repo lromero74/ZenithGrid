@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Layers, Plus, X, Settings, TrendingUp, Activity, BarChart3, Info } from 'lucide-react'
+import { Layers, X, Settings, TrendingUp, Activity, BarChart3, Info } from 'lucide-react'
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
 

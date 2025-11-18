@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, BarChart2, Search, Settings } from 'lucide-react'
+import { X, BarChart2, Search } from 'lucide-react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineStyle } from 'lightweight-charts'
 import axios from 'axios'
-import type { Position, Trade } from '../types'
+import type { Position } from '../types'
 import {
   calculateSMA,
   calculateEMA,
@@ -43,7 +43,6 @@ export default function LightweightChartModal({
   const chartRef = useRef<IChartApi | null>(null)
   const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map())
-  const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
   const positionLinesRef = useRef<ISeriesApi<any>[]>([])
   const candleDataRef = useRef<CandleData[]>([])
   const isCleanedUpRef = useRef<boolean>(false)
@@ -63,7 +62,6 @@ export default function LightweightChartModal({
   const [indicators, setIndicators] = useState<IndicatorConfig[]>([])
   const [showIndicatorModal, setShowIndicatorModal] = useState(false)
   const [indicatorSearch, setIndicatorSearch] = useState('')
-  const [editingIndicator, setEditingIndicator] = useState<IndicatorConfig | null>(null)
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -208,7 +206,7 @@ export default function LightweightChartModal({
         priceFormat,
         priceScaleId: 'right',
       })
-      series.setData(data)
+      series.setData(data as any)
       mainSeriesRef.current = series
     } else if (chartType === 'bar') {
       const series = chartRef.current.addBarSeries({
@@ -217,7 +215,7 @@ export default function LightweightChartModal({
         priceFormat,
         priceScaleId: 'right',
       })
-      series.setData(data)
+      series.setData(data as any)
       mainSeriesRef.current = series
     } else if (chartType === 'line') {
       const series = chartRef.current.addLineSeries({
@@ -226,7 +224,7 @@ export default function LightweightChartModal({
         priceFormat,
         priceScaleId: 'right',
       })
-      series.setData(data.map(d => ({ time: d.time, value: d.close })))
+      series.setData(data.map(d => ({ time: d.time as Time, value: d.close })))
       mainSeriesRef.current = series
     } else if (chartType === 'area') {
       const series = chartRef.current.addAreaSeries({
@@ -237,7 +235,7 @@ export default function LightweightChartModal({
         priceFormat,
         priceScaleId: 'right',
       })
-      series.setData(data.map(d => ({ time: d.time, value: d.close })))
+      series.setData(data.map(d => ({ time: d.time as Time, value: d.close })))
       mainSeriesRef.current = series
     } else if (chartType === 'baseline') {
       const baseValue = position?.average_buy_price || data[0]?.close || 0
@@ -252,7 +250,7 @@ export default function LightweightChartModal({
         priceFormat,
         priceScaleId: 'right',
       })
-      series.setData(data.map(d => ({ time: d.time, value: d.close })))
+      series.setData(data.map(d => ({ time: d.time as Time, value: d.close })))
       mainSeriesRef.current = series
     }
 
@@ -295,15 +293,13 @@ export default function LightweightChartModal({
     // Render each indicator
     indicators.forEach((indicator) => {
       const closes = chartData.map(c => c.close)
-      const highs = chartData.map(c => c.high)
-      const lows = chartData.map(c => c.low)
 
       if (indicator.type === 'sma') {
         const period = indicator.settings.period || 20
         const smaValues = calculateSMA(closes, period)
         const smaData = chartData
-          .map((c, i) => ({ time: c.time, value: smaValues[i] ?? 0 }))
-          .filter((d, i) => smaValues[i] !== null)
+          .map((c, i) => ({ time: c.time as Time, value: smaValues[i] ?? 0 }))
+          .filter((_d, i) => smaValues[i] !== null)
 
         const smaSeries = chartRef.current!.addLineSeries({
           color: indicator.settings.color || '#FF9800',
@@ -318,8 +314,8 @@ export default function LightweightChartModal({
         const period = indicator.settings.period || 12
         const emaValues = calculateEMA(closes, period)
         const emaData = chartData
-          .map((c, i) => ({ time: c.time, value: emaValues[i] ?? 0 }))
-          .filter((d, i) => emaValues[i] !== null)
+          .map((c, i) => ({ time: c.time as Time, value: emaValues[i] ?? 0 }))
+          .filter((_d, i) => emaValues[i] !== null)
 
         const emaSeries = chartRef.current!.addLineSeries({
           color: indicator.settings.color || '#9C27B0',
@@ -336,14 +332,14 @@ export default function LightweightChartModal({
         const bands = calculateBollingerBands(closes, period, stdDev)
 
         const upperData = chartData
-          .map((c, i) => ({ time: c.time, value: bands.upper[i] ?? 0 }))
-          .filter((d, i) => bands.upper[i] !== null)
+          .map((c, i) => ({ time: c.time as Time, value: bands.upper[i] ?? 0 }))
+          .filter((_d, i) => bands.upper[i] !== null)
         const middleData = chartData
-          .map((c, i) => ({ time: c.time, value: bands.middle[i] ?? 0 }))
-          .filter((d, i) => bands.middle[i] !== null)
+          .map((c, i) => ({ time: c.time as Time, value: bands.middle[i] ?? 0 }))
+          .filter((_d, i) => bands.middle[i] !== null)
         const lowerData = chartData
-          .map((c, i) => ({ time: c.time, value: bands.lower[i] ?? 0 }))
-          .filter((d, i) => bands.lower[i] !== null)
+          .map((c, i) => ({ time: c.time as Time, value: bands.lower[i] ?? 0 }))
+          .filter((_d, i) => bands.lower[i] !== null)
 
         const upperSeries = chartRef.current!.addLineSeries({
           color: indicator.settings.upperColor || '#2196F3',
@@ -439,8 +435,8 @@ export default function LightweightChartModal({
     const closes = chartData.map(c => c.close)
     const rsiValues = calculateRSI(closes, period)
     const rsiData = chartData
-      .map((c, i) => ({ time: c.time, value: rsiValues[i] ?? 0 }))
-      .filter((d, i) => rsiValues[i] !== null)
+      .map((c, i) => ({ time: c.time as Time, value: rsiValues[i] ?? 0 }))
+      .filter((_d, i) => rsiValues[i] !== null)
 
     const rsiSeries = rsiChartRef.current.addLineSeries({
       color: rsiIndicator.settings.color || '#2196F3',
@@ -460,7 +456,7 @@ export default function LightweightChartModal({
       lastValueVisible: false,
       priceLineVisible: false,
     })
-    overboughtSeries.setData(chartData.map(c => ({ time: c.time, value: overbought })))
+    overboughtSeries.setData(chartData.map(c => ({ time: c.time as Time, value: overbought })))
 
     const oversoldSeries = rsiChartRef.current.addLineSeries({
       color: 'rgba(38, 166, 154, 0.5)',
@@ -469,7 +465,7 @@ export default function LightweightChartModal({
       lastValueVisible: false,
       priceLineVisible: false,
     })
-    oversoldSeries.setData(chartData.map(c => ({ time: c.time, value: oversold })))
+    oversoldSeries.setData(chartData.map(c => ({ time: c.time as Time, value: oversold })))
 
     rsiChartRef.current.timeScale().fitContent()
 
@@ -541,14 +537,14 @@ export default function LightweightChartModal({
     const macdResult = calculateMACD(closes, fastPeriod, slowPeriod, signalPeriod)
 
     const macdData = chartData
-      .map((c, i) => ({ time: c.time, value: macdResult.macd[i] ?? 0 }))
-      .filter((d, i) => macdResult.macd[i] !== null)
+      .map((c, i) => ({ time: c.time as Time, value: macdResult.macd[i] ?? 0 }))
+      .filter((_d, i) => macdResult.macd[i] !== null)
     const signalData = chartData
-      .map((c, i) => ({ time: c.time, value: macdResult.signal[i] ?? 0 }))
-      .filter((d, i) => macdResult.signal[i] !== null)
+      .map((c, i) => ({ time: c.time as Time, value: macdResult.signal[i] ?? 0 }))
+      .filter((_d, i) => macdResult.signal[i] !== null)
     const histogramData = chartData
-      .map((c, i) => ({ time: c.time, value: macdResult.histogram[i] ?? 0 }))
-      .filter((d, i) => macdResult.histogram[i] !== null)
+      .map((c, i) => ({ time: c.time as Time, value: macdResult.histogram[i] ?? 0 }))
+      .filter((_d, i) => macdResult.histogram[i] !== null)
 
     const macdSeries = macdChartRef.current.addLineSeries({
       color: macdIndicator.settings.macdColor || '#2196F3',
@@ -642,11 +638,11 @@ export default function LightweightChartModal({
     const stochasticResult = calculateStochastic(highs, lows, closes, kPeriod, dPeriod)
 
     const kData = chartData
-      .map((c, i) => ({ time: c.time, value: stochasticResult.k[i] ?? 0 }))
-      .filter((d, i) => stochasticResult.k[i] !== null)
+      .map((c, i) => ({ time: c.time as Time, value: stochasticResult.k[i] ?? 0 }))
+      .filter((_d, i) => stochasticResult.k[i] !== null)
     const dData = chartData
-      .map((c, i) => ({ time: c.time, value: stochasticResult.d[i] ?? 0 }))
-      .filter((d, i) => stochasticResult.d[i] !== null)
+      .map((c, i) => ({ time: c.time as Time, value: stochasticResult.d[i] ?? 0 }))
+      .filter((_d, i) => stochasticResult.d[i] !== null)
 
     const kSeries = stochasticChartRef.current.addLineSeries({
       color: stochasticIndicator.settings.kColor || '#2196F3',
@@ -670,7 +666,7 @@ export default function LightweightChartModal({
       lastValueVisible: false,
       priceLineVisible: false,
     })
-    overboughtSeries.setData(chartData.map(c => ({ time: c.time, value: 80 })))
+    overboughtSeries.setData(chartData.map(c => ({ time: c.time as Time, value: 80 })))
 
     const oversoldSeries = stochasticChartRef.current.addLineSeries({
       color: 'rgba(38, 166, 154, 0.5)',
@@ -679,7 +675,7 @@ export default function LightweightChartModal({
       lastValueVisible: false,
       priceLineVisible: false,
     })
-    oversoldSeries.setData(chartData.map(c => ({ time: c.time, value: 20 })))
+    oversoldSeries.setData(chartData.map(c => ({ time: c.time as Time, value: 20 })))
 
     stochasticChartRef.current.timeScale().fitContent()
 
@@ -727,7 +723,7 @@ export default function LightweightChartModal({
       priceLineVisible: false,
       lastValueVisible: false,
     })
-    const entryData = chartData.map(d => ({ time: d.time, value: avgBuyPrice }))
+    const entryData = chartData.map(d => ({ time: d.time as Time, value: avgBuyPrice }))
     entrySeries.setData(entryData)
     positionLinesRef.current.push(entrySeries)
 
@@ -740,7 +736,7 @@ export default function LightweightChartModal({
       priceLineVisible: false,
       lastValueVisible: false,
     })
-    const targetData = chartData.map(d => ({ time: d.time, value: targetPrice }))
+    const targetData = chartData.map(d => ({ time: d.time as Time, value: targetPrice }))
     targetSeries.setData(targetData)
     positionLinesRef.current.push(targetSeries)
 
@@ -761,7 +757,7 @@ export default function LightweightChartModal({
           priceLineVisible: false,
           lastValueVisible: false,
         })
-        const soData = chartData.map(d => ({ time: d.time, value: soPrice }))
+        const soData = chartData.map(d => ({ time: d.time as Time, value: soPrice }))
         soSeries.setData(soData)
         positionLinesRef.current.push(soSeries)
       }
@@ -789,7 +785,7 @@ export default function LightweightChartModal({
           priceLineVisible: false,
           lastValueVisible: false,
         })
-        const dcaData = chartData.map(d => ({ time: d.time, value: dcaPrice }))
+        const dcaData = chartData.map(d => ({ time: d.time as Time, value: dcaPrice }))
         dcaSeries.setData(dcaData)
         positionLinesRef.current.push(dcaSeries)
       }

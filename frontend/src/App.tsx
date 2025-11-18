@@ -9,7 +9,6 @@ import Charts from './pages/Charts'
 import Strategies from './pages/Strategies'
 import Portfolio from './pages/Portfolio'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History } from 'lucide-react'
-import { accountApi } from './services/api'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'closedPositions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 

@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { botsApi, positionsApi } from '../services/api'
 import {
-  Activity,
   TrendingUp,
   TrendingDown,
   DollarSign,
@@ -10,11 +9,9 @@ import {
   Bot as BotIcon,
   Target,
   Award,
-  Clock,
-  BarChart3
+  Clock
 } from 'lucide-react'
-import { Bot, Position } from '../types'
-import { useState } from 'react'
+import { Bot } from '../types'
 import { format } from 'date-fns'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
@@ -343,9 +340,9 @@ function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => vo
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-400">Profit:</span>
               <span className={`font-semibold ${
-                stats.total_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'
+                stats.total_profit_quote >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {stats.total_profit_btc >= 0 ? '+' : ''}{formatCrypto(stats.total_profit_btc, 6)} BTC
+                {stats.total_profit_quote >= 0 ? '+' : ''}{formatCrypto(stats.total_profit_quote, 6)} BTC
               </span>
             </div>
           </>
