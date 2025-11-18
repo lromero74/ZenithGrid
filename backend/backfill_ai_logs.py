@@ -34,9 +34,13 @@ async def backfill_ai_logs():
             if not position.bot_id or not position.product_id:
                 continue
 
-            # Calculate time window (30s before open to close time)
+            # Calculate time window (30s before open to 30s after close)
+            # The 30s buffer after close captures the AI reasoning that led to closing
             time_before = position.opened_at - timedelta(seconds=30)
-            time_after = position.closed_at if position.closed_at else position.opened_at + timedelta(days=365)
+            if position.closed_at:
+                time_after = position.closed_at + timedelta(seconds=30)
+            else:
+                time_after = position.opened_at + timedelta(days=365)
 
             # Find AI logs for this bot/product in the time window
             logs_query = select(AIBotLog).where(

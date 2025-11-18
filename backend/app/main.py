@@ -263,10 +263,11 @@ async def get_position_ai_logs(
     """
     Get AI reasoning logs for a position.
 
-    By default, includes logs from 30 seconds before position opened.
-    This captures the AI's thinking that led to opening the position.
+    By default, includes logs from 30 seconds before position opened and
+    30 seconds after position closed. This captures the AI's complete
+    decision-making process including what led to opening and closing.
     """
-    # Get the position to know when it was opened
+    # Get the position to know when it was opened/closed
     pos_query = select(Position).where(Position.id == position_id)
     pos_result = await db.execute(pos_query)
     position = pos_result.scalars().first()
@@ -279,17 +280,24 @@ async def get_position_ai_logs(
         AIBotLog.position_id == position_id
     )
 
-    # If include_before_open is True, also get logs from 30s before position opened
+    # If include_before_open is True, also get logs from 30s before open and 30s after close
     # that belong to the same bot and product
     if include_before_open and position.opened_at:
         time_before = position.opened_at - timedelta(seconds=30)
+
+        # Calculate time after (30s after close, or far future if still open)
+        if position.closed_at:
+            time_after = position.closed_at + timedelta(seconds=30)
+        else:
+            time_after = datetime.utcnow() + timedelta(days=365)
+
         query = select(AIBotLog).where(
             (AIBotLog.position_id == position_id) |
             (
                 (AIBotLog.bot_id == position.bot_id) &
                 (AIBotLog.product_id == position.product_id) &
                 (AIBotLog.timestamp >= time_before) &
-                (AIBotLog.timestamp <= position.opened_at) &
+                (AIBotLog.timestamp <= time_after) &
                 (AIBotLog.position_id == None)
             )
         )
