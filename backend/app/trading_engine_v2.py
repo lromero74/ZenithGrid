@@ -473,6 +473,13 @@ class StrategyTradingEngine:
 
         # Log AI thinking immediately after analysis (if AI bot and not already logged in batch mode)
         if self.bot.strategy_type == "ai_autonomous" and not signal_data.get("_already_logged", False):
+            # DEBUG: This should NOT be called in batch mode!
+            import traceback
+            stack = ''.join(traceback.format_stack()[-5:-1])
+            logger.warning(f"  ⚠️ save_ai_log called despite _already_logged check! Bot #{self.bot.id} {self.product_id}")
+            logger.warning(f"  _already_logged={signal_data.get('_already_logged')}")
+            logger.warning(f"  Call stack:\n{stack}")
+
             # Log what the AI thinks, not what the bot will do
             ai_signal = signal_data.get("signal_type", "none")
             if ai_signal == "buy":

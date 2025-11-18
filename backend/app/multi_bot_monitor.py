@@ -388,7 +388,13 @@ class MultiBotMonitor:
     ):
         """Log AI decision to database"""
         try:
+            import traceback
             from app.models import AIBotLog
+
+            # DEBUG: Log stack trace to find duplicate calls
+            stack = ''.join(traceback.format_stack()[-5:-1])
+            logger.info(f"  📝 Logging AI decision for Bot #{bot.id} {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)")
+            logger.debug(f"  Call stack:\n{stack}")
 
             # Extract only additional context (avoid duplicating fields already in columns)
             additional_context = signal_data.get("context", {})  # Get nested context if exists
