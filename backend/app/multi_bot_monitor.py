@@ -657,8 +657,8 @@ class MultiBotMonitor:
                                 # Continue with other bots even if one fails
                                 continue
 
-                # Wait for next interval (use minimum bot interval or default)
-                await asyncio.sleep(60)  # Check every minute for bots that need processing
+                # Wait for next interval - check frequently so bots with short intervals are responsive
+                await asyncio.sleep(10)  # Check every 10 seconds for bots that need processing
 
             except Exception as e:
                 logger.error(f"Error in monitor loop: {e}", exc_info=True)

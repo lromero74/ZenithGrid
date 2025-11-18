@@ -68,11 +68,10 @@ else:
     coinbase_client = CoinbaseClient()  # Will fail on actual calls
 
 # Multi-bot monitor - monitors all active bots with their strategies
-# Now using per-bot check_interval_seconds (set in database)
-# Monitor loop runs every 60s to check if any bots need processing
-# Each bot can have its own interval optimized for its AI provider quota
+# Monitor loop runs every 10s to check if any bots need processing
+# Bots can override with their own check_interval_seconds (set in database)
 # Order monitor is integrated within MultiBotMonitor (checks pending limit orders)
-price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=300)
+price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=10)
 
 
 # Startup/Shutdown events
