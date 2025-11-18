@@ -352,14 +352,18 @@ class MultiBotMonitor:
                     # Debug logging to track duplicate opinions
                     logger.info(f"    Processing {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)")
 
+                    # Add current_price to signal_data for DCA logic (AI response doesn't include it)
+                    pair_info = pairs_data.get(product_id, {})
+                    signal_data["current_price"] = pair_info.get("current_price", 0)
+
                     # Log AI decision
-                    await self.log_ai_decision(db, bot, product_id, signal_data, pairs_data.get(product_id, {}))
+                    await self.log_ai_decision(db, bot, product_id, signal_data, pair_info)
 
                     # Mark signal as already logged to prevent duplicate logging in trading_engine_v2.py
                     signal_data["_already_logged"] = True
 
                     # Execute trading logic based on signal
-                    result = await self.execute_trading_logic(db, bot, product_id, signal_data, pairs_data.get(product_id, {}))
+                    result = await self.execute_trading_logic(db, bot, product_id, signal_data, pair_info)
                     results[product_id] = result
 
                 except Exception as e:
