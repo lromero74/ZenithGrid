@@ -528,18 +528,21 @@ class CoinbaseClient:
 
         Note: Use either size OR funds, not both
         """
-        order_config = {
-            "limit_limit_gtc": {
-                "limit_price": str(limit_price),
-                "post_only": False  # Allow immediate partial fills
-            }
-        }
-
         # Extract currencies from product_id for proper precision formatting
         if '-' in product_id:
             base_currency, quote_currency = product_id.split('-')
         else:
             base_currency, quote_currency = "ETH", "BTC"  # fallback
+
+        # Format limit price with proper precision (price is in quote currency)
+        formatted_limit_price = format_quote_amount(limit_price, quote_currency)
+
+        order_config = {
+            "limit_limit_gtc": {
+                "limit_price": formatted_limit_price,
+                "post_only": False  # Allow immediate partial fills
+            }
+        }
 
         if size:
             # Format base amount with proper precision

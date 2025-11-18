@@ -9,8 +9,11 @@ from app.coinbase_unified_client import CoinbaseClient
 async def test_cdp_auth():
     """Test CDP client authentication"""
     try:
-        # Load from the downloaded key file
-        client = CoinbaseClient(key_file_path="/home/louis/Downloads/cdp_api_key.json")
+        # Load from the downloaded key file (update path as needed)
+        # For production, credentials are loaded from settings/environment
+        import os
+        key_file = os.environ.get("CDP_KEY_FILE", f"{os.path.expanduser('~')}/cdp_api_key.json")
+        client = CoinbaseClient(key_file_path=key_file)
 
         print("Testing CDP authentication...")
 
