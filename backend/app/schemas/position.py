@@ -1,6 +1,6 @@
 """Position-related Pydantic schemas"""
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel
 
@@ -45,6 +45,23 @@ class TradeResponse(BaseModel):
     price: float
     trade_type: str
     order_id: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class AIBotLogResponse(BaseModel):
+    id: int
+    bot_id: int
+    position_id: Optional[int]
+    timestamp: datetime
+    thinking: str
+    decision: str
+    confidence: Optional[float]
+    current_price: Optional[float]
+    position_status: Optional[str]
+    product_id: Optional[str]
+    context: Optional[Dict[str, Any]]
 
     class Config:
         from_attributes = True

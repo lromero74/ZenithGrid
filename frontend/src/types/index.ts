@@ -52,12 +52,14 @@ export interface Signal {
 export interface AIBotLog {
   id: number;
   bot_id: number;
+  position_id: number | null;
   timestamp: string;
   thinking: string;
   decision: string;
   confidence: number | null;
   current_price: number | null;
   position_status: string | null;
+  product_id: string | null;
   context: any;
 }
 

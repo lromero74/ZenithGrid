@@ -14,10 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db, init_db
-from app.models import Bot, MarketData, PendingOrder, Position, Signal, Trade
+from app.models import AIBotLog, Bot, MarketData, PendingOrder, Position, Signal, Trade
 from app.multi_bot_monitor import MultiBotMonitor
 from app.routers import bots_router, order_history_router, templates_router
 from app.schemas import (
+    AIBotLogResponse,
     DashboardStats,
     MarketDataResponse,
     PositionResponse,
@@ -251,6 +252,54 @@ async def get_position_trades(position_id: int, db: AsyncSession = Depends(get_d
     trades = result.scalars().all()
 
     return [TradeResponse.model_validate(t) for t in trades]
+
+
+@app.get("/api/positions/{position_id}/ai-logs", response_model=List[AIBotLogResponse])
+async def get_position_ai_logs(
+    position_id: int,
+    include_before_open: bool = True,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get AI reasoning logs for a position.
+
+    By default, includes logs from 30 seconds before position opened.
+    This captures the AI's thinking that led to opening the position.
+    """
+    # Get the position to know when it was opened
+    pos_query = select(Position).where(Position.id == position_id)
+    pos_result = await db.execute(pos_query)
+    position = pos_result.scalars().first()
+
+    if not position:
+        raise HTTPException(status_code=404, detail="Position not found")
+
+    # Build query for AI logs
+    query = select(AIBotLog).where(
+        AIBotLog.position_id == position_id
+    )
+
+    # If include_before_open is True, also get logs from 30s before position opened
+    # that belong to the same bot and product
+    if include_before_open and position.opened_at:
+        time_before = position.opened_at - timedelta(seconds=30)
+        query = select(AIBotLog).where(
+            (AIBotLog.position_id == position_id) |
+            (
+                (AIBotLog.bot_id == position.bot_id) &
+                (AIBotLog.product_id == position.product_id) &
+                (AIBotLog.timestamp >= time_before) &
+                (AIBotLog.timestamp <= position.opened_at) &
+                (AIBotLog.position_id == None)
+            )
+        )
+
+    query = query.order_by(AIBotLog.timestamp)
+
+    result = await db.execute(query)
+    logs = result.scalars().all()
+
+    return [AIBotLogResponse.model_validate(log) for log in logs]
 
 
 @app.get("/api/trades", response_model=List[TradeResponse])

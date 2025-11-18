@@ -81,6 +81,7 @@ class StrategyTradingEngine:
         # Save log (don't commit - let caller handle transaction)
         ai_log = AIBotLog(
             bot_id=self.bot.id,
+            position_id=position.id if position else None,  # Link to position for historical review
             thinking=thinking,
             decision=decision,
             confidence=confidence,

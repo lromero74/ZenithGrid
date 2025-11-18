@@ -55,3 +55,4 @@ htmlcov/
 
 # Process IDs
 .pids/
+*.pid

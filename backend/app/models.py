@@ -272,6 +272,7 @@ class AIBotLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+    position_id = Column(Integer, ForeignKey("positions.id"), nullable=True, index=True)  # Link to position
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
     # AI thinking/reasoning content
@@ -286,6 +287,9 @@ class AIBotLog(Base):
 
     # Additional context (JSON for flexibility)
     context = Column(JSON, nullable=True)  # Market conditions, indicators, etc.
+
+    # Relationships
+    position = relationship("Position", foreign_keys=[position_id])
 
 
 class PendingOrder(Base):

@@ -2,13 +2,14 @@
 
 from .dashboard import DashboardStats
 from .market import MarketDataResponse, SignalResponse
-from .position import PositionResponse, TradeResponse
+from .position import AIBotLogResponse, PositionResponse, TradeResponse
 from .settings import SettingsUpdate, TestConnectionRequest
 
 __all__ = [
     # Position schemas
     "PositionResponse",
     "TradeResponse",
+    "AIBotLogResponse",
     # Market schemas
     "SignalResponse",
     "MarketDataResponse",

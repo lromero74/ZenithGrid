@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Bot, OrderHistory, Position
 
-router = APIRouter(prefix="/order-history", tags=["order-history"])
+router = APIRouter(prefix="/api/order-history", tags=["order-history"])
 
 
 class OrderHistoryResponse(BaseModel):

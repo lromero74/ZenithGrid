@@ -12,6 +12,7 @@ import type {
   BotStats,
   StrategyDefinition,
   OrderHistory,
+  AIBotLog,
 } from '../types';
 
 const api = axios.create({
@@ -30,6 +31,8 @@ export const positionsApi = {
     api.get<Position>(`/positions/${id}`).then((res) => res.data),
   getTrades: (id: number) =>
     api.get<Trade[]>(`/positions/${id}/trades`).then((res) => res.data),
+  getAILogs: (id: number, includeBeforeOpen = true) =>
+    api.get<AIBotLog[]>(`/positions/${id}/ai-logs`, { params: { include_before_open: includeBeforeOpen } }).then((res) => res.data),
   close: (id: number) =>
     api.post<{ message: string; profit_btc: number; profit_percentage: number }>(`/positions/${id}/force-close`)
       .then((res) => res.data),
