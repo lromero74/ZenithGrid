@@ -10,6 +10,7 @@ import httpx
 from app.cache import api_cache
 from app.config import settings
 from app.constants import BALANCE_CACHE_TTL, PRICE_CACHE_TTL
+from app.precision import format_quote_amount, format_base_amount
 
 logger = logging.getLogger(__name__)
 
@@ -246,10 +247,20 @@ class CoinbaseClient:
             "market_market_ioc": {}
         }
 
+        # Extract currencies from product_id for proper precision formatting
+        if '-' in product_id:
+            base_currency, quote_currency = product_id.split('-')
+        else:
+            base_currency, quote_currency = "ETH", "BTC"  # fallback
+
         if size:
-            order_config["market_market_ioc"]["base_size"] = str(size)
+            # Format base amount with proper precision
+            formatted_size = format_base_amount(float(size), base_currency)
+            order_config["market_market_ioc"]["base_size"] = formatted_size
         elif funds:
-            order_config["market_market_ioc"]["quote_size"] = str(funds)
+            # Format quote amount with proper precision
+            formatted_funds = format_quote_amount(float(funds), quote_currency)
+            order_config["market_market_ioc"]["quote_size"] = formatted_funds
         else:
             raise ValueError("Must specify either size or funds")
 
