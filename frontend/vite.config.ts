@@ -9,11 +9,11 @@ export default defineConfig({
     strictPort: true, // Fail if port 5173 is already in use
     proxy: {
       '/api': {
-        target: 'http://localhost:8100',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8100',
+        target: 'ws://localhost:8000',
         ws: true,
       },
     },
