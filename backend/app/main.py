@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -890,6 +891,47 @@ async def get_ticker(product_id: str):
             "price": current_price,
             "time": datetime.utcnow().isoformat(),
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/prices/batch")
+async def get_prices_batch(products: str):
+    """
+    Get current prices for multiple products in a single request
+
+    Args:
+        products: Comma-separated list of product IDs (e.g., "ETH-BTC,AAVE-BTC,ALGO-BTC")
+
+    Returns:
+        Dict mapping product_id to price
+    """
+    try:
+        product_list = [p.strip() for p in products.split(',') if p.strip()]
+
+        if not product_list:
+            raise HTTPException(status_code=400, detail="No products specified")
+
+        # Fetch all prices concurrently
+        async def fetch_price(product_id: str):
+            try:
+                price = await coinbase_client.get_current_price(product_id)
+                return (product_id, price)
+            except Exception as e:
+                logger.warning(f"Failed to fetch price for {product_id}: {e}")
+                return (product_id, None)
+
+        results = await asyncio.gather(*[fetch_price(p) for p in product_list])
+
+        # Build response dict, filtering out failed requests
+        prices = {product_id: price for product_id, price in results if price is not None}
+
+        return {
+            "prices": prices,
+            "time": datetime.utcnow().isoformat(),
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -1191,43 +1191,42 @@ export default function Positions() {
       if (!allPositions) return
 
       const openPositions = allPositions.filter(p => p.status === 'open')
-      const pricePromises = openPositions.map(async (position) => {
-        try {
-          // Use candles API (more reliable than ticker for getting current price)
-          const response = await axios.get(`${API_BASE_URL}/api/candles`, {
-            params: {
-              product_id: position.product_id || 'ETH-BTC',
-              granularity: 'ONE_MINUTE',
-              limit: 1
-            },
-            signal: abortController.signal
-          })
-          const candles = response.data.candles || []
-          if (candles.length > 0) {
-            return { product_id: position.product_id || 'ETH-BTC', price: candles[0].close }
+      if (openPositions.length === 0) return
+
+      try {
+        // Fetch all prices in a single batch request
+        const productIds = openPositions.map(p => p.product_id || 'ETH-BTC').join(',')
+        const response = await axios.get(`${API_BASE_URL}/api/prices/batch`, {
+          params: { products: productIds },
+          signal: abortController.signal
+        })
+
+        const priceMap = response.data.prices || {}
+
+        // Fill in fallback prices for positions that didn't get a price
+        openPositions.forEach(position => {
+          const productId = position.product_id || 'ETH-BTC'
+          if (!priceMap[productId]) {
+            priceMap[productId] = position.average_buy_price
           }
-          // Fallback to ticker if no candles
-          const tickerResponse = await axios.get(`${API_BASE_URL}/api/ticker/${position.product_id || 'ETH-BTC'}`, {
-            signal: abortController.signal
-          })
-          return { product_id: position.product_id || 'ETH-BTC', price: tickerResponse.data.price }
-        } catch (err) {
-          // Ignore abort errors (they're expected when component unmounts)
-          if (axios.isCancel(err) || (err as any)?.code === 'ECONNABORTED') {
-            return { product_id: position.product_id || 'ETH-BTC', price: position.average_buy_price }
-          }
-          console.error(`Error fetching price for ${position.product_id}:`, err)
-          return { product_id: position.product_id || 'ETH-BTC', price: position.average_buy_price }
+        })
+
+        setCurrentPrices(priceMap)
+      } catch (err) {
+        // Ignore abort errors (they're expected when component unmounts)
+        if (axios.isCancel(err) || (err as any)?.code === 'ECONNABORTED') {
+          return
         }
-      })
+        console.error('Error fetching batch prices:', err)
 
-      const prices = await Promise.all(pricePromises)
-      const priceMap = prices.reduce((acc, { product_id, price }) => {
-        acc[product_id] = price
-        return acc
-      }, {} as Record<string, number>)
-
-      setCurrentPrices(priceMap)
+        // Fallback to using average buy prices
+        const fallbackPrices: Record<string, number> = {}
+        openPositions.forEach(position => {
+          const productId = position.product_id || 'ETH-BTC'
+          fallbackPrices[productId] = position.average_buy_price
+        })
+        setCurrentPrices(fallbackPrices)
+      }
     }
 
     fetchPrices()
