@@ -21,12 +21,20 @@ interface BotFormData {
   strategy_config: Record<string, any>
 }
 
+interface ValidationWarning {
+  product_id: string
+  issue: string
+  suggested_minimum_pct: number
+  current_pct: number
+}
+
 function Bots() {
   const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
   const [editingBot, setEditingBot] = useState<Bot | null>(null)
   const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
+  const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
   const [formData, setFormData] = useState<BotFormData>({
     name: '',
     description: '',
@@ -53,6 +61,49 @@ function Bots() {
     queryKey: ['strategies'],
     queryFn: botsApi.getStrategies,
   })
+
+  // Validate bot configuration against Coinbase minimum order sizes
+  const validateBotConfig = async () => {
+    // Only validate if we have products and strategy config
+    if (formData.product_ids.length === 0 || !formData.strategy_config) {
+      setValidationWarnings([])
+      return
+    }
+
+    // Skip if no budget percentage configured
+    const budgetPct = formData.strategy_config.base_order_percentage ||
+                      formData.strategy_config.safety_order_percentage ||
+                      formData.strategy_config.initial_budget_percentage
+    if (!budgetPct || budgetPct === 0) {
+      setValidationWarnings([])
+      return
+    }
+
+    try {
+      const response = await axios.post('http://localhost:8000/api/bots/validate-config', {
+        product_ids: formData.product_ids,
+        strategy_config: formData.strategy_config
+      })
+
+      if (response.data.warnings) {
+        setValidationWarnings(response.data.warnings)
+      } else {
+        setValidationWarnings([])
+      }
+    } catch (error) {
+      console.error('Validation error:', error)
+      setValidationWarnings([])
+    }
+  }
+
+  // Auto-validate when relevant fields change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      validateBotConfig()
+    }, 500) // Debounce 500ms
+
+    return () => clearTimeout(timeoutId)
+  }, [formData.product_ids, formData.strategy_config])
 
   // Fetch available templates
   const { data: templates = [] } = useQuery({
@@ -1023,6 +1074,39 @@ function Bots() {
                 </div>
               ) : null}
               </div>
+              )}
+
+              {/* Validation Warnings */}
+              {validationWarnings.length > 0 && (
+                <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="text-yellow-500 text-xl flex-shrink-0">⚠️</div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-yellow-300 mb-2">
+                        Minimum Order Size Warning
+                      </div>
+                      <div className="text-sm text-yellow-200/90 mb-3">
+                        The following products may fail to execute orders because your configured budget percentage is below Coinbase's minimum order size:
+                      </div>
+                      <div className="space-y-2">
+                        {validationWarnings.map((warning, idx) => (
+                          <div key={idx} className="bg-yellow-900/20 rounded p-3 border border-yellow-700/50">
+                            <div className="font-medium text-yellow-300 mb-1">
+                              {warning.product_id}
+                            </div>
+                            <div className="text-xs text-yellow-200/80 space-y-1">
+                              <div>Current budget: <span className="font-mono text-red-400">{warning.current_pct.toFixed(2)}%</span></div>
+                              <div>Suggested minimum: <span className="font-mono text-green-400">{warning.suggested_minimum_pct.toFixed(2)}%</span></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-xs text-yellow-200/70 mt-3">
+                        You can still create this bot, but orders may fail until you increase the budget percentage or add more funds.
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Actions */}
