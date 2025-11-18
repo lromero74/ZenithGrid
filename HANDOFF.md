@@ -1,3 +1,39 @@
+# Fix: Duplicate AI Opinions Race Condition
+**Date:** November 17, 2025
+**Status:** COMPLETE ✅
+
+## Problem
+Bots were logging duplicate AI analyses with conflicting opinions within milliseconds:
+```
+03:01:12.269 - SELL 72% - "Price showing clear downtrend..."
+03:01:12.618 - BUY 80% - "Extremely high volatility... coiled spring..."
+```
+
+## Root Cause
+Race condition in monitor loop (`multi_bot_monitor.py`):
+- Monitor loop runs every 10 seconds
+- Checks `bot.last_signal_check` BEFORE processing
+- Updates `bot.last_signal_check` AFTER processing completes
+- If AI analysis takes >10 seconds, next loop iteration starts processing same bot again!
+
+**Timeline:**
+```
+T=0s:  Loop 1 checks timestamp → starts Bot #2 processing → calls Claude API
+T=10s: Loop 2 checks timestamp (still old!) → starts Bot #2 AGAIN → second API call
+Result: Two opinions 0.35 seconds apart with conflicting decisions
+```
+
+## Solution
+Update `bot.last_signal_check` IMMEDIATELY when deciding to process a bot (line 657), before async processing starts. Commit to database immediately to prevent concurrent access.
+
+**Changes:**
+- Added timestamp update at start of processing in `monitor_loop()`
+- Removed redundant updates at end of `process_bot_batch()` and `process_bot_pair()`
+
+**Commit**: `548f8fd` - "Fix duplicate AI opinions race condition"
+
+---
+
 # Code Modularization - Phase 1
 **Date:** November 16, 2025
 **Status:** IN PROGRESS 🚧
