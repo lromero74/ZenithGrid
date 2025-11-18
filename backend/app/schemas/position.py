@@ -27,6 +27,9 @@ class PositionResponse(BaseModel):
     profit_usd: Optional[float]
     trade_count: int = 0
     pending_orders_count: int = 0  # Count of unfilled limit orders
+    last_error_message: Optional[str] = None  # Last error message (like 3Commas)
+    last_error_timestamp: Optional[datetime] = None  # When error occurred
+    notes: Optional[str] = None  # User notes (like 3Commas)
 
     class Config:
         from_attributes = True
