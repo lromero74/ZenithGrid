@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import AIBotLog, Bot, Position
 from app.strategies import StrategyDefinition, StrategyRegistry
-from app.coinbase_client import get_coinbase_client
+from app.coinbase_client import CoinbaseClient
 from app.order_validation import calculate_minimum_budget_percentage
 
 logger = logging.getLogger(__name__)
@@ -650,7 +650,7 @@ async def validate_bot_config(
 
     Returns warnings with suggested minimum percentages if validation fails.
     """
-    coinbase = get_coinbase_client()
+    coinbase = CoinbaseClient()
 
     # Get quote balance if not provided
     quote_balance = request.quote_balance
