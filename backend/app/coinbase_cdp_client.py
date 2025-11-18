@@ -15,6 +15,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 from app.cache import api_cache
+from app.precision import format_quote_amount, format_base_amount
 
 
 class CoinbaseCDPClient:
@@ -355,10 +356,13 @@ class CoinbaseCDPClient:
         Returns:
             Order response
         """
+        # Extract quote currency from product_id (e.g., "BTC" from "ETH-BTC")
+        quote_currency = product_id.split('-')[1] if '-' in product_id else "BTC"
+
         return await self.create_market_order(
             product_id=product_id,
             side="BUY",
-            funds=f"{btc_amount:.8f}"
+            funds=format_quote_amount(btc_amount, quote_currency)
         )
 
     async def sell_eth_for_btc(self, eth_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
@@ -372,10 +376,13 @@ class CoinbaseCDPClient:
         Returns:
             Order response
         """
+        # Extract base currency from product_id (e.g., "ETH" from "ETH-BTC")
+        base_currency = product_id.split('-')[0] if '-' in product_id else "ETH"
+
         return await self.create_market_order(
             product_id=product_id,
             side="SELL",
-            size=f"{eth_amount:.8f}"
+            size=format_base_amount(eth_amount, base_currency)
         )
 
     async def test_connection(self) -> bool:
