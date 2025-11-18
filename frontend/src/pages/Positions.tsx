@@ -37,8 +37,7 @@ import {
   TIME_INTERVALS,
   type CandleData
 } from '../utils/indicators'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { API_BASE_URL } from '../config/api'
 
 interface IndicatorConfig {
   id: string
@@ -134,7 +133,7 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
   useEffect(() => {
     const fetchCandles = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/candles`, {
+        const response = await axios.get(`${API_BASE_URL}/api/candles`, {
           params: {
             product_id: selectedPair,
             granularity: timeframe,
@@ -1192,7 +1191,7 @@ export default function Positions() {
       const pricePromises = openPositions.map(async (position) => {
         try {
           // Use candles API (more reliable than ticker for getting current price)
-          const response = await axios.get(`${API_BASE}/api/candles`, {
+          const response = await axios.get(`${API_BASE_URL}/api/candles`, {
             params: {
               product_id: position.product_id || 'ETH-BTC',
               granularity: 'ONE_MINUTE',
@@ -1205,7 +1204,7 @@ export default function Positions() {
             return { product_id: position.product_id || 'ETH-BTC', price: candles[0].close }
           }
           // Fallback to ticker if no candles
-          const tickerResponse = await axios.get(`${API_BASE}/api/ticker/${position.product_id || 'ETH-BTC'}`, {
+          const tickerResponse = await axios.get(`${API_BASE_URL}/api/ticker/${position.product_id || 'ETH-BTC'}`, {
             signal: abortController.signal
           })
           return { product_id: position.product_id || 'ETH-BTC', price: tickerResponse.data.price }

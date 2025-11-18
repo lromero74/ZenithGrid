@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Layers, Plus, X, Settings, TrendingUp, Activity, BarChart3, Info } from 'lucide-react'
 import axios from 'axios'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { API_BASE_URL } from '../config/api'
 
 interface StrategyParameter {
   name: string
@@ -33,7 +32,7 @@ export default function Strategies() {
   const { data: strategies, isLoading } = useQuery<StrategyDefinition[]>({
     queryKey: ['strategies'],
     queryFn: async () => {
-      const response = await axios.get(`${API_BASE}/api/bots/strategies`)
+      const response = await axios.get(`${API_BASE_URL}/api/bots/strategies`)
       return response.data
     }
   })

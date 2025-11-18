@@ -361,8 +361,8 @@ class MultiBotMonitor:
                     logger.error(f"  Error processing {product_id} result: {e}")
                     results[product_id] = {"error": str(e)}
 
-            # Update bot's last check time
-            bot.last_signal_check = datetime.utcnow()
+            # Note: bot.last_signal_check is updated BEFORE processing starts (in monitor_loop)
+            # to prevent race conditions where the same bot gets processed twice
             await db.commit()
 
             return results
@@ -611,8 +611,8 @@ class MultiBotMonitor:
 
             logger.info(f"  Result: {result['action']} - {result['reason']}")
 
-            # Update bot's last check time
-            bot.last_signal_check = datetime.utcnow()
+            # Note: bot.last_signal_check is updated BEFORE processing starts (in monitor_loop)
+            # to prevent race conditions where the same bot gets processed twice
             await db.commit()
 
             return result
@@ -651,6 +651,12 @@ class MultiBotMonitor:
                                         continue
 
                                 logger.info(f"Processing {bot.name} (interval: {check_interval}s)")
+
+                                # Update timestamp BEFORE processing to prevent race condition
+                                # (if processing takes >10s, next loop iteration would start processing again!)
+                                bot.last_signal_check = datetime.utcnow()
+                                await db.commit()  # Commit immediately to prevent concurrent processing
+
                                 await self.process_bot(db, bot)
                             except Exception as e:
                                 logger.error(f"Error processing bot {bot.name}: {e}")
