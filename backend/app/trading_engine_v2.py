@@ -223,14 +223,32 @@ class StrategyTradingEngine:
                 logger.error(f"Coinbase order failed - Full response: {order_response}")
 
                 # Save error to position for UI display (like 3Commas)
-                error_msg = "Order failed"
                 if error_response:
-                    error_msg = error_response.get("message", "Unknown error")
+                    # Try multiple possible error field names from Coinbase
+                    error_msg = error_response.get("message") or error_response.get("error") or "Unknown error"
                     error_details = error_response.get("error_details", "")
-                    logger.error(f"Coinbase error: {error_msg} - {error_details}")
-                    full_error = f"{error_msg}: {error_details}" if error_details else error_msg
+                    failure_reason = error_response.get("failure_reason", "")
+                    preview_failure_reason = error_response.get("preview_failure_reason", "")
+
+                    # Build comprehensive error message
+                    error_parts = [error_msg]
+                    if error_details:
+                        error_parts.append(error_details)
+                    if failure_reason:
+                        error_parts.append(f"Reason: {failure_reason}")
+                    if preview_failure_reason:
+                        error_parts.append(f"Preview: {preview_failure_reason}")
+
+                    full_error = " - ".join(error_parts)
+
+                    # If still no useful error, show the entire error_response as JSON
+                    if full_error == "Unknown error":
+                        import json
+                        full_error = f"Coinbase error: {json.dumps(error_response)}"
+
+                    logger.error(f"Coinbase error details: {full_error}")
                 else:
-                    full_error = "No order_id returned from Coinbase"
+                    full_error = "No order_id returned from Coinbase (no error_response provided)"
 
                 # Record error on position
                 position.last_error_message = full_error
