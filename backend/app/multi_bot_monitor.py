@@ -336,9 +336,11 @@ class MultiBotMonitor:
             # Call batch AI analysis (1 API call for ALL pairs!)
             logger.info(f"  🧠 Calling AI for batch analysis of {len(pairs_data)} pairs...")
             batch_analyses = await strategy.analyze_multiple_pairs_batch(pairs_data)
+            logger.info(f"  ✅ Received {len(batch_analyses)} analyses from AI")
 
             # Process each pair's analysis result
             results = {}
+            logger.info(f"  📋 Processing {len(pairs_data)} pairs from batch analysis...")
             for product_id in pairs_data.keys():
                 try:
                     signal_data = batch_analyses.get(product_id, {
@@ -346,6 +348,9 @@ class MultiBotMonitor:
                         "confidence": 0,
                         "reasoning": "No analysis result"
                     })
+
+                    # Debug logging to track duplicate opinions
+                    logger.info(f"    Processing {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)")
 
                     # Log AI decision
                     await self.log_ai_decision(db, bot, product_id, signal_data, pairs_data.get(product_id, {}))
@@ -623,8 +628,8 @@ class MultiBotMonitor:
 
     async def monitor_loop(self):
         """Main monitoring loop for all active bots"""
-        logger.info("Starting multi-bot monitor")
-        self.running = True
+        logger.info("Starting multi-bot monitor loop")
+        # Note: self.running is set to True in start() to prevent race conditions
 
         while self.running:
             try:
@@ -676,10 +681,13 @@ class MultiBotMonitor:
     def start(self):
         """Start the monitoring task"""
         if not self.running:
+            self.running = True  # Set IMMEDIATELY to prevent race condition (double-start)
             self.task = asyncio.create_task(self.monitor_loop())
             # Start order monitor alongside bot monitor
             asyncio.create_task(self.order_monitor.start())
             logger.info("Multi-bot monitor task started")
+        else:
+            logger.warning("Monitor already running, ignoring duplicate start() call")
 
     async def stop(self):
         """Stop the monitoring task"""
