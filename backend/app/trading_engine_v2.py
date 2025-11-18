@@ -214,11 +214,20 @@ class StrategyTradingEngine:
                 quote_amount=quote_amount
             )
             success_response = order_response.get("success_response", {})
+            error_response = order_response.get("error_response", {})
             order_id = success_response.get("order_id", "")
 
             # CRITICAL: Validate order_id is present
             if not order_id:
-                raise ValueError("No order_id returned from Coinbase - buy order may have failed")
+                # Log the full Coinbase response to understand why order failed
+                logger.error(f"Coinbase order failed - Full response: {order_response}")
+                if error_response:
+                    error_msg = error_response.get("message", "Unknown error")
+                    error_details = error_response.get("error_details", "")
+                    logger.error(f"Coinbase error: {error_msg} - {error_details}")
+                    raise ValueError(f"Coinbase order failed: {error_msg} - {error_details}")
+                else:
+                    raise ValueError("No order_id returned from Coinbase - buy order may have failed")
 
         except Exception as e:
             logger.error(f"Error executing buy order: {e}")
