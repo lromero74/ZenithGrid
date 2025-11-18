@@ -639,13 +639,10 @@ class CoinbaseClient:
         Returns:
             Order response
         """
-        # Extract quote currency from product_id (e.g., "BTC" from "ETH-BTC")
-        quote_currency = product_id.split('-')[1] if '-' in product_id else "BTC"
-
         return await self.create_market_order(
             product_id=product_id,
             side="BUY",
-            funds=format_quote_amount(btc_amount, quote_currency)
+            funds=f"{btc_amount:.8f}"
         )
 
     async def sell_eth_for_btc(self, eth_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
@@ -682,7 +679,7 @@ class CoinbaseClient:
         return await self.create_market_order(
             product_id=product_id,
             side="BUY",
-            funds=format_quote_amount(usd_amount, "USD")
+            funds=f"{usd_amount:.2f}"
         )
 
     async def sell_for_usd(self, base_amount: float, product_id: str) -> Dict[str, Any]:
