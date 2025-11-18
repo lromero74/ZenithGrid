@@ -415,12 +415,34 @@ class StrategyTradingEngine:
                 product_id=self.product_id,
                 base_amount=base_amount
             )
+
+            # Log the full response for debugging
+            logger.info(f"Coinbase sell order response: {order_response}")
+
+            # Check success flag first
+            if not order_response.get("success", False):
+                # Order failed - check error response
+                error_response = order_response.get("error_response", {})
+                if error_response:
+                    error_msg = error_response.get("message", "Unknown error")
+                    error_details = error_response.get("error_details", "")
+                    error_code = error_response.get("error", "UNKNOWN")
+                    raise ValueError(f"Coinbase sell order failed [{error_code}]: {error_msg}. Details: {error_details}")
+                else:
+                    raise ValueError(f"Coinbase sell order failed with no error details. Full response: {order_response}")
+
+            # Extract order_id from success_response (documented format)
             success_response = order_response.get("success_response", {})
             order_id = success_response.get("order_id", "")
 
+            # Fallback: try top-level order_id
+            if not order_id:
+                order_id = order_response.get("order_id", "")
+
             # CRITICAL: Validate order_id is present
             if not order_id:
-                raise ValueError("No order_id returned from Coinbase - sell order may have failed")
+                logger.error(f"Full Coinbase response: {order_response}")
+                raise ValueError(f"No order_id found in successful Coinbase response. Response keys: {list(order_response.keys())}")
 
         except Exception as e:
             logger.error(f"Error executing sell order: {e}")
