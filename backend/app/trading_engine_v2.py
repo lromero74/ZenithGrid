@@ -418,7 +418,8 @@ class StrategyTradingEngine:
     async def process_signal(
         self,
         candles: List[Dict[str, Any]],
-        current_price: float
+        current_price: float,
+        pre_analyzed_signal: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Process market data with bot's strategy
@@ -426,12 +427,18 @@ class StrategyTradingEngine:
         Args:
             candles: Recent candle data
             current_price: Current market price
+            pre_analyzed_signal: Optional pre-analyzed signal from batch mode (prevents duplicate AI calls)
 
         Returns:
             Dict with action taken and details
         """
-        # Analyze signal using strategy
-        signal_data = await self.strategy.analyze_signal(candles, current_price)
+        # Use pre-analyzed signal if provided (from batch mode), otherwise analyze now
+        if pre_analyzed_signal:
+            signal_data = pre_analyzed_signal
+            logger.info(f"  Using pre-analyzed signal from batch mode (confidence: {signal_data.get('confidence')}%)")
+        else:
+            # Analyze signal using strategy
+            signal_data = await self.strategy.analyze_signal(candles, current_price)
 
         if not signal_data:
             return {

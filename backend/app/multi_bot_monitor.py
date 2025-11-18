@@ -617,8 +617,8 @@ class MultiBotMonitor:
                 product_id=product_id  # Specify which pair this engine instance trades
             )
 
-            # Process the signal
-            result = await engine.process_signal(candles, current_price)
+            # Process the signal (pass pre_analyzed_signal if available from batch mode)
+            result = await engine.process_signal(candles, current_price, pre_analyzed_signal=pre_analyzed_signal)
 
             logger.info(f"  Result: {result['action']} - {result['reason']}")
 
