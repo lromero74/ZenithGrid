@@ -847,6 +847,20 @@ class StrategyTradingEngine:
                 self.db.add(signal)
                 await self.db.commit()
 
+                # Log the SELL decision to AI logs (even if AI recommended something else)
+                # This captures what the trading engine actually did, not just what AI suggested
+                await self.save_ai_log(
+                    signal_data={
+                        **signal_data,
+                        "signal_type": "sell",
+                        "reasoning": f"SELL EXECUTED: {sell_reason}",
+                        "confidence": 100,  # Trading engine decision, not AI suggestion
+                    },
+                    decision="sell",
+                    current_price=current_price,
+                    position=position
+                )
+
                 return {
                     "action": "sell",
                     "reason": sell_reason,

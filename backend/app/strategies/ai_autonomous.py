@@ -1467,7 +1467,7 @@ Strategic Considerations:
         if profit_pct < min_profit:
             return False, f"Profit {profit_pct:.2f}% below minimum {min_profit}%"
 
-        # RULE 3: Consider AI recommendation
+        # RULE 3: AI decides when to sell (with profit protection from rules 1 & 2)
         # Lower threshold for sells (65%) since we have profit protection (never sell at loss + min profit)
         if signal_data.get("signal_type") == "sell":
             confidence = signal_data.get("confidence", 0)
@@ -1475,9 +1475,6 @@ Strategic Considerations:
                 reasoning = signal_data.get("reasoning", "AI recommends selling")
                 return True, f"AI SELL ({confidence}% confidence, {profit_pct:.2f}% profit): {reasoning}"
 
-        # RULE 4: Sell if we hit expected profit from AI's original analysis
-        expected_profit = signal_data.get("expected_profit_pct", 0)
-        if expected_profit > 0 and profit_pct >= expected_profit:
-            return True, f"Hit expected profit target ({profit_pct:.2f}% >= {expected_profit}%)"
-
-        return False, f"Holding for more profit (current: {profit_pct:.2f}%)"
+        # Don't sell unless AI recommends it
+        # The AI is in full control of sell decisions (as long as we have profit)
+        return False, f"Holding for AI signal (current profit: {profit_pct:.2f}%)"

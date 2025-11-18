@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ETH/BTC Trading Bot - Systemd Service Manager
+# ETH/BTC Trading Bot - Cross-Platform Manager
 # Usage: ./bot.sh [start|stop|restart|status|logs]
 
 set -e
@@ -12,14 +12,45 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Service names
+# Detect OS
+OS_TYPE=$(uname -s)
+
+# Directories and files
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$SCRIPT_DIR/backend"
+FRONTEND_DIR="$SCRIPT_DIR/frontend"
+BACKEND_PID_FILE="$SCRIPT_DIR/.backend.pid"
+FRONTEND_PID_FILE="$SCRIPT_DIR/.frontend.pid"
+BACKEND_LOG="$SCRIPT_DIR/backend.log"
+FRONTEND_LOG="$SCRIPT_DIR/frontend.log"
+
+# Service names (for systemd)
 BACKEND_SERVICE="trading-bot-backend"
 FRONTEND_SERVICE="trading-bot-frontend"
 
-# Function to check if service is running
+# Ports
+BACKEND_PORT=8100
+FRONTEND_PORT=5173
+
+# Function to check if process is running (macOS/Linux)
+is_process_running() {
+    local pid_file=$1
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        else
+            rm -f "$pid_file"
+            return 1
+        fi
+    fi
+    return 1
+}
+
+# Function to check if systemd service is running (Linux)
 is_service_running() {
     local service=$1
-    systemctl is-active --quiet "$service"
+    systemctl is-active --quiet "$service" 2>/dev/null
     return $?
 }
 
@@ -27,23 +58,50 @@ is_service_running() {
 start_backend() {
     echo -e "${BLUE}Starting backend...${NC}"
 
-    if is_service_running "$BACKEND_SERVICE"; then
-        echo -e "${YELLOW}Backend is already running${NC}"
-        return 0
-    fi
+    if [ "$OS_TYPE" = "Darwin" ]; then
+        # macOS - use process management
+        if is_process_running "$BACKEND_PID_FILE"; then
+            echo -e "${YELLOW}Backend is already running (PID: $(cat $BACKEND_PID_FILE))${NC}"
+            return 0
+        fi
 
-    sudo systemctl start "$BACKEND_SERVICE"
-    sleep 2
+        cd "$BACKEND_DIR"
+        nohup ./venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $BACKEND_PORT --reload > "$BACKEND_LOG" 2>&1 &
+        local backend_pid=$!
+        echo $backend_pid > "$BACKEND_PID_FILE"
+        cd "$SCRIPT_DIR"
+        sleep 3
 
-    if is_service_running "$BACKEND_SERVICE"; then
-        echo -e "${GREEN}✅ Backend started${NC}"
-        echo -e "${GREEN}   API: http://localhost:8000${NC}"
-        echo -e "${GREEN}   Logs: sudo journalctl -u $BACKEND_SERVICE -f${NC}"
-        return 0
+        if is_process_running "$BACKEND_PID_FILE"; then
+            echo -e "${GREEN}✅ Backend started (PID: $backend_pid)${NC}"
+            echo -e "${GREEN}   API: http://localhost:$BACKEND_PORT${NC}"
+            echo -e "${GREEN}   Logs: tail -f $BACKEND_LOG${NC}"
+            return 0
+        else
+            echo -e "${RED}❌ Backend failed to start${NC}"
+            echo -e "${YELLOW}Check logs: tail -n 50 $BACKEND_LOG${NC}"
+            return 1
+        fi
     else
-        echo -e "${RED}❌ Backend failed to start${NC}"
-        echo -e "${YELLOW}Check logs: sudo journalctl -u $BACKEND_SERVICE -n 50${NC}"
-        return 1
+        # Linux - use systemd
+        if is_service_running "$BACKEND_SERVICE"; then
+            echo -e "${YELLOW}Backend is already running${NC}"
+            return 0
+        fi
+
+        sudo systemctl start "$BACKEND_SERVICE"
+        sleep 2
+
+        if is_service_running "$BACKEND_SERVICE"; then
+            echo -e "${GREEN}✅ Backend started${NC}"
+            echo -e "${GREEN}   API: http://localhost:8100${NC}"
+            echo -e "${GREEN}   Logs: sudo journalctl -u $BACKEND_SERVICE -f${NC}"
+            return 0
+        else
+            echo -e "${RED}❌ Backend failed to start${NC}"
+            echo -e "${YELLOW}Check logs: sudo journalctl -u $BACKEND_SERVICE -n 50${NC}"
+            return 1
+        fi
     fi
 }
 
