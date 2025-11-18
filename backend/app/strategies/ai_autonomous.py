@@ -1223,15 +1223,12 @@ Respond with JSON (no markdown):
             if confidence < dca_confidence_threshold:
                 return False, 0.0, f"DCA confidence {confidence}% below threshold {dca_confidence_threshold}%"
 
-            # Calculate DCA amount
+            # Calculate DCA amount using position's initial balance (3Commas style)
+            # This ensures consistent DCA order sizes regardless of current account balance
             safety_order_pct = self.config.get("safety_order_percentage", 5.0)
 
-            # Smart budget division by max concurrent deals (3Commas style)
-            max_deals = self.config.get("max_concurrent_deals", 1)
-            if max_deals > 1:
-                safety_order_pct = safety_order_pct / max_deals
-
-            btc_amount = btc_balance * (safety_order_pct / 100.0)
+            # Use the position's initial balance for consistent DCA sizing
+            btc_amount = position.initial_quote_balance * (safety_order_pct / 100.0)
 
             # Don't exceed position budget
             remaining_budget = position.max_quote_allowed - position.total_quote_spent
