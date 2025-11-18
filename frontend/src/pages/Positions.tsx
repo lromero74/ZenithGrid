@@ -1736,6 +1736,15 @@ export default function Positions() {
                                 productId={position.product_id || 'ETH-BTC'}
                               />
                             )}
+                            {/* Error Indicator (like 3Commas) */}
+                            {position.last_error_message && (
+                              <div
+                                className="flex items-center cursor-help"
+                                title={`Error: ${position.last_error_message}\n${position.last_error_timestamp ? `Time: ${formatDateTime(position.last_error_timestamp)}` : ''}`}
+                              >
+                                <AlertCircle size={14} className="text-red-400" />
+                              </div>
+                            )}
                           </div>
                           <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>
                         </div>

@@ -221,16 +221,31 @@ class StrategyTradingEngine:
             if not order_id:
                 # Log the full Coinbase response to understand why order failed
                 logger.error(f"Coinbase order failed - Full response: {order_response}")
+
+                # Save error to position for UI display (like 3Commas)
+                error_msg = "Order failed"
                 if error_response:
                     error_msg = error_response.get("message", "Unknown error")
                     error_details = error_response.get("error_details", "")
                     logger.error(f"Coinbase error: {error_msg} - {error_details}")
-                    raise ValueError(f"Coinbase order failed: {error_msg} - {error_details}")
+                    full_error = f"{error_msg}: {error_details}" if error_details else error_msg
                 else:
-                    raise ValueError("No order_id returned from Coinbase - buy order may have failed")
+                    full_error = "No order_id returned from Coinbase"
+
+                # Record error on position
+                position.last_error_message = full_error
+                position.last_error_timestamp = datetime.utcnow()
+                await self.db.commit()
+
+                raise ValueError(f"Coinbase order failed: {full_error}")
 
         except Exception as e:
             logger.error(f"Error executing buy order: {e}")
+            # Record error on position if it's not already recorded
+            if position and not position.last_error_message:
+                position.last_error_message = str(e)
+                position.last_error_timestamp = datetime.utcnow()
+                await self.db.commit()
             raise
 
         # Record trade
@@ -249,6 +264,10 @@ class StrategyTradingEngine:
         )
 
         self.db.add(trade)
+
+        # Clear any previous errors on successful trade
+        position.last_error_message = None
+        position.last_error_timestamp = None
 
         # Update position totals
         position.total_quote_spent += quote_amount

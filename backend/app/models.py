@@ -142,6 +142,10 @@ class Position(Base):
     # Trailing Stop Loss tracking
     highest_price_since_entry = Column(Float, nullable=True)  # Highest price since position opened (for trailing SL)
 
+    # Error tracking (like 3Commas - show errors in UI with tooltips)
+    last_error_message = Column(String, nullable=True)  # Last error message (e.g., from failed DCA)
+    last_error_timestamp = Column(DateTime, nullable=True)  # When the error occurred
+
     # Relationships
     bot = relationship("Bot", back_populates="positions")
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")
