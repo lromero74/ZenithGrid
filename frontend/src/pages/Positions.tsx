@@ -90,7 +90,7 @@ const formatQuoteAmount = (amount: number, productId: string) => {
 }
 
 // Deal Chart Component with full Charts page functionality
-function DealChart({ position, productId: initialProductId, currentPrice }: { position: Position, productId: string, currentPrice?: number }) {
+function DealChart({ position, productId: initialProductId, currentPrice, trades }: { position: Position, productId: string, currentPrice?: number, trades?: Trade[] }) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
@@ -129,6 +129,55 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
     enabled: !!position.bot_id,
   })
 
+  // Fill gaps in candle data with synthetic candles for position entry
+  const fillCandleGaps = (candles: CandleData[], position: Position) => {
+    if (!candles.length) return candles
+
+    const openedTime = Math.floor(new Date(position.opened_at).getTime() / 1000)
+    const entryPrice = position.average_buy_price
+
+    // Check if we need to add a synthetic candle for the entry time
+    const hasExactCandle = candles.some(c => c.time === openedTime)
+    if (hasExactCandle) return candles
+
+    // Find where to insert the synthetic candle
+    const insertIndex = candles.findIndex(c => c.time > openedTime)
+
+    if (insertIndex === -1) {
+      // Entry is after all candles, add to end
+      return [...candles, {
+        time: openedTime,
+        open: entryPrice,
+        high: entryPrice,
+        low: entryPrice,
+        close: entryPrice,
+        volume: 0
+      }]
+    } else if (insertIndex === 0) {
+      // Entry is before all candles, add to beginning
+      return [{
+        time: openedTime,
+        open: entryPrice,
+        high: entryPrice,
+        low: entryPrice,
+        close: entryPrice,
+        volume: 0
+      }, ...candles]
+    } else {
+      // Entry is in the middle, insert synthetic candle
+      const newCandles = [...candles]
+      newCandles.splice(insertIndex, 0, {
+        time: openedTime,
+        open: entryPrice,
+        high: entryPrice,
+        low: entryPrice,
+        close: entryPrice,
+        volume: 0
+      })
+      return newCandles
+    }
+  }
+
   // Fetch candle data
   useEffect(() => {
     const fetchCandles = async () => {
@@ -140,7 +189,13 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
             limit: 300,
           },
         })
-        const candles = response.data.candles || []
+        let candles = response.data.candles || []
+
+        // Add synthetic candle for position entry if needed
+        if (position) {
+          candles = fillCandleGaps(candles, position)
+        }
+
         setChartData(candles)
         candleDataRef.current = candles
       } catch (err) {
@@ -148,7 +203,7 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
       }
     }
     fetchCandles()
-  }, [selectedPair, timeframe])
+  }, [selectedPair, timeframe, position])
 
   // Initialize main chart
   useEffect(() => {
@@ -604,11 +659,13 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
           })
         }
 
-        // Entry marker
+        // Entry marker (base order)
         const openedTime = Math.floor(new Date(position.opened_at).getTime() / 1000)
         const nearestCandle = chartData.reduce((prev, curr) =>
           Math.abs(curr.time - openedTime) < Math.abs(prev.time - openedTime) ? curr : prev
         )
+
+        console.log(`Entry arrow: openedTime=${openedTime}, nearestCandle.time=${nearestCandle?.time}, diff=${Math.abs((nearestCandle?.time || 0) - openedTime)}s, price=${nearestCandle?.close}`)
 
         if (nearestCandle) {
           markers.push({
@@ -620,6 +677,31 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
           })
         }
 
+        // DCA markers (safety orders)
+        if (trades && trades.length > 0) {
+          const positionTrades = trades.filter(t => t.position_id === position.id)
+          const dcaTrades = positionTrades
+            .filter(t => t.side === 'buy' && t.trade_type === 'dca')
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
+          dcaTrades.forEach((trade, index) => {
+            const tradeTime = Math.floor(new Date(trade.timestamp).getTime() / 1000)
+            const nearestCandle = chartData.reduce((prev, curr) =>
+              Math.abs(curr.time - tradeTime) < Math.abs(prev.time - tradeTime) ? curr : prev
+            )
+
+            if (nearestCandle) {
+              markers.push({
+                time: nearestCandle.time as Time,
+                position: 'belowBar',
+                color: '#f97316', // Orange for DCA
+                shape: 'arrowUp',
+                text: `DCA${index + 1}`,
+              })
+            }
+          })
+        }
+
         mainSeriesRef.current.setMarkers(markers)
       }
 
@@ -627,7 +709,7 @@ function DealChart({ position, productId: initialProductId, currentPrice }: { po
     } catch (e) {
       return
     }
-  }, [chartData, chartType, useHeikinAshi, indicators, position, bot, selectedPair])
+  }, [chartData, chartType, useHeikinAshi, indicators, position, bot, selectedPair, trades])
 
   // Create oscillator indicator charts
   useEffect(() => {
@@ -2103,6 +2185,7 @@ export default function Positions() {
                         position={position}
                         productId={position.product_id || "ETH-BTC"}
                         currentPrice={currentPrice}
+                        trades={trades}
                       />
                     </div>
                   )}
