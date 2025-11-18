@@ -3,8 +3,7 @@ import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDow
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { API_BASE_URL } from '../config/api'
 
 interface CandleData {
   time: number
@@ -233,7 +232,7 @@ function Portfolio() {
       try {
         const productId = `${chartModalAsset}-${chartPairType}`
         const response = await axios.get<{ candles: CandleData[] }>(
-          `${API_BASE}/api/candles`,
+          `${API_BASE_URL}/api/candles`,
           {
             params: {
               product_id: productId,

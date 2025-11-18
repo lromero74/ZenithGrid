@@ -13,8 +13,7 @@ import {
 } from '../utils/indicators/calculations'
 import type { CandleData, IndicatorConfig } from '../utils/indicators/types'
 import { AVAILABLE_INDICATORS } from '../utils/indicators/definitions'
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+import { API_BASE_URL } from '../config/api'
 
 interface LightweightChartModalProps {
   isOpen: boolean
@@ -85,7 +84,7 @@ export default function LightweightChartModal({
 
     const fetchCandles = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/candles`, {
+        const response = await axios.get(`${API_BASE_URL}/api/candles`, {
           params: {
             product_id: symbol,
             granularity: timeframe,

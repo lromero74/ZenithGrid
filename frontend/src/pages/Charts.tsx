@@ -15,8 +15,7 @@ import {
   TIME_INTERVALS,
   type CandleData
 } from '../utils/indicators'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { API_BASE_URL } from '../config/api'
 
 interface IndicatorConfig {
   id: string
@@ -832,7 +831,7 @@ function Charts() {
 
       try {
         const response = await axios.get<{ candles: CandleData[] }>(
-          `${API_BASE}/api/candles`,
+          `${API_BASE_URL}/api/candles`,
           {
             params: {
               product_id: selectedPair,
