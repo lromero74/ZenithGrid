@@ -1396,15 +1396,24 @@ export default function Positions() {
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     )
 
-    return buyTrades.map((trade, index) => ({
-      orderNumber: index,
-      type: index === 0 ? 'Base Order' : `Safety Order ${index}`,
-      quoteAmount: trade.quote_amount,
-      baseAmount: trade.base_amount,
-      price: trade.price,
-      timestamp: trade.timestamp,
-      filled: true
-    }))
+    return buyTrades.map((trade, index) => {
+      let orderType = 'Base Order'
+      if (index > 0) {
+        // Safety orders - distinguish manual vs automatic (3Commas style)
+        const isManual = trade.trade_type === 'manual_safety_order'
+        orderType = `Safety Order ${index}${isManual ? ' (Manual)' : ''}`
+      }
+
+      return {
+        orderNumber: index,
+        type: orderType,
+        quoteAmount: trade.quote_amount,
+        baseAmount: trade.base_amount,
+        price: trade.price,
+        timestamp: trade.timestamp,
+        filled: true
+      }
+    })
   }
 
   // Calculate overall statistics
@@ -1913,7 +1922,19 @@ export default function Positions() {
                       {/* Column 5: Avg. O (Averaging Orders) - Like 3Commas (1 col) */}
                       <div className="col-span-1">
                         <div className="text-[10px] space-y-0.5">
-                          <div className="text-slate-400">Completed: {Math.max(0, (position.trade_count || 1) - 1)}</div>
+                          <div className="text-slate-400">
+                            Completed: {(() => {
+                              // Calculate auto vs manual safety orders (3Commas style: "auto (+manual)")
+                              const positionTrades = trades?.filter(t => t.position_id === position.id && t.side === 'buy') || []
+                              const autoSO = positionTrades.filter(t => t.trade_type === 'dca').length
+                              const manualSO = positionTrades.filter(t => t.trade_type === 'manual_safety_order').length
+
+                              if (manualSO > 0) {
+                                return `${autoSO} (+${manualSO})`
+                              }
+                              return autoSO
+                            })()}
+                          </div>
                           <div className="text-slate-400">Active: {position.pending_orders_count || 0}</div>
                           <div className="text-slate-400">Max: {position.strategy_config_snapshot?.max_safety_orders || 0}</div>
                         </div>
