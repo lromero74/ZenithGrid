@@ -69,6 +69,7 @@ class BotResponse(BaseModel):
     total_positions_count: int = 0
     total_pnl_usd: float = 0.0
     avg_daily_pnl_usd: float = 0.0
+    insufficient_funds: bool = False
 
     class Config:
         from_attributes = True
@@ -80,6 +81,7 @@ class BotStats(BaseModel):
     closed_positions: int
     total_profit_btc: float
     win_rate: float
+    insufficient_funds: bool
 
 
 # Strategy Endpoints
@@ -191,6 +193,9 @@ async def list_bots(
     result = await db.execute(query)
     bots = result.scalars().all()
 
+    # Initialize coinbase client for budget calculations
+    coinbase = CoinbaseClient()
+
     # Add position counts and PnL for each bot
     bot_responses = []
     for bot in bots:
@@ -213,11 +218,37 @@ async def list_bots(
         days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
         avg_daily_pnl_usd = total_pnl_usd / days_active if days_active > 0 else 0.0
 
+        # Check if bot has insufficient funds for new positions
+        insufficient_funds = False
+        max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+
+        if len(open_positions) < max_concurrent_deals:
+            # Bot has room for more positions - check if there's budget
+            try:
+                quote_currency = bot.get_quote_currency()
+
+                if quote_currency == "BTC":
+                    aggregate_value = await coinbase.calculate_aggregate_btc_value()
+                else:  # USD
+                    aggregate_value = await coinbase.calculate_aggregate_usd_value()
+
+                reserved_balance = bot.get_reserved_balance(aggregate_value)
+                total_in_positions = sum(p.total_quote_spent for p in open_positions)
+                available_budget = reserved_balance - total_in_positions
+                min_per_position = reserved_balance / max(max_concurrent_deals, 1)
+
+                insufficient_funds = available_budget < min_per_position
+            except Exception as e:
+                logger.error(f"Error calculating budget for bot {bot.id}: {e}")
+                # Don't fail the whole request if budget calc fails
+                insufficient_funds = False
+
         bot_response = BotResponse.model_validate(bot)
         bot_response.open_positions_count = len(open_positions)
         bot_response.total_positions_count = len(all_positions)
         bot_response.total_pnl_usd = total_pnl_usd
         bot_response.avg_daily_pnl_usd = avg_daily_pnl_usd
+        bot_response.insufficient_funds = insufficient_funds
         bot_responses.append(bot_response)
 
     return bot_responses
@@ -515,12 +546,39 @@ async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
     winning_positions = [p for p in closed_positions if p.profit_quote and p.profit_quote > 0]
     win_rate = (len(winning_positions) / len(closed_positions) * 100) if closed_positions else 0.0
 
+    # Check if bot has insufficient funds for new positions
+    insufficient_funds = False
+    max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+
+    if len(open_positions) < max_concurrent_deals:
+        # Bot has room for more positions - check if there's budget
+        try:
+            coinbase = CoinbaseClient()
+            quote_currency = bot.get_quote_currency()
+
+            if quote_currency == "BTC":
+                aggregate_value = await coinbase.calculate_aggregate_btc_value()
+            else:  # USD
+                aggregate_value = await coinbase.calculate_aggregate_usd_value()
+
+            reserved_balance = bot.get_reserved_balance(aggregate_value)
+            total_in_positions = sum(p.total_quote_spent for p in open_positions)
+            available_budget = reserved_balance - total_in_positions
+            min_per_position = reserved_balance / max(max_concurrent_deals, 1)
+
+            insufficient_funds = available_budget < min_per_position
+        except Exception as e:
+            logger.error(f"Error calculating budget for bot {bot_id}: {e}")
+            # Don't fail the whole request if budget calc fails
+            insufficient_funds = False
+
     return BotStats(
         total_positions=len(all_positions),
         open_positions=len(open_positions),
         closed_positions=len(closed_positions),
         total_profit_btc=total_profit,
-        win_rate=win_rate
+        win_rate=win_rate,
+        insufficient_funds=insufficient_funds
     )
 
 

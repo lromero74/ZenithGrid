@@ -553,7 +553,17 @@ function Bots() {
                       {/* Name & Description */}
                       <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <div className="flex flex-col">
-                          <div className="font-medium text-white">{bot.name}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-white">{bot.name}</span>
+                            {(bot as any).insufficient_funds && (
+                              <span
+                                className="text-amber-500 text-sm"
+                                title="Insufficient funds to open new positions"
+                              >
+                                💰
+                              </span>
+                            )}
+                          </div>
                           {bot.description && (
                             <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">
                               {bot.description}

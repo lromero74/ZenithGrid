@@ -146,6 +146,7 @@ export interface Bot {
   created_at: string;
   updated_at: string;
   last_signal_check: string | null;
+  insufficient_funds?: boolean;
 }
 
 export interface BotCreate {
@@ -168,6 +169,7 @@ export interface BotStats {
   total_profit_usd: number;
   win_rate: number;
   avg_profit_per_position: number;
+  insufficient_funds: boolean;
 }
 
 export interface OrderHistory {

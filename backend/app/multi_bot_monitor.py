@@ -255,6 +255,28 @@ class MultiBotMonitor:
             # Get max concurrent deals from strategy config
             max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
 
+            # Calculate available budget for new positions
+            quote_currency = bot.get_quote_currency()
+            if quote_currency == "BTC":
+                aggregate_value = await self.coinbase.calculate_aggregate_btc_value()
+            else:  # USD
+                aggregate_value = await self.coinbase.calculate_aggregate_usd_value()
+
+            reserved_balance = bot.get_reserved_balance(aggregate_value)
+
+            # Calculate how much budget is already used
+            total_in_positions = sum(p.total_quote_spent for p in open_positions)
+            available_budget = reserved_balance - total_in_positions
+
+            # Calculate minimum required per new position (budget / max_deals)
+            min_per_position = reserved_balance / max(max_concurrent_deals, 1)
+
+            # Determine if we have enough budget for new positions or DCA
+            has_budget_for_new = available_budget >= min_per_position
+
+            logger.info(f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved, {total_in_positions:.8f} in use, {available_budget:.8f} available")
+            logger.info(f"  💰 Min per position: {min_per_position:.8f} {quote_currency}, Has budget: {has_budget_for_new}")
+
             # Determine which pairs to analyze
             pairs_to_analyze = trading_pairs
 
@@ -267,8 +289,16 @@ class MultiBotMonitor:
                     logger.info(f"  📊 Bot at max capacity ({open_count}/{max_concurrent_deals} positions)")
                     logger.info(f"  🎯 Analyzing only {len(pairs_to_analyze)} pairs with open positions: {pairs_to_analyze}")
                     logger.info(f"  ⏭️  Skipping {len(trading_pairs) - len(pairs_to_analyze)} pairs without positions")
+            elif not has_budget_for_new:
+                # Insufficient budget - only analyze pairs with open positions (for sell signals, no new buys/DCA)
+                pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+                pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
+
+                logger.warning(f"  ⚠️  INSUFFICIENT FUNDS: Only {available_budget:.8f} {quote_currency} available, need {min_per_position:.8f}")
+                logger.info(f"  💰 Skipping new position analysis - analyzing only {len(pairs_to_analyze)} pairs with open positions for sell signals")
+                logger.info(f"  ℹ️  Will resume looking for new opportunities once funds are available")
             else:
-                # Below capacity - analyze all configured pairs (looking for buy + sell signals)
+                # Below capacity AND has budget - analyze all configured pairs (looking for buy + sell signals)
                 logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
                 logger.info(f"  🔍 Analyzing all {len(trading_pairs)} pairs for opportunities")
 

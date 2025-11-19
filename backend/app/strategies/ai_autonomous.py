@@ -1635,6 +1635,8 @@ Strategic Considerations:
 
         # New position (base order)
         min_confidence = self._get_confidence_threshold_for_action("open")
+        if min_confidence is None:
+            return False, 0.0, f"AI confidence threshold not configured for opening positions"
         if confidence < min_confidence:
             return False, 0.0, f"AI confidence too low ({confidence}% - need {min_confidence}%+ to open position)"
 
