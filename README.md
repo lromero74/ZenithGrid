@@ -321,3 +321,4 @@ The AI trading bot is experimental. AI decisions are not guaranteed to be profit
 🤖 **Built with Claude Code**
 
 For detailed documentation, see [HANDOFF_DOCUMENT.md](HANDOFF_DOCUMENT.md)
+# Auto-deployment enabled - pushes to main will deploy automatically within 1 minute
