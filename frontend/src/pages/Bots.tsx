@@ -522,6 +522,7 @@ function Bots() {
           </button>
         </div>
       ) : (
+        <>
         <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -532,7 +533,7 @@ function Bots() {
                   <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Pair</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Active trades</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">PnL</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Avg. daily PnL</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Projected PnL</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Budget</th>
                   <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Status</th>
                   <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Actions</th>
@@ -624,18 +625,33 @@ function Bots() {
                         })()}
                       </td>
 
-                      {/* Avg Daily PnL */}
+                      {/* Projected PnL */}
                       <td className="px-4 py-3 text-right">
                         {(() => {
-                          const avgPnl = (bot as any).avg_daily_pnl_usd || 0
-                          const isPositive = avgPnl > 0
-                          const isNegative = avgPnl < 0
+                          const dailyPnl = (bot as any).avg_daily_pnl_usd || 0
+                          const weeklyPnl = dailyPnl * 7
+                          const monthlyPnl = dailyPnl * 30
+                          const yearlyPnl = dailyPnl * 365
+                          const isPositive = dailyPnl > 0
+                          const isNegative = dailyPnl < 0
+                          const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
+                          const prefix = isPositive ? '+' : ''
+
                           return (
-                            <span className={`text-sm font-medium ${
-                              isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
-                            }`}>
-                              {isPositive ? '+' : ''}${avgPnl.toFixed(2)} {isPositive ? '↑' : isNegative ? '↓' : ''}
-                            </span>
+                            <div className="text-xs space-y-0.5">
+                              <div className={`font-medium ${colorClass}`}>
+                                Day: {prefix}${dailyPnl.toFixed(2)}
+                              </div>
+                              <div className={`${colorClass}`}>
+                                Week: {prefix}${weeklyPnl.toFixed(2)}
+                              </div>
+                              <div className={`${colorClass}`}>
+                                Month: {prefix}${monthlyPnl.toFixed(2)}
+                              </div>
+                              <div className={`${colorClass}`}>
+                                Year: {prefix}${yearlyPnl.toFixed(2)}
+                              </div>
+                            </div>
                           )
                         })()}
                       </td>
@@ -741,6 +757,52 @@ function Bots() {
             </table>
           </div>
         </div>
+
+        {/* Summary Totals Table */}
+        <div className="mt-4 bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-slate-900">
+              <tr>
+                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Portfolio Totals</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Daily</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Weekly</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Monthly</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Yearly</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const totalDailyPnl = bots.reduce((sum, bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
+                const totalWeeklyPnl = totalDailyPnl * 7
+                const totalMonthlyPnl = totalDailyPnl * 30
+                const totalYearlyPnl = totalDailyPnl * 365
+                const isPositive = totalDailyPnl > 0
+                const isNegative = totalDailyPnl < 0
+                const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
+                const prefix = isPositive ? '+' : ''
+
+                return (
+                  <tr>
+                    <td className="px-4 py-3 text-sm font-semibold text-slate-300">Projected PnL</td>
+                    <td className={`px-4 py-3 text-right text-lg font-bold ${colorClass}`}>
+                      {prefix}${totalDailyPnl.toFixed(2)}
+                    </td>
+                    <td className={`px-4 py-3 text-right text-lg font-bold ${colorClass}`}>
+                      {prefix}${totalWeeklyPnl.toFixed(2)}
+                    </td>
+                    <td className={`px-4 py-3 text-right text-lg font-bold ${colorClass}`}>
+                      {prefix}${totalMonthlyPnl.toFixed(2)}
+                    </td>
+                    <td className={`px-4 py-3 text-right text-lg font-bold ${colorClass}`}>
+                      {prefix}${totalYearlyPnl.toFixed(2)}
+                    </td>
+                  </tr>
+                )
+              })()}
+            </tbody>
+          </table>
+        </div>
+        </>
       )}
 
       {/* Create/Edit Modal */}
