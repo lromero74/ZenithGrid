@@ -64,6 +64,17 @@ function Bots() {
     queryFn: botsApi.getStrategies,
   })
 
+  // Fetch portfolio data for percentage calculations
+  const { data: portfolio } = useQuery({
+    queryKey: ['account-portfolio-bots'],
+    queryFn: async () => {
+      const response = await fetch('/api/account/portfolio')
+      if (!response.ok) throw new Error('Failed to fetch portfolio')
+      return response.json()
+    },
+    refetchInterval: 60000, // Update every 60 seconds
+  })
+
   // Validate bot configuration against Coinbase minimum order sizes
   const validateBotConfig = async () => {
     // Only validate if we have products and strategy config
@@ -791,20 +802,40 @@ function Bots() {
                 const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
                 const prefix = isPositive ? '+' : ''
 
+                // Calculate percentage gains based on portfolio value
+                const portfolioUsd = portfolio?.total_usd_value || 0
+                const dailyPct = portfolioUsd > 0 ? (totalDailyPnl / portfolioUsd) * 100 : 0
+                const weeklyPct = portfolioUsd > 0 ? (totalWeeklyPnl / portfolioUsd) * 100 : 0
+                const monthlyPct = portfolioUsd > 0 ? (totalMonthlyPnl / portfolioUsd) * 100 : 0
+                const yearlyPct = portfolioUsd > 0 ? (totalYearlyPnl / portfolioUsd) * 100 : 0
+                const pctPrefix = isPositive ? '+' : ''
+
                 return (
                   <tr>
                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-sm font-semibold text-slate-300">Projected PnL</td>
                     <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalDailyPnl.toFixed(2)}
+                      <span className="text-xs ml-1 text-slate-400">
+                        ({pctPrefix}{dailyPct.toFixed(2)}%)
+                      </span>
                     </td>
                     <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalWeeklyPnl.toFixed(2)}
+                      <span className="text-xs ml-1 text-slate-400">
+                        ({pctPrefix}{weeklyPct.toFixed(2)}%)
+                      </span>
                     </td>
                     <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalMonthlyPnl.toFixed(2)}
+                      <span className="text-xs ml-1 text-slate-400">
+                        ({pctPrefix}{monthlyPct.toFixed(2)}%)
+                      </span>
                     </td>
                     <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalYearlyPnl.toFixed(2)}
+                      <span className="text-xs ml-1 text-slate-400">
+                        ({pctPrefix}{yearlyPct.toFixed(2)}%)
+                      </span>
                     </td>
                   </tr>
                 )
