@@ -589,18 +589,30 @@ async def force_close_position(position_id: int, db: AsyncSession = Depends(get_
         if position.status != "open":
             raise HTTPException(status_code=400, detail="Position is not open")
 
-        # Get current price
-        current_price = await coinbase_client.get_current_price()
+        # Get the bot associated with this position
+        bot_query = select(Bot).where(Bot.id == position.bot_id)
+        bot_result = await db.execute(bot_query)
+        bot = bot_result.scalars().first()
 
-        # Execute sell using new trading engine
-        trading_client = TradingClient(coinbase_client)
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found for this position")
+
+        # Get current price for the position's product
+        current_price = await coinbase_client.get_current_price(position.product_id)
+
+        # Create strategy instance for this bot
+        from app.strategies import StrategyRegistry
+        strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
+
+        # Execute sell using trading engine
         engine = StrategyTradingEngine(
             db=db,
-            trading_client=trading_client,
-            bot=None,  # Manual operation, no bot
+            coinbase=coinbase_client,
+            bot=bot,
+            strategy=strategy,
             product_id=position.product_id
         )
-        trade, profit_btc, profit_percentage = await engine.execute_sell(
+        trade, profit_quote, profit_percentage = await engine.execute_sell(
             position=position,
             current_price=current_price,
             signal_data=None
@@ -608,7 +620,7 @@ async def force_close_position(position_id: int, db: AsyncSession = Depends(get_
 
         return {
             "message": f"Position {position_id} closed successfully",
-            "profit_btc": profit_btc,
+            "profit_quote": profit_quote,
             "profit_percentage": profit_percentage
         }
     except HTTPException:
@@ -1119,3 +1131,4 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+# Test comment for auto-deploy
