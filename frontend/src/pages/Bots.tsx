@@ -468,7 +468,7 @@ function Bots() {
         step={step}
         min={param.min_value}
         max={param.max_value}
-        value={value}
+        value={value ?? ''}
         onChange={(e) => {
           const val =
             param.type === 'float'
