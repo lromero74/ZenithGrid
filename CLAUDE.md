@@ -3,3 +3,53 @@
 - new work should be done in dev branches and merged after I confirm good
 - always do git diff check before new git add to make sure we didn't lose functionality we want to keep
 - we are now running from EC2.  Restarts should be done with "sudo systemctl restart trading-bot-backend"
+
+## EC2 Test Instance (testbot)
+
+**Instance Details:**
+- **Host**: testbot (SSH alias in ~/.ssh/config)
+- **Type**: t2.micro (1 vCPU, 1GB RAM, ~$8.50/month)
+- **OS**: Amazon Linux 2023
+- **Region**: us-east-1
+- **Purpose**: 24/7 trading bot hosting
+
+**Services Running:**
+- Trading bot backend (systemd: trading-bot-backend.service)
+- Trading bot frontend (systemd: trading-bot-frontend.service)
+- Both auto-start on boot
+
+**Management:**
+```bash
+ssh testbot
+cd GetRidOf3CommasBecauseTheyGoDownTooOften
+./bot.sh start|stop|restart|status|logs
+```
+
+**Important Notes:**
+- ❌ **DO NOT install Claude Code on testbot** - t2.micro only has 1GB RAM and already runs backend + frontend
+- Trading bot services consume most available memory
+- If Claude Code needed, upgrade to t3.small (2GB RAM) first
+- Database synced from local, stop local services before copying DB to avoid corruption
+
+## Required Python Libraries for AI Strategies
+
+**CRITICAL**: The following libraries must be installed on EC2 for AI strategies to work properly:
+
+```bash
+# Install on EC2 testbot (already in requirements.txt)
+cd GetRidOf3CommasBecauseTheyGoDownTooOften/backend
+./venv/bin/pip install anthropic==0.74.0
+./venv/bin/pip install google-generativeai==0.8.3
+./venv/bin/pip install openai==2.8.1
+```
+
+**Why These Are Required:**
+- `anthropic`: Claude AI API integration for AI autonomous strategy
+- `google-generativeai`: Google Gemini AI integration for alternative AI strategies
+- `openai`: OpenAI API integration (GPT models) for AI decision-making
+
+**Installation Notes:**
+1. These are already listed in `backend/requirements.txt`
+2. On fresh EC2 instance: `pip install -r requirements.txt`
+3. If missing libraries cause errors in AI Bot Reasoning logs, install individually
+4. After installation, always restart backend: `sudo systemctl restart trading-bot-backend`
