@@ -9,6 +9,7 @@ import Charts from './pages/Charts'
 import Strategies from './pages/Strategies'
 import Portfolio from './pages/Portfolio'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History } from 'lucide-react'
+import { positionsApi } from './services/api'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'closedPositions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
@@ -17,6 +18,12 @@ function App() {
     // Restore last viewed page from localStorage
     const saved = localStorage.getItem('current-page')
     return (saved as Page) || 'dashboard'
+  })
+
+  // Track last viewed timestamp for closed positions
+  const [lastViewedClosedPositions, setLastViewedClosedPositions] = useState<number>(() => {
+    const saved = localStorage.getItem('last-viewed-closed-positions')
+    return saved ? parseInt(saved) : Date.now()
   })
 
   // Fetch full portfolio data (all coins)
@@ -36,9 +43,29 @@ function App() {
   const totalBtcValue = portfolio?.total_btc_value || 0
   const totalUsdValue = portfolio?.total_usd_value || 0
 
+  // Fetch closed positions to count new ones
+  const { data: closedPositions = [] } = useQuery({
+    queryKey: ['closed-positions-badge'],
+    queryFn: () => positionsApi.getAll('closed', 100),
+    refetchInterval: 10000, // Check every 10 seconds
+  })
+
+  // Count new closed positions since last view
+  const newClosedCount = closedPositions.filter(pos => {
+    const closedAt = new Date(pos.closed_at || pos.opened_at).getTime()
+    return closedAt > lastViewedClosedPositions
+  }).length
+
   // Save current page to localStorage when it changes
   useEffect(() => {
     localStorage.setItem('current-page', currentPage)
+
+    // Mark closed positions as viewed when navigating to History page
+    if (currentPage === 'closedPositions') {
+      const now = Date.now()
+      setLastViewedClosedPositions(now)
+      localStorage.setItem('last-viewed-closed-positions', now.toString())
+    }
   }, [currentPage])
 
   return (
@@ -115,7 +142,7 @@ function App() {
             </button>
             <button
               onClick={() => setCurrentPage('closedPositions')}
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base relative ${
                 currentPage === 'closedPositions'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
@@ -124,6 +151,11 @@ function App() {
               <div className="flex items-center space-x-1 sm:space-x-2">
                 <History className="w-4 h-4" />
                 <span className="hidden sm:inline">History</span>
+                {newClosedCount > 0 && (
+                  <span className="absolute -top-1 -right-1 sm:relative sm:top-0 sm:right-0 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {newClosedCount > 9 ? '9+' : newClosedCount}
+                  </span>
+                )}
               </div>
             </button>
             <button
