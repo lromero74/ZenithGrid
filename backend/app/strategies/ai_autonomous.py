@@ -64,9 +64,9 @@ class AIAutonomousStrategy(TradingStrategy):
         ┌──────────────┬──────┬──────┬──────┐
         │              │ Open │ DCA  │ Sell │
         ├──────────────┼──────┼──────┼──────┤
-        │ Aggressive   │  65  │  60  │  70  │
-        │ Moderate     │  70  │  65  │  75  │
-        │ Conservative │  80  │  75  │  85  │
+        │ Aggressive   │  70  │  65  │  60  │
+        │ Moderate     │  75  │  70  │  65  │
+        │ Conservative │  80  │  75  │  70  │
         └──────────────┴──────┴──────┴──────┘
 
         Args:
@@ -80,19 +80,19 @@ class AIAutonomousStrategy(TradingStrategy):
         # Define threshold matrix
         thresholds = {
             "aggressive": {
-                "open": 65,
-                "dca": 60,
-                "close": 70
-            },
-            "moderate": {
                 "open": 70,
                 "dca": 65,
-                "close": 75
+                "close": 60
+            },
+            "moderate": {
+                "open": 75,
+                "dca": 70,
+                "close": 65
             },
             "conservative": {
                 "open": 80,
                 "dca": 75,
-                "close": 85
+                "close": 70
             }
         }
 
@@ -266,7 +266,7 @@ class AIAutonomousStrategy(TradingStrategy):
                 StrategyParameter(
                     name="min_confidence_to_open",
                     display_name="Min Confidence to Open Position (%)",
-                    description="Minimum AI confidence to open position. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=65, Moderate=70, Conservative=80)",
+                    description="Minimum AI confidence to open position. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=70, Moderate=75, Conservative=80)",
                     type="int",
                     default=None,
                     min_value=50,
@@ -276,7 +276,7 @@ class AIAutonomousStrategy(TradingStrategy):
                 StrategyParameter(
                     name="min_confidence_for_dca",
                     display_name="Min Confidence for DCA (%)",
-                    description="Minimum AI confidence for DCA orders. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=60, Moderate=65, Conservative=75)",
+                    description="Minimum AI confidence for DCA orders. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=65, Moderate=70, Conservative=75)",
                     type="int",
                     default=None,
                     min_value=50,
@@ -286,7 +286,7 @@ class AIAutonomousStrategy(TradingStrategy):
                 StrategyParameter(
                     name="min_confidence_to_close",
                     display_name="Min Confidence to Close Position (%)",
-                    description="Minimum AI confidence to sell. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=70, Moderate=75, Conservative=85)",
+                    description="Minimum AI confidence to sell. Leave unset to auto-adjust based on Risk Tolerance (Aggressive=60, Moderate=65, Conservative=70)",
                     type="int",
                     default=None,
                     min_value=50,
