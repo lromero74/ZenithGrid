@@ -509,10 +509,10 @@ async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
     closed_positions = [p for p in all_positions if p.status == "closed"]
 
     # Calculate total profit
-    total_profit = sum(p.profit_btc for p in closed_positions if p.profit_btc)
+    total_profit = sum(p.profit_quote for p in closed_positions if p.profit_quote)
 
     # Calculate win rate
-    winning_positions = [p for p in closed_positions if p.profit_btc and p.profit_btc > 0]
+    winning_positions = [p for p in closed_positions if p.profit_quote and p.profit_quote > 0]
     win_rate = (len(winning_positions) / len(closed_positions) * 100) if closed_positions else 0.0
 
     return BotStats(

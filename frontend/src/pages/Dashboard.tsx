@@ -68,7 +68,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
     .slice(0, 5)
 
-  const formatCrypto = (amount: number, decimals: number = 8) => amount.toFixed(decimals)
+  const formatCrypto = (amount: number | undefined | null, decimals: number = 8) => (amount ?? 0).toFixed(decimals)
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -275,7 +275,7 @@ function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => vo
     enabled: bot.is_active,
   })
 
-  const formatCrypto = (amount: number, decimals: number = 8) => amount.toFixed(decimals)
+  const formatCrypto = (amount: number | undefined | null, decimals: number = 8) => (amount ?? 0).toFixed(decimals)
 
   const handleToggleBot = async (e: React.MouseEvent) => {
     e.stopPropagation()
