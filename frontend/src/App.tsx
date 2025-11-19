@@ -45,137 +45,137 @@ function App() {
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Activity className="w-8 h-8 text-blue-500" />
+        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
               <div>
-                <h1 className="text-2xl font-bold">Zenith Grid</h1>
-                <p className="text-sm text-slate-400">Multi-Strategy Trading Platform</p>
+                <h1 className="text-xl sm:text-2xl font-bold">Zenith Grid</h1>
+                <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">Multi-Strategy Trading Platform</p>
               </div>
             </div>
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
               <div className="text-right">
-                <p className="text-sm text-slate-400">Account Value</p>
-                <p className="text-xl font-bold text-blue-400">
-                  {totalBtcValue.toFixed(8)} BTC
+                <p className="text-xs sm:text-sm text-slate-400">Account Value</p>
+                <p className="text-base sm:text-xl font-bold text-blue-400">
+                  {totalBtcValue.toFixed(6)} BTC
                 </p>
-                <p className="text-sm text-green-400">
-                  ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                <p className="text-xs sm:text-sm text-green-400">
+                  ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </p>
               </div>
-              <DollarSign className="w-10 h-10 text-green-500 opacity-50" />
+              <DollarSign className="w-8 h-8 sm:w-10 sm:h-10 text-green-500 opacity-50" />
             </div>
           </div>
         </div>
       </header>
 
       {/* Navigation */}
-      <nav className="bg-slate-800 border-b border-slate-700">
-        <div className="container mx-auto px-6">
-          <div className="flex space-x-1">
+      <nav className="bg-slate-800 border-b border-slate-700 overflow-x-auto">
+        <div className="container mx-auto px-4 sm:px-6">
+          <div className="flex space-x-1 min-w-max sm:min-w-0">
             <button
               onClick={() => setCurrentPage('dashboard')}
-              className={`px-4 py-3 font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 currentPage === 'dashboard'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <Activity className="w-4 h-4" />
-                <span>Dashboard</span>
+                <span className="hidden sm:inline">Dashboard</span>
               </div>
             </button>
             <button
               onClick={() => setCurrentPage('bots')}
-              className={`px-4 py-3 font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 currentPage === 'bots'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <Bot className="w-4 h-4" />
-                <span>Bots</span>
+                <span className="hidden sm:inline">Bots</span>
               </div>
             </button>
             <button
               onClick={() => setCurrentPage('positions')}
-              className={`px-4 py-3 font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 currentPage === 'positions'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <TrendingUp className="w-4 h-4" />
-                <span>Positions</span>
+                <span className="hidden sm:inline">Positions</span>
               </div>
             </button>
             <button
               onClick={() => setCurrentPage('closedPositions')}
-              className={`px-4 py-3 font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 currentPage === 'closedPositions'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <History className="w-4 h-4" />
-                <span>History</span>
+                <span className="hidden sm:inline">History</span>
               </div>
             </button>
             <button
               onClick={() => setCurrentPage('portfolio')}
-              className={`px-4 py-3 font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 currentPage === 'portfolio'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <Wallet className="w-4 h-4" />
-                <span>Portfolio</span>
+                <span className="hidden sm:inline">Portfolio</span>
               </div>
             </button>
             <button
               onClick={() => setCurrentPage('charts')}
-              className={`px-4 py-3 font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 currentPage === 'charts'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <BarChart3 className="w-4 h-4" />
-                <span>Charts</span>
+                <span className="hidden sm:inline">Charts</span>
               </div>
             </button>
             <button
               onClick={() => setCurrentPage('strategies')}
-              className={`px-4 py-3 font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 currentPage === 'strategies'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <Layers className="w-4 h-4" />
-                <span>Strategies</span>
+                <span className="hidden sm:inline">Strategies</span>
               </div>
             </button>
             <button
               onClick={() => setCurrentPage('settings')}
-              className={`px-4 py-3 font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 currentPage === 'settings'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <SettingsIcon className="w-4 h-4" />
-                <span>Settings</span>
+                <span className="hidden sm:inline">Settings</span>
               </div>
             </button>
           </div>
@@ -183,7 +183,7 @@ function App() {
       </nav>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
         {currentPage === 'dashboard' && <Dashboard onNavigate={setCurrentPage} />}
         {currentPage === 'bots' && <Bots />}
         {currentPage === 'positions' && <Positions />}

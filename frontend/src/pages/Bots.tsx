@@ -528,15 +528,15 @@ function Bots() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-900 border-b border-slate-700">
-                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Name</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Strategy</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Pair</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Active trades</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">PnL</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Projected PnL</th>
-                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Budget</th>
-                  <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Status</th>
-                  <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Actions</th>
+                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Name</th>
+                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Strategy</th>
+                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Pair</th>
+                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
+                  <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">PnL</th>
+                  <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Projected PnL</th>
+                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Budget</th>
+                  <th className="text-center px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Status</th>
+                  <th className="text-center px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -551,7 +551,7 @@ function Bots() {
                       className="border-b border-slate-700 hover:bg-slate-750 transition-colors"
                     >
                       {/* Name & Description */}
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <div className="flex flex-col">
                           <div className="font-medium text-white">{bot.name}</div>
                           {bot.description && (
@@ -563,7 +563,7 @@ function Bots() {
                       </td>
 
                       {/* Strategy */}
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <div className="flex flex-col">
                           <div className="text-sm text-white">{strategyName}</div>
                           {aiProvider && (
@@ -578,7 +578,7 @@ function Bots() {
                       </td>
 
                       {/* Pairs */}
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <div className="flex items-center gap-1">
                           {botPairs.length === 1 ? (
                             <span className="text-sm text-white font-mono">
@@ -593,7 +593,7 @@ function Bots() {
                       </td>
 
                       {/* Active Trades */}
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
                         {bot.strategy_config?.max_concurrent_deals ? (
                           <div className="text-sm">
                             <span className="text-blue-400 font-medium">
@@ -610,7 +610,7 @@ function Bots() {
                       </td>
 
                       {/* PnL */}
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-right">
                         {(() => {
                           const pnl = (bot as any).total_pnl_usd || 0
                           const isPositive = pnl > 0
@@ -626,7 +626,7 @@ function Bots() {
                       </td>
 
                       {/* Projected PnL */}
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-right">
                         {(() => {
                           const dailyPnl = (bot as any).avg_daily_pnl_usd || 0
                           const weeklyPnl = dailyPnl * 7
@@ -657,7 +657,7 @@ function Bots() {
                       </td>
 
                       {/* Budget */}
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
                         {bot.budget_percentage > 0 ? (
                           <span className="text-sm text-emerald-400 font-medium">
                             {bot.budget_percentage}%
@@ -668,7 +668,7 @@ function Bots() {
                       </td>
 
                       {/* Status Toggle */}
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <div className="flex justify-center">
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -689,7 +689,7 @@ function Bots() {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <div className="flex items-center justify-center gap-2">
                           {bot.strategy_type === 'ai_autonomous' && (
                             <button
@@ -763,11 +763,11 @@ function Bots() {
           <table className="w-full">
             <thead className="bg-slate-900">
               <tr>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Portfolio Totals</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Daily</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Weekly</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Monthly</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Yearly</th>
+                <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Portfolio Totals</th>
+                <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Daily</th>
+                <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Weekly</th>
+                <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Monthly</th>
+                <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Yearly</th>
               </tr>
             </thead>
             <tbody>
@@ -783,17 +783,17 @@ function Bots() {
 
                 return (
                   <tr>
-                    <td className="px-4 py-3 text-sm font-semibold text-slate-300">Projected PnL</td>
-                    <td className={`px-4 py-3 text-right text-lg font-bold ${colorClass}`}>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-sm font-semibold text-slate-300">Projected PnL</td>
+                    <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalDailyPnl.toFixed(2)}
                     </td>
-                    <td className={`px-4 py-3 text-right text-lg font-bold ${colorClass}`}>
+                    <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalWeeklyPnl.toFixed(2)}
                     </td>
-                    <td className={`px-4 py-3 text-right text-lg font-bold ${colorClass}`}>
+                    <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalMonthlyPnl.toFixed(2)}
                     </td>
-                    <td className={`px-4 py-3 text-right text-lg font-bold ${colorClass}`}>
+                    <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalYearlyPnl.toFixed(2)}
                     </td>
                   </tr>

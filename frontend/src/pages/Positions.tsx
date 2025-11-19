@@ -1034,7 +1034,7 @@ function DealChart({ position, productId: initialProductId, currentPrice, trades
                     <button
                       key={indicator.id}
                       onClick={() => addIndicator(indicator.id)}
-                      className="w-full text-left bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded transition-colors"
+                      className="w-full text-left bg-slate-700 hover:bg-slate-600 text-white px-2 sm:px-4 py-2 sm:py-3 rounded transition-colors"
                     >
                       {indicator.name}
                     </button>
@@ -2273,14 +2273,14 @@ export default function Positions() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowAddFundsModal(false)}
-                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg font-medium transition-colors"
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-2 sm:px-4 py-2 sm:py-3 rounded-lg font-medium transition-colors"
                   disabled={isProcessing}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAddFunds}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-2 sm:px-4 py-2 sm:py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
                   disabled={isProcessing}
                 >
                   {isProcessing ? 'Adding...' : 'Add Funds'}
@@ -2345,7 +2345,7 @@ export default function Positions() {
                     handleSaveNotes()
                   }
                 }}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] resize-y"
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 sm:px-4 py-2 sm:py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] resize-y"
                 placeholder="Add a note for this position..."
                 autoFocus
                 disabled={isProcessing}
