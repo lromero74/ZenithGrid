@@ -288,10 +288,8 @@ class StrategyTradingEngine:
                 await self.db.commit()
             raise ValueError(error_msg)
 
-        # Calculate amount of base currency to buy
-        base_amount = quote_amount / current_price
-
         # Execute order via TradingClient (currency-agnostic)
+        # Actual fill amounts will be fetched from Coinbase after order executes
         order_id = None
         try:
             order_response = await self.trading_client.buy(
@@ -355,6 +353,23 @@ class StrategyTradingEngine:
 
                 raise ValueError(f"Coinbase order failed: {full_error}")
 
+            # Fetch actual fill data from Coinbase
+            logger.info(f"Fetching order details for order_id: {order_id}")
+            order_details = await self.coinbase.get_order(order_id)
+
+            # Extract actual fills from nested order object
+            order_obj = order_details.get("order", {})
+            filled_size_str = order_obj.get("filled_size", "0")
+            filled_value_str = order_obj.get("filled_value", "0")
+            avg_price_str = order_obj.get("average_filled_price", "0")
+
+            # Convert to floats
+            actual_base_amount = float(filled_size_str)
+            actual_quote_amount = float(filled_value_str)
+            actual_price = float(avg_price_str)
+
+            logger.info(f"Order filled - Base: {actual_base_amount}, Quote: {actual_quote_amount}, Avg Price: {actual_price}")
+
         except Exception as e:
             logger.error(f"Error executing buy order: {e}")
 
@@ -379,14 +394,14 @@ class StrategyTradingEngine:
                 await self.db.commit()
             raise
 
-        # Record trade
+        # Record trade with ACTUAL filled amounts from Coinbase
         trade = Trade(
             position_id=position.id,
             timestamp=datetime.utcnow(),
             side="buy",
-            quote_amount=quote_amount,
-            base_amount=base_amount,
-            price=current_price,
+            quote_amount=actual_quote_amount,  # Use actual filled value
+            base_amount=actual_base_amount,     # Use actual filled size
+            price=actual_price,                 # Use actual average price
             trade_type=trade_type,
             order_id=order_id,
             macd_value=signal_data.get("macd_value") if signal_data else None,
@@ -402,20 +417,20 @@ class StrategyTradingEngine:
             side="BUY",
             order_type="MARKET",
             trade_type=trade_type,
-            quote_amount=quote_amount,
-            price=current_price,
+            quote_amount=actual_quote_amount,
+            price=actual_price,
             status="success",
             order_id=order_id,
-            base_amount=base_amount
+            base_amount=actual_base_amount
         )
 
         # Clear any previous errors on successful trade
         position.last_error_message = None
         position.last_error_timestamp = None
 
-        # Update position totals
-        position.total_quote_spent += quote_amount
-        position.total_base_acquired += base_amount
+        # Update position totals with ACTUAL filled amounts
+        position.total_quote_spent += actual_quote_amount
+        position.total_base_acquired += actual_base_amount
         # Update average buy price manually (don't use update_averages() - it triggers lazy loading)
         if position.total_base_acquired > 0:
             position.average_buy_price = position.total_quote_spent / position.total_base_acquired
