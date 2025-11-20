@@ -508,10 +508,12 @@ class StrategyTradingEngine:
         Returns:
             Tuple of (trade, profit_quote, profit_percentage)
         """
-        # Sell 99.99% to prevent precision/rounding rejections from Coinbase
-        # Leaves tiny "dust" amount but ensures sell executes successfully
-        # The 0.01% dust can be cleaned up later
-        base_amount = position.total_base_acquired * 0.9999
+        # Sell 99% to prevent precision/rounding rejections from Coinbase
+        # Leaves 1% "dust" amount but ensures sell executes successfully
+        # The 1% dust can be cleaned up later
+        # Using 0.99 instead of 0.9999 because our tracked amounts may be slightly
+        # higher than actual Coinbase balances due to calculation vs actual fills
+        base_amount = position.total_base_acquired * 0.99
         quote_received = base_amount * current_price
 
         # Log the dust amount
