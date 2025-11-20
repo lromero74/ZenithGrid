@@ -112,9 +112,16 @@ export function PnLChart() {
     return { totalPnL, closedTrades, bestPair, worstPair }
   }
 
-  // Initialize chart
+  // Initialize chart - recreate when switching to summary tab
   useEffect(() => {
-    if (!chartContainerRef.current || !data) return
+    if (!chartContainerRef.current || !data || activeTab !== 'summary') return
+
+    // Clean up existing chart if any
+    if (chartRef.current) {
+      chartRef.current.remove()
+      chartRef.current = null
+      areaSeriesRef.current = null
+    }
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
@@ -165,11 +172,11 @@ export function PnLChart() {
       window.removeEventListener('resize', handleResize)
       chart.remove()
     }
-  }, [data])
+  }, [data, activeTab])
 
   // Update chart data
   useEffect(() => {
-    if (!areaSeriesRef.current || !data) return
+    if (!areaSeriesRef.current || !data || activeTab !== 'summary') return
 
     const filteredData = getFilteredData()
     if (filteredData.length === 0) return
