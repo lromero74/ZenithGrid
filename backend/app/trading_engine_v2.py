@@ -674,17 +674,21 @@ class StrategyTradingEngine:
 
         # Get bot's available balance (budget-based or total portfolio)
         # Calculate aggregate portfolio value for bot budgeting
+        print(f"🔍 Bot budget_percentage: {self.bot.budget_percentage}%, quote_currency: {self.quote_currency}")
         aggregate_value = None
         if self.bot.budget_percentage > 0:
             # Bot uses percentage-based budgeting - calculate aggregate value
             if self.quote_currency == "USD":
                 aggregate_value = await self.coinbase.calculate_aggregate_usd_value()
+                print(f"🔍 Aggregate USD value: ${aggregate_value:.2f}")
                 logger.info(f"  💰 Aggregate USD value: ${aggregate_value:.2f}")
             else:
                 aggregate_value = await self.coinbase.calculate_aggregate_btc_value()
+                print(f"🔍 Aggregate BTC value: {aggregate_value:.8f} BTC")
                 logger.info(f"  💰 Aggregate BTC value: {aggregate_value:.8f} BTC")
 
         reserved_balance = self.bot.get_reserved_balance(aggregate_value)
+        print(f"🔍 Reserved balance: {reserved_balance:.8f}")
         if reserved_balance > 0:
             # Bot has reserved balance - divide by max_concurrent_deals for per-position budget
             max_concurrent_deals = max(self.bot.strategy_config.get('max_concurrent_deals', 1), 1)
@@ -738,6 +742,7 @@ class StrategyTradingEngine:
         quote_amount = 0
         buy_reason = ""
 
+        print(f"🔍 Bot active: {self.bot.is_active}, Position exists: {position is not None}")
         logger.info(f"  🤖 Bot active: {self.bot.is_active}, Position exists: {position is not None}")
 
         if self.bot.is_active:
@@ -745,14 +750,18 @@ class StrategyTradingEngine:
             if position is None:  # Only check when considering opening a NEW position
                 open_positions_count = await self.get_open_positions_count()
                 max_deals = self.strategy.config.get("max_concurrent_deals", 1)
+                print(f"🔍 Open positions: {open_positions_count}/{max_deals}")
 
                 if open_positions_count >= max_deals:
                     should_buy = False
                     buy_reason = f"Max concurrent deals limit reached ({open_positions_count}/{max_deals})"
+                    print(f"🔍 Should buy: FALSE - {buy_reason}")
                 else:
+                    print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
                     should_buy, quote_amount, buy_reason = await self.strategy.should_buy(
                         signal_data, position, quote_balance
                     )
+                    print(f"🔍 Should buy result: {should_buy}, amount: {quote_amount:.8f}, reason: {buy_reason}")
             else:
                 # Position already exists for this pair - check for DCA
                 should_buy, quote_amount, buy_reason = await self.strategy.should_buy(
