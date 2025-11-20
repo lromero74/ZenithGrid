@@ -53,3 +53,4 @@ cd GetRidOf3CommasBecauseTheyGoDownTooOften/backend
 2. On fresh EC2 instance: `pip install -r requirements.txt`
 3. If missing libraries cause errors in AI Bot Reasoning logs, install individually
 4. After installation, always restart backend: `sudo systemctl restart trading-bot-backend`
+- please always back up the database before you mess with it

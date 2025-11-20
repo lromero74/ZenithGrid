@@ -75,7 +75,10 @@ class AIAutonomousStrategy(TradingStrategy):
         Returns:
             Confidence threshold percentage (0-100)
         """
+        print(f"🔍 _get_confidence_threshold_for_action({action_type})")
+        print(f"🔍 self.config keys: {list(self.config.keys())}")
         risk_tolerance = self.config.get("risk_tolerance", "moderate")
+        print(f"🔍 risk_tolerance: {risk_tolerance}")
 
         # Define threshold matrix
         thresholds = {
@@ -98,6 +101,7 @@ class AIAutonomousStrategy(TradingStrategy):
 
         # Get default based on risk tolerance
         default_threshold = thresholds.get(risk_tolerance, thresholds["moderate"])[action_type]
+        print(f"🔍 default_threshold for {action_type}: {default_threshold}")
 
         # Allow user override via explicit config
         config_key_map = {
@@ -107,9 +111,12 @@ class AIAutonomousStrategy(TradingStrategy):
         }
 
         config_key = config_key_map[action_type]
+        print(f"🔍 config_key: {config_key}, value in config: {self.config.get(config_key, 'NOT SET')}")
 
         # Return user's explicit setting if provided, otherwise use risk-based default
-        return self.config.get(config_key, default_threshold)
+        result = self.config.get(config_key, default_threshold)
+        print(f"🔍 Returning threshold: {result}")
+        return result
 
     def _should_perform_web_search(
         self,
