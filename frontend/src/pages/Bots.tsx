@@ -1148,9 +1148,9 @@ function Bots() {
                     </label>
                     <input
                       type="number"
-                      step="5"
-                      min="5"
-                      max="120"
+                      step="1"
+                      min="1"
+                      max="1440"
                       value={formData.analysis_interval_minutes}
                       onChange={(e) => setFormData({ ...formData, analysis_interval_minutes: parseInt(e.target.value) || 15 })}
                       className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
@@ -1158,7 +1158,7 @@ function Bots() {
                     />
                     <p className="text-xs text-slate-400 mt-1.5">
                       How often AI analyzes markets (AI bots only)<br/>
-                      <span className="text-slate-500">Default: 15 min • Gemini: 60 min</span>
+                      <span className="text-slate-500">Range: 1-1440 min (1 day) • Default: 15 min</span>
                     </p>
                   </div>
                 </div>
