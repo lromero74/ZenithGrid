@@ -1558,6 +1558,8 @@ Strategic Considerations:
         - Respect budget limits
         - For DCA: AI makes dynamic decisions about timing and amount (no fixed rules)
         """
+        print(f"🔍 should_buy() called with signal_data keys: {signal_data.keys()}")
+        print(f"🔍 signal_type={signal_data.get('signal_type')}, confidence={signal_data.get('confidence')}")
 
         if signal_data.get("signal_type") != "buy":
             return False, 0.0, "AI did not suggest buying"
