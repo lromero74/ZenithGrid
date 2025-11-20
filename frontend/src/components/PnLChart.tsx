@@ -275,58 +275,59 @@ export function PnLChart() {
 
   return (
     <div className="bg-slate-900 rounded-lg overflow-hidden">
-      {/* Header with Tabs and Time Range */}
+      {/* Time Range Pills - 3Commas style */}
       <div className="p-4 sm:p-6 border-b border-slate-800">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          {/* Tabs */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab('summary')}
-              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                activeTab === 'summary'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              Summary PnL
-            </button>
-            <button
-              onClick={() => setActiveTab('by_day')}
-              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                activeTab === 'by_day'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              PnL by Day
-            </button>
-            <button
-              onClick={() => setActiveTab('by_pair')}
-              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                activeTab === 'by_pair'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              PnL by Pair
-            </button>
-          </div>
-
-          {/* Time Range */}
-          <div className="flex gap-2 items-center">
-            <Calendar className="w-4 h-4 text-slate-400" />
-            <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-              className="bg-slate-800 text-white px-3 py-1.5 rounded text-sm border border-slate-700 focus:border-blue-500 focus:outline-none"
-            >
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="3m">Last 3 months</option>
-              <option value="6m">Last 6 months</option>
-              <option value="all">All time</option>
-            </select>
-          </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setTimeRange('all')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              timeRange === 'all'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setTimeRange('7d')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              timeRange === '7d'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            7 days
+          </button>
+          <button
+            onClick={() => setTimeRange('30d')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              timeRange === '30d'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            30 days
+          </button>
+          <button
+            onClick={() => setTimeRange('3m')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              timeRange === '3m'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            3 months
+          </button>
+          <button
+            onClick={() => setTimeRange('6m')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              timeRange === '6m'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            6 months
+          </button>
         </div>
       </div>
 
@@ -381,8 +382,44 @@ export function PnLChart() {
           </div>
         </div>
 
-        {/* Right side - Chart */}
-        <div className="flex-1 min-h-0">
+        {/* Right side - Chart Type Tabs + Chart */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Chart Type Tabs */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveTab('summary')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'summary'
+                  ? 'bg-slate-700 text-white border-b-2 border-blue-500'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Summary PnL
+            </button>
+            <button
+              onClick={() => setActiveTab('by_day')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'by_day'
+                  ? 'bg-slate-700 text-white border-b-2 border-blue-500'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              PnL by day
+            </button>
+            <button
+              onClick={() => setActiveTab('by_pair')}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'by_pair'
+                  ? 'bg-slate-700 text-white border-b-2 border-blue-500'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              PnL by pair
+            </button>
+          </div>
+
+          {/* Chart Container */}
+          <div className="flex-1 min-h-0">
         {activeTab === 'by_day' ? (
           // Daily P&L bar chart
           <ResponsiveContainer width="100%" height="100%">
@@ -448,6 +485,7 @@ export function PnLChart() {
           // Area chart for summary (cumulative P&L)
           <div ref={chartContainerRef} className="w-full h-full" />
         )}
+          </div>
         </div>
       </div>
     </div>
