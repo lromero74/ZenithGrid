@@ -735,6 +735,7 @@ class MultiBotMonitor:
                         # Process each bot independently based on their individual check intervals
                         for bot in bots:
                             try:
+                                print(f"🔍 Checking bot: {bot.name} (ID: {bot.id})")
                                 # Check if enough time has elapsed since last check
                                 check_interval = bot.check_interval_seconds or self.interval_seconds
                                 now = datetime.utcnow()
@@ -742,17 +743,19 @@ class MultiBotMonitor:
                                 if bot.last_signal_check:
                                     time_since_last_check = (now - bot.last_signal_check).total_seconds()
                                     if time_since_last_check < check_interval:
-                                        logger.debug(f"Skipping {bot.name} - last checked {time_since_last_check:.0f}s ago (interval: {check_interval}s)")
+                                        print(f"⏭️  Skipping {bot.name} - last checked {time_since_last_check:.0f}s ago (interval: {check_interval}s)")
                                         continue
 
-                                logger.info(f"Processing {bot.name} (interval: {check_interval}s)")
+                                print(f"🔄 Processing {bot.name} (interval: {check_interval}s)")
 
                                 # Update timestamp BEFORE processing to prevent race condition
                                 # (if processing takes >10s, next loop iteration would start processing again!)
                                 bot.last_signal_check = datetime.utcnow()
                                 await db.commit()  # Commit immediately to prevent concurrent processing
 
+                                print(f"🔍 Calling process_bot for {bot.name}...")
                                 await self.process_bot(db, bot)
+                                print(f"✅ Finished processing {bot.name}")
                             except Exception as e:
                                 logger.error(f"Error processing bot {bot.name}: {e}")
                                 # Continue with other bots even if one fails
