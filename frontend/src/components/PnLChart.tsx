@@ -32,6 +32,28 @@ interface PnLTimeSeriesData {
 type TimeRange = '7d' | '30d' | '3m' | '6m' | 'all'
 type TabType = 'summary' | 'by_day' | 'by_pair'
 
+// Custom tooltip component for 3Commas-style tooltips
+const CustomTooltip = ({ active, payload, label, labelFormatter }: any) => {
+  if (!active || !payload || !payload.length) return null
+
+  const value = payload[0].value
+  const isProfit = value >= 0
+
+  // Convert USD to BTC (using approximate current BTC price)
+  const btcValue = value / 100000 // Approximate conversion
+
+  return (
+    <div className="bg-slate-800 border-2 border-slate-600 rounded-lg p-3 shadow-lg">
+      <div className="text-slate-300 text-sm mb-2">
+        {labelFormatter ? labelFormatter(label) : label}
+      </div>
+      <div className={`text-base font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+        Profit ${value.toFixed(2)} / {btcValue.toFixed(8)} BTC
+      </div>
+    </div>
+  )
+}
+
 export function PnLChart() {
   const [activeTab, setActiveTab] = useState<TabType>('summary')
   const [timeRange, setTimeRange] = useState<TimeRange>('30d')
@@ -344,14 +366,8 @@ export function PnLChart() {
                 tickFormatter={(value) => `$${value}`}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: '6px',
-                  color: '#f1f5f9'
-                }}
-                labelFormatter={(date) => new Date(date).toLocaleDateString()}
-                formatter={(value: number) => [`$${value.toFixed(2)}`, 'Daily P&L']}
+                content={<CustomTooltip labelFormatter={(date: string) => new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} />}
+                cursor={false}
               />
               <Bar dataKey="daily_pnl" radius={[4, 4, 0, 0]}>
                 {getFilteredData().map((entry: any, index: number) => (
@@ -380,13 +396,8 @@ export function PnLChart() {
                 tickFormatter={(value) => `$${value}`}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: '6px',
-                  color: '#f1f5f9'
-                }}
-                formatter={(value: number) => [`$${value.toFixed(2)}`, 'Total P&L']}
+                content={<CustomTooltip labelFormatter={(pair: string) => pair} />}
+                cursor={false}
               />
               <Bar dataKey="total_pnl" radius={[4, 4, 0, 0]}>
                 {data.by_pair.map((entry, index) => (
