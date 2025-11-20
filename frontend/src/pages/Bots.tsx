@@ -5,6 +5,7 @@ import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
 import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 import AIBotLogs from '../components/AIBotLogs'
+import { PnLChart } from '../components/PnLChart'
 import axios from 'axios'
 
 interface BotFormData {
@@ -517,6 +518,11 @@ function Bots() {
           <Plus className="w-4 h-4" />
           <span>Create Bot</span>
         </button>
+      </div>
+
+      {/* P&L Chart - 3Commas-style */}
+      <div className="mb-6">
+        <PnLChart />
       </div>
 
       {/* Bot List - 3Commas-style Table */}
