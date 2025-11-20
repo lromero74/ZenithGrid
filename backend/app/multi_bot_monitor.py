@@ -710,6 +710,7 @@ class MultiBotMonitor:
 
     async def monitor_loop(self):
         """Main monitoring loop for all active bots"""
+        print("🔍 monitor_loop() entered!")
         logger.info("Starting multi-bot monitor loop")
         # Note: self.running is set to True in start() to prevent race conditions
 
@@ -773,6 +774,7 @@ class MultiBotMonitor:
 
     async def start_async(self):
         """Start the monitoring task (async - preferred method)"""
+        print(f"🔍 start_async() called, self.running={self.running}")
         if not self.running:
             self.running = True  # Set IMMEDIATELY to prevent race condition (double-start)
             self.task = asyncio.create_task(self.monitor_loop())
