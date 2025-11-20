@@ -421,9 +421,11 @@ class MultiBotMonitor:
 
             # Process each pair's analysis result
             results = {}
+            print(f"🔍 Processing {len(pairs_data)} pairs from batch analysis...")
             logger.info(f"  📋 Processing {len(pairs_data)} pairs from batch analysis...")
             for product_id in pairs_data.keys():
                 try:
+                    print(f"🔍 Processing result for {product_id}...")
                     signal_data = batch_analyses.get(product_id, {
                         "signal_type": "hold",
                         "confidence": 0,
@@ -437,14 +439,18 @@ class MultiBotMonitor:
                     pair_info = pairs_data.get(product_id, {})
                     signal_data["current_price"] = pair_info.get("current_price", 0)
 
+                    print(f"🔍 Logging AI decision for {product_id}...")
                     # Log AI decision
                     await self.log_ai_decision(db, bot, product_id, signal_data, pair_info)
+                    print(f"✅ Logged AI decision for {product_id}")
 
                     # Mark signal as already logged to prevent duplicate logging in trading_engine_v2.py
                     signal_data["_already_logged"] = True
 
+                    print(f"🔍 Executing trading logic for {product_id}...")
                     # Execute trading logic based on signal
                     result = await self.execute_trading_logic(db, bot, product_id, signal_data, pair_info)
+                    print(f"✅ Trading logic complete for {product_id}")
                     results[product_id] = result
 
                 except Exception as e:
@@ -465,7 +471,9 @@ class MultiBotMonitor:
 
             # Note: bot.last_signal_check is updated BEFORE processing starts (in monitor_loop)
             # to prevent race conditions where the same bot gets processed twice
+            print(f"🔍 Committing database changes...")
             await db.commit()
+            print(f"✅ Database committed, returning results")
 
             return results
 
