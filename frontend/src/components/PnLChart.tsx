@@ -159,7 +159,7 @@ export function PnLChart() {
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
-      height: 350,
+      height: chartContainerRef.current.clientHeight,
       layout: {
         background: { type: ColorType.Solid, color: '#0f172a' },
         textColor: '#94a3b8',
@@ -196,6 +196,7 @@ export function PnLChart() {
       if (chartContainerRef.current && chart) {
         chart.applyOptions({
           width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight,
         })
       }
     }
@@ -381,10 +382,10 @@ export function PnLChart() {
         </div>
 
         {/* Right side - Chart */}
-        <div className="flex-1">
+        <div className="flex-1 min-h-0">
         {activeTab === 'by_day' ? (
           // Daily P&L bar chart
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={getFilteredData()} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
@@ -415,7 +416,7 @@ export function PnLChart() {
           </ResponsiveContainer>
         ) : activeTab === 'by_pair' ? (
           // Pair P&L bar chart
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.by_pair} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
@@ -445,7 +446,7 @@ export function PnLChart() {
           </ResponsiveContainer>
         ) : (
           // Area chart for summary (cumulative P&L)
-          <div ref={chartContainerRef} className="w-full h-[350px]" />
+          <div ref={chartContainerRef} className="w-full h-full" />
         )}
         </div>
       </div>
