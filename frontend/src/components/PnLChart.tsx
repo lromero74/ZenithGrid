@@ -423,7 +423,7 @@ export function PnLChart() {
         {activeTab === 'by_day' ? (
           // Daily P&L bar chart
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={getFilteredData()} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <BarChart data={getFilteredData()} margin={{ top: 5, right: 30, left: 20, bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
                 dataKey="date"
@@ -454,7 +454,7 @@ export function PnLChart() {
         ) : activeTab === 'by_pair' ? (
           // Pair P&L bar chart
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.by_pair} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+            <BarChart data={data.by_pair} margin={{ top: 5, right: 30, left: 20, bottom: 80 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
                 dataKey="pair"
