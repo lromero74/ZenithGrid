@@ -723,12 +723,14 @@ class MultiBotMonitor:
             try:
                 async with async_session_maker() as db:
                     # Get all active bots
+                    print("🔍 Calling get_active_bots()...")
                     bots = await self.get_active_bots(db)
+                    print(f"🔍 Got {len(bots)} bots from get_active_bots()")
 
                     if not bots:
-                        logger.debug("No active bots to monitor")
+                        print("⚠️ No active bots to monitor")
                     else:
-                        logger.info(f"Monitoring {len(bots)} active bot(s)")
+                        print(f"✅ Monitoring {len(bots)} active bot(s)")
 
                         # Process each bot independently based on their individual check intervals
                         for bot in bots:
@@ -757,13 +759,17 @@ class MultiBotMonitor:
                                 continue
 
                 # Wait for next interval - check frequently so bots with short intervals are responsive
+                print("🔍 Sleeping 10 seconds before next iteration...")
                 await asyncio.sleep(10)  # Check every 10 seconds for bots that need processing
+                print("🔍 Woke up from sleep, looping back...")
 
             except Exception as e:
+                print(f"❌ ERROR in monitor loop: {e}")
                 logger.error(f"Error in monitor loop: {e}", exc_info=True)
                 # Wait a bit before retrying
                 await asyncio.sleep(10)
 
+        print("🛑 Multi-bot monitor loop EXITED - self.running is False")
         logger.info("Multi-bot monitor stopped")
 
     def start(self):
