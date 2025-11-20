@@ -4,6 +4,7 @@ import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
+import { LoadingSpinner } from '../components/LoadingSpinner'
 
 interface CandleData {
   time: number
@@ -284,7 +285,7 @@ function Portfolio() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-slate-400">Loading portfolio...</div>
+        <LoadingSpinner size="lg" text="Loading portfolio data..." />
       </div>
     )
   }

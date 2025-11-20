@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Layers, X, Settings, TrendingUp, Activity, BarChart3, Info } from 'lucide-react'
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
+import { LoadingSpinner } from '../components/LoadingSpinner'
 
 interface StrategyParameter {
   name: string
@@ -131,7 +132,7 @@ export default function Strategies() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-slate-400">Loading strategies...</div>
+        <LoadingSpinner size="lg" text="Loading strategies..." />
       </div>
     )
   }
