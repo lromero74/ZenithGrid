@@ -1245,18 +1245,18 @@ function Bots() {
                       <div className="text-sm text-slate-300">
                         {formData.split_budget_across_pairs ? (
                           <>
-                            <span className="text-green-400">✓ Enabled:</span> Budget percentages will be divided by {formData.product_ids.length} pairs.
+                            <span className="text-green-400">✓ Enabled:</span> Budget percentages will be divided by {formData.strategy_config?.max_concurrent_deals || 1} max concurrent deals.
                             <br />
                             <span className="text-xs text-slate-400">
-                              Example: 30% max usage ÷ {formData.product_ids.length} = {(30 / formData.product_ids.length).toFixed(1)}% per pair (safer)
+                              Example: 30% max usage ÷ {formData.strategy_config?.max_concurrent_deals || 1} = {(30 / (formData.strategy_config?.max_concurrent_deals || 1)).toFixed(1)}% per deal (safer)
                             </span>
                           </>
                         ) : (
                           <>
-                            <span className="text-yellow-400">○ Disabled:</span> Each pair gets full budget allocation independently.
+                            <span className="text-yellow-400">○ Disabled:</span> Each deal gets full budget allocation independently.
                             <br />
                             <span className="text-xs text-slate-400">
-                              Example: 30% max usage × {formData.product_ids.length} pairs = up to {30 * formData.product_ids.length}% total (3Commas style)
+                              Example: 30% max usage × {formData.strategy_config?.max_concurrent_deals || 1} deals = up to {30 * (formData.strategy_config?.max_concurrent_deals || 1)}% total (3Commas style)
                             </span>
                           </>
                         )}

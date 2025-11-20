@@ -669,11 +669,11 @@ class StrategyTradingEngine:
 
         reserved_balance = self.bot.get_reserved_balance(aggregate_value)
         if reserved_balance > 0:
-            # Bot has reserved balance - use it instead of total portfolio
-            # Calculate how much is available (reserved - already in positions)
-            quote_balance = reserved_balance
+            # Bot has reserved balance - divide by max_concurrent_deals for per-position budget
+            max_concurrent_deals = max(self.bot.strategy_config.get('max_concurrent_deals', 1), 1)
+            per_position_budget = reserved_balance / max_concurrent_deals
 
-            # Subtract amount already in open positions for this bot
+            # Calculate how much is available for THIS position (per-position budget - already spent in this position)
             from sqlalchemy import select
 
             from app.models import Position
@@ -686,12 +686,12 @@ class StrategyTradingEngine:
             open_positions = result.scalars().all()
 
             total_in_positions = sum(p.total_quote_spent for p in open_positions)
-            quote_balance -= total_in_positions
+            quote_balance = per_position_budget - total_in_positions
 
             if self.bot.budget_percentage > 0:
-                logger.info(f"  💰 Bot budget: {self.bot.budget_percentage}% of aggregate ({reserved_balance:.8f}), In positions: {total_in_positions:.8f}, Available: {quote_balance:.8f}")
+                logger.info(f"  💰 Bot budget: {self.bot.budget_percentage}% of aggregate ({reserved_balance:.8f}), Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions:.8f}, Available: {quote_balance:.8f}")
             else:
-                logger.info(f"  💰 Bot reserved balance: {reserved_balance}, In positions: {total_in_positions}, Available: {quote_balance}")
+                logger.info(f"  💰 Bot reserved balance: {reserved_balance}, Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions}, Available: {quote_balance}")
         else:
             # No reserved balance - use total portfolio balance (backward compatibility)
             quote_balance = await self.trading_client.get_quote_balance(self.product_id)
