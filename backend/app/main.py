@@ -78,7 +78,7 @@ async def startup_event():
     print("🚀 Database initialized successfully")
     print("🚀 Starting multi-bot monitor (includes order monitor)...")
     # Start price monitor (which includes order monitor)
-    price_monitor.start()
+    await price_monitor.start_async()
     print("🚀 Multi-bot monitor started - bot monitoring & order tracking active")
     print("🚀 Startup complete!")
     print("🚀 ========================================")
