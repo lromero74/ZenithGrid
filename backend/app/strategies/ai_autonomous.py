@@ -1364,6 +1364,7 @@ Remember:
                 response_text = response_text.strip()
 
             batch_analysis = json.loads(response_text)
+            print(f"🔍 Grok batch_analysis keys: {list(batch_analysis.keys())}")
 
             if hasattr(response, 'usage'):
                 logger.info(f"📊 Grok BATCH - {len(pairs_data)} pairs - Input: {response.usage.prompt_tokens}, Output: {response.usage.completion_tokens}")
@@ -1371,6 +1372,7 @@ Remember:
 
             results = {}
             for product_id in pairs_data.keys():
+                print(f"🔍 Checking if {product_id} in batch_analysis: {product_id in batch_analysis}")
                 if product_id in batch_analysis:
                     analysis = batch_analysis[product_id]
                     signal_type = "none"
@@ -1396,7 +1398,10 @@ Remember:
             return results
 
         except Exception as e:
+            print(f"🔍 Grok batch analysis EXCEPTION: {e}")
             logger.error(f"Grok batch analysis error: {e}")
+            import traceback
+            traceback.print_exc()
             return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
                     for pid in pairs_data.keys()}
 
