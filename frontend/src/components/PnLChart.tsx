@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineStyle } from 'lightweight-charts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { TrendingUp, TrendingDown, Calendar } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 
@@ -323,33 +324,42 @@ export function PnLChart() {
       {/* Chart or Table */}
       <div className="p-4 sm:p-6">
         {activeTab === 'by_pair' ? (
-          // Pair ranking table
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Rank</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-400">Pair</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-slate-400">Total P&L</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.by_pair.map((pair, index) => (
-                  <tr key={pair.pair} className="border-b border-slate-800/50">
-                    <td className="py-3 px-4 text-sm text-slate-400">#{index + 1}</td>
-                    <td className="py-3 px-4 text-sm font-medium text-white">{pair.pair}</td>
-                    <td className={`py-3 px-4 text-sm font-semibold text-right ${
-                      pair.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {pair.total_pnl >= 0 ? '+' : ''}${pair.total_pnl.toFixed(2)}
-                    </td>
-                  </tr>
+          // Pair P&L bar chart
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={data.by_pair} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis
+                dataKey="pair"
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+              />
+              <YAxis
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                tickFormatter={(value) => `$${value}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #334155',
+                  borderRadius: '6px',
+                  color: '#f1f5f9'
+                }}
+                formatter={(value: number) => [`$${value.toFixed(2)}`, 'Total P&L']}
+              />
+              <Bar dataKey="total_pnl" radius={[4, 4, 0, 0]}>
+                {data.by_pair.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.total_pnl >= 0 ? '#22c55e' : '#ef4444'}
+                  />
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         ) : (
-          // Chart
+          // Area chart for summary and by_day
           <div ref={chartContainerRef} className="w-full h-[350px]" />
         )}
       </div>
