@@ -715,11 +715,11 @@ class MultiBotMonitor:
 
     async def monitor_loop(self):
         """Main monitoring loop for all active bots"""
-        logger.info("🔍 monitor_loop() ENTERED - starting multi-bot monitor loop")
+        print("🔍 monitor_loop() ENTERED - starting multi-bot monitor loop")
         # Note: self.running is set to True in start() to prevent race conditions
 
         while self.running:
-            logger.debug(f"🔁 Monitor loop iteration, self.running={self.running}")
+            print(f"🔁 Monitor loop iteration, self.running={self.running}")
             try:
                 async with async_session_maker() as db:
                     # Get all active bots
@@ -779,19 +779,19 @@ class MultiBotMonitor:
 
     async def start_async(self):
         """Start the monitoring task (async - preferred method)"""
-        logger.info(f"🔍 start_async() called, self.running={self.running}")
+        print(f"🔍 start_async() called, self.running={self.running}")
         if not self.running:
-            logger.info("🔍 Setting self.running=True and creating tasks")
+            print("🔍 Setting self.running=True and creating tasks")
             self.running = True  # Set IMMEDIATELY to prevent race condition (double-start)
             self.task = asyncio.create_task(self.monitor_loop())
             # Start order monitor alongside bot monitor
             asyncio.create_task(self.order_monitor.start())
-            logger.info("✅ Multi-bot monitor task started")
+            print("✅ Multi-bot monitor task started")
             # Give the task a moment to actually start
             await asyncio.sleep(0.1)
-            logger.info("✅ Multi-bot monitor loop should be running now")
+            print("✅ Multi-bot monitor loop should be running now")
         else:
-            logger.warning("⚠️ Monitor already running, ignoring duplicate start() call")
+            print("⚠️ Monitor already running, ignoring duplicate start() call")
 
     async def stop(self):
         """Stop the monitoring task"""
