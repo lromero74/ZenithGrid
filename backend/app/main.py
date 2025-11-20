@@ -214,6 +214,86 @@ async def get_positions(
     return response
 
 
+@app.get("/api/positions/pnl-timeseries")
+async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
+    """
+    Get P&L time series data for cumulative profit chart (3Commas-style).
+
+    Returns cumulative profit over time from all closed positions.
+    """
+    from collections import defaultdict
+    from datetime import date
+
+    # Get all closed positions ordered by close date
+    query = select(Position).where(
+        Position.status == "closed",
+        Position.closed_at != None,
+        Position.profit_usd != None
+    ).order_by(Position.closed_at)
+
+    result = await db.execute(query)
+    positions = result.scalars().all()
+
+    if not positions:
+        # No data yet
+        return {
+            "summary": [],
+            "by_day": [],
+            "by_pair": []
+        }
+
+    # Build cumulative P&L over time
+    cumulative_pnl = 0.0
+    summary_data = []
+    daily_pnl = defaultdict(float)
+    pair_pnl = defaultdict(float)
+
+    for pos in positions:
+        profit = pos.profit_usd or 0.0
+        cumulative_pnl += profit
+
+        # Add to summary timeline
+        summary_data.append({
+            "timestamp": pos.closed_at.isoformat(),
+            "date": pos.closed_at.strftime("%Y-%m-%d"),
+            "cumulative_pnl": round(cumulative_pnl, 2),
+            "profit": round(profit, 2)
+        })
+
+        # Aggregate by day
+        day_key = pos.closed_at.date().isoformat()
+        daily_pnl[day_key] += profit
+
+        # Aggregate by pair
+        pair_pnl[pos.product_id] += profit
+
+    # Convert daily P&L to cumulative
+    by_day_data = []
+    cumulative = 0.0
+    for day in sorted(daily_pnl.keys()):
+        cumulative += daily_pnl[day]
+        by_day_data.append({
+            "date": day,
+            "daily_pnl": round(daily_pnl[day], 2),
+            "cumulative_pnl": round(cumulative, 2)
+        })
+
+    # Convert pair P&L to list
+    by_pair_data = [
+        {
+            "pair": pair,
+            "total_pnl": round(pnl, 2)
+        }
+        for pair, pnl in sorted(pair_pnl.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    return {
+        "summary": summary_data,
+        "by_day": by_day_data,
+        "by_pair": by_pair_data
+    }
+
+
 @app.get("/api/positions/{position_id}", response_model=PositionResponse)
 async def get_position(position_id: int, db: AsyncSession = Depends(get_db)):
     """Get specific position details"""
@@ -308,86 +388,6 @@ async def get_position_ai_logs(
     logs = result.scalars().all()
 
     return [AIBotLogResponse.model_validate(log) for log in logs]
-
-
-@app.get("/api/positions/pnl-timeseries")
-async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
-    """
-    Get P&L time series data for cumulative profit chart (3Commas-style).
-
-    Returns cumulative profit over time from all closed positions.
-    """
-    from collections import defaultdict
-    from datetime import date
-
-    # Get all closed positions ordered by close date
-    query = select(Position).where(
-        Position.status == "closed",
-        Position.closed_at != None,
-        Position.profit_usd != None
-    ).order_by(Position.closed_at)
-
-    result = await db.execute(query)
-    positions = result.scalars().all()
-
-    if not positions:
-        # No data yet
-        return {
-            "summary": [],
-            "by_day": [],
-            "by_pair": []
-        }
-
-    # Build cumulative P&L over time
-    cumulative_pnl = 0.0
-    summary_data = []
-    daily_pnl = defaultdict(float)
-    pair_pnl = defaultdict(float)
-
-    for pos in positions:
-        profit = pos.profit_usd or 0.0
-        cumulative_pnl += profit
-
-        # Add to summary timeline
-        summary_data.append({
-            "timestamp": pos.closed_at.isoformat(),
-            "date": pos.closed_at.strftime("%Y-%m-%d"),
-            "cumulative_pnl": round(cumulative_pnl, 2),
-            "profit": round(profit, 2)
-        })
-
-        # Aggregate by day
-        day_key = pos.closed_at.date().isoformat()
-        daily_pnl[day_key] += profit
-
-        # Aggregate by pair
-        pair_pnl[pos.product_id] += profit
-
-    # Convert daily P&L to cumulative
-    by_day_data = []
-    cumulative = 0.0
-    for day in sorted(daily_pnl.keys()):
-        cumulative += daily_pnl[day]
-        by_day_data.append({
-            "date": day,
-            "daily_pnl": round(daily_pnl[day], 2),
-            "cumulative_pnl": round(cumulative, 2)
-        })
-
-    # Convert pair P&L to list
-    by_pair_data = [
-        {
-            "pair": pair,
-            "total_pnl": round(pnl, 2)
-        }
-        for pair, pnl in sorted(pair_pnl.items(), key=lambda x: x[1], reverse=True)
-    ]
-
-    return {
-        "summary": summary_data,
-        "by_day": by_day_data,
-        "by_pair": by_pair_data
-    }
 
 
 @app.get("/api/trades", response_model=List[TradeResponse])
