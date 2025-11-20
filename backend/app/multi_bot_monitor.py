@@ -712,8 +712,9 @@ class MultiBotMonitor:
         """Main monitoring loop for all active bots"""
         print("🔍 monitor_loop() entered!")
         logger.info("Starting multi-bot monitor loop")
+        print("🔍 After logger.info")
         # Note: self.running is set to True in start() to prevent race conditions
-
+        print(f"🔍 About to enter while loop, self.running={self.running}")
         while self.running:
             try:
                 async with async_session_maker() as db:
