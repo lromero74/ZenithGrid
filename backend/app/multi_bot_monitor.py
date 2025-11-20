@@ -710,19 +710,15 @@ class MultiBotMonitor:
 
     async def monitor_loop(self):
         """Main monitoring loop for all active bots"""
-        print("🔍 monitor_loop() entered!")
         logger.info("Starting multi-bot monitor loop")
-        print("🔍 After logger.info")
         # Note: self.running is set to True in start() to prevent race conditions
-        print(f"🔍 About to enter while loop, self.running={self.running}")
+
         while self.running:
             try:
-                print(f"🔍 Loop iteration start, self.running={self.running}")
                 async with async_session_maker() as db:
                     # Get all active bots
-                    print("🔍 About to get active bots")
                     bots = await self.get_active_bots(db)
-                    print(f"🔍 Got {len(bots)} bots")
+
                     if not bots:
                         logger.debug("No active bots to monitor")
                     else:
@@ -755,11 +751,9 @@ class MultiBotMonitor:
                                 continue
 
                 # Wait for next interval - check frequently so bots with short intervals are responsive
-                print("🔍 Sleeping for 10 seconds...")
                 await asyncio.sleep(10)  # Check every 10 seconds for bots that need processing
-                print("🔍 Woke up from sleep")
+
             except Exception as e:
-                print(f"🔍 EXCEPTION in monitor loop: {e}")
                 logger.error(f"Error in monitor loop: {e}", exc_info=True)
                 # Wait a bit before retrying
                 await asyncio.sleep(10)
@@ -779,7 +773,6 @@ class MultiBotMonitor:
 
     async def start_async(self):
         """Start the monitoring task (async - preferred method)"""
-        print(f"🔍 start_async() called, self.running={self.running}")
         if not self.running:
             self.running = True  # Set IMMEDIATELY to prevent race condition (double-start)
             self.task = asyncio.create_task(self.monitor_loop())
