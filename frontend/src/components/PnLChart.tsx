@@ -323,7 +323,44 @@ export function PnLChart() {
 
       {/* Chart or Table */}
       <div className="p-4 sm:p-6">
-        {activeTab === 'by_pair' ? (
+        {activeTab === 'by_day' ? (
+          // Daily P&L bar chart
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={getFilteredData()} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis
+                dataKey="date"
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                tickFormatter={(date) => {
+                  const d = new Date(date)
+                  return `${d.getMonth() + 1}/${d.getDate()}`
+                }}
+              />
+              <YAxis
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                tickFormatter={(value) => `$${value}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #334155',
+                  borderRadius: '6px',
+                  color: '#f1f5f9'
+                }}
+                labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                formatter={(value: number) => [`$${value.toFixed(2)}`, 'Daily P&L']}
+              />
+              <Bar dataKey="daily_pnl" radius={[4, 4, 0, 0]}>
+                {getFilteredData().map((entry: any, index: number) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.daily_pnl >= 0 ? '#22c55e' : '#ef4444'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : activeTab === 'by_pair' ? (
           // Pair P&L bar chart
           <ResponsiveContainer width="100%" height={350}>
             <BarChart data={data.by_pair} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
@@ -359,7 +396,7 @@ export function PnLChart() {
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          // Area chart for summary and by_day
+          // Area chart for summary (cumulative P&L)
           <div ref={chartContainerRef} className="w-full h-[350px]" />
         )}
       </div>
