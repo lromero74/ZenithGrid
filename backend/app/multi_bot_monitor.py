@@ -166,19 +166,27 @@ class MultiBotMonitor:
             Result dictionary with action/signal info for all pairs
         """
         try:
+            print(f"🔍 process_bot() ENTERED for {bot.name}")
             # Get all trading pairs for this bot (supports multi-pair)
             trading_pairs = bot.get_trading_pairs()
+            print(f"🔍 Got {len(trading_pairs)} trading pairs: {trading_pairs}")
             logger.info(f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})")
 
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis
             # Individual positions will still use frozen config in process_bot_pair
+            print(f"🔍 Getting strategy instance for {bot.strategy_type}...")
             strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
+            print(f"🔍 Strategy instance created")
             supports_batch = hasattr(strategy, 'analyze_multiple_pairs_batch') and len(trading_pairs) > 1
+            print(f"🔍 Supports batch: {supports_batch}")
 
             if supports_batch:
+                print(f"🔍 Calling process_bot_batch()...")
                 logger.info(f"🚀 Using BATCH analysis mode - {len(trading_pairs)} pairs in 1 API call!")
-                return await self.process_bot_batch(db, bot, trading_pairs, strategy)
+                result = await self.process_bot_batch(db, bot, trading_pairs, strategy)
+                print(f"✅ process_bot_batch() returned")
+                return result
             else:
                 logger.info("Using sequential analysis mode")
                 # Original sequential processing logic
@@ -241,8 +249,10 @@ class MultiBotMonitor:
             Result dictionary with action/signal info for all pairs
         """
         try:
+            print(f"🔍 process_bot_batch() ENTERED")
             from app.models import Position
 
+            print(f"🔍 Checking open positions...")
             # Check how many open positions this bot has
             open_positions_query = (
                 select(Position)
@@ -251,9 +261,11 @@ class MultiBotMonitor:
             open_positions_result = await db.execute(open_positions_query)
             open_positions = list(open_positions_result.scalars().all())
             open_count = len(open_positions)
+            print(f"🔍 Found {open_count} open positions")
 
             # Get max concurrent deals from strategy config
             max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+            print(f"🔍 Max concurrent deals: {max_concurrent_deals}")
 
             # Calculate available budget for new positions
             quote_currency = bot.get_quote_currency()
@@ -336,12 +348,14 @@ class MultiBotMonitor:
             # Collect market data for pairs we're analyzing
             pairs_data = {}
             failed_pairs = {}  # Track pairs that failed to load data
+            print(f"🔍 Fetching market data for {len(pairs_to_analyze)} pairs...")
             logger.info(f"  Fetching market data for {len(pairs_to_analyze)} pairs...")
 
             # Check which pairs have open positions (critical to retry)
             pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
 
             for product_id in pairs_to_analyze:
+                print(f"🔍 Fetching data for {product_id}...")
                 has_open_position = product_id in pairs_with_positions
                 max_retries = 3 if has_open_position else 1  # Retry more for open positions
 
@@ -399,8 +413,10 @@ class MultiBotMonitor:
                     logger.error(f"  🚨 CRITICAL: Failed to fetch data for open position {product_id}: {last_error}")
 
             # Call batch AI analysis (1 API call for ALL pairs!)
+            print(f"🔍 About to call AI batch analysis for {len(pairs_data)} pairs...")
             logger.info(f"  🧠 Calling AI for batch analysis of {len(pairs_data)} pairs...")
             batch_analyses = await strategy.analyze_multiple_pairs_batch(pairs_data)
+            print(f"✅ AI batch analysis returned with {len(batch_analyses)} results")
             logger.info(f"  ✅ Received {len(batch_analyses)} analyses from AI")
 
             # Process each pair's analysis result
