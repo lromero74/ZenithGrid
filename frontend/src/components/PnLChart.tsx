@@ -148,7 +148,11 @@ export function PnLChart() {
 
     // Clean up existing chart if any
     if (chartRef.current) {
-      chartRef.current.remove()
+      try {
+        chartRef.current.remove()
+      } catch (e) {
+        // Chart already disposed, ignore
+      }
       chartRef.current = null
       areaSeriesRef.current = null
     }
@@ -200,7 +204,13 @@ export function PnLChart() {
 
     return () => {
       window.removeEventListener('resize', handleResize)
-      chart.remove()
+      try {
+        if (chart) {
+          chart.remove()
+        }
+      } catch (e) {
+        // Chart already disposed, ignore
+      }
     }
   }, [data, activeTab])
 
