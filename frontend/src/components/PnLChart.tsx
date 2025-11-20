@@ -23,10 +23,18 @@ interface PairPnL {
   total_pnl: number
 }
 
+interface MostProfitableBot {
+  bot_id: number
+  bot_name: string
+  total_pnl: number
+}
+
 interface PnLTimeSeriesData {
   summary: PnLDataPoint[]
   by_day: DailyPnL[]
   by_pair: PairPnL[]
+  active_trades: number
+  most_profitable_bot: MostProfitableBot | null
 }
 
 type TimeRange = '7d' | '30d' | '3m' | '6m' | 'all'
@@ -327,6 +335,7 @@ export function PnLChart() {
           <div className="bg-slate-800/50 rounded-lg p-4">
             <div className="text-sm text-slate-400 mb-1">Closed trades</div>
             <div className="text-3xl font-bold text-white mb-1">{stats.closedTrades}</div>
+            <div className="text-xs text-slate-500">Active trades: {data.active_trades}</div>
           </div>
 
           {/* Best Pairs Card */}
@@ -343,6 +352,21 @@ export function PnLChart() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Most Profitable Bot Card */}
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <div className="text-sm text-slate-400 mb-1">Most profitable bot</div>
+            {data.most_profitable_bot ? (
+              <>
+                <div className={`text-2xl font-bold mb-1 ${data.most_profitable_bot.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {data.most_profitable_bot.total_pnl >= 0 ? '+' : ''}${data.most_profitable_bot.total_pnl.toFixed(2)}
+                </div>
+                <div className="text-xs text-blue-400 truncate">{data.most_profitable_bot.bot_name}</div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500">No data</div>
+            )}
           </div>
         </div>
 

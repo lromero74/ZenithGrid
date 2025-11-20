@@ -287,10 +287,43 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
         for pair, pnl in sorted(pair_pnl.items(), key=lambda x: x[1], reverse=True)
     ]
 
+    # Get active trades count
+    active_count_query = select(func.count(Position.id)).where(Position.status == "open")
+    active_count_result = await db.execute(active_count_query)
+    active_trades = active_count_result.scalar() or 0
+
+    # Get bot-level P&L for most profitable bot
+    bot_pnl_query = select(
+        Position.bot_id,
+        func.sum(Position.profit_usd).label('total_pnl')
+    ).where(
+        Position.status == "closed",
+        Position.profit_usd != None
+    ).group_by(Position.bot_id).order_by(func.sum(Position.profit_usd).desc())
+
+    bot_pnl_result = await db.execute(bot_pnl_query)
+    bot_pnls = bot_pnl_result.all()
+
+    most_profitable_bot = None
+    if bot_pnls:
+        top_bot_id, top_bot_pnl = bot_pnls[0]
+        # Get bot name
+        bot_query = select(Bot).where(Bot.id == top_bot_id)
+        bot_result = await db.execute(bot_query)
+        bot = bot_result.scalars().first()
+        if bot:
+            most_profitable_bot = {
+                "bot_id": top_bot_id,
+                "bot_name": bot.name,
+                "total_pnl": round(top_bot_pnl, 2)
+            }
+
     return {
         "summary": summary_data,
         "by_day": by_day_data,
-        "by_pair": by_pair_data
+        "by_pair": by_pair_data,
+        "active_trades": active_trades,
+        "most_profitable_bot": most_profitable_bot
     }
 
 
