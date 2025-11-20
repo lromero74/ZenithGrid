@@ -234,47 +234,8 @@ export function PnLChart() {
 
   return (
     <div className="bg-slate-900 rounded-lg overflow-hidden">
-      {/* Header with Stats */}
+      {/* Header with Tabs and Time Range */}
       <div className="p-4 sm:p-6 border-b border-slate-800">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Total P&L */}
-          <div className="bg-slate-800/50 rounded-lg p-4">
-            <div className="text-xs text-slate-400 mb-1">Total P&L</div>
-            <div className={`text-2xl font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-              {isProfit ? '+' : ''}${stats.totalPnL.toFixed(2)}
-            </div>
-          </div>
-
-          {/* Closed Trades */}
-          <div className="bg-slate-800/50 rounded-lg p-4">
-            <div className="text-xs text-slate-400 mb-1">Closed Trades</div>
-            <div className="text-2xl font-bold text-white">{stats.closedTrades}</div>
-          </div>
-
-          {/* Best Pair */}
-          <div className="bg-slate-800/50 rounded-lg p-4">
-            <div className="text-xs text-slate-400 mb-1">Best Pair</div>
-            <div className="text-sm font-semibold text-white">{stats.bestPair?.pair || 'N/A'}</div>
-            {stats.bestPair && (
-              <div className="text-xs text-green-400">
-                +${stats.bestPair.total_pnl.toFixed(2)}
-              </div>
-            )}
-          </div>
-
-          {/* Worst Pair */}
-          <div className="bg-slate-800/50 rounded-lg p-4">
-            <div className="text-xs text-slate-400 mb-1">Worst Pair</div>
-            <div className="text-sm font-semibold text-white">{stats.worstPair?.pair || 'N/A'}</div>
-            {stats.worstPair && (
-              <div className={`text-xs ${stats.worstPair.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {stats.worstPair.total_pnl >= 0 ? '+' : ''}${stats.worstPair.total_pnl.toFixed(2)}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tabs and Time Range */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           {/* Tabs */}
           <div className="flex gap-2">
@@ -328,8 +289,43 @@ export function PnLChart() {
         </div>
       </div>
 
-      {/* Chart or Table */}
-      <div className="p-4 sm:p-6">
+      {/* Stats Cards + Chart */}
+      <div className="p-4 sm:p-6 flex gap-6">
+        {/* Left sidebar - Stats Cards */}
+        <div className="flex flex-col gap-3 w-72 flex-shrink-0">
+          {/* Total P&L Card */}
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <div className="text-sm text-slate-400 mb-1">PnL</div>
+            <div className={`text-2xl font-bold mb-2 ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+              {isProfit ? '' : '-'}${Math.abs(stats.totalPnL).toFixed(2)}
+            </div>
+          </div>
+
+          {/* Closed Trades Card */}
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <div className="text-sm text-slate-400 mb-1">Closed trades</div>
+            <div className="text-3xl font-bold text-white mb-1">{stats.closedTrades}</div>
+          </div>
+
+          {/* Best Pairs Card */}
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <div className="text-sm text-slate-400 mb-3">Best pairs</div>
+            <div className="space-y-2">
+              {data.by_pair.slice(0, 3).map((pair, index) => (
+                <div key={pair.pair} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">#{index + 1}</span>
+                  <span className="text-sm text-white flex-1">{pair.pair}</span>
+                  <span className={`text-sm font-semibold ${pair.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {pair.total_pnl >= 0 ? '+' : ''}${pair.total_pnl.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right side - Chart */}
+        <div className="flex-1">
         {activeTab === 'by_day' ? (
           // Daily P&L bar chart
           <ResponsiveContainer width="100%" height={350}>
@@ -406,6 +402,7 @@ export function PnLChart() {
           // Area chart for summary (cumulative P&L)
           <div ref={chartContainerRef} className="w-full h-[350px]" />
         )}
+        </div>
       </div>
     </div>
   )
