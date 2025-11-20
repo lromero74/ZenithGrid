@@ -1417,7 +1417,7 @@ export default function Positions() {
       // Refetch positions instead of full page reload
       refetchPositions()
       // Show success notification
-      alert(`Position closed successfully!\nProfit: ${result.profit_btc.toFixed(8)} BTC (${result.profit_percentage.toFixed(2)}%)`)
+      alert(`Position closed successfully!\nProfit: ${result.profit_quote.toFixed(8)} (${result.profit_percentage.toFixed(2)}%)`)
     } catch (err: any) {
       alert(`Error closing position: ${err.response?.data?.detail || err.message}`)
     } finally {

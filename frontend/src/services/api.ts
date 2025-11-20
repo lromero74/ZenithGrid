@@ -34,7 +34,7 @@ export const positionsApi = {
   getAILogs: (id: number, includeBeforeOpen = true) =>
     api.get<AIBotLog[]>(`/positions/${id}/ai-logs`, { params: { include_before_open: includeBeforeOpen } }).then((res) => res.data),
   close: (id: number) =>
-    api.post<{ message: string; profit_btc: number; profit_percentage: number }>(`/positions/${id}/force-close`)
+    api.post<{ message: string; profit_quote: number; profit_percentage: number }>(`/positions/${id}/force-close`)
       .then((res) => res.data),
   addFunds: (id: number, btcAmount: number) =>
     api.post<{ message: string; trade_id: number; price: number; eth_acquired: number }>(`/positions/${id}/add-funds`, { btc_amount: btcAmount })
