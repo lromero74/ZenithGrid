@@ -19,7 +19,6 @@ interface BotFormData {
   reserved_usd_balance: number  // USD allocated to this bot (legacy)
   budget_percentage: number  // % of aggregate portfolio value (preferred)
   check_interval_seconds: number  // How often bot monitors positions
-  analysis_interval_minutes: number  // How often AI analyzes (for AI bots)
   strategy_config: Record<string, any>
 }
 
@@ -48,7 +47,6 @@ function Bots() {
     reserved_usd_balance: 0,  // No reserved balance by default
     budget_percentage: 0,  // No budget percentage by default
     check_interval_seconds: 300,  // Default: 5 minutes
-    analysis_interval_minutes: 15,  // Default: 15 minutes (for AI bots)
     strategy_config: {},
   })
 
@@ -295,7 +293,6 @@ function Bots() {
       reserved_usd_balance: 0,
       budget_percentage: 0,
       check_interval_seconds: 300,
-      analysis_interval_minutes: 15,
       strategy_config: {},
     })
     setEditingBot(null)
@@ -316,7 +313,6 @@ function Bots() {
       reserved_usd_balance: template.reserved_usd_balance || 0,
       budget_percentage: template.budget_percentage || 0,
       check_interval_seconds: template.check_interval_seconds || 300,
-      analysis_interval_minutes: template.strategy_config?.analysis_interval_minutes || 15,
       strategy_config: template.strategy_config,
     })
   }
@@ -337,7 +333,6 @@ function Bots() {
       reserved_usd_balance: bot.reserved_usd_balance || 0,
       budget_percentage: bot.budget_percentage || 0,
       check_interval_seconds: (bot as any).check_interval_seconds || 300,
-      analysis_interval_minutes: (bot.strategy_config as any)?.analysis_interval_minutes || 15,
       strategy_type: bot.strategy_type,
       product_id: bot.product_id,  // Keep for backward compatibility
       product_ids: productIds,
@@ -394,10 +389,7 @@ function Bots() {
       reserved_usd_balance: formData.reserved_usd_balance,
       budget_percentage: formData.budget_percentage,
       check_interval_seconds: formData.check_interval_seconds,  // Monitoring interval
-      strategy_config: {
-        ...formData.strategy_config,
-        analysis_interval_minutes: formData.analysis_interval_minutes  // For AI bots
-      },
+      strategy_config: formData.strategy_config,
     }
 
     if (editingBot) {
@@ -1139,26 +1131,6 @@ function Bots() {
                     <p className="text-xs text-slate-400 mt-1.5">
                       How often to monitor positions<br/>
                       <span className="text-slate-500">Default: 300s (5 min) • Gemini: 1800s (30 min)</span>
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                      AI Analysis Interval (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      step="1"
-                      min="1"
-                      max="1440"
-                      value={formData.analysis_interval_minutes}
-                      onChange={(e) => setFormData({ ...formData, analysis_interval_minutes: parseInt(e.target.value) || 15 })}
-                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
-                      placeholder="15"
-                    />
-                    <p className="text-xs text-slate-400 mt-1.5">
-                      How often AI analyzes markets (AI bots only)<br/>
-                      <span className="text-slate-500">Range: 1-1440 min (1 day) • Default: 15 min</span>
                     </p>
                   </div>
                 </div>
