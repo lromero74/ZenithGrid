@@ -257,10 +257,15 @@ class MultiBotMonitor:
 
             # Calculate available budget for new positions
             quote_currency = bot.get_quote_currency()
-            if quote_currency == "BTC":
-                aggregate_value = await self.coinbase.calculate_aggregate_btc_value()
-            else:  # USD
-                aggregate_value = await self.coinbase.calculate_aggregate_usd_value()
+            try:
+                if quote_currency == "BTC":
+                    aggregate_value = await self.coinbase.calculate_aggregate_btc_value()
+                else:  # USD
+                    aggregate_value = await self.coinbase.calculate_aggregate_usd_value()
+            except Exception as e:
+                # If portfolio API fails (403/rate limit), use a conservative fallback
+                logger.warning(f"  ⚠️  Failed to get aggregate balance (API error), using 0.001 BTC fallback: {e}")
+                aggregate_value = 0.001  # Conservative fallback - allows ~3 positions at 30% budget
 
             reserved_balance = bot.get_reserved_balance(aggregate_value)
 
