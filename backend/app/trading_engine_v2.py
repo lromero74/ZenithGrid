@@ -688,11 +688,12 @@ class StrategyTradingEngine:
                 logger.info(f"  💰 Aggregate BTC value: {aggregate_value:.8f} BTC")
 
         reserved_balance = self.bot.get_reserved_balance(aggregate_value)
-        print(f"🔍 Reserved balance: {reserved_balance:.8f}")
+        print(f"🔍 Reserved balance (per-position): {reserved_balance:.8f}")
         if reserved_balance > 0:
-            # Bot has reserved balance - divide by max_concurrent_deals for per-position budget
+            # Bot has reserved balance - get_reserved_balance() already divides by max_concurrent_deals
+            # so reserved_balance IS the per-position budget
             max_concurrent_deals = max(self.bot.strategy_config.get('max_concurrent_deals', 1), 1)
-            per_position_budget = reserved_balance / max_concurrent_deals
+            per_position_budget = reserved_balance  # Already per-position, don't divide again!
 
             # Calculate how much is available for THIS position (per-position budget - already spent in this position)
             from sqlalchemy import select
