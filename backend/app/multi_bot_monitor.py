@@ -537,9 +537,10 @@ class MultiBotMonitor:
         """Execute trading logic for a single pair based on AI signal"""
         # Reuse existing process_bot_pair logic but with pre-analyzed signal
         # This avoids code duplication
-        return await self.process_bot_pair(db, bot, product_id, pre_analyzed_signal=signal_data, pair_data=pair_data)
+        # Pass commit=False to prevent mid-batch commits that corrupt the session
+        return await self.process_bot_pair(db, bot, product_id, pre_analyzed_signal=signal_data, pair_data=pair_data, commit=False)
 
-    async def process_bot_pair(self, db: AsyncSession, bot: Bot, product_id: str, pre_analyzed_signal=None, pair_data=None) -> Dict[str, Any]:
+    async def process_bot_pair(self, db: AsyncSession, bot: Bot, product_id: str, pre_analyzed_signal=None, pair_data=None, commit=True) -> Dict[str, Any]:
         """
         Process signals for a single bot/pair combination
 
@@ -547,6 +548,8 @@ class MultiBotMonitor:
             db: Database session
             bot: Bot instance to process
             product_id: Trading pair to evaluate (e.g., "ETH-BTC")
+            commit: Whether to commit the database session after processing (default: True)
+                    Set to False when processing in batch mode to avoid corrupting the session
 
         Returns:
             Result dictionary with action/signal info
@@ -729,7 +732,9 @@ class MultiBotMonitor:
 
             # Note: bot.last_signal_check is updated BEFORE processing starts (in monitor_loop)
             # to prevent race conditions where the same bot gets processed twice
-            await db.commit()
+            # Only commit if not in batch mode (batch mode commits once at the end)
+            if commit:
+                await db.commit()
 
             return result
 
