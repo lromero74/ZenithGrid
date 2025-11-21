@@ -114,9 +114,20 @@ class AIAutonomousStrategy(TradingStrategy):
         print(f"🔍 config_key: {config_key}, value in config: {self.config.get(config_key, 'NOT SET')}")
 
         # Return user's explicit setting if provided, otherwise use risk-based default
-        result = self.config.get(config_key, default_threshold)
-        print(f"🔍 Returning threshold: {result}")
-        return result
+        try:
+            result = self.config.get(config_key, default_threshold)
+            print(f"🔍 Returning threshold: {result} (type: {type(result)})")
+            if result is None:
+                print(f"❌ WARNING: Threshold is None! default_threshold was: {default_threshold}")
+                # Fallback to default if somehow None
+                result = default_threshold
+            return result
+        except Exception as e:
+            print(f"❌ EXCEPTION in _get_confidence_threshold_for_action: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return safe default
+            return default_threshold
 
     def _should_perform_web_search(
         self,
@@ -1661,11 +1672,9 @@ Strategic Considerations:
         # Use lesser of AI suggestion and max allowed
         use_pct = min(suggested_pct, max_pct)
 
-        # Smart budget division by max concurrent deals (3Commas style)
-        max_deals = self.config.get("max_concurrent_deals", 1)
-        if max_deals > 1:
-            # Divide budget equally among max concurrent deals
-            use_pct = use_pct / max_deals
+        # NOTE: Do NOT divide by max_concurrent_deals here - the btc_balance
+        # passed in has ALREADY been divided by max_concurrent_deals in trading_engine_v2.py
+        # (per_position_budget = reserved_balance / max_concurrent_deals)
 
         btc_amount = btc_balance * (use_pct / 100.0)
 
