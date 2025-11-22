@@ -290,16 +290,10 @@ class CoinbaseClient:
 
     async def get_btc_balance(self) -> float:
         """
-        Get BTC balance
+        Get BTC balance - always fetches fresh data from Coinbase (no caching)
 
         Uses portfolio breakdown for CDP auth, individual accounts for HMAC auth.
-        Both methods are cached to reduce API calls.
         """
-        cache_key = "balance_btc"
-        cached = await api_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
         if self.auth_type == "cdp":
             # Use portfolio breakdown for CDP
             try:
@@ -308,7 +302,6 @@ class CoinbaseClient:
                 for pos in spot_positions:
                     if pos.get("asset") == "BTC":
                         balance = float(pos.get("available_to_trade_crypto", 0))
-                        await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
                         return balance
             except Exception as e:
                 logger.warning(f"Portfolio endpoint failed for BTC balance: {e}. Falling back to get_accounts().")
@@ -320,7 +313,6 @@ class CoinbaseClient:
                     if account.get("currency") == "BTC":
                         available = account.get("available_balance", {})
                         balance = float(available.get("value", 0))
-                        await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
                         return balance
             except Exception as fallback_error:
                 logger.error(f"Fallback get_accounts() also failed: {fallback_error}")
@@ -336,7 +328,6 @@ class CoinbaseClient:
                     balance = float(available.get("value", 0))
                     break
 
-            await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
             return balance
 
     async def get_eth_balance(self) -> float:
