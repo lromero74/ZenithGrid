@@ -331,6 +331,12 @@ class AdvancedDCAStrategy(TradingStrategy):
             # Get entry price (average price from position)
             entry_price = position.average_buy_price
 
+            # SAFETY CHECK: Price must be at least 2% below cost basis to DCA
+            # This prevents "chasing" the price and ensures we only average down meaningfully
+            min_required_drop = entry_price * 0.98  # 2% below cost basis
+            if current_price > min_required_drop:
+                return False, 0.0, f"Price ({current_price:.8f}) must be 2% below cost basis ({entry_price:.8f}) to DCA"
+
             # Calculate trigger price for next safety order
             trigger_price = self.calculate_safety_order_price(entry_price, next_order_number)
 
