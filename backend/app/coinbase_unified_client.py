@@ -759,15 +759,43 @@ class CoinbaseClient:
 
     async def calculate_aggregate_btc_value(self) -> float:
         """
-        Calculate aggregate BTC value - returns actual BTC balance from Coinbase.
-        This is used for bot budget allocation.
+        Calculate total BTC value of entire account (available BTC + BTC value of all positions).
+        This is used for bot budget allocation (90% of total account value).
 
         Returns:
-            Actual BTC balance from Coinbase
+            Total BTC value across all holdings (available + in positions)
         """
-        btc_balance = await self.get_btc_balance()
-        logger.info(f"✅ BTC balance from Coinbase: {btc_balance:.8f} BTC")
-        return btc_balance
+        # Get available BTC balance
+        available_btc = await self.get_btc_balance()
+
+        # Get all accounts to calculate BTC value of altcoin positions
+        accounts = await self.get_accounts()
+
+        total_btc_value = available_btc
+
+        # For each BTC pair (e.g., ETH-BTC), add the BTC value of those holdings
+        for account in accounts:
+            currency = account.get("currency")
+            if currency and currency != "BTC":
+                # Check if this is a BTC pair
+                product_id = f"{currency}-BTC"
+                try:
+                    # Get current product info to check if pair exists
+                    available_balance = float(account.get("available_balance", {}).get("value", 0))
+                    if available_balance > 0:
+                        # Get current price for this pair
+                        product = await self.get_product(product_id)
+                        if product:
+                            price = float(product.get("price", 0))
+                            btc_value = available_balance * price
+                            total_btc_value += btc_value
+                            logger.info(f"  + {currency}: {available_balance:.8f} × {price:.8f} BTC = {btc_value:.8f} BTC")
+                except Exception as e:
+                    # Pair doesn't exist or error fetching price, skip
+                    pass
+
+        logger.info(f"✅ Total account BTC value: {total_btc_value:.8f} BTC (available: {available_btc:.8f} BTC)")
+        return total_btc_value
 
     async def calculate_aggregate_usd_value(self) -> float:
         """

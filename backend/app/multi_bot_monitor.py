@@ -288,12 +288,14 @@ class MultiBotMonitor:
                 logger.warning(f"  ⚠️  SUSPICIOUS: Aggregate {quote_currency} value is very low ({aggregate_value:.8f}). This may indicate API issues.")
                 logger.warning(f"  ⚠️  Bot may be unable to open new positions due to insufficient calculated balance.")
 
+            # Calculate bot's reserved balance (90% of total account value)
             reserved_balance = bot.get_reserved_balance(aggregate_value)
 
-            # NOTE: aggregate_value from get_btc_balance() already excludes what's in positions.
-            # Coinbase returns "available balance" which is net of open orders/positions.
-            # So reserved_balance is already the "available to spend" amount - don't subtract positions again!
-            available_budget = reserved_balance
+            # Calculate how much budget is already used by this bot's positions
+            total_in_positions = sum(p.total_quote_spent for p in open_positions)
+
+            # Available budget = max allowed - already in use
+            available_budget = reserved_balance - total_in_positions
 
             # Calculate minimum required per new position (budget / max_deals)
             min_per_position = reserved_balance / max(max_concurrent_deals, 1)
@@ -301,8 +303,8 @@ class MultiBotMonitor:
             # Determine if we have enough budget for new positions or DCA
             has_budget_for_new = available_budget >= min_per_position
 
-            # Log budget info (removed confusing "in use" since balance is already net of positions)
-            logger.info(f"  💰 Budget: {reserved_balance:.8f} {quote_currency} available (after bot allocation %)")
+            logger.info(f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved (90% of {aggregate_value:.8f})")
+            logger.info(f"  💰 In positions: {total_in_positions:.8f} {quote_currency}, Available: {available_budget:.8f} {quote_currency}")
             logger.info(f"  💰 Min per position: {min_per_position:.8f} {quote_currency}, Has budget: {has_budget_for_new}")
 
             # Determine which pairs to analyze
