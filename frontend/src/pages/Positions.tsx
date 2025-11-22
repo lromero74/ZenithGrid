@@ -25,6 +25,7 @@ import type { Position, Trade } from '../types'
 import PositionLogsModal from '../components/PositionLogsModal'
 import TradingViewChartModal from '../components/TradingViewChartModal'
 import LightweightChartModal from '../components/LightweightChartModal'
+import CoinIcon from '../components/CoinIcon'
 import {
   calculateSMA,
   calculateEMA,
@@ -1835,9 +1836,10 @@ export default function Positions() {
 
                       {/* Column 2: Pair + Exchange (1.5 cols) */}
                       <div className="col-span-2 flex items-start gap-2">
-                        <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-xs">
-                          {position.product_id?.split('-')[0]?.substring(0, 1) || 'Ƀ'}
-                        </div>
+                        <CoinIcon
+                          symbol={position.product_id?.split('-')[0] || 'BTC'}
+                          size="sm"
+                        />
                         <div className="flex-1">
                           <div className="flex items-center gap-1.5">
                             <span
