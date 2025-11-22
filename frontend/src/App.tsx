@@ -58,10 +58,10 @@ function App() {
   // Mark closed positions as viewed after a few seconds on History page
   useEffect(() => {
     if (location.pathname === '/history') {
-      console.log('🔴 History page opened, setting 3s timer. lastViewed:', new Date(lastViewedClosedPositions).toLocaleString())
+      console.log('🔴 History page opened, setting 3s timer')
       const timer = setTimeout(() => {
         const now = Date.now()
-        console.log('✅ Timer fired! Updating lastViewed from', new Date(lastViewedClosedPositions).toLocaleString(), 'to', new Date(now).toLocaleString())
+        console.log('✅ Timer fired! Clearing badge notification')
         setLastViewedClosedPositions(now)
         localStorage.setItem('last-viewed-closed-positions', now.toString())
       }, 3000) // Clear badge after 3 seconds
@@ -72,7 +72,7 @@ function App() {
         clearTimeout(timer)
       }
     }
-  }, [location.pathname, lastViewedClosedPositions])
+  }, [location.pathname])
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
