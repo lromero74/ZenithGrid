@@ -777,9 +777,10 @@ class CoinbaseClient:
         # Check cache first to reduce API spam
         cache_key = "aggregate_btc_value"
         cached = await api_cache.get(cache_key)
-        if cached is not None:
-            logger.info(f"✅ Using cached aggregate BTC value: {cached:.8f} BTC")
-            return cached
+        # TEMPORARILY DISABLED TO DEBUG
+        # if cached is not None:
+        #     logger.info(f"✅ Using cached aggregate BTC value: {cached:.8f} BTC")
+        #     return cached
 
         # Use get_accounts() as primary method (more reliable than portfolio endpoint)
         try:
