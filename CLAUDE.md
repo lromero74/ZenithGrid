@@ -59,22 +59,23 @@ cd GetRidOf3CommasBecauseTheyGoDownTooOften/backend
 3. If missing libraries cause errors in AI Bot Reasoning logs, install individually
 4. After installation, always restart backend: `sudo systemctl restart trading-bot-backend`
 - please always back up the database before you mess with it
-- we run on testbot host in EC2
 
 ## CRITICAL: Budget Calculation for BTC Bots
 
-**IMPORTANT - READ THIS EVERY TIME YOU WORK ON BUDGET ISSUES:**
+**IMPORTANT - BTC-based bots should ONLY look at BTC and BTC-pair values:**
 
 For BTC-based bots (bots trading BTC pairs like ETH-BTC, ADA-BTC, etc.):
 
 **The aggregate BTC value MUST include:**
 1. Available BTC balance in the account
-2. PLUS the BTC value of ALL altcoin positions in BTC pairs (e.g., if you have 10 ADA and ADA-BTC is trading at 0.00001, that's 0.0001 BTC)
+2. PLUS the BTC value of ALL altcoin positions in BTC pairs ONLY (e.g., if you have 10 ADA and ADA-BTC is trading at 0.00001, that's 0.0001 BTC)
+
+**USD-based pairs should NOT be included** because when sold, they don't add to available BTC for BTC-based trading. Only BTC and BTC-pair positions should count toward the BTC bot's budget.
 
 **Example Calculation:**
 - Available BTC: 0.00273944
-- ADA position: 100 ADA × 0.00001 BTC = 0.001 BTC
-- AAVE position: 0.5 AAVE × 0.0005 BTC = 0.00025 BTC
+- ADA position: 100 ADA × 0.00001 BTC (ADA-BTC price) = 0.001 BTC
+- AAVE position: 0.5 AAVE × 0.0005 BTC (AAVE-BTC price) = 0.00025 BTC
 - **Total aggregate BTC = 0.00273944 + 0.001 + 0.00025 = 0.00398944 BTC**
 
 Then bot budget = (budget_percentage / 100) × total_aggregate_btc
@@ -83,4 +84,5 @@ Then bot budget = (budget_percentage / 100) × total_aggregate_btc
 
 If you see "INSUFFICIENT FUNDS" errors, verify that `calculate_aggregate_btc_value()` is correctly summing BOTH:
 - BTC balance
-- BTC value of all altcoin holdings in BTC pairs
+- BTC value of all altcoin holdings in BTC pairs (NOT USD pairs)
+- we run on testbot host in EC2

@@ -244,13 +244,15 @@ class CoinbaseClient:
 
     # ===== Account & Balance Methods =====
 
-    async def get_accounts(self) -> List[Dict[str, Any]]:
-        """Get all accounts (cached to reduce API calls)"""
+    async def get_accounts(self, force_fresh: bool = False) -> List[Dict[str, Any]]:
+        """Get all accounts (cached to reduce API calls unless force_fresh=True)"""
         cache_key = "accounts_list"
-        cached = await api_cache.get(cache_key)
-        if cached is not None:
-            logger.debug(f"Using cached accounts list ({len(cached)} accounts)")
-            return cached
+
+        if not force_fresh:
+            cached = await api_cache.get(cache_key)
+            if cached is not None:
+                logger.debug(f"Using cached accounts list ({len(cached)} accounts)")
+                return cached
 
         result = await self._request("GET", "/api/v3/brokerage/accounts")
         accounts = result.get("accounts", [])
@@ -770,7 +772,8 @@ class CoinbaseClient:
         available_btc = await self.get_btc_balance()
 
         # Get all accounts to calculate BTC value of altcoin positions
-        accounts = await self.get_accounts()
+        # Force fresh data to avoid stale cache issues
+        accounts = await self.get_accounts(force_fresh=True)
 
         total_btc_value = available_btc
 
