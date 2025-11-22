@@ -684,6 +684,7 @@ async def get_ai_bot_logs(
     limit: int = 50,
     offset: int = 0,
     product_id: Optional[str] = None,
+    position_id: Optional[int] = None,
     since: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db)
 ):
@@ -695,6 +696,7 @@ async def get_ai_bot_logs(
         limit: Maximum number of logs to return
         offset: Pagination offset
         product_id: Optional filter by trading pair (e.g., "ETH-BTC")
+        position_id: Optional filter by position ID
         since: Optional filter for logs since this timestamp
     """
     # Verify bot exists
@@ -710,6 +712,9 @@ async def get_ai_bot_logs(
 
     if product_id:
         logs_query = logs_query.where(AIBotLog.product_id == product_id)
+
+    if position_id is not None:
+        logs_query = logs_query.where(AIBotLog.position_id == position_id)
 
     if since:
         logs_query = logs_query.where(AIBotLog.timestamp >= since)
