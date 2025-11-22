@@ -650,6 +650,13 @@ class StrategyTradingEngine:
         # Invalidate balance cache after trade
         await self.trading_client.invalidate_balance_cache()
 
+        # Trigger immediate re-analysis to find replacement position
+        # By resetting last_signal_check, the bot will run on the next monitor cycle
+        # This is like 3Commas - when a deal closes, immediately look for new opportunities
+        logger.info(f"🔄 Position closed - triggering immediate re-analysis to find replacement")
+        self.bot.last_signal_check = None
+        await self.db.commit()
+
         return trade, profit_quote, profit_percentage
 
     async def process_signal(
