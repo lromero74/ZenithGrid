@@ -1265,6 +1265,24 @@ export default function Positions() {
     refetchInterval: 10000,
   })
 
+  // Fetch portfolio for BTC/USD price
+  const { data: portfolio } = useQuery({
+    queryKey: ['account-portfolio'],
+    queryFn: async () => {
+      const response = await fetch('/api/account/portfolio')
+      if (!response.ok) throw new Error('Failed to fetch portfolio')
+      return response.json()
+    },
+    refetchInterval: 120000,
+    staleTime: 60000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  })
+
+  const totalBtcValue = portfolio?.total_btc_value || 0
+  const totalUsdValue = portfolio?.total_usd_value || 0
+  const btcUsdPrice = totalBtcValue > 0 ? totalUsdValue / totalBtcValue : 0
+
   // Fetch real-time prices for all open positions
   useEffect(() => {
     const abortController = new AbortController()
@@ -2042,7 +2060,14 @@ export default function Positions() {
                       {/* Column 4: Volume (2 cols) */}
                       <div className="col-span-2">
                         <div className="text-[10px] space-y-0.5">
-                          <div className="text-white">{formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}</div>
+                          <div className="text-white">
+                            {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}
+                            {getQuoteCurrency(position.product_id || 'ETH-BTC').symbol === 'BTC' && btcUsdPrice > 0 && (
+                              <span className="text-slate-400">
+                                {' '}(${(position.total_quote_spent * btcUsdPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })})
+                              </span>
+                            )}
+                          </div>
                           <div className="text-slate-400">{formatBaseAmount(position.total_base_acquired, position.product_id || 'ETH-BTC')}</div>
                           {pnl && pnl.usd !== undefined && (
                             <div className={pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}>
