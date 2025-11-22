@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { botsApi, templatesApi } from '../services/api'
 import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
-import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical } from 'lucide-react'
+import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical, FastForward } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 import AIBotLogs from '../components/AIBotLogs'
 import { PnLChart } from '../components/PnLChart'
@@ -259,6 +259,14 @@ function Bots() {
   // Clone bot mutation
   const cloneBot = useMutation({
     mutationFn: (id: number) => botsApi.clone(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bots'] })
+    },
+  })
+
+  // Force run mutation
+  const forceRunBot = useMutation({
+    mutationFn: (id: number) => botsApi.forceRun(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bots'] })
     },
@@ -717,6 +725,18 @@ function Bots() {
                               title="View AI Reasoning Logs"
                             >
                               <Brain className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Force Run Button - only show for active bots */}
+                          {bot.is_active && (
+                            <button
+                              onClick={() => forceRunBot.mutate(bot.id)}
+                              disabled={forceRunBot.isPending}
+                              className="p-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Force Run Now"
+                            >
+                              <FastForward className="w-4 h-4" />
                             </button>
                           )}
 
