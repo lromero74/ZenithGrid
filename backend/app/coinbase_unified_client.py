@@ -765,6 +765,7 @@ class CoinbaseClient:
         Returns:
             Total BTC value across all holdings (available + in positions)
         """
+        logger.warning("📊 Calculating aggregate BTC value for budget allocation...")
         # Get available BTC balance
         available_btc = await self.get_btc_balance()
 
@@ -789,12 +790,12 @@ class CoinbaseClient:
                             price = float(product.get("price", 0))
                             btc_value = available_balance * price
                             total_btc_value += btc_value
-                            logger.info(f"  + {currency}: {available_balance:.8f} × {price:.8f} BTC = {btc_value:.8f} BTC")
+                            logger.warning(f"  💰 BTC: + {currency}: {available_balance:.8f} × {price:.8f} BTC = {btc_value:.8f} BTC")
                 except Exception as e:
                     # Pair doesn't exist or error fetching price, skip
-                    pass
+                    logger.warning(f"  ⚠️  Skipping {product_id}: {str(e)}")
 
-        logger.info(f"✅ Total account BTC value: {total_btc_value:.8f} BTC (available: {available_btc:.8f} BTC)")
+        logger.warning(f"✅ Total account BTC value: {total_btc_value:.8f} BTC (available: {available_btc:.8f} BTC)")
         return total_btc_value
 
     async def calculate_aggregate_usd_value(self) -> float:
