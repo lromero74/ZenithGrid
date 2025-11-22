@@ -54,9 +54,20 @@ is_service_running() {
     return $?
 }
 
+# Function to clear Python bytecode cache
+clear_python_cache() {
+    echo -e "${BLUE}Clearing Python bytecode cache...${NC}"
+    find "$BACKEND_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+    find "$BACKEND_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
+    echo -e "${GREEN}✅ Python cache cleared${NC}"
+}
+
 # Function to start backend
 start_backend() {
     echo -e "${BLUE}Starting backend...${NC}"
+
+    # Clear bytecode cache before starting
+    clear_python_cache
 
     if [ "$OS_TYPE" = "Darwin" ]; then
         # macOS - use process management
@@ -275,6 +286,10 @@ case "${1:-}" in
         echo -e "${YELLOW}========================================${NC}"
         echo -e "${YELLOW}  Restarting Trading Bot${NC}"
         echo -e "${YELLOW}========================================${NC}"
+        echo ""
+
+        # Clear bytecode cache before restarting
+        clear_python_cache
         echo ""
 
         echo -e "${BLUE}Restarting backend...${NC}"
