@@ -764,73 +764,49 @@ class CoinbaseClient:
         Calculate total BTC value of entire account (available BTC + BTC value of all positions).
         This is used for bot budget allocation (90% of total account value).
 
-        Uses portfolio breakdown to get ALL positions (including those currently held in open trades).
+        Uses database to get positions held in open trades (since Coinbase API doesn't provide this).
 
         Returns:
             Total BTC value across all holdings (available + in positions)
         """
         logger.warning("📊 Calculating aggregate BTC value for budget allocation...")
 
-        total_btc_value = 0.0
+        # Get available BTC balance from Coinbase
+        available_btc = await self.get_btc_balance()
+        total_btc_value = available_btc
+        logger.warning(f"  💰 Available BTC: {available_btc:.8f} BTC")
 
+        # Get BTC value of open positions from database
         try:
-            # Use portfolio breakdown which shows ALL positions (even those in open trades)
-            breakdown = await self.get_portfolio_breakdown()
-            spot_positions = breakdown.get("spot_positions", [])
+            import sqlite3
+            db_path = "/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/trading.db"
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
 
-            logger.warning(f"  📋 Found {len(spot_positions)} positions in portfolio")
+            # Query all open positions in BTC pairs
+            cursor.execute("""
+                SELECT product_id, total_base_acquired, average_buy_price
+                FROM positions
+                WHERE status = 'open' AND product_id LIKE '%-BTC'
+            """)
 
-            for pos in spot_positions:
-                asset = pos.get("asset")
-                if not asset:
-                    continue
+            positions = cursor.fetchall()
+            btc_in_positions = 0.0
 
-                # Get total crypto holdings (available + on hold in orders)
-                total_crypto = float(pos.get("total_balance_crypto", 0))
+            for product_id, amount, avg_price in positions:
+                if amount and avg_price:
+                    btc_value = float(amount) * float(avg_price)
+                    btc_in_positions += btc_value
+                    logger.warning(f"  💰 Position {product_id}: {amount:.8f} × {avg_price:.8f} BTC = {btc_value:.8f} BTC")
 
-                if asset == "BTC":
-                    # BTC itself
-                    total_btc_value += total_crypto
-                    logger.warning(f"  💰 BTC: {total_crypto:.8f} BTC")
-                elif total_crypto > 0:
-                    # Check if this is a BTC pair (e.g., AAVE-BTC, ADA-BTC)
-                    product_id = f"{asset}-BTC"
-                    try:
-                        product = await self.get_product(product_id)
-                        if product:
-                            # This is a valid BTC pair
-                            price = float(product.get("price", 0))
-                            btc_value = total_crypto * price
-                            total_btc_value += btc_value
-                            logger.warning(f"  💰 BTC: + {asset}: {total_crypto:.8f} × {price:.8f} BTC/unit = {btc_value:.8f} BTC")
-                    except Exception as e:
-                        # Not a BTC pair (probably USD pair), skip
-                        pass
+            conn.close()
+
+            total_btc_value += btc_in_positions
+            logger.warning(f"  💰 BTC in positions: {btc_in_positions:.8f} BTC")
 
         except Exception as e:
-            logger.error(f"Failed to calculate aggregate BTC value from portfolio: {e}")
-            logger.warning("Falling back to get_accounts() method...")
-
-            # Fallback to old method using get_accounts() if portfolio fails
-            available_btc = await self.get_btc_balance()
-            accounts = await self.get_accounts(force_fresh=True)
-            total_btc_value = available_btc
-
-            for account in accounts:
-                currency = account.get("currency")
-                if currency and currency != "BTC":
-                    product_id = f"{currency}-BTC"
-                    try:
-                        available_balance = float(account.get("available_balance", {}).get("value", 0))
-                        if available_balance > 0:
-                            product = await self.get_product(product_id)
-                            if product:
-                                price = float(product.get("price", 0))
-                                btc_value = available_balance * price
-                                total_btc_value += btc_value
-                                logger.warning(f"  💰 BTC: + {currency}: {available_balance:.8f} × {price:.8f} BTC = {btc_value:.8f} BTC")
-                    except Exception as e:
-                        logger.warning(f"  ⚠️  Skipping {product_id}: {str(e)}")
+            logger.error(f"Failed to get positions from database: {e}")
+            logger.warning("  ⚠️  Continuing with available BTC only")
 
         logger.warning(f"✅ Total account BTC value: {total_btc_value:.8f} BTC")
         return total_btc_value
