@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 
 import { useState } from 'react'
 import type { Trade, AIBotLog } from '../types'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+import { formatDateTime } from '../utils/dateFormat'
 
 function ClosedPositions() {
   const [activeTab, setActiveTab] = useState<'closed' | 'failed'>('closed')
@@ -236,7 +237,7 @@ function ClosedPositions() {
                             <div key={trade.id} className="bg-slate-800 rounded p-3 grid grid-cols-5 gap-3 text-sm">
                               <div>
                                 <p className="text-slate-500 text-xs mb-1">Time</p>
-                                <p className="text-white">{format(new Date(trade.timestamp), 'MMM dd, HH:mm:ss')}</p>
+                                <p className="text-white">{formatDateTime(trade.timestamp)}</p>
                               </div>
                               <div>
                                 <p className="text-slate-500 text-xs mb-1">Type</p>
@@ -288,7 +289,7 @@ function ClosedPositions() {
                               <div className="flex items-start justify-between mb-2">
                                 <div className="flex items-center gap-3">
                                   <p className="text-slate-500 text-xs">
-                                    {format(new Date(log.timestamp), 'MMM dd, HH:mm:ss')}
+                                    {formatDateTime(log.timestamp)}
                                   </p>
                                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                                     log.decision === 'buy' || log.decision === 'open_position'
@@ -354,7 +355,7 @@ function ClosedPositions() {
                       <div>
                         <p className="text-slate-400 text-xs mb-1">Time</p>
                         <p className="font-semibold text-white">
-                          {format(new Date(order.timestamp), 'MMM dd, HH:mm:ss')}
+                          {formatDateTime(order.timestamp)}
                         </p>
                       </div>
                       <div>
