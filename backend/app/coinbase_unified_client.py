@@ -768,48 +768,15 @@ class CoinbaseClient:
 
     async def calculate_aggregate_btc_value(self) -> float:
         """
-        Calculate aggregate BTC value of BTC + BTC pairs (excludes USD/USDC).
+        Calculate aggregate BTC value - returns actual BTC balance from Coinbase.
         This is used for bot budget allocation.
 
         Returns:
-            Total BTC value (BTC balance + value of all BTC pairs in BTC)
+            Actual BTC balance from Coinbase
         """
-        try:
-            accounts = await self.get_accounts()
-            btc_usd_price = await self.get_btc_usd_price()
-            total_btc_value = 0.0
-
-            logger.info(f"📊 Calculating aggregate BTC value from {len(accounts)} accounts")
-
-            for account in accounts:
-                currency = account.get("currency", "")
-                available_str = account.get("available_balance", {}).get("value", "0")
-                available = float(available_str)
-
-                if available == 0:
-                    continue
-
-                # Only include BTC and BTC pairs (exclude USD/USDC)
-                if currency == "BTC":
-                    total_btc_value += available
-                    logger.info(f"  💰 BTC: {available:.8f} BTC")
-                elif currency not in ["USD", "USDC"]:
-                    # This is a BTC pair (ADA, AAVE, etc.) - convert to BTC value
-                    try:
-                        usd_price = await self.get_current_price(f"{currency}-USD")
-                        usd_value = available * usd_price
-                        btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
-                        total_btc_value += btc_value
-                        logger.info(f"  💰 {currency}: {available:.8f} (${usd_value:.2f} = {btc_value:.8f} BTC)")
-                    except Exception as e:
-                        logger.warning(f"  ⚠️  Failed to price {currency}: {e}")
-
-            logger.info(f"✅ Total aggregate BTC value: {total_btc_value:.8f} BTC")
-            return total_btc_value
-
-        except Exception as e:
-            logger.error(f"Error calculating aggregate BTC value: {e}")
-            raise Exception(f"Failed to calculate aggregate BTC value: {e}")
+        btc_balance = await self.get_btc_balance()
+        logger.info(f"✅ BTC balance from Coinbase: {btc_balance:.8f} BTC")
+        return btc_balance
 
     async def calculate_aggregate_usd_value(self) -> float:
         """
