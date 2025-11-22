@@ -855,10 +855,12 @@ class StrategyTradingEngine:
 
             except Exception as e:
                 logger.error(f"  ❌ Trade execution failed: {e}")
-                # If this was a new position and trade failed, rollback the position
+                # If this was a new position and trade failed, remove the position from session
                 if is_new_position and position:
-                    logger.warning(f"  🗑️ Rolling back position {position.id} due to failed trade")
-                    await self.db.rollback()
+                    logger.warning(f"  🗑️ Removing failed position {position.id} from session (trade failed)")
+                    # Expunge the position from session instead of rolling back
+                    # This prevents session corruption when processing multiple pairs in batch mode
+                    self.db.expunge(position)
                     return {
                         "action": "none",
                         "reason": f"Buy failed: {str(e)}",
