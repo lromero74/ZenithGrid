@@ -15,10 +15,10 @@ import { useEffect, useState } from 'react'
 function App() {
   const location = useLocation()
 
-  // Track last viewed timestamp for closed positions
-  const [lastViewedClosedPositions, setLastViewedClosedPositions] = useState<number>(() => {
-    const saved = localStorage.getItem('last-viewed-closed-positions')
-    return saved ? parseInt(saved) : Date.now()
+  // Track last seen count of history items (closed + failed)
+  const [lastSeenHistoryCount, setLastSeenHistoryCount] = useState<number>(() => {
+    const saved = localStorage.getItem('last-seen-history-count')
+    return saved ? parseInt(saved) : 0
   })
 
   // Fetch full portfolio data (all coins)
@@ -42,43 +42,31 @@ function App() {
   const btcUsdPrice = totalBtcValue > 0 ? totalUsdValue / totalBtcValue : 0
   const usdBtcPrice = btcUsdPrice > 0 ? 1 / btcUsdPrice : 0
 
-  // Fetch closed positions to count new ones
+  // Fetch closed and failed positions to count total history items
   const { data: closedPositions = [] } = useQuery({
     queryKey: ['closed-positions-badge'],
     queryFn: () => positionsApi.getAll('closed', 100),
     refetchInterval: 10000, // Check every 10 seconds
   })
 
-  // Count new closed positions since last view
-  const newClosedCount = closedPositions.filter(pos => {
-    const closedAt = new Date(pos.closed_at || pos.opened_at).getTime()
-    return closedAt > lastViewedClosedPositions
-  }).length
+  const { data: failedPositions = [] } = useQuery({
+    queryKey: ['failed-positions-badge'],
+    queryFn: () => positionsApi.getAll('failed', 100),
+    refetchInterval: 10000, // Check every 10 seconds
+  })
 
-  // Debug logging
-  useEffect(() => {
-    console.log('📊 Badge count recalculated:', {
-      newClosedCount,
-      lastViewed: new Date(lastViewedClosedPositions).toLocaleString(),
-      totalPositions: closedPositions.length
-    })
-  }, [newClosedCount, lastViewedClosedPositions, closedPositions.length])
+  // Calculate total history count and badge delta
+  const currentHistoryCount = closedPositions.length + failedPositions.length
+  const newHistoryItemsCount = Math.max(0, currentHistoryCount - lastSeenHistoryCount)
 
-  // Mark closed positions as viewed after a few seconds on History page
+  // Mark history as viewed after a few seconds on History page
   useEffect(() => {
     if (location.pathname === '/history') {
       console.log('🔴 History page opened, setting 3s timer')
       const timer = setTimeout(() => {
-        // Find the most recent closed position timestamp and add 1ms
-        // This ensures the filter (closedAt > lastViewed) excludes ALL current positions
-        const mostRecentTimestamp = closedPositions.reduce((max, pos) => {
-          const closedAt = new Date(pos.closed_at || pos.opened_at).getTime()
-          return closedAt > max ? closedAt : max
-        }, 0) + 1  // Add 1ms to ensure > comparison excludes current positions
-
-        console.log('✅ Timer fired! Clearing badge notification, mostRecentTimestamp:', new Date(mostRecentTimestamp).toLocaleString())
-        setLastViewedClosedPositions(mostRecentTimestamp)
-        localStorage.setItem('last-viewed-closed-positions', mostRecentTimestamp.toString())
+        console.log('✅ Timer fired! Updating last seen count from', lastSeenHistoryCount, 'to', currentHistoryCount)
+        setLastSeenHistoryCount(currentHistoryCount)
+        localStorage.setItem('last-seen-history-count', currentHistoryCount.toString())
       }, 3000) // Clear badge after 3 seconds
 
       // Cleanup timer if user navigates away before it completes
@@ -87,7 +75,7 @@ function App() {
         clearTimeout(timer)
       }
     }
-  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname, currentHistoryCount, lastSeenHistoryCount])
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -181,9 +169,9 @@ function App() {
               <div className="flex items-center space-x-1 sm:space-x-2">
                 <History className="w-4 h-4" />
                 <span className="hidden sm:inline">History</span>
-                {newClosedCount > 0 && (
+                {newHistoryItemsCount > 0 && (
                   <span className="absolute -top-1 -right-1 sm:relative sm:top-0 sm:right-0 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {newClosedCount > 9 ? '9+' : newClosedCount}
+                    {newHistoryItemsCount > 9 ? '9+' : newHistoryItemsCount}
                   </span>
                 )}
               </div>
