@@ -17,12 +17,32 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
 
   const { data: logs = [], isLoading, refetch } = useQuery({
     queryKey: ['position-logs', botId, productId, positionOpenedAt],
-    queryFn: () => {
-      // Look 60 seconds before position opened to catch the initial AI analysis that triggered the buy
+    queryFn: async () => {
+      // Fetch AI logs for this bot/product combination
+      // Look back far enough to catch the buy decision that triggered this position
+      // We'll filter client-side to show logs from the most recent "buy" decision onwards
       const openedDate = new Date(positionOpenedAt)
-      const lookbackDate = new Date(openedDate.getTime() - 60000) // 60 seconds before
+      const lookbackDate = new Date(openedDate.getTime() - 300000) // 5 minutes before to be safe
       const since = lookbackDate.toISOString()
-      return botsApi.getLogs(botId, 200, 0, productId, since)
+
+      const allLogs = await botsApi.getLogs(botId, 200, 0, productId, since)
+
+      // Find the most recent "buy" decision before or at the position opened time
+      // Then return all logs from that buy decision onwards
+      const positionTime = openedDate.getTime()
+      let buyIndex = -1
+
+      for (let i = allLogs.length - 1; i >= 0; i--) {
+        const logTime = new Date(allLogs[i].timestamp).getTime()
+        if (logTime <= positionTime && allLogs[i].decision === 'buy') {
+          buyIndex = i
+          break
+        }
+      }
+
+      // If we found a buy decision, return logs from that point onwards
+      // Otherwise return all logs (shouldn't happen, but safer)
+      return buyIndex >= 0 ? allLogs.slice(buyIndex) : allLogs
     },
     enabled: isOpen,
     refetchInterval: isOpen ? 10000 : false, // Refresh every 10 seconds when open
