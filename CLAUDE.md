@@ -59,3 +59,4 @@ cd GetRidOf3CommasBecauseTheyGoDownTooOften/backend
 3. If missing libraries cause errors in AI Bot Reasoning logs, install individually
 4. After installation, always restart backend: `sudo systemctl restart trading-bot-backend`
 - please always back up the database before you mess with it
+- we run on testbot host in EC2

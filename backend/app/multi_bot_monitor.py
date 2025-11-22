@@ -290,9 +290,10 @@ class MultiBotMonitor:
 
             reserved_balance = bot.get_reserved_balance(aggregate_value)
 
-            # Calculate how much budget is already used
-            total_in_positions = sum(p.total_quote_spent for p in open_positions)
-            available_budget = reserved_balance - total_in_positions
+            # NOTE: aggregate_value from get_btc_balance() already excludes what's in positions.
+            # Coinbase returns "available balance" which is net of open orders/positions.
+            # So reserved_balance is already the "available to spend" amount - don't subtract positions again!
+            available_budget = reserved_balance
 
             # Calculate minimum required per new position (budget / max_deals)
             min_per_position = reserved_balance / max(max_concurrent_deals, 1)
@@ -300,7 +301,8 @@ class MultiBotMonitor:
             # Determine if we have enough budget for new positions or DCA
             has_budget_for_new = available_budget >= min_per_position
 
-            logger.info(f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved, {total_in_positions:.8f} in use, {available_budget:.8f} available")
+            # Log budget info (removed confusing "in use" since balance is already net of positions)
+            logger.info(f"  💰 Budget: {reserved_balance:.8f} {quote_currency} available (after bot allocation %)")
             logger.info(f"  💰 Min per position: {min_per_position:.8f} {quote_currency}, Has budget: {has_budget_for_new}")
 
             # Determine which pairs to analyze
