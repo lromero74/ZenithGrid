@@ -353,22 +353,48 @@ class StrategyTradingEngine:
 
                 raise ValueError(f"Coinbase order failed: {full_error}")
 
-            # Fetch actual fill data from Coinbase
+            # Fetch actual fill data from Coinbase with retry logic
+            # Market orders can take a moment to fill, so we retry up to 5 times with delays
             logger.info(f"Fetching order details for order_id: {order_id}")
-            order_details = await self.coinbase.get_order(order_id)
 
-            # Extract actual fills from nested order object
-            order_obj = order_details.get("order", {})
-            filled_size_str = order_obj.get("filled_size", "0")
-            filled_value_str = order_obj.get("filled_value", "0")
-            avg_price_str = order_obj.get("average_filled_price", "0")
+            actual_base_amount = 0.0
+            actual_quote_amount = 0.0
+            actual_price = 0.0
 
-            # Convert to floats
-            actual_base_amount = float(filled_size_str)
-            actual_quote_amount = float(filled_value_str)
-            actual_price = float(avg_price_str)
+            max_retries = 5
+            for attempt in range(max_retries):
+                if attempt > 0:
+                    # Wait before retrying (exponential backoff: 0.5s, 1s, 2s, 4s)
+                    import asyncio
+                    delay = 0.5 * (2 ** (attempt - 1))
+                    logger.info(f"Waiting {delay}s before retry {attempt + 1}/{max_retries}...")
+                    await asyncio.sleep(delay)
 
-            logger.info(f"Order filled - Base: {actual_base_amount}, Quote: {actual_quote_amount}, Avg Price: {actual_price}")
+                order_details = await self.coinbase.get_order(order_id)
+
+                # Extract actual fills from nested order object
+                order_obj = order_details.get("order", {})
+                filled_size_str = order_obj.get("filled_size", "0")
+                filled_value_str = order_obj.get("filled_value", "0")
+                avg_price_str = order_obj.get("average_filled_price", "0")
+
+                # Convert to floats
+                actual_base_amount = float(filled_size_str)
+                actual_quote_amount = float(filled_value_str)
+                actual_price = float(avg_price_str)
+
+                # Check if order has filled (non-zero amounts)
+                if actual_base_amount > 0 and actual_quote_amount > 0:
+                    logger.info(f"Order filled - Base: {actual_base_amount}, Quote: {actual_quote_amount}, Avg Price: {actual_price}")
+                    break
+                else:
+                    logger.warning(f"Attempt {attempt + 1}/{max_retries}: Order not yet filled (amounts still zero)")
+                    if attempt == max_retries - 1:
+                        logger.error(f"Order {order_id} did not fill after {max_retries} attempts - recording with zero amounts")
+
+            # Final validation check
+            if actual_base_amount == 0 or actual_quote_amount == 0:
+                logger.error(f"WARNING: Order {order_id} has zero fill amounts after all retries!")
 
         except Exception as e:
             logger.error(f"Error executing buy order: {e}")
