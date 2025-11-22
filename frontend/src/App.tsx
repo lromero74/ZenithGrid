@@ -60,11 +60,16 @@ function App() {
   useEffect(() => {
     localStorage.setItem('current-page', currentPage)
 
-    // Mark closed positions as viewed when navigating to History page
+    // Mark closed positions as viewed after a few seconds on History page
     if (currentPage === 'closedPositions') {
-      const now = Date.now()
-      setLastViewedClosedPositions(now)
-      localStorage.setItem('last-viewed-closed-positions', now.toString())
+      const timer = setTimeout(() => {
+        const now = Date.now()
+        setLastViewedClosedPositions(now)
+        localStorage.setItem('last-viewed-closed-positions', now.toString())
+      }, 3000) // Clear badge after 3 seconds
+
+      // Cleanup timer if user navigates away before it completes
+      return () => clearTimeout(timer)
     }
   }, [currentPage])
 
