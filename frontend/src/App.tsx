@@ -69,11 +69,12 @@ function App() {
     if (location.pathname === '/history') {
       console.log('🔴 History page opened, setting 3s timer')
       const timer = setTimeout(() => {
-        // Find the most recent closed position timestamp and use it
+        // Find the most recent closed position timestamp and add 1ms
+        // This ensures the filter (closedAt > lastViewed) excludes ALL current positions
         const mostRecentTimestamp = closedPositions.reduce((max, pos) => {
           const closedAt = new Date(pos.closed_at || pos.opened_at).getTime()
           return closedAt > max ? closedAt : max
-        }, Date.now())
+        }, 0) + 1  // Add 1ms to ensure > comparison excludes current positions
 
         console.log('✅ Timer fired! Clearing badge notification, mostRecentTimestamp:', new Date(mostRecentTimestamp).toLocaleString())
         setLastViewedClosedPositions(mostRecentTimestamp)
