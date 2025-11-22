@@ -84,20 +84,16 @@ class Bot(Base):
                             If provided and budget_percentage is set, calculates from percentage.
 
         Returns:
-            Reserved balance in quote currency (BTC or USD)
+            Total reserved balance in quote currency (BTC or USD) for the entire bot, not per-deal
         """
         quote = self.get_quote_currency()
 
         # If budget_percentage is set and aggregate_value provided, calculate from percentage
         if self.budget_percentage > 0 and aggregate_value is not None:
             # Bot gets budget_percentage of aggregate value
+            # This is the TOTAL budget for the bot, not divided by max_concurrent_deals
             bot_budget = aggregate_value * (self.budget_percentage / 100.0)
-
-            # Divide by max_concurrent_deals if configured
-            max_deals = self.strategy_config.get("max_concurrent_deals", 1) if self.strategy_config else 1
-            per_deal_budget = bot_budget / max(max_deals, 1)
-
-            return per_deal_budget
+            return bot_budget
 
         # Fallback to legacy reserved balances
         if quote == "USD":
