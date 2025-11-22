@@ -8,6 +8,7 @@ Supports both authentication methods:
 Auto-detects authentication method based on provided credentials.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -211,24 +212,53 @@ class CoinbaseClient:
             }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            if method == "GET":
-                response = await client.get(url, headers=headers, params=params)
-            elif method == "POST":
-                response = await client.post(url, headers=headers, json=data)
-            elif method == "DELETE":
-                response = await client.delete(url, headers=headers, params=params)
-            else:
-                raise ValueError(f"Unsupported method: {method}")
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    if method == "GET":
+                        response = await client.get(url, headers=headers, params=params)
+                    elif method == "POST":
+                        response = await client.post(url, headers=headers, json=data)
+                    elif method == "DELETE":
+                        response = await client.delete(url, headers=headers, params=params)
+                    else:
+                        raise ValueError(f"Unsupported method: {method}")
 
-            response.raise_for_status()
-            return response.json()
+                    response.raise_for_status()
+                    return response.json()
+
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:  # Too Many Requests
+                        if attempt < max_retries - 1:
+                            # Exponential backoff: 1s, 2s, 4s
+                            wait_time = 2 ** attempt
+                            logger.warning(f"⚠️  Rate limited (429) on {method} {endpoint}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            logger.error(f"❌ Rate limit exceeded after {max_retries} attempts on {method} {endpoint}")
+                            raise
+                    else:
+                        # Non-429 error, raise immediately
+                        raise
 
     # ===== Account & Balance Methods =====
 
     async def get_accounts(self) -> List[Dict[str, Any]]:
-        """Get all accounts"""
+        """Get all accounts (cached to reduce API calls)"""
+        cache_key = "accounts_list"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"Using cached accounts list ({len(cached)} accounts)")
+            return cached
+
         result = await self._request("GET", "/api/v3/brokerage/accounts")
-        return result.get("accounts", [])
+        accounts = result.get("accounts", [])
+
+        # Cache for 60 seconds (same as BALANCE_CACHE_TTL)
+        await api_cache.set(cache_key, accounts, BALANCE_CACHE_TTL)
+        logger.debug(f"Cached accounts list ({len(accounts)} accounts) for {BALANCE_CACHE_TTL}s")
+        return accounts
 
     async def get_account(self, account_id: str) -> Dict[str, Any]:
         """Get specific account details"""
@@ -370,6 +400,9 @@ class CoinbaseClient:
         await api_cache.delete("balance_btc")
         await api_cache.delete("balance_eth")
         await api_cache.delete("balance_usd")
+        await api_cache.delete("accounts_list")
+        await api_cache.delete("aggregate_btc_value")
+        await api_cache.delete("aggregate_usd_value")
 
     # ===== Product & Market Data Methods =====
 
@@ -741,6 +774,13 @@ class CoinbaseClient:
         Returns:
             Total BTC value across all holdings
         """
+        # Check cache first to reduce API spam
+        cache_key = "aggregate_btc_value"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            logger.info(f"✅ Using cached aggregate BTC value: {cached:.8f} BTC")
+            return cached
+
         # Use get_accounts() as primary method (more reliable than portfolio endpoint)
         try:
             accounts = await self.get_accounts()
@@ -770,6 +810,8 @@ class CoinbaseClient:
                     except Exception:
                         pass  # Skip assets we can't price
 
+            # Cache the result for 30 seconds
+            await api_cache.set(cache_key, total_btc_value, ttl_seconds=30)
             logger.info(f"✅ Calculated aggregate BTC value: {total_btc_value:.8f} BTC")
             return total_btc_value
 
@@ -786,6 +828,13 @@ class CoinbaseClient:
         Returns:
             Total USD value across all holdings
         """
+        # Check cache first to reduce API spam
+        cache_key = "aggregate_usd_value"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            logger.info(f"✅ Using cached aggregate USD value: ${cached:.2f}")
+            return cached
+
         # Use get_accounts() as primary method (more reliable than portfolio endpoint)
         try:
             accounts = await self.get_accounts()
@@ -812,6 +861,8 @@ class CoinbaseClient:
                     except Exception:
                         pass  # Skip assets we can't price
 
+            # Cache the result for 30 seconds
+            await api_cache.set(cache_key, total_usd_value, ttl_seconds=30)
             logger.info(f"✅ Calculated aggregate USD value: ${total_usd_value:.2f}")
             return total_usd_value
 
