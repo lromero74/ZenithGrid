@@ -768,67 +768,17 @@ class CoinbaseClient:
 
     async def calculate_aggregate_btc_value(self) -> float:
         """
-        Calculate aggregate BTC value of entire portfolio (BTC + all pairs converted to BTC).
+        Calculate aggregate BTC value - simplified to just return actual BTC balance.
         This is used for bot budget allocation.
 
         Returns:
-            Total BTC value across all holdings
+            Total BTC balance from Coinbase
         """
-        # Check cache first to reduce API spam
-        cache_key = "aggregate_btc_value"
-        cached = await api_cache.get(cache_key)
-        # TEMPORARILY DISABLED TO DEBUG
-        # if cached is not None:
-        #     logger.info(f"✅ Using cached aggregate BTC value: {cached:.8f} BTC")
-        #     return cached
-
-        # Use get_accounts() as primary method (more reliable than portfolio endpoint)
-        try:
-            accounts = await self.get_accounts()
-            btc_usd_price = await self.get_btc_usd_price()
-            total_btc_value = 0.0
-
-            logger.info(f"🔍 DEBUG: Got {len(accounts)} accounts from Coinbase")
-            logger.info(f"🔍 DEBUG: BTC-USD price: ${btc_usd_price:.2f}")
-
-            for account in accounts:
-                currency = account.get("currency", "")
-                available_str = account.get("available_balance", {}).get("value", "0")
-                available = float(available_str)
-
-                if available == 0:
-                    continue
-
-                logger.info(f"🔍 DEBUG: {currency} balance: {available:.8f}")
-
-                # Convert all currencies to BTC value
-                if currency == "BTC":
-                    total_btc_value += available
-                    logger.info(f"   → Added {available:.8f} BTC directly")
-                elif currency in ["USD", "USDC"]:
-                    btc_value = available / btc_usd_price if btc_usd_price > 0 else 0
-                    total_btc_value += btc_value
-                    logger.info(f"   → Converted ${available:.2f} {currency} to {btc_value:.8f} BTC")
-                else:
-                    try:
-                        usd_price = await self.get_current_price(f"{currency}-USD")
-                        usd_value = available * usd_price
-                        btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
-                        total_btc_value += btc_value
-                        logger.info(f"   → Converted {available:.8f} {currency} (${usd_price:.2f}/unit) to {btc_value:.8f} BTC")
-                    except Exception as e:
-                        logger.warning(f"   → Failed to price {currency}: {e}")
-                        pass  # Skip assets we can't price
-
-            # Cache the result for 30 seconds
-            await api_cache.set(cache_key, total_btc_value, ttl_seconds=30)
-            logger.info(f"✅ Calculated aggregate BTC value: {total_btc_value:.8f} BTC")
-            return total_btc_value
-
-        except Exception as e:
-            logger.error(f"Error calculating aggregate BTC value using accounts endpoint: {e}")
-            # Raise exception to trigger conservative fallback in calling code
-            raise Exception(f"Failed to calculate aggregate BTC value: accounts API failed ({e})")
+        # SIMPLIFIED: Just return the actual BTC balance from Coinbase
+        # This resolves budget calculation issues where bots couldn't analyze all pairs
+        btc_balance = await self.get_balance("BTC")
+        logger.info(f"✅ BTC balance from Coinbase: {btc_balance:.8f} BTC")
+        return btc_balance
 
     async def calculate_aggregate_usd_value(self) -> float:
         """
