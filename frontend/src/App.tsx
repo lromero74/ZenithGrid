@@ -55,6 +55,15 @@ function App() {
     return closedAt > lastViewedClosedPositions
   }).length
 
+  // Debug logging
+  useEffect(() => {
+    console.log('📊 Badge count recalculated:', {
+      newClosedCount,
+      lastViewed: new Date(lastViewedClosedPositions).toLocaleString(),
+      totalPositions: closedPositions.length
+    })
+  }, [newClosedCount, lastViewedClosedPositions, closedPositions.length])
+
   // Mark closed positions as viewed after a few seconds on History page
   useEffect(() => {
     if (location.pathname === '/history') {
