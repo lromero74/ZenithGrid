@@ -304,9 +304,9 @@ class MultiBotMonitor:
             # Determine if we have enough budget for new positions or DCA
             has_budget_for_new = available_budget >= min_per_position
 
-            logger.info(f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved ({budget_pct}% of {aggregate_value:.8f})")
-            logger.info(f"  💰 In positions: {total_in_positions:.8f} {quote_currency}, Available: {available_budget:.8f} {quote_currency}")
-            logger.info(f"  💰 Min per position: {min_per_position:.8f} {quote_currency}, Has budget: {has_budget_for_new}")
+            logger.warning(f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved ({budget_pct}% of {aggregate_value:.8f})")
+            logger.warning(f"  💰 In positions: {total_in_positions:.8f} {quote_currency}, Available: {available_budget:.8f} {quote_currency}")
+            logger.warning(f"  💰 Min per position: {min_per_position:.8f} {quote_currency}, Has budget: {has_budget_for_new}")
 
             # Determine which pairs to analyze
             pairs_to_analyze = trading_pairs
