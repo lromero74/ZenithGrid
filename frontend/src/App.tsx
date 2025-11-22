@@ -34,14 +34,18 @@ function App() {
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
-    refetchInterval: 60000, // Update prices every 60 seconds
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: 120000, // Update prices every 2 minutes
+    staleTime: 60000, // Consider data fresh for 60 seconds
     refetchOnMount: false, // Don't refetch on page refresh - use cache
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
   })
 
   const totalBtcValue = portfolio?.total_btc_value || 0
   const totalUsdValue = portfolio?.total_usd_value || 0
+
+  // Calculate BTC/USD price from portfolio data
+  const btcUsdPrice = totalBtcValue > 0 ? totalUsdValue / totalBtcValue : 0
+  const usdBtcPrice = btcUsdPrice > 0 ? 1 / btcUsdPrice : 0
 
   // Fetch closed positions to count new ones
   const { data: closedPositions = [] } = useQuery({
@@ -92,6 +96,15 @@ function App() {
               </div>
             </div>
             <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
+              <div className="text-right hidden sm:block">
+                <p className="text-xs text-slate-400">BTC Price</p>
+                <p className="text-sm font-medium text-orange-400">
+                  ${btcUsdPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {usdBtcPrice.toFixed(8)} BTC/USD
+                </p>
+              </div>
               <div className="text-right">
                 <p className="text-xs sm:text-sm text-slate-400">Account Value</p>
                 <p className="text-base sm:text-xl font-bold text-blue-400">
