@@ -454,8 +454,8 @@ class MultiBotMonitor:
                     signal_data["current_price"] = pair_info.get("current_price", 0)
 
                     print(f"🔍 Logging AI decision for {product_id}...")
-                    # Log AI decision
-                    await self.log_ai_decision(db, bot, product_id, signal_data, pair_info)
+                    # Log AI decision (position_id will be updated after position is created)
+                    ai_log_entry = await self.log_ai_decision(db, bot, product_id, signal_data, pair_info)
                     print(f"✅ Logged AI decision for {product_id}")
 
                     # Mark signal as already logged to prevent duplicate logging in trading_engine_v2.py
@@ -466,6 +466,12 @@ class MultiBotMonitor:
                     result = await self.execute_trading_logic(db, bot, product_id, signal_data, pair_info)
                     print(f"✅ Trading logic complete for {product_id}")
                     results[product_id] = result
+
+                    # Update AI log with position_id if a position was created
+                    if ai_log_entry and result.get("position"):
+                        position = result["position"]
+                        ai_log_entry.position_id = position.id
+                        logger.info(f"  🔗 Linked AI log to position #{position.id} for {product_id}")
 
                 except Exception as e:
                     logger.error(f"  Error processing {product_id} result: {e}")
@@ -505,7 +511,7 @@ class MultiBotMonitor:
         signal_data: Dict[str, Any],
         pair_data: Dict[str, Any]
     ):
-        """Log AI decision to database"""
+        """Log AI decision to database and return the log entry"""
         try:
             import traceback
             from app.models import AIBotLog
@@ -534,11 +540,13 @@ class MultiBotMonitor:
             )
             db.add(log_entry)
             # Don't flush here - let the session commit handle it to avoid greenlet async issues
+            return log_entry
 
         except Exception as e:
             logger.error(f"Error logging AI decision for {product_id}: {e}")
             # Don't rollback here - let the outer transaction handle it
             # Rolling back mid-batch corrupts the async session state
+            return None
 
     async def execute_trading_logic(
         self,

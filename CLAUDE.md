@@ -86,3 +86,7 @@ If you see "INSUFFICIENT FUNDS" errors, verify that `calculate_aggregate_btc_val
 - BTC balance
 - BTC value of all altcoin holdings in BTC pairs (NOT USD pairs)
 - we run on testbot host in EC2
+- keep our repo tidy
+- tidy branch and repo applies to local as well as testbot host
+- one-off debug and helper scripts belong in scripts folder
+- when you make a change to local repo you have to push so testbot host (where this is actually running) can pick it up
