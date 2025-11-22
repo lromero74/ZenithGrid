@@ -69,10 +69,15 @@ function App() {
     if (location.pathname === '/history') {
       console.log('🔴 History page opened, setting 3s timer')
       const timer = setTimeout(() => {
-        const now = Date.now()
-        console.log('✅ Timer fired! Clearing badge notification')
-        setLastViewedClosedPositions(now)
-        localStorage.setItem('last-viewed-closed-positions', now.toString())
+        // Find the most recent closed position timestamp and use it
+        const mostRecentTimestamp = closedPositions.reduce((max, pos) => {
+          const closedAt = new Date(pos.closed_at || pos.opened_at).getTime()
+          return closedAt > max ? closedAt : max
+        }, Date.now())
+
+        console.log('✅ Timer fired! Clearing badge notification, mostRecentTimestamp:', new Date(mostRecentTimestamp).toLocaleString())
+        setLastViewedClosedPositions(mostRecentTimestamp)
+        localStorage.setItem('last-viewed-closed-positions', mostRecentTimestamp.toString())
       }, 3000) // Clear badge after 3 seconds
 
       // Cleanup timer if user navigates away before it completes
@@ -81,7 +86,7 @@ function App() {
         clearTimeout(timer)
       }
     }
-  }, [location.pathname])
+  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
