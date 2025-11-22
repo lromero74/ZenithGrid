@@ -52,13 +52,9 @@ logs/
 htmlcov/
 .pytest_cache/
 
-# Temporary test/debug scripts
-backend/clean_slate.py
-backend/restore_position_*.py
-backend/sell_all_*.py
-backend/test_buy_*.py
-backend/update_trade_fills.py
-backend/fix_position_*.sql
+# One-off helper scripts and temporary test/debug scripts
+backend/scripts/*
+!backend/scripts/README.md
 
 # Claude Code
 .claude/
