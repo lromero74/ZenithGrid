@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Positions from './pages/Positions'
@@ -10,15 +10,10 @@ import Strategies from './pages/Strategies'
 import Portfolio from './pages/Portfolio'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History } from 'lucide-react'
 import { positionsApi } from './services/api'
-
-type Page = 'dashboard' | 'bots' | 'positions' | 'closedPositions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
+import { useEffect, useState } from 'react'
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>(() => {
-    // Restore last viewed page from localStorage
-    const saved = localStorage.getItem('current-page')
-    return (saved as Page) || 'dashboard'
-  })
+  const location = useLocation()
 
   // Track last viewed timestamp for closed positions
   const [lastViewedClosedPositions, setLastViewedClosedPositions] = useState<number>(() => {
@@ -60,12 +55,9 @@ function App() {
     return closedAt > lastViewedClosedPositions
   }).length
 
-  // Save current page to localStorage when it changes
+  // Mark closed positions as viewed after a few seconds on History page
   useEffect(() => {
-    localStorage.setItem('current-page', currentPage)
-
-    // Mark closed positions as viewed after a few seconds on History page
-    if (currentPage === 'closedPositions') {
+    if (location.pathname === '/history') {
       console.log('🔴 History page opened, setting 3s timer. lastViewed:', new Date(lastViewedClosedPositions).toLocaleString())
       const timer = setTimeout(() => {
         const now = Date.now()
@@ -80,7 +72,7 @@ function App() {
         clearTimeout(timer)
       }
     }
-  }, [currentPage])
+  }, [location.pathname, lastViewedClosedPositions])
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -124,10 +116,10 @@ function App() {
       <nav className="bg-slate-800 border-b border-slate-700 overflow-x-auto">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex space-x-1 min-w-max sm:min-w-0">
-            <button
-              onClick={() => setCurrentPage('dashboard')}
+            <Link
+              to="/"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                currentPage === 'dashboard'
+                location.pathname === '/'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -136,11 +128,11 @@ function App() {
                 <Activity className="w-4 h-4" />
                 <span className="hidden sm:inline">Dashboard</span>
               </div>
-            </button>
-            <button
-              onClick={() => setCurrentPage('bots')}
+            </Link>
+            <Link
+              to="/bots"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                currentPage === 'bots'
+                location.pathname === '/bots'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -149,11 +141,11 @@ function App() {
                 <Bot className="w-4 h-4" />
                 <span className="hidden sm:inline">Bots</span>
               </div>
-            </button>
-            <button
-              onClick={() => setCurrentPage('positions')}
+            </Link>
+            <Link
+              to="/positions"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                currentPage === 'positions'
+                location.pathname === '/positions'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -162,11 +154,11 @@ function App() {
                 <TrendingUp className="w-4 h-4" />
                 <span className="hidden sm:inline">Positions</span>
               </div>
-            </button>
-            <button
-              onClick={() => setCurrentPage('closedPositions')}
+            </Link>
+            <Link
+              to="/history"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base relative ${
-                currentPage === 'closedPositions'
+                location.pathname === '/history'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -180,11 +172,11 @@ function App() {
                   </span>
                 )}
               </div>
-            </button>
-            <button
-              onClick={() => setCurrentPage('portfolio')}
+            </Link>
+            <Link
+              to="/portfolio"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                currentPage === 'portfolio'
+                location.pathname === '/portfolio'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -193,11 +185,11 @@ function App() {
                 <Wallet className="w-4 h-4" />
                 <span className="hidden sm:inline">Portfolio</span>
               </div>
-            </button>
-            <button
-              onClick={() => setCurrentPage('charts')}
+            </Link>
+            <Link
+              to="/charts"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                currentPage === 'charts'
+                location.pathname === '/charts'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -206,11 +198,11 @@ function App() {
                 <BarChart3 className="w-4 h-4" />
                 <span className="hidden sm:inline">Charts</span>
               </div>
-            </button>
-            <button
-              onClick={() => setCurrentPage('strategies')}
+            </Link>
+            <Link
+              to="/strategies"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                currentPage === 'strategies'
+                location.pathname === '/strategies'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -219,11 +211,11 @@ function App() {
                 <Layers className="w-4 h-4" />
                 <span className="hidden sm:inline">Strategies</span>
               </div>
-            </button>
-            <button
-              onClick={() => setCurrentPage('settings')}
+            </Link>
+            <Link
+              to="/settings"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                currentPage === 'settings'
+                location.pathname === '/settings'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -232,21 +224,25 @@ function App() {
                 <SettingsIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Settings</span>
               </div>
-            </button>
+            </Link>
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        {currentPage === 'dashboard' && <Dashboard onNavigate={setCurrentPage} />}
-        {currentPage === 'bots' && <Bots />}
-        {currentPage === 'positions' && <Positions />}
-        {currentPage === 'closedPositions' && <ClosedPositions />}
-        {currentPage === 'portfolio' && <Portfolio />}
-        {currentPage === 'charts' && <Charts />}
-        {currentPage === 'strategies' && <Strategies />}
-        {currentPage === 'settings' && <Settings />}
+        <Routes>
+          <Route path="/" element={<Dashboard onNavigate={(page) => {}} />} />
+          <Route path="/bots" element={<Bots />} />
+          <Route path="/positions" element={<Positions />} />
+          <Route path="/history" element={<ClosedPositions />} />
+          <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/charts" element={<Charts />} />
+          <Route path="/strategies" element={<Strategies />} />
+          <Route path="/settings" element={<Settings />} />
+          {/* Redirect unknown routes to dashboard */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     </div>
   )
