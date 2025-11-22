@@ -168,13 +168,13 @@ function ClosedPositions() {
                     <div>
                       <p className="text-slate-400 text-xs mb-1">Opened</p>
                       <p className="font-semibold text-white">
-                        {format(new Date(position.opened_at), 'MMM dd, HH:mm')}
+                        {formatDateTime(position.opened_at)}
                       </p>
                     </div>
                     <div>
                       <p className="text-slate-400 text-xs mb-1">Closed</p>
                       <p className="font-semibold text-white">
-                        {position.closed_at ? format(new Date(position.closed_at), 'MMM dd, HH:mm') : '-'}
+                        {position.closed_at ? formatDateTime(position.closed_at) : '-'}
                       </p>
                     </div>
                     <div>
