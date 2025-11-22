@@ -537,8 +537,8 @@ class MultiBotMonitor:
 
         except Exception as e:
             logger.error(f"Error logging AI decision for {product_id}: {e}")
-            # Rollback on error to prevent session state issues
-            await db.rollback()
+            # Don't rollback here - let the outer transaction handle it
+            # Rolling back mid-batch corrupts the async session state
 
     async def execute_trading_logic(
         self,
