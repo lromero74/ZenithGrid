@@ -60,3 +60,27 @@ cd GetRidOf3CommasBecauseTheyGoDownTooOften/backend
 4. After installation, always restart backend: `sudo systemctl restart trading-bot-backend`
 - please always back up the database before you mess with it
 - we run on testbot host in EC2
+
+## CRITICAL: Budget Calculation for BTC Bots
+
+**IMPORTANT - READ THIS EVERY TIME YOU WORK ON BUDGET ISSUES:**
+
+For BTC-based bots (bots trading BTC pairs like ETH-BTC, ADA-BTC, etc.):
+
+**The aggregate BTC value MUST include:**
+1. Available BTC balance in the account
+2. PLUS the BTC value of ALL altcoin positions in BTC pairs (e.g., if you have 10 ADA and ADA-BTC is trading at 0.00001, that's 0.0001 BTC)
+
+**Example Calculation:**
+- Available BTC: 0.00273944
+- ADA position: 100 ADA × 0.00001 BTC = 0.001 BTC
+- AAVE position: 0.5 AAVE × 0.0005 BTC = 0.00025 BTC
+- **Total aggregate BTC = 0.00273944 + 0.001 + 0.00025 = 0.00398944 BTC**
+
+Then bot budget = (budget_percentage / 100) × total_aggregate_btc
+
+**This is implemented in `backend/app/coinbase_unified_client.py` in the `calculate_aggregate_btc_value()` function.**
+
+If you see "INSUFFICIENT FUNDS" errors, verify that `calculate_aggregate_btc_value()` is correctly summing BOTH:
+- BTC balance
+- BTC value of all altcoin holdings in BTC pairs
