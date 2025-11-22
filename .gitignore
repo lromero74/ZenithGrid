@@ -17,6 +17,7 @@ build/
 *.db-journal
 *.db.backup-*
 **/trading.db.backup-*
+**/trading.db.backup.*
 
 # Environment variables
 .env
