@@ -222,14 +222,20 @@ export function PnLChart() {
     const filteredData = getFilteredData()
     if (filteredData.length === 0) return
 
-    // Convert to chart format
-    const chartData = filteredData.map((point) => {
+    // Convert to chart format and deduplicate by timestamp
+    // Multiple positions can close on the same day, so we keep only the last one per day
+    const dataByTimestamp = new Map<Time, number>()
+
+    filteredData.forEach((point) => {
       const timestamp = Math.floor(new Date(point.date).getTime() / 1000) as Time
-      return {
-        time: timestamp,
-        value: point.cumulative_pnl
-      }
+      // Keep the latest cumulative_pnl for each timestamp
+      dataByTimestamp.set(timestamp, point.cumulative_pnl)
     })
+
+    // Convert map to sorted array
+    const chartData = Array.from(dataByTimestamp.entries())
+      .map(([time, value]) => ({ time, value }))
+      .sort((a, b) => (a.time as number) - (b.time as number))
 
     // Determine if we have profits or losses
     const latestValue = chartData[chartData.length - 1]?.value || 0
