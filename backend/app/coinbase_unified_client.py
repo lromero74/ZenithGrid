@@ -266,8 +266,21 @@ class CoinbaseClient:
                         balance = float(pos.get("available_to_trade_crypto", 0))
                         await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
                         return balance
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Portfolio endpoint failed for BTC balance: {e}. Falling back to get_accounts().")
+
+            # Fallback to get_accounts() if portfolio fails
+            try:
+                accounts = await self.get_accounts()
+                for account in accounts:
+                    if account.get("currency") == "BTC":
+                        available = account.get("available_balance", {})
+                        balance = float(available.get("value", 0))
+                        await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
+                        return balance
+            except Exception as fallback_error:
+                logger.error(f"Fallback get_accounts() also failed: {fallback_error}")
+
             return 0.0
         else:
             # Use accounts for HMAC
@@ -746,8 +759,44 @@ class CoinbaseClient:
             return total_btc_value
 
         except Exception as e:
-            logger.error(f"Error calculating aggregate BTC value: {e}")
-            return 0.0
+            logger.error(f"Error calculating aggregate BTC value using portfolio endpoint: {e}")
+            logger.info("Falling back to get_accounts() method for BTC balance calculation")
+
+            # Fallback: Use get_accounts() to calculate total BTC value
+            try:
+                accounts = await self.get_accounts()
+                btc_usd_price = await self.get_btc_usd_price()
+                total_btc_value = 0.0
+
+                for account in accounts:
+                    currency = account.get("currency", "")
+                    available_str = account.get("available_balance", {}).get("value", "0")
+                    available = float(available_str)
+
+                    if available == 0:
+                        continue
+
+                    # Convert all currencies to BTC value
+                    if currency == "BTC":
+                        total_btc_value += available
+                    elif currency in ["USD", "USDC"]:
+                        btc_value = available / btc_usd_price if btc_usd_price > 0 else 0
+                        total_btc_value += btc_value
+                    else:
+                        try:
+                            usd_price = await self.get_current_price(f"{currency}-USD")
+                            usd_value = available * usd_price
+                            btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
+                            total_btc_value += btc_value
+                        except Exception:
+                            pass  # Skip assets we can't price
+
+                logger.info(f"✅ Calculated aggregate BTC value using fallback: {total_btc_value:.8f} BTC")
+                return total_btc_value
+
+            except Exception as fallback_error:
+                logger.error(f"Error in fallback BTC value calculation: {fallback_error}")
+                return 0.0
 
     async def calculate_aggregate_usd_value(self) -> float:
         """
