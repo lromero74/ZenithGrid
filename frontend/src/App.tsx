@@ -62,14 +62,19 @@ function App() {
 
     // Mark closed positions as viewed after a few seconds on History page
     if (currentPage === 'closedPositions') {
+      console.log('🔴 History page opened, setting 3s timer. lastViewed:', new Date(lastViewedClosedPositions).toLocaleString())
       const timer = setTimeout(() => {
         const now = Date.now()
+        console.log('✅ Timer fired! Updating lastViewed from', new Date(lastViewedClosedPositions).toLocaleString(), 'to', new Date(now).toLocaleString())
         setLastViewedClosedPositions(now)
         localStorage.setItem('last-viewed-closed-positions', now.toString())
       }, 3000) // Clear badge after 3 seconds
 
       // Cleanup timer if user navigates away before it completes
-      return () => clearTimeout(timer)
+      return () => {
+        console.log('🧹 Cleaning up timer (page navigation)')
+        clearTimeout(timer)
+      }
     }
   }, [currentPage])
 

@@ -15,8 +15,13 @@
 
 **Services Running:**
 - Trading bot backend (systemd: trading-bot-backend.service)
-- Trading bot frontend (systemd: trading-bot-frontend.service)
+- Trading bot frontend (Vite dev server on port 5173)
 - Both auto-start on boot
+
+**Accessing Frontend:**
+- Frontend runs on testbot:5173 (Vite dev server)
+- Access locally via SSH port forwarding (localhost:5173 → testbot:5173)
+- After code changes, restart Vite: `ssh testbot "pkill -f vite && cd ~/GetRidOf3CommasBecauseTheyGoDownTooOften/frontend && nohup npm run dev > /tmp/vite.log 2>&1 &"`
 
 **Management:**
 ```bash
