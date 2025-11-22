@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi, orderHistoryApi } from '../services/api'
 import { format } from 'date-fns'
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Trade, AIBotLog } from '../types'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { formatDateTime } from '../utils/dateFormat'
@@ -12,6 +12,17 @@ function ClosedPositions() {
   const [expandedPositionId, setExpandedPositionId] = useState<number | null>(null)
   const [positionTrades, setPositionTrades] = useState<Record<number, Trade[]>>({})
   const [positionAILogs, setPositionAILogs] = useState<Record<number, AIBotLog[]>>({})
+
+  // Track last seen counts separately for closed and failed
+  const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(() => {
+    const saved = localStorage.getItem('last-seen-closed-count')
+    return saved ? parseInt(saved) : 0
+  })
+
+  const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(() => {
+    const saved = localStorage.getItem('last-seen-failed-count')
+    return saved ? parseInt(saved) : 0
+  })
 
   const { data: bots } = useQuery({
     queryKey: ['bots'],
@@ -31,6 +42,31 @@ function ClosedPositions() {
   })
 
   const closedPositions = allPositions?.filter(p => p.status === 'closed') || []
+
+  // Calculate badge counts for each tab
+  const currentClosedCount = closedPositions.length
+  const currentFailedCount = failedOrders?.length || 0
+  const newClosedCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
+  const newFailedCount = Math.max(0, currentFailedCount - lastSeenFailedCount)
+
+  // Update last seen count when user views a specific tab for 3 seconds
+  useEffect(() => {
+    if (activeTab === 'closed') {
+      const timer = setTimeout(() => {
+        console.log('✅ Marking closed positions as viewed:', currentClosedCount)
+        setLastSeenClosedCount(currentClosedCount)
+        localStorage.setItem('last-seen-closed-count', currentClosedCount.toString())
+      }, 3000)
+      return () => clearTimeout(timer)
+    } else if (activeTab === 'failed') {
+      const timer = setTimeout(() => {
+        console.log('✅ Marking failed orders as viewed:', currentFailedCount)
+        setLastSeenFailedCount(currentFailedCount)
+        localStorage.setItem('last-seen-failed-count', currentFailedCount.toString())
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [activeTab, currentClosedCount, currentFailedCount])
 
   const getQuoteCurrency = (productId: string) => {
     const quote = productId?.split('-')[1] || 'BTC'
@@ -115,23 +151,37 @@ function ClosedPositions() {
         <div className="flex space-x-2 mb-6 border-b border-slate-700">
           <button
             onClick={() => setActiveTab('closed')}
-            className={`px-4 py-2 font-medium transition-colors ${
+            className={`px-4 py-2 font-medium transition-colors relative ${
               activeTab === 'closed'
                 ? 'text-blue-400 border-b-2 border-blue-400'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Closed Positions ({closedPositions.length})
+            <span className="flex items-center space-x-2">
+              <span>Closed Positions ({closedPositions.length})</span>
+              {newClosedCount > 0 && (
+                <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {newClosedCount > 9 ? '9+' : newClosedCount}
+                </span>
+              )}
+            </span>
           </button>
           <button
             onClick={() => setActiveTab('failed')}
-            className={`px-4 py-2 font-medium transition-colors ${
+            className={`px-4 py-2 font-medium transition-colors relative ${
               activeTab === 'failed'
                 ? 'text-blue-400 border-b-2 border-blue-400'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Failed Orders ({failedOrders?.length || 0})
+            <span className="flex items-center space-x-2">
+              <span>Failed Orders ({failedOrders?.length || 0})</span>
+              {newFailedCount > 0 && (
+                <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {newFailedCount > 9 ? '9+' : newFailedCount}
+                </span>
+              )}
+            </span>
           </button>
         </div>
 
