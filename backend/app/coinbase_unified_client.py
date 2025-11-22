@@ -235,12 +235,26 @@ class CoinbaseClient:
         result = await self._request("GET", f"/api/v3/brokerage/accounts/{account_id}")
         return result.get("account", {})
 
-    async def get_portfolio_breakdown(self, portfolio_uuid: str = "5b4aea83-9bf7-5ff0-9390-87153d9c1729") -> dict:
+    async def get_portfolios(self) -> List[Dict[str, Any]]:
+        """Get list of all portfolios"""
+        result = await self._request("GET", "/api/v3/brokerage/portfolios")
+        return result.get("portfolios", [])
+
+    async def get_portfolio_breakdown(self, portfolio_uuid: Optional[str] = None) -> dict:
         """
         Get portfolio breakdown with all spot positions
 
         This is a CDP-specific endpoint that provides a consolidated view of all holdings.
+        If portfolio_uuid is not provided, automatically fetches the first available portfolio.
         """
+        if portfolio_uuid is None:
+            # Dynamically fetch the first available portfolio UUID
+            portfolios = await self.get_portfolios()
+            if not portfolios:
+                raise Exception("No portfolios found for this API key")
+            portfolio_uuid = portfolios[0].get("uuid")
+            logger.info(f"Using portfolio UUID: {portfolio_uuid} (name: {portfolios[0].get('name', 'Unknown')})")
+
         result = await self._request("GET", f"/api/v3/brokerage/portfolios/{portfolio_uuid}")
         return result.get("breakdown", {})
 
@@ -727,77 +741,42 @@ class CoinbaseClient:
         Returns:
             Total BTC value across all holdings
         """
+        # Use get_accounts() as primary method (more reliable than portfolio endpoint)
         try:
-            breakdown = await self.get_portfolio_breakdown()
-            spot_positions = breakdown.get("spot_positions", [])
+            accounts = await self.get_accounts()
             btc_usd_price = await self.get_btc_usd_price()
-
             total_btc_value = 0.0
 
-            for position in spot_positions:
-                asset = position.get("asset", "")
-                total_balance = float(position.get("total_balance_crypto", 0))
+            for account in accounts:
+                currency = account.get("currency", "")
+                available_str = account.get("available_balance", {}).get("value", "0")
+                available = float(available_str)
 
-                if total_balance == 0:
+                if available == 0:
                     continue
 
-                # Convert all assets to BTC value
-                if asset == "BTC":
-                    total_btc_value += total_balance
-                elif asset == "USD" or asset == "USDC":
-                    btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
+                # Convert all currencies to BTC value
+                if currency == "BTC":
+                    total_btc_value += available
+                elif currency in ["USD", "USDC"]:
+                    btc_value = available / btc_usd_price if btc_usd_price > 0 else 0
                     total_btc_value += btc_value
                 else:
                     try:
-                        usd_price = await self.get_current_price(f"{asset}-USD")
-                        usd_value = total_balance * usd_price
+                        usd_price = await self.get_current_price(f"{currency}-USD")
+                        usd_value = available * usd_price
                         btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
                         total_btc_value += btc_value
                     except Exception:
                         pass  # Skip assets we can't price
 
+            logger.info(f"✅ Calculated aggregate BTC value: {total_btc_value:.8f} BTC")
             return total_btc_value
 
         except Exception as e:
-            logger.error(f"Error calculating aggregate BTC value using portfolio endpoint: {e}")
-            logger.info("Falling back to get_accounts() method for BTC balance calculation")
-
-            # Fallback: Use get_accounts() to calculate total BTC value
-            try:
-                accounts = await self.get_accounts()
-                btc_usd_price = await self.get_btc_usd_price()
-                total_btc_value = 0.0
-
-                for account in accounts:
-                    currency = account.get("currency", "")
-                    available_str = account.get("available_balance", {}).get("value", "0")
-                    available = float(available_str)
-
-                    if available == 0:
-                        continue
-
-                    # Convert all currencies to BTC value
-                    if currency == "BTC":
-                        total_btc_value += available
-                    elif currency in ["USD", "USDC"]:
-                        btc_value = available / btc_usd_price if btc_usd_price > 0 else 0
-                        total_btc_value += btc_value
-                    else:
-                        try:
-                            usd_price = await self.get_current_price(f"{currency}-USD")
-                            usd_value = available * usd_price
-                            btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
-                            total_btc_value += btc_value
-                        except Exception:
-                            pass  # Skip assets we can't price
-
-                logger.info(f"✅ Calculated aggregate BTC value using fallback: {total_btc_value:.8f} BTC")
-                return total_btc_value
-
-            except Exception as fallback_error:
-                logger.error(f"Error in fallback BTC value calculation: {fallback_error}")
-                # Raise exception to trigger conservative fallback in calling code
-                raise Exception(f"Failed to calculate aggregate BTC value: portfolio API failed, accounts API also failed ({fallback_error})")
+            logger.error(f"Error calculating aggregate BTC value using accounts endpoint: {e}")
+            # Raise exception to trigger conservative fallback in calling code
+            raise Exception(f"Failed to calculate aggregate BTC value: accounts API failed ({e})")
 
     async def calculate_aggregate_usd_value(self) -> float:
         """
@@ -807,38 +786,39 @@ class CoinbaseClient:
         Returns:
             Total USD value across all holdings
         """
+        # Use get_accounts() as primary method (more reliable than portfolio endpoint)
         try:
-            breakdown = await self.get_portfolio_breakdown()
-            spot_positions = breakdown.get("spot_positions", [])
+            accounts = await self.get_accounts()
             btc_usd_price = await self.get_btc_usd_price()
-
             total_usd_value = 0.0
 
-            for position in spot_positions:
-                asset = position.get("asset", "")
-                total_balance = float(position.get("total_balance_crypto", 0))
+            for account in accounts:
+                currency = account.get("currency", "")
+                available_str = account.get("available_balance", {}).get("value", "0")
+                available = float(available_str)
 
-                if total_balance == 0:
+                if available == 0:
                     continue
 
-                # Convert all assets to USD value
-                if asset == "USD" or asset == "USDC":
-                    total_usd_value += total_balance
-                elif asset == "BTC":
-                    total_usd_value += total_balance * btc_usd_price
+                # Convert all currencies to USD value
+                if currency in ["USD", "USDC"]:
+                    total_usd_value += available
+                elif currency == "BTC":
+                    total_usd_value += available * btc_usd_price
                 else:
                     try:
-                        usd_price = await self.get_current_price(f"{asset}-USD")
-                        total_usd_value += total_balance * usd_price
+                        usd_price = await self.get_current_price(f"{currency}-USD")
+                        total_usd_value += available * usd_price
                     except Exception:
                         pass  # Skip assets we can't price
 
+            logger.info(f"✅ Calculated aggregate USD value: ${total_usd_value:.2f}")
             return total_usd_value
 
         except Exception as e:
-            logger.error(f"Error calculating aggregate USD value: {e}")
+            logger.error(f"Error calculating aggregate USD value using accounts endpoint: {e}")
             # Raise exception to trigger conservative fallback in calling code
-            raise Exception(f"Failed to calculate aggregate USD value: {e}")
+            raise Exception(f"Failed to calculate aggregate USD value: accounts API failed ({e})")
 
     # ===== Connection Test =====
 
