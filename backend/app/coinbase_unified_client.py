@@ -796,7 +796,8 @@ class CoinbaseClient:
 
             except Exception as fallback_error:
                 logger.error(f"Error in fallback BTC value calculation: {fallback_error}")
-                return 0.0
+                # Raise exception to trigger conservative fallback in calling code
+                raise Exception(f"Failed to calculate aggregate BTC value: portfolio API failed, accounts API also failed ({fallback_error})")
 
     async def calculate_aggregate_usd_value(self) -> float:
         """
@@ -836,7 +837,8 @@ class CoinbaseClient:
 
         except Exception as e:
             logger.error(f"Error calculating aggregate USD value: {e}")
-            return 0.0
+            # Raise exception to trigger conservative fallback in calling code
+            raise Exception(f"Failed to calculate aggregate USD value: {e}")
 
     # ===== Connection Test =====
 

@@ -263,6 +263,10 @@ class MultiBotMonitor:
             open_count = len(open_positions)
             print(f"🔍 Found {open_count} open positions")
 
+            # Refresh bot from database to get latest config (in case max_concurrent_deals changed)
+            from app.models import Bot as BotModel
+            await db.refresh(bot)
+
             # Get max concurrent deals from strategy config
             max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
             print(f"🔍 Max concurrent deals: {max_concurrent_deals}")
@@ -278,6 +282,11 @@ class MultiBotMonitor:
                 # If portfolio API fails (403/rate limit), use a conservative fallback
                 logger.warning(f"  ⚠️  Failed to get aggregate balance (API error), using 0.001 BTC fallback: {e}")
                 aggregate_value = 0.001  # Conservative fallback - allows ~3 positions at 30% budget
+
+            # Defensive logging: Warn if aggregate value is suspiciously low
+            if aggregate_value < 0.0001:
+                logger.warning(f"  ⚠️  SUSPICIOUS: Aggregate {quote_currency} value is very low ({aggregate_value:.8f}). This may indicate API issues.")
+                logger.warning(f"  ⚠️  Bot may be unable to open new positions due to insufficient calculated balance.")
 
             reserved_balance = bot.get_reserved_balance(aggregate_value)
 
