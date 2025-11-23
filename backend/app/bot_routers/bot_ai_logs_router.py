@@ -17,7 +17,7 @@ from app.models import AIBotLog, Bot
 from app.bot_routers.schemas import AIBotLogCreate, AIBotLogResponse
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="")
 
 
 @router.post("/{bot_id}/logs", response_model=AIBotLogResponse, status_code=201)

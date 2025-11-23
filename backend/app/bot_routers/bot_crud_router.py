@@ -25,7 +25,7 @@ from app.bot_routers.schemas import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="")
 
 
 # Strategy Endpoints

@@ -19,7 +19,7 @@ from app.trading_client import TradingClient
 from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="")
 
 
 @router.post("/{position_id}/add-funds")

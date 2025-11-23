@@ -23,7 +23,7 @@ from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import LimitCloseRequest, UpdateLimitCloseRequest
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="")
 
 
 @router.post("/{position_id}/limit-close")

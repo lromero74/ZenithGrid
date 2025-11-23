@@ -15,7 +15,7 @@ from app.database import get_db
 from app.models import Bot
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="")
 
 
 @router.post("/{bot_id}/start")
