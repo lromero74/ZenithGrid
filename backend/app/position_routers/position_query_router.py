@@ -22,7 +22,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="")
+router = APIRouter()
 
 
 @router.get("", response_model=List[PositionResponse])

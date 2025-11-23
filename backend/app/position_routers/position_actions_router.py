@@ -18,7 +18,7 @@ from app.position_routers.dependencies import get_coinbase
 from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="")
+router = APIRouter()
 
 
 @router.post("/{position_id}/cancel")

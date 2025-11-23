@@ -20,7 +20,7 @@ from app.bot_routers.schemas import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="")
+router = APIRouter()
 
 
 @router.post("/validate-config", response_model=ValidateBotConfigResponse)
