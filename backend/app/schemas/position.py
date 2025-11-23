@@ -1,6 +1,6 @@
 """Position-related Pydantic schemas"""
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -30,9 +30,28 @@ class PositionResponse(BaseModel):
     last_error_message: Optional[str] = None  # Last error message (like 3Commas)
     last_error_timestamp: Optional[datetime] = None  # When error occurred
     notes: Optional[str] = None  # User notes (like 3Commas)
+    closing_via_limit: bool = False  # Whether position is closing via limit order
+    limit_close_order_id: Optional[str] = None  # Coinbase order ID for limit close
+    limit_order_details: Optional['LimitOrderDetails'] = None  # Details of limit close order
 
     class Config:
         from_attributes = True
+
+
+class LimitOrderFill(BaseModel):
+    price: float
+    base_amount: float
+    quote_amount: float
+    timestamp: datetime
+
+
+class LimitOrderDetails(BaseModel):
+    limit_price: float
+    remaining_amount: float
+    filled_amount: float
+    fill_percentage: float
+    fills: List[LimitOrderFill]
+    status: str  # "pending", "partially_filled", "filled", "canceled"
 
 
 class TradeResponse(BaseModel):

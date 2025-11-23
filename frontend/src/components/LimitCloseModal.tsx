@@ -8,6 +8,8 @@ interface LimitCloseModalProps {
   productId: string
   totalAmount: number
   quoteCurrency: string
+  isEditing?: boolean  // Whether we're editing an existing order
+  currentLimitPrice?: number  // Current limit price if editing
   onClose: () => void
   onSuccess: () => void
 }
@@ -24,11 +26,13 @@ export function LimitCloseModal({
   productId,
   totalAmount,
   quoteCurrency,
+  isEditing = false,
+  currentLimitPrice,
   onClose,
   onSuccess
 }: LimitCloseModalProps) {
   const [ticker, setTicker] = useState<TickerData | null>(null)
-  const [limitPrice, setLimitPrice] = useState<number>(0)
+  const [limitPrice, setLimitPrice] = useState<number>(currentLimitPrice || 0)
   const [sliderValue, setSliderValue] = useState<number>(50) // 0-100 range
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,8 +44,10 @@ export function LimitCloseModal({
         const response = await axios.get(`${API_BASE_URL}/api/positions/${positionId}/ticker`)
         const data = response.data
         setTicker(data)
-        // Default to mark price
-        setLimitPrice(data.mark_price)
+        // Default to mark price if not editing, otherwise keep current limit price
+        if (!isEditing) {
+          setLimitPrice(data.mark_price)
+        }
       } catch (err: any) {
         setError(err.response?.data?.detail || 'Failed to fetch ticker data')
       }
@@ -68,13 +74,21 @@ export function LimitCloseModal({
     setError(null)
 
     try {
-      await axios.post(`${API_BASE_URL}/api/positions/${positionId}/limit-close`, {
-        limit_price: limitPrice
-      })
+      if (isEditing) {
+        // Update existing limit order
+        await axios.post(`${API_BASE_URL}/api/positions/${positionId}/update-limit-close`, {
+          new_limit_price: limitPrice
+        })
+      } else {
+        // Create new limit order
+        await axios.post(`${API_BASE_URL}/api/positions/${positionId}/limit-close`, {
+          limit_price: limitPrice
+        })
+      }
       onSuccess()
       onClose()
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to place limit order')
+      setError(err.response?.data?.detail || `Failed to ${isEditing ? 'update' : 'place'} limit order`)
     } finally {
       setIsSubmitting(false)
     }
@@ -120,7 +134,9 @@ export function LimitCloseModal({
       <div className="bg-slate-800 rounded-lg w-full max-w-lg">
         {/* Header */}
         <div className="p-6 border-b border-slate-700 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Close Position at Limit Price</h2>
+          <h2 className="text-xl font-bold text-white">
+            {isEditing ? 'Update Limit Close Price' : 'Close Position at Limit Price'}
+          </h2>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white transition-colors"
@@ -233,7 +249,7 @@ export function LimitCloseModal({
             className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors"
             disabled={isSubmitting || !ticker}
           >
-            {isSubmitting ? 'Placing Order...' : 'Place Limit Order'}
+            {isSubmitting ? (isEditing ? 'Updating...' : 'Placing Order...') : (isEditing ? 'Update Limit Price' : 'Place Limit Order')}
           </button>
         </div>
       </div>

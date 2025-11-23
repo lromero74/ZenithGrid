@@ -1881,7 +1881,15 @@ export default function Positions() {
                               </div>
                             )}
                           </div>
-                          <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>
+                            {/* Limit Close Status Badge */}
+                            {position.closing_via_limit && position.limit_order_details && (
+                              <div className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-[10px] font-medium">
+                                Limit Close {position.limit_order_details.fill_percentage > 0 ? `${position.limit_order_details.fill_percentage.toFixed(0)}%` : 'Pending'}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -2149,26 +2157,61 @@ export default function Positions() {
                       >
                         <span>🚫</span> Cancel
                       </button>
-                      <button
-                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setCloseConfirmPositionId(position.id)
-                          setShowCloseConfirm(true)
-                        }}
-                      >
-                        <span>💱</span> Close at market
-                      </button>
-                      <button
-                        className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setLimitClosePosition(position)
-                          setShowLimitCloseModal(true)
-                        }}
-                      >
-                        <span>📊</span> Close at limit
-                      </button>
+
+                      {/* Show edit/cancel if there's a pending limit order */}
+                      {position.closing_via_limit ? (
+                        <>
+                          <button
+                            className="text-xs text-yellow-400 hover:text-yellow-300 flex items-center gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setLimitClosePosition(position)
+                              setShowLimitCloseModal(true)
+                            }}
+                          >
+                            <span>✏️</span> Edit limit price
+                          </button>
+                          <button
+                            className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              if (confirm('Cancel limit close order?')) {
+                                try {
+                                  await axios.post(`${API_BASE_URL}/api/positions/${position.id}/cancel-limit-close`)
+                                  refetchPositions()
+                                } catch (err: any) {
+                                  alert(`Error: ${err.response?.data?.detail || err.message}`)
+                                }
+                              }
+                            }}
+                          >
+                            <span>❌</span> Cancel limit order
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setCloseConfirmPositionId(position.id)
+                              setShowCloseConfirm(true)
+                            }}
+                          >
+                            <span>💱</span> Close at market
+                          </button>
+                          <button
+                            className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setLimitClosePosition(position)
+                              setShowLimitCloseModal(true)
+                            }}
+                          >
+                            <span>📊</span> Close at limit
+                          </button>
+                        </>
+                      )}
                       <button
                         className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
                         onClick={(e) => {
@@ -2420,6 +2463,8 @@ export default function Positions() {
           productId={limitClosePosition.product_id || 'ETH-BTC'}
           totalAmount={limitClosePosition.total_base_acquired}
           quoteCurrency={limitClosePosition.product_id?.split('-')[1] || 'BTC'}
+          isEditing={limitClosePosition.closing_via_limit}
+          currentLimitPrice={limitClosePosition.limit_order_details?.limit_price}
           onClose={() => {
             setShowLimitCloseModal(false)
             setLimitClosePosition(null)

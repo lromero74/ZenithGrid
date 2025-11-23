@@ -209,6 +209,33 @@ async def get_positions(
         pos_response = PositionResponse.model_validate(pos)
         pos_response.trade_count = trade_count
         pos_response.pending_orders_count = pending_count
+
+        # If position is closing via limit, fetch order details
+        if pos.closing_via_limit and pos.limit_close_order_id:
+            limit_order_query = select(PendingOrder).where(
+                PendingOrder.order_id == pos.limit_close_order_id
+            )
+            limit_order_result = await db.execute(limit_order_query)
+            limit_order = limit_order_result.scalars().first()
+
+            if limit_order:
+                from app.schemas.position import LimitOrderDetails, LimitOrderFill
+                import json
+
+                fills_data = json.loads(limit_order.fills) if isinstance(limit_order.fills, str) else (limit_order.fills or [])
+                fills = [LimitOrderFill(**fill) for fill in fills_data]
+                filled_amount = limit_order.base_amount - (limit_order.remaining_base_amount or limit_order.base_amount)
+                fill_percentage = (filled_amount / limit_order.base_amount * 100) if limit_order.base_amount > 0 else 0
+
+                pos_response.limit_order_details = LimitOrderDetails(
+                    limit_price=limit_order.limit_price,
+                    remaining_amount=limit_order.remaining_base_amount or limit_order.base_amount,
+                    filled_amount=filled_amount,
+                    fill_percentage=fill_percentage,
+                    fills=fills,
+                    status=limit_order.status
+                )
+
         response.append(pos_response)
 
     return response
