@@ -161,6 +161,14 @@ class ConditionalDCAStrategy(TradingStrategy):
                     max_value=50.0
                 ),
                 StrategyParameter(
+                    name="take_profit_order_type",
+                    display_name="Take Profit Order Type",
+                    description="Use limit order (at Mark price) or market order when closing profitable position",
+                    type="str",
+                    default="limit",
+                    options=["limit", "market"]
+                ),
+                StrategyParameter(
                     name="min_profit_for_conditions",
                     display_name="Min Profit % for Condition Exit",
                     description="Minimum profit % required to exit on take profit conditions (set negative to allow selling at a loss)",

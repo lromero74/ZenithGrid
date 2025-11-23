@@ -124,6 +124,30 @@ class TradingClient:
             funds=str(quote_amount)
         )
 
+    async def sell_limit(
+        self,
+        product_id: str,
+        limit_price: float,
+        base_amount: float
+    ) -> Dict[str, Any]:
+        """
+        Sell base currency for quote currency using a limit order
+
+        Args:
+            product_id: Trading pair (e.g., "ETH-BTC", "ADA-USD")
+            limit_price: Limit price for the order
+            base_amount: Amount of base currency to sell
+
+        Returns:
+            Order response from Coinbase
+        """
+        return await self.coinbase.create_limit_order(
+            product_id=product_id,
+            side="SELL",
+            limit_price=limit_price,
+            size=str(base_amount)
+        )
+
     async def sell(
         self,
         product_id: str,
