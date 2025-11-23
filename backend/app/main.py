@@ -14,6 +14,12 @@ from app.routers import account_router
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
+# Import dependency functions for override
+from app.position_routers.dependencies import get_coinbase as position_get_coinbase
+from app.routers.account_router import get_coinbase as account_get_coinbase
+from app.routers.market_data_router import get_coinbase as market_data_get_coinbase
+from app.routers.settings_router import get_coinbase as settings_get_coinbase
+from app.routers.system_router import get_coinbase as system_get_coinbase, get_price_monitor as system_get_price_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +55,13 @@ def override_get_price_monitor():
     return price_monitor
 
 
-# Override router dependencies with global instances
-positions_router.router.dependency_overrides[positions_router.get_coinbase] = override_get_coinbase
-account_router.router.dependency_overrides[account_router.get_coinbase] = override_get_coinbase
-market_data_router.router.dependency_overrides[market_data_router.get_coinbase] = override_get_coinbase
-settings_router.router.dependency_overrides[settings_router.get_coinbase] = override_get_coinbase
-system_router.router.dependency_overrides[system_router.get_coinbase] = override_get_coinbase
-system_router.router.dependency_overrides[system_router.get_price_monitor] = override_get_price_monitor
+# Override dependencies with global instances
+app.dependency_overrides[position_get_coinbase] = override_get_coinbase
+app.dependency_overrides[account_get_coinbase] = override_get_coinbase
+app.dependency_overrides[market_data_get_coinbase] = override_get_coinbase
+app.dependency_overrides[settings_get_coinbase] = override_get_coinbase
+app.dependency_overrides[system_get_coinbase] = override_get_coinbase
+app.dependency_overrides[system_get_price_monitor] = override_get_price_monitor
 
 # Include all routers
 app.include_router(bots_router)  # Existing routers
