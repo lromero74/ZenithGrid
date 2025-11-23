@@ -33,6 +33,21 @@ from app.trading_engine_v2 import StrategyTradingEngine
 logger = logging.getLogger(__name__)
 
 
+# Pydantic Request Models
+class AddFundsRequest(BaseModel):
+    btc_amount: float
+
+
+class UpdateNotesRequest(BaseModel):
+    notes: str
+
+
+class LimitCloseRequest(BaseModel):
+    limit_price: float
+
+
+class UpdateLimitCloseRequest(BaseModel):
+    new_limit_price: float
 
 
 app = FastAPI(
@@ -1000,22 +1015,6 @@ async def update_limit_close(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-class AddFundsRequest(BaseModel):
-    btc_amount: float
-
-
-class UpdateNotesRequest(BaseModel):
-    notes: str
-
-
-class LimitCloseRequest(BaseModel):
-    limit_price: float
-
-
-class UpdateLimitCloseRequest(BaseModel):
-    new_limit_price: float
 
 
 @app.post("/api/positions/{position_id}/add-funds")
