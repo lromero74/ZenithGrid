@@ -1000,7 +1000,7 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
         total_reserved_btc = sum(bot.reserved_btc_balance for bot in all_bots)
         total_reserved_usd = sum(bot.reserved_usd_balance for bot in all_bots)
 
-        # Get all open positions and sum their balances
+        # Get all open positions and calculate their current values
         positions_query = select(Position).where(Position.status == "open")
         positions_result = await db.execute(positions_query)
         open_positions = positions_result.scalars().all()
@@ -1010,23 +1010,29 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
 
         for position in open_positions:
             quote = position.get_quote_currency()
-            if quote == "USD":
-                total_in_positions_usd += position.total_quote_spent
-            else:
-                total_in_positions_btc += position.total_quote_spent
+            base = position.get_base_currency()
 
-        # Get total portfolio balances from Coinbase
-        total_portfolio_btc = 0.0
-        total_portfolio_usd = 0.0
+            # Get current price for the position
+            try:
+                current_price = await coinbase_client.get_current_price(f"{base}-{quote}")
+                current_value = position.amount * current_price
 
-        for position in spot_positions:
-            asset = position.get("asset", "")
-            total_balance = float(position.get("total_balance_crypto", 0))
+                if quote == "USD":
+                    total_in_positions_usd += current_value
+                else:  # BTC
+                    total_in_positions_btc += current_value
+            except Exception as e:
+                # Fallback to quote spent if can't get current price
+                print(f"Could not get current price for {base}-{quote}, using quote spent: {e}")
+                if quote == "USD":
+                    total_in_positions_usd += position.total_quote_spent
+                else:
+                    total_in_positions_btc += position.total_quote_spent
 
-            if asset == "BTC":
-                total_portfolio_btc = total_balance
-            elif asset in ["USD", "USDC"]:
-                total_portfolio_usd += total_balance
+        # Total portfolio values should match the aggregate BTC/USD values from holdings
+        # (which already include all coins converted to BTC/USD)
+        total_portfolio_btc = total_btc_value
+        total_portfolio_usd = total_usd_value
 
         # Calculate free balances
         free_btc = total_portfolio_btc - (total_reserved_btc + total_in_positions_btc)
