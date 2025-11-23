@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("", response_model=List[PositionResponse])
+@router.get("/", response_model=List[PositionResponse])
 async def get_positions(
     status: Optional[str] = None,
     limit: int = 50,

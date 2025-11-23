@@ -45,7 +45,7 @@ async def get_strategy_definition(strategy_id: str):
 
 
 # Bot CRUD Endpoints
-@router.post("", response_model=BotResponse, status_code=201)
+@router.post("/", response_model=BotResponse, status_code=201)
 async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
     """Create a new trading bot"""
     # Validate strategy exists
@@ -123,7 +123,7 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
     return response
 
 
-@router.get("", response_model=List[BotResponse])
+@router.get("/", response_model=List[BotResponse])
 async def list_bots(
     active_only: bool = False,
     db: AsyncSession = Depends(get_db)
