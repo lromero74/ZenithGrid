@@ -26,6 +26,7 @@ import PositionLogsModal from '../components/PositionLogsModal'
 import TradingViewChartModal from '../components/TradingViewChartModal'
 import LightweightChartModal from '../components/LightweightChartModal'
 import { LimitCloseModal } from '../components/LimitCloseModal'
+import { SlippageWarningModal } from '../components/SlippageWarningModal'
 import CoinIcon from '../components/CoinIcon'
 import {
   calculateSMA,
@@ -1245,6 +1246,9 @@ export default function Positions() {
   const [closeConfirmPositionId, setCloseConfirmPositionId] = useState<number | null>(null)
   const [showLimitCloseModal, setShowLimitCloseModal] = useState(false)
   const [limitClosePosition, setLimitClosePosition] = useState<Position | null>(null)
+  const [showSlippageWarning, setShowSlippageWarning] = useState(false)
+  const [slippageData, setSlippageData] = useState<any>(null)
+  const [pendingMarketClosePositionId, setPendingMarketClosePositionId] = useState<number | null>(null)
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [editingNotesPositionId, setEditingNotesPositionId] = useState<number | null>(null)
   const [notesText, setNotesText] = useState('')
@@ -1426,6 +1430,29 @@ export default function Positions() {
 
   const formatCrypto = (amount: number, decimals: number = 8) => {
     return amount.toFixed(decimals)
+  }
+
+  const checkSlippageBeforeMarketClose = async (positionId: number) => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/positions/${positionId}/slippage-check`)
+      const slippage = response.data
+
+      if (slippage.show_warning) {
+        // Show slippage warning modal
+        setSlippageData(slippage)
+        setPendingMarketClosePositionId(positionId)
+        setShowSlippageWarning(true)
+      } else {
+        // No significant slippage, proceed directly to close confirmation
+        setCloseConfirmPositionId(positionId)
+        setShowCloseConfirm(true)
+      }
+    } catch (err: any) {
+      console.error('Error checking slippage:', err)
+      // If slippage check fails, still allow closing (fallback)
+      setCloseConfirmPositionId(positionId)
+      setShowCloseConfirm(true)
+    }
   }
 
   const handleClosePosition = async () => {
@@ -2194,8 +2221,7 @@ export default function Positions() {
                             className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
                             onClick={(e) => {
                               e.stopPropagation()
-                              setCloseConfirmPositionId(position.id)
-                              setShowCloseConfirm(true)
+                              checkSlippageBeforeMarketClose(position.id)
                             }}
                           >
                             <span>💱</span> Close at market
@@ -2471,6 +2497,35 @@ export default function Positions() {
           }}
           onSuccess={() => {
             refetchPositions()
+          }}
+        />
+      )}
+
+      {showSlippageWarning && slippageData && pendingMarketClosePositionId && (
+        <SlippageWarningModal
+          positionId={pendingMarketClosePositionId}
+          productId={slippageData.product_id}
+          slippageData={slippageData}
+          quoteCurrency={slippageData.product_id?.split('-')[1] || 'BTC'}
+          onClose={() => {
+            setShowSlippageWarning(false)
+            setSlippageData(null)
+            setPendingMarketClosePositionId(null)
+          }}
+          onProceedWithMarket={() => {
+            setShowSlippageWarning(false)
+            setCloseConfirmPositionId(pendingMarketClosePositionId)
+            setShowCloseConfirm(true)
+            setPendingMarketClosePositionId(null)
+          }}
+          onSwitchToLimit={() => {
+            setShowSlippageWarning(false)
+            const position = allPositions?.find(p => p.id === pendingMarketClosePositionId)
+            if (position) {
+              setLimitClosePosition(position)
+              setShowLimitCloseModal(true)
+            }
+            setPendingMarketClosePositionId(null)
           }}
         />
       )}

@@ -888,6 +888,65 @@ async def get_position_ticker(position_id: int, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/positions/{position_id}/slippage-check")
+async def check_market_close_slippage(position_id: int, db: AsyncSession = Depends(get_db)):
+    """Check if closing at market would result in significant slippage"""
+    try:
+        query = select(Position).where(Position.id == position_id)
+        result = await db.execute(query)
+        position = result.scalars().first()
+
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        if position.status != "open":
+            raise HTTPException(status_code=400, detail="Position is not open")
+
+        # Get ticker data including bid/ask
+        ticker = await coinbase_client.get_ticker(position.product_id)
+        best_bid = float(ticker.get("best_bid", 0))
+        best_ask = float(ticker.get("best_ask", 0))
+        mark_price = (best_bid + best_ask) / 2 if best_bid and best_ask else float(ticker.get("price", 0))
+
+        # Calculate expected profit at mark price
+        current_value_at_mark = position.total_base_acquired * mark_price
+        expected_profit_at_mark = current_value_at_mark - position.total_quote_spent
+
+        # Calculate actual profit when selling at best bid (market sell)
+        actual_value_at_bid = position.total_base_acquired * best_bid
+        actual_profit_at_bid = actual_value_at_bid - position.total_quote_spent
+
+        # Calculate slippage
+        slippage_amount = expected_profit_at_mark - actual_profit_at_bid
+        slippage_percentage = 0.0
+
+        # Calculate slippage as % of expected profit (if profitable)
+        if expected_profit_at_mark > 0:
+            slippage_percentage = (slippage_amount / expected_profit_at_mark) * 100
+
+        # Determine if warning should be shown (>25% slippage)
+        show_warning = slippage_percentage > 25.0
+
+        return {
+            "product_id": position.product_id,
+            "best_bid": best_bid,
+            "best_ask": best_ask,
+            "mark_price": mark_price,
+            "expected_profit_at_mark": expected_profit_at_mark,
+            "actual_profit_at_bid": actual_profit_at_bid,
+            "slippage_amount": slippage_amount,
+            "slippage_percentage": slippage_percentage,
+            "show_warning": show_warning,
+            "position_value_at_bid": actual_value_at_bid,
+            "position_value_at_mark": current_value_at_mark
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/positions/{position_id}/cancel-limit-close")
 async def cancel_limit_close(position_id: int, db: AsyncSession = Depends(get_db)):
     """Cancel a pending limit close order"""
