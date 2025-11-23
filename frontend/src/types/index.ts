@@ -23,6 +23,25 @@ export interface Position {
   last_error_message?: string | null;  // Last error message (like 3Commas - for UI display)
   last_error_timestamp?: string | null;  // When the error occurred
   notes?: string | null;  // User notes for position (like 3Commas)
+  closing_via_limit?: boolean;  // Whether position is closing via limit order
+  limit_close_order_id?: string | null;  // Coinbase order ID for limit close
+  limit_order_details?: LimitOrderDetails | null;  // Details of the limit close order
+}
+
+export interface LimitOrderDetails {
+  limit_price: number;
+  remaining_amount: number;
+  filled_amount: number;
+  fill_percentage: number;
+  fills: LimitOrderFill[];
+  status: string;  // "pending", "partially_filled", "filled", "canceled"
+}
+
+export interface LimitOrderFill {
+  price: number;
+  base_amount: number;
+  quote_amount: number;
+  timestamp: string;
 }
 
 export interface Trade {

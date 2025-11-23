@@ -25,6 +25,7 @@ import type { Position, Trade } from '../types'
 import PositionLogsModal from '../components/PositionLogsModal'
 import TradingViewChartModal from '../components/TradingViewChartModal'
 import LightweightChartModal from '../components/LightweightChartModal'
+import { LimitCloseModal } from '../components/LimitCloseModal'
 import CoinIcon from '../components/CoinIcon'
 import {
   calculateSMA,
@@ -1242,6 +1243,8 @@ export default function Positions() {
   const [lightweightChartPosition, setLightweightChartPosition] = useState<Position | null>(null)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [closeConfirmPositionId, setCloseConfirmPositionId] = useState<number | null>(null)
+  const [showLimitCloseModal, setShowLimitCloseModal] = useState(false)
+  const [limitClosePosition, setLimitClosePosition] = useState<Position | null>(null)
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [editingNotesPositionId, setEditingNotesPositionId] = useState<number | null>(null)
   const [notesText, setNotesText] = useState('')
@@ -2154,7 +2157,17 @@ export default function Positions() {
                           setShowCloseConfirm(true)
                         }}
                       >
-                        <span>💱</span> Close at market price
+                        <span>💱</span> Close at market
+                      </button>
+                      <button
+                        className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setLimitClosePosition(position)
+                          setShowLimitCloseModal(true)
+                        }}
+                      >
+                        <span>📊</span> Close at limit
                       </button>
                       <button
                         className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
@@ -2398,6 +2411,23 @@ export default function Positions() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Limit Close Modal */}
+      {showLimitCloseModal && limitClosePosition && (
+        <LimitCloseModal
+          positionId={limitClosePosition.id}
+          productId={limitClosePosition.product_id || 'ETH-BTC'}
+          totalAmount={limitClosePosition.total_base_acquired}
+          quoteCurrency={limitClosePosition.product_id?.split('-')[1] || 'BTC'}
+          onClose={() => {
+            setShowLimitCloseModal(false)
+            setLimitClosePosition(null)
+          }}
+          onSuccess={() => {
+            refetchPositions()
+          }}
+        />
       )}
     </div>
   )
