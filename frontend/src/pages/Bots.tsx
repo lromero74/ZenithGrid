@@ -594,12 +594,25 @@ function Bots() {
                         <div className="flex flex-col">
                           <div className="text-sm text-white">{strategyName}</div>
                           {aiProvider && (
-                            <div className="text-xs text-purple-400 mt-0.5">
+                            <a
+                              href={
+                                aiProvider === 'claude' ? 'https://console.anthropic.com/settings/usage'
+                                : aiProvider === 'gemini' ? 'https://aistudio.google.com/app/apikey'
+                                : aiProvider === 'grok' ? 'https://console.x.ai/'
+                                : '#'
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-purple-400 hover:text-purple-300 mt-0.5 flex items-center gap-1 transition-colors cursor-pointer"
+                              title="View API credits/usage"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               {aiProvider === 'claude' ? '🤖 Claude'
                                 : aiProvider === 'gemini' ? '🤖 Gemini'
                                 : aiProvider === 'grok' ? '🤖 Grok'
                                 : `🤖 ${aiProvider}`}
-                            </div>
+                              <span className="text-[10px]">💳</span>
+                            </a>
                           )}
                         </div>
                       </td>

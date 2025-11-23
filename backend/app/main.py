@@ -112,6 +112,30 @@ async def root():
     return {"message": "ETH/BTC Trading Bot API", "status": "running"}
 
 
+@app.get("/api/ai-providers")
+async def get_ai_provider_info():
+    """Get information about AI providers and their billing URLs"""
+    return {
+        "providers": {
+            "anthropic": {
+                "name": "Anthropic (Claude)",
+                "billing_url": "https://console.anthropic.com/settings/usage",
+                "has_api_key": bool(settings.anthropic_api_key)
+            },
+            "gemini": {
+                "name": "Google Gemini",
+                "billing_url": "https://aistudio.google.com/app/apikey",
+                "has_api_key": bool(settings.gemini_api_key)
+            },
+            "openai": {
+                "name": "OpenAI (GPT)",
+                "billing_url": "https://platform.openai.com/usage",
+                "has_api_key": False  # Not currently configured
+            }
+        }
+    }
+
+
 @app.get("/api/status")
 async def get_status():
     """Get overall system status"""
