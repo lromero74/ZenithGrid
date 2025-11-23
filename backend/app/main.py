@@ -1328,13 +1328,68 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
                 "current_price_usd": current_price_usd,
                 "usd_value": usd_value,
                 "btc_value": btc_value,
-                "percentage": 0.0  # Will calculate after we know total
+                "percentage": 0.0,  # Will calculate after we know total
+                "unrealized_pnl_usd": 0.0,  # Will calculate from open positions
+                "unrealized_pnl_percentage": 0.0
             })
 
         # Calculate percentages
         for holding in portfolio_holdings:
             if total_usd_value > 0:
                 holding["percentage"] = (holding["usd_value"] / total_usd_value) * 100
+
+        # Calculate unrealized PnL from open positions
+        # Get all open positions
+        positions_query = select(Position).where(Position.status == "open")
+        positions_result = await db.execute(positions_query)
+        open_positions_for_pnl = positions_result.scalars().all()
+
+        # Track PnL by base asset
+        asset_pnl = {}  # {asset: {"pnl_usd": X, "cost_usd": Y}}
+
+        for position in open_positions_for_pnl:
+            base = position.get_base_currency()
+            quote = position.get_quote_currency()
+
+            try:
+                # Get current price
+                current_price = await coinbase_client.get_current_price(f"{base}-{quote}")
+                current_value_quote = position.total_base_acquired * current_price
+
+                # Calculate profit in quote currency
+                profit_quote = current_value_quote - position.total_quote_spent
+
+                # Convert to USD
+                if quote == "USD":
+                    profit_usd = profit_quote
+                    cost_usd = position.total_quote_spent
+                elif quote == "BTC":
+                    profit_usd = profit_quote * btc_usd_price
+                    cost_usd = position.total_quote_spent * btc_usd_price
+                else:
+                    continue  # Skip unknown quote currencies
+
+                # Accumulate PnL by base asset
+                if base not in asset_pnl:
+                    asset_pnl[base] = {"pnl_usd": 0.0, "cost_usd": 0.0}
+
+                asset_pnl[base]["pnl_usd"] += profit_usd
+                asset_pnl[base]["cost_usd"] += cost_usd
+
+            except Exception as e:
+                logger.warning(f"Could not calculate PnL for position {position.id}: {e}")
+                continue
+
+        # Add PnL to holdings
+        for holding in portfolio_holdings:
+            asset = holding["asset"]
+            if asset in asset_pnl:
+                pnl_data = asset_pnl[asset]
+                holding["unrealized_pnl_usd"] = pnl_data["pnl_usd"]
+
+                # Calculate percentage if cost > 0
+                if pnl_data["cost_usd"] > 0:
+                    holding["unrealized_pnl_percentage"] = (pnl_data["pnl_usd"] / pnl_data["cost_usd"]) * 100
 
         # Sort by USD value descending
         portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)

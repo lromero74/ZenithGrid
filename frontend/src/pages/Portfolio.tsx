@@ -548,6 +548,15 @@ function Portfolio() {
                       {getSortIcon('percentage')}
                     </div>
                   </th>
+                  <th
+                    className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    onClick={() => handleSort('unrealized_pnl_usd')}
+                  >
+                    <div className="flex items-center justify-end gap-2">
+                      <span>Unrealized PnL</span>
+                      {getSortIcon('unrealized_pnl_usd')}
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
@@ -600,6 +609,30 @@ function Portfolio() {
                           />
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      {(() => {
+                        const pnl = (holding as any).unrealized_pnl_usd || 0
+                        const pnlPct = (holding as any).unrealized_pnl_percentage || 0
+                        const isPositive = pnl > 0
+                        const isNegative = pnl < 0
+                        const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
+
+                        if (Math.abs(pnl) < 0.01) {
+                          return <span className="text-slate-500">—</span>
+                        }
+
+                        return (
+                          <div className="flex flex-col items-end">
+                            <span className={`font-medium ${colorClass}`}>
+                              {isPositive ? '+' : ''}{formatCurrency(pnl)}
+                            </span>
+                            <span className={`text-xs ${colorClass}`}>
+                              {isPositive ? '+' : ''}{pnlPct.toFixed(2)}%
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </td>
                   </tr>
                 ))}
