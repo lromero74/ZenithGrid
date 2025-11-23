@@ -742,12 +742,253 @@ async def force_close_position(position_id: int, db: AsyncSession = Depends(get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/positions/{position_id}/limit-close")
+async def limit_close_position(
+    position_id: int,
+    request: LimitCloseRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Close a position via limit order"""
+    try:
+        query = select(Position).where(Position.id == position_id)
+        result = await db.execute(query)
+        position = result.scalars().first()
+
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        if position.status != "open":
+            raise HTTPException(status_code=400, detail="Position is not open")
+
+        if position.closing_via_limit:
+            raise HTTPException(status_code=400, detail="Position already has a pending limit close order")
+
+        # Create limit sell order via Coinbase
+        order_result = await coinbase_client.create_limit_order(
+            product_id=position.product_id,
+            side="SELL",
+            limit_price=request.limit_price,
+            size=str(position.total_base_acquired)  # Sell entire position
+        )
+
+        # Extract order ID from response
+        order_id = order_result.get("order_id") or order_result.get("success_response", {}).get("order_id")
+
+        if not order_id:
+            raise HTTPException(status_code=500, detail="Failed to create limit order - no order ID returned")
+
+        # Create PendingOrder record to track this limit sell
+        pending_order = PendingOrder(
+            position_id=position.id,
+            bot_id=position.bot_id,
+            order_id=order_id,
+            product_id=position.product_id,
+            side="SELL",
+            order_type="LIMIT",
+            limit_price=request.limit_price,
+            quote_amount=0.0,  # Will be filled when order completes
+            base_amount=position.total_base_acquired,
+            trade_type="limit_close",
+            status="pending",
+            remaining_base_amount=position.total_base_acquired,
+            fills=[]
+        )
+        db.add(pending_order)
+
+        # Update position to indicate it's closing via limit
+        position.closing_via_limit = True
+        position.limit_close_order_id = order_id
+
+        await db.commit()
+
+        return {
+            "message": "Limit close order placed successfully",
+            "order_id": order_id,
+            "limit_price": request.limit_price,
+            "base_amount": position.total_base_acquired
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/positions/{position_id}/ticker")
+async def get_position_ticker(position_id: int, db: AsyncSession = Depends(get_db)):
+    """Get current bid/ask/mark prices for a position"""
+    try:
+        query = select(Position).where(Position.id == position_id)
+        result = await db.execute(query)
+        position = result.scalars().first()
+
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        # Get ticker data including bid/ask
+        ticker = await coinbase_client.get_ticker(position.product_id)
+
+        best_bid = float(ticker.get("best_bid", 0))
+        best_ask = float(ticker.get("best_ask", 0))
+        mark_price = (best_bid + best_ask) / 2 if best_bid and best_ask else float(ticker.get("price", 0))
+
+        return {
+            "product_id": position.product_id,
+            "best_bid": best_bid,
+            "best_ask": best_ask,
+            "mark_price": mark_price,
+            "last_price": float(ticker.get("price", 0))
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/positions/{position_id}/cancel-limit-close")
+async def cancel_limit_close(position_id: int, db: AsyncSession = Depends(get_db)):
+    """Cancel a pending limit close order"""
+    try:
+        query = select(Position).where(Position.id == position_id)
+        result = await db.execute(query)
+        position = result.scalars().first()
+
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        if not position.closing_via_limit:
+            raise HTTPException(status_code=400, detail="Position does not have a pending limit close order")
+
+        # Cancel the order on Coinbase
+        await coinbase_client.cancel_order(position.limit_close_order_id)
+
+        # Update pending order status
+        pending_order_query = select(PendingOrder).where(
+            PendingOrder.order_id == position.limit_close_order_id
+        )
+        pending_order_result = await db.execute(pending_order_query)
+        pending_order = pending_order_result.scalars().first()
+
+        if pending_order:
+            pending_order.status = "canceled"
+            pending_order.canceled_at = datetime.utcnow()
+
+        # Reset position limit close flags
+        position.closing_via_limit = False
+        position.limit_close_order_id = None
+
+        await db.commit()
+
+        return {"message": "Limit close order canceled successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/positions/{position_id}/update-limit-close")
+async def update_limit_close(
+    position_id: int,
+    request: UpdateLimitCloseRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update the limit price for a pending limit close order"""
+    try:
+        query = select(Position).where(Position.id == position_id)
+        result = await db.execute(query)
+        position = result.scalars().first()
+
+        if not position:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        if not position.closing_via_limit:
+            raise HTTPException(status_code=400, detail="Position does not have a pending limit close order")
+
+        # Get the pending order to check remaining amount
+        pending_order_query = select(PendingOrder).where(
+            PendingOrder.order_id == position.limit_close_order_id
+        )
+        pending_order_result = await db.execute(pending_order_query)
+        pending_order = pending_order_result.scalars().first()
+
+        if not pending_order:
+            raise HTTPException(status_code=404, detail="Pending order not found")
+
+        # Cancel the old order
+        await coinbase_client.cancel_order(position.limit_close_order_id)
+
+        # Create new limit order with updated price (for remaining amount)
+        remaining_amount = pending_order.remaining_base_amount or position.total_base_acquired
+
+        order_result = await coinbase_client.create_limit_order(
+            product_id=position.product_id,
+            side="SELL",
+            limit_price=request.new_limit_price,
+            size=str(remaining_amount)
+        )
+
+        # Extract new order ID
+        new_order_id = order_result.get("order_id") or order_result.get("success_response", {}).get("order_id")
+
+        if not new_order_id:
+            raise HTTPException(status_code=500, detail="Failed to create updated limit order")
+
+        # Update old pending order to canceled
+        pending_order.status = "canceled"
+        pending_order.canceled_at = datetime.utcnow()
+
+        # Create new pending order
+        new_pending_order = PendingOrder(
+            position_id=position.id,
+            bot_id=position.bot_id,
+            order_id=new_order_id,
+            product_id=position.product_id,
+            side="SELL",
+            order_type="LIMIT",
+            limit_price=request.new_limit_price,
+            quote_amount=0.0,
+            base_amount=remaining_amount,
+            trade_type="limit_close",
+            status="pending",
+            remaining_base_amount=remaining_amount,
+            fills=pending_order.fills  # Preserve existing fills
+        )
+        db.add(new_pending_order)
+
+        # Update position with new order ID
+        position.limit_close_order_id = new_order_id
+
+        await db.commit()
+
+        return {
+            "message": "Limit close order updated successfully",
+            "order_id": new_order_id,
+            "new_limit_price": request.new_limit_price,
+            "remaining_amount": remaining_amount
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class AddFundsRequest(BaseModel):
     btc_amount: float
 
 
 class UpdateNotesRequest(BaseModel):
     notes: str
+
+
+class LimitCloseRequest(BaseModel):
+    limit_price: float
+
+
+class UpdateLimitCloseRequest(BaseModel):
+    new_limit_price: float
 
 
 @app.post("/api/positions/{position_id}/add-funds")

@@ -170,6 +170,10 @@ class Position(Base):
     # Notes (like 3Commas - user can add notes to positions)
     notes = Column(Text, nullable=True)  # User notes for this position
 
+    # Limit close tracking
+    closing_via_limit = Column(Boolean, default=False)  # Whether position is closing via limit order
+    limit_close_order_id = Column(String, nullable=True)  # Coinbase order ID for limit close order
+
     # Relationships
     bot = relationship("Bot", back_populates="positions")
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")
@@ -181,6 +185,12 @@ class Position(Base):
         if self.product_id and '-' in self.product_id:
             return self.product_id.split('-')[1]
         return 'BTC'  # Default fallback
+
+    def get_base_currency(self) -> str:
+        """Get the base currency from product_id (e.g., 'ETH' from 'ETH-BTC', 'ADA' from 'ADA-USD')"""
+        if self.product_id and '-' in self.product_id:
+            return self.product_id.split('-')[0]
+        return 'ETH'  # Default fallback
 
     def update_averages(self):
         """Recalculate average buy price and totals from trades"""
@@ -314,15 +324,19 @@ class PendingOrder(Base):
     trade_type = Column(String, nullable=False)  # "safety_order_1", "safety_order_2", etc.
 
     # Status tracking
-    status = Column(String, nullable=False, default="pending")  # "pending", "filled", "canceled", "expired"
+    status = Column(String, nullable=False, default="pending")  # "pending", "partially_filled", "filled", "canceled", "expired"
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     filled_at = Column(DateTime, nullable=True)
     canceled_at = Column(DateTime, nullable=True)
 
     # Filled details (populated when order fills)
-    filled_price = Column(Float, nullable=True)  # Actual fill price
-    filled_quote_amount = Column(Float, nullable=True)  # Actual quote spent
-    filled_base_amount = Column(Float, nullable=True)  # Actual base acquired
+    filled_price = Column(Float, nullable=True)  # Actual fill price (average if multiple fills)
+    filled_quote_amount = Column(Float, nullable=True)  # Actual quote spent (cumulative)
+    filled_base_amount = Column(Float, nullable=True)  # Actual base acquired (cumulative)
+
+    # Partial fill tracking
+    fills = Column(JSON, nullable=True)  # Array of fill records: [{price, base_amount, quote_amount, timestamp}, ...]
+    remaining_base_amount = Column(Float, nullable=True)  # Unfilled base amount for partial fills
 
     # Relationships
     position = relationship("Position", back_populates="pending_orders")
