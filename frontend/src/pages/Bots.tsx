@@ -549,6 +549,7 @@ function Bots() {
                   <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Strategy</th>
                   <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Pair</th>
                   <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
+                  <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Trade Stats</th>
                   <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">PnL</th>
                   <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Projected PnL</th>
                   <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Budget</th>
@@ -647,6 +648,18 @@ function Bots() {
                         ) : (
                           <span className="text-sm text-slate-500">—</span>
                         )}
+                      </td>
+
+                      {/* Trade Stats */}
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-right">
+                        <div className="flex flex-col items-end">
+                          <div className="text-xs text-slate-400">
+                            {(bot as any).closed_positions_count || 0} closed
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {((bot as any).trades_per_day || 0).toFixed(2)}/day
+                          </div>
+                        </div>
                       </td>
 
                       {/* PnL */}

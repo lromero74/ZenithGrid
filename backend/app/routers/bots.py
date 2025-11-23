@@ -67,6 +67,8 @@ class BotResponse(BaseModel):
     last_signal_check: Optional[datetime]
     open_positions_count: int = 0
     total_positions_count: int = 0
+    closed_positions_count: int = 0
+    trades_per_day: float = 0.0
     total_pnl_usd: float = 0.0
     avg_daily_pnl_usd: float = 0.0
     insufficient_funds: bool = False
@@ -220,6 +222,9 @@ async def list_bots(
         days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
         avg_daily_pnl_usd = total_pnl_usd / days_active if days_active > 0 else 0.0
 
+        # Calculate trades per day (closed positions / days active)
+        trades_per_day = len(closed_positions) / days_active if days_active > 0 else 0.0
+
         # Calculate budget utilization percentage (for all bots with open positions)
         insufficient_funds = False
         budget_utilization_percentage = 0.0
@@ -265,6 +270,8 @@ async def list_bots(
         bot_response = BotResponse.model_validate(bot)
         bot_response.open_positions_count = len(open_positions)
         bot_response.total_positions_count = len(all_positions)
+        bot_response.closed_positions_count = len(closed_positions)
+        bot_response.trades_per_day = trades_per_day
         bot_response.total_pnl_usd = total_pnl_usd
         bot_response.avg_daily_pnl_usd = avg_daily_pnl_usd
         bot_response.insufficient_funds = insufficient_funds
