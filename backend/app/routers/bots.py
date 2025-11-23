@@ -70,6 +70,7 @@ class BotResponse(BaseModel):
     total_pnl_usd: float = 0.0
     avg_daily_pnl_usd: float = 0.0
     insufficient_funds: bool = False
+    budget_utilization_percentage: float = 0.0
 
     class Config:
         from_attributes = True
@@ -82,6 +83,7 @@ class BotStats(BaseModel):
     total_profit_btc: float
     win_rate: float
     insufficient_funds: bool
+    budget_utilization_percentage: float = 0.0  # % of allocated budget in open positions
 
 
 # Strategy Endpoints
@@ -218,30 +220,47 @@ async def list_bots(
         days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
         avg_daily_pnl_usd = total_pnl_usd / days_active if days_active > 0 else 0.0
 
-        # Check if bot has insufficient funds for new positions
+        # Calculate budget utilization percentage (for all bots with open positions)
         insufficient_funds = False
+        budget_utilization_percentage = 0.0
         max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
 
-        if len(open_positions) < max_concurrent_deals:
-            # Bot has room for more positions - check if there's budget
-            try:
-                quote_currency = bot.get_quote_currency()
+        try:
+            quote_currency = bot.get_quote_currency()
 
-                if quote_currency == "BTC":
-                    aggregate_value = await coinbase.calculate_aggregate_btc_value()
-                else:  # USD
-                    aggregate_value = await coinbase.calculate_aggregate_usd_value()
+            if quote_currency == "BTC":
+                aggregate_value = await coinbase.calculate_aggregate_btc_value()
+            else:  # USD
+                aggregate_value = await coinbase.calculate_aggregate_usd_value()
 
-                reserved_balance = bot.get_reserved_balance(aggregate_value)
+            reserved_balance = bot.get_reserved_balance(aggregate_value)
+
+            # Calculate budget utilization (current value of positions / reserved balance)
+            total_in_positions_value = 0.0
+            for position in open_positions:
+                try:
+                    current_price = await coinbase.get_current_price(position.product_id)
+                    position_value = position.total_base_acquired * current_price
+                    total_in_positions_value += position_value
+                except Exception as e:
+                    logger.warning(f"Could not get current price for position {position.id}, using quote spent")
+                    total_in_positions_value += position.total_quote_spent
+
+            if reserved_balance > 0:
+                budget_utilization_percentage = (total_in_positions_value / reserved_balance) * 100
+
+            # Check if bot has insufficient funds for new positions
+            if len(open_positions) < max_concurrent_deals:
                 total_in_positions = sum(p.total_quote_spent for p in open_positions)
                 available_budget = reserved_balance - total_in_positions
                 min_per_position = reserved_balance / max(max_concurrent_deals, 1)
-
                 insufficient_funds = available_budget < min_per_position
-            except Exception as e:
-                logger.error(f"Error calculating budget for bot {bot.id}: {e}")
-                # Don't fail the whole request if budget calc fails
-                insufficient_funds = False
+
+        except Exception as e:
+            logger.error(f"Error calculating budget for bot {bot.id}: {e}")
+            # Don't fail the whole request if budget calc fails
+            insufficient_funds = False
+            budget_utilization_percentage = 0.0
 
         bot_response = BotResponse.model_validate(bot)
         bot_response.open_positions_count = len(open_positions)
@@ -249,6 +268,7 @@ async def list_bots(
         bot_response.total_pnl_usd = total_pnl_usd
         bot_response.avg_daily_pnl_usd = avg_daily_pnl_usd
         bot_response.insufficient_funds = insufficient_funds
+        bot_response.budget_utilization_percentage = budget_utilization_percentage
         bot_responses.append(bot_response)
 
     return bot_responses
@@ -581,31 +601,48 @@ async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
     winning_positions = [p for p in closed_positions if p.profit_quote and p.profit_quote > 0]
     win_rate = (len(winning_positions) / len(closed_positions) * 100) if closed_positions else 0.0
 
-    # Check if bot has insufficient funds for new positions
+    # Check if bot has insufficient funds for new positions and calculate budget utilization
     insufficient_funds = False
+    budget_utilization_percentage = 0.0
     max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
 
-    if len(open_positions) < max_concurrent_deals:
-        # Bot has room for more positions - check if there's budget
-        try:
-            coinbase = CoinbaseClient()
-            quote_currency = bot.get_quote_currency()
+    try:
+        coinbase = CoinbaseClient()
+        quote_currency = bot.get_quote_currency()
 
-            if quote_currency == "BTC":
-                aggregate_value = await coinbase.calculate_aggregate_btc_value()
-            else:  # USD
-                aggregate_value = await coinbase.calculate_aggregate_usd_value()
+        if quote_currency == "BTC":
+            aggregate_value = await coinbase.calculate_aggregate_btc_value()
+        else:  # USD
+            aggregate_value = await coinbase.calculate_aggregate_usd_value()
 
-            reserved_balance = bot.get_reserved_balance(aggregate_value)
-            total_in_positions = sum(p.total_quote_spent for p in open_positions)
-            available_budget = reserved_balance - total_in_positions
+        reserved_balance = bot.get_reserved_balance(aggregate_value)
+
+        # Calculate current value of open positions (not just spent)
+        total_in_positions_value = 0.0
+        for position in open_positions:
+            try:
+                current_price = await coinbase.get_current_price(position.product_id)
+                position_value = position.total_base_acquired * current_price
+                total_in_positions_value += position_value
+            except Exception as e:
+                # Fallback to quote spent if can't get current price
+                logger.warning(f"Could not get current price for position {position.id}, using quote spent")
+                total_in_positions_value += position.total_quote_spent
+
+        # Calculate budget utilization percentage
+        if reserved_balance > 0:
+            budget_utilization_percentage = (total_in_positions_value / reserved_balance) * 100
+
+        # Check insufficient funds if bot has room for more positions
+        if len(open_positions) < max_concurrent_deals:
+            available_budget = reserved_balance - total_in_positions_value
             min_per_position = reserved_balance / max(max_concurrent_deals, 1)
-
             insufficient_funds = available_budget < min_per_position
-        except Exception as e:
-            logger.error(f"Error calculating budget for bot {bot_id}: {e}")
-            # Don't fail the whole request if budget calc fails
-            insufficient_funds = False
+    except Exception as e:
+        logger.error(f"Error calculating budget for bot {bot_id}: {e}")
+        # Don't fail the whole request if budget calc fails
+        insufficient_funds = False
+        budget_utilization_percentage = 0.0
 
     return BotStats(
         total_positions=len(all_positions),
@@ -613,7 +650,8 @@ async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
         closed_positions=len(closed_positions),
         total_profit_btc=total_profit,
         win_rate=win_rate,
-        insufficient_funds=insufficient_funds
+        insufficient_funds=insufficient_funds,
+        budget_utilization_percentage=budget_utilization_percentage
     )
 
 

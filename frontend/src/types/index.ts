@@ -166,6 +166,7 @@ export interface Bot {
   updated_at: string;
   last_signal_check: string | null;
   insufficient_funds?: boolean;
+  budget_utilization_percentage?: number;
 }
 
 export interface BotCreate {
@@ -189,6 +190,7 @@ export interface BotStats {
   win_rate: number;
   avg_profit_per_position: number;
   insufficient_funds: boolean;
+  budget_utilization_percentage?: number;  // % of allocated budget in open positions
 }
 
 export interface OrderHistory {
