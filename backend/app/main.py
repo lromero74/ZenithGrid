@@ -1420,7 +1420,7 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
             # Get current price for the position
             try:
                 current_price = await coinbase_client.get_current_price(f"{base}-{quote}")
-                current_value = position.amount * current_price
+                current_value = position.total_base_acquired * current_price
 
                 if quote == "USD":
                     total_in_positions_usd += current_value
