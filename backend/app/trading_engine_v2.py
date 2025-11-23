@@ -537,6 +537,75 @@ class StrategyTradingEngine:
 
         return pending_order
 
+    async def execute_limit_sell(
+        self,
+        position: Position,
+        base_amount: float,
+        limit_price: float,
+        signal_data: Optional[Dict[str, Any]] = None
+    ) -> PendingOrder:
+        """
+        Place a limit sell order to close position and track it in pending_orders table
+
+        Args:
+            position: Current position to close
+            base_amount: Amount of base currency to sell
+            limit_price: Target price for the limit order (mark price)
+            signal_data: Optional signal metadata
+
+        Returns:
+            PendingOrder record
+        """
+        # Calculate expected quote amount at limit price
+        expected_quote_amount = base_amount * limit_price
+
+        # Place limit order via TradingClient
+        order_id = None
+        try:
+            order_response = await self.trading_client.sell_limit(
+                product_id=self.product_id,
+                limit_price=limit_price,
+                base_amount=base_amount
+            )
+            success_response = order_response.get("success_response", {})
+            order_id = success_response.get("order_id", "")
+
+            if not order_id:
+                raise ValueError("No order_id returned from Coinbase")
+
+        except Exception as e:
+            logger.error(f"Error placing limit sell order: {e}")
+            raise
+
+        # Create PendingOrder record
+        pending_order = PendingOrder(
+            position_id=position.id,
+            bot_id=self.bot.id,
+            order_id=order_id,
+            product_id=self.product_id,
+            side="SELL",
+            order_type="LIMIT",
+            limit_price=limit_price,
+            quote_amount=expected_quote_amount,
+            base_amount=base_amount,
+            trade_type="limit_close",
+            status="pending",
+            created_at=datetime.utcnow()
+        )
+
+        self.db.add(pending_order)
+
+        # Mark position as closing via limit
+        position.closing_via_limit = True
+        position.limit_close_order_id = order_id
+
+        await self.db.commit()
+        await self.db.refresh(pending_order)
+
+        logger.info(f"✅ Placed limit sell order: {base_amount:.8f} {self.base_currency} @ {limit_price:.8f} (Order ID: {order_id})")
+
+        return pending_order
+
     async def execute_sell(
         self,
         position: Position,
@@ -544,11 +613,55 @@ class StrategyTradingEngine:
         signal_data: Optional[Dict[str, Any]] = None
     ) -> Tuple[Trade, float, float]:
         """
-        Execute a sell order for entire position
+        Execute a sell order for entire position (market or limit based on configuration)
 
         Returns:
             Tuple of (trade, profit_quote, profit_percentage)
+            If limit order is placed, returns (None, 0.0, 0.0) and position remains open
         """
+        # Check if we should use a limit order for closing
+        config = position.strategy_config_snapshot or {}
+        take_profit_order_type = config.get("take_profit_order_type", "limit")
+
+        if take_profit_order_type == "limit":
+            # Use limit order at mark price (mid between bid/ask)
+            try:
+                # Get ticker to calculate mark price
+                ticker = await self.coinbase.get_ticker(self.product_id)
+                best_bid = float(ticker.get("best_bid", 0))
+                best_ask = float(ticker.get("best_ask", 0))
+
+                # Use mark price (mid-point) as limit price
+                if best_bid > 0 and best_ask > 0:
+                    limit_price = (best_bid + best_ask) / 2
+                else:
+                    # Fallback to current price if bid/ask not available
+                    limit_price = current_price
+
+                # Sell 99% to prevent precision/rounding rejections
+                base_amount = position.total_base_acquired * 0.99
+
+                logger.info(f"  📊 Placing LIMIT close order @ {limit_price:.8f} (mark price)")
+
+                # Place limit order and return - position stays open until filled
+                pending_order = await self.execute_limit_sell(
+                    position=position,
+                    base_amount=base_amount,
+                    limit_price=limit_price,
+                    signal_data=signal_data
+                )
+
+                # Return None trade since order is pending
+                # Actual Trade record will be created when limit order fills
+                return None, 0.0, 0.0
+
+            except Exception as e:
+                logger.warning(f"Failed to place limit close order: {e}. Falling back to market order.")
+                # Fall through to market order execution below
+
+        # Execute market order (default behavior or fallback)
+        logger.info(f"  💱 Executing MARKET close order @ {current_price:.8f}")
+
         # Sell 99% to prevent precision/rounding rejections from Coinbase
         # Leaves 1% "dust" amount but ensures sell executes successfully
         # The 1% dust can be cleaned up later
@@ -898,14 +1011,24 @@ class StrategyTradingEngine:
             )
 
             if should_sell:
-                # Execute sell
+                # Execute sell (market or limit based on config)
                 trade, profit_quote, profit_pct = await self.execute_sell(
                     position=position,
                     current_price=current_price,
                     signal_data=signal_data
                 )
 
-                # Record signal
+                # If trade is None, a limit order was placed - position stays open
+                if trade is None:
+                    logger.info(f"  📊 Limit close order placed for position #{position.id}, waiting for fill")
+                    return {
+                        "action": "limit_close_pending",
+                        "reason": sell_reason,
+                        "limit_order_placed": True,
+                        "position_id": position.id
+                    }
+
+                # Record signal for market sell
                 signal = Signal(
                     position_id=position.id,
                     timestamp=datetime.utcnow(),
