@@ -162,8 +162,8 @@ async def execute_sell(
                 # Fallback to current price if bid/ask not available
                 limit_price = current_price
 
-            # Sell 99% to prevent precision/rounding rejections
-            base_amount = position.total_base_acquired * 0.99
+            # Use full position amount (execute_limit_sell will handle precision rounding)
+            base_amount = position.total_base_acquired
 
             logger.info(f"  📊 Placing LIMIT close order @ {limit_price:.8f} (mark price)")
 
@@ -192,17 +192,21 @@ async def execute_sell(
     # Execute market order (default behavior or fallback)
     logger.info(f"  💱 Executing MARKET close order @ {current_price:.8f}")
 
-    # Sell 99% to prevent precision/rounding rejections from Coinbase
-    # Leaves 1% "dust" amount but ensures sell executes successfully
-    # The 1% dust can be cleaned up later
-    # Using 0.99 instead of 0.9999 because our tracked amounts may be slightly
-    # higher than actual Coinbase balances due to calculation vs actual fills
-    base_amount = position.total_base_acquired * 0.99
+    # Round base_amount to proper precision using product precision data
+    minimums = await get_product_minimums(coinbase, product_id)
+    base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
+    base_decimal = Decimal(str(position.total_base_acquired))
+
+    # Floor division to round down to nearest increment (avoid INSUFFICIENT_FUND)
+    rounded_base = (base_decimal // base_increment) * base_increment
+    base_amount = float(rounded_base)
+
     quote_received = base_amount * current_price
 
-    # Log the dust amount
-    dust_amount = position.total_base_acquired - base_amount
-    logger.info(f"  💰 Selling {base_amount:.8f} {product_id.split('-')[0]} (leaving {dust_amount:.8f} dust)")
+    logger.info(
+        f"  💰 Selling {base_amount:.8f} {product_id.split('-')[0]} "
+        f"(raw: {position.total_base_acquired:.8f}, increment: {base_increment})"
+    )
 
     # Execute order via TradingClient (currency-agnostic)
     order_id = None

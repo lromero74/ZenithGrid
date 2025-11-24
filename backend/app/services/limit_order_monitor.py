@@ -272,5 +272,5 @@ async def run_limit_order_monitor(db: AsyncSession, coinbase_client: CoinbaseCli
         except Exception as e:
             logger.error(f"Error in limit order monitor loop: {e}")
 
-        # Check every 30 seconds
-        await asyncio.sleep(30)
+        # Check every 10 seconds (fast response without hitting rate limits)
+        await asyncio.sleep(10)

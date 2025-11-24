@@ -6,14 +6,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
-from app.database import init_db
+from app.database import init_db, get_db
 from app.multi_bot_monitor import MultiBotMonitor
+from app.services.limit_order_monitor import LimitOrderMonitor
 from app.routers import bots_router, order_history_router, templates_router
 from app.routers import positions_router
 from app.routers import account_router
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
+import asyncio
 
 # Import dependency functions for override
 from app.position_routers.dependencies import get_coinbase as position_get_coinbase
@@ -41,8 +43,11 @@ coinbase_client = CoinbaseClient()  # Auto-detects auth from settings
 # Multi-bot monitor - monitors all active bots with their strategies
 # Monitor loop runs every 10s to check if any bots need processing
 # Bots can override with their own check_interval_seconds (set in database)
-# Order monitor is integrated within MultiBotMonitor (checks pending limit orders)
 price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=10)
+
+# Limit order monitor - tracks pending limit orders and processes fills
+# Runs every 10 seconds to check order status
+limit_order_monitor_task = None
 
 
 # Dependency overrides for router injection
@@ -73,26 +78,59 @@ app.include_router(settings_router.router)
 app.include_router(system_router.router)
 
 
+# Background task for limit order monitoring
+async def run_limit_order_monitor():
+    """Background task that monitors pending limit orders"""
+    from app.database import async_session_maker
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                monitor = LimitOrderMonitor(db, coinbase_client)
+                await monitor.check_limit_close_orders()
+        except Exception as e:
+            logger.error(f"Error in limit order monitor loop: {e}")
+
+        # Check every 10 seconds
+        await asyncio.sleep(10)
+
+
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
+    global limit_order_monitor_task
+
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
     print("🚀 Initializing database...")
     await init_db()
     print("🚀 Database initialized successfully")
-    print("🚀 Starting multi-bot monitor (includes order monitor)...")
-    # Start price monitor (which includes order monitor)
+    print("🚀 Starting multi-bot monitor...")
+    # Start price monitor
     await price_monitor.start_async()
-    print("🚀 Multi-bot monitor started - bot monitoring & order tracking active")
+    print("🚀 Multi-bot monitor started - bot monitoring active")
+    print("🚀 Starting limit order monitor...")
+    # Start limit order monitor as background task
+    limit_order_monitor_task = asyncio.create_task(run_limit_order_monitor())
+    print("🚀 Limit order monitor started - checking every 10 seconds")
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    global limit_order_monitor_task
+
     logger.info("🛑 Shutting down - stopping monitors...")
     await price_monitor.stop()
+
+    if limit_order_monitor_task:
+        limit_order_monitor_task.cancel()
+        try:
+            await limit_order_monitor_task
+        except asyncio.CancelledError:
+            pass
+
     logger.info("🛑 Monitors stopped - shutdown complete")
 
 
