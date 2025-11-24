@@ -121,6 +121,10 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
         total_usd_value = 0.0
         total_btc_value = 0.0
 
+        # Track actual USD and BTC balances separately (for balance breakdown)
+        actual_usd_balance = 0.0  # USD + USDC only
+        actual_btc_balance = 0.0  # BTC only
+
         for position in spot_positions:
             asset = position.get("asset", "")
             total_balance = float(position.get("total_balance_crypto", 0))
@@ -140,10 +144,14 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                 usd_value = total_balance
                 btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
                 current_price_usd = 1.0
+                # Track actual USD balance
+                actual_usd_balance += total_balance
             elif asset == "BTC":
                 usd_value = total_balance * btc_usd_price
                 btc_value = total_balance
                 current_price_usd = btc_usd_price
+                # Track actual BTC balance
+                actual_btc_balance += total_balance
             else:
                 # Use price from parallel fetch
                 if asset not in prices:
@@ -278,14 +286,16 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                 else:
                     total_in_positions_btc += position.total_quote_spent
 
-        # Total portfolio values should match the aggregate BTC/USD values from holdings
-        # (which already include all coins converted to BTC/USD)
-        total_portfolio_btc = total_btc_value
-        total_portfolio_usd = total_usd_value
+        # Balance breakdown should show ONLY actual USD/BTC balances + their respective positions
+        # NOT the total portfolio value converted to USD/BTC
+        # BTC: actual BTC balance + BTC value of BTC-pair positions
+        # USD: actual USD balance + USD value of USD-pair positions
+        total_btc_portfolio = actual_btc_balance + total_in_positions_btc
+        total_usd_portfolio = actual_usd_balance + total_in_positions_usd
 
         # Calculate free balances
-        free_btc = total_portfolio_btc - (total_reserved_btc + total_in_positions_btc)
-        free_usd = total_portfolio_usd - (total_reserved_usd + total_in_positions_usd)
+        free_btc = total_btc_portfolio - (total_reserved_btc + total_in_positions_btc)
+        free_usd = total_usd_portfolio - (total_reserved_usd + total_in_positions_usd)
 
         # Ensure free balances don't go negative
         free_btc = max(0.0, free_btc)
@@ -329,13 +339,13 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
             "holdings_count": len(portfolio_holdings),
             "balance_breakdown": {
                 "btc": {
-                    "total": total_portfolio_btc,
+                    "total": total_btc_portfolio,
                     "reserved_by_bots": total_reserved_btc,
                     "in_open_positions": total_in_positions_btc,
                     "free": free_btc,
                 },
                 "usd": {
-                    "total": total_portfolio_usd,
+                    "total": total_usd_portfolio,
                     "reserved_by_bots": total_reserved_usd,
                     "in_open_positions": total_in_positions_usd,
                     "free": free_usd,
