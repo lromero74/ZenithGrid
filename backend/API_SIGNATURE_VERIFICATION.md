@@ -367,7 +367,47 @@ All sub-routers updated with explicit empty prefix `APIRouter(prefix="")`:
 
 ---
 
+---
+
+## 8. Post-Deployment Issues Fixed
+
+### Issue 1: Router Prefix Configuration (FIXED - v1, v2, v3)
+**Problem:** FastAPI error "Prefix and path cannot be both empty"
+**Root Cause:** Sub-routers without prefix parameter + endpoints with empty path `""`
+**Solution:**
+- Changed `APIRouter(prefix="")` to `APIRouter()` (no prefix parameter)
+- Changed empty path endpoints from `@router.post("")` to `@router.post("/")`
+- Fixed in 8 sub-router files
+
+### Issue 2: Dependency Overrides (FIXED - v4)
+**Problem:** AttributeError: 'APIRouter' object has no attribute 'dependency_overrides'
+**Root Cause:** Trying to set overrides on individual routers instead of app
+**Solution:**
+- Import dependency functions from refactored routers
+- Use `app.dependency_overrides` instead of `router.dependency_overrides`
+- Fixed in app/main.py
+
+### Issue 3: OLD_BACKUP Files Import Confusion (FIXED - v5)
+**Problem:** AIAutonomousStrategy error: 'object has no attribute '_prepare_market_context'
+**Root Cause:** Python importing `ai_autonomous_OLD_BACKUP.py` instead of `ai_autonomous/` module
+**Solution:**
+- Removed all OLD_BACKUP files from git repository (6 files, 7076 lines deleted)
+- Files were never meant to be committed - were local backups only
+- Fixed AI strategy import to use refactored module
+
+**Impact:** All open positions for AI autonomous bot were failing to process (SOL-BTC, ADA-BTC, XLM-BTC, AAVE-BTC)
+
+---
+
 **Verified By:** Claude Code
 **Date:** 2025-01-23
 **Branch:** HouseKeeping_1.0
-**Status:** ✅ READY FOR PRODUCTION TESTING
+**Final Status:** ✅ DEPLOYED AND RUNNING IN PRODUCTION
+
+**All Issues Resolved:**
+- ✅ Router configuration fixed
+- ✅ Dependency overrides corrected
+- ✅ OLD_BACKUP files removed
+- ✅ AI strategy working correctly
+- ✅ All API endpoints functional
+- ✅ Backend running cleanly with no errors
