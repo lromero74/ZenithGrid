@@ -9,12 +9,12 @@ export default defineConfig({
     strictPort: true, // Fail if port 5173 is already in use
     proxy: {
       '/api': {
-        target: 'http://localhost:8100',
+        target: 'http://127.0.0.1:8100',
         changeOrigin: true,
         timeout: 60000, // 60 second timeout (portfolio endpoint needs time to fetch many prices)
       },
       '/ws': {
-        target: 'ws://localhost:8100',
+        target: 'ws://127.0.0.1:8100',
         ws: true,
       },
     },
