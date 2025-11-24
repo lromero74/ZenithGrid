@@ -49,6 +49,10 @@ price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=10)
 # Runs every 10 seconds to check order status
 limit_order_monitor_task = None
 
+# Order reconciliation monitor - auto-fixes positions with missing fill data
+# Runs every 60 seconds to detect and reconcile orphaned orders
+order_reconciliation_monitor_task = None
+
 
 # Dependency overrides for router injection
 def override_get_coinbase():
@@ -95,10 +99,28 @@ async def run_limit_order_monitor():
         await asyncio.sleep(10)
 
 
+# Background task for order reconciliation
+async def run_order_reconciliation_monitor():
+    """Background task that auto-fixes positions with missing fill data"""
+    from app.database import async_session_maker
+    from app.services.order_reconciliation_monitor import OrderReconciliationMonitor
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                monitor = OrderReconciliationMonitor(db, coinbase_client)
+                await monitor.check_and_fix_orphaned_positions()
+        except Exception as e:
+            logger.error(f"Error in order reconciliation monitor loop: {e}")
+
+        # Check every 60 seconds (less frequent than limit orders)
+        await asyncio.sleep(60)
+
+
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
-    global limit_order_monitor_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -113,13 +135,17 @@ async def startup_event():
     # Start limit order monitor as background task
     limit_order_monitor_task = asyncio.create_task(run_limit_order_monitor())
     print("🚀 Limit order monitor started - checking every 10 seconds")
+    print("🚀 Starting order reconciliation monitor...")
+    # Start order reconciliation monitor as background task
+    order_reconciliation_monitor_task = asyncio.create_task(run_order_reconciliation_monitor())
+    print("🚀 Order reconciliation monitor started - auto-fixing orphaned positions every 60 seconds")
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global limit_order_monitor_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task
 
     logger.info("🛑 Shutting down - stopping monitors...")
     await price_monitor.stop()
@@ -128,6 +154,13 @@ async def shutdown_event():
         limit_order_monitor_task.cancel()
         try:
             await limit_order_monitor_task
+        except asyncio.CancelledError:
+            pass
+
+    if order_reconciliation_monitor_task:
+        order_reconciliation_monitor_task.cancel()
+        try:
+            await order_reconciliation_monitor_task
         except asyncio.CancelledError:
             pass
 
