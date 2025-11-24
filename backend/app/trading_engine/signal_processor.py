@@ -233,7 +233,16 @@ async def process_signal(
                 # This prevents session corruption when processing multiple pairs in batch mode
                 db.expunge(position)
                 return {"action": "none", "reason": f"Buy failed: {str(e)}", "signal": signal_data}
-            raise  # Re-raise for existing positions (DCA failures)
+
+            # CRITICAL FIX: For existing positions (DCA failures), DO NOT raise exception
+            # Raising would abort the entire bot cycle and prevent sells on other positions!
+            # Instead, log the error on the position and continue processing
+            logger.error(f"  ❌ DCA buy failed for existing position: {e}")
+            logger.warning(f"  ⚠️ Continuing bot cycle to check for sells on other positions")
+
+            # The error is already recorded on the position by execute_buy() if commit_on_error=True
+            # Just return and let the bot continue to check for sells
+            return {"action": "none", "reason": f"DCA buy failed: {str(e)}", "signal": signal_data}
 
         # Record signal
         signal = Signal(
