@@ -96,6 +96,8 @@ async def limit_close_position(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error creating limit close order for position {position_id}: {e}", exc_info=True)
+        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
