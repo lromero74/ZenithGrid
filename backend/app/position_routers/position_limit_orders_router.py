@@ -48,12 +48,31 @@ async def limit_close_position(
         if position.closing_via_limit:
             raise HTTPException(status_code=400, detail="Position already has a pending limit close order")
 
+        # Round size to proper precision using product precision data
+        from app.order_validation import get_product_minimums
+        from decimal import Decimal
+
+        minimums = await get_product_minimums(coinbase, position.product_id)
+        base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
+        total_base = Decimal(str(position.total_base_acquired))
+
+        # Floor division to round down to nearest increment (avoid INSUFFICIENT_FUND)
+        rounded_size = (total_base // base_increment) * base_increment
+        size_to_sell = str(float(rounded_size))
+
+        logger.info(
+            f"Position {position_id} limit close: "
+            f"raw size={position.total_base_acquired}, "
+            f"base_increment={base_increment}, "
+            f"rounded size={size_to_sell}"
+        )
+
         # Create limit sell order via Coinbase
         order_result = await coinbase.create_limit_order(
             product_id=position.product_id,
             side="SELL",
             limit_price=request.limit_price,
-            size=str(position.total_base_acquired),  # Sell entire position
+            size=size_to_sell,  # Sell entire position (rounded to valid precision)
         )
 
         # Log the full response for debugging
@@ -272,10 +291,29 @@ async def update_limit_close(
         await coinbase.cancel_order(position.limit_close_order_id)
 
         # Create new limit order with updated price (for remaining amount)
+        # Round size to proper precision
+        from app.order_validation import get_product_minimums
+        from decimal import Decimal
+
+        minimums = await get_product_minimums(coinbase, position.product_id)
+        base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
+
         remaining_amount = pending_order.remaining_base_amount or position.total_base_acquired
+        remaining_decimal = Decimal(str(remaining_amount))
+
+        # Floor division to round down to nearest increment
+        rounded_remaining = (remaining_decimal // base_increment) * base_increment
+        size_to_sell = str(float(rounded_remaining))
+
+        logger.info(
+            f"Position {position_id} update limit close: "
+            f"raw remaining={remaining_amount}, "
+            f"base_increment={base_increment}, "
+            f"rounded size={size_to_sell}"
+        )
 
         order_result = await coinbase.create_limit_order(
-            product_id=position.product_id, side="SELL", limit_price=request.new_limit_price, size=str(remaining_amount)
+            product_id=position.product_id, side="SELL", limit_price=request.new_limit_price, size=size_to_sell
         )
 
         # Extract new order ID
