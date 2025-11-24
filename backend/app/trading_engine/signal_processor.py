@@ -91,12 +91,12 @@ async def process_signal(
             logger.info(f"  💰 Aggregate BTC value: {aggregate_value:.8f} BTC")
 
     reserved_balance = bot.get_reserved_balance(aggregate_value)
-    print(f"🔍 Reserved balance (per-position): {reserved_balance:.8f}")
+    print(f"🔍 Reserved balance (total bot budget): {reserved_balance:.8f}")
     if reserved_balance > 0:
-        # Bot has reserved balance - get_reserved_balance() already divides by max_concurrent_deals
-        # so reserved_balance IS the per-position budget
+        # Bot has reserved balance - divide by max_concurrent_deals to get per-position budget
+        # This ensures each position gets its fair share (e.g., 33% ÷ 6 deals = 5.5% per deal)
         max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
-        per_position_budget = reserved_balance  # Already per-position, don't divide again!
+        per_position_budget = reserved_balance / max_concurrent_deals
 
         # Calculate how much is available for THIS position (per-position budget - already spent in this position)
         query = select(Position).where(
