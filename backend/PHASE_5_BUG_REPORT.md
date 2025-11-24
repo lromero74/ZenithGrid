@@ -230,15 +230,65 @@ def get_reserved_balance(self, aggregate_value: Optional[float] = None):
 
 ---
 
+### Bug #6: Missing Error Logging in Limit Close Endpoint
+
+**Location:** `app/position_routers/position_limit_orders_router.py`
+
+**Severity:** MEDIUM - Poor error handling, difficult debugging
+
+**Problem:**
+The `/limit-close` endpoint lacked proper error logging when limit order creation failed, making it difficult to diagnose issues.
+
+**Fixed:** Added comprehensive logging and error handling in `HouseKeeping_1.1_bugfix` branch.
+
+---
+
+### Bug #7: AI Strategy Missing Method (multi_bot_monitor.py)
+
+**Location:** `app/multi_bot_monitor.py:408`
+
+**Severity:** CRITICAL - AttributeError preventing AI bot monitoring
+
+**Current Code:**
+```python
+market_context = strategy._prepare_market_context(candles, current_price)
+```
+
+**Problem:**
+- Code assumes `_prepare_market_context()` is a method on the strategy object
+- This method doesn't exist on any strategy class
+- The actual function is `prepare_market_context()` in `app.strategies.ai_autonomous.market_analysis` module
+- Causes: `AttributeError: 'AIAutonomousStrategy' object has no attribute '_prepare_market_context'`
+
+**Impact:**
+- AI bot monitoring completely fails
+- All positions using AI strategy cannot be monitored
+- Prevents batch analysis of AI strategy positions
+
+**Recommended Fix:**
+```python
+# Import at top of file
+from app.strategies.ai_autonomous import market_analysis
+
+# Line 408
+market_context = market_analysis.prepare_market_context(candles, current_price)
+```
+
+**Fixed:** Implemented in `HouseKeeping_1.1_bugfix` branch (commit c9239ba).
+
+---
+
 ## 📊 SUMMARY
 
-| Bug | Severity | Impact | Runtime Error? |
-|-----|----------|--------|----------------|
-| #1: Wrong class import | CRITICAL | Cannot import module | YES |
-| #2: Method doesn't exist | CRITICAL | Would crash if triggered | YES (dormant) |
-| #3: Outdated API usage | HIGH | Endpoint completely broken | YES |
-| #4: Signature mismatch | LOW | Type checker warning only | NO |
-| #5: Incorrect type hint | LOW | Type checker warning only | NO |
+| Bug | Severity | Impact | Runtime Error? | Status |
+|-----|----------|--------|----------------|--------|
+| #1: Wrong class import | CRITICAL | Cannot import module | YES | FIXED |
+| #2: Method doesn't exist | CRITICAL | Would crash if triggered | YES (dormant) | FIXED |
+| #3: Outdated API usage | HIGH | Endpoint completely broken | YES | FIXED |
+| #4: Signature mismatch | LOW | Type checker warning only | NO | FIXED |
+| #5: Incorrect type hint | LOW | Type checker warning only | NO | FIXED |
+| #6: Missing error logging | MEDIUM | Hard to debug limit orders | NO | FIXED |
+| #7: AI strategy method error | CRITICAL | AI bot monitoring fails | YES | FIXED |
 
 ---
 
