@@ -4,8 +4,8 @@ Handles market and limit sell orders
 """
 
 import logging
+import math
 from datetime import datetime
-from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.trading_client import TradingClient
 from app.currency_utils import get_quote_currency
-from app.order_validation import get_product_minimums
+from app.product_precision import get_base_precision
 
 logger = logging.getLogger(__name__)
 
@@ -47,18 +47,13 @@ async def execute_limit_sell(
     Returns:
         PendingOrder record
     """
-    # Round base_amount to proper precision using product precision data
-    minimums = await get_product_minimums(coinbase, product_id)
-    base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
-    base_decimal = Decimal(str(base_amount))
-
-    # Floor division to round down to nearest increment (avoid INSUFFICIENT_FUND)
-    rounded_base = (base_decimal // base_increment) * base_increment
-    base_amount_rounded = float(rounded_base)
+    # Round base_amount down to proper precision (floor to avoid INSUFFICIENT_FUND)
+    precision = get_base_precision(product_id)
+    base_amount_rounded = math.floor(base_amount * (10 ** precision)) / (10 ** precision)
 
     logger.info(
         f"Limit sell precision: raw={base_amount:.8f}, "
-        f"increment={base_increment}, rounded={base_amount_rounded:.8f}"
+        f"precision={precision} decimals, rounded_down={base_amount_rounded:.8f}"
     )
 
     # Calculate expected quote amount at limit price
@@ -192,20 +187,15 @@ async def execute_sell(
     # Execute market order (default behavior or fallback)
     logger.info(f"  💱 Executing MARKET close order @ {current_price:.8f}")
 
-    # Round base_amount to proper precision using product precision data
-    minimums = await get_product_minimums(coinbase, product_id)
-    base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
-    base_decimal = Decimal(str(position.total_base_acquired))
-
-    # Floor division to round down to nearest increment (avoid INSUFFICIENT_FUND)
-    rounded_base = (base_decimal // base_increment) * base_increment
-    base_amount = float(rounded_base)
+    # Round base_amount down to proper precision (floor to avoid INSUFFICIENT_FUND)
+    precision = get_base_precision(product_id)
+    base_amount = math.floor(position.total_base_acquired * (10 ** precision)) / (10 ** precision)
 
     quote_received = base_amount * current_price
 
     logger.info(
         f"  💰 Selling {base_amount:.8f} {product_id.split('-')[0]} "
-        f"(raw: {position.total_base_acquired:.8f}, increment: {base_increment})"
+        f"(raw: {position.total_base_acquired:.8f}, precision: {precision} decimals)"
     )
 
     # Execute order via TradingClient (currency-agnostic)
