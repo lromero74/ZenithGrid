@@ -146,6 +146,18 @@ class TradingClient:
         else:
             raise ValueError(f"Unsupported quote currency: {quote_currency}")
 
+    async def cancel_order(self, order_id: str) -> Dict[str, Any]:
+        """
+        Cancel an open order
+
+        Args:
+            order_id: Coinbase order ID to cancel
+
+        Returns:
+            Cancellation result from Coinbase
+        """
+        return await self.coinbase.cancel_order(order_id)
+
     async def invalidate_balance_cache(self):
         """Invalidate balance cache after trades"""
         await self.coinbase.invalidate_balance_cache()
