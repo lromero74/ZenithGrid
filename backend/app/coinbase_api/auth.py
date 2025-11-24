@@ -185,3 +185,6 @@ async def authenticated_request(
                 else:
                     # Non-429 error, raise immediately
                     raise
+
+    # Should never reach here (all paths return or raise)
+    raise RuntimeError(f"Unexpected: No response after {max_retries} attempts")

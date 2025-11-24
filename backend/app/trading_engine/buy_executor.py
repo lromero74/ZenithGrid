@@ -59,7 +59,7 @@ async def execute_buy(
 
     # Check if this is a safety order that should use limit orders
     is_safety_order = trade_type.startswith("safety_order")
-    config = position.strategy_config_snapshot or {}
+    config: Dict = position.strategy_config_snapshot or {}
     safety_order_type = config.get("safety_order_type", "market")
 
     if is_safety_order and safety_order_type == "limit":

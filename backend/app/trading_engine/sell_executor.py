@@ -128,7 +128,7 @@ async def execute_sell(
     quote_currency = get_quote_currency(product_id)
 
     # Check if we should use a limit order for closing
-    config = position.strategy_config_snapshot or {}
+    config: Dict = position.strategy_config_snapshot or {}
     take_profit_order_type = config.get("take_profit_order_type", "limit")
 
     if take_profit_order_type == "limit":

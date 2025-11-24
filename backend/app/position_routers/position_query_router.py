@@ -66,7 +66,7 @@ async def get_positions(
             limit_order = limit_order_result.scalars().first()
 
             if limit_order:
-                fills_data = (
+                fills_data: List = (
                     json.loads(limit_order.fills) if isinstance(limit_order.fills, str) else (limit_order.fills or [])
                 )
                 fills = [LimitOrderFill(**fill) for fill in fills_data]
@@ -111,8 +111,8 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
     # Build cumulative P&L over time
     cumulative_pnl = 0.0
     summary_data = []
-    daily_pnl = defaultdict(float)
-    pair_pnl = defaultdict(float)
+    daily_pnl: Dict[str, float] = defaultdict(float)
+    pair_pnl: Dict[str, float] = defaultdict(float)
 
     for pos in positions:
         profit = pos.profit_usd or 0.0

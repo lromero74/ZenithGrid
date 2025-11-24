@@ -32,7 +32,7 @@ async def create_market_order(
 
     Note: Use either size OR funds, not both
     """
-    order_config = {"market_market_ioc": {}}
+    order_config: Dict[str, Dict] = {"market_market_ioc": {}}
 
     # Extract currencies from product_id for proper precision formatting
     if "-" in product_id:
