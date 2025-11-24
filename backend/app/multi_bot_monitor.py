@@ -17,6 +17,7 @@ from app.database import async_session_maker
 from app.models import Bot
 from app.services.order_monitor import OrderMonitor
 from app.strategies import StrategyRegistry
+from app.strategies.ai_autonomous import market_analysis
 from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
@@ -404,8 +405,8 @@ class MultiBotMonitor:
                             logger.warning(f"  ⚠️  {product_id}: {last_error} after {max_retries} attempts")
                             break
 
-                        # Prepare market context
-                        market_context = strategy._prepare_market_context(candles, current_price)
+                        # Prepare market context (for AI batch analysis)
+                        market_context = market_analysis.prepare_market_context(candles, current_price)
 
                         pairs_data[product_id] = {
                             "current_price": current_price,
