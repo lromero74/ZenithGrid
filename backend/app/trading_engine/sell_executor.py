@@ -5,6 +5,7 @@ Handles market and limit sell orders
 
 import logging
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.trading_client import TradingClient
 from app.currency_utils import get_quote_currency
+from app.order_validation import get_product_minimums
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +47,28 @@ async def execute_limit_sell(
     Returns:
         PendingOrder record
     """
+    # Round base_amount to proper precision using product precision data
+    minimums = await get_product_minimums(coinbase, product_id)
+    base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
+    base_decimal = Decimal(str(base_amount))
+
+    # Floor division to round down to nearest increment (avoid INSUFFICIENT_FUND)
+    rounded_base = (base_decimal // base_increment) * base_increment
+    base_amount_rounded = float(rounded_base)
+
+    logger.info(
+        f"Limit sell precision: raw={base_amount:.8f}, "
+        f"increment={base_increment}, rounded={base_amount_rounded:.8f}"
+    )
+
     # Calculate expected quote amount at limit price
-    expected_quote_amount = base_amount * limit_price
+    expected_quote_amount = base_amount_rounded * limit_price
 
     # Place limit order via TradingClient
     order_id = None
     try:
         order_response = await trading_client.sell_limit(
-            product_id=product_id, limit_price=limit_price, base_amount=base_amount
+            product_id=product_id, limit_price=limit_price, base_amount=base_amount_rounded
         )
         success_response = order_response.get("success_response", {})
         order_id = success_response.get("order_id", "")

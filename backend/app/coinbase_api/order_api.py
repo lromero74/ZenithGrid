@@ -129,8 +129,8 @@ async def get_order(request_func: Callable, auth_type: str, order_id: str) -> Di
     """
     result = await request_func("GET", f"/api/v3/brokerage/orders/historical/{order_id}")
 
-    # CDP returns full dict, HMAC returns nested in "order" key
-    if auth_type == "hmac" and "order" in result:
+    # Both CDP and HMAC return order details nested in "order" key
+    if "order" in result:
         return result.get("order", {})
     return result
 
