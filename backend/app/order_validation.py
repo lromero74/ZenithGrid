@@ -4,6 +4,8 @@ Order validation utilities for Coinbase API
 Ensures orders meet minimum size requirements before submission.
 """
 
+import json
+import os
 from decimal import Decimal
 from typing import Dict, Optional, Tuple
 import logging
@@ -11,6 +13,23 @@ import logging
 from app.cache import api_cache
 
 logger = logging.getLogger(__name__)
+
+# Load product precision data from JSON file
+_PRODUCT_PRECISION = None
+
+def _load_product_precision():
+    """Load product precision data from product_precision.json"""
+    global _PRODUCT_PRECISION
+    if _PRODUCT_PRECISION is None:
+        precision_file = os.path.join(os.path.dirname(__file__), "product_precision.json")
+        try:
+            with open(precision_file, "r") as f:
+                _PRODUCT_PRECISION = json.load(f)
+                logger.info(f"Loaded precision data for {len(_PRODUCT_PRECISION)} products")
+        except Exception as e:
+            logger.error(f"Failed to load product_precision.json: {e}")
+            _PRODUCT_PRECISION = {}
+    return _PRODUCT_PRECISION
 
 # Common minimum order sizes for BTC pairs (fallback if API call fails)
 # Based on Coinbase documentation and empirical testing
@@ -41,17 +60,25 @@ async def get_product_minimums(coinbase_client, product_id: str) -> Dict[str, st
         return cached
 
     try:
-        # Fetch product details from Coinbase
+        # Load product precision from our JSON file (more reliable than Coinbase API)
+        precision_data = _load_product_precision()
+        product_precision = precision_data.get(product_id, {})
+
+        # Fetch product details from Coinbase (for quote/base currency info)
         product = await coinbase_client.get_product(product_id)
 
+        # Use our precision table values (they're more reliable than Coinbase's API)
         minimums = {
             "quote_min_size": product.get("quote_min_size", "0.0001"),
             "base_min_size": product.get("base_min_size", "0.00000001"),
             "quote_currency": product.get("quote_currency", "BTC"),
             "base_currency": product.get("base_currency", ""),
-            "quote_increment": product.get("quote_increment", "0.00000001"),
-            "base_increment": product.get("base_increment", "0.00000001"),
+            # CRITICAL: Use our precision table instead of Coinbase API (which returns None)
+            "quote_increment": product_precision.get("quote_increment", product.get("quote_increment", "0.00000001")),
+            "base_increment": product_precision.get("base_increment", product.get("base_increment", "0.00000001")),
         }
+
+        logger.info(f"Product {product_id} precision: base_increment={minimums['base_increment']}, quote_increment={minimums['quote_increment']}")
 
         # Cache for 1 hour (product minimums rarely change)
         await api_cache.set(cache_key, minimums, ttl_seconds=3600)
