@@ -210,35 +210,51 @@ app/trading_engine/__init__.py
 
 ---
 
-### Phase 4: HIGH RISK - Unused Code Investigation 🛑
-**Confidence: 50% - REQUIRES USER INPUT**
+### Phase 4: HIGH RISK - Unused Code Investigation ✅
+**Confidence: 80% - Required investigation and user guidance**
 
-**STOP HERE - Need user guidance on:**
+**Completed - Changes made:**
 
-1. **F841 - Unused variables (10 occurrences)**
-   - `pending_order` in buy/sell executors - Future feature placeholder?
-   - Exception variable `e` (10x) - Should we log it?
+1. **F841 - Unused variables (10 occurrences)** - RESOLVED
+   - `pending_order` (2x): Added TODO comments marking as placeholders for future limit order tracking
+   - Exception variable `e` (2x): Changed to `_` per PEP 8 convention for ignored exceptions
+   - `order_amount` (1x): Removed - was calculated but never used
+   - `base_currency/quote_currency` (2x): Removed from create_market_order() - not needed (still used in create_limit_order())
+   - `_volumes, _band_type, _line_type` (3x): Already documented with explanatory comments - intentionally unused
 
-2. **E731 - Lambda expressions (3 occurrences)**
-   - Context needed - are these performance-critical?
+2. **E731 - Lambda expressions (3 occurrences)** - DOCUMENTED
+   - Added TODO comments to all 3 lambda expressions suggesting future conversion to def functions for better debugging
+   - Kept as-is per user guidance
 
-3. **F401 - Unused imports (9 occurrences)**
-   - `BotModel` imported - Used in type hints or string refs?
+3. **F401 - Unused imports (9 occurrences)** - REMOVED
+   - Removed after thorough investigation:
+     - `BotModel` from multi_bot_monitor.py
+     - `Decimal` from product_precision.py
+     - `List` from account_router.py, limit_order_monitor.py, order_monitor.py
+     - `HTTPException` from order_history.py
+     - `Position` from order_history.py
+     - `json` from limit_order_monitor.py
+     - `StrategyParameter` from ai_autonomous/__init__.py
 
-**Action:** Present findings to user, get guidance before proceeding
+4. **Fixed critical bug introduced in Phase 3:**
+   - Added missing `Dict` import in position_query_router.py
+
+**Commit:** "Phase 4: Code cleanup - unused variables and imports"
 
 ---
 
-### Phase 5: CRITICAL REVIEW - Potential Bugs 🔴
-**DO NOT FIX - REPORT ONLY**
+### Phase 5: CRITICAL REVIEW - Potential Bugs ✅
+**Investigation Complete - See PHASE_5_BUG_REPORT.md**
 
-Issues that might indicate actual bugs:
-1. `app/trading_client.py:51`: `get_portfolio` doesn't exist (should be `get_portfolios`?)
-2. `app/services/limit_order_monitor.py:18`: `CoinbaseUnifiedClient` doesn't exist
-3. Type mismatches in trading_engine/signal_processor.py
-4. Incompatible arguments in position_routers/position_manual_ops_router.py
+**Bugs Found:**
+1. ✅ **CRITICAL**: Wrong class import in `limit_order_monitor.py` (`CoinbaseUnifiedClient` doesn't exist)
+2. ✅ **CRITICAL**: Method doesn't exist in `trading_client.py` (`get_portfolio()` doesn't exist)
+3. ✅ **HIGH**: Outdated API usage in `position_manual_ops_router.py` (multiple issues)
+4. ✅ **LOW**: Type hint issues (method signature mismatch, Optional type hints)
 
-**Action:** Document and report to user - DO NOT AUTO-FIX
+**Report:** Detailed findings in `PHASE_5_BUG_REPORT.md`
+
+**Action:** User review required - fixes should be implemented in separate bug fix commits
 
 ---
 
