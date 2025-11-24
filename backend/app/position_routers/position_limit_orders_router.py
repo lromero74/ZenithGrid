@@ -82,7 +82,18 @@ async def limit_close_position(
         order_id = order_result.get("order_id") or order_result.get("success_response", {}).get("order_id")
 
         if not order_id:
-            raise HTTPException(status_code=500, detail="Failed to create limit order - no order ID returned")
+            # Log the full error for debugging
+            error_response = order_result.get("error_response", {})
+            error_msg = error_response.get("message", "Unknown error")
+            error_details = error_response.get("error_details", "")
+            logger.error(
+                f"Failed to create limit order for position {position_id}: "
+                f"error={error_response.get('error')}, message={error_msg}, details={error_details}"
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to create limit order: {error_msg}"
+            )
 
         # Create PendingOrder record to track this limit sell
         pending_order = PendingOrder(
