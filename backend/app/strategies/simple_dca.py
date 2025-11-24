@@ -26,7 +26,7 @@ class SimpleDCAStrategy(TradingStrategy):
             id="simple_dca",
             name="Simple DCA Strategy",
             description="Time-based Dollar Cost Averaging. Buys fixed amount at regular intervals, "
-                        "sells when profit target is reached.",
+            "sells when profit target is reached.",
             parameters=[
                 StrategyParameter(
                     name="timeframe",
@@ -34,7 +34,16 @@ class SimpleDCAStrategy(TradingStrategy):
                     description="Timeframe for price monitoring (e.g., 5min, 1hour, 1day)",
                     type="str",
                     default="FIVE_MINUTE",
-                    options=["ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR", "TWO_HOUR", "SIX_HOUR", "ONE_DAY"]
+                    options=[
+                        "ONE_MINUTE",
+                        "FIVE_MINUTE",
+                        "FIFTEEN_MINUTE",
+                        "THIRTY_MINUTE",
+                        "ONE_HOUR",
+                        "TWO_HOUR",
+                        "SIX_HOUR",
+                        "ONE_DAY",
+                    ],
                 ),
                 StrategyParameter(
                     name="buy_amount_btc",
@@ -43,7 +52,7 @@ class SimpleDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.01,
                     min_value=0.0001,
-                    max_value=1.0
+                    max_value=1.0,
                 ),
                 StrategyParameter(
                     name="buy_interval_hours",
@@ -52,7 +61,7 @@ class SimpleDCAStrategy(TradingStrategy):
                     type="int",
                     default=24,
                     min_value=1,
-                    max_value=168  # 1 week
+                    max_value=168,  # 1 week
                 ),
                 StrategyParameter(
                     name="max_position_size_btc",
@@ -61,7 +70,7 @@ class SimpleDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.1,
                     min_value=0.001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
                 StrategyParameter(
                     name="take_profit_percentage",
@@ -70,7 +79,7 @@ class SimpleDCAStrategy(TradingStrategy):
                     type="float",
                     default=5.0,
                     min_value=0.5,
-                    max_value=50.0
+                    max_value=50.0,
                 ),
                 StrategyParameter(
                     name="stop_loss_percentage",
@@ -79,10 +88,10 @@ class SimpleDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.0,
                     min_value=0.0,
-                    max_value=50.0
+                    max_value=50.0,
                 ),
             ],
-            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-USD", "LINK-USD"]
+            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-USD", "LINK-USD"],
         )
 
     def validate_config(self):
@@ -105,28 +114,17 @@ class SimpleDCAStrategy(TradingStrategy):
         # Track last buy time (will be managed externally in bot state)
         self.last_buy_time = None
 
-    async def analyze_signal(
-        self,
-        candles: List[Dict[str, Any]],
-        current_price: float
-    ) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float) -> Optional[Dict[str, Any]]:
         """
         Time-based signal - always returns a signal for evaluation
 
         The buy decision is made in should_buy() based on time elapsed
         """
         # Always return a signal - decision is time-based
-        return {
-            "signal_type": "time_check",
-            "price": current_price,
-            "timestamp": datetime.utcnow()
-        }
+        return {"signal_type": "time_check", "price": current_price, "timestamp": datetime.utcnow()}
 
     async def should_buy(
-        self,
-        signal_data: Dict[str, Any],
-        position: Optional[Any],
-        btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
     ) -> Tuple[bool, float, str]:
         """
         Buy fixed amount if enough time has elapsed since last buy
@@ -152,7 +150,7 @@ class SimpleDCAStrategy(TradingStrategy):
         # Check time interval (this should be tracked in bot state/position)
         # For now, we'll rely on the trading engine to track this
         # If position exists, check last trade time
-        if position is not None and hasattr(position, 'trades') and len(position.trades) > 0:
+        if position is not None and hasattr(position, "trades") and len(position.trades) > 0:
             last_trade = max(position.trades, key=lambda t: t.timestamp)
             time_since_last = datetime.utcnow() - last_trade.timestamp
             required_interval = timedelta(hours=interval_hours)
@@ -163,12 +161,7 @@ class SimpleDCAStrategy(TradingStrategy):
 
         return True, buy_amount, f"DCA buy of {buy_amount:.8f} BTC"
 
-    async def should_sell(
-        self,
-        signal_data: Dict[str, Any],
-        position: Any,
-        current_price: float
-    ) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
         """
         Sell when take_profit or stop_loss is hit
 

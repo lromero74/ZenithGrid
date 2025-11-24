@@ -38,13 +38,13 @@ def prepare_market_context(candles: List[Dict[str, Any]], current_price: float) 
             "period_low": current_price,
             "recent_prices": [current_price],
             "data_points": 0,
-            "volatility": 0.0
+            "volatility": 0.0,
         }
 
     recent_candles = candles[-10:] if len(candles) > 10 else candles
 
     # Calculate key metrics
-    prices = [float(c.get('close', c.get('price', 0))) for c in candles]
+    prices = [float(c.get("close", c.get("price", 0))) for c in candles]
     high = max(prices) if prices else current_price
     low = min(prices) if prices else current_price
 
@@ -58,9 +58,9 @@ def prepare_market_context(candles: List[Dict[str, Any]], current_price: float) 
         "price_change_24h_pct": round(price_change_pct, 2),
         "period_high": high,
         "period_low": low,
-        "recent_prices": [round(float(c.get('close', c.get('price', 0))), 8) for c in recent_candles],
+        "recent_prices": [round(float(c.get("close", c.get("price", 0))), 8) for c in recent_candles],
         "data_points": len(candles),
-        "volatility": round((high - low) / low * 100, 2) if low > 0 else 0
+        "volatility": round((high - low) / low * 100, 2) if low > 0 else 0,
     }
 
     # Add sentiment/news data if available
@@ -104,10 +104,7 @@ def get_sentiment_data() -> Optional[Dict[str, Any]]:
 
 
 async def perform_web_search(
-    client,
-    product_id: str,
-    action_context: str,
-    total_tokens_tracker: Dict[str, int]
+    client, product_id: str, action_context: str, total_tokens_tracker: Dict[str, int]
 ) -> Optional[str]:
     """
     Perform web search for recent crypto news and sentiment.
@@ -126,7 +123,7 @@ async def perform_web_search(
     """
     try:
         # Extract coin symbol (e.g., "AAVE" from "AAVE-BTC")
-        coin_symbol = product_id.split('-')[0] if '-' in product_id else product_id
+        coin_symbol = product_id.split("-")[0] if "-" in product_id else product_id
 
         # Construct search query based on context
         if action_context == "open":
@@ -144,9 +141,10 @@ async def perform_web_search(
                 model="claude-sonnet-4-5-20250929",
                 max_tokens=500,  # Keep response concise to save tokens
                 temperature=0,
-                messages=[{
-                    "role": "user",
-                    "content": f"""Search the web for recent news about {coin_symbol} cryptocurrency and provide a brief summary (3-5 bullet points) covering:
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"""Search the web for recent news about {coin_symbol} cryptocurrency and provide a brief summary (3-5 bullet points) covering:
 - Major news or announcements in the last 24-48 hours
 - Market sentiment (bullish/bearish/neutral)
 - Any significant price movements or predictions
@@ -155,16 +153,19 @@ async def perform_web_search(
 
 Query: {query}
 
-Keep it concise and focused on actionable trading information."""
-                }]
+Keep it concise and focused on actionable trading information.""",
+                    }
+                ],
             )
 
             # Extract the text response
             search_results = response.content[0].text.strip()
 
             # Track token usage
-            total_tokens_tracker['total'] += response.usage.input_tokens + response.usage.output_tokens
-            logger.info(f"📊 Web Search - Input: {response.usage.input_tokens} tokens, Output: {response.usage.output_tokens} tokens")
+            total_tokens_tracker["total"] += response.usage.input_tokens + response.usage.output_tokens
+            logger.info(
+                f"📊 Web Search - Input: {response.usage.input_tokens} tokens, Output: {response.usage.output_tokens} tokens"
+            )
 
             logger.info(f"✅ Web search completed for {coin_symbol}")
             return search_results
@@ -182,9 +183,7 @@ The AI will analyze based on technical data and historical patterns."""
 
 
 def should_skip_analysis(
-    last_analysis_time: Optional[datetime],
-    config: Dict[str, Any],
-    position: Optional[Any] = None
+    last_analysis_time: Optional[datetime], config: Dict[str, Any], position: Optional[Any] = None
 ) -> bool:
     """
     Check if we should skip analysis to save tokens

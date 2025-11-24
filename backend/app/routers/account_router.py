@@ -49,7 +49,7 @@ async def get_balances(coinbase: CoinbaseClient = Depends(get_coinbase)):
             "total_btc_value": total_btc_value,
             "current_eth_btc_price": current_price,
             "btc_usd_price": btc_usd_price,
-            "total_usd_value": total_btc_value * btc_usd_price
+            "total_usd_value": total_btc_value * btc_usd_price,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -66,17 +66,14 @@ async def get_aggregate_value(coinbase: CoinbaseClient = Depends(get_coinbase)):
         return {
             "aggregate_btc_value": aggregate_btc,
             "aggregate_usd_value": aggregate_usd,
-            "btc_usd_price": btc_usd_price
+            "btc_usd_price": btc_usd_price,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/portfolio")
-async def get_portfolio(
-    db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
-):
+async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)):
     """Get full portfolio breakdown (all coins like 3Commas)"""
     try:
         # Get portfolio breakdown with all holdings
@@ -113,10 +110,9 @@ async def get_portfolio(
                 return (asset, None)
 
         # Fetch prices with staggered delays (every 0.1 seconds) to avoid rate limits
-        price_results = await asyncio.gather(*[
-            fetch_price(asset, idx * 0.1)
-            for idx, (asset, _, _) in enumerate(assets_to_price)
-        ])
+        price_results = await asyncio.gather(
+            *[fetch_price(asset, idx * 0.1) for idx, (asset, _, _) in enumerate(assets_to_price)]
+        )
 
         # Create price lookup dict
         prices = {asset: price for asset, price in price_results if price is not None}
@@ -167,18 +163,20 @@ async def get_portfolio(
             total_usd_value += usd_value
             total_btc_value += btc_value
 
-            portfolio_holdings.append({
-                "asset": asset,
-                "total_balance": total_balance,
-                "available": available,
-                "hold": hold,
-                "current_price_usd": current_price_usd,
-                "usd_value": usd_value,
-                "btc_value": btc_value,
-                "percentage": 0.0,  # Will calculate after we know total
-                "unrealized_pnl_usd": 0.0,  # Will calculate from open positions
-                "unrealized_pnl_percentage": 0.0
-            })
+            portfolio_holdings.append(
+                {
+                    "asset": asset,
+                    "total_balance": total_balance,
+                    "available": available,
+                    "hold": hold,
+                    "current_price_usd": current_price_usd,
+                    "usd_value": usd_value,
+                    "btc_value": btc_value,
+                    "percentage": 0.0,  # Will calculate after we know total
+                    "unrealized_pnl_usd": 0.0,  # Will calculate from open positions
+                    "unrealized_pnl_percentage": 0.0,
+                }
+            )
 
         # Calculate percentages
         for holding in portfolio_holdings:
@@ -335,25 +333,19 @@ async def get_portfolio(
                     "total": total_portfolio_btc,
                     "reserved_by_bots": total_reserved_btc,
                     "in_open_positions": total_in_positions_btc,
-                    "free": free_btc
+                    "free": free_btc,
                 },
                 "usd": {
                     "total": total_portfolio_usd,
                     "reserved_by_bots": total_reserved_usd,
                     "in_open_positions": total_in_positions_usd,
-                    "free": free_usd
-                }
+                    "free": free_usd,
+                },
             },
             "pnl": {
-                "today": {
-                    "usd": pnl_today_usd,
-                    "btc": pnl_today_btc
-                },
-                "all_time": {
-                    "usd": pnl_all_time_usd,
-                    "btc": pnl_all_time_btc
-                }
-            }
+                "today": {"usd": pnl_today_usd, "btc": pnl_today_btc},
+                "all_time": {"usd": pnl_all_time_usd, "btc": pnl_all_time_btc},
+            },
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

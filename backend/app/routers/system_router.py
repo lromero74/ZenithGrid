@@ -61,37 +61,32 @@ async def get_ai_provider_info():
             "anthropic": {
                 "name": "Anthropic (Claude)",
                 "billing_url": "https://console.anthropic.com/settings/usage",
-                "has_api_key": bool(settings.anthropic_api_key)
+                "has_api_key": bool(settings.anthropic_api_key),
             },
             "gemini": {
                 "name": "Google Gemini",
                 "billing_url": "https://aistudio.google.com/app/apikey",
-                "has_api_key": bool(settings.gemini_api_key)
+                "has_api_key": bool(settings.gemini_api_key),
             },
             "openai": {
                 "name": "OpenAI (GPT)",
                 "billing_url": "https://platform.openai.com/usage",
-                "has_api_key": False  # Not currently configured
-            }
+                "has_api_key": False,  # Not currently configured
+            },
         }
     }
 
 
 @router.get("/api/status")
 async def get_status(
-    coinbase: CoinbaseClient = Depends(get_coinbase),
-    price_monitor: MultiBotMonitor = Depends(get_price_monitor)
+    coinbase: CoinbaseClient = Depends(get_coinbase), price_monitor: MultiBotMonitor = Depends(get_price_monitor)
 ):
     """Get overall system status"""
     try:
         connection_ok = await coinbase.test_connection()
         monitor_status = await price_monitor.get_status()
 
-        return {
-            "api_connected": connection_ok,
-            "monitor": monitor_status,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        return {"api_connected": connection_ok, "monitor": monitor_status, "timestamp": datetime.utcnow().isoformat()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -100,7 +95,7 @@ async def get_status(
 async def get_dashboard(
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
-    price_monitor: MultiBotMonitor = Depends(get_price_monitor)
+    price_monitor: MultiBotMonitor = Depends(get_price_monitor),
 ):
     """Get dashboard statistics"""
     try:
@@ -156,7 +151,7 @@ async def get_dashboard(
             current_price=current_price,
             btc_balance=btc_balance,
             eth_balance=eth_balance,
-            monitor_running=monitor_status["running"]
+            monitor_running=monitor_status["running"],
         )
 
     except Exception as e:
@@ -202,10 +197,7 @@ async def get_signals(limit: int = 100, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/api/market-data", response_model=List[MarketDataResponse])
-async def get_market_data(
-    hours: int = 24,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_market_data(hours: int = 24, db: AsyncSession = Depends(get_db)):
     """Get market data for charting"""
     start_time = datetime.utcnow() - timedelta(hours=hours)
     query = select(MarketData).where(MarketData.timestamp >= start_time).order_by(MarketData.timestamp)

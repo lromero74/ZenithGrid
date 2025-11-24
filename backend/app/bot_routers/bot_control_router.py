@@ -71,13 +71,10 @@ async def force_run_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Bot not found")
 
     if not bot.is_active:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot force run an inactive bot. Start the bot first."
-        )
+        raise HTTPException(status_code=400, detail="Cannot force run an inactive bot. Start the bot first.")
 
     # Get bot's check interval (default to 300 seconds if not set)
-    check_interval = getattr(bot, 'check_interval_seconds', 300) or 300
+    check_interval = getattr(bot, "check_interval_seconds", 300) or 300
 
     # Set last_signal_check to a time that's past the interval
     # This ensures the bot will be processed on the next monitor cycle
@@ -87,9 +84,11 @@ async def force_run_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
 
     await db.commit()
 
-    logger.info(f"🚀 Force run triggered for bot '{bot.name}' (ID: {bot_id}). Will execute on next monitor cycle (~10 seconds).")
+    logger.info(
+        f"🚀 Force run triggered for bot '{bot.name}' (ID: {bot_id}). Will execute on next monitor cycle (~10 seconds)."
+    )
 
     return {
         "message": f"Bot '{bot.name}' will run on next monitor cycle",
-        "note": "Bot will execute within ~10 seconds"
+        "note": "Bot will execute within ~10 seconds",
     }

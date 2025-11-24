@@ -26,7 +26,7 @@ async def execute_limit_sell(
     position: Position,
     base_amount: float,
     limit_price: float,
-    signal_data: Optional[Dict[str, Any]] = None
+    signal_data: Optional[Dict[str, Any]] = None,
 ) -> PendingOrder:
     """
     Place a limit sell order to close position and track it in pending_orders table
@@ -52,9 +52,7 @@ async def execute_limit_sell(
     order_id = None
     try:
         order_response = await trading_client.sell_limit(
-            product_id=product_id,
-            limit_price=limit_price,
-            base_amount=base_amount
+            product_id=product_id, limit_price=limit_price, base_amount=base_amount
         )
         success_response = order_response.get("success_response", {})
         order_id = success_response.get("order_id", "")
@@ -79,7 +77,7 @@ async def execute_limit_sell(
         base_amount=base_amount,
         trade_type="limit_close",
         status="pending",
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
     )
 
     db.add(pending_order)
@@ -92,8 +90,10 @@ async def execute_limit_sell(
     await db.refresh(pending_order)
 
     # Get base currency name from product_id
-    base_currency = product_id.split('-')[0]
-    logger.info(f"✅ Placed limit sell order: {base_amount:.8f} {base_currency} @ {limit_price:.8f} (Order ID: {order_id})")
+    base_currency = product_id.split("-")[0]
+    logger.info(
+        f"✅ Placed limit sell order: {base_amount:.8f} {base_currency} @ {limit_price:.8f} (Order ID: {order_id})"
+    )
 
     return pending_order
 
@@ -106,7 +106,7 @@ async def execute_sell(
     product_id: str,
     position: Position,
     current_price: float,
-    signal_data: Optional[Dict[str, Any]] = None
+    signal_data: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Optional[Trade], float, float]:
     """
     Execute a sell order for entire position (market or limit based on configuration)
@@ -161,7 +161,7 @@ async def execute_sell(
                 position=position,
                 base_amount=base_amount,
                 limit_price=limit_price,
-                signal_data=signal_data
+                signal_data=signal_data,
             )
 
             # Return None trade since order is pending
@@ -190,10 +190,7 @@ async def execute_sell(
     # Execute order via TradingClient (currency-agnostic)
     order_id = None
     try:
-        order_response = await trading_client.sell(
-            product_id=product_id,
-            base_amount=base_amount
-        )
+        order_response = await trading_client.sell(product_id=product_id, base_amount=base_amount)
 
         # Log the full response for debugging
         logger.info(f"Coinbase sell order response: {order_response}")
@@ -221,7 +218,9 @@ async def execute_sell(
         # CRITICAL: Validate order_id is present
         if not order_id:
             logger.error(f"Full Coinbase response: {order_response}")
-            raise ValueError(f"No order_id found in successful Coinbase response. Response keys: {list(order_response.keys())}")
+            raise ValueError(
+                f"No order_id found in successful Coinbase response. Response keys: {list(order_response.keys())}"
+            )
 
     except Exception as e:
         logger.error(f"Error executing sell order: {e}")
@@ -255,7 +254,7 @@ async def execute_sell(
         order_id=order_id,
         macd_value=signal_data.get("macd_value") if signal_data else None,
         macd_signal=signal_data.get("macd_signal") if signal_data else None,
-        macd_histogram=signal_data.get("macd_histogram") if signal_data else None
+        macd_histogram=signal_data.get("macd_histogram") if signal_data else None,
     )
 
     db.add(trade)

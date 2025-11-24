@@ -15,11 +15,7 @@ from app.currency_utils import format_with_usd, get_quote_currency
 from app.models import Bot, Position, Signal
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
-from app.trading_engine.position_manager import (
-    get_active_position,
-    get_open_positions_count,
-    create_position
-)
+from app.trading_engine.position_manager import get_active_position, get_open_positions_count, create_position
 from app.trading_engine.order_logger import save_ai_log
 from app.trading_engine.buy_executor import execute_buy
 from app.trading_engine.sell_executor import execute_sell
@@ -36,7 +32,7 @@ async def process_signal(
     product_id: str,
     candles: List[Dict[str, Any]],
     current_price: float,
-    pre_analyzed_signal: Optional[Dict[str, Any]] = None
+    pre_analyzed_signal: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Process market data with bot's strategy
@@ -73,18 +69,11 @@ async def process_signal(
     else:
         # Analyze signal using strategy (with position and context for web search)
         signal_data = await strategy.analyze_signal(
-            candles,
-            current_price,
-            position=position,
-            action_context=action_context
+            candles, current_price, position=position, action_context=action_context
         )
 
     if not signal_data:
-        return {
-            "action": "none",
-            "reason": "No signal detected",
-            "signal": None
-        }
+        return {"action": "none", "reason": "No signal detected", "signal": None}
 
     # Get bot's available balance (budget-based or total portfolio)
     # Calculate aggregate portfolio value for bot budgeting
@@ -106,14 +95,12 @@ async def process_signal(
     if reserved_balance > 0:
         # Bot has reserved balance - get_reserved_balance() already divides by max_concurrent_deals
         # so reserved_balance IS the per-position budget
-        max_concurrent_deals = max(bot.strategy_config.get('max_concurrent_deals', 1), 1)
+        max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
         per_position_budget = reserved_balance  # Already per-position, don't divide again!
 
         # Calculate how much is available for THIS position (per-position budget - already spent in this position)
         query = select(Position).where(
-            Position.bot_id == bot.id,
-            Position.status == "open",
-            Position.product_id == product_id
+            Position.bot_id == bot.id, Position.status == "open", Position.product_id == product_id
         )
         result = await db.execute(query)
         open_positions = result.scalars().all()
@@ -122,9 +109,13 @@ async def process_signal(
         quote_balance = per_position_budget - total_in_positions
 
         if bot.budget_percentage > 0:
-            logger.info(f"  💰 Bot budget: {bot.budget_percentage}% of aggregate ({reserved_balance:.8f}), Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions:.8f}, Available: {quote_balance:.8f}")
+            logger.info(
+                f"  💰 Bot budget: {bot.budget_percentage}% of aggregate ({reserved_balance:.8f}), Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions:.8f}, Available: {quote_balance:.8f}"
+            )
         else:
-            logger.info(f"  💰 Bot reserved balance: {reserved_balance}, Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions}, Available: {quote_balance}")
+            logger.info(
+                f"  💰 Bot reserved balance: {reserved_balance}, Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions}, Available: {quote_balance}"
+            )
     else:
         # No reserved balance - use total portfolio balance (backward compatibility)
         quote_balance = await trading_client.get_quote_balance(product_id)
@@ -134,7 +125,8 @@ async def process_signal(
     if bot.strategy_type == "ai_autonomous" and not signal_data.get("_already_logged", False):
         # DEBUG: This should NOT be called in batch mode!
         import traceback
-        stack = ''.join(traceback.format_stack()[-5:-1])
+
+        stack = "".join(traceback.format_stack()[-5:-1])
         logger.warning(f"  ⚠️ save_ai_log called despite _already_logged check! Bot #{bot.id} {product_id}")
         logger.warning(f"  _already_logged={signal_data.get('_already_logged')}")
         logger.warning(f"  Call stack:\n{stack}")
@@ -170,15 +162,11 @@ async def process_signal(
                 print(f"🔍 Should buy: FALSE - {buy_reason}")
             else:
                 print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
-                should_buy, quote_amount, buy_reason = await strategy.should_buy(
-                    signal_data, position, quote_balance
-                )
+                should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
                 print(f"🔍 Should buy result: {should_buy}, amount: {quote_amount:.8f}, reason: {buy_reason}")
         else:
             # Position already exists for this pair - check for DCA
-            should_buy, quote_amount, buy_reason = await strategy.should_buy(
-                signal_data, position, quote_balance
-            )
+            should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
     else:
         # Bot is stopped - don't open new positions
         if position is None:
@@ -226,7 +214,7 @@ async def process_signal(
                 current_price=current_price,
                 trade_type=trade_type,
                 signal_data=signal_data,
-                commit_on_error=not is_new_position  # Don't commit errors for base orders
+                commit_on_error=not is_new_position,  # Don't commit errors for base orders
             )
 
             if trade is None:
@@ -244,11 +232,7 @@ async def process_signal(
                 # Expunge the position from session instead of rolling back
                 # This prevents session corruption when processing multiple pairs in batch mode
                 db.expunge(position)
-                return {
-                    "action": "none",
-                    "reason": f"Buy failed: {str(e)}",
-                    "signal": signal_data
-                }
+                return {"action": "none", "reason": f"Buy failed: {str(e)}", "signal": signal_data}
             raise  # Re-raise for existing positions (DCA failures)
 
         # Record signal
@@ -261,24 +245,16 @@ async def process_signal(
             macd_histogram=signal_data.get("macd_histogram", 0),
             price=current_price,
             action_taken="buy",
-            reason=buy_reason
+            reason=buy_reason,
         )
         db.add(signal)
         await db.commit()
 
-        return {
-            "action": "buy",
-            "reason": buy_reason,
-            "signal": signal_data,
-            "trade": trade,
-            "position": position
-        }
+        return {"action": "buy", "reason": buy_reason, "signal": signal_data, "trade": trade, "position": position}
 
     # Check if we should sell
     if position is not None:
-        should_sell, sell_reason = await strategy.should_sell(
-            signal_data, position, current_price
-        )
+        should_sell, sell_reason = await strategy.should_sell(signal_data, position, current_price)
 
         if should_sell:
             # Execute sell (market or limit based on config)
@@ -290,7 +266,7 @@ async def process_signal(
                 product_id=product_id,
                 position=position,
                 current_price=current_price,
-                signal_data=signal_data
+                signal_data=signal_data,
             )
 
             # If trade is None, a limit order was placed - position stays open
@@ -300,7 +276,7 @@ async def process_signal(
                     "action": "limit_close_pending",
                     "reason": sell_reason,
                     "limit_order_placed": True,
-                    "position_id": position.id
+                    "position_id": position.id,
                 }
 
             # Record signal for market sell
@@ -313,7 +289,7 @@ async def process_signal(
                 macd_histogram=signal_data.get("macd_histogram", 0),
                 price=current_price,
                 action_taken="sell",
-                reason=sell_reason
+                reason=sell_reason,
             )
             db.add(signal)
             await db.commit()
@@ -332,7 +308,7 @@ async def process_signal(
                 },
                 decision="sell",
                 current_price=current_price,
-                position=position
+                position=position,
             )
 
             return {
@@ -342,7 +318,7 @@ async def process_signal(
                 "trade": trade,
                 "position": position,
                 "profit_quote": profit_quote,
-                "profit_percentage": profit_pct
+                "profit_percentage": profit_pct,
             }
         else:
             # Hold - record signal with no action
@@ -355,23 +331,14 @@ async def process_signal(
                 macd_histogram=signal_data.get("macd_histogram", 0),
                 price=current_price,
                 action_taken="hold",
-                reason=sell_reason
+                reason=sell_reason,
             )
             db.add(signal)
             await db.commit()
 
-            return {
-                "action": "hold",
-                "reason": sell_reason,
-                "signal": signal_data,
-                "position": position
-            }
+            return {"action": "hold", "reason": sell_reason, "signal": signal_data, "position": position}
 
     # Commit any pending changes (like AI logs)
     await db.commit()
 
-    return {
-        "action": "none",
-        "reason": "Signal detected but no action criteria met",
-        "signal": signal_data
-    }
+    return {"action": "none", "reason": "Signal detected but no action criteria met", "signal": signal_data}

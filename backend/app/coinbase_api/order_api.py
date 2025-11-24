@@ -18,7 +18,7 @@ async def create_market_order(
     product_id: str,
     side: str,  # "BUY" or "SELL"
     size: Optional[str] = None,  # Amount of base currency (e.g., ETH)
-    funds: Optional[str] = None  # Amount of quote currency (e.g., BTC) to spend
+    funds: Optional[str] = None,  # Amount of quote currency (e.g., BTC) to spend
 ) -> Dict[str, Any]:
     """
     Create a market order
@@ -32,13 +32,11 @@ async def create_market_order(
 
     Note: Use either size OR funds, not both
     """
-    order_config = {
-        "market_market_ioc": {}
-    }
+    order_config = {"market_market_ioc": {}}
 
     # Extract currencies from product_id for proper precision formatting
-    if '-' in product_id:
-        base_currency, quote_currency = product_id.split('-')
+    if "-" in product_id:
+        base_currency, quote_currency = product_id.split("-")
     else:
         base_currency, quote_currency = "ETH", "BTC"  # fallback
 
@@ -58,7 +56,7 @@ async def create_market_order(
         "client_order_id": f"{int(time.time() * 1000)}",
         "product_id": product_id,
         "side": side,
-        "order_configuration": order_config
+        "order_configuration": order_config,
     }
 
     result = await request_func("POST", "/api/v3/brokerage/orders", data=data)
@@ -71,7 +69,7 @@ async def create_limit_order(
     side: str,  # "BUY" or "SELL"
     limit_price: float,  # Target price
     size: Optional[str] = None,  # Amount of base currency (e.g., ETH)
-    funds: Optional[str] = None  # Amount of quote currency (e.g., BTC) to spend
+    funds: Optional[str] = None,  # Amount of quote currency (e.g., BTC) to spend
 ) -> Dict[str, Any]:
     """
     Create a limit order (Good-Til-Cancelled)
@@ -87,8 +85,8 @@ async def create_limit_order(
     Note: Use either size OR funds, not both
     """
     # Extract currencies from product_id for proper precision formatting
-    if '-' in product_id:
-        base_currency, quote_currency = product_id.split('-')
+    if "-" in product_id:
+        base_currency, quote_currency = product_id.split("-")
     else:
         base_currency, quote_currency = "ETH", "BTC"  # fallback
 
@@ -96,10 +94,7 @@ async def create_limit_order(
     formatted_limit_price = format_quote_amount(limit_price, quote_currency)
 
     order_config = {
-        "limit_limit_gtc": {
-            "limit_price": formatted_limit_price,
-            "post_only": False  # Allow immediate partial fills
-        }
+        "limit_limit_gtc": {"limit_price": formatted_limit_price, "post_only": False}  # Allow immediate partial fills
     }
 
     if size:
@@ -119,7 +114,7 @@ async def create_limit_order(
         "client_order_id": f"{int(time.time() * 1000)}",
         "product_id": product_id,
         "side": side,
-        "order_configuration": order_config
+        "order_configuration": order_config,
     }
 
     result = await request_func("POST", "/api/v3/brokerage/orders", data=data)
@@ -157,18 +152,13 @@ async def cancel_order(request_func: Callable, order_id: str) -> Dict[str, Any]:
     Returns:
         Cancellation result
     """
-    data = {
-        "order_ids": [order_id]
-    }
+    data = {"order_ids": [order_id]}
     result = await request_func("POST", "/api/v3/brokerage/orders/batch_cancel", data=data)
     return result
 
 
 async def list_orders(
-    request_func: Callable,
-    product_id: Optional[str] = None,
-    order_status: Optional[List[str]] = None,
-    limit: int = 100
+    request_func: Callable, product_id: Optional[str] = None, order_status: Optional[List[str]] = None, limit: int = 100
 ) -> List[Dict[str, Any]]:
     """
     List orders with optional filtering
@@ -195,11 +185,7 @@ async def list_orders(
 # ===== Convenience Trading Methods =====
 
 
-async def buy_eth_with_btc(
-    request_func: Callable,
-    btc_amount: float,
-    product_id: str = "ETH-BTC"
-) -> Dict[str, Any]:
+async def buy_eth_with_btc(request_func: Callable, btc_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
     """
     Buy crypto with specified amount of BTC
 
@@ -211,19 +197,10 @@ async def buy_eth_with_btc(
     Returns:
         Order response
     """
-    return await create_market_order(
-        request_func,
-        product_id=product_id,
-        side="BUY",
-        funds=f"{btc_amount:.8f}"
-    )
+    return await create_market_order(request_func, product_id=product_id, side="BUY", funds=f"{btc_amount:.8f}")
 
 
-async def sell_eth_for_btc(
-    request_func: Callable,
-    eth_amount: float,
-    product_id: str = "ETH-BTC"
-) -> Dict[str, Any]:
+async def sell_eth_for_btc(request_func: Callable, eth_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
     """
     Sell crypto for BTC
 
@@ -236,21 +213,14 @@ async def sell_eth_for_btc(
         Order response
     """
     # Extract base currency from product_id (e.g., "ETH" from "ETH-BTC")
-    base_currency = product_id.split('-')[0] if '-' in product_id else "ETH"
+    base_currency = product_id.split("-")[0] if "-" in product_id else "ETH"
 
     return await create_market_order(
-        request_func,
-        product_id=product_id,
-        side="SELL",
-        size=format_base_amount(eth_amount, base_currency)
+        request_func, product_id=product_id, side="SELL", size=format_base_amount(eth_amount, base_currency)
     )
 
 
-async def buy_with_usd(
-    request_func: Callable,
-    usd_amount: float,
-    product_id: str
-) -> Dict[str, Any]:
+async def buy_with_usd(request_func: Callable, usd_amount: float, product_id: str) -> Dict[str, Any]:
     """
     Buy crypto with specified amount of USD
 
@@ -262,19 +232,10 @@ async def buy_with_usd(
     Returns:
         Order response
     """
-    return await create_market_order(
-        request_func,
-        product_id=product_id,
-        side="BUY",
-        funds=f"{usd_amount:.2f}"
-    )
+    return await create_market_order(request_func, product_id=product_id, side="BUY", funds=f"{usd_amount:.2f}")
 
 
-async def sell_for_usd(
-    request_func: Callable,
-    base_amount: float,
-    product_id: str
-) -> Dict[str, Any]:
+async def sell_for_usd(request_func: Callable, base_amount: float, product_id: str) -> Dict[str, Any]:
     """
     Sell crypto for USD
 
@@ -287,11 +248,8 @@ async def sell_for_usd(
         Order response
     """
     # Extract base currency from product_id
-    base_currency = product_id.split('-')[0] if '-' in product_id else "ETH"
+    base_currency = product_id.split("-")[0] if "-" in product_id else "ETH"
 
     return await create_market_order(
-        request_func,
-        product_id=product_id,
-        side="SELL",
-        size=format_base_amount(base_amount, base_currency)
+        request_func, product_id=product_id, side="SELL", size=format_base_amount(base_amount, base_currency)
     )

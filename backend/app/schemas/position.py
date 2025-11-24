@@ -1,4 +1,5 @@
 """Position-related Pydantic schemas"""
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -14,9 +15,9 @@ class PositionResponse(BaseModel):
     closed_at: Optional[datetime]
     strategy_config_snapshot: Optional[dict] = None  # Frozen config from bot at position creation
     initial_quote_balance: float  # BTC or USD
-    max_quote_allowed: float      # BTC or USD
-    total_quote_spent: float      # BTC or USD
-    total_base_acquired: float    # ETH, ADA, etc.
+    max_quote_allowed: float  # BTC or USD
+    total_quote_spent: float  # BTC or USD
+    total_base_acquired: float  # ETH, ADA, etc.
     average_buy_price: float
     sell_price: Optional[float]
     total_quote_received: Optional[float]  # BTC or USD
@@ -32,7 +33,7 @@ class PositionResponse(BaseModel):
     notes: Optional[str] = None  # User notes (like 3Commas)
     closing_via_limit: bool = False  # Whether position is closing via limit order
     limit_close_order_id: Optional[str] = None  # Coinbase order ID for limit close
-    limit_order_details: Optional['LimitOrderDetails'] = None  # Details of limit close order
+    limit_order_details: Optional["LimitOrderDetails"] = None  # Details of limit close order
 
     class Config:
         from_attributes = True
@@ -60,7 +61,7 @@ class TradeResponse(BaseModel):
     timestamp: datetime
     side: str
     quote_amount: float  # BTC or USD
-    base_amount: float   # ETH, ADA, etc.
+    base_amount: float  # ETH, ADA, etc.
     price: float
     trade_type: str
     order_id: Optional[str]

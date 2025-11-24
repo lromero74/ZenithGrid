@@ -39,11 +39,7 @@ async def get_ticker(request_func: Callable, product_id: str = "ETH-BTC") -> Dic
     return result
 
 
-async def get_current_price(
-    request_func: Callable,
-    auth_type: str,
-    product_id: str = "ETH-BTC"
-) -> float:
+async def get_current_price(request_func: Callable, auth_type: str, product_id: str = "ETH-BTC") -> float:
     """
     Get current price (cached for 10s to reduce API spam)
 
@@ -110,7 +106,7 @@ async def get_product_stats(request_func: Callable, product_id: str = "ETH-BTC")
     stats = {
         "volume_24h": float(result.get("volume_24h", 0)),
         "volume_percentage_change_24h": float(result.get("volume_percentage_change_24h", 0)),
-        "price_percentage_change_24h": float(result.get("price_percentage_change_24h", 0))
+        "price_percentage_change_24h": float(result.get("price_percentage_change_24h", 0)),
     }
 
     # Cache for 5 minutes (volume doesn't change that quickly)
@@ -119,18 +115,10 @@ async def get_product_stats(request_func: Callable, product_id: str = "ETH-BTC")
 
 
 async def get_candles(
-    request_func: Callable,
-    product_id: str,
-    start: int,
-    end: int,
-    granularity: str = "FIVE_MINUTE"
+    request_func: Callable, product_id: str, start: int, end: int, granularity: str = "FIVE_MINUTE"
 ) -> List[Dict[str, Any]]:
     """Get historical candles/OHLCV data"""
-    params = {
-        "start": str(start),
-        "end": str(end),
-        "granularity": granularity
-    }
+    params = {"start": str(start), "end": str(end), "granularity": granularity}
     result = await request_func("GET", f"/api/v3/brokerage/products/{product_id}/candles", params=params)
     return result.get("candles", [])
 
@@ -139,6 +127,7 @@ async def test_connection(request_func: Callable) -> bool:
     """Test if API connection works"""
     try:
         from app.coinbase_api import account_balance_api
+
         await account_balance_api.get_accounts(request_func)
         return True
     except Exception as e:

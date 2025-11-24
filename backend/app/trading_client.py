@@ -66,11 +66,7 @@ class TradingClient:
         quote_currency = get_quote_currency(product_id)
         return await self.get_balance(quote_currency)
 
-    async def buy(
-        self,
-        product_id: str,
-        quote_amount: float
-    ) -> Dict[str, Any]:
+    async def buy(self, product_id: str, quote_amount: float) -> Dict[str, Any]:
         """
         Buy base currency with quote currency (market order)
 
@@ -87,25 +83,14 @@ class TradingClient:
 
         if quote_currency == "BTC":
             # Buy with BTC
-            return await self.coinbase.buy_eth_with_btc(
-                btc_amount=quote_amount,
-                product_id=product_id
-            )
+            return await self.coinbase.buy_eth_with_btc(btc_amount=quote_amount, product_id=product_id)
         elif quote_currency == "USD":
             # Buy with USD
-            return await self.coinbase.buy_with_usd(
-                usd_amount=quote_amount,
-                product_id=product_id
-            )
+            return await self.coinbase.buy_with_usd(usd_amount=quote_amount, product_id=product_id)
         else:
             raise ValueError(f"Unsupported quote currency: {quote_currency}")
 
-    async def buy_limit(
-        self,
-        product_id: str,
-        limit_price: float,
-        quote_amount: float
-    ) -> Dict[str, Any]:
+    async def buy_limit(self, product_id: str, limit_price: float, quote_amount: float) -> Dict[str, Any]:
         """
         Buy base currency with quote currency using a limit order
 
@@ -118,18 +103,10 @@ class TradingClient:
             Order response from Coinbase
         """
         return await self.coinbase.create_limit_order(
-            product_id=product_id,
-            side="BUY",
-            limit_price=limit_price,
-            funds=str(quote_amount)
+            product_id=product_id, side="BUY", limit_price=limit_price, funds=str(quote_amount)
         )
 
-    async def sell_limit(
-        self,
-        product_id: str,
-        limit_price: float,
-        base_amount: float
-    ) -> Dict[str, Any]:
+    async def sell_limit(self, product_id: str, limit_price: float, base_amount: float) -> Dict[str, Any]:
         """
         Sell base currency for quote currency using a limit order
 
@@ -142,17 +119,10 @@ class TradingClient:
             Order response from Coinbase
         """
         return await self.coinbase.create_limit_order(
-            product_id=product_id,
-            side="SELL",
-            limit_price=limit_price,
-            size=str(base_amount)
+            product_id=product_id, side="SELL", limit_price=limit_price, size=str(base_amount)
         )
 
-    async def sell(
-        self,
-        product_id: str,
-        base_amount: float
-    ) -> Dict[str, Any]:
+    async def sell(self, product_id: str, base_amount: float) -> Dict[str, Any]:
         """
         Sell base currency for quote currency
 
@@ -169,16 +139,10 @@ class TradingClient:
 
         if quote_currency == "BTC":
             # Sell for BTC
-            return await self.coinbase.sell_eth_for_btc(
-                eth_amount=base_amount,
-                product_id=product_id
-            )
+            return await self.coinbase.sell_eth_for_btc(eth_amount=base_amount, product_id=product_id)
         elif quote_currency == "USD":
             # Sell for USD
-            return await self.coinbase.sell_for_usd(
-                base_amount=base_amount,
-                product_id=product_id
-            )
+            return await self.coinbase.sell_for_usd(base_amount=base_amount, product_id=product_id)
         else:
             raise ValueError(f"Unsupported quote currency: {quote_currency}")
 

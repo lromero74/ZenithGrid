@@ -21,7 +21,7 @@ def calculate_rsi(prices: List[float], period: int = 14) -> List[float]:
         return []
 
     # Calculate price changes
-    deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+    deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
 
     # Separate gains and losses
     gains = [d if d > 0 else 0 for d in deltas]
@@ -66,7 +66,16 @@ class RSIStrategy(TradingStrategy):
                     description="Timeframe for RSI analysis (e.g., 5min, 1hour, 1day)",
                     type="str",
                     default="FIVE_MINUTE",
-                    options=["ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR", "TWO_HOUR", "SIX_HOUR", "ONE_DAY"]
+                    options=[
+                        "ONE_MINUTE",
+                        "FIVE_MINUTE",
+                        "FIFTEEN_MINUTE",
+                        "THIRTY_MINUTE",
+                        "ONE_HOUR",
+                        "TWO_HOUR",
+                        "SIX_HOUR",
+                        "ONE_DAY",
+                    ],
                 ),
                 StrategyParameter(
                     name="rsi_period",
@@ -75,7 +84,7 @@ class RSIStrategy(TradingStrategy):
                     type="int",
                     default=14,
                     min_value=5,
-                    max_value=50
+                    max_value=50,
                 ),
                 StrategyParameter(
                     name="oversold_threshold",
@@ -84,7 +93,7 @@ class RSIStrategy(TradingStrategy):
                     type="float",
                     default=30.0,
                     min_value=10.0,
-                    max_value=40.0
+                    max_value=40.0,
                 ),
                 StrategyParameter(
                     name="overbought_threshold",
@@ -93,7 +102,7 @@ class RSIStrategy(TradingStrategy):
                     type="float",
                     default=70.0,
                     min_value=60.0,
-                    max_value=90.0
+                    max_value=90.0,
                 ),
                 StrategyParameter(
                     name="buy_amount_percentage",
@@ -102,7 +111,7 @@ class RSIStrategy(TradingStrategy):
                     type="float",
                     default=10.0,
                     min_value=1.0,
-                    max_value=50.0
+                    max_value=50.0,
                 ),
                 StrategyParameter(
                     name="min_profit_percentage",
@@ -111,7 +120,7 @@ class RSIStrategy(TradingStrategy):
                     type="float",
                     default=2.0,
                     min_value=0.1,
-                    max_value=20.0
+                    max_value=20.0,
                 ),
                 StrategyParameter(
                     name="max_position_size_btc",
@@ -120,10 +129,10 @@ class RSIStrategy(TradingStrategy):
                     type="float",
                     default=0.1,
                     min_value=0.001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
             ],
-            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD"]
+            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD"],
         )
 
     def validate_config(self):
@@ -143,11 +152,7 @@ class RSIStrategy(TradingStrategy):
             if param.max_value is not None and value > param.max_value:
                 raise ValueError(f"{param.display_name} must be <= {param.max_value}")
 
-    async def analyze_signal(
-        self,
-        candles: List[Dict[str, Any]],
-        current_price: float
-    ) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float) -> Optional[Dict[str, Any]]:
         """
         Analyze RSI and detect oversold/overbought conditions
 
@@ -179,19 +184,12 @@ class RSIStrategy(TradingStrategy):
             signal_type = "overbought"  # Potential sell signal
 
         if signal_type:
-            return {
-                "signal_type": signal_type,
-                "rsi": current_rsi,
-                "price": current_price
-            }
+            return {"signal_type": signal_type, "rsi": current_rsi, "price": current_price}
 
         return None
 
     async def should_buy(
-        self,
-        signal_data: Dict[str, Any],
-        position: Optional[Any],
-        btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
     ) -> Tuple[bool, float, str]:
         """
         Buy when RSI indicates oversold
@@ -210,10 +208,7 @@ class RSIStrategy(TradingStrategy):
         buy_pct = self.config["buy_amount_percentage"]
         max_position = self.config["max_position_size_btc"]
 
-        btc_to_spend = min(
-            btc_balance * (buy_pct / 100.0),
-            max_position
-        )
+        btc_to_spend = min(btc_balance * (buy_pct / 100.0), max_position)
 
         if btc_to_spend <= 0:
             return False, 0.0, "Insufficient BTC balance"
@@ -221,12 +216,7 @@ class RSIStrategy(TradingStrategy):
         rsi = signal_data.get("rsi", 0)
         return True, btc_to_spend, f"RSI oversold ({rsi:.1f}) - buying {buy_pct}% of BTC"
 
-    async def should_sell(
-        self,
-        signal_data: Dict[str, Any],
-        position: Any,
-        current_price: float
-    ) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
         """
         Sell when RSI indicates overbought AND profit target is met
 

@@ -12,10 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 async def get_claude_analysis(
-    client,
-    market_context: Dict[str, Any],
-    build_prompt_func,
-    total_tokens_tracker: Dict[str, int]
+    client, market_context: Dict[str, Any], build_prompt_func, total_tokens_tracker: Dict[str, int]
 ) -> Dict[str, Any]:
     """
     Call Claude API for market analysis
@@ -39,15 +36,14 @@ async def get_claude_analysis(
             model="claude-sonnet-4-5-20250929",  # Claude Sonnet 4.5 (latest)
             max_tokens=1000,  # Allow for detailed reasoning
             temperature=0,  # Deterministic responses (eliminates flip-flopping)
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
+            messages=[{"role": "user", "content": prompt}],
         )
 
         # Track token usage
-        total_tokens_tracker['total'] += response.usage.input_tokens + response.usage.output_tokens
-        logger.info(f"📊 Claude API - Input: {response.usage.input_tokens} tokens, Output: {response.usage.output_tokens} tokens, Total: {total_tokens_tracker['total']}")
+        total_tokens_tracker["total"] += response.usage.input_tokens + response.usage.output_tokens
+        logger.info(
+            f"📊 Claude API - Input: {response.usage.input_tokens} tokens, Output: {response.usage.output_tokens} tokens, Total: {total_tokens_tracker['total']}"
+        )
 
         # Parse response
         response_text = response.content[0].text.strip()
@@ -74,8 +70,8 @@ async def get_claude_analysis(
             "reasoning": analysis.get("reasoning", "AI analysis"),
             "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
             "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
-            "current_price": market_context['current_price'],  # Include current price for DCA logic
-            "raw_analysis": analysis
+            "current_price": market_context["current_price"],  # Include current price for DCA logic
+            "raw_analysis": analysis,
         }
 
     except json.JSONDecodeError as e:
@@ -86,7 +82,7 @@ async def get_claude_analysis(
             "confidence": 0,
             "reasoning": "Failed to parse AI response",
             "suggested_allocation_pct": 0,
-            "expected_profit_pct": 0
+            "expected_profit_pct": 0,
         }
     except Exception as e:
         logger.error(f"Error calling Claude API: {e}", exc_info=True)
@@ -95,14 +91,12 @@ async def get_claude_analysis(
             "confidence": 0,
             "reasoning": f"Error: {str(e)}",
             "suggested_allocation_pct": 0,
-            "expected_profit_pct": 0
+            "expected_profit_pct": 0,
         }
 
 
 async def get_claude_batch_analysis(
-    pairs_data: Dict[str, Dict[str, Any]],
-    build_batch_prompt_func,
-    total_tokens_tracker: Dict[str, int]
+    pairs_data: Dict[str, Dict[str, Any]], build_batch_prompt_func, total_tokens_tracker: Dict[str, int]
 ) -> Dict[str, Dict[str, Any]]:
     """
     Analyze multiple pairs in a single Claude API call
@@ -121,14 +115,18 @@ async def get_claude_batch_analysis(
         from anthropic import AsyncAnthropic
     except ImportError:
         logger.error("anthropic library not installed")
-        return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "Anthropic library not installed"}
-                for pid in pairs_data.keys()}
+        return {
+            pid: {"signal_type": "hold", "confidence": 0, "reasoning": "Anthropic library not installed"}
+            for pid in pairs_data.keys()
+        }
 
     api_key = settings.anthropic_api_key
     if not api_key:
         logger.error("ANTHROPIC_API_KEY not set")
-        return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
-                for pid in pairs_data.keys()}
+        return {
+            pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
+            for pid in pairs_data.keys()
+        }
 
     # Use shared batch prompt template
     prompt = build_batch_prompt_func(pairs_data)
@@ -139,7 +137,7 @@ async def get_claude_batch_analysis(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
             temperature=0,  # Deterministic responses (eliminates flip-flopping)
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
         )
 
         response_text = response.content[0].text.strip()
@@ -154,11 +152,13 @@ async def get_claude_batch_analysis(
         batch_analysis = json.loads(response_text)
 
         # Track token usage
-        if hasattr(response, 'usage'):
+        if hasattr(response, "usage"):
             input_tokens = response.usage.input_tokens
             output_tokens = response.usage.output_tokens
-            total_tokens_tracker['total'] += input_tokens + output_tokens
-            logger.info(f"📊 Claude BATCH API - {len(pairs_data)} pairs - Input: {input_tokens} tokens, Output: {output_tokens} tokens")
+            total_tokens_tracker["total"] += input_tokens + output_tokens
+            logger.info(
+                f"📊 Claude BATCH API - {len(pairs_data)} pairs - Input: {input_tokens} tokens, Output: {output_tokens} tokens"
+            )
             logger.info(f"   🎯 Efficiency: {len(pairs_data)} pairs in 1 call (saved {len(pairs_data)-1} API calls!)")
 
         # Convert to our signal format for each pair
@@ -177,23 +177,27 @@ async def get_claude_batch_analysis(
                     "confidence": analysis.get("confidence", 50),
                     "reasoning": analysis.get("reasoning", "AI batch analysis"),
                     "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
-                    "expected_profit_pct": analysis.get("expected_profit_pct", 1.0)
+                    "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
                 }
             else:
                 # Pair missing from response
                 results[product_id] = {
                     "signal_type": "hold",
                     "confidence": 0,
-                    "reasoning": "Not analyzed in batch response"
+                    "reasoning": "Not analyzed in batch response",
                 }
 
         return results
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse Claude batch response: {e}")
-        return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "Failed to parse batch response"}
-                for pid in pairs_data.keys()}
+        return {
+            pid: {"signal_type": "hold", "confidence": 0, "reasoning": "Failed to parse batch response"}
+            for pid in pairs_data.keys()
+        }
     except Exception as e:
         logger.error(f"Claude batch analysis error: {e}")
-        return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
-                for pid in pairs_data.keys()}
+        return {
+            pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
+            for pid in pairs_data.keys()
+        }

@@ -29,11 +29,7 @@ class MultiBotMonitor:
     Each bot can use a different strategy and trade a different product pair.
     """
 
-    def __init__(
-        self,
-        coinbase: CoinbaseClient,
-        interval_seconds: int = 60
-    ):
+    def __init__(self, coinbase: CoinbaseClient, interval_seconds: int = 60):
         """
         Initialize multi-bot monitor
 
@@ -94,15 +90,12 @@ class MultiBotMonitor:
             "ONE_HOUR": 3600,
             "TWO_HOUR": 7200,
             "SIX_HOUR": 21600,
-            "ONE_DAY": 86400
+            "ONE_DAY": 86400,
         }
         return timeframe_map.get(timeframe, 300)  # Default to 5 minutes
 
     async def get_candles_cached(
-        self,
-        product_id: str,
-        granularity: str,
-        lookback_candles: int = 100
+        self, product_id: str, granularity: str, lookback_candles: int = 100
     ) -> List[Dict[str, Any]]:
         """
         Get historical candles with caching
@@ -131,13 +124,12 @@ class MultiBotMonitor:
             end_time = int(time.time())
             start_time = end_time - (lookback_candles * granularity_seconds)
 
-            logger.info(f"  Requesting {lookback_candles} {granularity} candles for {product_id} (time range: {start_time} to {end_time})")
+            logger.info(
+                f"  Requesting {lookback_candles} {granularity} candles for {product_id} (time range: {start_time} to {end_time})"
+            )
 
             candles = await self.coinbase.get_candles(
-                product_id=product_id,
-                start=start_time,
-                end=end_time,
-                granularity=granularity
+                product_id=product_id, start=start_time, end=end_time, granularity=granularity
             )
 
             logger.info(f"  Coinbase returned {len(candles)} candles")
@@ -170,7 +162,9 @@ class MultiBotMonitor:
             # Get all trading pairs for this bot (supports multi-pair)
             trading_pairs = bot.get_trading_pairs()
             print(f"🔍 Got {len(trading_pairs)} trading pairs: {trading_pairs}")
-            logger.info(f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})")
+            logger.info(
+                f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})"
+            )
 
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis
@@ -178,7 +172,7 @@ class MultiBotMonitor:
             print(f"🔍 Getting strategy instance for {bot.strategy_type}...")
             strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
             print(f"🔍 Strategy instance created")
-            supports_batch = hasattr(strategy, 'analyze_multiple_pairs_batch') and len(trading_pairs) > 1
+            supports_batch = hasattr(strategy, "analyze_multiple_pairs_batch") and len(trading_pairs) > 1
             print(f"🔍 Supports batch: {supports_batch}")
 
             if supports_batch:
@@ -195,7 +189,7 @@ class MultiBotMonitor:
                 batch_size = 5
 
                 for i in range(0, len(trading_pairs), batch_size):
-                    batch = trading_pairs[i:i + batch_size]
+                    batch = trading_pairs[i : i + batch_size]
                     logger.info(f"  Processing batch {i // batch_size + 1} ({len(batch)} pairs): {batch}")
 
                     # Process batch sequentially to avoid DB session conflicts
@@ -226,15 +220,12 @@ class MultiBotMonitor:
         except Exception as e:
             logger.error(f"Error processing bot {bot.name}: {e}")
             import traceback
+
             traceback.print_exc()
             return {"error": str(e)}
 
     async def process_bot_batch(
-        self,
-        db: AsyncSession,
-        bot: Bot,
-        trading_pairs: List[str],
-        strategy: Any
+        self, db: AsyncSession, bot: Bot, trading_pairs: List[str], strategy: Any
     ) -> Dict[str, Any]:
         """
         Process multiple trading pairs using AI batch analysis (single API call for all pairs)
@@ -254,10 +245,7 @@ class MultiBotMonitor:
 
             print(f"🔍 Checking open positions...")
             # Check how many open positions this bot has
-            open_positions_query = (
-                select(Position)
-                .where(Position.bot_id == bot.id, Position.status == "open")
-            )
+            open_positions_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
             open_positions_result = await db.execute(open_positions_query)
             open_positions = list(open_positions_result.scalars().all())
             open_count = len(open_positions)
@@ -265,6 +253,7 @@ class MultiBotMonitor:
 
             # Refresh bot from database to get latest config (in case max_concurrent_deals changed)
             from app.models import Bot as BotModel
+
             await db.refresh(bot)
 
             # Get max concurrent deals from strategy config
@@ -285,7 +274,9 @@ class MultiBotMonitor:
 
             # Defensive logging: Warn if aggregate value is suspiciously low
             if aggregate_value < 0.0001:
-                logger.warning(f"  ⚠️  SUSPICIOUS: Aggregate {quote_currency} value is very low ({aggregate_value:.8f}). This may indicate API issues.")
+                logger.warning(
+                    f"  ⚠️  SUSPICIOUS: Aggregate {quote_currency} value is very low ({aggregate_value:.8f}). This may indicate API issues."
+                )
                 logger.warning(f"  ⚠️  Bot may be unable to open new positions due to insufficient calculated balance.")
 
             # Calculate bot's reserved balance (percentage of total account value from bot config)
@@ -304,9 +295,15 @@ class MultiBotMonitor:
             # Determine if we have enough budget for new positions or DCA
             has_budget_for_new = available_budget >= min_per_position
 
-            logger.warning(f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved ({budget_pct}% of {aggregate_value:.8f})")
-            logger.warning(f"  💰 In positions: {total_in_positions:.8f} {quote_currency}, Available: {available_budget:.8f} {quote_currency}")
-            logger.warning(f"  💰 Min per position: {min_per_position:.8f} {quote_currency}, Has budget: {has_budget_for_new}")
+            logger.warning(
+                f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved ({budget_pct}% of {aggregate_value:.8f})"
+            )
+            logger.warning(
+                f"  💰 In positions: {total_in_positions:.8f} {quote_currency}, Available: {available_budget:.8f} {quote_currency}"
+            )
+            logger.warning(
+                f"  💰 Min per position: {min_per_position:.8f} {quote_currency}, Has budget: {has_budget_for_new}"
+            )
 
             # Determine which pairs to analyze
             pairs_to_analyze = trading_pairs
@@ -318,15 +315,21 @@ class MultiBotMonitor:
 
                 if len(pairs_to_analyze) < len(trading_pairs):
                     logger.info(f"  📊 Bot at max capacity ({open_count}/{max_concurrent_deals} positions)")
-                    logger.info(f"  🎯 Analyzing only {len(pairs_to_analyze)} pairs with open positions: {pairs_to_analyze}")
+                    logger.info(
+                        f"  🎯 Analyzing only {len(pairs_to_analyze)} pairs with open positions: {pairs_to_analyze}"
+                    )
                     logger.info(f"  ⏭️  Skipping {len(trading_pairs) - len(pairs_to_analyze)} pairs without positions")
             elif not has_budget_for_new:
                 # Insufficient budget - only analyze pairs with open positions (for sell signals, no new buys/DCA)
                 pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
                 pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
 
-                logger.warning(f"  ⚠️  INSUFFICIENT FUNDS: Only {available_budget:.8f} {quote_currency} available, need {min_per_position:.8f}")
-                logger.info(f"  💰 Skipping new position analysis - analyzing only {len(pairs_to_analyze)} pairs with open positions for sell signals")
+                logger.warning(
+                    f"  ⚠️  INSUFFICIENT FUNDS: Only {available_budget:.8f} {quote_currency} available, need {min_per_position:.8f}"
+                )
+                logger.info(
+                    f"  💰 Skipping new position analysis - analyzing only {len(pairs_to_analyze)} pairs with open positions for sell signals"
+                )
                 logger.info(f"  ℹ️  Will resume looking for new opportunities once funds are available")
             else:
                 # Below capacity AND has budget - analyze all configured pairs (looking for buy + sell signals)
@@ -409,7 +412,7 @@ class MultiBotMonitor:
                         pairs_data[product_id] = {
                             "current_price": current_price,
                             "candles": candles,
-                            "market_context": market_context
+                            "market_context": market_context,
                         }
                         success = True
                         break  # Success, exit retry loop
@@ -440,14 +443,14 @@ class MultiBotMonitor:
             for product_id in pairs_data.keys():
                 try:
                     print(f"🔍 Processing result for {product_id}...")
-                    signal_data = batch_analyses.get(product_id, {
-                        "signal_type": "hold",
-                        "confidence": 0,
-                        "reasoning": "No analysis result"
-                    })
+                    signal_data = batch_analyses.get(
+                        product_id, {"signal_type": "hold", "confidence": 0, "reasoning": "No analysis result"}
+                    )
 
                     # Debug logging to track duplicate opinions
-                    logger.info(f"    Processing {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)")
+                    logger.info(
+                        f"    Processing {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)"
+                    )
 
                     # Add current_price to signal_data for DCA logic (AI response doesn't include it)
                     pair_info = pairs_data.get(product_id, {})
@@ -480,6 +483,7 @@ class MultiBotMonitor:
             # Log errors to positions that failed to load market data
             if failed_pairs:
                 from datetime import datetime
+
                 logger.info(f"  💾 Logging {len(failed_pairs)} market data errors to positions...")
                 for product_id, error_msg in failed_pairs.items():
                     # Find the position for this product
@@ -500,16 +504,12 @@ class MultiBotMonitor:
         except Exception as e:
             logger.error(f"Error in batch processing: {e}")
             import traceback
+
             traceback.print_exc()
             return {"error": str(e)}
 
     async def log_ai_decision(
-        self,
-        db: AsyncSession,
-        bot: Bot,
-        product_id: str,
-        signal_data: Dict[str, Any],
-        pair_data: Dict[str, Any]
+        self, db: AsyncSession, bot: Bot, product_id: str, signal_data: Dict[str, Any], pair_data: Dict[str, Any]
     ):
         """Log AI decision to database and return the log entry"""
         try:
@@ -517,8 +517,10 @@ class MultiBotMonitor:
             from app.models import AIBotLog
 
             # DEBUG: Log stack trace to find duplicate calls
-            stack = ''.join(traceback.format_stack()[-5:-1])
-            logger.info(f"  📝 Logging AI decision for Bot #{bot.id} {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)")
+            stack = "".join(traceback.format_stack()[-5:-1])
+            logger.info(
+                f"  📝 Logging AI decision for Bot #{bot.id} {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)"
+            )
             logger.debug(f"  Call stack:\n{stack}")
 
             # Extract only additional context (avoid duplicating fields already in columns)
@@ -536,7 +538,7 @@ class MultiBotMonitor:
                 current_price=pair_data.get("current_price"),
                 position_status="unknown",  # Will be determined by trading logic
                 product_id=product_id,
-                context=additional_context  # Only store additional context, not duplicate fields
+                context=additional_context,  # Only store additional context, not duplicate fields
             )
             db.add(log_entry)
             # Don't flush here - let the session commit handle it to avoid greenlet async issues
@@ -549,20 +551,19 @@ class MultiBotMonitor:
             return None
 
     async def execute_trading_logic(
-        self,
-        db: AsyncSession,
-        bot: Bot,
-        product_id: str,
-        signal_data: Dict[str, Any],
-        pair_data: Dict[str, Any]
+        self, db: AsyncSession, bot: Bot, product_id: str, signal_data: Dict[str, Any], pair_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute trading logic for a single pair based on AI signal"""
         # Reuse existing process_bot_pair logic but with pre-analyzed signal
         # This avoids code duplication
         # Pass commit=False to prevent mid-batch commits that corrupt the session
-        return await self.process_bot_pair(db, bot, product_id, pre_analyzed_signal=signal_data, pair_data=pair_data, commit=False)
+        return await self.process_bot_pair(
+            db, bot, product_id, pre_analyzed_signal=signal_data, pair_data=pair_data, commit=False
+        )
 
-    async def process_bot_pair(self, db: AsyncSession, bot: Bot, product_id: str, pre_analyzed_signal=None, pair_data=None, commit=True) -> Dict[str, Any]:
+    async def process_bot_pair(
+        self, db: AsyncSession, bot: Bot, product_id: str, pre_analyzed_signal=None, pair_data=None, commit=True
+    ) -> Dict[str, Any]:
         """
         Process signals for a single bot/pair combination
 
@@ -587,11 +588,12 @@ class MultiBotMonitor:
                 from sqlalchemy import desc, select
 
                 from app.models import Position
-                query = select(Position).where(
-                    Position.bot_id == bot.id,
-                    Position.product_id == product_id,
-                    Position.status == "open"
-                ).order_by(desc(Position.opened_at))
+
+                query = (
+                    select(Position)
+                    .where(Position.bot_id == bot.id, Position.product_id == product_id, Position.status == "open")
+                    .order_by(desc(Position.opened_at))
+                )
                 result = await db.execute(query)
                 existing_position = result.scalars().first()
 
@@ -606,24 +608,30 @@ class MultiBotMonitor:
 
                     # Adjust budget percentages if splitting across pairs (only for new positions)
                     if bot.split_budget_across_pairs:
-                        max_concurrent_deals = max(strategy_config.get('max_concurrent_deals', 1), 1)
+                        max_concurrent_deals = max(strategy_config.get("max_concurrent_deals", 1), 1)
                         logger.info(f"    Splitting budget across {max_concurrent_deals} max concurrent deals")
 
                         # Adjust percentage-based parameters
                         if "base_order_percentage" in strategy_config:
                             original = strategy_config["base_order_percentage"]
                             strategy_config["base_order_percentage"] = original / max_concurrent_deals
-                            logger.info(f"      Base order: {original}% → {strategy_config['base_order_percentage']:.2f}%")
+                            logger.info(
+                                f"      Base order: {original}% → {strategy_config['base_order_percentage']:.2f}%"
+                            )
 
                         if "safety_order_percentage" in strategy_config:
                             original = strategy_config["safety_order_percentage"]
                             strategy_config["safety_order_percentage"] = original / max_concurrent_deals
-                            logger.info(f"      Safety order: {original}% → {strategy_config['safety_order_percentage']:.2f}%")
+                            logger.info(
+                                f"      Safety order: {original}% → {strategy_config['safety_order_percentage']:.2f}%"
+                            )
 
                         if "max_btc_usage_percentage" in strategy_config:
                             original = strategy_config["max_btc_usage_percentage"]
                             strategy_config["max_btc_usage_percentage"] = original / max_concurrent_deals
-                            logger.info(f"      Max usage: {original}% → {strategy_config['max_btc_usage_percentage']:.2f}%")
+                            logger.info(
+                                f"      Max usage: {original}% → {strategy_config['max_btc_usage_percentage']:.2f}%"
+                            )
 
                 strategy = StrategyRegistry.get_strategy(bot.strategy_type, strategy_config)
             except ValueError as e:
@@ -651,15 +659,15 @@ class MultiBotMonitor:
             if bot.strategy_type == "conditional_dca":
                 # Extract unique timeframes from all conditions
                 timeframes_needed = set()
-                for phase_key in ['base_order_conditions', 'safety_order_conditions', 'take_profit_conditions']:
+                for phase_key in ["base_order_conditions", "safety_order_conditions", "take_profit_conditions"]:
                     conditions = bot.strategy_config.get(phase_key, [])
                     for condition in conditions:
-                        tf = condition.get('timeframe', 'FIVE_MINUTE')
+                        tf = condition.get("timeframe", "FIVE_MINUTE")
                         timeframes_needed.add(tf)
 
                 # If no conditions, use default
                 if not timeframes_needed:
-                    timeframes_needed.add('FIVE_MINUTE')
+                    timeframes_needed.add("FIVE_MINUTE")
 
                 logger.info(f"  Fetching candles for timeframes: {timeframes_needed}")
 
@@ -670,21 +678,19 @@ class MultiBotMonitor:
                     # Coinbase limits: ~300 candles max per request
                     # Stay conservative to ensure we get data
                     lookback_map = {
-                        'ONE_MINUTE': 200,
-                        'FIVE_MINUTE': 200,
-                        'FIFTEEN_MINUTE': 150,
-                        'THIRTY_MINUTE': 100,  # 100 candles = 50 hours
-                        'ONE_HOUR': 100,       # 100 candles = 4 days
-                        'TWO_HOUR': 100,
-                        'SIX_HOUR': 100,
-                        'ONE_DAY': 100
+                        "ONE_MINUTE": 200,
+                        "FIVE_MINUTE": 200,
+                        "FIFTEEN_MINUTE": 150,
+                        "THIRTY_MINUTE": 100,  # 100 candles = 50 hours
+                        "ONE_HOUR": 100,  # 100 candles = 4 days
+                        "TWO_HOUR": 100,
+                        "SIX_HOUR": 100,
+                        "ONE_DAY": 100,
                     }
                     lookback = lookback_map.get(timeframe, 100)
 
                     tf_candles = await self.get_candles_cached(
-                        product_id=product_id,
-                        granularity=timeframe,
-                        lookback_candles=lookback
+                        product_id=product_id, granularity=timeframe, lookback_candles=lookback
                     )
                     if tf_candles:
                         logger.info(f"    Got {len(tf_candles)} candles for {timeframe}")
@@ -705,9 +711,7 @@ class MultiBotMonitor:
 
                 # Get historical candles for signal analysis
                 candles = await self.get_candles_cached(
-                    product_id=product_id,
-                    granularity=timeframe,
-                    lookback_candles=100
+                    product_id=product_id, granularity=timeframe, lookback_candles=100
                 )
 
                 if not candles:
@@ -733,7 +737,9 @@ class MultiBotMonitor:
                 logger.warning("  No signal from strategy (returned None)")
                 return {"action": "none", "reason": "No signal"}
 
-            logger.info(f"  Signal data: base_order={signal_data.get('base_order_signal')}, safety_order={signal_data.get('safety_order_signal')}, take_profit={signal_data.get('take_profit_signal')}")
+            logger.info(
+                f"  Signal data: base_order={signal_data.get('base_order_signal')}, safety_order={signal_data.get('safety_order_signal')}, take_profit={signal_data.get('take_profit_signal')}"
+            )
 
             signal_type = signal_data.get("signal_type")
             logger.info(f"  🔔 Signal detected: {signal_type}")
@@ -744,7 +750,7 @@ class MultiBotMonitor:
                 coinbase=self.coinbase,
                 bot=bot,
                 strategy=strategy,
-                product_id=product_id  # Specify which pair this engine instance trades
+                product_id=product_id,  # Specify which pair this engine instance trades
             )
 
             # Process the signal (pass pre_analyzed_signal if available from batch mode)
@@ -794,7 +800,9 @@ class MultiBotMonitor:
                                 if bot.last_signal_check:
                                     time_since_last_check = (now - bot.last_signal_check).total_seconds()
                                     if time_since_last_check < check_interval:
-                                        print(f"⏭️  Skipping {bot.name} - last checked {time_since_last_check:.0f}s ago (interval: {check_interval}s)")
+                                        print(
+                                            f"⏭️  Skipping {bot.name} - last checked {time_since_last_check:.0f}s ago (interval: {check_interval}s)"
+                                        )
                                         continue
 
                                 print(f"🔄 Processing {bot.name} (interval: {check_interval}s)")
@@ -876,17 +884,15 @@ class MultiBotMonitor:
                             "id": bot.id,
                             "name": bot.name,
                             "product_ids": bot.get_trading_pairs(),  # Multi-pair support
-                            "product_id": bot.get_trading_pairs()[0] if bot.get_trading_pairs() else None,  # Legacy compatibility
+                            "product_id": (
+                                bot.get_trading_pairs()[0] if bot.get_trading_pairs() else None
+                            ),  # Legacy compatibility
                             "strategy": bot.strategy_type,
-                            "last_check": bot.last_signal_check.isoformat() if bot.last_signal_check else None
+                            "last_check": bot.last_signal_check.isoformat() if bot.last_signal_check else None,
                         }
                         for bot in bots
-                    ]
+                    ],
                 }
         except Exception as e:
             logger.error(f"Error getting status: {e}")
-            return {
-                "running": self.running,
-                "interval_seconds": self.interval_seconds,
-                "error": str(e)
-            }
+            return {"running": self.running, "interval_seconds": self.interval_seconds, "error": str(e)}

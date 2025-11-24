@@ -12,10 +12,7 @@ from app.constants import BALANCE_CACHE_TTL
 logger = logging.getLogger(__name__)
 
 
-async def get_accounts(
-    request_func: Callable,
-    force_fresh: bool = False
-) -> List[Dict[str, Any]]:
+async def get_accounts(request_func: Callable, force_fresh: bool = False) -> List[Dict[str, Any]]:
     """Get all accounts (cached to reduce API calls unless force_fresh=True)"""
     cache_key = "accounts_list"
 
@@ -34,10 +31,7 @@ async def get_accounts(
     return accounts
 
 
-async def get_account(
-    request_func: Callable,
-    account_id: str
-) -> Dict[str, Any]:
+async def get_account(request_func: Callable, account_id: str) -> Dict[str, Any]:
     """Get specific account details"""
     result = await request_func("GET", f"/api/v3/brokerage/accounts/{account_id}")
     return result.get("account", {})
@@ -49,10 +43,7 @@ async def get_portfolios(request_func: Callable) -> List[Dict[str, Any]]:
     return result.get("portfolios", [])
 
 
-async def get_portfolio_breakdown(
-    request_func: Callable,
-    portfolio_uuid: Optional[str] = None
-) -> dict:
+async def get_portfolio_breakdown(request_func: Callable, portfolio_uuid: Optional[str] = None) -> dict:
     """
     Get portfolio breakdown with all spot positions
 
@@ -71,10 +62,7 @@ async def get_portfolio_breakdown(
     return result.get("breakdown", {})
 
 
-async def get_btc_balance(
-    request_func: Callable,
-    auth_type: str
-) -> float:
+async def get_btc_balance(request_func: Callable, auth_type: str) -> float:
     """
     Get BTC balance - always fetches fresh data from Coinbase (no caching)
 
@@ -117,10 +105,7 @@ async def get_btc_balance(
         return balance
 
 
-async def get_eth_balance(
-    request_func: Callable,
-    auth_type: str
-) -> float:
+async def get_eth_balance(request_func: Callable, auth_type: str) -> float:
     """
     Get ETH balance
 
@@ -208,16 +193,19 @@ async def calculate_aggregate_btc_value(request_func: Callable, auth_type: str) 
     # Get BTC value of open positions from database
     try:
         import sqlite3
+
         db_path = "/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/trading.db"
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
         # Query all open positions in BTC pairs
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT product_id, total_base_acquired, average_buy_price
             FROM positions
             WHERE status = 'open' AND product_id LIKE '%-BTC'
-        """)
+        """
+        )
 
         positions = cursor.fetchall()
         btc_in_positions = 0.0
@@ -242,9 +230,7 @@ async def calculate_aggregate_btc_value(request_func: Callable, auth_type: str) 
 
 
 async def calculate_aggregate_usd_value(
-    request_func: Callable,
-    get_btc_usd_price_func: Callable,
-    get_current_price_func: Callable
+    request_func: Callable, get_btc_usd_price_func: Callable, get_current_price_func: Callable
 ) -> float:
     """
     Calculate aggregate USD value of entire portfolio (USD + all pairs converted to USD).

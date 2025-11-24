@@ -63,10 +63,7 @@ class SimpleCache:
     async def cleanup_expired(self):
         """Remove all expired entries"""
         async with self._lock:
-            expired_keys = [
-                key for key, entry in self._cache.items()
-                if entry.is_expired()
-            ]
+            expired_keys = [key for key, entry in self._cache.items() if entry.is_expired()]
             for key in expired_keys:
                 del self._cache[key]
 

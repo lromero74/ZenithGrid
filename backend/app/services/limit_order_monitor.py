@@ -31,10 +31,7 @@ class LimitOrderMonitor:
         """Check all pending limit close orders for fills"""
         try:
             # Get all positions with pending limit close orders
-            query = select(Position).where(
-                Position.closing_via_limit == True,
-                Position.status == "open"
-            )
+            query = select(Position).where(Position.closing_via_limit == True, Position.status == "open")
             result = await self.db.execute(query)
             positions = result.scalars().all()
 
@@ -54,14 +51,14 @@ class LimitOrderMonitor:
                 return
 
             # Get the pending order record
-            pending_order_query = select(PendingOrder).where(
-                PendingOrder.order_id == position.limit_close_order_id
-            )
+            pending_order_query = select(PendingOrder).where(PendingOrder.order_id == position.limit_close_order_id)
             pending_order_result = await self.db.execute(pending_order_query)
             pending_order = pending_order_result.scalars().first()
 
             if not pending_order:
-                logger.warning(f"No pending order found for position {position.id}, order ID {position.limit_close_order_id}")
+                logger.warning(
+                    f"No pending order found for position {position.id}, order ID {position.limit_close_order_id}"
+                )
                 return
 
             # Fetch order status from Coinbase
@@ -104,7 +101,9 @@ class LimitOrderMonitor:
                 # Update status to partially_filled if not fully filled
                 if filled_size < pending_order.base_amount:
                     pending_order.status = "partially_filled"
-                    logger.info(f"Position {position.id} limit order partially filled: {filled_size}/{pending_order.base_amount}")
+                    logger.info(
+                        f"Position {position.id} limit order partially filled: {filled_size}/{pending_order.base_amount}"
+                    )
 
                 await self.db.commit()
 
@@ -112,7 +111,9 @@ class LimitOrderMonitor:
             logger.error(f"Error processing partial fills for position {position.id}: {e}")
             await self.db.rollback()
 
-    async def _process_order_completion(self, position: Position, pending_order: PendingOrder, order_data: dict, order_status: str):
+    async def _process_order_completion(
+        self, position: Position, pending_order: PendingOrder, order_data: dict, order_status: str
+    ):
         """Process completed (filled/cancelled/expired) limit order"""
         try:
             if order_status == "FILLED":
@@ -132,7 +133,7 @@ class LimitOrderMonitor:
                     base_amount=filled_size,
                     price=avg_fill_price,
                     trade_type="limit_close",
-                    order_id=position.limit_close_order_id
+                    order_id=position.limit_close_order_id,
                 )
                 self.db.add(trade)
 
@@ -142,7 +143,9 @@ class LimitOrderMonitor:
                 position.sell_price = avg_fill_price
                 position.total_quote_received = filled_value
                 position.profit_quote = filled_value - position.total_quote_spent
-                position.profit_percentage = (position.profit_quote / position.total_quote_spent * 100) if position.total_quote_spent > 0 else 0
+                position.profit_percentage = (
+                    (position.profit_quote / position.total_quote_spent * 100) if position.total_quote_spent > 0 else 0
+                )
 
                 # Calculate USD profit if BTC pair
                 quote_currency = position.get_quote_currency()
@@ -166,6 +169,7 @@ class LimitOrderMonitor:
                 # Return reserved balance to bot if position has a bot
                 if position.bot_id:
                     from app.models import Bot
+
                     bot_query = select(Bot).where(Bot.id == position.bot_id)
                     bot_result = await self.db.execute(bot_query)
                     bot = bot_result.scalars().first()

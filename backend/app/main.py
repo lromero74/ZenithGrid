@@ -14,6 +14,7 @@ from app.routers import account_router
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
+
 # Import dependency functions for override
 from app.position_routers.dependencies import get_coinbase as position_get_coinbase
 from app.routers.account_router import get_coinbase as account_get_coinbase
@@ -23,9 +24,7 @@ from app.routers.system_router import get_coinbase as system_get_coinbase, get_p
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
-    title="ETH/BTC Trading Bot"
-)
+app = FastAPI(title="ETH/BTC Trading Bot")
 
 # CORS middleware
 app.add_middleware(
@@ -135,5 +134,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
 # Test comment for auto-deploy

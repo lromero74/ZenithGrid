@@ -31,7 +31,7 @@ async def limit_close_position(
     position_id: int,
     request: LimitCloseRequest,
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
     """Close a position via limit order"""
     try:
@@ -53,7 +53,7 @@ async def limit_close_position(
             product_id=position.product_id,
             side="SELL",
             limit_price=request.limit_price,
-            size=str(position.total_base_acquired)  # Sell entire position
+            size=str(position.total_base_acquired),  # Sell entire position
         )
 
         # Extract order ID from response
@@ -76,7 +76,7 @@ async def limit_close_position(
             trade_type="limit_close",
             status="pending",
             remaining_base_amount=position.total_base_acquired,
-            fills=[]
+            fills=[],
         )
         db.add(pending_order)
 
@@ -90,7 +90,7 @@ async def limit_close_position(
             "message": "Limit close order placed successfully",
             "order_id": order_id,
             "limit_price": request.limit_price,
-            "base_amount": position.total_base_acquired
+            "base_amount": position.total_base_acquired,
         }
 
     except HTTPException:
@@ -101,9 +101,7 @@ async def limit_close_position(
 
 @router.get("/{position_id}/ticker")
 async def get_position_ticker(
-    position_id: int,
-    db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)
 ):
     """Get current bid/ask/mark prices for a position"""
     try:
@@ -126,7 +124,7 @@ async def get_position_ticker(
             "best_bid": best_bid,
             "best_ask": best_ask,
             "mark_price": mark_price,
-            "last_price": float(ticker.get("price", 0))
+            "last_price": float(ticker.get("price", 0)),
         }
 
     except HTTPException:
@@ -137,9 +135,7 @@ async def get_position_ticker(
 
 @router.get("/{position_id}/slippage-check")
 async def check_market_close_slippage(
-    position_id: int,
-    db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)
 ):
     """Check if closing at market would result in significant slippage"""
     try:
@@ -189,7 +185,7 @@ async def check_market_close_slippage(
             "slippage_percentage": slippage_percentage,
             "show_warning": show_warning,
             "position_value_at_bid": actual_value_at_bid,
-            "position_value_at_mark": current_value_at_mark
+            "position_value_at_mark": current_value_at_mark,
         }
 
     except HTTPException:
@@ -200,9 +196,7 @@ async def check_market_close_slippage(
 
 @router.post("/{position_id}/cancel-limit-close")
 async def cancel_limit_close(
-    position_id: int,
-    db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)
 ):
     """Cancel a pending limit close order"""
     try:
@@ -220,9 +214,7 @@ async def cancel_limit_close(
         await coinbase.cancel_order(position.limit_close_order_id)
 
         # Update pending order status
-        pending_order_query = select(PendingOrder).where(
-            PendingOrder.order_id == position.limit_close_order_id
-        )
+        pending_order_query = select(PendingOrder).where(PendingOrder.order_id == position.limit_close_order_id)
         pending_order_result = await db.execute(pending_order_query)
         pending_order = pending_order_result.scalars().first()
 
@@ -249,7 +241,7 @@ async def update_limit_close(
     position_id: int,
     request: UpdateLimitCloseRequest,
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
     """Update the limit price for a pending limit close order"""
     try:
@@ -264,9 +256,7 @@ async def update_limit_close(
             raise HTTPException(status_code=400, detail="Position does not have a pending limit close order")
 
         # Get the pending order to check remaining amount
-        pending_order_query = select(PendingOrder).where(
-            PendingOrder.order_id == position.limit_close_order_id
-        )
+        pending_order_query = select(PendingOrder).where(PendingOrder.order_id == position.limit_close_order_id)
         pending_order_result = await db.execute(pending_order_query)
         pending_order = pending_order_result.scalars().first()
 
@@ -280,10 +270,7 @@ async def update_limit_close(
         remaining_amount = pending_order.remaining_base_amount or position.total_base_acquired
 
         order_result = await coinbase.create_limit_order(
-            product_id=position.product_id,
-            side="SELL",
-            limit_price=request.new_limit_price,
-            size=str(remaining_amount)
+            product_id=position.product_id, side="SELL", limit_price=request.new_limit_price, size=str(remaining_amount)
         )
 
         # Extract new order ID
@@ -310,7 +297,7 @@ async def update_limit_close(
             trade_type="limit_close",
             status="pending",
             remaining_base_amount=remaining_amount,
-            fills=pending_order.fills  # Preserve existing fills
+            fills=pending_order.fills,  # Preserve existing fills
         )
         db.add(new_pending_order)
 
@@ -323,7 +310,7 @@ async def update_limit_close(
             "message": "Limit close order updated successfully",
             "order_id": new_order_id,
             "new_limit_price": request.new_limit_price,
-            "remaining_amount": remaining_amount
+            "remaining_amount": remaining_amount,
         }
 
     except HTTPException:

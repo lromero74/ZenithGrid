@@ -50,9 +50,7 @@ async def cancel_position(position_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{position_id}/force-close")
 async def force_close_position(
-    position_id: int,
-    db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)
 ):
     """Force close a position at current market price"""
     try:
@@ -79,26 +77,21 @@ async def force_close_position(
 
         # Create strategy instance for this bot
         from app.strategies import StrategyRegistry
+
         strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
 
         # Execute sell using trading engine
         engine = StrategyTradingEngine(
-            db=db,
-            coinbase=coinbase,
-            bot=bot,
-            strategy=strategy,
-            product_id=position.product_id
+            db=db, coinbase=coinbase, bot=bot, strategy=strategy, product_id=position.product_id
         )
         trade, profit_quote, profit_percentage = await engine.execute_sell(
-            position=position,
-            current_price=current_price,
-            signal_data=None
+            position=position, current_price=current_price, signal_data=None
         )
 
         return {
             "message": f"Position {position_id} closed successfully",
             "profit_quote": profit_quote,
-            "profit_percentage": profit_percentage
+            "profit_percentage": profit_percentage,
         }
     except HTTPException:
         raise

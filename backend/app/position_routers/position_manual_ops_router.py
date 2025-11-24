@@ -27,7 +27,7 @@ async def add_funds_to_position(
     position_id: int,
     request: AddFundsRequest,
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
     """Manually add funds to a position (manual safety order)"""
     btc_amount = request.btc_amount
@@ -46,7 +46,7 @@ async def add_funds_to_position(
         if position.total_btc_spent + btc_amount > position.max_btc_allowed:
             raise HTTPException(
                 status_code=400,
-                detail=f"Adding {btc_amount} BTC would exceed max allowed ({position.max_btc_allowed} BTC)"
+                detail=f"Adding {btc_amount} BTC would exceed max allowed ({position.max_btc_allowed} BTC)",
             )
 
         # Get current price
@@ -55,24 +55,21 @@ async def add_funds_to_position(
         # Execute DCA buy using new trading engine
         trading_client = TradingClient(coinbase)
         engine = StrategyTradingEngine(
-            db=db,
-            trading_client=trading_client,
-            bot=None,  # Manual operation, no bot
-            product_id=position.product_id
+            db=db, trading_client=trading_client, bot=None, product_id=position.product_id  # Manual operation, no bot
         )
         trade = await engine.execute_buy(
             position=position,
             quote_amount=btc_amount,  # New engine uses quote_amount (multi-currency)
             current_price=current_price,
             trade_type="manual_safety_order",
-            signal_data=None
+            signal_data=None,
         )
 
         return {
             "message": f"Added {btc_amount} BTC to position {position_id}",
             "trade_id": trade.id,
             "price": current_price,
-            "eth_acquired": trade.eth_amount
+            "eth_acquired": trade.eth_amount,
         }
     except HTTPException:
         raise
@@ -81,11 +78,7 @@ async def add_funds_to_position(
 
 
 @router.patch("/{position_id}/notes")
-async def update_position_notes(
-    position_id: int,
-    request: UpdateNotesRequest,
-    db: AsyncSession = Depends(get_db)
-):
+async def update_position_notes(position_id: int, request: UpdateNotesRequest, db: AsyncSession = Depends(get_db)):
     """Update notes for a position (like 3Commas)"""
     try:
         query = select(Position).where(Position.id == position_id)
@@ -100,10 +93,7 @@ async def update_position_notes(
 
         await db.commit()
 
-        return {
-            "message": f"Notes updated for position {position_id}",
-            "notes": position.notes
-        }
+        return {"message": f"Notes updated for position {position_id}", "notes": position.notes}
     except HTTPException:
         raise
     except Exception as e:

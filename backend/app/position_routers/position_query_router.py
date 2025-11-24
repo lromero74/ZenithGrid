@@ -30,7 +30,7 @@ async def get_positions(
     status: Optional[str] = None,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
     """Get positions with optional status filter"""
     query = select(Position)
@@ -50,8 +50,7 @@ async def get_positions(
 
         # Count pending orders
         pending_count_query = select(func.count(PendingOrder.id)).where(
-            PendingOrder.position_id == pos.id,
-            PendingOrder.status == "pending"
+            PendingOrder.position_id == pos.id, PendingOrder.status == "pending"
         )
         pending_count_result = await db.execute(pending_count_query)
         pending_count = pending_count_result.scalar()
@@ -62,14 +61,14 @@ async def get_positions(
 
         # If position is closing via limit, fetch order details
         if pos.closing_via_limit and pos.limit_close_order_id:
-            limit_order_query = select(PendingOrder).where(
-                PendingOrder.order_id == pos.limit_close_order_id
-            )
+            limit_order_query = select(PendingOrder).where(PendingOrder.order_id == pos.limit_close_order_id)
             limit_order_result = await db.execute(limit_order_query)
             limit_order = limit_order_result.scalars().first()
 
             if limit_order:
-                fills_data = json.loads(limit_order.fills) if isinstance(limit_order.fills, str) else (limit_order.fills or [])
+                fills_data = (
+                    json.loads(limit_order.fills) if isinstance(limit_order.fills, str) else (limit_order.fills or [])
+                )
                 fills = [LimitOrderFill(**fill) for fill in fills_data]
                 filled_amount = limit_order.base_amount - (limit_order.remaining_base_amount or limit_order.base_amount)
                 fill_percentage = (filled_amount / limit_order.base_amount * 100) if limit_order.base_amount > 0 else 0
@@ -80,7 +79,7 @@ async def get_positions(
                     filled_amount=filled_amount,
                     fill_percentage=fill_percentage,
                     fills=fills,
-                    status=limit_order.status
+                    status=limit_order.status,
                 )
 
         response.append(pos_response)
@@ -96,22 +95,18 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
     Returns cumulative profit over time from all closed positions.
     """
     # Get all closed positions ordered by close date
-    query = select(Position).where(
-        Position.status == "closed",
-        Position.closed_at != None,
-        Position.profit_usd != None
-    ).order_by(Position.closed_at)
+    query = (
+        select(Position)
+        .where(Position.status == "closed", Position.closed_at != None, Position.profit_usd != None)
+        .order_by(Position.closed_at)
+    )
 
     result = await db.execute(query)
     positions = result.scalars().all()
 
     if not positions:
         # No data yet
-        return {
-            "summary": [],
-            "by_day": [],
-            "by_pair": []
-        }
+        return {"summary": [], "by_day": [], "by_pair": []}
 
     # Build cumulative P&L over time
     cumulative_pnl = 0.0
@@ -124,12 +119,14 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
         cumulative_pnl += profit
 
         # Add to summary timeline
-        summary_data.append({
-            "timestamp": pos.closed_at.isoformat(),
-            "date": pos.closed_at.strftime("%Y-%m-%d"),
-            "cumulative_pnl": round(cumulative_pnl, 2),
-            "profit": round(profit, 2)
-        })
+        summary_data.append(
+            {
+                "timestamp": pos.closed_at.isoformat(),
+                "date": pos.closed_at.strftime("%Y-%m-%d"),
+                "cumulative_pnl": round(cumulative_pnl, 2),
+                "profit": round(profit, 2),
+            }
+        )
 
         # Aggregate by day
         day_key = pos.closed_at.date().isoformat()
@@ -143,18 +140,11 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
     cumulative = 0.0
     for day in sorted(daily_pnl.keys()):
         cumulative += daily_pnl[day]
-        by_day_data.append({
-            "date": day,
-            "daily_pnl": round(daily_pnl[day], 2),
-            "cumulative_pnl": round(cumulative, 2)
-        })
+        by_day_data.append({"date": day, "daily_pnl": round(daily_pnl[day], 2), "cumulative_pnl": round(cumulative, 2)})
 
     # Convert pair P&L to list
     by_pair_data = [
-        {
-            "pair": pair,
-            "total_pnl": round(pnl, 2)
-        }
+        {"pair": pair, "total_pnl": round(pnl, 2)}
         for pair, pnl in sorted(pair_pnl.items(), key=lambda x: x[1], reverse=True)
     ]
 
@@ -164,13 +154,12 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
     active_trades = active_count_result.scalar() or 0
 
     # Get bot-level P&L for most profitable bot
-    bot_pnl_query = select(
-        Position.bot_id,
-        func.sum(Position.profit_usd).label('total_pnl')
-    ).where(
-        Position.status == "closed",
-        Position.profit_usd != None
-    ).group_by(Position.bot_id).order_by(func.sum(Position.profit_usd).desc())
+    bot_pnl_query = (
+        select(Position.bot_id, func.sum(Position.profit_usd).label("total_pnl"))
+        .where(Position.status == "closed", Position.profit_usd != None)
+        .group_by(Position.bot_id)
+        .order_by(func.sum(Position.profit_usd).desc())
+    )
 
     bot_pnl_result = await db.execute(bot_pnl_query)
     bot_pnls = bot_pnl_result.all()
@@ -183,18 +172,14 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
         bot_result = await db.execute(bot_query)
         bot = bot_result.scalars().first()
         if bot:
-            most_profitable_bot = {
-                "bot_id": top_bot_id,
-                "bot_name": bot.name,
-                "total_pnl": round(top_bot_pnl, 2)
-            }
+            most_profitable_bot = {"bot_id": top_bot_id, "bot_name": bot.name, "total_pnl": round(top_bot_pnl, 2)}
 
     return {
         "summary": summary_data,
         "by_day": by_day_data,
         "by_pair": by_pair_data,
         "active_trades": active_trades,
-        "most_profitable_bot": most_profitable_bot
+        "most_profitable_bot": most_profitable_bot,
     }
 
 
@@ -217,8 +202,7 @@ async def get_position(position_id: int, db: AsyncSession = Depends(get_db)):
 
     # Count pending orders
     pending_count_query = select(func.count(PendingOrder.id)).where(
-        PendingOrder.position_id == position.id,
-        PendingOrder.status == "pending"
+        PendingOrder.position_id == position.id, PendingOrder.status == "pending"
     )
     pending_count_result = await db.execute(pending_count_query)
     pending_count = pending_count_result.scalar()
@@ -241,11 +225,7 @@ async def get_position_trades(position_id: int, db: AsyncSession = Depends(get_d
 
 
 @router.get("/{position_id}/ai-logs", response_model=List[AIBotLogResponse])
-async def get_position_ai_logs(
-    position_id: int,
-    include_before_open: bool = True,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_position_ai_logs(position_id: int, include_before_open: bool = True, db: AsyncSession = Depends(get_db)):
     """
     Get AI reasoning logs for a position.
 
@@ -264,9 +244,7 @@ async def get_position_ai_logs(
         raise HTTPException(status_code=404, detail="Position not found")
 
     # Build query for AI logs
-    query = select(AIBotLog).where(
-        AIBotLog.position_id == position_id
-    )
+    query = select(AIBotLog).where(AIBotLog.position_id == position_id)
 
     # If include_before_open is True, also get logs from 30s before open and 30s after close
     # that belong to the same bot and product
@@ -280,13 +258,13 @@ async def get_position_ai_logs(
             time_after = datetime.utcnow() + timedelta(days=365)
 
         query = select(AIBotLog).where(
-            (AIBotLog.position_id == position_id) |
-            (
-                (AIBotLog.bot_id == position.bot_id) &
-                (AIBotLog.product_id == position.product_id) &
-                (AIBotLog.timestamp >= time_before) &
-                (AIBotLog.timestamp <= time_after) &
-                (AIBotLog.position_id == None)
+            (AIBotLog.position_id == position_id)
+            | (
+                (AIBotLog.bot_id == position.bot_id)
+                & (AIBotLog.product_id == position.product_id)
+                & (AIBotLog.timestamp >= time_before)
+                & (AIBotLog.timestamp <= time_after)
+                & (AIBotLog.position_id == None)
             )
         )
 

@@ -31,10 +31,10 @@ def load_cdp_credentials_from_file(file_path: str) -> Tuple[str, str]:
     Returns:
         Tuple of (key_name, private_key)
     """
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         data = json.load(f)
 
-    return data['name'], data['privateKey']
+    return data["name"], data["privateKey"]
 
 
 def generate_jwt(key_name: str, private_key: str, request_method: str, request_path: str) -> str:
@@ -52,9 +52,7 @@ def generate_jwt(key_name: str, private_key: str, request_method: str, request_p
     """
     # Load the EC private key
     private_key_obj = serialization.load_pem_private_key(
-        private_key.encode('utf-8'),
-        password=None,
-        backend=default_backend()
+        private_key.encode("utf-8"), password=None, backend=default_backend()
     )
 
     # Create JWT payload - URI must include hostname per Coinbase spec
@@ -66,15 +64,12 @@ def generate_jwt(key_name: str, private_key: str, request_method: str, request_p
         "iss": "cdp",  # Coinbase Developer Platform
         "nbf": current_time,
         "exp": current_time + 120,  # Expires in 2 minutes
-        "uri": uri
+        "uri": uri,
     }
 
     # Sign JWT with ES256 algorithm (ECDSA with P-256 curve)
     token = jwt.encode(
-        payload,
-        private_key_obj,
-        algorithm="ES256",
-        headers={"kid": key_name, "nonce": str(current_time)}
+        payload, private_key_obj, algorithm="ES256", headers={"kid": key_name, "nonce": str(current_time)}
     )
 
     # Debug output
@@ -85,13 +80,7 @@ def generate_jwt(key_name: str, private_key: str, request_method: str, request_p
     return token
 
 
-def generate_hmac_signature(
-    api_secret: str,
-    timestamp: str,
-    method: str,
-    request_path: str,
-    body: str = ""
-) -> str:
+def generate_hmac_signature(api_secret: str, timestamp: str, method: str, request_path: str, body: str = "") -> str:
     """
     Generate HMAC-SHA256 signature for API request
 
@@ -106,11 +95,7 @@ def generate_hmac_signature(
         HMAC signature hex string
     """
     message = timestamp + method + request_path + body
-    signature = hmac.new(
-        api_secret.encode("utf-8"),
-        message.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
+    signature = hmac.new(api_secret.encode("utf-8"), message.encode("utf-8"), hashlib.sha256).hexdigest()
     return signature
 
 
@@ -126,7 +111,7 @@ async def authenticated_request(
     api_secret: Optional[str] = None,
     # Request params
     params: Optional[Dict[str, Any]] = None,
-    data: Optional[Dict[str, Any]] = None
+    data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Make authenticated request to Coinbase API
@@ -152,10 +137,7 @@ async def authenticated_request(
     if auth_type == "cdp":
         # CDP/JWT Authentication
         jwt_token = generate_jwt(key_name, private_key, method, endpoint)
-        headers = {
-            "Authorization": f"Bearer {jwt_token}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {jwt_token}", "Content-Type": "application/json"}
     else:
         # HMAC Authentication
         timestamp = str(int(time.time()))
@@ -168,7 +150,7 @@ async def authenticated_request(
             "CB-ACCESS-KEY": api_key,
             "CB-ACCESS-SIGN": signature,
             "CB-ACCESS-TIMESTAMP": timestamp,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -191,8 +173,10 @@ async def authenticated_request(
                 if e.response.status_code == 429:  # Too Many Requests
                     if attempt < max_retries - 1:
                         # Exponential backoff: 1s, 2s, 4s
-                        wait_time = 2 ** attempt
-                        logger.warning(f"⚠️  Rate limited (429) on {method} {endpoint}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                        wait_time = 2**attempt
+                        logger.warning(
+                            f"⚠️  Rate limited (429) on {method} {endpoint}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})"
+                        )
                         await asyncio.sleep(wait_time)
                         continue
                     else:

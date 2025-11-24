@@ -3,6 +3,7 @@ Order validation utilities for Coinbase API
 
 Ensures orders meet minimum size requirements before submission.
 """
+
 from decimal import Decimal
 from typing import Dict, Optional, Tuple
 import logging
@@ -16,12 +17,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_MINIMUMS = {
     "BTC": {
         "quote_min_size": "0.0001",  # 0.0001 BTC minimum (~$10 at $100k/BTC)
-        "base_min_size": "0.00000001"  # 1 satoshi
+        "base_min_size": "0.00000001",  # 1 satoshi
     },
-    "USD": {
-        "quote_min_size": "1.00",  # $1 minimum
-        "base_min_size": "0.00000001"
-    }
+    "USD": {"quote_min_size": "1.00", "base_min_size": "0.00000001"},  # $1 minimum
 }
 
 
@@ -52,7 +50,7 @@ async def get_product_minimums(coinbase_client, product_id: str) -> Dict[str, st
             "quote_currency": product.get("quote_currency", "BTC"),
             "base_currency": product.get("base_currency", ""),
             "quote_increment": product.get("quote_increment", "0.00000001"),
-            "base_increment": product.get("base_increment", "0.00000001")
+            "base_increment": product.get("base_increment", "0.00000001"),
         }
 
         # Cache for 1 hour (product minimums rarely change)
@@ -64,15 +62,12 @@ async def get_product_minimums(coinbase_client, product_id: str) -> Dict[str, st
         logger.warning(f"Failed to fetch product minimums for {product_id}: {e}")
 
         # Use defaults based on quote currency
-        quote_currency = product_id.split('-')[1] if '-' in product_id else "BTC"
+        quote_currency = product_id.split("-")[1] if "-" in product_id else "BTC"
         return DEFAULT_MINIMUMS.get(quote_currency, DEFAULT_MINIMUMS["BTC"])
 
 
 async def validate_order_size(
-    coinbase_client,
-    product_id: str,
-    quote_amount: Optional[float] = None,
-    base_amount: Optional[float] = None
+    coinbase_client, product_id: str, quote_amount: Optional[float] = None, base_amount: Optional[float] = None
 ) -> Tuple[bool, Optional[str]]:
     """
     Validate if an order meets minimum size requirements
@@ -100,7 +95,7 @@ async def validate_order_size(
         if quote_decimal < quote_min:
             return (
                 False,
-                f"Order size {quote_amount} {quote_currency} is below minimum {quote_min} {quote_currency} for {product_id}"
+                f"Order size {quote_amount} {quote_currency} is below minimum {quote_min} {quote_currency} for {product_id}",
             )
 
     # Validate base amount if provided
@@ -110,17 +105,13 @@ async def validate_order_size(
             base_currency = minimums["base_currency"]
             return (
                 False,
-                f"Order size {base_amount} {base_currency} is below minimum {base_min} {base_currency} for {product_id}"
+                f"Order size {base_amount} {base_currency} is below minimum {base_min} {base_currency} for {product_id}",
             )
 
     return (True, None)
 
 
-async def calculate_minimum_budget_percentage(
-    coinbase_client,
-    product_id: str,
-    quote_balance: float
-) -> float:
+async def calculate_minimum_budget_percentage(coinbase_client, product_id: str, quote_balance: float) -> float:
     """
     Calculate minimum budget percentage needed to meet order minimums
 

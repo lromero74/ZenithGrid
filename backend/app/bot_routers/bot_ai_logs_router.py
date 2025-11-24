@@ -21,11 +21,7 @@ router = APIRouter()
 
 
 @router.post("/{bot_id}/logs", response_model=AIBotLogResponse, status_code=201)
-async def create_ai_bot_log(
-    bot_id: int,
-    log_data: AIBotLogCreate,
-    db: AsyncSession = Depends(get_db)
-):
+async def create_ai_bot_log(bot_id: int, log_data: AIBotLogCreate, db: AsyncSession = Depends(get_db)):
     """Save AI bot reasoning/thinking log"""
     # Verify bot exists
     bot_query = select(Bot).where(Bot.id == bot_id)
@@ -44,7 +40,7 @@ async def create_ai_bot_log(
         current_price=log_data.current_price,
         position_status=log_data.position_status,
         context=log_data.context,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.utcnow(),
     )
 
     db.add(log_entry)
@@ -62,7 +58,7 @@ async def get_ai_bot_logs(
     product_id: Optional[str] = None,
     position_id: Optional[int] = None,
     since: Optional[datetime] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get AI bot reasoning logs (most recent first)
@@ -95,12 +91,7 @@ async def get_ai_bot_logs(
     if since:
         logs_query = logs_query.where(AIBotLog.timestamp >= since)
 
-    logs_query = (
-        logs_query
-        .order_by(desc(AIBotLog.timestamp))
-        .limit(limit)
-        .offset(offset)
-    )
+    logs_query = logs_query.order_by(desc(AIBotLog.timestamp)).limit(limit).offset(offset)
 
     logs_result = await db.execute(logs_query)
     logs = logs_result.scalars().all()

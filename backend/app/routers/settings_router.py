@@ -29,27 +29,27 @@ def get_coinbase() -> CoinbaseClient:
 
 def update_env_file(key: str, value: str):
     """Update a value in the .env file"""
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
 
     # Read existing .env file
     lines = []
     key_found = False
     if os.path.exists(env_path):
-        with open(env_path, 'r') as f:
+        with open(env_path, "r") as f:
             lines = f.readlines()
 
     # Update or add the key
     for i, line in enumerate(lines):
-        if line.startswith(f'{key}='):
-            lines[i] = f'{key}={value}\n'
+        if line.startswith(f"{key}="):
+            lines[i] = f"{key}={value}\n"
             key_found = True
             break
 
     if not key_found:
-        lines.append(f'{key}={value}\n')
+        lines.append(f"{key}={value}\n")
 
     # Write back to .env file
-    with open(env_path, 'w') as f:
+    with open(env_path, "w") as f:
         f.writelines(lines)
 
 
@@ -79,14 +79,11 @@ async def get_settings():
 
 
 @router.post("/settings")
-async def update_settings(
-    settings_update: SettingsUpdate,
-    coinbase: CoinbaseClient = Depends(get_coinbase)
-):
+async def update_settings(settings_update: SettingsUpdate, coinbase: CoinbaseClient = Depends(get_coinbase)):
     """Update trading settings"""
     # Update API credentials in .env file if provided
     if settings_update.coinbase_api_key is not None:
-        update_env_file('COINBASE_API_KEY', settings_update.coinbase_api_key)
+        update_env_file("COINBASE_API_KEY", settings_update.coinbase_api_key)
         settings.coinbase_api_key = settings_update.coinbase_api_key
         # Reinitialize coinbase client with new credentials
         coinbase.api_key = settings_update.coinbase_api_key
@@ -94,7 +91,7 @@ async def update_settings(
             coinbase.api_secret = settings_update.coinbase_api_secret
 
     if settings_update.coinbase_api_secret is not None:
-        update_env_file('COINBASE_API_SECRET', settings_update.coinbase_api_secret)
+        update_env_file("COINBASE_API_SECRET", settings_update.coinbase_api_secret)
         settings.coinbase_api_secret = settings_update.coinbase_api_secret
         coinbase.api_secret = settings_update.coinbase_api_secret
 
@@ -137,14 +134,19 @@ async def test_connection(request: TestConnectionRequest):
                 "success": True,
                 "message": f"Connection successful! BTC Balance: {btc_balance:.8f}, ETH Balance: {eth_balance:.8f}",
                 "btc_balance": btc_balance,
-                "eth_balance": eth_balance
+                "eth_balance": eth_balance,
             }
         except Exception as e:
             error_msg = str(e)
             if "401" in error_msg or "403" in error_msg or "unauthorized" in error_msg.lower():
-                raise HTTPException(status_code=401, detail="Invalid API credentials. Please check your API key and secret.")
+                raise HTTPException(
+                    status_code=401, detail="Invalid API credentials. Please check your API key and secret."
+                )
             elif "permission" in error_msg.lower():
-                raise HTTPException(status_code=403, detail="Insufficient permissions. Make sure your API key has 'View' and 'Trade' permissions.")
+                raise HTTPException(
+                    status_code=403,
+                    detail="Insufficient permissions. Make sure your API key has 'View' and 'Trade' permissions.",
+                )
             else:
                 raise HTTPException(status_code=400, detail=f"Connection failed: {error_msg}")
     except HTTPException:

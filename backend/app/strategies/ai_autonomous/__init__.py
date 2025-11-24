@@ -59,7 +59,7 @@ class AIAutonomousStrategy(TradingStrategy):
         self._last_search_time: Dict[int, datetime] = {}
 
         # Token tracker dict for passing to API functions
-        self._token_tracker = {'total': 0}
+        self._token_tracker = {"total": 0}
 
     def _get_confidence_threshold_for_action(self, action_type: str) -> int:
         """
@@ -89,21 +89,9 @@ class AIAutonomousStrategy(TradingStrategy):
 
         # Define threshold matrix
         thresholds = {
-            "aggressive": {
-                "open": 70,
-                "dca": 65,
-                "close": 60
-            },
-            "moderate": {
-                "open": 75,
-                "dca": 70,
-                "close": 65
-            },
-            "conservative": {
-                "open": 80,
-                "dca": 75,
-                "close": 70
-            }
+            "aggressive": {"open": 70, "dca": 65, "close": 60},
+            "moderate": {"open": 75, "dca": 70, "close": 65},
+            "conservative": {"open": 80, "dca": 75, "close": 70},
         }
 
         # Get default based on risk tolerance
@@ -114,7 +102,7 @@ class AIAutonomousStrategy(TradingStrategy):
         config_key_map = {
             "open": "min_confidence_to_open",
             "dca": "min_confidence_for_dca",
-            "close": "min_confidence_to_close"
+            "close": "min_confidence_to_close",
         }
 
         config_key = config_key_map[action_type]
@@ -132,14 +120,13 @@ class AIAutonomousStrategy(TradingStrategy):
         except Exception as e:
             print(f"❌ EXCEPTION in _get_confidence_threshold_for_action: {e}")
             import traceback
+
             traceback.print_exc()
             # Return safe default
             return default_threshold
 
     def _should_perform_web_search(
-        self,
-        position: Optional[Any],
-        action_context: str  # "open", "close", "hold", "dca"
+        self, position: Optional[Any], action_context: str  # "open", "close", "hold", "dca"
     ) -> bool:
         """
         Determine if we should perform a web search based on configuration and context.
@@ -191,7 +178,9 @@ class AIAutonomousStrategy(TradingStrategy):
                 if holding_hours > 24:
                     # Check if we've searched recently
                     if position.id in self._last_search_time:
-                        hours_since_search = (datetime.utcnow() - self._last_search_time[position.id]).total_seconds() / 3600
+                        hours_since_search = (
+                            datetime.utcnow() - self._last_search_time[position.id]
+                        ).total_seconds() / 3600
                         if hours_since_search < 6:  # Don't search more than every 6 hours for holds
                             return False
                     return True
@@ -202,8 +191,8 @@ class AIAutonomousStrategy(TradingStrategy):
 
     def _format_price(self, price: float, product_id: str) -> str:
         """Format price with correct precision and currency based on product_id"""
-        quote_currency = product_id.split('-')[1] if '-' in product_id else 'BTC'
-        if quote_currency == 'USD':
+        quote_currency = product_id.split("-")[1] if "-" in product_id else "BTC"
+        if quote_currency == "USD":
             return f"{price:.2f} USD"
         else:
             return f"{price:.8f} BTC"
@@ -236,6 +225,7 @@ class AIAutonomousStrategy(TradingStrategy):
         # Import the full parameter list from original file (lines 227-456)
         # This is preserved exactly as-is from the original
         from .strategy_definition import get_strategy_definition
+
         return get_strategy_definition()
 
     def validate_config(self):
@@ -247,7 +237,7 @@ class AIAutonomousStrategy(TradingStrategy):
             "max_position_size_percentage",
             "risk_tolerance",
             "analysis_interval_minutes",
-            "min_profit_percentage"
+            "min_profit_percentage",
         ]
 
         for param in required:
@@ -265,7 +255,7 @@ class AIAutonomousStrategy(TradingStrategy):
         current_price: float,
         candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
         position: Optional[Any] = None,
-        action_context: str = "hold"
+        action_context: str = "hold",
     ) -> Optional[Dict[str, Any]]:
         """
         Use AI to analyze market data and generate trading signals
@@ -291,22 +281,19 @@ class AIAutonomousStrategy(TradingStrategy):
 
             # Determine product_id from position or config
             product_id = None
-            if position and hasattr(position, 'product_id'):
+            if position and hasattr(position, "product_id"):
                 product_id = position.product_id
-            elif 'product_id' in self.config:
-                product_id = self.config['product_id']
+            elif "product_id" in self.config:
+                product_id = self.config["product_id"]
 
             # Perform web search if configured
             web_search_results = None
             if product_id and self._should_perform_web_search(position, action_context):
                 web_search_results = await market_analysis.perform_web_search(
-                    self.client,
-                    product_id,
-                    action_context,
-                    self._token_tracker
+                    self.client, product_id, action_context, self._token_tracker
                 )
                 if web_search_results:
-                    market_context['web_search_results'] = web_search_results
+                    market_context["web_search_results"] = web_search_results
                     self._last_search_time = datetime.utcnow()
                     logger.info(f"🔍 Web search results added to market context")
 
@@ -319,28 +306,17 @@ class AIAutonomousStrategy(TradingStrategy):
 
             if provider == "claude":
                 analysis = await claude.get_claude_analysis(
-                    self.client,
-                    market_context,
-                    build_prompt,
-                    self._token_tracker
+                    self.client, market_context, build_prompt, self._token_tracker
                 )
             elif provider == "gemini":
-                analysis = await gemini.get_gemini_analysis(
-                    market_context,
-                    build_prompt,
-                    self._token_tracker
-                )
+                analysis = await gemini.get_gemini_analysis(market_context, build_prompt, self._token_tracker)
             elif provider == "grok":
-                analysis = await grok.get_grok_analysis(
-                    market_context,
-                    build_prompt,
-                    self._token_tracker
-                )
+                analysis = await grok.get_grok_analysis(market_context, build_prompt, self._token_tracker)
             else:
                 raise ValueError(f"Unknown AI provider: {provider}")
 
             # Sync token tracker back
-            self._total_tokens_used = self._token_tracker['total']
+            self._total_tokens_used = self._token_tracker["total"]
 
             # Cache the result
             cache_key = f"{current_price}_{len(candles)}"
@@ -353,10 +329,7 @@ class AIAutonomousStrategy(TradingStrategy):
             logger.error(f"Error in AI analysis: {e}", exc_info=True)
             return None
 
-    async def analyze_multiple_pairs_batch(
-        self,
-        pairs_data: Dict[str, Dict[str, Any]]
-    ) -> Dict[str, Dict[str, Any]]:
+    async def analyze_multiple_pairs_batch(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """
         Analyze multiple trading pairs in a single AI API call (batch mode)
 
@@ -372,7 +345,9 @@ class AIAutonomousStrategy(TradingStrategy):
         provider = self.config.get("ai_provider", "claude").lower()
 
         # Build batch prompt
-        build_batch_prompt = lambda data: prompts.build_standard_batch_analysis_prompt(data, self.config, self._format_price)
+        build_batch_prompt = lambda data: prompts.build_standard_batch_analysis_prompt(
+            data, self.config, self._format_price
+        )
 
         if provider == "gemini":
             return await gemini.get_gemini_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
@@ -389,24 +364,28 @@ class AIAutonomousStrategy(TradingStrategy):
             for product_id, data in pairs_data.items():
                 market_context = data.get("market_context", {})
                 if provider == "claude":
-                    results[product_id] = await claude.get_claude_analysis(self.client, market_context, build_prompt, self._token_tracker)
+                    results[product_id] = await claude.get_claude_analysis(
+                        self.client, market_context, build_prompt, self._token_tracker
+                    )
                 elif provider == "gemini":
-                    results[product_id] = await gemini.get_gemini_analysis(market_context, build_prompt, self._token_tracker)
+                    results[product_id] = await gemini.get_gemini_analysis(
+                        market_context, build_prompt, self._token_tracker
+                    )
                 elif provider == "grok":
-                    results[product_id] = await grok.get_grok_analysis(market_context, build_prompt, self._token_tracker)
+                    results[product_id] = await grok.get_grok_analysis(
+                        market_context, build_prompt, self._token_tracker
+                    )
             return results
 
     async def should_buy(
-        self,
-        signal_data: Dict[str, Any],
-        position: Optional[Any],
-        btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
     ) -> Tuple[bool, float, str]:
         """
         Determine if we should buy based on AI's analysis
 
         Uses extracted trading_decisions module
         """
+
         # Create wrapper for DCA decision that uses instance methods
         async def ask_dca_wrapper(pos, price, budget, ctx):
             return await trading_decisions.ask_ai_for_dca_decision(
@@ -419,33 +398,19 @@ class AIAutonomousStrategy(TradingStrategy):
                 self.config,
                 lambda p, cp, rb, mc, cfg: prompts.build_dca_decision_prompt(p, cp, rb, mc, cfg),
                 settings,
-                self._token_tracker
+                self._token_tracker,
             )
 
         return await trading_decisions.should_buy(
-            signal_data,
-            position,
-            btc_balance,
-            self.config,
-            self._get_confidence_threshold_for_action,
-            ask_dca_wrapper
+            signal_data, position, btc_balance, self.config, self._get_confidence_threshold_for_action, ask_dca_wrapper
         )
 
-    async def should_sell(
-        self,
-        signal_data: Dict[str, Any],
-        position: Any,
-        current_price: float
-    ) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
         """
         Determine if we should sell
 
         Uses extracted trading_decisions module
         """
         return await trading_decisions.should_sell(
-            signal_data,
-            position,
-            current_price,
-            self.config,
-            self._get_confidence_threshold_for_action
+            signal_data, position, current_price, self.config, self._get_confidence_threshold_for_action
         )

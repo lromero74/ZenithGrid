@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 async def get_grok_analysis(
-    market_context: Dict[str, Any],
-    build_prompt_func,
-    total_tokens_tracker: Dict[str, int]
+    market_context: Dict[str, Any], build_prompt_func, total_tokens_tracker: Dict[str, int]
 ) -> Dict[str, Any]:
     """
     Call Grok API for market analysis (uses OpenAI-compatible API)
@@ -39,7 +37,7 @@ async def get_grok_analysis(
             "confidence": 0,
             "reasoning": "OpenAI library not installed",
             "suggested_allocation_pct": 0,
-            "expected_profit_pct": 0
+            "expected_profit_pct": 0,
         }
 
     api_key = settings.grok_api_key
@@ -50,22 +48,19 @@ async def get_grok_analysis(
             "confidence": 0,
             "reasoning": "Grok API key not configured",
             "suggested_allocation_pct": 0,
-            "expected_profit_pct": 0
+            "expected_profit_pct": 0,
         }
 
     # Use shared prompt template
     prompt = build_prompt_func(market_context)
 
     try:
-        client = AsyncOpenAI(
-            api_key=api_key,
-            base_url="https://api.x.ai/v1"
-        )
+        client = AsyncOpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
         response = await client.chat.completions.create(
             model="grok-3",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0  # Deterministic responses (eliminates flip-flopping)
+            temperature=0,  # Deterministic responses (eliminates flip-flopping)
         )
 
         response_text = response.choices[0].message.content.strip()
@@ -80,10 +75,10 @@ async def get_grok_analysis(
         analysis = json.loads(response_text)
 
         # Track token usage
-        if hasattr(response, 'usage'):
+        if hasattr(response, "usage"):
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
-            total_tokens_tracker['total'] += input_tokens + output_tokens
+            total_tokens_tracker["total"] += input_tokens + output_tokens
             logger.info(f"📊 Grok API - Input: {input_tokens} tokens, Output: {output_tokens} tokens")
 
         signal_type = "none"
@@ -97,7 +92,7 @@ async def get_grok_analysis(
             "confidence": analysis.get("confidence", 50),
             "reasoning": analysis.get("reasoning", "AI analysis"),
             "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
-            "expected_profit_pct": analysis.get("expected_profit_pct", 1.0)
+            "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
         }
 
     except Exception as e:
@@ -107,14 +102,12 @@ async def get_grok_analysis(
             "confidence": 0,
             "reasoning": f"Error: {str(e)[:100]}",
             "suggested_allocation_pct": 0,
-            "expected_profit_pct": 0
+            "expected_profit_pct": 0,
         }
 
 
 async def get_grok_batch_analysis(
-    pairs_data: Dict[str, Dict[str, Any]],
-    build_batch_prompt_func,
-    total_tokens_tracker: Dict[str, int]
+    pairs_data: Dict[str, Dict[str, Any]], build_batch_prompt_func, total_tokens_tracker: Dict[str, int]
 ) -> Dict[str, Dict[str, Any]]:
     """
     Analyze multiple pairs in a single Grok API call
@@ -133,14 +126,18 @@ async def get_grok_batch_analysis(
         from openai import AsyncOpenAI
     except ImportError:
         logger.error("openai library not installed")
-        return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "OpenAI library not installed"}
-                for pid in pairs_data.keys()}
+        return {
+            pid: {"signal_type": "hold", "confidence": 0, "reasoning": "OpenAI library not installed"}
+            for pid in pairs_data.keys()
+        }
 
     api_key = settings.grok_api_key
     if not api_key:
         logger.error("GROK_API_KEY not set")
-        return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
-                for pid in pairs_data.keys()}
+        return {
+            pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
+            for pid in pairs_data.keys()
+        }
 
     # Use shared batch prompt template
     prompt = build_batch_prompt_func(pairs_data)
@@ -150,7 +147,7 @@ async def get_grok_batch_analysis(
         response = await client.chat.completions.create(
             model="grok-3",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0  # Deterministic responses (eliminates flip-flopping)
+            temperature=0,  # Deterministic responses (eliminates flip-flopping)
         )
 
         response_text = response.choices[0].message.content.strip()
@@ -163,8 +160,10 @@ async def get_grok_batch_analysis(
         batch_analysis = json.loads(response_text)
         print(f"🔍 Grok batch_analysis keys: {list(batch_analysis.keys())}")
 
-        if hasattr(response, 'usage'):
-            logger.info(f"📊 Grok BATCH - {len(pairs_data)} pairs - Input: {response.usage.prompt_tokens}, Output: {response.usage.completion_tokens}")
+        if hasattr(response, "usage"):
+            logger.info(
+                f"📊 Grok BATCH - {len(pairs_data)} pairs - Input: {response.usage.prompt_tokens}, Output: {response.usage.completion_tokens}"
+            )
             logger.info(f"   🎯 Efficiency: {len(pairs_data)} pairs in 1 call!")
 
         results = {}
@@ -183,13 +182,13 @@ async def get_grok_batch_analysis(
                     "confidence": analysis.get("confidence", 50),
                     "reasoning": analysis.get("reasoning", "AI batch analysis"),
                     "suggested_allocation_pct": analysis.get("suggested_allocation_pct", 10),
-                    "expected_profit_pct": analysis.get("expected_profit_pct", 1.0)
+                    "expected_profit_pct": analysis.get("expected_profit_pct", 1.0),
                 }
             else:
                 results[product_id] = {
                     "signal_type": "hold",
                     "confidence": 0,
-                    "reasoning": "Not analyzed in batch response"
+                    "reasoning": "Not analyzed in batch response",
                 }
 
         return results
@@ -198,5 +197,7 @@ async def get_grok_batch_analysis(
         print(f"🔍 Grok batch analysis EXCEPTION: {e}")
         logger.error(f"Grok batch analysis error: {e}")
         traceback.print_exc()
-        return {pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
-                for pid in pairs_data.keys()}
+        return {
+            pid: {"signal_type": "hold", "confidence": 0, "reasoning": f"Error: {str(e)[:100]}"}
+            for pid in pairs_data.keys()
+        }

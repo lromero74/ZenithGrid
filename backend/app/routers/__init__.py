@@ -21,5 +21,5 @@ __all__ = [
     "account_router",
     "market_data_router",
     "settings_router",
-    "system_router"
+    "system_router",
 ]

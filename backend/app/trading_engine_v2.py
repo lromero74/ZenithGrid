@@ -41,7 +41,7 @@ class StrategyTradingEngine:
         coinbase: CoinbaseClient,
         bot: Bot,
         strategy: TradingStrategy,
-        product_id: Optional[str] = None
+        product_id: Optional[str] = None,
     ):
         """
         Initialize engine for a specific bot with its strategy
@@ -59,15 +59,13 @@ class StrategyTradingEngine:
         self.bot = bot
         self.strategy = strategy
         # Use provided product_id, or fallback to bot's first pair
-        self.product_id = product_id or (bot.get_trading_pairs()[0] if hasattr(bot, 'get_trading_pairs') else bot.product_id)
+        self.product_id = product_id or (
+            bot.get_trading_pairs()[0] if hasattr(bot, "get_trading_pairs") else bot.product_id
+        )
         self.quote_currency = get_quote_currency(self.product_id)
 
     async def save_ai_log(
-        self,
-        signal_data: Dict[str, Any],
-        decision: str,
-        current_price: float,
-        position: Optional[Position]
+        self, signal_data: Dict[str, Any], decision: str, current_price: float, position: Optional[Position]
     ):
         """Delegate to order_logger module"""
         await order_logger.save_ai_log(
@@ -82,11 +80,7 @@ class StrategyTradingEngine:
         """Delegate to position_manager module"""
         return await position_manager.get_open_positions_count(self.db, self.bot)
 
-    async def create_position(
-        self,
-        quote_balance: float,
-        quote_amount: float
-    ) -> Position:
+    async def create_position(self, quote_balance: float, quote_amount: float) -> Position:
         """Delegate to position_manager module"""
         return await position_manager.create_position(
             self.db, self.coinbase, self.bot, self.product_id, quote_balance, quote_amount
@@ -105,8 +99,17 @@ class StrategyTradingEngine:
     ):
         """Delegate to order_logger module"""
         await order_logger.log_order_to_history(
-            self.db, self.bot, self.product_id, position, side, order_type, trade_type,
-            quote_amount, price, status, **kwargs
+            self.db,
+            self.bot,
+            self.product_id,
+            position,
+            side,
+            order_type,
+            trade_type,
+            quote_amount,
+            price,
+            status,
+            **kwargs
         )
 
     async def execute_buy(
@@ -116,12 +119,21 @@ class StrategyTradingEngine:
         current_price: float,
         trade_type: str,
         signal_data: Optional[Dict[str, Any]] = None,
-        commit_on_error: bool = True
+        commit_on_error: bool = True,
     ) -> Optional[Trade]:
         """Delegate to buy_executor module"""
         return await buy_executor.execute_buy(
-            self.db, self.coinbase, self.trading_client, self.bot, self.product_id,
-            position, quote_amount, current_price, trade_type, signal_data, commit_on_error
+            self.db,
+            self.coinbase,
+            self.trading_client,
+            self.bot,
+            self.product_id,
+            position,
+            quote_amount,
+            current_price,
+            trade_type,
+            signal_data,
+            commit_on_error,
         )
 
     async def execute_limit_buy(
@@ -130,47 +142,58 @@ class StrategyTradingEngine:
         quote_amount: float,
         limit_price: float,
         trade_type: str,
-        signal_data: Optional[Dict[str, Any]] = None
+        signal_data: Optional[Dict[str, Any]] = None,
     ) -> PendingOrder:
         """Delegate to buy_executor module"""
         return await buy_executor.execute_limit_buy(
-            self.db, self.coinbase, self.trading_client, self.bot, self.product_id,
-            position, quote_amount, limit_price, trade_type, signal_data
+            self.db,
+            self.coinbase,
+            self.trading_client,
+            self.bot,
+            self.product_id,
+            position,
+            quote_amount,
+            limit_price,
+            trade_type,
+            signal_data,
         )
 
     async def execute_sell(
-        self,
-        position: Position,
-        current_price: float,
-        signal_data: Optional[Dict[str, Any]] = None
+        self, position: Position, current_price: float, signal_data: Optional[Dict[str, Any]] = None
     ) -> Tuple[Optional[Trade], float, float]:
         """Delegate to sell_executor module"""
         return await sell_executor.execute_sell(
-            self.db, self.coinbase, self.trading_client, self.bot, self.product_id,
-            position, current_price, signal_data
+            self.db, self.coinbase, self.trading_client, self.bot, self.product_id, position, current_price, signal_data
         )
 
     async def execute_limit_sell(
-        self,
-        position: Position,
-        base_amount: float,
-        limit_price: float,
-        signal_data: Optional[Dict[str, Any]] = None
+        self, position: Position, base_amount: float, limit_price: float, signal_data: Optional[Dict[str, Any]] = None
     ) -> PendingOrder:
         """Delegate to sell_executor module"""
         return await sell_executor.execute_limit_sell(
-            self.db, self.coinbase, self.trading_client, self.bot, self.product_id,
-            position, base_amount, limit_price, signal_data
+            self.db,
+            self.coinbase,
+            self.trading_client,
+            self.bot,
+            self.product_id,
+            position,
+            base_amount,
+            limit_price,
+            signal_data,
         )
 
     async def process_signal(
-        self,
-        candles: List[Dict[str, Any]],
-        current_price: float,
-        pre_analyzed_signal: Optional[Dict[str, Any]] = None
+        self, candles: List[Dict[str, Any]], current_price: float, pre_analyzed_signal: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Delegate to signal_processor module"""
         return await signal_processor.process_signal(
-            self.db, self.coinbase, self.trading_client, self.bot, self.strategy,
-            self.product_id, candles, current_price, pre_analyzed_signal
+            self.db,
+            self.coinbase,
+            self.trading_client,
+            self.bot,
+            self.strategy,
+            self.product_id,
+            candles,
+            current_price,
+            pre_analyzed_signal,
         )

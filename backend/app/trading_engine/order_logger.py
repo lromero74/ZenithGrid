@@ -24,7 +24,7 @@ async def save_ai_log(
     signal_data: Dict[str, Any],
     decision: str,
     current_price: float,
-    position: Optional[Position]
+    position: Optional[Position],
 ):
     """Save AI bot reasoning log if this is an AI autonomous bot"""
     # Only save logs for AI autonomous strategy
@@ -51,7 +51,7 @@ async def save_ai_log(
         position_status=position_status,
         product_id=product_id,  # Track which pair this analysis is for
         context=signal_data,  # Store full signal data for reference
-        timestamp=datetime.utcnow()
+        timestamp=datetime.utcnow(),
     )
 
     db.add(ai_log)
@@ -71,7 +71,7 @@ async def log_order_to_history(
     status: str,
     order_id: Optional[str] = None,
     base_amount: Optional[float] = None,
-    error_message: Optional[str] = None
+    error_message: Optional[str] = None,
 ):
     """
     Log order attempt to order_history table for audit trail.
@@ -106,7 +106,7 @@ async def log_order_to_history(
             price=price,
             status=status,
             order_id=order_id,
-            error_message=error_message
+            error_message=error_message,
         )
         db.add(order_history)
         # Note: Don't commit here - let caller handle commits

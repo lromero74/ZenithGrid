@@ -20,7 +20,7 @@ async def ask_ai_for_dca_decision(
     config: Dict[str, Any],
     build_dca_prompt_func,
     settings,
-    total_tokens_tracker: Dict[str, int]
+    total_tokens_tracker: Dict[str, int],
 ) -> Dict[str, Any]:
     """
     Ask AI if we should add to an existing position and how much
@@ -50,28 +50,30 @@ async def ask_ai_for_dca_decision(
                 model="claude-sonnet-4-5-20250929",
                 max_tokens=500,
                 temperature=0,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
             response_text = response.content[0].text.strip()
 
             # Log token usage
-            total_tokens_tracker['total'] += response.usage.input_tokens + response.usage.output_tokens
-            logger.info(f"📊 DCA Decision - Input: {response.usage.input_tokens}, Output: {response.usage.output_tokens}")
+            total_tokens_tracker["total"] += response.usage.input_tokens + response.usage.output_tokens
+            logger.info(
+                f"📊 DCA Decision - Input: {response.usage.input_tokens}, Output: {response.usage.output_tokens}"
+            )
 
         elif provider == "gemini":
             import google.generativeai as genai
+
             genai.configure(api_key=settings.gemini_api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"temperature": 0})
+            model = genai.GenerativeModel("gemini-2.5-flash", generation_config={"temperature": 0})
             response = model.generate_content(prompt)
             response_text = response.text.strip()
 
         elif provider == "grok":
             from openai import AsyncOpenAI
+
             grok_client = AsyncOpenAI(api_key=settings.grok_api_key, base_url="https://api.x.ai/v1")
             response = await grok_client.chat.completions.create(
-                model="grok-3",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0
+                model="grok-3", messages=[{"role": "user", "content": prompt}], temperature=0
             )
             response_text = response.choices[0].message.content.strip()
 
@@ -93,17 +95,12 @@ async def ask_ai_for_dca_decision(
             "amount": round(amount, 8),
             "amount_percentage": amount_pct,
             "confidence": decision.get("confidence", 0),
-            "reasoning": decision.get("reasoning", "AI DCA decision")
+            "reasoning": decision.get("reasoning", "AI DCA decision"),
         }
 
     except Exception as e:
         logger.error(f"Error asking AI for DCA decision: {e}", exc_info=True)
-        return {
-            "should_buy": False,
-            "amount": 0,
-            "confidence": 0,
-            "reasoning": f"Error: {str(e)}"
-        }
+        return {"should_buy": False, "amount": 0, "confidence": 0, "reasoning": f"Error: {str(e)}"}
 
 
 async def should_buy(
@@ -112,7 +109,7 @@ async def should_buy(
     btc_balance: float,
     config: Dict[str, Any],
     get_confidence_threshold_func,
-    ask_dca_decision_func
+    ask_dca_decision_func,
 ) -> Tuple[bool, float, str]:
     """
     Determine if we should buy based on AI's analysis
@@ -171,13 +168,15 @@ async def should_buy(
         # No fixed price drop thresholds or volume percentages
         # AI decides based on market conditions and position state
         market_context = {
-            'current_price': current_price,
-            'price_change_24h_pct': signal_data.get('raw_analysis', {}).get('price_change_24h_pct', 0),
-            'volatility': signal_data.get('raw_analysis', {}).get('volatility', 0),
-            'recent_prices': signal_data.get('raw_analysis', {}).get('recent_prices', [])
+            "current_price": current_price,
+            "price_change_24h_pct": signal_data.get("raw_analysis", {}).get("price_change_24h_pct", 0),
+            "volatility": signal_data.get("raw_analysis", {}).get("volatility", 0),
+            "recent_prices": signal_data.get("raw_analysis", {}).get("recent_prices", []),
         }
 
-        logger.info(f"  🤖 Asking AI for DCA decision (remaining budget: {remaining_budget:.8f}, DCAs: {current_safety_orders}/{max_safety_orders})")
+        logger.info(
+            f"  🤖 Asking AI for DCA decision (remaining budget: {remaining_budget:.8f}, DCAs: {current_safety_orders}/{max_safety_orders})"
+        )
         dca_decision = await ask_dca_decision_func(position, current_price, remaining_budget, market_context)
 
         if not dca_decision["should_buy"]:
@@ -208,7 +207,11 @@ async def should_buy(
         reasoning = dca_decision["reasoning"]
         amount_pct = dca_decision["amount_percentage"]
 
-        return True, btc_amount, f"AI DCA #{current_safety_orders + 1} ({dca_conf}% confidence, {amount_pct}% of budget): {reasoning}"
+        return (
+            True,
+            btc_amount,
+            f"AI DCA #{current_safety_orders + 1} ({dca_conf}% confidence, {amount_pct}% of budget): {reasoning}",
+        )
 
     # New position (base order)
     min_confidence = get_confidence_threshold_func("open")
@@ -242,7 +245,7 @@ async def should_sell(
     position: Any,
     current_price: float,
     config: Dict[str, Any],
-    get_confidence_threshold_func
+    get_confidence_threshold_func,
 ) -> Tuple[bool, str]:
     """
     Determine if we should sell
@@ -282,7 +285,7 @@ async def should_sell(
         if entry_price == 0:
             return False, "No entry price yet - position has no trades"
 
-    profit_pct = ((current_price - entry_price) / entry_price * 100)
+    profit_pct = (current_price - entry_price) / entry_price * 100
 
     min_profit = config.get("min_profit_percentage", 1.0)
 

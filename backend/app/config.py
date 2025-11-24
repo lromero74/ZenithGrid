@@ -14,12 +14,12 @@ class Settings(BaseSettings):
     coinbase_cdp_key_name: str = ""  # API key name from CDP
     coinbase_cdp_private_key: str = ""  # EC private key from CDP
 
-    @field_validator('coinbase_cdp_private_key')
+    @field_validator("coinbase_cdp_private_key")
     @classmethod
     def convert_newlines(cls, v: str) -> str:
         """Convert literal \\n to actual newlines in private key"""
         if v:
-            return v.replace('\\n', '\n')
+            return v.replace("\\n", "\n")
         return v
 
     # AI Provider API Keys (for AI Autonomous Trading)

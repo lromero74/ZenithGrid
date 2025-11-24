@@ -7,11 +7,7 @@ Contains standardized prompts used across all AI providers (Claude, Gemini, Grok
 from typing import Any, Dict
 
 
-def build_standard_analysis_prompt(
-    market_context: Dict[str, Any],
-    config: Dict[str, Any],
-    format_price_func
-) -> str:
+def build_standard_analysis_prompt(market_context: Dict[str, Any], config: Dict[str, Any], format_price_func) -> str:
     """
     Build standardized analysis prompt used by ALL AI providers (Claude, Gemini, Grok)
 
@@ -44,7 +40,7 @@ def build_standard_analysis_prompt(
 """
 
     # Format price with appropriate precision
-    current_price = market_context['current_price']
+    current_price = market_context["current_price"]
     price_str = f"{current_price:.8f}" if current_price < 1 else f"{current_price:.2f}"
 
     prompt = f"""You are an expert cryptocurrency trading AI analyzing market data.
@@ -84,9 +80,7 @@ Remember:
 
 
 def build_standard_batch_analysis_prompt(
-    pairs_data: Dict[str, Dict[str, Any]],
-    config: Dict[str, Any],
-    format_price_func
+    pairs_data: Dict[str, Dict[str, Any]], config: Dict[str, Any], format_price_func
 ) -> str:
     """
     Build standardized batch analysis prompt for ALL AI providers (Claude, Gemini, Grok)
@@ -99,14 +93,16 @@ def build_standard_batch_analysis_prompt(
     pairs_summary = []
     for product_id, data in pairs_data.items():
         ctx = data.get("market_context", {})
-        price_str = format_price_func(ctx.get('current_price', 0), product_id)
-        recent_prices = ctx.get('recent_prices', [])[-3:]
-        pairs_summary.append(f"""
+        price_str = format_price_func(ctx.get("current_price", 0), product_id)
+        recent_prices = ctx.get("recent_prices", [])[-3:]
+        pairs_summary.append(
+            f"""
 **{product_id}:**
 - Current Price: {price_str}
 - 24h Change: {ctx.get('price_change_24h_pct', 0):.2f}%
 - Volatility: {ctx.get('volatility', 0):.2f}%
-- Recent Trend: {recent_prices}""")
+- Recent Trend: {recent_prices}"""
+        )
 
     prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
 
@@ -144,11 +140,7 @@ Remember:
 
 
 def build_dca_decision_prompt(
-    position: Any,
-    current_price: float,
-    remaining_budget: float,
-    market_context: Dict[str, Any],
-    config: Dict[str, Any]
+    position: Any, current_price: float, remaining_budget: float, market_context: Dict[str, Any], config: Dict[str, Any]
 ) -> str:
     """
     Build prompt for AI to decide on DCA (Dollar Cost Averaging) action

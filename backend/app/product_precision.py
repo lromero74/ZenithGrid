@@ -4,6 +4,7 @@ Product precision specifications from Coinbase API.
 Each trading pair has specific increment requirements for quote and base amounts.
 This module provides a lookup system to ensure orders meet Coinbase's precision requirements.
 """
+
 import json
 import os
 from typing import Dict, Optional
@@ -21,9 +22,9 @@ def get_precision_data() -> Dict:
         return _PRECISION_CACHE
 
     # Try to load from file
-    json_path = os.path.join(os.path.dirname(__file__), 'product_precision.json')
+    json_path = os.path.join(os.path.dirname(__file__), "product_precision.json")
     if os.path.exists(json_path):
-        with open(json_path, 'r') as f:
+        with open(json_path, "r") as f:
             _PRECISION_CACHE = json.load(f)
             return _PRECISION_CACHE
 
@@ -49,8 +50,8 @@ def get_quote_precision(product_id: str) -> int:
         2  # USD always uses 2 decimal places
     """
     # Get quote currency from product_id
-    if '-' in product_id:
-        _, quote_currency = product_id.split('-')
+    if "-" in product_id:
+        _, quote_currency = product_id.split("-")
     else:
         quote_currency = "BTC"  # fallback
 
@@ -62,7 +63,7 @@ def get_quote_precision(product_id: str) -> int:
     precision_data = get_precision_data()
 
     if product_id in precision_data:
-        return precision_data[product_id].get('quote_decimals', 8)
+        return precision_data[product_id].get("quote_decimals", 8)
 
     # Default fallback for BTC pairs (conservative)
     if quote_currency == "BTC":
@@ -85,9 +86,9 @@ def get_base_precision(product_id: str) -> int:
     precision_data = get_precision_data()
 
     if product_id in precision_data:
-        base_inc = precision_data[product_id].get('base_increment', '')
-        if base_inc and '.' in base_inc:
-            return len(base_inc.split('.')[1].rstrip('0'))
+        base_inc = precision_data[product_id].get("base_increment", "")
+        if base_inc and "." in base_inc:
+            return len(base_inc.split(".")[1].rstrip("0"))
 
     # Default: 8 decimals for crypto
     return 8

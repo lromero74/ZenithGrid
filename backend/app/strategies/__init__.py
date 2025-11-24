@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 class StrategyParameter(BaseModel):
     """Definition of a strategy parameter"""
+
     name: str
     display_name: str
     description: str
@@ -25,6 +26,7 @@ class StrategyParameter(BaseModel):
 
 class StrategyDefinition(BaseModel):
     """Metadata about a strategy"""
+
     id: str  # Unique identifier (e.g., "macd_dca")
     name: str  # Display name (e.g., "MACD DCA Strategy")
     description: str
@@ -64,11 +66,7 @@ class TradingStrategy(ABC):
         pass
 
     @abstractmethod
-    async def analyze_signal(
-        self,
-        candles: List[Dict[str, Any]],
-        current_price: float
-    ) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float) -> Optional[Dict[str, Any]]:
         """
         Analyze market data and detect signals
 
@@ -83,10 +81,7 @@ class TradingStrategy(ABC):
 
     @abstractmethod
     async def should_buy(
-        self,
-        signal_data: Dict[str, Any],
-        position: Optional[Any],
-        btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
     ) -> Tuple[bool, float, str]:
         """
         Determine if we should buy and how much
@@ -102,12 +97,7 @@ class TradingStrategy(ABC):
         pass
 
     @abstractmethod
-    async def should_sell(
-        self,
-        signal_data: Dict[str, Any],
-        position: Any,
-        current_price: float
-    ) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
         """
         Determine if we should sell
 
@@ -174,16 +164,16 @@ from app.strategies import (  # noqa: E402
 )
 
 __all__ = [
-    'TradingStrategy',
-    'StrategyDefinition',
-    'StrategyParameter',
-    'StrategyRegistry',
+    "TradingStrategy",
+    "StrategyDefinition",
+    "StrategyParameter",
+    "StrategyRegistry",
     # Strategy implementations (imported for registration)
-    'advanced_dca',
-    'ai_autonomous',
-    'bollinger',
-    'conditional_dca',
-    'macd_dca',
-    'rsi',
-    'simple_dca',
+    "advanced_dca",
+    "ai_autonomous",
+    "bollinger",
+    "conditional_dca",
+    "macd_dca",
+    "rsi",
+    "simple_dca",
 ]

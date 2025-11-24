@@ -5,6 +5,7 @@ Coinbase has strict precision requirements for order sizes.
 This module ensures amounts are properly formatted to avoid
 PREVIEW_INVALID_QUOTE_SIZE_PRECISION and similar errors.
 """
+
 from decimal import Decimal, ROUND_DOWN
 
 

@@ -30,7 +30,7 @@ async def execute_buy(
     current_price: float,
     trade_type: str,
     signal_data: Optional[Dict[str, Any]] = None,
-    commit_on_error: bool = True
+    commit_on_error: bool = True,
 ) -> Optional[Trade]:
     """
     Execute a buy order (market or limit based on configuration)
@@ -80,7 +80,7 @@ async def execute_buy(
             quote_amount=quote_amount,
             limit_price=limit_price,
             trade_type=trade_type,
-            signal_data=signal_data
+            signal_data=signal_data,
         )
 
         # Return None for limit orders (no Trade created yet)
@@ -89,11 +89,7 @@ async def execute_buy(
 
     # Execute market order (immediate execution)
     # Validate order meets minimum size requirements
-    is_valid, error_msg = await validate_order_size(
-        coinbase,
-        product_id,
-        quote_amount=quote_amount
-    )
+    is_valid, error_msg = await validate_order_size(coinbase, product_id, quote_amount=quote_amount)
 
     if not is_valid:
         logger.warning(f"Order validation failed: {error_msg}")
@@ -110,7 +106,7 @@ async def execute_buy(
             quote_amount=quote_amount,
             price=current_price,
             status="failed",
-            error_message=error_msg
+            error_message=error_msg,
         )
 
         # Save error to position for UI display (only for DCA orders)
@@ -124,10 +120,7 @@ async def execute_buy(
     # Actual fill amounts will be fetched from Coinbase after order executes
     order_id = None
     try:
-        order_response = await trading_client.buy(
-            product_id=product_id,
-            quote_amount=quote_amount
-        )
+        order_response = await trading_client.buy(product_id=product_id, quote_amount=quote_amount)
         success_response = order_response.get("success_response", {})
         error_response = order_response.get("error_response", {})
         order_id = success_response.get("order_id", "")
@@ -159,6 +152,7 @@ async def execute_buy(
                 # If still no useful error, show the entire error_response as JSON
                 if full_error == "Unknown error":
                     import json
+
                     full_error = f"Coinbase error: {json.dumps(error_response)}"
 
                 logger.error(f"Coinbase error details: {full_error}")
@@ -177,7 +171,7 @@ async def execute_buy(
                 quote_amount=quote_amount,
                 price=current_price,
                 status="failed",
-                error_message=full_error
+                error_message=full_error,
             )
 
             # Record error on position (only for DCA orders)
@@ -201,6 +195,7 @@ async def execute_buy(
             if attempt > 0:
                 # Wait before retrying (exponential backoff: 0.5s, 1s, 2s, 4s)
                 import asyncio
+
                 delay = 0.5 * (2 ** (attempt - 1))
                 logger.info(f"Waiting {delay}s before retry {attempt + 1}/{max_retries}...")
                 await asyncio.sleep(delay)
@@ -220,12 +215,16 @@ async def execute_buy(
 
             # Check if order has filled (non-zero amounts)
             if actual_base_amount > 0 and actual_quote_amount > 0:
-                logger.info(f"Order filled - Base: {actual_base_amount}, Quote: {actual_quote_amount}, Avg Price: {actual_price}")
+                logger.info(
+                    f"Order filled - Base: {actual_base_amount}, Quote: {actual_quote_amount}, Avg Price: {actual_price}"
+                )
                 break
             else:
                 logger.warning(f"Attempt {attempt + 1}/{max_retries}: Order not yet filled (amounts still zero)")
                 if attempt == max_retries - 1:
-                    logger.error(f"Order {order_id} did not fill after {max_retries} attempts - recording with zero amounts")
+                    logger.error(
+                        f"Order {order_id} did not fill after {max_retries} attempts - recording with zero amounts"
+                    )
 
         # Final validation check
         if actual_base_amount == 0 or actual_quote_amount == 0:
@@ -248,7 +247,7 @@ async def execute_buy(
                 quote_amount=quote_amount,
                 price=current_price,
                 status="failed",
-                error_message=str(e)
+                error_message=str(e),
             )
 
         # Record error on position if it's not already recorded (only for DCA orders)
@@ -264,13 +263,13 @@ async def execute_buy(
         timestamp=datetime.utcnow(),
         side="buy",
         quote_amount=actual_quote_amount,  # Use actual filled value
-        base_amount=actual_base_amount,     # Use actual filled size
-        price=actual_price,                 # Use actual average price
+        base_amount=actual_base_amount,  # Use actual filled size
+        price=actual_price,  # Use actual average price
         trade_type=trade_type,
         order_id=order_id,
         macd_value=signal_data.get("macd_value") if signal_data else None,
         macd_signal=signal_data.get("macd_signal") if signal_data else None,
-        macd_histogram=signal_data.get("macd_histogram") if signal_data else None
+        macd_histogram=signal_data.get("macd_histogram") if signal_data else None,
     )
 
     db.add(trade)
@@ -288,7 +287,7 @@ async def execute_buy(
         price=actual_price,
         status="success",
         order_id=order_id,
-        base_amount=actual_base_amount
+        base_amount=actual_base_amount,
     )
 
     # Clear any previous errors on successful trade
@@ -323,7 +322,7 @@ async def execute_limit_buy(
     quote_amount: float,
     limit_price: float,
     trade_type: str,
-    signal_data: Optional[Dict[str, Any]] = None
+    signal_data: Optional[Dict[str, Any]] = None,
 ) -> PendingOrder:
     """
     Place a limit buy order and track it in pending_orders table
@@ -352,9 +351,7 @@ async def execute_limit_buy(
     order_id = None
     try:
         order_response = await trading_client.buy_limit(
-            product_id=product_id,
-            limit_price=limit_price,
-            quote_amount=quote_amount
+            product_id=product_id, limit_price=limit_price, quote_amount=quote_amount
         )
         success_response = order_response.get("success_response", {})
         order_id = success_response.get("order_id", "")
@@ -379,13 +376,15 @@ async def execute_limit_buy(
         base_amount=base_amount,
         trade_type=trade_type,
         status="pending",
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
     )
 
     db.add(pending_order)
     await db.commit()
     await db.refresh(pending_order)
 
-    logger.info(f"✅ Placed limit buy order: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f} (Order ID: {order_id})")
+    logger.info(
+        f"✅ Placed limit buy order: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f} (Order ID: {order_id})"
+    )
 
     return pending_order

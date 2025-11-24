@@ -34,7 +34,7 @@ class CoinbaseClient:
         key_file_path: Optional[str] = None,
         # HMAC auth params
         api_key: Optional[str] = None,
-        api_secret: Optional[str] = None
+        api_secret: Optional[str] = None,
     ):
         """
         Initialize Coinbase client with auto-detection of auth method
@@ -73,8 +73,13 @@ class CoinbaseClient:
         else:
             # Fallback to settings
             from app.config import settings
-            if hasattr(settings, 'coinbase_cdp_key_name') and settings.coinbase_cdp_key_name and \
-               hasattr(settings, 'coinbase_cdp_private_key') and settings.coinbase_cdp_private_key:
+
+            if (
+                hasattr(settings, "coinbase_cdp_key_name")
+                and settings.coinbase_cdp_key_name
+                and hasattr(settings, "coinbase_cdp_private_key")
+                and settings.coinbase_cdp_private_key
+            ):
                 # CDP from settings
                 self.auth_type = "cdp"
                 self.key_name = settings.coinbase_cdp_key_name
@@ -88,20 +93,19 @@ class CoinbaseClient:
                 logger.info("Using HMAC authentication (from settings)")
 
     async def _request(
-        self,
-        method: str,
-        endpoint: str,
-        params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None
+        self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Make authenticated request"""
         return await auth.authenticated_request(
-            method, endpoint, self.auth_type,
-            key_name=getattr(self, 'key_name', None),
-            private_key=getattr(self, 'private_key', None),
-            api_key=getattr(self, 'api_key', None),
-            api_secret=getattr(self, 'api_secret', None),
-            params=params, data=data
+            method,
+            endpoint,
+            self.auth_type,
+            key_name=getattr(self, "key_name", None),
+            private_key=getattr(self, "private_key", None),
+            api_key=getattr(self, "api_key", None),
+            api_secret=getattr(self, "api_secret", None),
+            params=params,
+            data=data,
         )
 
     # ===== Account & Balance Methods =====
@@ -145,9 +149,7 @@ class CoinbaseClient:
     async def calculate_aggregate_usd_value(self) -> float:
         """Calculate aggregate USD value of entire portfolio"""
         return await account_balance_api.calculate_aggregate_usd_value(
-            self._request,
-            self.get_btc_usd_price,
-            self.get_current_price
+            self._request, self.get_btc_usd_price, self.get_current_price
         )
 
     # ===== Product & Market Data Methods =====
@@ -177,11 +179,7 @@ class CoinbaseClient:
         return await market_data_api.get_product_stats(self._request, product_id)
 
     async def get_candles(
-        self,
-        product_id: str,
-        start: int,
-        end: int,
-        granularity: str = "FIVE_MINUTE"
+        self, product_id: str, start: int, end: int, granularity: str = "FIVE_MINUTE"
     ) -> List[Dict[str, Any]]:
         """Get historical candles/OHLCV data"""
         return await market_data_api.get_candles(self._request, product_id, start, end, granularity)
@@ -189,22 +187,13 @@ class CoinbaseClient:
     # ===== Order Methods =====
 
     async def create_market_order(
-        self,
-        product_id: str,
-        side: str,
-        size: Optional[str] = None,
-        funds: Optional[str] = None
+        self, product_id: str, side: str, size: Optional[str] = None, funds: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create a market order"""
         return await order_api.create_market_order(self._request, product_id, side, size, funds)
 
     async def create_limit_order(
-        self,
-        product_id: str,
-        side: str,
-        limit_price: float,
-        size: Optional[str] = None,
-        funds: Optional[str] = None
+        self, product_id: str, side: str, limit_price: float, size: Optional[str] = None, funds: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create a limit order (Good-Til-Cancelled)"""
         return await order_api.create_limit_order(self._request, product_id, side, limit_price, size, funds)
@@ -218,10 +207,7 @@ class CoinbaseClient:
         return await order_api.cancel_order(self._request, order_id)
 
     async def list_orders(
-        self,
-        product_id: Optional[str] = None,
-        order_status: Optional[List[str]] = None,
-        limit: int = 100
+        self, product_id: Optional[str] = None, order_status: Optional[List[str]] = None, limit: int = 100
     ) -> List[Dict[str, Any]]:
         """List orders with optional filtering"""
         return await order_api.list_orders(self._request, product_id, order_status, limit)

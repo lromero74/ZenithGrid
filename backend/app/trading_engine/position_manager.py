@@ -18,44 +18,32 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.models import Bot, Position
 
 
-async def get_active_position(
-    db: AsyncSession,
-    bot: Bot,
-    product_id: str
-) -> Optional[Position]:
+async def get_active_position(db: AsyncSession, bot: Bot, product_id: str) -> Optional[Position]:
     """Get currently active position for this bot/pair combination"""
-    query = select(Position).options(
-        selectinload(Position.trades)  # Eager load trades to avoid greenlet errors in should_buy()
-    ).where(
-        Position.bot_id == bot.id,
-        Position.product_id == product_id,  # Filter by pair for multi-pair support
-        Position.status == "open"
-    ).order_by(desc(Position.opened_at))
+    query = (
+        select(Position)
+        .options(selectinload(Position.trades))  # Eager load trades to avoid greenlet errors in should_buy()
+        .where(
+            Position.bot_id == bot.id,
+            Position.product_id == product_id,  # Filter by pair for multi-pair support
+            Position.status == "open",
+        )
+        .order_by(desc(Position.opened_at))
+    )
 
     result = await db.execute(query)
     return result.scalars().first()
 
 
-async def get_open_positions_count(
-    db: AsyncSession,
-    bot: Bot
-) -> int:
+async def get_open_positions_count(db: AsyncSession, bot: Bot) -> int:
     """Get count of all open positions for this bot (across all pairs)"""
-    query = select(func.count(Position.id)).where(
-        Position.bot_id == bot.id,
-        Position.status == "open"
-    )
+    query = select(func.count(Position.id)).where(Position.bot_id == bot.id, Position.status == "open")
     result = await db.execute(query)
     return result.scalar() or 0
 
 
 async def create_position(
-    db: AsyncSession,
-    coinbase: CoinbaseClient,
-    bot: Bot,
-    product_id: str,
-    quote_balance: float,
-    quote_amount: float
+    db: AsyncSession, coinbase: CoinbaseClient, bot: Bot, product_id: str, quote_balance: float, quote_amount: float
 ) -> Position:
     """
     Create a new position for this bot
@@ -85,7 +73,7 @@ async def create_position(
         total_base_acquired=0.0,
         average_buy_price=0.0,
         btc_usd_price_at_open=btc_usd_price,
-        strategy_config_snapshot=bot.strategy_config  # Freeze config at position creation (like 3Commas)
+        strategy_config_snapshot=bot.strategy_config,  # Freeze config at position creation (like 3Commas)
     )
 
     db.add(position)

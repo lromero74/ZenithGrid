@@ -25,7 +25,7 @@ class MACDDCAStrategy(TradingStrategy):
             id="macd_dca",
             name="MACD DCA Strategy",
             description="Dollar Cost Averaging based on MACD crossover signals. "
-                        "Buys when MACD crosses above signal line, sells when crosses below with profit.",
+            "Buys when MACD crosses above signal line, sells when crosses below with profit.",
             parameters=[
                 StrategyParameter(
                     name="timeframe",
@@ -33,7 +33,16 @@ class MACDDCAStrategy(TradingStrategy):
                     description="Timeframe for MACD analysis (e.g., 5min, 1hour, 1day)",
                     type="str",
                     default="FIVE_MINUTE",
-                    options=["ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR", "TWO_HOUR", "SIX_HOUR", "ONE_DAY"]
+                    options=[
+                        "ONE_MINUTE",
+                        "FIVE_MINUTE",
+                        "FIFTEEN_MINUTE",
+                        "THIRTY_MINUTE",
+                        "ONE_HOUR",
+                        "TWO_HOUR",
+                        "SIX_HOUR",
+                        "ONE_DAY",
+                    ],
                 ),
                 StrategyParameter(
                     name="base_order_type",
@@ -41,7 +50,7 @@ class MACDDCAStrategy(TradingStrategy):
                     description="How to calculate base order size",
                     type="str",
                     default="percentage",
-                    options=["percentage", "fixed_btc"]
+                    options=["percentage", "fixed_btc"],
                 ),
                 StrategyParameter(
                     name="initial_btc_percentage",
@@ -50,7 +59,7 @@ class MACDDCAStrategy(TradingStrategy):
                     type="float",
                     default=10.0,
                     min_value=1.0,
-                    max_value=50.0
+                    max_value=50.0,
                 ),
                 StrategyParameter(
                     name="base_order_btc",
@@ -59,7 +68,7 @@ class MACDDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.001,
                     min_value=0.0001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
                 StrategyParameter(
                     name="dca_order_type",
@@ -67,7 +76,7 @@ class MACDDCAStrategy(TradingStrategy):
                     description="How to calculate DCA order size",
                     type="str",
                     default="percentage_of_initial",
-                    options=["percentage_of_initial", "fixed_btc"]
+                    options=["percentage_of_initial", "fixed_btc"],
                 ),
                 StrategyParameter(
                     name="dca_percentage",
@@ -76,7 +85,7 @@ class MACDDCAStrategy(TradingStrategy):
                     type="float",
                     default=5.0,
                     min_value=1.0,
-                    max_value=25.0
+                    max_value=25.0,
                 ),
                 StrategyParameter(
                     name="dca_order_btc",
@@ -85,7 +94,7 @@ class MACDDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.0005,
                     min_value=0.0001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
                 StrategyParameter(
                     name="max_btc_usage_percentage",
@@ -94,7 +103,7 @@ class MACDDCAStrategy(TradingStrategy):
                     type="float",
                     default=25.0,
                     min_value=10.0,
-                    max_value=100.0
+                    max_value=100.0,
                 ),
                 StrategyParameter(
                     name="min_profit_percentage",
@@ -103,7 +112,7 @@ class MACDDCAStrategy(TradingStrategy):
                     type="float",
                     default=1.0,
                     min_value=0.1,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
                 StrategyParameter(
                     name="macd_fast_period",
@@ -112,7 +121,7 @@ class MACDDCAStrategy(TradingStrategy):
                     type="int",
                     default=12,
                     min_value=5,
-                    max_value=50
+                    max_value=50,
                 ),
                 StrategyParameter(
                     name="macd_slow_period",
@@ -121,7 +130,7 @@ class MACDDCAStrategy(TradingStrategy):
                     type="int",
                     default=26,
                     min_value=10,
-                    max_value=100
+                    max_value=100,
                 ),
                 StrategyParameter(
                     name="macd_signal_period",
@@ -130,10 +139,10 @@ class MACDDCAStrategy(TradingStrategy):
                     type="int",
                     default=9,
                     min_value=5,
-                    max_value=50
+                    max_value=50,
                 ),
             ],
-            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD"]
+            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD"],
         )
 
     def validate_config(self):
@@ -157,14 +166,10 @@ class MACDDCAStrategy(TradingStrategy):
         self.macd_calculator = MACDCalculator(
             fast_period=int(self.config["macd_fast_period"]),
             slow_period=int(self.config["macd_slow_period"]),
-            signal_period=int(self.config["macd_signal_period"])
+            signal_period=int(self.config["macd_signal_period"]),
         )
 
-    async def analyze_signal(
-        self,
-        candles: List[Dict[str, Any]],
-        current_price: float
-    ) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float) -> Optional[Dict[str, Any]]:
         """
         Analyze MACD and detect crossover signals
 
@@ -199,16 +204,13 @@ class MACDDCAStrategy(TradingStrategy):
                 "macd_value": macd_line[-1],
                 "macd_signal": signal_line[-1],
                 "macd_histogram": curr_hist,
-                "price": current_price
+                "price": current_price,
             }
 
         return None
 
     async def should_buy(
-        self,
-        signal_data: Dict[str, Any],
-        position: Optional[Any],
-        btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
     ) -> Tuple[bool, float, str]:
         """
         Determine if we should buy based on MACD cross up
@@ -256,12 +258,7 @@ class MACDDCAStrategy(TradingStrategy):
             else:
                 return False, 0.0, f"Max BTC limit reached ({max_allowed:.8f} BTC)"
 
-    async def should_sell(
-        self,
-        signal_data: Dict[str, Any],
-        position: Any,
-        current_price: float
-    ) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
         """
         Determine if we should sell based on MACD cross down and profit target
 

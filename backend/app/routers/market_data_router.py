@@ -58,7 +58,7 @@ async def get_prices_batch(products: str, coinbase: CoinbaseClient = Depends(get
         Dict mapping product_id to price
     """
     try:
-        product_list = [p.strip() for p in products.split(',') if p.strip()]
+        product_list = [p.strip() for p in products.split(",") if p.strip()]
 
         if not product_list:
             raise HTTPException(status_code=400, detail="No products specified")
@@ -92,7 +92,7 @@ async def get_candles(
     product_id: str = "ETH-BTC",
     granularity: Optional[str] = None,
     limit: int = 300,
-    coinbase: CoinbaseClient = Depends(get_coinbase)
+    coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
     """
     Get historical candle data for charting
@@ -115,7 +115,7 @@ async def get_candles(
             "ONE_HOUR": 3600,
             "TWO_HOUR": 7200,
             "SIX_HOUR": 21600,
-            "ONE_DAY": 86400
+            "ONE_DAY": 86400,
         }
 
         seconds = interval_seconds.get(interval, 300)
@@ -123,30 +123,25 @@ async def get_candles(
         start_time = end_time - (seconds * limit)
 
         candles = await coinbase.get_candles(
-            product_id=product_id,
-            start=start_time,
-            end=end_time,
-            granularity=interval
+            product_id=product_id, start=start_time, end=end_time, granularity=interval
         )
 
         # Coinbase returns candles in reverse chronological order
         # Format: {"start": timestamp, "low": str, "high": str, "open": str, "close": str, "volume": str}
         formatted_candles = []
         for candle in reversed(candles):  # Reverse to get chronological order
-            formatted_candles.append({
-                "time": int(candle["start"]),
-                "open": float(candle["open"]),
-                "high": float(candle["high"]),
-                "low": float(candle["low"]),
-                "close": float(candle["close"]),
-                "volume": float(candle["volume"])
-            })
+            formatted_candles.append(
+                {
+                    "time": int(candle["start"]),
+                    "open": float(candle["open"]),
+                    "high": float(candle["high"]),
+                    "low": float(candle["low"]),
+                    "close": float(candle["close"]),
+                    "volume": float(candle["volume"]),
+                }
+            )
 
-        return {
-            "candles": formatted_candles,
-            "interval": interval,
-            "product_id": product_id
-        }
+        return {"candles": formatted_candles, "interval": interval, "product_id": product_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch candles: {str(e)}")
 
@@ -172,12 +167,14 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
                 base_currency = product.get("base_currency_id", "")
                 quote_currency = product.get("quote_currency_id", "")
 
-                filtered_products.append({
-                    "product_id": product_id,
-                    "base_currency": base_currency,
-                    "quote_currency": quote_currency,
-                    "display_name": product.get("display_name", product_id),
-                })
+                filtered_products.append(
+                    {
+                        "product_id": product_id,
+                        "base_currency": base_currency,
+                        "quote_currency": quote_currency,
+                        "display_name": product.get("display_name", product_id),
+                    }
+                )
 
         # Sort: BTC-USD first, then alphabetically
         def sort_key(p):
@@ -190,9 +187,6 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
 
         filtered_products.sort(key=sort_key)
 
-        return {
-            "products": filtered_products,
-            "count": len(filtered_products)
-        }
+        return {"products": filtered_products, "count": len(filtered_products)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

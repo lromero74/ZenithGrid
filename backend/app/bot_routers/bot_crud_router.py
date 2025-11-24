@@ -17,12 +17,7 @@ from app.database import get_db
 from app.models import Bot, Position
 from app.strategies import StrategyDefinition, StrategyRegistry
 from app.coinbase_unified_client import CoinbaseClient
-from app.bot_routers.schemas import (
-    BotCreate,
-    BotUpdate,
-    BotResponse,
-    BotStats
-)
+from app.bot_routers.schemas import BotCreate, BotUpdate, BotResponse, BotStats
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -72,15 +67,15 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
     if all_pairs and len(all_pairs) > 0:
         quote_currencies = set()
         for pair in all_pairs:
-            if '-' in pair:
-                quote = pair.split('-')[1]
+            if "-" in pair:
+                quote = pair.split("-")[1]
                 quote_currencies.add(quote)
 
         if len(quote_currencies) > 1:
             raise HTTPException(
                 status_code=400,
                 detail=f"All trading pairs must use the same quote currency. Found: {', '.join(sorted(quote_currencies))}. "
-                       f"Please use only BTC-based pairs OR only USD-based pairs, not a mix."
+                f"Please use only BTC-based pairs OR only USD-based pairs, not a mix.",
             )
 
         # Set quote_currency for market_focus correction
@@ -108,7 +103,7 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
         reserved_btc_balance=bot_data.reserved_btc_balance,
         reserved_usd_balance=bot_data.reserved_usd_balance,
         budget_percentage=bot_data.budget_percentage,
-        is_active=False
+        is_active=False,
     )
 
     db.add(bot)
@@ -124,10 +119,7 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/", response_model=List[BotResponse])
-async def list_bots(
-    active_only: bool = False,
-    db: AsyncSession = Depends(get_db)
-):
+async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db)):
     """Get list of all bots"""
     query = select(Bot).order_by(desc(Bot.created_at))
 
@@ -232,10 +224,7 @@ async def get_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Bot not found")
 
     # Count positions
-    open_pos_query = select(Position).where(
-        Position.bot_id == bot.id,
-        Position.status == "open"
-    )
+    open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
     total_pos_query = select(Position).where(Position.bot_id == bot.id)
 
     open_result = await db.execute(open_pos_query)
@@ -249,11 +238,7 @@ async def get_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{bot_id}", response_model=BotResponse)
-async def update_bot(
-    bot_id: int,
-    bot_update: BotUpdate,
-    db: AsyncSession = Depends(get_db)
-):
+async def update_bot(bot_id: int, bot_update: BotUpdate, db: AsyncSession = Depends(get_db)):
     """Update bot configuration"""
     query = select(Bot).where(Bot.id == bot_id)
     result = await db.execute(query)
@@ -309,15 +294,15 @@ async def update_bot(
     if final_pairs and len(final_pairs) > 0:
         quote_currencies = set()
         for pair in final_pairs:
-            if '-' in pair:
-                quote = pair.split('-')[1]
+            if "-" in pair:
+                quote = pair.split("-")[1]
                 quote_currencies.add(quote)
 
         if len(quote_currencies) > 1:
             raise HTTPException(
                 status_code=400,
                 detail=f"All trading pairs must use the same quote currency. Found: {', '.join(sorted(quote_currencies))}. "
-                       f"Please use only BTC-based pairs OR only USD-based pairs, not a mix."
+                f"Please use only BTC-based pairs OR only USD-based pairs, not a mix.",
             )
 
         # Set quote_currency for market_focus correction
@@ -353,16 +338,10 @@ async def delete_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Bot not found")
 
     # Check for open positions
-    open_pos_query = select(Position).where(
-        Position.bot_id == bot.id,
-        Position.status == "open"
-    )
+    open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
     open_result = await db.execute(open_pos_query)
     if open_result.scalars().first():
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete bot with open positions. Close positions first."
-        )
+        raise HTTPException(status_code=400, detail="Cannot delete bot with open positions. Close positions first.")
 
     await db.delete(bot)
     await db.commit()
@@ -395,7 +374,8 @@ async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
 
     # Check if name already has (Copy X) pattern
     import re
-    copy_match = re.search(r'\(Copy(?: (\d+))?\)$', new_name)
+
+    copy_match = re.search(r"\(Copy(?: (\d+))?\)$", new_name)
 
     if copy_match:
         # Name already has (Copy) or (Copy N), increment
@@ -403,10 +383,10 @@ async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
         if copy_num:
             # (Copy N) → (Copy N+1)
             next_num = int(copy_num) + 1
-            new_name = re.sub(r'\(Copy \d+\)$', f'(Copy {next_num})', new_name)
+            new_name = re.sub(r"\(Copy \d+\)$", f"(Copy {next_num})", new_name)
         else:
             # (Copy) → (Copy 2)
-            new_name = re.sub(r'\(Copy\)$', '(Copy 2)', new_name)
+            new_name = re.sub(r"\(Copy\)$", "(Copy 2)", new_name)
     else:
         # No (Copy) yet → add (Copy)
         new_name = f"{new_name} (Copy)"
@@ -435,7 +415,7 @@ async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
         reserved_usd_balance=0.0,
         is_active=False,  # Start stopped
         created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        updated_at=datetime.utcnow(),
     )
 
     db.add(cloned_bot)
@@ -521,5 +501,5 @@ async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
         total_profit_btc=total_profit,
         win_rate=win_rate,
         insufficient_funds=insufficient_funds,
-        budget_utilization_percentage=budget_utilization_percentage
+        budget_utilization_percentage=budget_utilization_percentage,
     )
