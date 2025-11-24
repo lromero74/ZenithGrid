@@ -169,7 +169,7 @@ class MACDDCAStrategy(TradingStrategy):
             signal_period=int(self.config["macd_signal_period"]),
         )
 
-    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float, **kwargs -> Optional[Dict[str, Any]]:
         """
         Analyze MACD and detect crossover signals
 

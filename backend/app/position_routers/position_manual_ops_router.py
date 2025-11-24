@@ -16,7 +16,8 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import AddFundsRequest, UpdateNotesRequest
 from app.trading_client import TradingClient
-from app.trading_engine_v2 import StrategyTradingEngine
+from app.trading_engine.buy_executor import execute_buy
+from app.currency_utils import get_quote_currency
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -30,7 +31,7 @@ async def add_funds_to_position(
     coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
     """Manually add funds to a position (manual safety order)"""
-    btc_amount = request.btc_amount
+    quote_amount = request.btc_amount  # Multi-currency: actually quote amount (BTC or USD)
     try:
         query = select(Position).where(Position.id == position_id)
         result = await db.execute(query)
@@ -42,34 +43,51 @@ async def add_funds_to_position(
         if position.status != "open":
             raise HTTPException(status_code=400, detail="Position is not open")
 
-        # Check if adding funds would exceed max allowed
-        if position.total_btc_spent + btc_amount > position.max_btc_allowed:
+        # Get quote currency for this position
+        quote_currency = get_quote_currency(position.product_id)
+
+        # Check if adding funds would exceed max allowed (multi-currency)
+        if position.total_quote_spent + quote_amount > position.max_quote_allowed:
             raise HTTPException(
                 status_code=400,
-                detail=f"Adding {btc_amount} BTC would exceed max allowed ({position.max_btc_allowed} BTC)",
+                detail=(
+                    f"Adding {quote_amount:.8f} {quote_currency} would exceed max allowed "
+                    f"({position.max_quote_allowed:.8f} {quote_currency})"
+                ),
             )
 
-        # Get current price
-        current_price = await coinbase.get_current_price()
+        # Get current price for the position's product
+        current_price = await coinbase.get_current_price(position.product_id)
 
-        # Execute DCA buy using new trading engine
+        # Get bot for this position (required for execute_buy)
+        if not position.bot:
+            raise HTTPException(status_code=400, detail="Position has no associated bot")
+
+        # Execute buy using modular function
         trading_client = TradingClient(coinbase)
-        engine = StrategyTradingEngine(
-            db=db, trading_client=trading_client, bot=None, product_id=position.product_id  # Manual operation, no bot
-        )
-        trade = await engine.execute_buy(
+        trade = await execute_buy(
+            db=db,
+            coinbase=coinbase,
+            trading_client=trading_client,
+            bot=position.bot,
+            product_id=position.product_id,
             position=position,
-            quote_amount=btc_amount,  # New engine uses quote_amount (multi-currency)
+            quote_amount=quote_amount,
             current_price=current_price,
             trade_type="manual_safety_order",
             signal_data=None,
+            commit_on_error=True,
         )
 
+        # Format response (multi-currency aware)
+        base_currency = position.product_id.split("-")[0]
         return {
-            "message": f"Added {btc_amount} BTC to position {position_id}",
-            "trade_id": trade.id,
+            "message": f"Added {quote_amount:.8f} {quote_currency} to position {position_id}",
+            "trade_id": trade.id if trade else None,
             "price": current_price,
-            "eth_acquired": trade.eth_amount,
+            "base_acquired": trade.base_amount if trade else 0.0,
+            "base_currency": base_currency,
+            "quote_currency": quote_currency,
         }
     except HTTPException:
         raise

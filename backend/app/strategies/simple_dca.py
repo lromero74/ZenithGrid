@@ -114,7 +114,7 @@ class SimpleDCAStrategy(TradingStrategy):
         # Track last buy time (will be managed externally in bot state)
         self.last_buy_time = None
 
-    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float, **kwargs -> Optional[Dict[str, Any]]:
         """
         Time-based signal - always returns a signal for evaluation
 

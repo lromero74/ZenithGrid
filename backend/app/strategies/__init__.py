@@ -66,13 +66,16 @@ class TradingStrategy(ABC):
         pass
 
     @abstractmethod
-    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(
+        self, candles: List[Dict[str, Any]], current_price: float, **kwargs
+    ) -> Optional[Dict[str, Any]]:
         """
         Analyze market data and detect signals
 
         Args:
             candles: List of recent candle data
             current_price: Current market price
+            **kwargs: Additional strategy-specific parameters (e.g., position, action_context)
 
         Returns:
             Signal data dict or None if no signal

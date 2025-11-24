@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Position, PendingOrder, Trade
-from app.coinbase_unified_client import CoinbaseUnifiedClient
+from app.coinbase_unified_client import CoinbaseClient
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class LimitOrderMonitor:
     """Monitors limit orders and processes fills"""
 
-    def __init__(self, db: AsyncSession, coinbase_client: CoinbaseUnifiedClient):
+    def __init__(self, db: AsyncSession, coinbase_client: CoinbaseClient):
         self.db = db
         self.coinbase = coinbase_client
 
@@ -100,7 +100,8 @@ class LimitOrderMonitor:
                 if filled_size < pending_order.base_amount:
                     pending_order.status = "partially_filled"
                     logger.info(
-                        f"Position {position.id} limit order partially filled: {filled_size}/{pending_order.base_amount}"
+                        f"Position {position.id} limit order partially filled: "
+                        f"{filled_size}/{pending_order.base_amount}"
                     )
 
                 await self.db.commit()
@@ -200,7 +201,7 @@ class LimitOrderMonitor:
             await self.db.rollback()
 
 
-async def run_limit_order_monitor(db: AsyncSession, coinbase_client: CoinbaseUnifiedClient):
+async def run_limit_order_monitor(db: AsyncSession, coinbase_client: CoinbaseClient):
     """Main loop for limit order monitoring"""
     monitor = LimitOrderMonitor(db, coinbase_client)
 

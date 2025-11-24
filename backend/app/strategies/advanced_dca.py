@@ -222,7 +222,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                 if param.max_value is not None and value > param.max_value:
                     raise ValueError(f"{param.display_name} must be <= {param.max_value}")
 
-    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float, **kwargs -> Optional[Dict[str, Any]]:
         """
         Advanced DCA doesn't use technical indicators - it only buys on initial entry
         and then uses price-based safety orders.

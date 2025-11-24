@@ -12,6 +12,7 @@ Defines SQLAlchemy ORM models for the trading bot application:
 """
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import (
     JSON,
@@ -86,7 +87,7 @@ class Bot(Base):
                 return first_pair.split("-")[1]
         return "BTC"  # Default
 
-    def get_reserved_balance(self, aggregate_value: float = None):
+    def get_reserved_balance(self, aggregate_value: Optional[float] = None):
         """
         Get the reserved balance for this bot's quote currency
 

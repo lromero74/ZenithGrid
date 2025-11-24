@@ -46,12 +46,12 @@ class TradingClient:
         elif currency == "USD":
             return await self.coinbase.get_usd_balance()
         else:
-            # For other currencies, use generic method if it exists
-            # Otherwise, get from portfolio
-            portfolio = await self.coinbase.get_portfolio()
-            balances = portfolio.get("balances", {})
-            currency_data = balances.get(currency, {})
-            return float(currency_data.get("available", 0))
+            # Currently only BTC and USD quote currencies are supported
+            # If other quote currencies are needed in the future, implement balance fetching here
+            raise ValueError(
+                f"Unsupported quote currency: {currency}. "
+                f"Only BTC and USD are currently supported as quote currencies."
+            )
 
     async def get_quote_balance(self, product_id: str) -> float:
         """
