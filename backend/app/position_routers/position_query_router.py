@@ -36,7 +36,13 @@ async def get_positions(
     query = select(Position)
     if status:
         query = query.where(Position.status == status)
-    query = query.order_by(desc(Position.opened_at)).limit(limit)
+        # Sort closed positions by close date (most recent first), others by opened_at
+        if status == "closed":
+            query = query.order_by(desc(Position.closed_at)).limit(limit)
+        else:
+            query = query.order_by(desc(Position.opened_at)).limit(limit)
+    else:
+        query = query.order_by(desc(Position.opened_at)).limit(limit)
 
     result = await db.execute(query)
     positions = result.scalars().all()
