@@ -56,6 +56,9 @@ async def limit_close_position(
             size=str(position.total_base_acquired),  # Sell entire position
         )
 
+        # Log the full response for debugging
+        logger.info(f"Coinbase create_limit_order response: {order_result}")
+
         # Extract order ID from response
         order_id = order_result.get("order_id") or order_result.get("success_response", {}).get("order_id")
 
