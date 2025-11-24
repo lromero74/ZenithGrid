@@ -87,21 +87,59 @@ class LimitOrderMonitor:
             filled_value = float(order_data.get("filled_value", 0))
 
             if filled_size > 0:
-                # Update pending order with fill information
+                # Check if there are NEW fills since last check
+                previous_filled = pending_order.filled_base_amount or 0
+                new_fill_size = filled_size - previous_filled
+
+                if new_fill_size > 0:
+                    # Calculate new fill value (proportional to new fill size)
+                    avg_fill_price = filled_value / filled_size if filled_size > 0 else 0
+                    new_fill_value = new_fill_size * avg_fill_price
+
+                    logger.info(
+                        f"Position {position.id} NEW partial fill detected: "
+                        f"{new_fill_size} @ {avg_fill_price} BTC "
+                        f"(total filled: {filled_size}/{pending_order.base_amount})"
+                    )
+
+                    # Create sell trade for the NEW partial fill
+                    trade = Trade(
+                        position_id=position.id,
+                        timestamp=datetime.utcnow(),
+                        side="sell",
+                        quote_amount=new_fill_value,
+                        base_amount=new_fill_size,
+                        price=avg_fill_price,
+                        trade_type="limit_close_partial",
+                        order_id=position.limit_close_order_id,
+                    )
+                    self.db.add(trade)
+
+                    # Update position totals (reduce remaining base, add quote received)
+                    if not position.total_quote_received:
+                        position.total_quote_received = 0
+                    position.total_quote_received += new_fill_value
+
+                    # Recalculate profit based on what's been sold so far
+                    position.profit_quote = position.total_quote_received - position.total_quote_spent
+                    position.profit_percentage = (
+                        (position.profit_quote / position.total_quote_spent * 100)
+                        if position.total_quote_spent > 0 else 0
+                    )
+
+                # Update pending order with current fill information
                 pending_order.filled_base_amount = filled_size
                 pending_order.filled_quote_amount = filled_value
                 pending_order.remaining_base_amount = pending_order.base_amount - filled_size
-
-                # Calculate average fill price
-                if filled_size > 0:
-                    pending_order.filled_price = filled_value / filled_size
+                pending_order.filled_price = filled_value / filled_size if filled_size > 0 else 0
 
                 # Update status to partially_filled if not fully filled
                 if filled_size < pending_order.base_amount:
                     pending_order.status = "partially_filled"
                     logger.info(
-                        f"Position {position.id} limit order partially filled: "
-                        f"{filled_size}/{pending_order.base_amount}"
+                        f"Position {position.id} partial fill status: "
+                        f"{filled_size}/{pending_order.base_amount} filled, "
+                        f"{pending_order.remaining_base_amount} remaining"
                     )
 
                 await self.db.commit()
@@ -123,25 +161,48 @@ class LimitOrderMonitor:
 
                 logger.info(f"Position {position.id} limit order FILLED at avg price {avg_fill_price}")
 
-                # Create sell trade record
-                trade = Trade(
-                    position_id=position.id,
-                    timestamp=datetime.utcnow(),
-                    side="sell",
-                    quote_amount=filled_value,
-                    base_amount=filled_size,
-                    price=avg_fill_price,
-                    trade_type="limit_close",
-                    order_id=position.limit_close_order_id,
-                )
-                self.db.add(trade)
+                # Check if there are NEW fills since last partial fill check
+                previous_filled = pending_order.filled_base_amount or 0
+                new_fill_size = filled_size - previous_filled
+
+                if new_fill_size > 0:
+                    # There's a final partial fill that hasn't been recorded yet
+                    new_fill_value = new_fill_size * avg_fill_price
+
+                    logger.info(
+                        f"Position {position.id} FINAL fill: {new_fill_size} @ {avg_fill_price} BTC "
+                        f"(completing full {filled_size})"
+                    )
+
+                    # Create sell trade for the final partial fill
+                    trade = Trade(
+                        position_id=position.id,
+                        timestamp=datetime.utcnow(),
+                        side="sell",
+                        quote_amount=new_fill_value,
+                        base_amount=new_fill_size,
+                        price=avg_fill_price,
+                        trade_type="limit_close_final",
+                        order_id=position.limit_close_order_id,
+                    )
+                    self.db.add(trade)
+
+                    # Update position totals with final fill
+                    if not position.total_quote_received:
+                        position.total_quote_received = 0
+                    position.total_quote_received += new_fill_value
 
                 # Close the position
                 position.status = "closed"
                 position.closed_at = datetime.utcnow()
                 position.sell_price = avg_fill_price
-                position.total_quote_received = filled_value
-                position.profit_quote = filled_value - position.total_quote_spent
+
+                # Use accumulated total_quote_received (includes partial fills)
+                # If no partial fills occurred, this will be set to filled_value
+                if not position.total_quote_received:
+                    position.total_quote_received = filled_value
+
+                position.profit_quote = position.total_quote_received - position.total_quote_spent
                 position.profit_percentage = (
                     (position.profit_quote / position.total_quote_spent * 100) if position.total_quote_spent > 0 else 0
                 )
