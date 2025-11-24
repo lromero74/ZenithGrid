@@ -12,6 +12,7 @@ from decimal import Decimal
 # Cache for precision data
 _PRECISION_CACHE: Optional[Dict] = None
 
+
 def get_precision_data() -> Dict:
     """Load precision data from JSON file (cached)."""
     global _PRECISION_CACHE

@@ -26,7 +26,7 @@ class SimpleDCAStrategy(TradingStrategy):
             id="simple_dca",
             name="Simple DCA Strategy",
             description="Time-based Dollar Cost Averaging. Buys fixed amount at regular intervals, "
-                       "sells when profit target is reached.",
+                        "sells when profit target is reached.",
             parameters=[
                 StrategyParameter(
                     name="timeframe",

@@ -98,7 +98,7 @@ class BollingerBandsStrategy(TradingStrategy):
             id="bollinger_bands",
             name="Bollinger Bands %B Strategy",
             description="Buys when %B < 0.2 (price near lower band - oversold), "
-                       "sells when %B > 0.8 (price near upper band - overbought) with profit target.",
+                        "sells when %B > 0.8 (price near upper band - overbought) with profit target.",
             parameters=[
                 StrategyParameter(
                     name="timeframe",

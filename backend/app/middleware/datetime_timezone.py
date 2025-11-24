@@ -14,7 +14,7 @@ class DatetimeTimezoneMiddleware(BaseHTTPMiddleware):
 
         # Only modify JSON responses (not streaming responses)
         if (response.headers.get("content-type", "").startswith("application/json") and
-            not isinstance(response, StreamingResponse)):
+                not isinstance(response, StreamingResponse)):
             # Read response body
             body = b""
             async for chunk in response.body_iterator:

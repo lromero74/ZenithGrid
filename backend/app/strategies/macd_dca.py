@@ -25,7 +25,7 @@ class MACDDCAStrategy(TradingStrategy):
             id="macd_dca",
             name="MACD DCA Strategy",
             description="Dollar Cost Averaging based on MACD crossover signals. "
-                       "Buys when MACD crosses above signal line, sells when crosses below with profit.",
+                        "Buys when MACD crosses above signal line, sells when crosses below with profit.",
             parameters=[
                 StrategyParameter(
                     name="timeframe",

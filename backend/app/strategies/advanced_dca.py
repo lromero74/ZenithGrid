@@ -28,7 +28,7 @@ class AdvancedDCAStrategy(TradingStrategy):
             id="advanced_dca",
             name="Advanced DCA (3Commas-style)",
             description="Full-featured DCA strategy with base order, safety orders, "
-                       "volume/step scaling, trailing take profit, and stop loss.",
+                        "volume/step scaling, trailing take profit, and stop loss.",
             parameters=[
                 StrategyParameter(
                     name="timeframe",

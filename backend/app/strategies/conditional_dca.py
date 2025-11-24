@@ -40,8 +40,8 @@ class ConditionalDCAStrategy(TradingStrategy):
             id="conditional_dca",
             name="Conditional DCA (Custom Conditions)",
             description="Advanced DCA with user-defined buy/sell conditions. "
-                       "Mix and match any indicators with operators like >, <, crossing above, etc. "
-                       "Each condition can use its own timeframe.",
+                        "Mix and match any indicators with operators like >, <, crossing above, etc. "
+                        "Each condition can use its own timeframe.",
             parameters=[
                 # Deal Management
                 StrategyParameter(
