@@ -88,7 +88,7 @@ async def validate_bot_config(request: ValidateBotConfigRequest, db: AsyncSessio
                 warnings.append(
                     ValidationWarning(
                         product_id=product_id,
-                        issue=f"Order size will be below Coinbase minimum",
+                        issue="Order size will be below Coinbase minimum",
                         suggested_minimum_pct=min_pct,
                         current_pct=order_pct,
                     )

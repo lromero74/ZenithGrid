@@ -31,7 +31,7 @@ class LimitOrderMonitor:
         """Check all pending limit close orders for fills"""
         try:
             # Get all positions with pending limit close orders
-            query = select(Position).where(Position.closing_via_limit == True, Position.status == "open")
+            query = select(Position).where(Position.closing_via_limit, Position.status == "open")
             result = await self.db.execute(query)
             positions = result.scalars().all()
 

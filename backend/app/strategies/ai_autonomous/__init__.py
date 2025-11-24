@@ -295,7 +295,7 @@ class AIAutonomousStrategy(TradingStrategy):
                 if web_search_results:
                     market_context["web_search_results"] = web_search_results
                     self._last_search_time = datetime.utcnow()
-                    logger.info(f"🔍 Web search results added to market context")
+                    logger.info("🔍 Web search results added to market context")
 
             # Call AI for analysis based on selected provider
             provider = self.config.get("ai_provider", "claude").lower()

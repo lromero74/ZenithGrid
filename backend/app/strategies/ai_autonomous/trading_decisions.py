@@ -216,7 +216,7 @@ async def should_buy(
     # New position (base order)
     min_confidence = get_confidence_threshold_func("open")
     if min_confidence is None:
-        return False, 0.0, f"AI confidence threshold not configured for opening positions"
+        return False, 0.0, "AI confidence threshold not configured for opening positions"
     if confidence < min_confidence:
         return False, 0.0, f"AI confidence too low ({confidence}% - need {min_confidence}%+ to open position)"
 

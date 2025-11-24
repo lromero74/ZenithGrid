@@ -171,15 +171,15 @@ class MultiBotMonitor:
             # Individual positions will still use frozen config in process_bot_pair
             print(f"🔍 Getting strategy instance for {bot.strategy_type}...")
             strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
-            print(f"🔍 Strategy instance created")
+            print("🔍 Strategy instance created")
             supports_batch = hasattr(strategy, "analyze_multiple_pairs_batch") and len(trading_pairs) > 1
             print(f"🔍 Supports batch: {supports_batch}")
 
             if supports_batch:
-                print(f"🔍 Calling process_bot_batch()...")
+                print("🔍 Calling process_bot_batch()...")
                 logger.info(f"🚀 Using BATCH analysis mode - {len(trading_pairs)} pairs in 1 API call!")
                 result = await self.process_bot_batch(db, bot, trading_pairs, strategy)
-                print(f"✅ process_bot_batch() returned")
+                print("✅ process_bot_batch() returned")
                 return result
             else:
                 logger.info("Using sequential analysis mode")
@@ -240,10 +240,10 @@ class MultiBotMonitor:
             Result dictionary with action/signal info for all pairs
         """
         try:
-            print(f"🔍 process_bot_batch() ENTERED")
+            print("🔍 process_bot_batch() ENTERED")
             from app.models import Position
 
-            print(f"🔍 Checking open positions...")
+            print("🔍 Checking open positions...")
             # Check how many open positions this bot has
             open_positions_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
             open_positions_result = await db.execute(open_positions_query)
@@ -277,7 +277,7 @@ class MultiBotMonitor:
                 logger.warning(
                     f"  ⚠️  SUSPICIOUS: Aggregate {quote_currency} value is very low ({aggregate_value:.8f}). This may indicate API issues."
                 )
-                logger.warning(f"  ⚠️  Bot may be unable to open new positions due to insufficient calculated balance.")
+                logger.warning("  ⚠️  Bot may be unable to open new positions due to insufficient calculated balance.")
 
             # Calculate bot's reserved balance (percentage of total account value from bot config)
             reserved_balance = bot.get_reserved_balance(aggregate_value)
@@ -330,7 +330,7 @@ class MultiBotMonitor:
                 logger.info(
                     f"  💰 Skipping new position analysis - analyzing only {len(pairs_to_analyze)} pairs with open positions for sell signals"
                 )
-                logger.info(f"  ℹ️  Will resume looking for new opportunities once funds are available")
+                logger.info("  ℹ️  Will resume looking for new opportunities once funds are available")
             else:
                 # Below capacity AND has budget - analyze all configured pairs (looking for buy + sell signals)
                 logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
@@ -495,9 +495,9 @@ class MultiBotMonitor:
 
             # Note: bot.last_signal_check is updated BEFORE processing starts (in monitor_loop)
             # to prevent race conditions where the same bot gets processed twice
-            print(f"🔍 Committing database changes...")
+            print("🔍 Committing database changes...")
             await db.commit()
-            print(f"✅ Database committed, returning results")
+            print("✅ Database committed, returning results")
 
             return results
 

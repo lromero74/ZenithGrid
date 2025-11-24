@@ -278,7 +278,7 @@ async def execute_sell(
     # Trigger immediate re-analysis to find replacement position
     # By resetting last_signal_check, the bot will run on the next monitor cycle
     # This is like 3Commas - when a deal closes, immediately look for new opportunities
-    logger.info(f"🔄 Position closed - triggering immediate re-analysis to find replacement")
+    logger.info("🔄 Position closed - triggering immediate re-analysis to find replacement")
     bot.last_signal_check = None
     await db.commit()
 

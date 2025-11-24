@@ -97,7 +97,7 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
     # Get all closed positions ordered by close date
     query = (
         select(Position)
-        .where(Position.status == "closed", Position.closed_at != None, Position.profit_usd != None)
+        .where(Position.status == "closed", Position.closed_at is not None, Position.profit_usd is not None)
         .order_by(Position.closed_at)
     )
 
@@ -156,7 +156,7 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
     # Get bot-level P&L for most profitable bot
     bot_pnl_query = (
         select(Position.bot_id, func.sum(Position.profit_usd).label("total_pnl"))
-        .where(Position.status == "closed", Position.profit_usd != None)
+        .where(Position.status == "closed", Position.profit_usd is not None)
         .group_by(Position.bot_id)
         .order_by(func.sum(Position.profit_usd).desc())
     )
@@ -264,7 +264,7 @@ async def get_position_ai_logs(position_id: int, include_before_open: bool = Tru
                 & (AIBotLog.product_id == position.product_id)
                 & (AIBotLog.timestamp >= time_before)
                 & (AIBotLog.timestamp <= time_after)
-                & (AIBotLog.position_id == None)
+                & (AIBotLog.position_id is None)
             )
         )
 

@@ -219,7 +219,7 @@ async def process_signal(
 
             if trade is None:
                 # Limit order was placed instead
-                logger.info(f"  ✅ Limit order placed (pending fill)")
+                logger.info("  ✅ Limit order placed (pending fill)")
             else:
                 # Market order executed immediately
                 logger.info(f"  ✅ Trade executed: ID={trade.id}, Order={trade.order_id}")
