@@ -179,7 +179,7 @@ async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db
                     current_price = await coinbase.get_current_price(position.product_id)
                     position_value = position.total_base_acquired * current_price
                     total_in_positions_value += position_value
-                except Exception as e:
+                except Exception as _:
                     logger.warning(f"Could not get current price for position {position.id}, using quote spent")
                     total_in_positions_value += position.total_quote_spent
 
@@ -474,7 +474,7 @@ async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
                 current_price = await coinbase.get_current_price(position.product_id)
                 position_value = position.total_base_acquired * current_price
                 total_in_positions_value += position_value
-            except Exception as e:
+            except Exception as _:
                 # Fallback to quote spent if can't get current price
                 logger.warning(f"Could not get current price for position {position.id}, using quote spent")
                 total_in_positions_value += position.total_quote_spent

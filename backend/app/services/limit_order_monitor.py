@@ -8,8 +8,6 @@ Runs as a background task to check order status periodically.
 import asyncio
 import logging
 from datetime import datetime
-from typing import List
-import json
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

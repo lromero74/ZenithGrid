@@ -7,7 +7,6 @@ Periodically checks pending limit orders and creates trades when filled.
 import asyncio
 import logging
 from datetime import datetime
-from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

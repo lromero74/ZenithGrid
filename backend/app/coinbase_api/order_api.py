@@ -34,12 +34,6 @@ async def create_market_order(
     """
     order_config: Dict[str, Dict] = {"market_market_ioc": {}}
 
-    # Extract currencies from product_id for proper precision formatting
-    if "-" in product_id:
-        base_currency, quote_currency = product_id.split("-")
-    else:
-        base_currency, quote_currency = "ETH", "BTC"  # fallback
-
     if size:
         # Format base amount with product-specific precision
         formatted_size = format_base_amount_for_product(float(size), product_id)

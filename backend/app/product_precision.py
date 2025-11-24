@@ -8,7 +8,6 @@ This module provides a lookup system to ensure orders meet Coinbase's precision 
 import json
 import os
 from typing import Dict, Optional
-from decimal import Decimal
 
 # Cache for precision data
 _PRECISION_CACHE: Optional[Dict] = None

@@ -8,7 +8,7 @@ import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import desc, func, select

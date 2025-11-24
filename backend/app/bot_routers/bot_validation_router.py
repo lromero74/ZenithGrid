@@ -77,9 +77,6 @@ async def validate_bot_config(request: ValidateBotConfigRequest, db: AsyncSessio
     # Check each product
     warnings: List[ValidationWarning] = []
     for product_id in request.product_ids:
-        # Calculate actual order amount
-        order_amount = (order_pct / 100) * quote_balance
-
         # Get minimum required percentage for this product
         try:
             min_pct = await calculate_minimum_budget_percentage(coinbase, product_id, quote_balance)

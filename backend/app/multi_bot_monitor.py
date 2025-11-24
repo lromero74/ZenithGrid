@@ -252,8 +252,6 @@ class MultiBotMonitor:
             print(f"🔍 Found {open_count} open positions")
 
             # Refresh bot from database to get latest config (in case max_concurrent_deals changed)
-            from app.models import Bot as BotModel
-
             await db.refresh(bot)
 
             # Get max concurrent deals from strategy config

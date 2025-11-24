@@ -70,6 +70,7 @@ async def execute_buy(
 
         logger.info(f"  📋 Placing limit buy order: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
 
+        # TODO: pending_order is currently unused but reserved for future limit order tracking/monitoring
         pending_order = await execute_limit_buy(
             db=db,
             coinbase=coinbase,

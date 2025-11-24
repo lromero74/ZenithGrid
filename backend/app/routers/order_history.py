@@ -8,13 +8,13 @@ Similar to 3Commas order history page.
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot, OrderHistory, Position
+from app.models import Bot, OrderHistory
 
 router = APIRouter(prefix="/api/order-history", tags=["order-history"])
 

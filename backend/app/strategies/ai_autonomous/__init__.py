@@ -14,7 +14,6 @@ import anthropic
 from app.config import settings
 from app.strategies import (
     StrategyDefinition,
-    StrategyParameter,
     StrategyRegistry,
     TradingStrategy,
 )
@@ -302,6 +301,7 @@ class AIAutonomousStrategy(TradingStrategy):
             logger.info(f"🤖 Calling {provider.upper()} AI for market analysis...")
 
             # Build prompt using extracted module
+            # TODO: Consider converting lambda to def function for better debugging
             build_prompt = lambda ctx: prompts.build_standard_analysis_prompt(ctx, self.config, self._format_price)
 
             if provider == "claude":
@@ -345,6 +345,7 @@ class AIAutonomousStrategy(TradingStrategy):
         provider = self.config.get("ai_provider", "claude").lower()
 
         # Build batch prompt
+        # TODO: Consider converting lambda to def function for better debugging
         build_batch_prompt = lambda data: prompts.build_standard_batch_analysis_prompt(
             data, self.config, self._format_price
         )
@@ -359,6 +360,7 @@ class AIAutonomousStrategy(TradingStrategy):
             # Fallback to individual calls if batch not supported
             logger.warning(f"Batch analysis not supported for {provider}, falling back to individual calls")
             results = {}
+            # TODO: Consider converting lambda to def function for better debugging
             build_prompt = lambda ctx: prompts.build_standard_analysis_prompt(ctx, self.config, self._format_price)
 
             for product_id, data in pairs_data.items():
