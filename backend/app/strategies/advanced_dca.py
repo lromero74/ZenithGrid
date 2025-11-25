@@ -28,7 +28,7 @@ class AdvancedDCAStrategy(TradingStrategy):
             id="advanced_dca",
             name="Advanced DCA (3Commas-style)",
             description="Full-featured DCA strategy with base order, safety orders, "
-                       "volume/step scaling, trailing take profit, and stop loss.",
+            "volume/step scaling, trailing take profit, and stop loss.",
             parameters=[
                 StrategyParameter(
                     name="timeframe",
@@ -36,7 +36,16 @@ class AdvancedDCAStrategy(TradingStrategy):
                     description="Timeframe for price monitoring (e.g., 5min, 1hour, 1day)",
                     type="str",
                     default="FIVE_MINUTE",
-                    options=["ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR", "TWO_HOUR", "SIX_HOUR", "ONE_DAY"]
+                    options=[
+                        "ONE_MINUTE",
+                        "FIVE_MINUTE",
+                        "FIFTEEN_MINUTE",
+                        "THIRTY_MINUTE",
+                        "ONE_HOUR",
+                        "TWO_HOUR",
+                        "SIX_HOUR",
+                        "ONE_DAY",
+                    ],
                 ),
                 # Base Order Settings
                 StrategyParameter(
@@ -45,7 +54,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                     description="How to calculate base order size",
                     type="str",
                     default="percentage",
-                    options=["percentage", "fixed_btc"]
+                    options=["percentage", "fixed_btc"],
                 ),
                 StrategyParameter(
                     name="base_order_percentage",
@@ -54,7 +63,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=10.0,
                     min_value=1.0,
-                    max_value=100.0
+                    max_value=100.0,
                 ),
                 StrategyParameter(
                     name="base_order_btc",
@@ -63,9 +72,8 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.001,
                     min_value=0.0001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
-
                 # Safety Order Settings
                 StrategyParameter(
                     name="safety_order_type",
@@ -73,7 +81,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                     description="How to calculate safety order size",
                     type="str",
                     default="percentage_of_base",
-                    options=["percentage_of_base", "fixed_btc"]
+                    options=["percentage_of_base", "fixed_btc"],
                 ),
                 StrategyParameter(
                     name="safety_order_percentage",
@@ -82,7 +90,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=50.0,
                     min_value=10.0,
-                    max_value=500.0
+                    max_value=500.0,
                 ),
                 StrategyParameter(
                     name="safety_order_btc",
@@ -91,7 +99,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.0005,
                     min_value=0.0001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
                 StrategyParameter(
                     name="max_safety_orders",
@@ -100,9 +108,8 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="int",
                     default=5,
                     min_value=0,
-                    max_value=20
+                    max_value=20,
                 ),
-
                 # Price Deviation Settings
                 StrategyParameter(
                     name="price_deviation",
@@ -111,7 +118,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=2.0,
                     min_value=0.1,
-                    max_value=20.0
+                    max_value=20.0,
                 ),
                 StrategyParameter(
                     name="safety_order_step_scale",
@@ -120,9 +127,8 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=1.0,
                     min_value=1.0,
-                    max_value=5.0
+                    max_value=5.0,
                 ),
-
                 # Volume Scaling
                 StrategyParameter(
                     name="safety_order_volume_scale",
@@ -131,9 +137,8 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=1.0,
                     min_value=1.0,
-                    max_value=5.0
+                    max_value=5.0,
                 ),
-
                 # Take Profit Settings
                 StrategyParameter(
                     name="take_profit_percentage",
@@ -142,14 +147,14 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=3.0,
                     min_value=0.1,
-                    max_value=50.0
+                    max_value=50.0,
                 ),
                 StrategyParameter(
                     name="trailing_take_profit",
                     display_name="Trailing Take Profit",
                     description="Enable trailing take profit (follows price up)",
                     type="bool",
-                    default=False
+                    default=False,
                 ),
                 StrategyParameter(
                     name="trailing_deviation",
@@ -158,16 +163,15 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=1.0,
                     min_value=0.1,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
-
                 # Stop Loss Settings
                 StrategyParameter(
                     name="stop_loss_enabled",
                     display_name="Enable Stop Loss",
                     description="Enable stop loss protection",
                     type="bool",
-                    default=False
+                    default=False,
                 ),
                 StrategyParameter(
                     name="stop_loss_percentage",
@@ -176,14 +180,14 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=-10.0,
                     min_value=-50.0,
-                    max_value=-0.1
+                    max_value=-0.1,
                 ),
                 StrategyParameter(
                     name="trailing_stop_loss",
                     display_name="Trailing Stop Loss",
                     description="Enable trailing stop loss (SL follows price upward to protect profits)",
                     type="bool",
-                    default=False
+                    default=False,
                 ),
                 StrategyParameter(
                     name="trailing_stop_deviation",
@@ -192,10 +196,10 @@ class AdvancedDCAStrategy(TradingStrategy):
                     type="float",
                     default=5.0,
                     min_value=0.1,
-                    max_value=20.0
+                    max_value=20.0,
                 ),
             ],
-            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-BTC", "SOL-USD"]
+            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-BTC", "SOL-USD"],
         )
 
     def validate_config(self):
@@ -218,11 +222,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                 if param.max_value is not None and value > param.max_value:
                     raise ValueError(f"{param.display_name} must be <= {param.max_value}")
 
-    async def analyze_signal(
-        self,
-        candles: List[Dict[str, Any]],
-        current_price: float
-    ) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float, **kwargs) -> Optional[Dict[str, Any]]:
         """
         Advanced DCA doesn't use technical indicators - it only buys on initial entry
         and then uses price-based safety orders.
@@ -231,10 +231,7 @@ class AdvancedDCAStrategy(TradingStrategy):
         """
         # This strategy is price-based, not indicator-based
         # Return a simple "check" signal that triggers position evaluation
-        return {
-            "signal_type": "check",
-            "price": current_price
-        }
+        return {"signal_type": "check", "price": current_price}
 
     def calculate_base_order_size(self, btc_balance: float) -> float:
         """Calculate base order size based on configuration"""
@@ -285,17 +282,14 @@ class AdvancedDCAStrategy(TradingStrategy):
             if i == 0:
                 total_deviation += deviation
             else:
-                total_deviation += deviation * (step_scale ** i)
+                total_deviation += deviation * (step_scale**i)
 
         # Calculate trigger price
         trigger_price = entry_price * (1.0 - total_deviation / 100.0)
         return trigger_price
 
     async def should_buy(
-        self,
-        signal_data: Dict[str, Any],
-        position: Optional[Any],
-        btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
     ) -> Tuple[bool, float, str]:
         """
         Determine if we should buy
@@ -320,7 +314,7 @@ class AdvancedDCAStrategy(TradingStrategy):
                 return False, 0.0, "Safety orders disabled"
 
             # Count existing safety orders (total trades - 1 base order)
-            safety_orders_count = position.trade_count - 1 if hasattr(position, 'trade_count') else 0
+            safety_orders_count = position.trade_count - 1 if hasattr(position, "trade_count") else 0
 
             if safety_orders_count >= max_safety:
                 return False, 0.0, f"Max safety orders reached ({max_safety})"
@@ -353,12 +347,7 @@ class AdvancedDCAStrategy(TradingStrategy):
 
             return False, 0.0, f"Price not low enough for SO #{next_order_number} (need {trigger_price:.8f})"
 
-    async def should_sell(
-        self,
-        signal_data: Dict[str, Any],
-        position: Any,
-        current_price: float
-    ) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
         """
         Determine if we should sell
 

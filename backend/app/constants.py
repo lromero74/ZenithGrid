@@ -9,24 +9,24 @@ from typing import Dict
 # Popular Coinbase trading pairs
 # Focus on X/BTC pairs as requested
 POPULAR_BTC_PAIRS = [
-    "ETH-BTC",    # Ethereum
-    "SOL-BTC",    # Solana
-    "LINK-BTC",   # Chainlink
+    "ETH-BTC",  # Ethereum
+    "SOL-BTC",  # Solana
+    "LINK-BTC",  # Chainlink
     "MATIC-BTC",  # Polygon
-    "AVAX-BTC",   # Avalanche
-    "DOT-BTC",    # Polkadot
-    "UNI-BTC",    # Uniswap
-    "ATOM-BTC",   # Cosmos
-    "LTC-BTC",    # Litecoin
-    "XLM-BTC",    # Stellar
+    "AVAX-BTC",  # Avalanche
+    "DOT-BTC",  # Polkadot
+    "UNI-BTC",  # Uniswap
+    "ATOM-BTC",  # Cosmos
+    "LTC-BTC",  # Litecoin
+    "XLM-BTC",  # Stellar
 ]
 
 # Also support major USD pairs
 POPULAR_USD_PAIRS = [
-    "BTC-USD",    # Bitcoin
-    "ETH-USD",    # Ethereum
-    "SOL-USD",    # Solana
-    "USDC-USD",   # USD Coin
+    "BTC-USD",  # Bitcoin
+    "ETH-USD",  # Ethereum
+    "SOL-USD",  # Solana
+    "USDC-USD",  # USD Coin
 ]
 
 # All supported trading pairs
@@ -64,4 +64,4 @@ CANDLE_INTERVALS = [
 
 # Cache TTL (seconds)
 BALANCE_CACHE_TTL = 60  # Cache balances for 60 seconds
-PRICE_CACHE_TTL = 10    # Cache prices for 10 seconds
+PRICE_CACHE_TTL = 10  # Cache prices for 10 seconds

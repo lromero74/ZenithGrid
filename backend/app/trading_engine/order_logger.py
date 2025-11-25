@@ -1,0 +1,115 @@
+"""
+Order logging utilities for trading engine
+
+Handles logging of:
+- Order history (audit trail like 3Commas)
+- AI bot decision logs
+"""
+
+import logging
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import AIBotLog, Bot, OrderHistory, Position
+
+logger = logging.getLogger(__name__)
+
+
+async def save_ai_log(
+    db: AsyncSession,
+    bot: Bot,
+    product_id: str,
+    signal_data: Dict[str, Any],
+    decision: str,
+    current_price: float,
+    position: Optional[Position],
+):
+    """Save AI bot reasoning log if this is an AI autonomous bot"""
+    # Only save logs for AI autonomous strategy
+    if bot.strategy_type != "ai_autonomous":
+        return
+
+    # Extract AI thinking/reasoning from signal_data
+    thinking = signal_data.get("reasoning", "No reasoning provided")
+    confidence = signal_data.get("confidence", None)
+
+    # Determine position status
+    position_status = "none"
+    if position:
+        position_status = position.status
+
+    # Save log (don't commit - let caller handle transaction)
+    ai_log = AIBotLog(
+        bot_id=bot.id,
+        position_id=position.id if position else None,  # Link to position for historical review
+        thinking=thinking,
+        decision=decision,
+        confidence=confidence,
+        current_price=current_price,
+        position_status=position_status,
+        product_id=product_id,  # Track which pair this analysis is for
+        context=signal_data,  # Store full signal data for reference
+        timestamp=datetime.utcnow(),
+    )
+
+    db.add(ai_log)
+    # Don't commit here - let the main process_signal flow commit everything together
+
+
+async def log_order_to_history(
+    db: AsyncSession,
+    bot: Bot,
+    product_id: str,
+    position: Optional[Position],
+    side: str,
+    order_type: str,
+    trade_type: str,
+    quote_amount: float,
+    price: float,
+    status: str,
+    order_id: Optional[str] = None,
+    base_amount: Optional[float] = None,
+    error_message: Optional[str] = None,
+):
+    """
+    Log order attempt to order_history table for audit trail.
+    Similar to 3Commas order history.
+
+    Args:
+        db: Database session
+        bot: Bot instance
+        product_id: Trading pair
+        position: Position (None for failed base orders)
+        side: "BUY" or "SELL"
+        order_type: "MARKET", "LIMIT", etc.
+        trade_type: "initial", "dca", "safety_order_1", etc.
+        quote_amount: Amount of quote currency attempted
+        price: Price at time of order
+        status: "success", "failed", "canceled"
+        order_id: Coinbase order ID (None for failed orders)
+        base_amount: Amount of base currency acquired (None for failed orders)
+        error_message: Error details if failed
+    """
+    try:
+        order_history = OrderHistory(
+            timestamp=datetime.utcnow(),
+            bot_id=bot.id,
+            position_id=position.id if position else None,
+            product_id=product_id,
+            side=side,
+            order_type=order_type,
+            trade_type=trade_type,
+            quote_amount=quote_amount,
+            base_amount=base_amount,
+            price=price,
+            status=status,
+            order_id=order_id,
+            error_message=error_message,
+        )
+        db.add(order_history)
+        # Note: Don't commit here - let caller handle commits
+    except Exception as e:
+        logger.error(f"Failed to log order to history: {e}")
+        # Don't fail the entire operation if logging fails

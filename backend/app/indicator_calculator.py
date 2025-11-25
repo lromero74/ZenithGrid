@@ -35,9 +35,7 @@ class IndicatorCalculator:
         pass
 
     def calculate_all_indicators(
-        self,
-        candles: List[Dict[str, Any]],
-        required_indicators: Set[str]
+        self, candles: List[Dict[str, Any]], required_indicators: Set[str]
     ) -> Dict[str, float]:
         """
         Calculate all required indicators from candle data
@@ -78,9 +76,7 @@ class IndicatorCalculator:
                     fast = int(parts[1])
                     slow = int(parts[2])
                     signal_period = int(parts[3])
-                    macd_line, signal_line, histogram = self.calculate_macd(
-                        closes, fast, slow, signal_period
-                    )
+                    macd_line, signal_line, histogram = self.calculate_macd(closes, fast, slow, signal_period)
                     if macd_line is not None:
                         indicators[f"macd_{fast}_{slow}_{signal_period}"] = macd_line
                         indicators[f"macd_signal_{fast}_{slow}_{signal_period}"] = signal_line
@@ -105,9 +101,7 @@ class IndicatorCalculator:
                     _band_type = parts[1]  # upper, middle, lower (parsed but not used - returns all bands)
                     period = int(parts[2])
                     std_dev = float(parts[3])
-                    upper, middle, lower = self.calculate_bollinger_bands(
-                        closes, period, std_dev
-                    )
+                    upper, middle, lower = self.calculate_bollinger_bands(closes, period, std_dev)
                     if upper is not None:
                         indicators[f"bb_upper_{period}_{std_dev}"] = upper
                         indicators[f"bb_middle_{period}_{std_dev}"] = middle
@@ -120,9 +114,7 @@ class IndicatorCalculator:
                     _line_type = parts[1]  # k or d (parsed but not used - returns both k and d)
                     k_period = int(parts[2])
                     d_period = int(parts[3])
-                    k_value, d_value = self.calculate_stochastic(
-                        highs, lows, closes, k_period, d_period
-                    )
+                    k_value, d_value = self.calculate_stochastic(highs, lows, closes, k_period, d_period)
                     if k_value is not None:
                         indicators[f"stoch_k_{k_period}_{d_period}"] = k_value
                         indicators[f"stoch_d_{k_period}_{d_period}"] = d_value
@@ -179,11 +171,7 @@ class IndicatorCalculator:
         return ema
 
     def calculate_macd(
-        self,
-        prices: List[float],
-        fast_period: int = 12,
-        slow_period: int = 26,
-        signal_period: int = 9
+        self, prices: List[float], fast_period: int = 12, slow_period: int = 26, signal_period: int = 9
     ) -> tuple[float | None, float | None, float | None]:
         """
         Calculate MACD (Moving Average Convergence Divergence)
@@ -226,10 +214,7 @@ class IndicatorCalculator:
         return macd_line, signal_line, histogram
 
     def calculate_bollinger_bands(
-        self,
-        prices: List[float],
-        period: int = 20,
-        std_dev: float = 2.0
+        self, prices: List[float], period: int = 20, std_dev: float = 2.0
     ) -> tuple[float | None, float | None, float | None]:
         """
         Calculate Bollinger Bands
@@ -256,12 +241,7 @@ class IndicatorCalculator:
         return upper_band, middle_band, lower_band
 
     def calculate_stochastic(
-        self,
-        highs: List[float],
-        lows: List[float],
-        closes: List[float],
-        k_period: int = 14,
-        d_period: int = 3
+        self, highs: List[float], lows: List[float], closes: List[float], k_period: int = 14, d_period: int = 3
     ) -> tuple[float | None, float | None]:
         """
         Calculate Stochastic Oscillator
@@ -291,8 +271,8 @@ class IndicatorCalculator:
         for i in range(max(k_period, len(closes) - d_period), len(closes)):
             if i < k_period:
                 continue
-            period_highs = highs[i - k_period:i]
-            period_lows = lows[i - k_period:i]
+            period_highs = highs[i - k_period : i]
+            period_lows = lows[i - k_period : i]
             period_close = closes[i]
 
             h_high = max(period_highs)
@@ -332,7 +312,7 @@ class IndicatorCalculator:
                 if condition.get("value_type") == "indicator":
                     compare_condition = {
                         "indicator": condition.get("compare_indicator"),
-                        "indicator_params": condition.get("compare_indicator_params", {})
+                        "indicator_params": condition.get("compare_indicator_params", {}),
                     }
                     required.add(self._get_indicator_key(compare_condition))
 

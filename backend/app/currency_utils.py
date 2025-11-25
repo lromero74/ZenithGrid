@@ -19,8 +19,8 @@ def get_currencies_from_pair(product_id: str) -> Tuple[str, str]:
         Example: "ETH-BTC" -> ("ETH", "BTC")
                  "ADA-USD" -> ("ADA", "USD")
     """
-    if '-' in product_id:
-        parts = product_id.split('-')
+    if "-" in product_id:
+        parts = product_id.split("-")
         return (parts[0], parts[1])
     return ("ETH", "BTC")  # Default fallback
 

@@ -1,4 +1,5 @@
 """Market data and signal-related Pydantic schemas"""
+
 from datetime import datetime
 from typing import Optional
 

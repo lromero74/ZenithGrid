@@ -7,7 +7,6 @@ Periodically checks pending limit orders and creates trades when filled.
 import asyncio
 import logging
 from datetime import datetime
-from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -134,12 +133,7 @@ class OrderMonitor:
 
         # For OPEN/PENDING status, do nothing (still waiting)
 
-    async def _process_filled_order(
-        self,
-        db: AsyncSession,
-        pending_order: PendingOrder,
-        order_data: dict
-    ):
+    async def _process_filled_order(self, db: AsyncSession, pending_order: PendingOrder, order_data: dict):
         """
         Process a filled order by creating a Trade and updating Position
 
@@ -175,7 +169,7 @@ class OrderMonitor:
             base_amount=filled_base_amount,
             price=filled_price,
             trade_type=pending_order.trade_type,
-            order_id=pending_order.order_id
+            order_id=pending_order.order_id,
         )
         db.add(trade)
 

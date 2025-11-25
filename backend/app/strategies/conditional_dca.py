@@ -40,8 +40,8 @@ class ConditionalDCAStrategy(TradingStrategy):
             id="conditional_dca",
             name="Conditional DCA (Custom Conditions)",
             description="Advanced DCA with user-defined buy/sell conditions. "
-                       "Mix and match any indicators with operators like >, <, crossing above, etc. "
-                       "Each condition can use its own timeframe.",
+            "Mix and match any indicators with operators like >, <, crossing above, etc. "
+            "Each condition can use its own timeframe.",
             parameters=[
                 # Deal Management
                 StrategyParameter(
@@ -51,9 +51,8 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="int",
                     default=1,
                     min_value=1,
-                    max_value=20
+                    max_value=20,
                 ),
-
                 # Base Order Settings
                 StrategyParameter(
                     name="base_order_type",
@@ -61,7 +60,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     description="How to calculate base order size",
                     type="str",
                     default="percentage",
-                    options=["percentage", "fixed_btc"]
+                    options=["percentage", "fixed_btc"],
                 ),
                 StrategyParameter(
                     name="base_order_percentage",
@@ -70,7 +69,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=10.0,
                     min_value=1.0,
-                    max_value=100.0
+                    max_value=100.0,
                 ),
                 StrategyParameter(
                     name="base_order_btc",
@@ -79,9 +78,8 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.001,
                     min_value=0.0001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
-
                 # Safety Order Settings
                 StrategyParameter(
                     name="safety_order_type",
@@ -89,7 +87,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     description="How to calculate safety order size",
                     type="str",
                     default="percentage_of_base",
-                    options=["percentage_of_base", "fixed_btc"]
+                    options=["percentage_of_base", "fixed_btc"],
                 ),
                 StrategyParameter(
                     name="safety_order_percentage",
@@ -98,7 +96,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=50.0,
                     min_value=10.0,
-                    max_value=500.0
+                    max_value=500.0,
                 ),
                 StrategyParameter(
                     name="safety_order_btc",
@@ -107,7 +105,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.0005,
                     min_value=0.0001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
                 StrategyParameter(
                     name="max_safety_orders",
@@ -116,9 +114,8 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="int",
                     default=5,
                     min_value=0,
-                    max_value=20
+                    max_value=20,
                 ),
-
                 # Price Deviation Settings
                 StrategyParameter(
                     name="price_deviation",
@@ -127,7 +124,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=2.0,
                     min_value=0.1,
-                    max_value=20.0
+                    max_value=20.0,
                 ),
                 StrategyParameter(
                     name="safety_order_step_scale",
@@ -136,9 +133,8 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=1.0,
                     min_value=1.0,
-                    max_value=5.0
+                    max_value=5.0,
                 ),
-
                 # Volume Scaling
                 StrategyParameter(
                     name="safety_order_volume_scale",
@@ -147,9 +143,8 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=1.0,
                     min_value=1.0,
-                    max_value=5.0
+                    max_value=5.0,
                 ),
-
                 # Take Profit Settings
                 StrategyParameter(
                     name="take_profit_percentage",
@@ -158,7 +153,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=3.0,
                     min_value=0.1,
-                    max_value=50.0
+                    max_value=50.0,
                 ),
                 StrategyParameter(
                     name="take_profit_order_type",
@@ -166,7 +161,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     description="Use limit order (at Mark price) or market order when closing profitable position",
                     type="str",
                     default="limit",
-                    options=["limit", "market"]
+                    options=["limit", "market"],
                 ),
                 StrategyParameter(
                     name="min_profit_for_conditions",
@@ -175,14 +170,14 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=0.0,
                     min_value=-50.0,
-                    max_value=50.0
+                    max_value=50.0,
                 ),
                 StrategyParameter(
                     name="trailing_take_profit",
                     display_name="Trailing Take Profit",
                     description="Enable trailing take profit (follows price up)",
                     type="bool",
-                    default=False
+                    default=False,
                 ),
                 StrategyParameter(
                     name="trailing_deviation",
@@ -191,7 +186,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=1.0,
                     min_value=0.1,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
                 StrategyParameter(
                     name="profit_calculation_method",
@@ -199,16 +194,15 @@ class ConditionalDCAStrategy(TradingStrategy):
                     description="How to calculate profit: from average cost (cost_basis) or from initial entry (base_order)",
                     type="string",
                     default="cost_basis",
-                    options=["cost_basis", "base_order"]
+                    options=["cost_basis", "base_order"],
                 ),
-
                 # Stop Loss Settings
                 StrategyParameter(
                     name="stop_loss_enabled",
                     display_name="Enable Stop Loss",
                     description="Enable stop loss protection",
                     type="bool",
-                    default=False
+                    default=False,
                 ),
                 StrategyParameter(
                     name="stop_loss_percentage",
@@ -217,14 +211,14 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=-10.0,
                     min_value=-50.0,
-                    max_value=-0.1
+                    max_value=-0.1,
                 ),
                 StrategyParameter(
                     name="trailing_stop_loss",
                     display_name="Trailing Stop Loss",
                     description="Enable trailing stop loss (SL follows price upward to protect profits)",
                     type="bool",
-                    default=False
+                    default=False,
                 ),
                 StrategyParameter(
                     name="trailing_stop_deviation",
@@ -233,15 +227,14 @@ class ConditionalDCAStrategy(TradingStrategy):
                     type="float",
                     default=5.0,
                     min_value=0.1,
-                    max_value=20.0
+                    max_value=20.0,
                 ),
-
                 # Condition Settings (stored as JSON in strategy_config)
                 # These are not StrategyParameters but part of config dict:
                 # - buy_conditions: ConditionGroup
                 # - sell_conditions: ConditionGroup
             ],
-            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-BTC", "SOL-USD"]
+            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-BTC", "SOL-USD"],
         )
 
     def validate_config(self):
@@ -285,7 +278,7 @@ class ConditionalDCAStrategy(TradingStrategy):
         self,
         candles: List[Dict[str, Any]],
         current_price: float,
-        candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None
+        candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Analyze market data and evaluate phase conditions
@@ -317,16 +310,16 @@ class ConditionalDCAStrategy(TradingStrategy):
         timeframes_needed = set()
         for indicator_key in required:
             # Extract timeframe from keys like "FIVE_MINUTE_rsi_14"
-            parts = indicator_key.split('_', 2)
+            parts = indicator_key.split("_", 2)
             if len(parts) >= 2:
                 # Reconstruct timeframe (handles ONE_MINUTE, FIVE_MINUTE, etc.)
-                if parts[0] in ['ONE', 'FIVE', 'FIFTEEN', 'THIRTY', 'TWO', 'SIX']:
+                if parts[0] in ["ONE", "FIVE", "FIFTEEN", "THIRTY", "TWO", "SIX"]:
                     timeframe = f"{parts[0]}_{parts[1]}"
                     timeframes_needed.add(timeframe)
 
         # Use provided candles_by_timeframe or fallback to default candles
         if candles_by_timeframe is None:
-            candles_by_timeframe = {'FIVE_MINUTE': candles}
+            candles_by_timeframe = {"FIVE_MINUTE": candles}
 
         # Calculate indicators for each timeframe using actual candles
         current_indicators = {}
@@ -338,7 +331,9 @@ class ConditionalDCAStrategy(TradingStrategy):
             print(f"[CONDITIONAL_DCA] Timeframe {timeframe}: got {len(tf_candles)} candles")
 
             if len(tf_candles) < min_candles_needed:
-                print(f"[CONDITIONAL_DCA] Skipping {timeframe}: only {len(tf_candles)} candles, need {min_candles_needed}")
+                print(
+                    f"[CONDITIONAL_DCA] Skipping {timeframe}: only {len(tf_candles)} candles, need {min_candles_needed}"
+                )
                 continue  # Not enough data for this timeframe
 
             # Extract just the indicator names (without timeframe prefix) for this timeframe
@@ -346,14 +341,11 @@ class ConditionalDCAStrategy(TradingStrategy):
             for indicator_key in required:
                 if indicator_key.startswith(f"{timeframe}_"):
                     # Remove timeframe prefix
-                    indicator_name = indicator_key[len(timeframe) + 1:]
+                    indicator_name = indicator_key[len(timeframe) + 1 :]
                     tf_required.add(indicator_name)
 
             # Calculate indicators for this timeframe
-            indicators_for_tf = self.indicator_calculator.calculate_all_indicators(
-                tf_candles,
-                tf_required
-            )
+            indicators_for_tf = self.indicator_calculator.calculate_all_indicators(tf_candles, tf_required)
 
             # Prefix each indicator with the timeframe
             for key, value in indicators_for_tf.items():
@@ -363,30 +355,21 @@ class ConditionalDCAStrategy(TradingStrategy):
         base_order_signal = False
         if self.base_order_conditions:
             base_order_signal = self.phase_evaluator.evaluate_phase_conditions(
-                self.base_order_conditions,
-                self.base_order_logic,
-                current_indicators,
-                self.previous_indicators
+                self.base_order_conditions, self.base_order_logic, current_indicators, self.previous_indicators
             )
 
         # Evaluate safety order conditions
         safety_order_signal = False
         if self.safety_order_conditions:
             safety_order_signal = self.phase_evaluator.evaluate_phase_conditions(
-                self.safety_order_conditions,
-                self.safety_order_logic,
-                current_indicators,
-                self.previous_indicators
+                self.safety_order_conditions, self.safety_order_logic, current_indicators, self.previous_indicators
             )
 
         # Evaluate take profit conditions
         take_profit_signal = False
         if self.take_profit_conditions:
             take_profit_signal = self.phase_evaluator.evaluate_phase_conditions(
-                self.take_profit_conditions,
-                self.take_profit_logic,
-                current_indicators,
-                self.previous_indicators
+                self.take_profit_conditions, self.take_profit_logic, current_indicators, self.previous_indicators
             )
 
         # Store current as previous for next iteration
@@ -398,7 +381,7 @@ class ConditionalDCAStrategy(TradingStrategy):
             "safety_order_signal": safety_order_signal,
             "take_profit_signal": take_profit_signal,
             "indicators": current_indicators,
-            "price": current_price
+            "price": current_price,
         }
 
     def calculate_base_order_size(self, btc_balance: float) -> float:
@@ -462,17 +445,14 @@ class ConditionalDCAStrategy(TradingStrategy):
             if i == 0:
                 total_deviation += deviation
             else:
-                total_deviation += deviation * (step_scale ** i)
+                total_deviation += deviation * (step_scale**i)
 
         # Calculate trigger price
         trigger_price = entry_price * (1.0 - total_deviation / 100.0)
         return trigger_price
 
     async def should_buy(
-        self,
-        signal_data: Dict[str, Any],
-        position: Optional[Any],
-        btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
     ) -> Tuple[bool, float, str]:
         """
         Determine if we should buy
@@ -503,7 +483,7 @@ class ConditionalDCAStrategy(TradingStrategy):
                 return False, 0.0, "Safety orders disabled"
 
             # Count existing safety orders
-            safety_orders_count = position.trade_count - 1 if hasattr(position, 'trade_count') else 0
+            safety_orders_count = position.trade_count - 1 if hasattr(position, "trade_count") else 0
 
             if safety_orders_count >= max_safety:
                 return False, 0.0, f"Max safety orders reached ({max_safety})"
@@ -530,12 +510,7 @@ class ConditionalDCAStrategy(TradingStrategy):
 
             return True, safety_size, f"Safety order #{next_order_number} (conditions met)"
 
-    async def should_sell(
-        self,
-        signal_data: Dict[str, Any],
-        position: Any,
-        current_price: float
-    ) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
         """
         Determine if we should sell
 
@@ -585,7 +560,10 @@ class ConditionalDCAStrategy(TradingStrategy):
             trailing_sl_price = highest_price * (1.0 - trailing_stop_dev / 100.0)
 
             if current_price <= trailing_sl_price:
-                return True, f"Trailing stop loss triggered (Peak: {highest_price:.8f}, SL: {trailing_sl_price:.8f}, Current: {current_price:.8f})"
+                return (
+                    True,
+                    f"Trailing stop loss triggered (Peak: {highest_price:.8f}, SL: {trailing_sl_price:.8f}, Current: {current_price:.8f})",
+                )
 
         # Check regular stop loss
         if self.config["stop_loss_enabled"]:
@@ -617,9 +595,15 @@ class ConditionalDCAStrategy(TradingStrategy):
                 trailing_trigger_price = peak_price * (1.0 - trailing_dev / 100.0)
 
                 if current_price <= trailing_trigger_price:
-                    return True, f"Trailing TP triggered (Peak: {peak_price:.8f}, Trigger: {trailing_trigger_price:.8f}, Profit: {profit_pct:.2f}%)"
+                    return (
+                        True,
+                        f"Trailing TP triggered (Peak: {peak_price:.8f}, Trigger: {trailing_trigger_price:.8f}, Profit: {profit_pct:.2f}%)",
+                    )
 
-                return False, f"Trailing TP active (Peak: {peak_price:.8f}, Current: {current_price:.8f}, Profit: {profit_pct:.2f}%)"
+                return (
+                    False,
+                    f"Trailing TP active (Peak: {peak_price:.8f}, Current: {current_price:.8f}, Profit: {profit_pct:.2f}%)",
+                )
             else:
                 # Simple take profit
                 return True, f"Take profit target reached: {profit_pct:.2f}%"

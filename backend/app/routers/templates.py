@@ -55,40 +55,25 @@ class TemplateResponse(BaseModel):
 
 # Template CRUD Endpoints
 @router.post("", response_model=TemplateResponse, status_code=201)
-async def create_template(
-    template_data: TemplateCreate,
-    db: AsyncSession = Depends(get_db)
-):
+async def create_template(template_data: TemplateCreate, db: AsyncSession = Depends(get_db)):
     """Create a new bot template"""
     # Validate strategy exists
     try:
         _strategy_def = StrategyRegistry.get_definition(template_data.strategy_type)  # noqa: F841
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown strategy: {template_data.strategy_type}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown strategy: {template_data.strategy_type}")
 
     # Validate strategy config
     try:
-        StrategyRegistry.get_strategy(
-            template_data.strategy_type,
-            template_data.strategy_config
-        )
+        StrategyRegistry.get_strategy(template_data.strategy_type, template_data.strategy_config)
     except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid strategy config: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid strategy config: {str(e)}")
 
     # Check if name is unique
     query = select(BotTemplate).where(BotTemplate.name == template_data.name)
     result = await db.execute(query)
     if result.scalars().first():
-        raise HTTPException(
-            status_code=400,
-            detail=f"Template with name '{template_data.name}' already exists"
-        )
+        raise HTTPException(status_code=400, detail=f"Template with name '{template_data.name}' already exists")
 
     # Create template
     template = BotTemplate(
@@ -98,7 +83,7 @@ async def create_template(
         strategy_config=template_data.strategy_config,
         product_ids=template_data.product_ids or [],
         split_budget_across_pairs=template_data.split_budget_across_pairs,
-        is_default=False  # User-created templates are not defaults
+        is_default=False,  # User-created templates are not defaults
     )
 
     db.add(template)
@@ -112,8 +97,7 @@ async def create_template(
 async def list_templates(db: AsyncSession = Depends(get_db)):
     """Get list of all templates (defaults first, then user-created)"""
     query = select(BotTemplate).order_by(
-        desc(BotTemplate.is_default),  # Defaults first
-        desc(BotTemplate.created_at)   # Then newest first
+        desc(BotTemplate.is_default), desc(BotTemplate.created_at)  # Defaults first  # Then newest first
     )
 
     result = await db.execute(query)
@@ -136,11 +120,7 @@ async def get_template(template_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{template_id}", response_model=TemplateResponse)
-async def update_template(
-    template_id: int,
-    template_update: TemplateUpdate,
-    db: AsyncSession = Depends(get_db)
-):
+async def update_template(template_id: int, template_update: TemplateUpdate, db: AsyncSession = Depends(get_db)):
     """Update template configuration"""
     query = select(BotTemplate).where(BotTemplate.id == template_id)
     result = await db.execute(query)
@@ -151,24 +131,15 @@ async def update_template(
 
     # Don't allow editing default templates
     if template.is_default:
-        raise HTTPException(
-            status_code=403,
-            detail="Cannot edit default templates"
-        )
+        raise HTTPException(status_code=403, detail="Cannot edit default templates")
 
     # Update fields
     if template_update.name is not None:
         # Check name uniqueness
-        name_query = select(BotTemplate).where(
-            BotTemplate.name == template_update.name,
-            BotTemplate.id != template_id
-        )
+        name_query = select(BotTemplate).where(BotTemplate.name == template_update.name, BotTemplate.id != template_id)
         name_result = await db.execute(name_query)
         if name_result.scalars().first():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Template with name '{template_update.name}' already exists"
-            )
+            raise HTTPException(status_code=400, detail=f"Template with name '{template_update.name}' already exists")
         template.name = template_update.name
 
     if template_update.description is not None:
@@ -177,15 +148,9 @@ async def update_template(
     if template_update.strategy_config is not None:
         # Validate new config
         try:
-            StrategyRegistry.get_strategy(
-                template.strategy_type,
-                template_update.strategy_config
-            )
+            StrategyRegistry.get_strategy(template.strategy_type, template_update.strategy_config)
         except ValueError as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid strategy config: {str(e)}"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid strategy config: {str(e)}")
         template.strategy_config = template_update.strategy_config
 
     if template_update.product_ids is not None:
@@ -214,10 +179,7 @@ async def delete_template(template_id: int, db: AsyncSession = Depends(get_db)):
 
     # Don't allow deleting default templates
     if template.is_default:
-        raise HTTPException(
-            status_code=403,
-            detail="Cannot delete default templates"
-        )
+        raise HTTPException(status_code=403, detail="Cannot delete default templates")
 
     await db.delete(template)
     await db.commit()
@@ -235,10 +197,7 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db)):
     existing_defaults = result.scalars().all()
 
     if existing_defaults:
-        return {
-            "message": "Default templates already exist",
-            "count": len(existing_defaults)
-        }
+        return {"message": "Default templates already exist", "count": len(existing_defaults)}
 
     # Default templates matching 3Commas presets
     default_templates = [
@@ -263,10 +222,10 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db)):
                 "base_order_conditions": [],
                 "safety_order_conditions": [],
                 "take_profit_conditions": [],
-                "min_profit_for_conditions": 0.0
+                "min_profit_for_conditions": 0.0,
             },
             "product_ids": [],
-            "split_budget_across_pairs": False
+            "split_budget_across_pairs": False,
         },
         {
             "name": "Balanced DCA",
@@ -289,10 +248,10 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db)):
                 "base_order_conditions": [],
                 "safety_order_conditions": [],
                 "take_profit_conditions": [],
-                "min_profit_for_conditions": 0.0
+                "min_profit_for_conditions": 0.0,
             },
             "product_ids": [],
-            "split_budget_across_pairs": False
+            "split_budget_across_pairs": False,
         },
         {
             "name": "Aggressive DCA",
@@ -315,11 +274,11 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db)):
                 "base_order_conditions": [],
                 "safety_order_conditions": [],
                 "take_profit_conditions": [],
-                "min_profit_for_conditions": 0.0
+                "min_profit_for_conditions": 0.0,
             },
             "product_ids": [],
-            "split_budget_across_pairs": False
-        }
+            "split_budget_across_pairs": False,
+        },
     ]
 
     # Create templates
@@ -332,14 +291,11 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db)):
             strategy_config=template_data["strategy_config"],
             product_ids=template_data["product_ids"],
             split_budget_across_pairs=template_data["split_budget_across_pairs"],
-            is_default=True  # Mark as default
+            is_default=True,  # Mark as default
         )
         db.add(template)
         created_templates.append(template_data["name"])
 
     await db.commit()
 
-    return {
-        "message": "Default templates created successfully",
-        "templates": created_templates
-    }
+    return {"message": "Default templates created successfully", "templates": created_templates}

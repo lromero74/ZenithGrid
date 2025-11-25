@@ -1,4 +1,18 @@
+"""
+Database Models
+
+Defines SQLAlchemy ORM models for the trading bot application:
+- Bot: Trading bot configuration and state
+- Position: Active and historical trading positions
+- Trade: Individual buy/sell trades within positions
+- OrderHistory: Order execution history
+- MarketData: Historical candlestick data
+- Template: Reusable bot configuration templates
+- BotAILog: AI strategy decision logs
+"""
+
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import (
     JSON,
@@ -69,11 +83,11 @@ class Bot(Base):
         if pairs and len(pairs) > 0:
             # All pairs should have same quote currency (enforced in validation)
             first_pair = pairs[0]
-            if '-' in first_pair:
-                return first_pair.split('-')[1]
+            if "-" in first_pair:
+                return first_pair.split("-")[1]
         return "BTC"  # Default
 
-    def get_reserved_balance(self, aggregate_value: float = None):
+    def get_reserved_balance(self, aggregate_value: Optional[float] = None):
         """
         Get the reserved balance for this bot's quote currency
 
@@ -182,15 +196,15 @@ class Position(Base):
 
     def get_quote_currency(self) -> str:
         """Get the quote currency from product_id (e.g., 'BTC' from 'ETH-BTC', 'USD' from 'ADA-USD')"""
-        if self.product_id and '-' in self.product_id:
-            return self.product_id.split('-')[1]
-        return 'BTC'  # Default fallback
+        if self.product_id and "-" in self.product_id:
+            return self.product_id.split("-")[1]
+        return "BTC"  # Default fallback
 
     def get_base_currency(self) -> str:
         """Get the base currency from product_id (e.g., 'ETH' from 'ETH-BTC', 'ADA' from 'ADA-USD')"""
-        if self.product_id and '-' in self.product_id:
-            return self.product_id.split('-')[0]
-        return 'ETH'  # Default fallback
+        if self.product_id and "-" in self.product_id:
+            return self.product_id.split("-")[0]
+        return "ETH"  # Default fallback
 
     def update_averages(self):
         """Recalculate average buy price and totals from trades"""
@@ -303,6 +317,7 @@ class PendingOrder(Base):
     Pending limit orders that haven't been filled yet.
     Used by DCA strategies to track safety order limit orders.
     """
+
     __tablename__ = "pending_orders"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -324,7 +339,9 @@ class PendingOrder(Base):
     trade_type = Column(String, nullable=False)  # "safety_order_1", "safety_order_2", etc.
 
     # Status tracking
-    status = Column(String, nullable=False, default="pending")  # "pending", "partially_filled", "filled", "canceled", "expired"
+    status = Column(
+        String, nullable=False, default="pending"
+    )  # "pending", "partially_filled", "filled", "canceled", "expired"
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     filled_at = Column(DateTime, nullable=True)
     canceled_at = Column(DateTime, nullable=True)
@@ -348,6 +365,7 @@ class OrderHistory(Base):
     Tracks all order attempts (successful and failed) for audit trail and debugging.
     Similar to 3Commas order history.
     """
+
     __tablename__ = "order_history"
 
     id = Column(Integer, primary_key=True, index=True)

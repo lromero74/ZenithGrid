@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 class ComparisonOperator(str, Enum):
     """Comparison operators for conditions"""
+
     GREATER_THAN = "greater_than"  # >
     LESS_THAN = "less_than"  # <
     GREATER_EQUAL = "greater_equal"  # >=
@@ -32,6 +33,7 @@ class ComparisonOperator(str, Enum):
 
 class IndicatorType(str, Enum):
     """Available indicators for conditions"""
+
     RSI = "rsi"
     MACD = "macd"
     MACD_SIGNAL = "macd_signal"
@@ -49,6 +51,7 @@ class IndicatorType(str, Enum):
 
 class LogicOperator(str, Enum):
     """Logic operators for combining conditions"""
+
     AND = "and"
     OR = "or"
 
@@ -63,6 +66,7 @@ class Condition(BaseModel):
     - Price > EMA(20)
     - Bollinger Lower crossing below Price
     """
+
     id: str = Field(default_factory=lambda: f"cond_{id(object())}")
     indicator: IndicatorType
     operator: ComparisonOperator
@@ -87,6 +91,7 @@ class ConditionGroup(BaseModel):
     - (RSI < 30 OR Stochastic K < 20)
     - Nested: ((RSI < 30 AND MACD > signal) OR (Price < Bollinger Lower))
     """
+
     id: str = Field(default_factory=lambda: f"group_{id(object())}")
     logic: LogicOperator = LogicOperator.AND
     conditions: List[Condition] = Field(default_factory=list)
@@ -118,7 +123,7 @@ class ConditionEvaluator:
         self,
         condition: Condition,
         current_indicators: Dict[str, Any],
-        previous_indicators: Optional[Dict[str, Any]] = None
+        previous_indicators: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Evaluate a single condition
@@ -132,11 +137,7 @@ class ConditionEvaluator:
             True if condition is met, False otherwise
         """
         # Get current value of the indicator
-        current_value = self._get_indicator_value(
-            condition.indicator,
-            condition.indicator_params,
-            current_indicators
-        )
+        current_value = self._get_indicator_value(condition.indicator, condition.indicator_params, current_indicators)
 
         if current_value is None:
             return False
@@ -146,9 +147,7 @@ class ConditionEvaluator:
             compare_value = condition.static_value
         else:  # indicator comparison
             compare_value = self._get_indicator_value(
-                condition.compare_indicator,
-                condition.compare_indicator_params,
-                current_indicators
+                condition.compare_indicator, condition.compare_indicator_params, current_indicators
             )
 
         if compare_value is None:
@@ -160,9 +159,7 @@ class ConditionEvaluator:
                 return False
 
             previous_value = self._get_indicator_value(
-                condition.indicator,
-                condition.indicator_params,
-                previous_indicators
+                condition.indicator, condition.indicator_params, previous_indicators
             )
 
             if previous_value is None:
@@ -170,9 +167,7 @@ class ConditionEvaluator:
 
             if condition.value_type == "indicator":
                 previous_compare = self._get_indicator_value(
-                    condition.compare_indicator,
-                    condition.compare_indicator_params,
-                    previous_indicators
+                    condition.compare_indicator, condition.compare_indicator_params, previous_indicators
                 )
                 if previous_compare is None:
                     return False
@@ -205,7 +200,7 @@ class ConditionEvaluator:
         self,
         group: ConditionGroup,
         current_indicators: Dict[str, Any],
-        previous_indicators: Optional[Dict[str, Any]] = None
+        previous_indicators: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Evaluate a condition group (with AND/OR logic)
@@ -240,10 +235,7 @@ class ConditionEvaluator:
             return any(results)
 
     def _get_indicator_value(
-        self,
-        indicator_type: IndicatorType,
-        params: Dict[str, Any],
-        indicators: Dict[str, Any]
+        self, indicator_type: IndicatorType, params: Dict[str, Any], indicators: Dict[str, Any]
     ) -> Optional[float]:
         """
         Extract indicator value from indicators dict

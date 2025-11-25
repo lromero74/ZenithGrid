@@ -1396,8 +1396,14 @@ export default function Positions() {
 
     switch (sortBy) {
       case 'created':
-        aVal = new Date(a.opened_at).getTime()
-        bVal = new Date(b.opened_at).getTime()
+        // For closed positions, sort by closed_at (most recent closure first)
+        // For open positions, sort by opened_at
+        aVal = a.status === 'closed' && a.closed_at
+          ? new Date(a.closed_at).getTime()
+          : new Date(a.opened_at).getTime()
+        bVal = b.status === 'closed' && b.closed_at
+          ? new Date(b.closed_at).getTime()
+          : new Date(b.opened_at).getTime()
         break
       case 'pnl':
         const aPnl = calculateUnrealizedPnL(a, currentPrices[a.product_id || 'ETH-BTC'])?.percent || 0

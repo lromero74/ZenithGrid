@@ -45,7 +45,7 @@ interface PortfolioData {
   }
 }
 
-type SortColumn = 'asset' | 'total_balance' | 'usd_value' | 'btc_value' | 'percentage'
+type SortColumn = 'asset' | 'total_balance' | 'usd_value' | 'btc_value' | 'percentage' | 'unrealized_pnl_usd'
 type SortDirection = 'asc' | 'desc'
 
 function Portfolio() {
@@ -127,6 +127,9 @@ function Portfolio() {
         break
       case 'percentage':
         compareValue = a.percentage - b.percentage
+        break
+      case 'unrealized_pnl_usd':
+        compareValue = ((a as any).unrealized_pnl_usd || 0) - ((b as any).unrealized_pnl_usd || 0)
         break
     }
 

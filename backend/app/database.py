@@ -13,14 +13,11 @@ engine = create_async_engine(
     echo=True,
     connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
     pool_pre_ping=True,
-    pool_recycle=3600
+    pool_recycle=3600,
 )
 
 async_session_maker = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False  # Disable autoflush to avoid greenlet issues
+    engine, class_=AsyncSession, expire_on_commit=False, autoflush=False  # Disable autoflush to avoid greenlet issues
 )
 
 

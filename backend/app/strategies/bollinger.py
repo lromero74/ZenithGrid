@@ -28,7 +28,7 @@ def calculate_sma(prices: List[float], period: int) -> List[float]:
 
     sma = []
     for i in range(period - 1, len(prices)):
-        avg = sum(prices[i - period + 1:i + 1]) / period
+        avg = sum(prices[i - period + 1 : i + 1]) / period
         sma.append(avg)
     return sma
 
@@ -39,7 +39,7 @@ def calculate_std_dev(prices: List[float], period: int, sma_values: List[float])
 
     for i in range(len(sma_values)):
         data_index = i + period - 1
-        subset = prices[data_index - period + 1:data_index + 1]
+        subset = prices[data_index - period + 1 : data_index + 1]
         mean = sma_values[i]
         variance = sum((x - mean) ** 2 for x in subset) / period
         std_dev = math.sqrt(variance)
@@ -49,9 +49,7 @@ def calculate_std_dev(prices: List[float], period: int, sma_values: List[float])
 
 
 def calculate_bollinger_bands(
-    prices: List[float],
-    period: int = 20,
-    std_multiplier: float = 2.0
+    prices: List[float], period: int = 20, std_multiplier: float = 2.0
 ) -> Tuple[List[float], List[float], List[float], List[float]]:
     """
     Calculate Bollinger Bands and %B
@@ -98,7 +96,7 @@ class BollingerBandsStrategy(TradingStrategy):
             id="bollinger_bands",
             name="Bollinger Bands %B Strategy",
             description="Buys when %B < 0.2 (price near lower band - oversold), "
-                       "sells when %B > 0.8 (price near upper band - overbought) with profit target.",
+            "sells when %B > 0.8 (price near upper band - overbought) with profit target.",
             parameters=[
                 StrategyParameter(
                     name="timeframe",
@@ -106,7 +104,16 @@ class BollingerBandsStrategy(TradingStrategy):
                     description="Timeframe for Bollinger Bands analysis (e.g., 5min, 1hour, 1day)",
                     type="str",
                     default="FIVE_MINUTE",
-                    options=["ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR", "TWO_HOUR", "SIX_HOUR", "ONE_DAY"]
+                    options=[
+                        "ONE_MINUTE",
+                        "FIVE_MINUTE",
+                        "FIFTEEN_MINUTE",
+                        "THIRTY_MINUTE",
+                        "ONE_HOUR",
+                        "TWO_HOUR",
+                        "SIX_HOUR",
+                        "ONE_DAY",
+                    ],
                 ),
                 StrategyParameter(
                     name="bb_period",
@@ -115,7 +122,7 @@ class BollingerBandsStrategy(TradingStrategy):
                     type="int",
                     default=20,
                     min_value=5,
-                    max_value=100
+                    max_value=100,
                 ),
                 StrategyParameter(
                     name="bb_std_multiplier",
@@ -124,7 +131,7 @@ class BollingerBandsStrategy(TradingStrategy):
                     type="float",
                     default=2.0,
                     min_value=1.0,
-                    max_value=4.0
+                    max_value=4.0,
                 ),
                 StrategyParameter(
                     name="buy_threshold",
@@ -133,7 +140,7 @@ class BollingerBandsStrategy(TradingStrategy):
                     type="float",
                     default=0.2,
                     min_value=0.0,
-                    max_value=0.5
+                    max_value=0.5,
                 ),
                 StrategyParameter(
                     name="sell_threshold",
@@ -142,7 +149,7 @@ class BollingerBandsStrategy(TradingStrategy):
                     type="float",
                     default=0.8,
                     min_value=0.5,
-                    max_value=1.0
+                    max_value=1.0,
                 ),
                 StrategyParameter(
                     name="buy_amount_percentage",
@@ -151,7 +158,7 @@ class BollingerBandsStrategy(TradingStrategy):
                     type="float",
                     default=15.0,
                     min_value=1.0,
-                    max_value=50.0
+                    max_value=50.0,
                 ),
                 StrategyParameter(
                     name="min_profit_percentage",
@@ -160,7 +167,7 @@ class BollingerBandsStrategy(TradingStrategy):
                     type="float",
                     default=1.5,
                     min_value=0.1,
-                    max_value=20.0
+                    max_value=20.0,
                 ),
                 StrategyParameter(
                     name="max_position_size_btc",
@@ -169,10 +176,10 @@ class BollingerBandsStrategy(TradingStrategy):
                     type="float",
                     default=0.15,
                     min_value=0.001,
-                    max_value=10.0
+                    max_value=10.0,
                 ),
             ],
-            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-USD"]
+            supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-USD"],
         )
 
     def validate_config(self):
@@ -192,11 +199,7 @@ class BollingerBandsStrategy(TradingStrategy):
             if param.max_value is not None and value > param.max_value:
                 raise ValueError(f"{param.display_name} must be <= {param.max_value}")
 
-    async def analyze_signal(
-        self,
-        candles: List[Dict[str, Any]],
-        current_price: float
-    ) -> Optional[Dict[str, Any]]:
+    async def analyze_signal(self, candles: List[Dict[str, Any]], current_price: float, **kwargs) -> Optional[Dict[str, Any]]:
         """
         Analyze Bollinger Bands and detect %B signals
 
@@ -213,11 +216,7 @@ class BollingerBandsStrategy(TradingStrategy):
         close_prices = [float(c["close"]) for c in candles]
 
         # Calculate Bollinger Bands
-        middle, upper, lower, percent_b = calculate_bollinger_bands(
-            close_prices,
-            bb_period,
-            std_multiplier
-        )
+        middle, upper, lower, percent_b = calculate_bollinger_bands(close_prices, bb_period, std_multiplier)
 
         if len(percent_b) == 0:
             return None
@@ -239,16 +238,13 @@ class BollingerBandsStrategy(TradingStrategy):
                 "middle_band": middle[-1],
                 "upper_band": upper[-1],
                 "lower_band": lower[-1],
-                "price": current_price
+                "price": current_price,
             }
 
         return None
 
     async def should_buy(
-        self,
-        signal_data: Dict[str, Any],
-        position: Optional[Any],
-        btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
     ) -> Tuple[bool, float, str]:
         """
         Buy when %B indicates oversold
@@ -267,10 +263,7 @@ class BollingerBandsStrategy(TradingStrategy):
         buy_pct = self.config["buy_amount_percentage"]
         max_position = self.config["max_position_size_btc"]
 
-        btc_to_spend = min(
-            btc_balance * (buy_pct / 100.0),
-            max_position
-        )
+        btc_to_spend = min(btc_balance * (buy_pct / 100.0), max_position)
 
         if btc_to_spend <= 0:
             return False, 0.0, "Insufficient BTC balance"
@@ -279,12 +272,7 @@ class BollingerBandsStrategy(TradingStrategy):
         lower_band = signal_data.get("lower_band", 0)
         return True, btc_to_spend, f"%B oversold ({pb:.3f}) near lower band ({lower_band:.8f})"
 
-    async def should_sell(
-        self,
-        signal_data: Dict[str, Any],
-        position: Any,
-        current_price: float
-    ) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
         """
         Sell when %B indicates overbought AND profit target is met
 
@@ -305,6 +293,9 @@ class BollingerBandsStrategy(TradingStrategy):
         if current_profit_pct >= min_profit:
             pb = signal_data.get("percent_b", 0)
             upper_band = signal_data.get("upper_band", 0)
-            return True, f"%B overbought ({pb:.3f}) near upper band ({upper_band:.8f}), profit {current_profit_pct:.2f}%"
+            return (
+                True,
+                f"%B overbought ({pb:.3f}) near upper band ({upper_band:.8f}), profit {current_profit_pct:.2f}%",
+            )
         else:
             return False, f"%B overbought but profit {current_profit_pct:.2f}% < target {min_profit}%"
