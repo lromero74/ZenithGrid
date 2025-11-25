@@ -73,6 +73,72 @@ async def process_signal(
         )
 
     if not signal_data:
+        # AI FAILSAFE: If AI analysis failed and we have a position in profit, auto-sell to protect it
+        if bot.strategy_type == "ai_autonomous" and position is not None:
+            logger.warning(f"  🛡️ AI analysis failed for {product_id} - checking failsafe for position #{position.id}")
+
+            # Check if failsafe should sell to protect profit
+            should_sell_failsafe, failsafe_reason = await strategy.should_sell_failsafe(position, current_price)
+
+            if should_sell_failsafe:
+                logger.warning(f"  🛡️ FAILSAFE ACTIVATED: {failsafe_reason}")
+
+                # Execute sell with limit order (mark price → bid fallback after 60s)
+                # This uses the existing execute_sell function which handles limit orders
+                trade, profit_quote, profit_pct = await execute_sell(
+                    db=db,
+                    coinbase=coinbase,
+                    trading_client=trading_client,
+                    bot=bot,
+                    product_id=product_id,
+                    position=position,
+                    current_price=current_price,
+                    signal_data={
+                        "signal_type": "sell",
+                        "confidence": 100,
+                        "reasoning": failsafe_reason,
+                    },
+                )
+
+                # If trade is None, a limit order was placed - position stays open
+                if trade is None:
+                    logger.warning(f"  🛡️ Failsafe limit close order placed for position #{position.id}, waiting for fill")
+                    return {
+                        "action": "failsafe_limit_close_pending",
+                        "reason": failsafe_reason,
+                        "limit_order_placed": True,
+                        "position_id": position.id,
+                    }
+
+                # Record signal for market sell
+                signal = Signal(
+                    position_id=position.id,
+                    timestamp=datetime.utcnow(),
+                    signal_type="sell",
+                    macd_value=0,
+                    macd_signal=0,
+                    macd_histogram=0,
+                    price=current_price,
+                    action_taken="sell",
+                    reason=failsafe_reason,
+                )
+                db.add(signal)
+                await db.commit()
+
+                logger.warning(f"  🛡️ FAILSAFE SELL COMPLETED: Profit protected at {profit_pct:.2f}%")
+
+                return {
+                    "action": "failsafe_sell",
+                    "reason": failsafe_reason,
+                    "signal": None,
+                    "trade": trade,
+                    "position": position,
+                    "profit_quote": profit_quote,
+                    "profit_percentage": profit_pct,
+                }
+            else:
+                logger.info(f"  Failsafe checked but not triggered: {failsafe_reason}")
+
         return {"action": "none", "reason": "No signal detected", "signal": None}
 
     # Get bot's available balance (budget-based or total portfolio)

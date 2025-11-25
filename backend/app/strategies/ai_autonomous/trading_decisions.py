@@ -237,6 +237,65 @@ async def should_buy(
     return True, btc_amount, f"AI BUY ({confidence}% confidence): {reasoning}"
 
 
+async def should_sell_failsafe(
+    position: Any,
+    current_price: float,
+    config: Dict[str, Any],
+) -> Tuple[bool, str]:
+    """
+    FAILSAFE: Check if position should be sold when AI analysis fails
+
+    This is a safety mechanism that protects profits when AI is unavailable
+    (e.g., API errors, token limits exceeded, service outages).
+
+    Rules:
+    - Only triggers when AI analysis fails
+    - Only sells if position is in profit
+    - Only sells if profit meets minimum threshold
+    - Uses limit orders for profit protection (mark price → bid price fallback)
+
+    Args:
+        position: Current position
+        current_price: Current market price
+        config: Strategy configuration
+
+    Returns:
+        Tuple of (should_sell: bool, reasoning: str)
+    """
+    # Determine profit calculation method
+    profit_method = config.get("profit_calculation_method", "cost_basis")
+
+    # Get entry price based on selected method
+    if profit_method == "base_order":
+        # Calculate from first trade (base order) only
+        buy_trades = [t for t in position.trades if t.side == "buy"]
+        if not buy_trades:
+            return False, "No entry price yet - position has no trades"
+        # Sort by timestamp to get first trade
+        buy_trades.sort(key=lambda t: t.timestamp)
+        entry_price = buy_trades[0].price
+    else:
+        # Default: cost_basis - use average buy price across all trades
+        entry_price = position.average_buy_price
+        if entry_price == 0:
+            return False, "No entry price yet - position has no trades"
+
+    profit_pct = (current_price - entry_price) / entry_price * 100
+    min_profit = config.get("min_profit_percentage", 1.0)
+
+    # FAILSAFE RULE 1: Never sell at a loss
+    if profit_pct <= 0:
+        return False, f"AI failsafe: not selling at loss (current: {profit_pct:.2f}%)"
+
+    # FAILSAFE RULE 2: Only sell if profit meets minimum
+    if profit_pct < min_profit:
+        return False, f"AI failsafe: profit {profit_pct:.2f}% below minimum {min_profit}%"
+
+    # FAILSAFE ACTIVATED: Position is in profit and AI is unavailable
+    # Sell to protect profits (limit order will be used)
+    return True, f"🛡️ AI FAILSAFE ACTIVATED: Protecting profit ({profit_pct:.2f}%) - AI analysis unavailable"
+
+
 async def should_sell(
     signal_data: Dict[str, Any],
     position: Any,

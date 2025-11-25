@@ -416,3 +416,13 @@ class AIAutonomousStrategy(TradingStrategy):
         return await trading_decisions.should_sell(
             signal_data, position, current_price, self.config, self._get_confidence_threshold_for_action
         )
+
+    async def should_sell_failsafe(self, position: Any, current_price: float) -> Tuple[bool, str]:
+        """
+        FAILSAFE: Check if position should be sold when AI analysis fails
+
+        This protects profits when AI is unavailable (API errors, token limits, etc.)
+
+        Uses extracted trading_decisions module
+        """
+        return await trading_decisions.should_sell_failsafe(position, current_price, self.config)
