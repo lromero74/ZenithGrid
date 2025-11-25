@@ -188,6 +188,55 @@ class AIAutonomousStrategy(TradingStrategy):
 
         return False
 
+    def _get_product_minimum(self, position: Optional[Any], signal_data: Dict[str, Any]) -> float:
+        """
+        Get minimum order size for a product from product_precision.json
+
+        Args:
+            position: Current position (if exists)
+            signal_data: Signal data containing product_id
+
+        Returns:
+            Minimum order size in quote currency (BTC or USD)
+        """
+        # Determine product_id
+        product_id = None
+        if position and hasattr(position, "product_id"):
+            product_id = position.product_id
+        elif "product_id" in signal_data:
+            product_id = signal_data.get("product_id")
+        elif "product_id" in self.config:
+            product_id = self.config.get("product_id")
+
+        if not product_id:
+            # Conservative default for BTC pairs
+            return 0.0001
+
+        # Load product precision data
+        import json
+        import os
+
+        precision_file = os.path.join(os.path.dirname(__file__), "..", "..", "product_precision.json")
+        try:
+            with open(precision_file, "r") as f:
+                precision_data = json.load(f)
+
+            # Get product-specific data
+            product_data = precision_data.get(product_id, {})
+            quote_increment = product_data.get("quote_increment", "0.0001")
+
+            # Convert increment string to minimum (typically 10x increment for safety)
+            from decimal import Decimal
+            min_value = Decimal(quote_increment) * 10
+
+            return float(min_value)
+
+        except Exception as e:
+            logger.warning(f"Could not load product minimum for {product_id}: {e}")
+            # Fallback based on quote currency
+            quote_currency = product_id.split("-")[1] if "-" in product_id else "BTC"
+            return 1.0 if quote_currency == "USD" else 0.0001
+
     def _format_price(self, price: float, product_id: str) -> str:
         """Format price with correct precision and currency based on product_id"""
         quote_currency = product_id.split("-")[1] if "-" in product_id else "BTC"
@@ -388,12 +437,8 @@ class AIAutonomousStrategy(TradingStrategy):
         Uses extracted trading_decisions module
         """
 
-        # Get product minimum (fetch from product_precision.json if available)
-        # Default to conservative 0.0001 BTC if not found
-        product_minimum = 0.0001  # Conservative default for BTC pairs
-
-        # TODO: In future, we could fetch this from database or product_precision.json
-        # For now, using safe default that works for most BTC pairs
+        # Get product minimum from product_precision.json
+        product_minimum = self._get_product_minimum(position, signal_data)
 
         # Create wrapper for DCA decision that uses instance methods
         async def ask_dca_wrapper(pos, price, budget, ctx):
