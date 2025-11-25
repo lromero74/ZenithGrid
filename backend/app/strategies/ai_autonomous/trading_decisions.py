@@ -5,6 +5,7 @@ Contains buy/sell decision logic and DCA (Dollar Cost Averaging) decisions
 """
 
 import logging
+from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ async def ask_ai_for_dca_decision(
     build_dca_prompt_func,
     settings,
     total_tokens_tracker: Dict[str, int],
+    product_minimum: float = 0.0001,
 ) -> Dict[str, Any]:
     """
     Ask AI if we should add to an existing position and how much
@@ -36,13 +38,14 @@ async def ask_ai_for_dca_decision(
         build_dca_prompt_func: Function to build DCA prompt
         settings: App settings (for API keys)
         total_tokens_tracker: Dict with 'total' key to track token usage
+        product_minimum: Minimum order size for this product (in quote currency)
 
     Returns:
         Dict with AI's decision: {"should_buy": bool, "amount": float, "reasoning": str}
     """
     import json
 
-    prompt = build_dca_prompt_func(position, current_price, remaining_budget, market_context, config)
+    prompt = build_dca_prompt_func(position, current_price, remaining_budget, market_context, config, product_minimum)
 
     try:
         if provider == "claude":
@@ -110,6 +113,7 @@ async def should_buy(
     config: Dict[str, Any],
     get_confidence_threshold_func,
     ask_dca_decision_func,
+    product_minimum: float = 0.0001,
 ) -> Tuple[bool, float, str]:
     """
     Determine if we should buy based on AI's analysis
@@ -118,6 +122,7 @@ async def should_buy(
     - Only buy if AI suggests it with good confidence
     - Respect budget limits
     - For DCA: AI makes dynamic decisions about timing and amount (no fixed rules)
+    - Validate against exchange minimums
 
     Args:
         signal_data: AI analysis result
@@ -126,6 +131,7 @@ async def should_buy(
         config: Strategy configuration
         get_confidence_threshold_func: Function to get confidence threshold
         ask_dca_decision_func: Function to ask AI for DCA decision
+        product_minimum: Minimum order size for this product (in quote currency)
 
     Returns:
         Tuple of (should_buy: bool, amount: float, reasoning: str)
@@ -219,6 +225,16 @@ async def should_buy(
         if btc_amount <= 0:
             return False, 0.0, "Insufficient budget for DCA"
 
+        # CRITICAL: Validate against exchange minimum order size
+        if btc_amount < product_minimum:
+            quote_currency = position.get_quote_currency()
+            return (
+                False,
+                0.0,
+                f"DCA amount {btc_amount:.8f} {quote_currency} below exchange minimum {product_minimum:.8f} {quote_currency}. "
+                f"AI should suggest at least {product_minimum:.8f} {quote_currency} or skip DCA.",
+            )
+
         reasoning = dca_decision["reasoning"]
         amount_pct = dca_decision["amount_percentage"]
 
@@ -248,6 +264,19 @@ async def should_buy(
 
     if btc_amount <= 0:
         return False, 0.0, "Insufficient balance"
+
+    # CRITICAL: Validate against exchange minimum order size
+    if btc_amount < product_minimum:
+        # Get quote currency from signal data or config
+        quote_currency = "BTC"  # Default
+        if position and hasattr(position, "get_quote_currency"):
+            quote_currency = position.get_quote_currency()
+        return (
+            False,
+            0.0,
+            f"Initial buy amount {btc_amount:.8f} {quote_currency} below exchange minimum {product_minimum:.8f} {quote_currency}. "
+            f"AI should suggest larger allocation or skip this pair.",
+        )
 
     reasoning = signal_data.get("reasoning", "AI recommends buying")
     return True, btc_amount, f"AI BUY ({confidence}% confidence): {reasoning}"

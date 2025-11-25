@@ -388,6 +388,13 @@ class AIAutonomousStrategy(TradingStrategy):
         Uses extracted trading_decisions module
         """
 
+        # Get product minimum (fetch from product_precision.json if available)
+        # Default to conservative 0.0001 BTC if not found
+        product_minimum = 0.0001  # Conservative default for BTC pairs
+
+        # TODO: In future, we could fetch this from database or product_precision.json
+        # For now, using safe default that works for most BTC pairs
+
         # Create wrapper for DCA decision that uses instance methods
         async def ask_dca_wrapper(pos, price, budget, ctx):
             return await trading_decisions.ask_ai_for_dca_decision(
@@ -398,13 +405,14 @@ class AIAutonomousStrategy(TradingStrategy):
                 budget,
                 ctx,
                 self.config,
-                lambda p, cp, rb, mc, cfg: prompts.build_dca_decision_prompt(p, cp, rb, mc, cfg),
+                lambda p, cp, rb, mc, cfg, pmin=product_minimum: prompts.build_dca_decision_prompt(p, cp, rb, mc, cfg, pmin),
                 settings,
                 self._token_tracker,
+                product_minimum,
             )
 
         return await trading_decisions.should_buy(
-            signal_data, position, btc_balance, self.config, self._get_confidence_threshold_for_action, ask_dca_wrapper
+            signal_data, position, btc_balance, self.config, self._get_confidence_threshold_for_action, ask_dca_wrapper, product_minimum
         )
 
     async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:

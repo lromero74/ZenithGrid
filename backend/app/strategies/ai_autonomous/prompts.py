@@ -140,7 +140,7 @@ Remember:
 
 
 def build_dca_decision_prompt(
-    position: Any, current_price: float, remaining_budget: float, market_context: Dict[str, Any], config: Dict[str, Any]
+    position: Any, current_price: float, remaining_budget: float, market_context: Dict[str, Any], config: Dict[str, Any], product_minimum: float = 0.0001
 ) -> str:
     """
     Build prompt for AI to decide on DCA (Dollar Cost Averaging) action
@@ -151,6 +151,7 @@ def build_dca_decision_prompt(
         remaining_budget: Remaining budget for this position
         market_context: Recent market data
         config: Strategy configuration
+        product_minimum: Minimum order size for this product (in quote currency)
 
     Returns:
         Formatted prompt string for AI DCA decision
@@ -167,11 +168,13 @@ def build_dca_decision_prompt(
         spent_str = f"${position.total_quote_spent:.2f} USD"
         avg_price_str = f"${position.average_buy_price:.2f} USD"
         curr_price_str = f"${current_price:.2f} USD"
+        min_order_str = f"${product_minimum:.2f} USD"
     else:
         budget_str = f"{remaining_budget:.8f} BTC"
         spent_str = f"{position.total_quote_spent:.8f} BTC"
         avg_price_str = f"{position.average_buy_price:.8f} BTC"
         curr_price_str = f"{current_price:.8f} BTC"
+        min_order_str = f"{product_minimum:.8f} BTC"
 
     prompt = f"""You are an autonomous trading AI managing real cryptocurrency positions. Your goal is to maximize profit through intelligent DCA decisions.
 
@@ -186,6 +189,7 @@ Your job is to grow this portfolio. The better you perform, the more resources y
 - Already Invested: {spent_str}
 - Remaining Budget: {budget_str}
 - DCA Buys So Far: {current_dcas}/{max_dcas}
+- **MINIMUM ORDER SIZE: {min_order_str}** (Coinbase exchange requirement)
 
 **CRITICAL RULE - DCA CONSTRAINT:**
 You can ONLY make this DCA decision if the current price is BELOW the average entry price.
@@ -222,6 +226,7 @@ Strategic Considerations:
 - How much budget should you save for even deeper discounts?
 - What's the market momentum and volatility telling you?
 - Only buy if you see genuine value, not just because price dropped
-- Remember: Your goal is to maximize long-term profit, not to spend budget quickly"""
+- Remember: Your goal is to maximize long-term profit, not to spend budget quickly
+- IMPORTANT: Ensure your buy amount meets the minimum order size ({min_order_str}) - orders below this will be rejected by the exchange"""
 
     return prompt
