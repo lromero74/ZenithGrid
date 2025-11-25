@@ -20,7 +20,7 @@ def get_strategy_definition() -> StrategyDefinition:
             StrategyParameter(
                 name="position_control_mode",
                 display_name="Position Control Mode",
-                description="Strict: Use fixed parameters for all position sizing. AI-Directed: Let AI dynamically control position sizes within budget limits. Always respects position budget regardless of mode.",
+                description="Controls how position sizes are determined:\n\n⚙️ STRICT MODE:\n  • YOU set exact percentages for initial buys and DCA amounts\n  • AI only decides WHEN to buy/sell based on market analysis\n  • Fixed parameters are always followed\n\n🤖 AI-DIRECTED MODE:\n  • AI decides both WHEN and HOW MUCH to allocate\n  • AI suggests position sizes dynamically based on confidence and market conditions\n  • Budget limits are still enforced (max_position_budget_percentage)\n  • More adaptive but less predictable sizing",
                 type="string",
                 default="strict",
                 options=["strict", "ai_directed"],
