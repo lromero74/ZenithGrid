@@ -91,3 +91,6 @@ If you see "INSUFFICIENT FUNDS" errors, verify that `calculate_aggregate_btc_val
 - one-off debug and helper scripts belong in scripts folder
 - when you make a change to local repo you have to push so testbot host (where this is actually running) can pick it up
 - remember that changes to local db need to be done on prod db at testbot ec2 host, and you must back up prod db before applying changes.
+- production trading db is backend/trading.db
+- remember our python is in venv on localhost and in production (testbot host on EC2)
+- lint all code before committing new or changed code
