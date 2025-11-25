@@ -292,12 +292,16 @@ async def process_signal(
 
         except Exception as e:
             logger.error(f"  ❌ Trade execution failed: {e}")
-            # If this was a new position and trade failed, remove the position from session
+            # If this was a new position and trade failed, mark it as failed (don't leave orphaned)
             if is_new_position and position:
-                logger.warning(f"  🗑️ Removing failed position {position.id} from session (trade failed)")
-                # Expunge the position from session instead of rolling back
-                # This prevents session corruption when processing multiple pairs in batch mode
-                db.expunge(position)
+                logger.warning(f"  🗑️ Marking position {position.id} as failed (initial buy failed)")
+                # Mark position as failed instead of expunging
+                # This prevents orphaned positions showing as "open" with 0 trades
+                position.status = "failed"
+                position.last_error_message = f"Initial buy failed: {str(e)}"
+                position.last_error_timestamp = datetime.utcnow()
+                position.closed_at = datetime.utcnow()
+                await db.commit()
                 return {"action": "none", "reason": f"Buy failed: {str(e)}", "signal": signal_data}
 
             # CRITICAL FIX: For existing positions (DCA failures), DO NOT raise exception
