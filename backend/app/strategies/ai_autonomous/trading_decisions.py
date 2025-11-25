@@ -161,6 +161,22 @@ async def should_buy(
         if current_price == 0:
             return False, 0.0, "Cannot determine current price for DCA"
 
+        # CRITICAL DCA RULE: Only DCA when price is REASONABLY BELOW average cost basis
+        # DCA (Dollar Cost Averaging) means buying MORE at SIGNIFICANTLY LOWER prices to reduce average cost
+        # Buying at or near current average moves the goal post AWAY and defeats the purpose of DCA
+        avg_cost = position.average_buy_price
+        price_drop_from_avg = ((avg_cost - current_price) / avg_cost) * 100  # Positive = price dropped
+
+        # Require meaningful drop below average (not just barely below)
+        # Use a reasonable minimum drop - AI can't override this constraint
+        min_drop_for_dca_pct = 1.0  # Require at least 1% drop below average cost basis
+
+        if price_drop_from_avg < min_drop_for_dca_pct:
+            if current_price >= avg_cost:
+                return False, 0.0, f"DCA rejected: price ({current_price:.8f}) is ABOVE avg cost ({avg_cost:.8f}). DCA only on significant drops."
+            else:
+                return False, 0.0, f"DCA rejected: drop {price_drop_from_avg:.2f}% below avg cost is too small (need {min_drop_for_dca_pct}%+). Waiting for better entry."
+
         # Calculate remaining budget
         remaining_budget = position.max_quote_allowed - position.total_quote_spent
 

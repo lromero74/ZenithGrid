@@ -187,6 +187,13 @@ Your job is to grow this portfolio. The better you perform, the more resources y
 - Remaining Budget: {budget_str}
 - DCA Buys So Far: {current_dcas}/{max_dcas}
 
+**CRITICAL RULE - DCA CONSTRAINT:**
+You can ONLY make this DCA decision if the current price is BELOW the average entry price.
+- Current Price: {curr_price_str}
+- Average Entry: {avg_price_str}
+- This ensures DCA actually LOWERS the average cost, not raises it!
+- If you're seeing this prompt, the price IS below average (constraint already enforced)
+
 **Recent Market Action:**
 - 24h Change: {market_context.get('price_change_24h_pct', 0):.2f}%
 - Volatility: {market_context.get('volatility', 0):.2f}%
@@ -197,7 +204,7 @@ Should you add to this position now (DCA)? If yes, how much should you invest fr
 
 You have complete freedom to:
 - Buy any amount from 0% to 100% of remaining budget
-- Wait for better opportunities
+- Wait for even better opportunities (price might drop more!)
 - Scale in gradually or go big when confident
 - Make strategic decisions based on market conditions
 
@@ -210,8 +217,9 @@ Respond ONLY with JSON (no markdown):
 }}
 
 Strategic Considerations:
+- Price is already below average - but is this the right time to buy more?
 - Is the price drop an opportunity or a warning sign?
-- How much budget should you save for future opportunities?
+- How much budget should you save for even deeper discounts?
 - What's the market momentum and volatility telling you?
 - Only buy if you see genuine value, not just because price dropped
 - Remember: Your goal is to maximize long-term profit, not to spend budget quickly"""
