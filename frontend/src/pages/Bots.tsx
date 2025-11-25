@@ -420,6 +420,35 @@ function Bots() {
   const renderParameterInput = (param: StrategyParameter) => {
     const value = formData.strategy_config[param.name] ?? param.default
 
+    // Special handling for position_control_mode - render as toggle switch
+    if (param.name === 'position_control_mode' && param.options && param.options.length === 2) {
+      const isAiDirected = value === 'ai_directed'
+      return (
+        <div className="flex items-center justify-between bg-slate-700 rounded-lg p-4 border border-slate-600">
+          <div className="flex-1">
+            <div className="text-sm font-medium text-white mb-1">
+              {isAiDirected ? '🤖 AI-Directed Mode' : '⚙️ Strict Parameters Mode'}
+            </div>
+            <div className="text-xs text-slate-400">
+              {isAiDirected
+                ? 'AI dynamically controls position sizes within budget limits'
+                : 'Use fixed parameters for all position sizing'
+              }
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer ml-4">
+            <input
+              type="checkbox"
+              checked={isAiDirected}
+              onChange={(e) => handleParamChange(param.name, e.target.checked ? 'ai_directed' : 'strict')}
+              className="sr-only peer"
+            />
+            <div className="w-14 h-7 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+          </label>
+        </div>
+      )
+    }
+
     if (param.type === 'bool') {
       return (
         <label className="flex items-center space-x-2">
@@ -1317,21 +1346,77 @@ function Bots() {
                   }
                 />
               ) : selectedStrategy.parameters.length > 0 ? (
-                <div className="space-y-4">
-                  {selectedStrategy.parameters.map((param) => (
-                    <div key={param.name}>
-                      <label className="block text-sm font-medium mb-2">
-                        {param.description}
-                        {param.min_value !== undefined && param.max_value !== undefined && (
-                          <span className="text-slate-400 text-xs ml-2">
-                            ({param.min_value} - {param.max_value})
-                          </span>
-                        )}
-                      </label>
-                      {renderParameterInput(param)}
+                (() => {
+                  // Helper function to check if parameter should be visible
+                  const isParameterVisible = (param: StrategyParameter): boolean => {
+                    if (!param.visible_when) return true
+
+                    // Check each condition in visible_when
+                    return Object.entries(param.visible_when).every(([key, value]) => {
+                      const currentValue = formData.strategy_config[key]
+                      return currentValue === value
+                    })
+                  }
+
+                  // Group parameters by group property
+                  const parametersByGroup = selectedStrategy.parameters.reduce((acc, param) => {
+                    if (!isParameterVisible(param)) return acc
+
+                    const group = param.group || 'Other'
+                    if (!acc[group]) acc[group] = []
+                    acc[group].push(param)
+                    return acc
+                  }, {} as Record<string, StrategyParameter[]>)
+
+                  // Define group display order
+                  const groupOrder = [
+                    'Control Mode',
+                    'AI Configuration',
+                    'Budget & Position Sizing',
+                    'DCA (Safety Orders)',
+                    'Profit & Exit',
+                    'AI Confidence Thresholds',
+                    'Analysis Timing',
+                    'Market Filters',
+                    'Web Search (Optional)',
+                    'Other'
+                  ]
+
+                  return (
+                    <div className="space-y-6">
+                      {groupOrder.map((groupName) => {
+                        const groupParams = parametersByGroup[groupName]
+                        if (!groupParams || groupParams.length === 0) return null
+
+                        return (
+                          <div key={groupName} className="bg-slate-750 rounded-lg p-4 border border-slate-700">
+                            <h4 className="text-sm font-semibold text-slate-300 mb-4 border-b border-slate-600 pb-2">
+                              {groupName}
+                            </h4>
+                            <div className="space-y-4">
+                              {groupParams.map((param) => (
+                                <div key={param.name}>
+                                  <label className="block text-sm font-medium mb-2">
+                                    {param.display_name || param.description}
+                                    {param.min_value !== undefined && param.max_value !== undefined && (
+                                      <span className="text-slate-400 text-xs ml-2">
+                                        ({param.min_value} - {param.max_value})
+                                      </span>
+                                    )}
+                                  </label>
+                                  {param.description && param.display_name && (
+                                    <p className="text-xs text-slate-400 mb-2">{param.description}</p>
+                                  )}
+                                  {renderParameterInput(param)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
-                  ))}
-                </div>
+                  )
+                })()
               ) : null}
               </div>
               )}

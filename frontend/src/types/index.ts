@@ -136,12 +136,16 @@ export interface Balances {
 
 export interface StrategyParameter {
   name: string;
+  display_name?: string;
   description: string;
-  default: number | string | boolean;
+  default: number | string | boolean | null;
   min_value?: number;
   max_value?: number;
-  type: 'float' | 'int' | 'string' | 'bool';
+  type: 'float' | 'int' | 'string' | 'bool' | 'text';
   options?: string[];
+  required?: boolean;
+  group?: string;
+  visible_when?: Record<string, any>;
 }
 
 export interface StrategyDefinition {
