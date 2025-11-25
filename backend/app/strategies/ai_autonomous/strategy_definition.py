@@ -15,19 +15,6 @@ def get_strategy_definition() -> StrategyDefinition:
         description="AI-powered autonomous trading that analyzes markets and makes intelligent decisions to maximize profit. Never sells at a loss.",
         parameters=[
             # ========================================
-            # CONTROL MODE (determines which parameters are active)
-            # ========================================
-            StrategyParameter(
-                name="position_control_mode",
-                display_name="Position Control Mode",
-                description="Controls how position sizes are determined:\n\n⚙️ STRICT MODE:\n  • YOU set exact percentages for initial buys and DCA amounts\n  • AI only decides WHEN to buy/sell based on market analysis\n  • Fixed parameters are always followed\n\n🤖 AI-DIRECTED MODE:\n  • AI decides both WHEN and HOW MUCH to allocate\n  • AI suggests position sizes dynamically based on confidence and market conditions\n  • Budget limits are still enforced (max_position_budget_percentage)\n  • More adaptive but less predictable sizing",
-                type="string",
-                default="strict",
-                options=["strict", "ai_directed"],
-                group="Control Mode",
-            ),
-
-            # ========================================
             # AI CONFIGURATION
             # ========================================
             StrategyParameter(
@@ -72,17 +59,6 @@ def get_strategy_definition() -> StrategyDefinition:
                 group="Budget & Position Sizing",
             ),
             StrategyParameter(
-                name="initial_budget_percentage",
-                display_name="Initial Buy Size (%)",
-                description="[STRICT MODE] Percentage of per-position budget to use for the first buy (e.g., 10% means if position gets 0.001 BTC, first buy is 0.0001 BTC). Remaining budget available for DCA.",
-                type="float",
-                default=10.0,
-                min_value=1.0,
-                max_value=100.0,
-                group="Budget & Position Sizing",
-                visible_when={"position_control_mode": "strict"},
-            ),
-            StrategyParameter(
                 name="max_position_budget_percentage",
                 display_name="Max Total Position Size (%)",
                 description="Maximum percentage of per-position budget that can be spent in total (initial buy + all DCAs). 100% allows using full position budget.",
@@ -113,28 +89,6 @@ def get_strategy_definition() -> StrategyDefinition:
                 min_value=0,
                 max_value=10,
                 group="DCA (Safety Orders)",
-            ),
-            StrategyParameter(
-                name="safety_order_percentage",
-                display_name="DCA Buy Size (%)",
-                description="[STRICT MODE] Percentage of remaining position budget to use for each DCA buy (e.g., 5% of what's left after previous buys).",
-                type="float",
-                default=5.0,
-                min_value=1.0,
-                max_value=50.0,
-                group="DCA (Safety Orders)",
-                visible_when={"position_control_mode": "strict"},
-            ),
-            StrategyParameter(
-                name="min_price_drop_for_dca",
-                display_name="Min Price Drop for DCA (%)",
-                description="[STRICT MODE] Require price to drop at least this much from average buy price before allowing DCA (e.g., 2% means price must be 2% below average to DCA).",
-                type="float",
-                default=2.0,
-                min_value=0.0,
-                max_value=20.0,
-                group="DCA (Safety Orders)",
-                visible_when={"position_control_mode": "strict"},
             ),
 
             # ========================================
