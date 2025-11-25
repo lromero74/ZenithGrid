@@ -32,7 +32,7 @@ async def ask_ai_for_dca_decision(
         current_price: Current market price
         remaining_budget: How much quote currency is left in position budget
         market_context: Recent market data
-        config: Strategy configuration
+        config: Strategy configuration (contains safety_order_percentage)
         build_dca_prompt_func: Function to build DCA prompt
         settings: App settings (for API keys)
         total_tokens_tracker: Dict with 'total' key to track token usage
@@ -86,14 +86,23 @@ async def ask_ai_for_dca_decision(
 
         decision = json.loads(response_text)
 
-        # Calculate actual amount from percentage
-        amount_pct = decision.get("amount_percentage", 0)
-        amount = remaining_budget * (amount_pct / 100.0)
+        # Calculate actual amount based on control mode
+        control_mode = config.get("position_control_mode", "strict")
+
+        if control_mode == "ai_directed":
+            # AI-DIRECTED MODE: Use AI's suggested percentage
+            amount_pct = decision.get("amount_percentage", 5)
+            amount = remaining_budget * (amount_pct / 100.0)
+            safety_pct = amount_pct
+        else:
+            # STRICT MODE: Use configured parameter
+            safety_pct = config.get("safety_order_percentage", 5)
+            amount = remaining_budget * (safety_pct / 100.0)
 
         return {
             "should_buy": decision.get("should_buy", False),
             "amount": round(amount, 8),
-            "amount_percentage": amount_pct,
+            "amount_percentage": safety_pct,  # Now using configured percentage
             "confidence": decision.get("confidence", 0),
             "reasoning": decision.get("reasoning", "AI DCA decision"),
         }
@@ -161,12 +170,21 @@ async def should_buy(
         if current_price == 0:
             return False, 0.0, "Cannot determine current price for DCA"
 
+        # Check if price has dropped enough (STRICT MODE only)
+        control_mode = config.get("position_control_mode", "strict")
+        if control_mode == "strict":
+            min_price_drop = config.get("min_price_drop_for_dca", 0)
+            if min_price_drop > 0 and position.average_buy_price > 0:
+                price_drop_pct = ((position.average_buy_price - current_price) / position.average_buy_price) * 100
+                if price_drop_pct < min_price_drop:
+                    return False, 0.0, f"Price drop {price_drop_pct:.2f}% below minimum {min_price_drop}% for DCA"
+
         # Calculate remaining budget
         remaining_budget = position.max_quote_allowed - position.total_quote_spent
 
-        # AI-CONTROLLED DCA: Ask AI for dynamic decision
-        # No fixed price drop thresholds or volume percentages
-        # AI decides based on market conditions and position state
+        # HYBRID DCA: Price drop threshold enforced, AI decides if/when to buy
+        # Fixed parameters (safety_order_percentage, min_price_drop_for_dca) control amounts and timing
+        # AI evaluates market conditions to decide if DCA is warranted
         market_context = {
             "current_price": current_price,
             "price_change_24h_pct": signal_data.get("raw_analysis", {}).get("price_change_24h_pct", 0),
@@ -220,12 +238,19 @@ async def should_buy(
     if confidence < min_confidence:
         return False, 0.0, f"AI confidence too low ({confidence}% - need {min_confidence}%+ to open position)"
 
-    # Calculate buy amount based on AI suggestion and budget
-    suggested_pct = signal_data.get("suggested_allocation_pct", 10)
-    max_pct = config.get("max_position_size_percentage", 25)
+    # Calculate buy amount based on control mode
+    control_mode = config.get("position_control_mode", "strict")
 
-    # Use lesser of AI suggestion and max allowed
-    use_pct = min(suggested_pct, max_pct)
+    if control_mode == "ai_directed":
+        # AI-DIRECTED MODE: Use AI's allocation suggestion
+        suggested_pct = signal_data.get("suggested_allocation_pct", 10)
+        max_pct = config.get("max_position_budget_percentage", 100)
+        use_pct = min(suggested_pct, max_pct)
+    else:
+        # STRICT MODE: Use configured parameters
+        initial_pct = config.get("initial_budget_percentage", 10)
+        max_pct = config.get("max_position_budget_percentage", 100)
+        use_pct = min(initial_pct, max_pct)
 
     # NOTE: Do NOT divide by max_concurrent_deals here - the btc_balance
     # passed in has ALREADY been divided by max_concurrent_deals in trading_engine_v2.py
