@@ -22,6 +22,9 @@ class StrategyParameter(BaseModel):
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     options: Optional[List[str]] = None  # For dropdown parameters
+    group: Optional[str] = None  # For grouping parameters in UI
+    visible_when: Optional[Dict[str, Any]] = None  # Conditional visibility
+    required: Optional[bool] = True  # Whether parameter is required
 
 
 class StrategyDefinition(BaseModel):

@@ -1375,7 +1375,6 @@ function Bots() {
                     'Budget & Position Sizing',
                     'DCA (Safety Orders)',
                     'Profit & Exit',
-                    'AI Confidence Thresholds',
                     'Analysis Timing',
                     'Market Filters',
                     'Web Search (Optional)',
@@ -1408,6 +1407,36 @@ function Bots() {
                                     <p className="text-xs text-slate-400 mb-2">{param.description}</p>
                                   )}
                                   {renderParameterInput(param)}
+
+                                  {/* Show preset threshold values when risk_tolerance is not manual */}
+                                  {param.name === 'risk_tolerance' && formData.strategy_config.risk_tolerance && formData.strategy_config.risk_tolerance !== 'manual' && (
+                                    <div className="mt-2 p-3 bg-blue-900/20 border border-blue-700/50 rounded text-xs">
+                                      <p className="font-semibold text-blue-400 mb-2">Preset Confidence Thresholds:</p>
+                                      <div className="grid grid-cols-3 gap-2 text-slate-300">
+                                        {formData.strategy_config.risk_tolerance === 'aggressive' && (
+                                          <>
+                                            <div>Open: <span className="text-white font-semibold">70%</span></div>
+                                            <div>DCA: <span className="text-white font-semibold">65%</span></div>
+                                            <div>Sell: <span className="text-white font-semibold">60%</span></div>
+                                          </>
+                                        )}
+                                        {formData.strategy_config.risk_tolerance === 'moderate' && (
+                                          <>
+                                            <div>Open: <span className="text-white font-semibold">75%</span></div>
+                                            <div>DCA: <span className="text-white font-semibold">70%</span></div>
+                                            <div>Sell: <span className="text-white font-semibold">65%</span></div>
+                                          </>
+                                        )}
+                                        {formData.strategy_config.risk_tolerance === 'conservative' && (
+                                          <>
+                                            <div>Open: <span className="text-white font-semibold">80%</span></div>
+                                            <div>DCA: <span className="text-white font-semibold">75%</span></div>
+                                            <div>Sell: <span className="text-white font-semibold">70%</span></div>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>

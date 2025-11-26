@@ -64,7 +64,7 @@ class AIAutonomousStrategy(TradingStrategy):
         """
         Get confidence threshold for a specific action type.
 
-        Uses risk tolerance to set intelligent defaults, but allows user override.
+        Uses risk tolerance to set intelligent defaults, or manual values if risk_tolerance="manual".
 
         Confidence Threshold Matrix:
         ┌──────────────┬──────┬──────┬──────┐
@@ -73,6 +73,7 @@ class AIAutonomousStrategy(TradingStrategy):
         │ Aggressive   │  70  │  65  │  60  │
         │ Moderate     │  75  │  70  │  65  │
         │ Conservative │  80  │  75  │  70  │
+        │ Manual       │ User │ User │ User │
         └──────────────┴──────┴──────┴──────┘
 
         Args:
@@ -86,43 +87,39 @@ class AIAutonomousStrategy(TradingStrategy):
         risk_tolerance = self.config.get("risk_tolerance", "moderate")
         print(f"🔍 risk_tolerance: {risk_tolerance}")
 
-        # Define threshold matrix
+        # Map action type to config key
+        config_key_map = {
+            "open": "min_confidence_to_open",
+            "dca": "min_confidence_for_dca",
+            "close": "min_confidence_to_close",
+        }
+        config_key = config_key_map[action_type]
+
+        # If risk tolerance is "manual", user MUST provide explicit values
+        if risk_tolerance == "manual":
+            manual_value = self.config.get(config_key)
+            print(f"🔍 Manual mode - {config_key}: {manual_value}")
+            if manual_value is None:
+                # Fallback to moderate defaults if manual values not provided
+                print(f"⚠️ Manual mode but no value for {config_key}, using moderate default")
+                fallback_defaults = {"open": 75, "dca": 70, "close": 65}
+                return fallback_defaults[action_type]
+            return manual_value
+
+        # Define threshold matrix for preset risk tolerance levels
         thresholds = {
             "aggressive": {"open": 70, "dca": 65, "close": 60},
             "moderate": {"open": 75, "dca": 70, "close": 65},
             "conservative": {"open": 80, "dca": 75, "close": 70},
         }
 
-        # Get default based on risk tolerance
+        # Get default based on risk tolerance (with fallback to moderate)
         default_threshold = thresholds.get(risk_tolerance, thresholds["moderate"])[action_type]
         print(f"🔍 default_threshold for {action_type}: {default_threshold}")
 
-        # Allow user override via explicit config
-        config_key_map = {
-            "open": "min_confidence_to_open",
-            "dca": "min_confidence_for_dca",
-            "close": "min_confidence_to_close",
-        }
-
-        config_key = config_key_map[action_type]
-        print(f"🔍 config_key: {config_key}, value in config: {self.config.get(config_key, 'NOT SET')}")
-
-        # Return user's explicit setting if provided, otherwise use risk-based default
-        try:
-            result = self.config.get(config_key, default_threshold)
-            print(f"🔍 Returning threshold: {result} (type: {type(result)})")
-            if result is None:
-                print(f"❌ WARNING: Threshold is None! default_threshold was: {default_threshold}")
-                # Fallback to default if somehow None
-                result = default_threshold
-            return result
-        except Exception as e:
-            print(f"❌ EXCEPTION in _get_confidence_threshold_for_action: {e}")
-            import traceback
-
-            traceback.print_exc()
-            # Return safe default
-            return default_threshold
+        # Return the preset default (user can't override when using preset risk tolerance)
+        print(f"🔍 Returning threshold: {default_threshold}")
+        return default_threshold
 
     def _should_perform_web_search(
         self, position: Optional[Any], action_context: str  # "open", "close", "hold", "dca"
