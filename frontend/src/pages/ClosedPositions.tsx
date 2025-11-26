@@ -92,18 +92,18 @@ function ClosedPositions() {
     const end = new Date(closedAt)
     const diffMs = end.getTime() - start.getTime()
 
-    const weeks = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7))
-    const days = Math.floor((diffMs % (1000 * 60 * 60 * 24 * 7)) / (1000 * 60 * 60 * 24))
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
     const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000)
 
     const parts = []
-    if (weeks > 0) parts.push(`${weeks} week${weeks > 1 ? 's' : ''}`)
     if (days > 0) parts.push(`${days} day${days > 1 ? 's' : ''}`)
     if (hours > 0) parts.push(`${hours} hour${hours > 1 ? 's' : ''}`)
     if (minutes > 0) parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`)
+    if (seconds > 0) parts.push(`${seconds} second${seconds > 1 ? 's' : ''}`)
 
-    return parts.length > 0 ? parts.join(' ') : 'Less than a minute'
+    return parts.length > 0 ? parts.join(' ') : 'Less than a second'
   }
 
   const togglePosition = async (positionId: number) => {
@@ -206,7 +206,7 @@ function ClosedPositions() {
                   className="p-4 cursor-pointer hover:bg-slate-750 transition-colors"
                   onClick={() => togglePosition(position.id)}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-8 gap-4">
                     <div>
                       <p className="text-slate-400 text-xs mb-1">Deal</p>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -231,6 +231,12 @@ function ClosedPositions() {
                       <p className="text-slate-400 text-xs mb-1">Closed</p>
                       <p className="font-semibold text-white">
                         {position.closed_at ? formatDateTime(position.closed_at) : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 text-xs mb-1">Duration</p>
+                      <p className="font-semibold text-white">
+                        {position.closed_at ? calculateDuration(position.opened_at, position.closed_at) : '-'}
                       </p>
                     </div>
                     <div>
@@ -276,15 +282,6 @@ function ClosedPositions() {
                 {/* Expanded trade details */}
                 {expandedPositionId === position.id && (
                   <div className="border-t border-slate-700 p-4 bg-slate-850">
-                    {position.closed_at && (
-                      <div className="mb-4 pb-3 border-b border-slate-700">
-                        <p className="text-slate-400 text-xs mb-1">Duration</p>
-                        <p className="font-semibold text-white">
-                          {calculateDuration(position.opened_at, position.closed_at)}
-                        </p>
-                      </div>
-                    )}
-
                     {positionTrades[position.id] ? (
                       <div>
                         <p className="text-slate-400 text-xs mb-3">Trade History</p>
