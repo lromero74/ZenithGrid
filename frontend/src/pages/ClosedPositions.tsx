@@ -41,7 +41,13 @@ function ClosedPositions() {
     refetchInterval: 30000,
   })
 
-  const closedPositions = allPositions?.filter(p => p.status === 'closed') || []
+  const closedPositions = (allPositions?.filter(p => p.status === 'closed') || [])
+    .sort((a, b) => {
+      // Sort by closed_at date, most recent first (descending)
+      if (!a.closed_at) return 1 // Move positions without closed_at to end
+      if (!b.closed_at) return -1
+      return new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime()
+    })
 
   // Calculate badge counts for each tab
   const currentClosedCount = closedPositions.length
@@ -388,7 +394,12 @@ function ClosedPositions() {
               </div>
             ) : (
               <div className="space-y-3">
-                {failedOrders.map((order) => (
+                {[...failedOrders]
+                  .sort((a, b) => {
+                    // Sort by timestamp, most recent first (descending)
+                    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                  })
+                  .map((order) => (
                   <div key={order.id} className="bg-slate-800 rounded-lg border border-red-900/30 p-4">
                     <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                       <div>
