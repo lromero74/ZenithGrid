@@ -1372,12 +1372,12 @@ function Bots() {
                   const groupOrder = [
                     'Control Mode',
                     'AI Configuration',
+                    'Analysis Timing',
+                    'Web Search (Optional)',
                     'Budget & Position Sizing',
                     'DCA (Safety Orders)',
                     'Profit & Exit',
-                    'Analysis Timing',
                     'Market Filters',
-                    'Web Search (Optional)',
                     'Other'
                   ]
 
