@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Bot } from '../types'
 import { format } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
@@ -268,6 +269,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
 // Enhanced Bot Card Component
 function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
+  const navigate = useNavigate()
   const { data: stats } = useQuery({
     queryKey: ['bot-stats', bot.id],
     queryFn: () => botsApi.getStats(bot.id),
@@ -290,6 +292,12 @@ function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => vo
     } catch (err) {
       alert(`Error: ${err}`)
     }
+  }
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    // Navigate to bots page with bot to edit
+    navigate('/bots', { state: { editBot: bot } })
   }
 
   return (
@@ -372,7 +380,7 @@ function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => vo
           )}
         </button>
         <button
-          onClick={() => onNavigate('bots')}
+          onClick={handleEdit}
           className="px-3 py-2 rounded font-medium text-sm bg-slate-700 hover:bg-slate-600 text-white transition-colors"
         >
           Edit

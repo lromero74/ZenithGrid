@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
 import { botsApi, templatesApi } from '../services/api'
 import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
 import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical, FastForward } from 'lucide-react'
@@ -31,6 +32,7 @@ interface ValidationWarning {
 
 function Bots() {
   const queryClient = useQueryClient()
+  const location = useLocation()
   const [showModal, setShowModal] = useState(false)
   const [editingBot, setEditingBot] = useState<Bot | null>(null)
   const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
@@ -107,6 +109,34 @@ function Bots() {
       setValidationWarnings([])
     }
   }
+
+  // Check for bot to edit from navigation state (from Dashboard Edit button)
+  useEffect(() => {
+    const state = location.state as { editBot?: Bot } | null
+    if (state?.editBot) {
+      const bot = state.editBot
+      // Open modal and set bot for editing
+      setEditingBot(bot)
+      // Handle both legacy single pair and new multi-pair bots
+      const productIds = (bot as any).product_ids || (bot.product_id ? [bot.product_id] : [])
+      setFormData({
+        name: bot.name,
+        description: bot.description || '',
+        reserved_btc_balance: bot.reserved_btc_balance || 0,
+        reserved_usd_balance: bot.reserved_usd_balance || 0,
+        budget_percentage: bot.budget_percentage || 0,
+        check_interval_seconds: (bot as any).check_interval_seconds || 300,
+        strategy_type: bot.strategy_type,
+        product_id: bot.product_id,  // Keep for backward compatibility
+        product_ids: productIds,
+        split_budget_across_pairs: (bot as any).split_budget_across_pairs || false,
+        strategy_config: bot.strategy_config,
+      })
+      setShowModal(true)
+      // Clear navigation state to prevent reopening on refresh
+      window.history.replaceState({}, '')
+    }
+  }, [location])
 
   // Auto-validate when relevant fields change
   useEffect(() => {
