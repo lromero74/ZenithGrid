@@ -84,22 +84,23 @@ async def create_limit_order(
     else:
         base_currency, quote_currency = "ETH", "BTC"  # fallback
 
-    # Format limit price with proper precision (price is in quote currency)
-    formatted_limit_price = format_quote_amount(limit_price, quote_currency)
+    # Format limit price with PRODUCT-SPECIFIC precision (uses product_precision.json)
+    # This ensures correct decimal places for each trading pair (e.g., SOL-BTC needs 7 decimals)
+    formatted_limit_price = format_quote_amount_for_product(limit_price, product_id)
 
     order_config = {
         "limit_limit_gtc": {"limit_price": formatted_limit_price, "post_only": False}  # Allow immediate partial fills
     }
 
     if size:
-        # Format base amount with proper precision
-        formatted_size = format_base_amount(float(size), base_currency)
+        # Format base amount with PRODUCT-SPECIFIC precision
+        formatted_size = format_base_amount_for_product(float(size), product_id)
         order_config["limit_limit_gtc"]["base_size"] = formatted_size
     elif funds:
         # For limit orders with funds, we calculate base size from limit price
         base_size = float(funds) / limit_price
-        # Format with proper precision
-        formatted_base_size = format_base_amount(base_size, base_currency)
+        # Format with PRODUCT-SPECIFIC precision
+        formatted_base_size = format_base_amount_for_product(base_size, product_id)
         order_config["limit_limit_gtc"]["base_size"] = formatted_base_size
     else:
         raise ValueError("Must specify either size or funds")

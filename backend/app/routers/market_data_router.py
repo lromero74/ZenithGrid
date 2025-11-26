@@ -190,3 +190,46 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
         return {"products": filtered_products, "count": len(filtered_products)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/product-precision/{product_id}")
+async def get_product_precision(product_id: str):
+    """
+    Get precision data for a specific product from product_precision.json
+
+    Returns quote_increment, quote_decimals, and base_increment
+    """
+    try:
+        from app.product_precision import get_precision_data
+
+        precision_data = get_precision_data()
+
+        if product_id not in precision_data:
+            # Return defaults based on quote currency
+            quote_currency = product_id.split("-")[1] if "-" in product_id else "BTC"
+            if quote_currency == "USD":
+                return {
+                    "product_id": product_id,
+                    "quote_increment": "0.01",
+                    "quote_decimals": 2,
+                    "base_increment": "0.00000001",
+                }
+            else:
+                return {
+                    "product_id": product_id,
+                    "quote_increment": "0.00000001",
+                    "quote_decimals": 8,
+                    "base_increment": "0.00000001",
+                }
+
+        product_data = precision_data[product_id]
+        return {
+            "product_id": product_id,
+            "quote_increment": product_data.get("quote_increment", "0.00000001"),
+            "quote_decimals": product_data.get("quote_decimals", 8),
+            "base_increment": product_data.get("base_increment", "0.00000001"),
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching product precision for {product_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

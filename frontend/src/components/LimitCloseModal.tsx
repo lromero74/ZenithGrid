@@ -21,6 +21,12 @@ interface TickerData {
   last_price: number
 }
 
+interface ProductPrecision {
+  quote_increment: string
+  quote_decimals: number
+  base_increment: string
+}
+
 export function LimitCloseModal({
   positionId,
   productId,
@@ -32,10 +38,30 @@ export function LimitCloseModal({
   onSuccess
 }: LimitCloseModalProps) {
   const [ticker, setTicker] = useState<TickerData | null>(null)
+  const [productPrecision, setProductPrecision] = useState<ProductPrecision | null>(null)
   const [limitPrice, setLimitPrice] = useState<number>(currentLimitPrice || 0)
   const [sliderValue, setSliderValue] = useState<number>(50) // 0-100 range
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Fetch product precision data
+  useEffect(() => {
+    const fetchPrecision = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/market-data/product-precision/${productId}`)
+        setProductPrecision(response.data)
+      } catch (err: any) {
+        console.error('Failed to fetch product precision:', err)
+        // Use defaults if fetch fails
+        setProductPrecision({
+          quote_increment: quoteCurrency === 'USD' ? '0.01' : '0.00000001',
+          quote_decimals: quoteCurrency === 'USD' ? 2 : 8,
+          base_increment: '0.00000001'
+        })
+      }
+    }
+    fetchPrecision()
+  }, [productId, quoteCurrency])
 
   // Fetch ticker data
   useEffect(() => {
@@ -59,15 +85,31 @@ export function LimitCloseModal({
     return () => clearInterval(interval)
   }, [positionId])
 
+  // Helper function to round price to correct increment
+  const roundToIncrement = (price: number): number => {
+    if (!productPrecision) return price
+
+    const increment = parseFloat(productPrecision.quote_increment)
+    // Round to nearest increment (not floor, to avoid always rounding down)
+    const rounded = Math.round(price / increment) * increment
+
+    // Return with proper decimal precision
+    const decimals = productPrecision.quote_decimals
+    return parseFloat(rounded.toFixed(decimals))
+  }
+
   // Update limit price when slider changes
   useEffect(() => {
-    if (!ticker) return
+    if (!ticker || !productPrecision) return
 
     const { best_bid, best_ask } = ticker
     const range = best_ask - best_bid
-    const price = best_bid + (range * sliderValue / 100)
-    setLimitPrice(price)
-  }, [sliderValue, ticker])
+    const rawPrice = best_bid + (range * sliderValue / 100)
+
+    // Round to correct increment for this product
+    const roundedPrice = roundToIncrement(rawPrice)
+    setLimitPrice(roundedPrice)
+  }, [sliderValue, ticker, productPrecision])
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
@@ -98,12 +140,15 @@ export function LimitCloseModal({
     const price = parseFloat(value)
     if (isNaN(price) || !ticker) return
 
-    setLimitPrice(price)
+    // Round to correct increment before setting
+    const roundedPrice = roundToIncrement(price)
+    setLimitPrice(roundedPrice)
+
     // Update slider to match manual input
     const { best_bid, best_ask } = ticker
     const range = best_ask - best_bid
     if (range > 0) {
-      const percentage = ((price - best_bid) / range) * 100
+      const percentage = ((roundedPrice - best_bid) / range) * 100
       setSliderValue(Math.max(0, Math.min(100, percentage)))
     }
   }
