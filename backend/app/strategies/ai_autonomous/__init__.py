@@ -260,8 +260,12 @@ class AIAutonomousStrategy(TradingStrategy):
                 # Gemini client will be initialized when needed
                 # Import is deferred to avoid requiring google-generativeai for Claude users
                 pass
+            elif provider == "grok":
+                # Grok client will be initialized when needed (uses OpenAI library)
+                # Import is deferred to avoid requiring openai for Claude/Gemini users
+                pass
             else:
-                raise ValueError(f"Unknown AI provider: {provider}. Must be 'claude' or 'gemini'.")
+                raise ValueError(f"Unknown AI provider: {provider}. Must be 'claude', 'gemini', or 'grok'.")
 
         return self._client
 
