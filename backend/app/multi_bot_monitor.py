@@ -147,13 +147,14 @@ class MultiBotMonitor:
             logger.error(f"Error fetching candles for {product_id} ({granularity}): {e}")
             return []
 
-    async def process_bot(self, db: AsyncSession, bot: Bot) -> Dict[str, Any]:
+    async def process_bot(self, db: AsyncSession, bot: Bot, skip_ai_analysis: bool = False) -> Dict[str, Any]:
         """
         Process signals for a single bot across all its trading pairs
 
         Args:
             db: Database session
             bot: Bot instance to process
+            skip_ai_analysis: If True, skip expensive AI analysis and use recent AI opinions from database
 
         Returns:
             Result dictionary with action/signal info for all pairs
@@ -179,7 +180,7 @@ class MultiBotMonitor:
             if supports_batch:
                 print("🔍 Calling process_bot_batch()...")
                 logger.info(f"🚀 Using BATCH analysis mode - {len(trading_pairs)} pairs in 1 API call!")
-                result = await self.process_bot_batch(db, bot, trading_pairs, strategy)
+                result = await self.process_bot_batch(db, bot, trading_pairs, strategy, skip_ai_analysis)
                 print("✅ process_bot_batch() returned")
                 return result
             else:
@@ -197,7 +198,7 @@ class MultiBotMonitor:
                     batch_results = []
                     for product_id in batch:
                         try:
-                            result = await self.process_bot_pair(db, bot, product_id)
+                            result = await self.process_bot_pair(db, bot, product_id, skip_ai_analysis=skip_ai_analysis)
                             batch_results.append(result)
                         except Exception as e:
                             logger.error(f"  Error processing {product_id}: {e}")
@@ -226,7 +227,7 @@ class MultiBotMonitor:
             return {"error": str(e)}
 
     async def process_bot_batch(
-        self, db: AsyncSession, bot: Bot, trading_pairs: List[str], strategy: Any
+        self, db: AsyncSession, bot: Bot, trading_pairs: List[str], strategy: Any, skip_ai_analysis: bool = False
     ) -> Dict[str, Any]:
         """
         Process multiple trading pairs using AI batch analysis (single API call for all pairs)
@@ -236,6 +237,7 @@ class MultiBotMonitor:
             bot: Bot instance
             trading_pairs: List of product IDs to analyze
             strategy: Strategy instance that supports batch analysis
+            skip_ai_analysis: If True, skip AI analysis and check only technical conditions
 
         Returns:
             Result dictionary with action/signal info for all pairs
@@ -449,12 +451,22 @@ class MultiBotMonitor:
                     failed_pairs[product_id] = last_error
                     logger.error(f"  🚨 CRITICAL: Failed to fetch data for open position {product_id}: {last_error}")
 
-            # Call batch AI analysis (1 API call for ALL pairs!)
-            print(f"🔍 About to call AI batch analysis for {len(pairs_data)} pairs...")
-            logger.info(f"  🧠 Calling AI for batch analysis of {len(pairs_data)} pairs...")
-            batch_analyses = await strategy.analyze_multiple_pairs_batch(pairs_data)
-            print(f"✅ AI batch analysis returned with {len(batch_analyses)} results")
-            logger.info(f"  ✅ Received {len(batch_analyses)} analyses from AI")
+            # Call batch AI analysis (1 API call for ALL pairs!) - or skip if technical-only check
+            if skip_ai_analysis:
+                print(f"⏭️  Skipping AI analysis (technical-only check)")
+                logger.info(f"  ⏭️  SKIPPING AI: Technical-only check for {len(pairs_data)} pairs")
+                # When skipping AI, we only check existing positions (DCA, TP logic)
+                # Don't open new positions without fresh AI analysis
+                batch_analyses = {
+                    product_id: {"signal_type": "hold", "confidence": 0, "reasoning": "Technical-only check (no AI)"}
+                    for product_id in pairs_data.keys()
+                }
+            else:
+                print(f"🔍 About to call AI batch analysis for {len(pairs_data)} pairs...")
+                logger.info(f"  🧠 Calling AI for batch analysis of {len(pairs_data)} pairs...")
+                batch_analyses = await strategy.analyze_multiple_pairs_batch(pairs_data)
+                print(f"✅ AI batch analysis returned with {len(batch_analyses)} results")
+                logger.info(f"  ✅ Received {len(batch_analyses)} analyses from AI")
 
             # Process each pair's analysis result
             results = {}
@@ -582,7 +594,7 @@ class MultiBotMonitor:
         )
 
     async def process_bot_pair(
-        self, db: AsyncSession, bot: Bot, product_id: str, pre_analyzed_signal=None, pair_data=None, commit=True
+        self, db: AsyncSession, bot: Bot, product_id: str, pre_analyzed_signal=None, pair_data=None, commit=True, skip_ai_analysis: bool = False
     ) -> Dict[str, Any]:
         """
         Process signals for a single bot/pair combination
@@ -591,8 +603,11 @@ class MultiBotMonitor:
             db: Database session
             bot: Bot instance to process
             product_id: Trading pair to evaluate (e.g., "ETH-BTC")
+            pre_analyzed_signal: Pre-analyzed signal from batch analysis (optional)
+            pair_data: Pre-fetched market data from batch analysis (optional)
             commit: Whether to commit the database session after processing (default: True)
                     Set to False when processing in batch mode to avoid corrupting the session
+            skip_ai_analysis: If True, skip AI analysis and check only technical conditions
 
         Returns:
             Result dictionary with action/signal info
@@ -744,6 +759,16 @@ class MultiBotMonitor:
             if pre_analyzed_signal:
                 logger.info("  Using pre-analyzed signal from batch")
                 signal_data = pre_analyzed_signal
+            elif skip_ai_analysis:
+                # Skip AI analysis for technical-only check
+                # For conditional_dca: Still evaluate conditions (it doesn't use AI)
+                # For AI strategies: Skip entirely and only check existing positions
+                if bot.strategy_type == "conditional_dca":
+                    logger.info("  ⏭️  Technical check: Analyzing conditional_dca signals without AI")
+                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe)
+                else:
+                    logger.info("  ⏭️  SKIPPING AI: Technical-only check (existing positions only)")
+                    signal_data = {"signal_type": "hold", "confidence": 0, "reasoning": "Technical-only check (no AI)"}
             else:
                 # Analyze signal using strategy
                 # For conditional_dca, pass the candles_by_timeframe dict
@@ -813,27 +838,48 @@ class MultiBotMonitor:
                         for bot in bots:
                             try:
                                 print(f"🔍 Checking bot: {bot.name} (ID: {bot.id})")
-                                # Check if enough time has elapsed since last check
-                                check_interval = bot.check_interval_seconds or self.interval_seconds
+
+                                # Two-tier checking strategy:
+                                # 1. Technical conditions checked every 60s (fast, cheap)
+                                # 2. AI analysis only at longer intervals (expensive)
+                                technical_check_interval = 60  # Always check technical conditions every 60s
+                                ai_check_interval = bot.check_interval_seconds or self.interval_seconds
                                 now = datetime.utcnow()
 
+                                # Determine if we need ANY check at all (technical + AI or just technical)
+                                time_since_last_signal_check = 0
                                 if bot.last_signal_check:
-                                    time_since_last_check = (now - bot.last_signal_check).total_seconds()
-                                    if time_since_last_check < check_interval:
+                                    time_since_last_signal_check = (now - bot.last_signal_check).total_seconds()
+                                    if time_since_last_signal_check < technical_check_interval:
                                         print(
-                                            f"⏭️  Skipping {bot.name} - last checked {time_since_last_check:.0f}s ago (interval: {check_interval}s)"
+                                            f"⏭️  Skipping {bot.name} - last checked {time_since_last_signal_check:.0f}s ago (technical interval: {technical_check_interval}s)"
                                         )
                                         continue
 
-                                print(f"🔄 Processing {bot.name} (interval: {check_interval}s)")
+                                # Determine if we need AI analysis
+                                needs_ai_analysis = True
+                                time_since_last_ai_check = None
+                                if bot.last_ai_check:
+                                    time_since_last_ai_check = (now - bot.last_ai_check).total_seconds()
+                                    if time_since_last_ai_check < ai_check_interval:
+                                        needs_ai_analysis = False
+                                        print(
+                                            f"🔧 {bot.name}: Technical-only check (last AI: {time_since_last_ai_check:.0f}s ago, AI interval: {ai_check_interval}s)"
+                                        )
+                                    else:
+                                        print(f"🤖 {bot.name}: Full check with AI analysis (interval: {ai_check_interval}s)")
+                                else:
+                                    print(f"🤖 {bot.name}: First-time AI analysis")
 
                                 # Update timestamp BEFORE processing to prevent race condition
                                 # (if processing takes >10s, next loop iteration would start processing again!)
                                 bot.last_signal_check = datetime.utcnow()
+                                if needs_ai_analysis:
+                                    bot.last_ai_check = datetime.utcnow()
                                 await db.commit()  # Commit immediately to prevent concurrent processing
 
-                                print(f"🔍 Calling process_bot for {bot.name}...")
-                                await self.process_bot(db, bot)
+                                print(f"🔍 Calling process_bot for {bot.name} (AI: {needs_ai_analysis})...")
+                                await self.process_bot(db, bot, skip_ai_analysis=not needs_ai_analysis)
                                 print(f"✅ Finished processing {bot.name}")
                             except Exception as e:
                                 logger.error(f"Error processing bot {bot.name}: {e}")

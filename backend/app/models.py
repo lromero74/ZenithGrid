@@ -62,7 +62,8 @@ class Bot(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_signal_check = Column(DateTime, nullable=True)  # Last time signal was checked
+    last_signal_check = Column(DateTime, nullable=True)  # Last time signal was checked (technical conditions + positions)
+    last_ai_check = Column(DateTime, nullable=True)  # Last time AI analysis was performed (expensive operation)
 
     # Relationships
     positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
