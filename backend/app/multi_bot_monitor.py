@@ -488,13 +488,19 @@ class MultiBotMonitor:
                     pair_info = pairs_data.get(product_id, {})
                     signal_data["current_price"] = pair_info.get("current_price", 0)
 
-                    print(f"🔍 Logging AI decision for {product_id}...")
-                    # Log AI decision (position_id will be updated after position is created)
-                    ai_log_entry = await self.log_ai_decision(db, bot, product_id, signal_data, pair_info)
-                    print(f"✅ Logged AI decision for {product_id}")
+                    # Only log actual AI analysis, not technical-only checks (reduces UI noise)
+                    ai_log_entry = None
+                    if signal_data.get("reasoning") != "Technical-only check (no AI)":
+                        print(f"🔍 Logging AI decision for {product_id}...")
+                        # Log AI decision (position_id will be updated after position is created)
+                        ai_log_entry = await self.log_ai_decision(db, bot, product_id, signal_data, pair_info)
+                        print(f"✅ Logged AI decision for {product_id}")
 
-                    # Mark signal as already logged to prevent duplicate logging in trading_engine_v2.py
-                    signal_data["_already_logged"] = True
+                        # Mark signal as already logged to prevent duplicate logging in trading_engine_v2.py
+                        signal_data["_already_logged"] = True
+                    else:
+                        # Technical-only check - still mark as logged to skip duplicate logging
+                        signal_data["_already_logged"] = True
 
                     print(f"🔍 Executing trading logic for {product_id}...")
                     # Execute trading logic based on signal
