@@ -105,6 +105,17 @@ def get_strategy_definition() -> StrategyDefinition:
                 max_value=100.0,
                 group="Budget & Position Sizing",
             ),
+            StrategyParameter(
+                name="initial_budget_percentage",
+                display_name="Initial Buy Size (%)",
+                description="Percentage of per-position budget to use for the initial buy. Leave room for DCA safety orders. If not set, AI decides allocation dynamically (capped by DCA reserve needs).",
+                type="float",
+                default=None,
+                min_value=5.0,
+                max_value=100.0,
+                required=False,
+                group="Budget & Position Sizing",
+            ),
 
             # ========================================
             # DCA (SAFETY ORDERS)
@@ -125,6 +136,16 @@ def get_strategy_definition() -> StrategyDefinition:
                 default=3,
                 min_value=0,
                 max_value=10,
+                group="DCA (Safety Orders)",
+            ),
+            StrategyParameter(
+                name="safety_order_percentage",
+                display_name="DCA Safety Order Size (%)",
+                description="Percentage of per-position budget for each DCA safety order. Budget is reserved automatically based on max_safety_orders. Example: 3 orders × 20% = 60% reserved for DCA.",
+                type="float",
+                default=20.0,
+                min_value=5.0,
+                max_value=50.0,
                 group="DCA (Safety Orders)",
             ),
 

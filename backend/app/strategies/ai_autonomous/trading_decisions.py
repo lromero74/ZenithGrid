@@ -251,10 +251,36 @@ async def should_buy(
     if confidence < min_confidence:
         return False, 0.0, f"AI confidence too low ({confidence}% - need {min_confidence}%+ to open position)"
 
-    # AI decides allocation percentage based on opportunity and confidence
-    suggested_pct = signal_data.get("suggested_allocation_pct", 10)
-    max_pct = config.get("max_position_budget_percentage", 100)
-    use_pct = min(suggested_pct, max_pct)
+    # Calculate DCA budget reserve if DCA is enabled
+    max_initial_pct = 100.0  # Default: can use full budget if no DCA
+    if config.get("enable_dca", True):
+        max_safety_orders = config.get("max_safety_orders", 3)
+        safety_order_pct = config.get("safety_order_percentage", 20.0)
+
+        # Reserve budget for all potential DCA safety orders
+        required_dca_reserve = max_safety_orders * safety_order_pct
+        max_initial_pct = max(100.0 - required_dca_reserve, 10.0)  # Reserve DCA budget, but allow at least 10%
+
+        logger.info(
+            f"  💰 DCA Reserve: {max_safety_orders} orders × {safety_order_pct}% = {required_dca_reserve}% reserved, "
+            f"max initial buy: {max_initial_pct}%"
+        )
+
+    # Determine initial buy percentage
+    initial_budget_pct = config.get("initial_budget_percentage", None)
+    if initial_budget_pct is not None:
+        # User explicitly configured initial budget percentage - use it (capped by DCA reserve)
+        use_pct = min(initial_budget_pct, max_initial_pct)
+        logger.info(f"  📊 Using configured initial_budget_percentage: {initial_budget_pct}% (capped at {use_pct}%)")
+    else:
+        # Let AI decide, but cap by both max_position_budget_percentage AND DCA reserve
+        suggested_pct = signal_data.get("suggested_allocation_pct", 10)
+        max_pct = config.get("max_position_budget_percentage", 100)
+        use_pct = min(suggested_pct, max_pct, max_initial_pct)
+        logger.info(
+            f"  🤖 AI suggested {suggested_pct}%, capped by max_position ({max_pct}%) and DCA reserve ({max_initial_pct}%) "
+            f"= {use_pct}%"
+        )
 
     # NOTE: Do NOT divide by max_concurrent_deals here - the btc_balance
     # passed in has ALREADY been divided by max_concurrent_deals in trading_engine_v2.py

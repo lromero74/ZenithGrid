@@ -132,12 +132,25 @@ def build_standard_batch_analysis_prompt(
             budget_str = f"{per_position_budget:.8f} BTC"
             min_str = "0.0001 BTC"
 
+        # Calculate DCA reserve information
+        dca_info = ""
+        if config.get("enable_dca", True):
+            max_safety_orders = config.get("max_safety_orders", 3)
+            safety_order_pct = config.get("safety_order_percentage", 20.0)
+            required_dca_reserve = max_safety_orders * safety_order_pct
+            max_initial_pct = max(100.0 - required_dca_reserve, 10.0)
+
+            dca_info = f"""
+- DCA Enabled: {max_safety_orders} safety orders configured at {safety_order_pct}% each
+- DCA Budget Reserved: {required_dca_reserve}% of position budget
+- Max Initial Buy: {max_initial_pct}% (rest reserved for DCA)"""
+
         budget_info = f"""
 **Available Budget Per Position:**
 - Budget per deal: {budget_str}
 - Max concurrent positions: {max_concurrent_deals}
 - Exchange minimum: {min_str}
-- Your allocation % is applied to the per-position budget above"""
+- Your allocation % is applied to the per-position budget above{dca_info}"""
 
     prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
 
@@ -171,12 +184,15 @@ Remember:
 - Keep reasoning concise to save tokens
 - Return valid JSON only (no markdown, no code blocks)
 
-**CRITICAL - Exchange Minimum Order Requirements:**
-- Coinbase requires minimum 0.0001 BTC per order (or equivalent USD for USD pairs)
-- Your suggested_allocation_pct is applied to the PER-POSITION budget shown above
-- Ensure your allocation percentage results in an order above the exchange minimum
-- Example: With 0.00015 BTC per-position budget, 50% = 0.000075 BTC (TOO SMALL - suggest 80%+ or hold)
-- Never suggest allocations that result in amounts below exchange minimums - orders will fail!"""
+**CRITICAL - Budget Allocation Rules:**
+1. Exchange Minimums: Coinbase requires minimum 0.0001 BTC per order (or equivalent USD)
+2. DCA Reserve: If DCA is enabled, you MUST leave budget for safety orders (see max_initial_buy % above)
+3. Your suggested_allocation_pct is applied to the PER-POSITION budget
+4. Ensure allocation meets BOTH exchange minimum AND leaves room for DCA
+5. Example: With 0.00126 BTC per-position budget, 3 DCA orders at 20% each = 60% reserved
+   - Max initial: 40% × 0.00126 = 0.000504 BTC ✓ (above minimum and leaves DCA room)
+   - Too high: 80% × 0.00126 = 0.001008 BTC ✗ (leaves only 0.000252 for 3 DCAs - insufficient!)
+6. Never suggest allocations that violate exchange minimums OR leave insufficient DCA budget!"""
 
     return prompt
 
