@@ -365,7 +365,7 @@ function Portfolio() {
         </div>
 
         {/* PnL Stats & Balance - Organized by Currency */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* BTC Column */}
           <div className="space-y-4">
             {/* Today PnL (BTC) */}
@@ -478,6 +478,37 @@ function Portfolio() {
                   <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
                     <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
                     <span className="text-green-400 font-mono text-lg font-bold">{formatCurrency(portfolio.balance_breakdown.usd.free)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* USDC Column */}
+          <div className="space-y-4">
+            {/* USDC Balance Breakdown */}
+            {portfolio.balance_breakdown && portfolio.balance_breakdown.usdc && (
+              <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div className="flex items-center gap-2 mb-4">
+                  <DollarSign size={20} className="text-blue-400" />
+                  <p className="text-slate-300 text-sm font-semibold">USDC Balance Breakdown</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">Total:</span>
+                    <span className="text-white font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usdc.total)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">Reserved by Bots:</span>
+                    <span className="text-orange-400 font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usdc.reserved_by_bots)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">In Open Positions:</span>
+                    <span className="text-yellow-400 font-mono text-sm">{formatCurrency(portfolio.balance_breakdown.usdc.in_open_positions)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
+                    <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
+                    <span className="text-green-400 font-mono text-lg font-bold">{formatCurrency(portfolio.balance_breakdown.usdc.free)}</span>
                   </div>
                 </div>
               </div>

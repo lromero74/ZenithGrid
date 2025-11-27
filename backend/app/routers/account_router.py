@@ -121,8 +121,9 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
         total_usd_value = 0.0
         total_btc_value = 0.0
 
-        # Track actual USD and BTC balances separately (for balance breakdown)
-        actual_usd_balance = 0.0  # USD + USDC only
+        # Track actual USD, USDC, and BTC balances separately (for balance breakdown)
+        actual_usd_balance = 0.0  # USD only
+        actual_usdc_balance = 0.0  # USDC only
         actual_btc_balance = 0.0  # BTC only
 
         for position in spot_positions:
@@ -140,12 +141,18 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
             btc_value = 0.0
             current_price_usd = 0.0
 
-            if asset == "USD" or asset == "USDC":
+            if asset == "USD":
                 usd_value = total_balance
                 btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
                 current_price_usd = 1.0
                 # Track actual USD balance
                 actual_usd_balance += total_balance
+            elif asset == "USDC":
+                usd_value = total_balance
+                btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
+                current_price_usd = 1.0
+                # Track actual USDC balance
+                actual_usdc_balance += total_balance
             elif asset == "BTC":
                 usd_value = total_balance * btc_usd_price
                 btc_value = total_balance
@@ -264,6 +271,7 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
 
         total_in_positions_btc = 0.0
         total_in_positions_usd = 0.0
+        total_in_positions_usdc = 0.0
 
         for position in open_positions:
             quote = position.get_quote_currency()
@@ -276,6 +284,8 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
 
                 if quote == "USD":
                     total_in_positions_usd += current_value
+                elif quote == "USDC":
+                    total_in_positions_usdc += current_value
                 else:  # BTC
                     total_in_positions_btc += current_value
             except Exception as e:
@@ -283,23 +293,31 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                 print(f"Could not get current price for {base}-{quote}, using quote spent: {e}")
                 if quote == "USD":
                     total_in_positions_usd += position.total_quote_spent
+                elif quote == "USDC":
+                    total_in_positions_usdc += position.total_quote_spent
                 else:
                     total_in_positions_btc += position.total_quote_spent
 
-        # Balance breakdown should show ONLY actual USD/BTC balances + their respective positions
-        # NOT the total portfolio value converted to USD/BTC
+        # Balance breakdown should show ONLY actual balances + their respective positions
+        # NOT the total portfolio value converted
         # BTC: actual BTC balance + BTC value of BTC-pair positions
         # USD: actual USD balance + USD value of USD-pair positions
+        # USDC: actual USDC balance + USDC value of USDC-pair positions
         total_btc_portfolio = actual_btc_balance + total_in_positions_btc
         total_usd_portfolio = actual_usd_balance + total_in_positions_usd
+        total_usdc_portfolio = actual_usdc_balance + total_in_positions_usdc
 
         # Calculate free balances
+        # Note: No USDC bots yet, so total_reserved_usdc = 0
+        total_reserved_usdc = 0.0
         free_btc = total_btc_portfolio - (total_reserved_btc + total_in_positions_btc)
         free_usd = total_usd_portfolio - (total_reserved_usd + total_in_positions_usd)
+        free_usdc = total_usdc_portfolio - (total_reserved_usdc + total_in_positions_usdc)
 
         # Ensure free balances don't go negative
         free_btc = max(0.0, free_btc)
         free_usd = max(0.0, free_usd)
+        free_usdc = max(0.0, free_usdc)
 
         # Calculate realized PnL from closed positions
         # All-time PnL
@@ -349,6 +367,12 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                     "reserved_by_bots": total_reserved_usd,
                     "in_open_positions": total_in_positions_usd,
                     "free": free_usd,
+                },
+                "usdc": {
+                    "total": total_usdc_portfolio,
+                    "reserved_by_bots": total_reserved_usdc,
+                    "in_open_positions": total_in_positions_usdc,
+                    "free": free_usdc,
                 },
             },
             "pnl": {
