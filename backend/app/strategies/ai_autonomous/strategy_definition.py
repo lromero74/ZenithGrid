@@ -150,6 +150,15 @@ def get_strategy_definition() -> StrategyDefinition:
                 options=["cost_basis", "base_order"],
                 group="Profit & Exit",
             ),
+            StrategyParameter(
+                name="custom_sell_conditions",
+                display_name="Custom Sell Conditions (Optional)",
+                description="Add technical indicators as additional sell triggers. Position sells if AI recommends sell OR custom conditions are met. All sells still require profit >= min_profit_percentage.",
+                type="conditions",
+                default=None,
+                required=False,
+                group="Profit & Exit",
+            ),
 
             # ========================================
             # ANALYSIS TIMING

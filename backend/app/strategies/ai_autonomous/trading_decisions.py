@@ -347,6 +347,7 @@ async def should_sell(
     current_price: float,
     config: Dict[str, Any],
     get_confidence_threshold_func,
+    market_context: Dict[str, Any] = None,
 ) -> Tuple[bool, str]:
     """
     Determine if we should sell
@@ -354,6 +355,7 @@ async def should_sell(
     Rules:
     - NEVER sell at a loss (user requirement)
     - Only sell if profit >= min_profit_percentage
+    - Check custom technical conditions (if configured)
     - Consider AI recommendation
     - Calculate profit based on selected method (cost_basis or base_order)
 
@@ -363,6 +365,7 @@ async def should_sell(
         current_price: Current market price
         config: Strategy configuration
         get_confidence_threshold_func: Function to get confidence threshold
+        market_context: Market data with indicators (for custom conditions)
 
     Returns:
         Tuple of (should_sell: bool, reasoning: str)
@@ -398,7 +401,22 @@ async def should_sell(
     if profit_pct < min_profit:
         return False, f"Profit {profit_pct:.2f}% below minimum {min_profit}%"
 
-    # RULE 3: AI decides when to sell (with profit protection from rules 1 & 2)
+    # RULE 3: Check custom technical sell conditions (if configured)
+    custom_conditions = config.get("custom_sell_conditions")
+    if custom_conditions and market_context:
+        from app.conditions import ConditionEvaluator
+
+        try:
+            evaluator = ConditionEvaluator(custom_conditions)
+            if evaluator.evaluate(market_context):
+                # Custom condition triggered - sell with profit protection
+                return True, f"Custom technical condition triggered at {profit_pct:.2f}% profit"
+        except Exception as e:
+            # Log error but don't block trading if condition evaluation fails
+            import logging
+            logging.getLogger(__name__).warning(f"Error evaluating custom sell conditions: {e}")
+
+    # RULE 4: AI decides when to sell (with profit protection from rules 1 & 2)
     if signal_data.get("signal_type") == "sell":
         confidence = signal_data.get("confidence", 0)
         min_sell_confidence = get_confidence_threshold_func("close")

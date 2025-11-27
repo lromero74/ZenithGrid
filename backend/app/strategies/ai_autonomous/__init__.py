@@ -457,14 +457,14 @@ class AIAutonomousStrategy(TradingStrategy):
             signal_data, position, btc_balance, self.config, self._get_confidence_threshold_for_action, ask_dca_wrapper, product_minimum
         )
 
-    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float) -> Tuple[bool, str]:
+    async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float, market_context: Dict[str, Any] = None) -> Tuple[bool, str]:
         """
         Determine if we should sell
 
         Uses extracted trading_decisions module
         """
         return await trading_decisions.should_sell(
-            signal_data, position, current_price, self.config, self._get_confidence_threshold_for_action
+            signal_data, position, current_price, self.config, self._get_confidence_threshold_for_action, market_context
         )
 
     async def should_sell_failsafe(self, position: Any, current_price: float) -> Tuple[bool, str]:

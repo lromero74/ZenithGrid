@@ -19,8 +19,56 @@ from app.trading_engine.position_manager import get_active_position, get_open_po
 from app.trading_engine.order_logger import save_ai_log
 from app.trading_engine.buy_executor import execute_buy
 from app.trading_engine.sell_executor import execute_sell
+from app.indicator_calculator import calculate_rsi, calculate_macd
 
 logger = logging.getLogger(__name__)
+
+
+def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], current_price: float) -> Dict[str, Any]:
+    """
+    Calculate market context with technical indicators for custom sell conditions
+
+    Returns a dict with:
+    - price: current price
+    - rsi: RSI indicator value
+    - macd: MACD line value
+    - macd_signal: MACD signal line value
+    - macd_histogram: MACD histogram value
+    """
+    if not candles or len(candles) < 14:
+        # Not enough data for indicators
+        return {
+            "price": current_price,
+            "rsi": 50.0,  # Neutral
+            "macd": 0.0,
+            "macd_signal": 0.0,
+            "macd_histogram": 0.0,
+        }
+
+    # Extract prices from candles
+    prices = [float(c.get("close", c.get("price", 0))) for c in candles]
+
+    # Calculate indicators
+    try:
+        rsi = calculate_rsi(prices) if len(prices) >= 14 else 50.0
+        macd_data = calculate_macd(prices) if len(prices) >= 26 else {"macd": 0.0, "signal": 0.0, "histogram": 0.0}
+
+        return {
+            "price": current_price,
+            "rsi": rsi,
+            "macd": macd_data.get("macd", 0.0),
+            "macd_signal": macd_data.get("signal", 0.0),
+            "macd_histogram": macd_data.get("histogram", 0.0),
+        }
+    except Exception as e:
+        logger.warning(f"Error calculating indicators for custom conditions: {e}")
+        return {
+            "price": current_price,
+            "rsi": 50.0,
+            "macd": 0.0,
+            "macd_signal": 0.0,
+            "macd_histogram": 0.0,
+        }
 
 
 async def process_signal(
@@ -333,7 +381,10 @@ async def process_signal(
 
     # Check if we should sell
     if position is not None:
-        should_sell, sell_reason = await strategy.should_sell(signal_data, position, current_price)
+        # Calculate market context with indicators for custom sell conditions
+        market_context = _calculate_market_context_with_indicators(candles, current_price)
+
+        should_sell, sell_reason = await strategy.should_sell(signal_data, position, current_price, market_context)
 
         if should_sell:
             # Execute sell (market or limit based on config)
