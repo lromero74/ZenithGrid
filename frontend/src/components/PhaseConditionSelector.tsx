@@ -16,6 +16,7 @@ export type Operator = 'greater_than' | 'less_than' | 'crossing_above' | 'crossi
 
 export type Timeframe =
   | 'ONE_MINUTE'
+  | 'THREE_MINUTE'
   | 'FIVE_MINUTE'
   | 'FIFTEEN_MINUTE'
   | 'THIRTY_MINUTE'
@@ -92,6 +93,7 @@ const OPERATORS: Record<Operator, string> = {
 
 const TIMEFRAMES: Record<Timeframe, string> = {
   ONE_MINUTE: '1m',
+  THREE_MINUTE: '3m',
   FIVE_MINUTE: '5m',
   FIFTEEN_MINUTE: '15m',
   THIRTY_MINUTE: '30m',
@@ -336,20 +338,16 @@ function PhaseConditionSelector({
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
               </select>
-              {(condition.operator === 'greater_than' || condition.operator === 'less_than') && (
-                <>
-                  <input
-                    type="number"
-                    value={condition.value ?? ''}
-                    onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
-                    min="0"
-                    max="100"
-                    step="1"
-                    className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
-                  />
-                  <span className="text-xs text-slate-400">%</span>
-                </>
-              )}
+              <input
+                type="number"
+                value={condition.value ?? ''}
+                onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                min="0"
+                max="100"
+                step="1"
+                className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+              />
+              <span className="text-xs text-slate-400">%</span>
             </div>
           </>
         )
