@@ -74,7 +74,14 @@ Remember:
 - Only suggest "sell" if you're confident price will drop
 - Suggest "hold" if market is unclear
 - Be {risk_tolerance} in your recommendations
-- Keep reasoning concise to save tokens"""
+- Keep reasoning concise to save tokens
+
+**CRITICAL - Exchange Minimum Order Requirements:**
+- Coinbase requires minimum 0.0001 BTC per order (or equivalent USD for USD pairs)
+- When suggesting allocation percentage, ensure the resulting amount meets this minimum
+- If available budget is too small for minimum order size, suggest 0% allocation (hold)
+- Example: With 0.0002 BTC budget, 40% = 0.00008 BTC (TOO SMALL - suggest 80%+ or hold)
+- Never suggest buying amounts below exchange minimums - orders will fail!"""
 
     return prompt
 
@@ -134,7 +141,14 @@ Remember:
 - Suggest "hold" if market is unclear
 - Be {risk_tolerance} in your recommendations
 - Keep reasoning concise to save tokens
-- Return valid JSON only (no markdown, no code blocks)"""
+- Return valid JSON only (no markdown, no code blocks)
+
+**CRITICAL - Exchange Minimum Order Requirements:**
+- Coinbase requires minimum 0.0001 BTC per order (or equivalent USD for USD pairs)
+- When suggesting allocation percentage, ensure the resulting amount meets this minimum
+- If available budget is too small for minimum order size, suggest 0% allocation (hold)
+- Example: With 0.0002 BTC budget, 40% = 0.00008 BTC (TOO SMALL - suggest 80%+ or hold)
+- Never suggest buying amounts below exchange minimums - orders will fail!"""
 
     return prompt
 
