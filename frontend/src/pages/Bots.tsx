@@ -5,6 +5,7 @@ import { botsApi, templatesApi } from '../services/api'
 import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
 import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical, FastForward } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
+import PhaseConditionSelector from '../components/PhaseConditionSelector'
 import AIBotLogs from '../components/AIBotLogs'
 import { PnLChart } from '../components/PnLChart'
 import axios from 'axios'
@@ -476,6 +477,19 @@ function Bots() {
             <div className="w-14 h-7 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
           </label>
         </div>
+      )
+    }
+
+    // Handle conditions type (condition builder for indicators)
+    if (param.type === 'conditions') {
+      return (
+        <PhaseConditionSelector
+          title={param.display_name}
+          description={param.description}
+          conditions={formData.strategy_config[param.name] || []}
+          onChange={(conditions) => handleParamChange(param.name, conditions)}
+          allowMultiple={true}
+        />
       )
     }
 
