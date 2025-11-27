@@ -327,8 +327,10 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
 
         pnl_all_time_usd = 0.0
         pnl_all_time_btc = 0.0
+        pnl_all_time_usdc = 0.0
         pnl_today_usd = 0.0
         pnl_today_btc = 0.0
+        pnl_today_usdc = 0.0
 
         today = datetime.utcnow().date()
 
@@ -339,6 +341,8 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                 # All-time PnL
                 if quote == "USD":
                     pnl_all_time_usd += position.profit_quote
+                elif quote == "USDC":
+                    pnl_all_time_usdc += position.profit_quote
                 else:  # BTC
                     pnl_all_time_btc += position.profit_quote
 
@@ -346,6 +350,8 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                 if position.closed_at and position.closed_at.date() == today:
                     if quote == "USD":
                         pnl_today_usd += position.profit_quote
+                    elif quote == "USDC":
+                        pnl_today_usdc += position.profit_quote
                     else:  # BTC
                         pnl_today_btc += position.profit_quote
 
@@ -376,8 +382,8 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                 },
             },
             "pnl": {
-                "today": {"usd": pnl_today_usd, "btc": pnl_today_btc},
-                "all_time": {"usd": pnl_all_time_usd, "btc": pnl_all_time_btc},
+                "today": {"usd": pnl_today_usd, "btc": pnl_today_btc, "usdc": pnl_today_usdc},
+                "all_time": {"usd": pnl_all_time_usd, "btc": pnl_all_time_btc, "usdc": pnl_all_time_usdc},
             },
         }
     except Exception as e:
