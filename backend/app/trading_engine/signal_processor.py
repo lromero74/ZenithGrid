@@ -19,7 +19,7 @@ from app.trading_engine.position_manager import get_active_position, get_open_po
 from app.trading_engine.order_logger import save_ai_log
 from app.trading_engine.buy_executor import execute_buy
 from app.trading_engine.sell_executor import execute_sell
-from app.indicator_calculator import calculate_rsi, calculate_macd
+from app.indicator_calculator import IndicatorCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], cur
 
     Returns a dict with:
     - price: current price
-    - rsi: RSI indicator value
+    - rsi: RSI indicator value (rsi_14)
     - macd: MACD line value
     - macd_signal: MACD signal line value
     - macd_histogram: MACD histogram value
@@ -40,34 +40,57 @@ def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], cur
         return {
             "price": current_price,
             "rsi": 50.0,  # Neutral
+            "rsi_14": 50.0,  # Also provide standard key
             "macd": 0.0,
             "macd_signal": 0.0,
             "macd_histogram": 0.0,
+            "macd_12_26_9": 0.0,
+            "macd_signal_12_26_9": 0.0,
+            "macd_histogram_12_26_9": 0.0,
         }
 
     # Extract prices from candles
     prices = [float(c.get("close", c.get("price", 0))) for c in candles]
 
-    # Calculate indicators
+    # Calculate indicators using IndicatorCalculator
     try:
-        rsi = calculate_rsi(prices) if len(prices) >= 14 else 50.0
-        macd_data = calculate_macd(prices) if len(prices) >= 26 else {"macd": 0.0, "signal": 0.0, "histogram": 0.0}
+        calc = IndicatorCalculator()
+
+        # Calculate RSI (14 period)
+        rsi = calc.calculate_rsi(prices, period=14) if len(prices) >= 15 else 50.0
+
+        # Calculate MACD (12, 26, 9)
+        macd_line, signal_line, histogram = calc.calculate_macd(prices, 12, 26, 9)
+
+        # Use defaults if calculation failed
+        if macd_line is None:
+            macd_line, signal_line, histogram = 0.0, 0.0, 0.0
+        if rsi is None:
+            rsi = 50.0
 
         return {
             "price": current_price,
-            "rsi": rsi,
-            "macd": macd_data.get("macd", 0.0),
-            "macd_signal": macd_data.get("signal", 0.0),
-            "macd_histogram": macd_data.get("histogram", 0.0),
+            "rsi": rsi,  # For simple access
+            "rsi_14": rsi,  # Standard key format
+            "macd": macd_line,  # For simple access
+            "macd_signal": signal_line,  # For simple access
+            "macd_histogram": histogram,  # For simple access
+            "macd_12_26_9": macd_line,  # Standard key format
+            "macd_signal_12_26_9": signal_line,  # Standard key format
+            "macd_histogram_12_26_9": histogram,  # Standard key format
         }
     except Exception as e:
         logger.warning(f"Error calculating indicators for custom conditions: {e}")
         return {
             "price": current_price,
             "rsi": 50.0,
+            "rsi_14": 50.0,
             "macd": 0.0,
             "macd_signal": 0.0,
             "macd_histogram": 0.0,
+            "macd_12_26_9": 0.0,
+            "macd_signal_12_26_9": 0.0,
+            "macd_histogram_12_26_9": 0.0,
         }
 
 
