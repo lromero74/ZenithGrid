@@ -87,14 +87,21 @@ Remember:
 
 
 def build_standard_batch_analysis_prompt(
-    pairs_data: Dict[str, Dict[str, Any]], config: Dict[str, Any], format_price_func
+    pairs_data: Dict[str, Dict[str, Any]], config: Dict[str, Any], format_price_func, per_position_budget: float = None
 ) -> str:
     """
     Build standardized batch analysis prompt for ALL AI providers (Claude, Gemini, Grok)
 
     Analyzes multiple trading pairs in a single API call for efficiency.
+
+    Args:
+        pairs_data: Market data for each trading pair
+        config: Bot configuration
+        format_price_func: Function to format prices
+        per_position_budget: Available budget per position (total budget / max_concurrent_deals)
     """
     risk_tolerance = config.get("risk_tolerance", "moderate")
+    max_concurrent_deals = config.get("max_concurrent_deals", 1)
 
     # Build summary for all pairs
     pairs_summary = []
@@ -111,13 +118,34 @@ def build_standard_batch_analysis_prompt(
 - Recent Trend: {recent_prices}"""
         )
 
+    # Budget information
+    budget_info = ""
+    if per_position_budget is not None:
+        # Determine currency from first pair
+        first_pair = list(pairs_data.keys())[0] if pairs_data else "BTC-USD"
+        quote_currency = first_pair.split("-")[1] if "-" in first_pair else "BTC"
+
+        if quote_currency == "USD":
+            budget_str = f"${per_position_budget:.2f} USD"
+            min_str = "$1.00 USD"
+        else:
+            budget_str = f"{per_position_budget:.8f} BTC"
+            min_str = "0.0001 BTC"
+
+        budget_info = f"""
+**Available Budget Per Position:**
+- Budget per deal: {budget_str}
+- Max concurrent positions: {max_concurrent_deals}
+- Exchange minimum: {min_str}
+- Your allocation % is applied to the per-position budget above"""
+
     prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
 
 **Market Data for All Pairs:**
 {''.join(pairs_summary)}
 
 **Trading Parameters:**
-- Risk Tolerance: {risk_tolerance}
+- Risk Tolerance: {risk_tolerance}{budget_info}
 
 **Your Task:**
 Analyze ALL pairs and respond with a JSON object where keys are product IDs and values are analysis objects. Format:
@@ -145,10 +173,10 @@ Remember:
 
 **CRITICAL - Exchange Minimum Order Requirements:**
 - Coinbase requires minimum 0.0001 BTC per order (or equivalent USD for USD pairs)
-- When suggesting allocation percentage, ensure the resulting amount meets this minimum
-- If available budget is too small for minimum order size, suggest 0% allocation (hold)
-- Example: With 0.0002 BTC budget, 40% = 0.00008 BTC (TOO SMALL - suggest 80%+ or hold)
-- Never suggest buying amounts below exchange minimums - orders will fail!"""
+- Your suggested_allocation_pct is applied to the PER-POSITION budget shown above
+- Ensure your allocation percentage results in an order above the exchange minimum
+- Example: With 0.00015 BTC per-position budget, 50% = 0.000075 BTC (TOO SMALL - suggest 80%+ or hold)
+- Never suggest allocations that result in amounts below exchange minimums - orders will fail!"""
 
     return prompt
 

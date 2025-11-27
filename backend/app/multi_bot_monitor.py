@@ -451,6 +451,21 @@ class MultiBotMonitor:
                     failed_pairs[product_id] = last_error
                     logger.error(f"  🚨 CRITICAL: Failed to fetch data for open position {product_id}: {last_error}")
 
+            # Calculate per-position budget (total budget / max concurrent deals)
+            max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+            # Get total bot budget using Bot's get_reserved_balance method
+            quote_currency = bot.get_quote_currency()
+            if quote_currency == "BTC":
+                # Calculate aggregate BTC value if needed
+                aggregate_btc = await self.coinbase.calculate_aggregate_btc_value()
+                total_bot_budget = bot.get_reserved_balance(aggregate_btc)
+            else:
+                # USD bots - get balance directly (no aggregation needed)
+                total_bot_budget = bot.get_reserved_balance()
+
+            per_position_budget = total_bot_budget / max_concurrent_deals if max_concurrent_deals > 0 else 0
+            print(f"💰 Budget calculation: Total={total_bot_budget:.8f}, MaxDeals={max_concurrent_deals}, PerPosition={per_position_budget:.8f}")
+
             # Call batch AI analysis (1 API call for ALL pairs!) - or skip if technical-only check
             if skip_ai_analysis:
                 print(f"⏭️  Skipping AI analysis (technical-only check)")
@@ -464,7 +479,7 @@ class MultiBotMonitor:
             else:
                 print(f"🔍 About to call AI batch analysis for {len(pairs_data)} pairs...")
                 logger.info(f"  🧠 Calling AI for batch analysis of {len(pairs_data)} pairs...")
-                batch_analyses = await strategy.analyze_multiple_pairs_batch(pairs_data)
+                batch_analyses = await strategy.analyze_multiple_pairs_batch(pairs_data, per_position_budget)
                 print(f"✅ AI batch analysis returned with {len(batch_analyses)} results")
                 logger.info(f"  ✅ Received {len(batch_analyses)} analyses from AI")
 

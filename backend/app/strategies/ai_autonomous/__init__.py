@@ -379,7 +379,7 @@ class AIAutonomousStrategy(TradingStrategy):
             logger.error(f"Error in AI analysis: {e}", exc_info=True)
             return None
 
-    async def analyze_multiple_pairs_batch(self, pairs_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    async def analyze_multiple_pairs_batch(self, pairs_data: Dict[str, Dict[str, Any]], per_position_budget: float = None) -> Dict[str, Dict[str, Any]]:
         """
         Analyze multiple trading pairs in a single AI API call (batch mode)
 
@@ -388,6 +388,7 @@ class AIAutonomousStrategy(TradingStrategy):
         Args:
             pairs_data: Dict mapping product_id to market context data
                        e.g., {"ETH-BTC": {candles, current_price}, "SOL-BTC": {...}}
+            per_position_budget: Available budget per position (total budget / max_concurrent_deals)
 
         Returns:
             Dict mapping product_id to analysis result
@@ -397,7 +398,7 @@ class AIAutonomousStrategy(TradingStrategy):
         # Build batch prompt
         # TODO: Consider converting lambda to def function for better debugging
         build_batch_prompt = lambda data: prompts.build_standard_batch_analysis_prompt(
-            data, self.config, self._format_price
+            data, self.config, self._format_price, per_position_budget
         )
 
         if provider == "gemini":
