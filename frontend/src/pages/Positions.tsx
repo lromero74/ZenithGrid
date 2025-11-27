@@ -1945,7 +1945,9 @@ export default function Positions() {
                                   }
 
                                   const currentPriceValue = pnl.currentPrice
-                                  const targetPrice = entryPrice * 1.02
+                                  // Use bot's min_profit_percentage setting instead of hardcoded 2%
+                                  const minProfitPercent = strategyConfig.min_profit_percentage || 1.5
+                                  const targetPrice = entryPrice * (1 + minProfitPercent / 100)
 
                                   const defaultMin = entryPrice * 0.95
                                   const defaultMax = entryPrice * 1.05
