@@ -271,6 +271,16 @@ class MultiBotMonitor:
                 logger.warning(f"  ⚠️  Failed to get aggregate balance (API error), using 0.001 BTC fallback: {e}")
                 aggregate_value = 0.001  # Conservative fallback - allows ~3 positions at 30% budget
 
+            # Get actual available balance (what's spendable right now)
+            try:
+                if quote_currency == "BTC":
+                    actual_available = await self.coinbase.get_btc_balance()
+                else:  # USD
+                    actual_available = await self.coinbase.get_usd_balance()
+            except Exception as e:
+                logger.warning(f"  ⚠️  Failed to get actual available balance: {e}")
+                actual_available = 0.0
+
             # Defensive logging: Warn if aggregate value is suspiciously low
             if aggregate_value < 0.0001:
                 logger.warning(
@@ -292,16 +302,27 @@ class MultiBotMonitor:
             min_per_position = reserved_balance / max(max_concurrent_deals, 1)
 
             # Determine if we have enough budget for new positions or DCA
-            has_budget_for_new = available_budget >= min_per_position
+            # Must pass TWO checks:
+            # 1. Has room in allocation (available_budget >= min_per_position)
+            # 2. Has actual spendable balance (actual_available >= min_per_position)
+            has_allocation_room = available_budget >= min_per_position
+            has_actual_balance = actual_available >= min_per_position
+            has_budget_for_new = has_allocation_room and has_actual_balance
 
             logger.warning(
                 f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved ({budget_pct}% of {aggregate_value:.8f})"
             )
             logger.warning(
-                f"  💰 In positions: {total_in_positions:.8f} {quote_currency}, Available: {available_budget:.8f} {quote_currency}"
+                f"  💰 In positions: {total_in_positions:.8f} {quote_currency}, Available allocation: {available_budget:.8f} {quote_currency}"
             )
             logger.warning(
-                f"  💰 Min per position: {min_per_position:.8f} {quote_currency}, Has budget: {has_budget_for_new}"
+                f"  💰 Actual {quote_currency} balance: {actual_available:.8f} {quote_currency}"
+            )
+            logger.warning(
+                f"  💰 Min per position: {min_per_position:.8f} {quote_currency}"
+            )
+            logger.warning(
+                f"  💰 Has allocation room: {has_allocation_room}, Has actual balance: {has_actual_balance}, Can open new: {has_budget_for_new}"
             )
 
             # Determine which pairs to analyze
