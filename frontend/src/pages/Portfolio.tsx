@@ -486,6 +486,34 @@ function Portfolio() {
 
           {/* USDC Column */}
           <div className="space-y-4">
+            {/* Today PnL (USDC) */}
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={20} className="text-slate-400" />
+                <p className="text-slate-400 text-sm font-medium">Today PnL (USDC)</p>
+              </div>
+              <p className="text-3xl font-bold text-slate-400">
+                +$0.00
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                (+0.00000000 BTC)
+              </p>
+            </div>
+
+            {/* All-Time PnL (USDC) */}
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={20} className="text-slate-400" />
+                <p className="text-slate-400 text-sm font-medium">All-Time PnL (USDC)</p>
+              </div>
+              <p className="text-3xl font-bold text-slate-400">
+                +$0.00
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                (+0.00000000 BTC)
+              </p>
+            </div>
+
             {/* USDC Balance Breakdown */}
             {portfolio.balance_breakdown && portfolio.balance_breakdown.usdc && (
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
