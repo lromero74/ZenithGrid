@@ -1,0 +1,17 @@
+[Unit]
+Description=Weekly Coin Review - AI Analysis
+After=network.target
+
+[Service]
+Type=oneshot
+User=ec2-user
+WorkingDirectory=/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend
+ExecStart=/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/venv/bin/python scripts/run_coin_review.py
+StandardOutput=journal
+StandardError=journal
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

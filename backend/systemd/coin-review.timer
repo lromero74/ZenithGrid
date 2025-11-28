@@ -1,0 +1,13 @@
+[Unit]
+Description=Weekly Coin Review Timer
+
+[Timer]
+# Run every Sunday at 6:00 AM UTC
+OnCalendar=Sun *-*-* 06:00:00
+# Randomize start time by up to 1 hour to avoid API rate limits
+RandomizedDelaySec=3600
+# Persist timer across reboots
+Persistent=true
+
+[Install]
+WantedBy=timers.target

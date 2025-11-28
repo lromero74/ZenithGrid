@@ -212,3 +212,22 @@ async def check_if_blacklisted(symbol: str, db: AsyncSession = Depends(get_db)):
         "is_blacklisted": entry is not None,
         "reason": entry.reason if entry else None,
     }
+
+
+@router.post("/ai-review")
+async def trigger_ai_review():
+    """
+    Trigger an AI-powered review of all tracked coins.
+
+    Uses Claude API to analyze each coin and update categorizations.
+    This is the same review that runs weekly via cron/systemd timer.
+    """
+    from app.services.coin_review_service import run_weekly_review
+
+    logger.info("Manual AI coin review triggered via API")
+    result = await run_weekly_review()
+
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result.get("message", "Review failed"))
+
+    return result
