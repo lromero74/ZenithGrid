@@ -13,6 +13,7 @@ from typing import Optional
 from app.coinbase_unified_client import CoinbaseClient
 from app.exchange_clients.base import ExchangeClient
 from app.exchange_clients.coinbase_adapter import CoinbaseAdapter
+from app.exchange_clients.dex_client import DEXClient
 
 
 def create_exchange_client(
@@ -79,23 +80,16 @@ def create_exchange_client(
         return CoinbaseAdapter(coinbase)
 
     elif exchange_type == "dex":
-        # Decentralized Exchange (future implementation)
+        # Decentralized Exchange (Ethereum + Uniswap V3)
         if not chain_id or not private_key or not rpc_url or not dex_router:
             raise ValueError("DEX requires chain_id, private_key, rpc_url, and dex_router")
 
-        # TODO: Implement DEXClient in Phase 3
-        # from app.exchange_clients.dex_client import DEXClient
-        # return DEXClient(
-        #     private_key=private_key,
-        #     chain_id=chain_id,
-        #     rpc_url=rpc_url,
-        #     dex_router=dex_router,
-        # )
-
-        raise NotImplementedError(
-            "DEX support is not yet implemented. "
-            "This will be added in Phase 3 of the DeFi integration. "
-            "For now, only CEX (Coinbase) is supported."
+        # Create DEX client (Ethereum + Uniswap V3 for Phase 3)
+        return DEXClient(
+            chain_id=chain_id,
+            rpc_url=rpc_url,
+            wallet_private_key=private_key,
+            dex_router=dex_router,
         )
 
     else:
