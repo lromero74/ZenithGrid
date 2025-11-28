@@ -75,12 +75,12 @@ TOKEN_ADDRESSES = {
 }
 
 # Default RPC URLs (can be overridden)
-# Using reliable public RPCs with good rate limits
+# Using PublicNode - truly free public RPCs
 DEFAULT_RPC_URLS = {
-    1: "https://rpc.ankr.com/eth",  # Ankr public RPC - good free tier
-    42161: "https://rpc.ankr.com/arbitrum",
-    137: "https://rpc.ankr.com/polygon",
-    8453: "https://rpc.ankr.com/base",
+    1: "https://ethereum-rpc.publicnode.com",
+    42161: "https://arbitrum-one-rpc.publicnode.com",
+    137: "https://polygon-bor-rpc.publicnode.com",
+    8453: "https://base-rpc.publicnode.com",
 }
 
 
