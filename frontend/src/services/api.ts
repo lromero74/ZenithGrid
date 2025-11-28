@@ -161,11 +161,11 @@ export interface BlacklistEntry {
 
 export const blacklistApi = {
   getAll: () =>
-    api.get<BlacklistEntry[]>('/blacklist').then((res) => res.data),
+    api.get<BlacklistEntry[]>('/blacklist/').then((res) => res.data),
   add: (symbol: string, reason?: string) =>
     api.post<BlacklistEntry>('/blacklist/single', { symbol, reason }).then((res) => res.data),
   addBulk: (symbols: string[], reason?: string) =>
-    api.post<BlacklistEntry[]>('/blacklist', { symbols, reason }).then((res) => res.data),
+    api.post<BlacklistEntry[]>('/blacklist/', { symbols, reason }).then((res) => res.data),
   remove: (symbol: string) =>
     api.delete<{ message: string }>(`/blacklist/${symbol}`).then((res) => res.data),
   updateReason: (symbol: string, reason: string | null) =>
