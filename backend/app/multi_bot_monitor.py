@@ -85,6 +85,7 @@ class MultiBotMonitor:
         """Convert timeframe string to seconds"""
         timeframe_map = {
             "ONE_MINUTE": 60,
+            "THREE_MINUTE": 180,  # Synthetic - aggregated from 1-minute candles
             "FIVE_MINUTE": 300,
             "FIFTEEN_MINUTE": 900,
             "THIRTY_MINUTE": 1800,
@@ -95,6 +96,48 @@ class MultiBotMonitor:
         }
         return timeframe_map.get(timeframe, 300)  # Default to 5 minutes
 
+    def _aggregate_candles(
+        self, candles: List[Dict[str, Any]], aggregation_factor: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Aggregate candles into larger timeframes.
+
+        Args:
+            candles: List of candles (must be sorted by time ascending)
+            aggregation_factor: How many candles to combine (e.g., 3 to convert 1-min to 3-min)
+
+        Returns:
+            List of aggregated candles
+        """
+        if not candles or aggregation_factor <= 1:
+            return candles
+
+        aggregated = []
+
+        # Process candles in groups of aggregation_factor
+        for i in range(0, len(candles) - aggregation_factor + 1, aggregation_factor):
+            group = candles[i:i + aggregation_factor]
+            if len(group) < aggregation_factor:
+                break  # Not enough candles for a complete group
+
+            # OHLCV aggregation logic:
+            # Open: first candle's open
+            # High: max of all highs
+            # Low: min of all lows
+            # Close: last candle's close
+            # Volume: sum of all volumes
+            aggregated_candle = {
+                "start": group[0].get("start", group[0].get("time", 0)),
+                "open": group[0].get("open"),
+                "high": max(float(c.get("high", 0)) for c in group),
+                "low": min(float(c.get("low", float("inf"))) for c in group),
+                "close": group[-1].get("close"),
+                "volume": sum(float(c.get("volume", 0)) for c in group),
+            }
+            aggregated.append(aggregated_candle)
+
+        return aggregated
+
     async def get_candles_cached(
         self, product_id: str, granularity: str, lookback_candles: int = 100
     ) -> List[Dict[str, Any]]:
@@ -103,8 +146,11 @@ class MultiBotMonitor:
 
         Args:
             product_id: Trading pair (e.g., "ETH-BTC")
-            granularity: Candle interval (e.g., "FIVE_MINUTE", "ONE_HOUR")
+            granularity: Candle interval (e.g., "FIVE_MINUTE", "ONE_HOUR", "THREE_MINUTE")
             lookback_candles: Number of candles to fetch
+
+        Note: THREE_MINUTE is not natively supported by Coinbase, so it's synthesized
+        by aggregating ONE_MINUTE candles.
         """
         # Use product_id + granularity as cache key
         cache_key = f"{product_id}:{granularity}"
@@ -119,6 +165,23 @@ class MultiBotMonitor:
         # Fetch new candles
         try:
             import time
+
+            # THREE_MINUTE is synthetic - fetch 1-minute candles and aggregate
+            if granularity == "THREE_MINUTE":
+                # Need 3x as many 1-minute candles to create the requested number of 3-minute candles
+                one_min_candles_needed = lookback_candles * 3
+                one_min_candles = await self.get_candles_cached(
+                    product_id, "ONE_MINUTE", one_min_candles_needed
+                )
+                if one_min_candles:
+                    candles = self._aggregate_candles(one_min_candles, 3)
+                    logger.info(
+                        f"  Aggregated {len(one_min_candles)} ONE_MINUTE candles into {len(candles)} THREE_MINUTE candles for {product_id}"
+                    )
+                    # Cache the aggregated result
+                    self._candle_cache[cache_key] = (now, candles)
+                    return candles
+                return []
 
             # Calculate time range based on granularity
             granularity_seconds = self.timeframe_to_seconds(granularity)
@@ -419,6 +482,8 @@ class MultiBotMonitor:
                         # Get candles for multiple timeframes (for BB% calculations)
                         candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
                         one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 100)
+                        # THREE_MINUTE is synthetic (aggregated from 1-min) but now supported
+                        three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
 
                         # Get current price from most recent candle (more reliable than ticker!)
                         if not candles or len(candles) == 0:
@@ -442,6 +507,8 @@ class MultiBotMonitor:
                         candles_by_timeframe = {"FIVE_MINUTE": candles}
                         if one_min_candles and len(one_min_candles) > 0:
                             candles_by_timeframe["ONE_MINUTE"] = one_min_candles
+                        if three_min_candles and len(three_min_candles) > 0:
+                            candles_by_timeframe["THREE_MINUTE"] = three_min_candles
 
                         # Prepare market context (for AI batch analysis)
                         market_context = market_analysis.prepare_market_context(candles, current_price)

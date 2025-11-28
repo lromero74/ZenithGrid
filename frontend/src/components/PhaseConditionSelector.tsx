@@ -93,7 +93,7 @@ const OPERATORS: Record<Operator, string> = {
 
 const TIMEFRAMES: Record<Timeframe, string> = {
   ONE_MINUTE: '1m',
-  THREE_MINUTE: '3m',
+  THREE_MINUTE: '3m*',  // * = synthetic, aggregated from 1-minute candles
   FIVE_MINUTE: '5m',
   FIFTEEN_MINUTE: '15m',
   THIRTY_MINUTE: '30m',

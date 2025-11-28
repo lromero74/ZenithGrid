@@ -66,6 +66,7 @@ export const AVAILABLE_INDICATORS: IndicatorDefinition[] = [
 
 export const TIME_INTERVALS = [
   { value: 'ONE_MINUTE', label: '1m' },
+  { value: 'THREE_MINUTE', label: '3m*' },  // * = synthetic, aggregated from 1-minute candles
   { value: 'FIVE_MINUTE', label: '5m' },
   { value: 'FIFTEEN_MINUTE', label: '15m' },
   { value: 'THIRTY_MINUTE', label: '30m' },
