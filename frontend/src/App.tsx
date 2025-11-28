@@ -11,6 +11,8 @@ import Portfolio from './pages/Portfolio'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History } from 'lucide-react'
 import { positionsApi } from './services/api'
 import { useEffect, useState } from 'react'
+import { AccountProvider } from './contexts/AccountContext'
+import { AccountSwitcher } from './components/AccountSwitcher'
 
 function App() {
   const location = useLocation()
@@ -91,6 +93,9 @@ function App() {
               </div>
             </div>
             <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
+              {/* Account Switcher */}
+              <AccountSwitcher />
+
               <div className="text-right hidden sm:block">
                 <p className="text-xs text-slate-400">BTC Price</p>
                 <p className="text-sm font-medium text-orange-400">

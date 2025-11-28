@@ -12,6 +12,7 @@ from app.services.limit_order_monitor import LimitOrderMonitor
 from app.routers import bots_router, order_history_router, templates_router
 from app.routers import positions_router
 from app.routers import account_router
+from app.routers import accounts_router  # Multi-account management (CEX + DEX)
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
@@ -82,6 +83,7 @@ app.include_router(order_history_router)
 app.include_router(templates_router)
 app.include_router(positions_router.router)  # New routers
 app.include_router(account_router.router)
+app.include_router(accounts_router.router)  # Multi-account management (CEX + DEX)
 app.include_router(market_data_router.router)
 app.include_router(settings_router.router)
 app.include_router(system_router.router)

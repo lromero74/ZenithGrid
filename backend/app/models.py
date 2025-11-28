@@ -2,6 +2,7 @@
 Database Models
 
 Defines SQLAlchemy ORM models for the trading bot application:
+- Account: CEX and DEX account configurations
 - Bot: Trading bot configuration and state
 - Position: Active and historical trading positions
 - Trade: Individual buy/sell trades within positions
@@ -30,12 +31,66 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
+class Account(Base):
+    """
+    Account model for managing CEX and DEX connections.
+
+    Supports:
+    - CEX accounts (Coinbase) with API credentials
+    - DEX wallets (MetaMask, WalletConnect) with wallet addresses
+
+    Each bot is linked to an account, enabling multi-account trading
+    and account-based UI filtering.
+    """
+    __tablename__ = "accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)  # User-friendly account name
+    type = Column(String, nullable=False)  # "cex" or "dex"
+    is_default = Column(Boolean, default=False)  # Default account for UI
+    is_active = Column(Boolean, default=True)  # Can be disabled without deletion
+
+    # CEX-specific fields (e.g., Coinbase)
+    exchange = Column(String, nullable=True)  # "coinbase"
+    api_key_name = Column(String, nullable=True)  # API key name/ID
+    api_private_key = Column(String, nullable=True)  # Encrypted API secret
+
+    # DEX-specific fields
+    chain_id = Column(Integer, nullable=True)  # 1=Ethereum, 56=BSC, 137=Polygon, 42161=Arbitrum
+    wallet_address = Column(String, nullable=True)  # Public wallet address
+    wallet_private_key = Column(String, nullable=True)  # Encrypted private key (optional)
+    rpc_url = Column(String, nullable=True)  # RPC endpoint URL
+    wallet_type = Column(String, nullable=True)  # "metamask", "walletconnect", "private_key"
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    bots = relationship("Bot", back_populates="account")
+
+    def get_display_name(self) -> str:
+        """Get display name with type indicator"""
+        type_label = "CEX" if self.type == "cex" else "DEX"
+        return f"{self.name} ({type_label})"
+
+    def get_short_address(self) -> str:
+        """Get shortened wallet address for DEX accounts"""
+        if self.wallet_address and len(self.wallet_address) > 10:
+            return f"{self.wallet_address[:6]}...{self.wallet_address[-4:]}"
+        return self.wallet_address or ""
+
+
 class Bot(Base):
     __tablename__ = "bots"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)  # User-defined bot name
     description = Column(Text, nullable=True)  # Optional description
+
+    # Account reference (links bot to CEX or DEX account)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # Nullable for backwards compatibility
 
     # Exchange configuration (CEX or DEX)
     exchange_type = Column(String, default="cex", nullable=False)  # "cex" or "dex"
@@ -74,6 +129,7 @@ class Bot(Base):
     last_ai_check = Column(DateTime, nullable=True)  # Last time AI analysis was performed (expensive operation)
 
     # Relationships
+    account = relationship("Account", back_populates="bots")
     positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
     pending_orders = relationship("PendingOrder", back_populates="bot", cascade="all, delete-orphan")
 
@@ -151,6 +207,7 @@ class Position(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True)  # Link to bot (nullable for backwards compatibility)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # Link to account (for filtering)
     product_id = Column(String, default="ETH-BTC")  # Trading pair (e.g., "ETH-BTC", "SOL-USD")
     status = Column(String, default="open")  # open, closed
     opened_at = Column(DateTime, default=datetime.utcnow)
