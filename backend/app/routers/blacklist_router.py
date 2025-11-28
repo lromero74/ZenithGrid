@@ -66,6 +66,103 @@ class BlacklistUpdateRequest(BaseModel):
     reason: Optional[str] = None
 
 
+# ============================================================================
+# Category Trading Settings (MUST be before /{symbol} routes to avoid conflicts)
+# ============================================================================
+
+class CategorySettingsRequest(BaseModel):
+    """Request model for updating allowed categories"""
+    allowed_categories: List[str]
+
+
+class CategorySettingsResponse(BaseModel):
+    """Response model for category settings"""
+    allowed_categories: List[str]
+    all_categories: List[str] = VALID_CATEGORIES
+
+
+async def get_allowed_categories(db: AsyncSession) -> List[str]:
+    """Get list of categories allowed to trade from database."""
+    query = select(Settings).where(Settings.key == ALLOWED_CATEGORIES_KEY)
+    result = await db.execute(query)
+    setting = result.scalars().first()
+
+    if setting and setting.value:
+        try:
+            return json.loads(setting.value)
+        except json.JSONDecodeError:
+            pass
+
+    return DEFAULT_ALLOWED_CATEGORIES
+
+
+@router.get("/categories", response_model=CategorySettingsResponse)
+async def get_category_settings(db: AsyncSession = Depends(get_db)):
+    """
+    Get current category trading settings.
+
+    Returns which categories are allowed to open new positions.
+    """
+    allowed = await get_allowed_categories(db)
+
+    return CategorySettingsResponse(
+        allowed_categories=allowed,
+        all_categories=VALID_CATEGORIES,
+    )
+
+
+@router.put("/categories", response_model=CategorySettingsResponse)
+async def update_category_settings(
+    request: CategorySettingsRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update which categories are allowed to trade.
+
+    Categories: APPROVED, BORDERLINE, QUESTIONABLE, BLACKLISTED
+    """
+    # Validate categories
+    invalid = [c for c in request.allowed_categories if c.upper() not in VALID_CATEGORIES]
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid categories: {invalid}. Valid: {VALID_CATEGORIES}"
+        )
+
+    # Normalize to uppercase
+    allowed = [c.upper() for c in request.allowed_categories]
+
+    # Update or create setting
+    query = select(Settings).where(Settings.key == ALLOWED_CATEGORIES_KEY)
+    result = await db.execute(query)
+    setting = result.scalars().first()
+
+    if setting:
+        setting.value = json.dumps(allowed)
+        setting.value_type = "json"
+    else:
+        setting = Settings(
+            key=ALLOWED_CATEGORIES_KEY,
+            value=json.dumps(allowed),
+            value_type="json",
+            description="Categories of coins allowed to open new positions"
+        )
+        db.add(setting)
+
+    await db.commit()
+
+    logger.info(f"Updated allowed coin categories: {allowed}")
+
+    return CategorySettingsResponse(
+        allowed_categories=allowed,
+        all_categories=VALID_CATEGORIES,
+    )
+
+
+# ============================================================================
+# Blacklist CRUD Operations
+# ============================================================================
+
 @router.get("/", response_model=List[BlacklistEntry])
 async def list_blacklisted_coins(db: AsyncSession = Depends(get_db)):
     """Get all blacklisted coins"""
@@ -240,96 +337,3 @@ async def trigger_ai_review():
         raise HTTPException(status_code=500, detail=result.get("message", "Review failed"))
 
     return result
-
-
-# ============================================================================
-# Category Trading Settings
-# ============================================================================
-
-class CategorySettingsRequest(BaseModel):
-    """Request model for updating allowed categories"""
-    allowed_categories: List[str]
-
-
-class CategorySettingsResponse(BaseModel):
-    """Response model for category settings"""
-    allowed_categories: List[str]
-    all_categories: List[str] = VALID_CATEGORIES
-
-
-async def get_allowed_categories(db: AsyncSession) -> List[str]:
-    """Get list of categories allowed to trade from database."""
-    query = select(Settings).where(Settings.key == ALLOWED_CATEGORIES_KEY)
-    result = await db.execute(query)
-    setting = result.scalars().first()
-
-    if setting and setting.value:
-        try:
-            return json.loads(setting.value)
-        except json.JSONDecodeError:
-            pass
-
-    return DEFAULT_ALLOWED_CATEGORIES
-
-
-@router.get("/categories", response_model=CategorySettingsResponse)
-async def get_category_settings(db: AsyncSession = Depends(get_db)):
-    """
-    Get current category trading settings.
-
-    Returns which categories are allowed to open new positions.
-    """
-    allowed = await get_allowed_categories(db)
-
-    return CategorySettingsResponse(
-        allowed_categories=allowed,
-        all_categories=VALID_CATEGORIES,
-    )
-
-
-@router.put("/categories", response_model=CategorySettingsResponse)
-async def update_category_settings(
-    request: CategorySettingsRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Update which categories are allowed to trade.
-
-    Categories: APPROVED, BORDERLINE, QUESTIONABLE, BLACKLISTED
-    """
-    # Validate categories
-    invalid = [c for c in request.allowed_categories if c.upper() not in VALID_CATEGORIES]
-    if invalid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid categories: {invalid}. Valid: {VALID_CATEGORIES}"
-        )
-
-    # Normalize to uppercase
-    allowed = [c.upper() for c in request.allowed_categories]
-
-    # Update or create setting
-    query = select(Settings).where(Settings.key == ALLOWED_CATEGORIES_KEY)
-    result = await db.execute(query)
-    setting = result.scalars().first()
-
-    if setting:
-        setting.value = json.dumps(allowed)
-        setting.value_type = "json"
-    else:
-        setting = Settings(
-            key=ALLOWED_CATEGORIES_KEY,
-            value=json.dumps(allowed),
-            value_type="json",
-            description="Categories of coins allowed to open new positions"
-        )
-        db.add(setting)
-
-    await db.commit()
-
-    logger.info(f"Updated allowed coin categories: {allowed}")
-
-    return CategorySettingsResponse(
-        allowed_categories=allowed,
-        all_categories=VALID_CATEGORIES,
-    )
