@@ -590,8 +590,8 @@ class MultiBotMonitor:
                     ai_log_entry = None
                     if signal_data.get("reasoning") != "Technical-only check (no AI)":
                         print(f"🔍 Logging AI decision for {product_id}...")
-                        # Log AI decision (position_id will be updated after position is created)
-                        ai_log_entry = await self.log_ai_decision(db, bot, product_id, signal_data, pair_info)
+                        # Log AI decision with position info if one exists
+                        ai_log_entry = await self.log_ai_decision(db, bot, product_id, signal_data, pair_info, open_positions)
                         print(f"✅ Logged AI decision for {product_id}")
 
                         # Mark signal as already logged to prevent duplicate logging in trading_engine_v2.py
@@ -606,11 +606,12 @@ class MultiBotMonitor:
                     print(f"✅ Trading logic complete for {product_id}")
                     results[product_id] = result
 
-                    # Update AI log with position_id if a position was created
-                    if ai_log_entry and result.get("position"):
+                    # Update AI log with position_id if a NEW position was created (not existing)
+                    if ai_log_entry and result.get("position") and not ai_log_entry.position_id:
                         position = result["position"]
                         ai_log_entry.position_id = position.id
-                        logger.info(f"  🔗 Linked AI log to position #{position.id} for {product_id}")
+                        ai_log_entry.position_status = "open"  # New position just opened
+                        logger.info(f"  🔗 Linked AI log to new position #{position.id} for {product_id}")
 
                 except Exception as e:
                     logger.error(f"  Error processing {product_id} result: {e}")
@@ -645,7 +646,7 @@ class MultiBotMonitor:
             return {"error": str(e)}
 
     async def log_ai_decision(
-        self, db: AsyncSession, bot: Bot, product_id: str, signal_data: Dict[str, Any], pair_data: Dict[str, Any]
+        self, db: AsyncSession, bot: Bot, product_id: str, signal_data: Dict[str, Any], pair_data: Dict[str, Any], open_positions: List = None
     ):
         """Log AI decision to database and return the log entry"""
         try:
@@ -666,13 +667,22 @@ class MultiBotMonitor:
                 excluded_fields = {"reasoning", "signal_type", "confidence"}
                 additional_context = {k: v for k, v in signal_data.items() if k not in excluded_fields}
 
+            # Determine position status from open positions
+            position_status = "none"
+            existing_position = None
+            if open_positions:
+                existing_position = next((p for p in open_positions if p.product_id == product_id), None)
+                if existing_position:
+                    position_status = existing_position.status  # "open" or "closed"
+
             log_entry = AIBotLog(
                 bot_id=bot.id,
                 thinking=signal_data.get("reasoning", ""),
                 decision=signal_data.get("signal_type", "hold"),
                 confidence=signal_data.get("confidence", 0),
                 current_price=pair_data.get("current_price"),
-                position_status="unknown",  # Will be determined by trading logic
+                position_status=position_status,
+                position_id=existing_position.id if existing_position else None,
                 product_id=product_id,
                 context=additional_context,  # Only store additional context, not duplicate fields
             )
