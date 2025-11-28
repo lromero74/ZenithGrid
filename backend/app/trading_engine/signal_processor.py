@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.currency_utils import format_with_usd, get_quote_currency
 from app.exchange_clients.base import ExchangeClient
-from app.models import BlacklistedCoin, Bot, Position, Signal
+from app.models import BlacklistedCoin, Bot, Position, Settings, Signal
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
 from app.trading_engine.position_manager import get_active_position, get_open_positions_count, create_position
@@ -346,20 +346,41 @@ async def process_signal(
                 blacklisted_entry = blacklist_result.scalars().first()
 
                 if blacklisted_entry:
-                    # Check if it's an APPROVED coin (not actually blocked)
+                    # Determine coin's category from reason prefix
                     reason = blacklisted_entry.reason or ''
                     if reason.startswith('[APPROVED]'):
-                        # Approved coins are allowed to trade
-                        print(f"🔍 {base_symbol} is APPROVED: {reason}")
-                        logger.info(f"  ✅ APPROVED: {base_symbol}")
+                        coin_category = 'APPROVED'
+                    elif reason.startswith('[BORDERLINE]'):
+                        coin_category = 'BORDERLINE'
+                    elif reason.startswith('[QUESTIONABLE]'):
+                        coin_category = 'QUESTIONABLE'
+                    else:
+                        coin_category = 'BLACKLISTED'
+
+                    # Get allowed categories from settings
+                    import json
+                    allowed_query = select(Settings).where(Settings.key == "allowed_coin_categories")
+                    allowed_result = await db.execute(allowed_query)
+                    allowed_setting = allowed_result.scalars().first()
+                    allowed_categories = ['APPROVED']  # Default
+                    if allowed_setting and allowed_setting.value:
+                        try:
+                            allowed_categories = json.loads(allowed_setting.value)
+                        except json.JSONDecodeError:
+                            pass
+
+                    if coin_category in allowed_categories:
+                        # Category is allowed to trade
+                        print(f"🔍 {base_symbol} is {coin_category} (allowed): {reason}")
+                        logger.info(f"  ✅ {coin_category}: {base_symbol} - allowed to trade")
                         print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
                         should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
                         print(f"🔍 Should buy result: {should_buy}, amount: {quote_amount:.8f}, reason: {buy_reason}")
                     else:
                         should_buy = False
-                        buy_reason = f"{base_symbol} is blacklisted: {reason or 'No reason provided'}"
+                        buy_reason = f"{base_symbol} is {coin_category}: {reason.replace(f'[{coin_category}] ', '')}"
                         print(f"🔍 Should buy: FALSE - {buy_reason}")
-                        logger.info(f"  🚫 BLACKLISTED: {buy_reason}")
+                        logger.info(f"  🚫 {coin_category} (blocked): {buy_reason}")
                 else:
                     print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
                     should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)

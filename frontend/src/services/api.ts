@@ -159,6 +159,11 @@ export interface BlacklistEntry {
   created_at: string;
 }
 
+export interface CategorySettings {
+  allowed_categories: string[];
+  all_categories: string[];
+}
+
 export const blacklistApi = {
   getAll: () =>
     api.get<BlacklistEntry[]>('/blacklist/').then((res) => res.data),
@@ -172,4 +177,12 @@ export const blacklistApi = {
     api.put<BlacklistEntry>(`/blacklist/${symbol}`, { reason }).then((res) => res.data),
   check: (symbol: string) =>
     api.get<{ symbol: string; is_blacklisted: boolean; reason: string | null }>(`/blacklist/check/${symbol}`).then((res) => res.data),
+  // Category trading settings
+  getCategories: () =>
+    api.get<CategorySettings>('/blacklist/categories').then((res) => res.data),
+  updateCategories: (allowedCategories: string[]) =>
+    api.put<CategorySettings>('/blacklist/categories', { allowed_categories: allowedCategories }).then((res) => res.data),
+  // AI review
+  triggerAIReview: () =>
+    api.post<{ status: string; categories: Record<string, number> }>('/blacklist/ai-review').then((res) => res.data),
 };

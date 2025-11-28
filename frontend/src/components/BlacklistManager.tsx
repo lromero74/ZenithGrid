@@ -4,6 +4,7 @@
  * Dual-list UI for managing coin blacklist.
  * - Left list: Available coins (from bot product_ids)
  * - Right list: Blacklisted coins with reasons
+ * - Category toggles for trading permissions
  */
 
 import { useState, useEffect, useMemo } from 'react'
@@ -17,14 +18,32 @@ import {
   Check,
   X,
   Search,
+  Sparkles,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react'
-import { blacklistApi, BlacklistEntry, botsApi } from '../services/api'
+import { blacklistApi, BlacklistEntry, botsApi, CategorySettings } from '../services/api'
+
+// Category display config
+const CATEGORY_CONFIG: Record<string, { color: string; bgColor: string; borderColor: string; label: string }> = {
+  APPROVED: { color: 'text-green-400', bgColor: 'bg-green-600/20', borderColor: 'border-green-600/50', label: 'Approved' },
+  BORDERLINE: { color: 'text-yellow-400', bgColor: 'bg-yellow-600/20', borderColor: 'border-yellow-600/50', label: 'Borderline' },
+  QUESTIONABLE: { color: 'text-orange-400', bgColor: 'bg-orange-600/20', borderColor: 'border-orange-600/50', label: 'Questionable' },
+  BLACKLISTED: { color: 'text-red-400', bgColor: 'bg-red-600/20', borderColor: 'border-red-600/50', label: 'Blacklisted' },
+}
 
 export function BlacklistManager() {
   const [blacklistedCoins, setBlacklistedCoins] = useState<BlacklistEntry[]>([])
   const [allTrackedSymbols, setAllTrackedSymbols] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Category settings
+  const [categorySettings, setCategorySettings] = useState<CategorySettings | null>(null)
+  const [savingCategories, setSavingCategories] = useState(false)
+
+  // AI Review
+  const [runningAIReview, setRunningAIReview] = useState(false)
 
   // Selected items in each list
   const [selectedAvailable, setSelectedAvailable] = useState<Set<string>>(new Set())
@@ -48,12 +67,14 @@ export function BlacklistManager() {
     setError(null)
 
     try {
-      const [blacklist, bots] = await Promise.all([
+      const [blacklist, bots, categories] = await Promise.all([
         blacklistApi.getAll(),
         botsApi.getAll(),
+        blacklistApi.getCategories(),
       ])
 
       setBlacklistedCoins(blacklist)
+      setCategorySettings(categories)
 
       // Extract unique symbols from all bots' product_ids
       const symbols = new Set<string>()
@@ -183,6 +204,81 @@ export function BlacklistManager() {
     }
   }
 
+  // Toggle category trading permission
+  const toggleCategory = async (category: string) => {
+    if (!categorySettings || savingCategories) return
+
+    setSavingCategories(true)
+    setError(null)
+
+    try {
+      const currentAllowed = categorySettings.allowed_categories
+      let newAllowed: string[]
+
+      if (currentAllowed.includes(category)) {
+        // Remove category (must keep at least one)
+        newAllowed = currentAllowed.filter((c) => c !== category)
+        if (newAllowed.length === 0) {
+          setError('At least one category must be allowed to trade')
+          setSavingCategories(false)
+          return
+        }
+      } else {
+        // Add category
+        newAllowed = [...currentAllowed, category]
+      }
+
+      const updated = await blacklistApi.updateCategories(newAllowed)
+      setCategorySettings(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update category settings')
+    } finally {
+      setSavingCategories(false)
+    }
+  }
+
+  // Trigger AI review
+  const triggerAIReview = async () => {
+    if (runningAIReview) return
+
+    setRunningAIReview(true)
+    setError(null)
+
+    try {
+      await blacklistApi.triggerAIReview()
+      // Refresh data after review completes
+      await fetchData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to run AI review')
+    } finally {
+      setRunningAIReview(false)
+    }
+  }
+
+  // Helper to get category from reason
+  const getCategoryFromReason = (reason: string | null): string => {
+    if (!reason) return 'BLACKLISTED'
+    if (reason.startsWith('[APPROVED]')) return 'APPROVED'
+    if (reason.startsWith('[BORDERLINE]')) return 'BORDERLINE'
+    if (reason.startsWith('[QUESTIONABLE]')) return 'QUESTIONABLE'
+    return 'BLACKLISTED'
+  }
+
+  // Count coins by category
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      APPROVED: 0,
+      BORDERLINE: 0,
+      QUESTIONABLE: 0,
+      BLACKLISTED: 0,
+    }
+    for (const coin of blacklistedCoins) {
+      const category = getCategoryFromReason(coin.reason)
+      counts[category] = (counts[category] || 0) + 1
+    }
+    return counts
+  }, [blacklistedCoins])
+
   if (isLoading) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
@@ -215,6 +311,66 @@ export function BlacklistManager() {
           <RefreshCw className="w-4 h-4 text-slate-400" />
         </button>
       </div>
+
+      {/* Category Trading Permissions */}
+      {categorySettings && (
+        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h4 className="font-medium text-white text-sm">Category Trading Permissions</h4>
+              <p className="text-xs text-slate-400">Select which categories are allowed to open new positions</p>
+            </div>
+            <button
+              onClick={triggerAIReview}
+              disabled={runningAIReview}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
+              title="Run AI to re-categorize all coins"
+            >
+              <Sparkles className={`w-4 h-4 ${runningAIReview ? 'animate-pulse' : ''}`} />
+              {runningAIReview ? 'Reviewing...' : 'AI Review'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {categorySettings.all_categories.map((category) => {
+              const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.BLACKLISTED
+              const isAllowed = categorySettings.allowed_categories.includes(category)
+              const count = categoryCounts[category] || 0
+
+              return (
+                <button
+                  key={category}
+                  onClick={() => toggleCategory(category)}
+                  disabled={savingCategories}
+                  className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    isAllowed
+                      ? `${config.bgColor} ${config.borderColor} border-2`
+                      : 'bg-slate-700/30 border-slate-600 opacity-60 hover:opacity-80'
+                  } ${savingCategories ? 'cursor-wait' : 'cursor-pointer'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    {isAllowed ? (
+                      <ToggleRight className={`w-5 h-5 ${config.color}`} />
+                    ) : (
+                      <ToggleLeft className="w-5 h-5 text-slate-500" />
+                    )}
+                    <span className={`text-sm font-medium ${isAllowed ? config.color : 'text-slate-400'}`}>
+                      {config.label}
+                    </span>
+                  </div>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${isAllowed ? config.bgColor : 'bg-slate-600'} ${isAllowed ? config.color : 'text-slate-400'}`}>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <p className="text-xs text-slate-500 mt-3">
+            Coins in allowed categories can open new positions. Position badges still show for all categories.
+          </p>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
