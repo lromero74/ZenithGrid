@@ -448,6 +448,9 @@ async def should_sell(
     take_profit_conditions = config.get("take_profit_conditions", [])
     take_profit_logic = config.get("take_profit_logic", "or")
 
+    import logging
+    _logger = logging.getLogger(__name__)
+
     if take_profit_conditions and market_context:
         from app.phase_conditions import PhaseConditionEvaluator
         from app.indicator_calculator import IndicatorCalculator
@@ -456,15 +459,21 @@ async def should_sell(
             evaluator = PhaseConditionEvaluator(IndicatorCalculator())
             # Get previous indicators for crossing detection
             previous_indicators = market_context.get("_previous")
+
+            # Debug: Log BB% values for take profit evaluation
+            current_bb = market_context.get("bb_percent", "N/A")
+            prev_bb = previous_indicators.get("bb_percent", "N/A") if previous_indicators else "None"
+            _logger.info(f"    📊 Take profit check: BB% current={current_bb:.1f}%, prev={prev_bb}, profit={profit_pct:.2f}%")
+
             if evaluator.evaluate_phase_conditions(
                 take_profit_conditions, take_profit_logic, market_context, previous_indicators
             ):
                 # Technical condition triggered - sell with profit protection
+                _logger.warning(f"    🎯 TAKE PROFIT TRIGGERED: BB% crossed below 90% at {profit_pct:.2f}% profit!")
                 return True, f"Take profit condition triggered at {profit_pct:.2f}% profit"
         except Exception as e:
             # Log error but don't block trading if condition evaluation fails
-            import logging
-            logging.getLogger(__name__).warning(f"Error evaluating take profit conditions: {e}")
+            _logger.warning(f"Error evaluating take profit conditions: {e}")
 
     # RULE 4: AI decides when to sell (with profit protection from rules 1 & 2)
     if signal_data.get("signal_type") == "sell":
