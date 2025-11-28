@@ -30,6 +30,13 @@ COINGECKO_PLATFORM_IDS = {
 _price_cache: Dict[str, tuple] = {}  # {address: (price, timestamp)}
 PRICE_CACHE_TTL = 60  # seconds
 
+# Legacy token address mappings (old token -> current token for pricing)
+# Used when CoinGecko doesn't have pricing for deprecated/migrated tokens
+LEGACY_TOKEN_PRICE_MAP = {
+    # GALA v1 -> GALA v2 (1:1 migration)
+    "0x15D4c048F83bd7e37d49eA4C83a07267Ec4203dA".lower(): "0xd1d2Eb1B1e90B638588728b4130137D262C87cae".lower(),
+}
+
 # Common ERC20 ABI for balanceOf
 ERC20_ABI = [
     {
@@ -392,7 +399,14 @@ class DexWalletService:
         total_usd = Decimal("0")
 
         # Fetch token prices from CoinGecko
+        # Include both actual token addresses and their mapped equivalents for legacy tokens
         token_addresses = [token.address for token in portfolio.token_balances]
+        for addr in list(token_addresses):
+            addr_lower = addr.lower()
+            if addr_lower in LEGACY_TOKEN_PRICE_MAP:
+                mapped_addr = LEGACY_TOKEN_PRICE_MAP[addr_lower]
+                if mapped_addr not in [a.lower() for a in token_addresses]:
+                    token_addresses.append(mapped_addr)
         token_prices = await self.fetch_token_prices(portfolio.chain_id, token_addresses)
 
         # Add native token
@@ -415,7 +429,15 @@ class DexWalletService:
         # Add token balances with real prices
         for token in portfolio.token_balances:
             # Get price from CoinGecko (by address)
-            price_usd = token_prices.get(token.address.lower(), 0)
+            addr_lower = token.address.lower()
+            price_usd = token_prices.get(addr_lower, 0)
+
+            # If no price found, check if this is a legacy token with a mapped equivalent
+            if price_usd == 0 and addr_lower in LEGACY_TOKEN_PRICE_MAP:
+                mapped_addr = LEGACY_TOKEN_PRICE_MAP[addr_lower]
+                price_usd = token_prices.get(mapped_addr, 0)
+                if price_usd > 0:
+                    logger.info(f"Using mapped price for legacy token {token.symbol}: ${price_usd}")
 
             if price_usd > 0:
                 # Use CoinGecko price
