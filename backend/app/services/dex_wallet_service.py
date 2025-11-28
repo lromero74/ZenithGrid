@@ -75,12 +75,12 @@ TOKEN_ADDRESSES = {
 }
 
 # Default RPC URLs (can be overridden)
-# Using Cloudflare and other reliable public RPCs
+# Using reliable public RPCs with good rate limits
 DEFAULT_RPC_URLS = {
-    1: "https://cloudflare-eth.com",  # Cloudflare's Ethereum gateway - good rate limits
-    42161: "https://arb1.arbitrum.io/rpc",
-    137: "https://polygon-rpc.com",
-    8453: "https://mainnet.base.org",
+    1: "https://rpc.ankr.com/eth",  # Ankr public RPC - good free tier
+    42161: "https://rpc.ankr.com/arbitrum",
+    137: "https://rpc.ankr.com/polygon",
+    8453: "https://rpc.ankr.com/base",
 }
 
 
@@ -247,17 +247,16 @@ class DexWalletService:
                 # Get known token balances for this chain
                 tokens = TOKEN_ADDRESSES.get(chain_id, {})
 
-                # Fetch all token balances concurrently
-                tasks = [
-                    self.get_token_balance(chain_id, wallet_address, addr, rpc_url)
-                    for addr in tokens.values()
-                ]
-
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                for result in results:
-                    if isinstance(result, TokenBalance) and result is not None:
-                        token_balances.append(result)
+                # Fetch token balances sequentially with delay to avoid rate limits
+                for symbol, addr in tokens.items():
+                    try:
+                        result = await self.get_token_balance(chain_id, wallet_address, addr, rpc_url)
+                        if result is not None:
+                            token_balances.append(result)
+                        # Small delay between requests to avoid rate limiting
+                        await asyncio.sleep(0.2)
+                    except Exception as e:
+                        logger.warning(f"Error fetching {symbol}: {e}")
 
             return WalletPortfolio(
                 chain_id=chain_id,
