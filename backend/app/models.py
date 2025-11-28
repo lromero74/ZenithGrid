@@ -466,3 +466,17 @@ class OrderHistory(Base):
     # Relationships
     bot = relationship("Bot")
     position = relationship("Position")
+
+
+class BlacklistedCoin(Base):
+    """
+    Blacklisted coins that bots should not open new positions for.
+    Existing positions in blacklisted coins continue to work normally.
+    """
+
+    __tablename__ = "blacklisted_coins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, unique=True, index=True)  # e.g., "ICP", "EOS", "DOGE"
+    reason = Column(Text, nullable=True)  # Why the coin is blacklisted
+    created_at = Column(DateTime, default=datetime.utcnow)

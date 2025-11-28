@@ -1948,6 +1948,15 @@ export default function Positions() {
                                 <AlertCircle size={14} className="text-red-400" />
                               </div>
                             )}
+                            {/* Blacklist Warning Badge */}
+                            {position.is_blacklisted && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-600/20 border border-red-600/50 text-red-400 cursor-help"
+                                title={position.blacklist_reason || 'Blacklisted coin'}
+                              >
+                                BLACKLISTED
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>

@@ -15,7 +15,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import AIBotLog, Bot, PendingOrder, Position, Trade
+from app.models import AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade
 from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails, LimitOrderFill
 from app.coinbase_unified_client import CoinbaseClient
@@ -47,6 +47,12 @@ async def get_positions(
     result = await db.execute(query)
     positions = result.scalars().all()
 
+    # Fetch all blacklisted coins once for efficiency
+    blacklist_query = select(BlacklistedCoin)
+    blacklist_result = await db.execute(blacklist_query)
+    blacklisted_coins = blacklist_result.scalars().all()
+    blacklist_map = {coin.symbol: coin.reason for coin in blacklisted_coins}
+
     response = []
     for pos in positions:
         # Count trades
@@ -64,6 +70,12 @@ async def get_positions(
         pos_response = PositionResponse.model_validate(pos)
         pos_response.trade_count = trade_count
         pos_response.pending_orders_count = pending_count
+
+        # Check if position's coin is blacklisted
+        base_symbol = pos.product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
+        if base_symbol in blacklist_map:
+            pos_response.is_blacklisted = True
+            pos_response.blacklist_reason = blacklist_map[base_symbol]
 
         # If position is closing via limit, fetch order details
         if pos.closing_via_limit and pos.limit_close_order_id:
@@ -216,6 +228,15 @@ async def get_position(position_id: int, db: AsyncSession = Depends(get_db)):
     pos_response = PositionResponse.model_validate(position)
     pos_response.trade_count = trade_count
     pos_response.pending_orders_count = pending_count
+
+    # Check if position's coin is blacklisted
+    base_symbol = position.product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
+    blacklist_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == base_symbol)
+    blacklist_result = await db.execute(blacklist_query)
+    blacklisted_coin = blacklist_result.scalars().first()
+    if blacklisted_coin:
+        pos_response.is_blacklisted = True
+        pos_response.blacklist_reason = blacklisted_coin.reason
 
     return pos_response
 

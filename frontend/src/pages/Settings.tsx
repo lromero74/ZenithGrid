@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AccountsManagement } from '../components/AccountsManagement'
 import { AddAccountModal } from '../components/AddAccountModal'
+import { BlacklistManager } from '../components/BlacklistManager'
 
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
@@ -13,6 +14,9 @@ export default function Settings() {
 
       {/* Accounts Management Section */}
       <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
+
+      {/* Coin Blacklist Section */}
+      <BlacklistManager />
 
       {/* Add Account Modal */}
       <AddAccountModal

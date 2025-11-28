@@ -17,6 +17,7 @@ from app.routers.accounts_router import set_coinbase_client
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
+from app.routers import blacklist_router
 import asyncio
 
 # Import dependency functions for override
@@ -91,6 +92,7 @@ app.include_router(accounts_router.router)  # Multi-account management (CEX + DE
 app.include_router(market_data_router.router)
 app.include_router(settings_router.router)
 app.include_router(system_router.router)
+app.include_router(blacklist_router.router)
 
 
 # Background task for limit order monitoring

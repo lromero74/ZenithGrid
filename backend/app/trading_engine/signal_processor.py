@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.currency_utils import format_with_usd, get_quote_currency
 from app.exchange_clients.base import ExchangeClient
-from app.models import Bot, Position, Signal
+from app.models import BlacklistedCoin, Bot, Position, Signal
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
 from app.trading_engine.position_manager import get_active_position, get_open_positions_count, create_position
@@ -339,9 +339,21 @@ async def process_signal(
                 buy_reason = f"Max concurrent deals limit reached ({open_positions_count}/{max_deals})"
                 print(f"🔍 Should buy: FALSE - {buy_reason}")
             else:
-                print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
-                should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
-                print(f"🔍 Should buy result: {should_buy}, amount: {quote_amount:.8f}, reason: {buy_reason}")
+                # Check if coin is blacklisted before considering a buy
+                base_symbol = product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
+                blacklist_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == base_symbol)
+                blacklist_result = await db.execute(blacklist_query)
+                blacklisted_entry = blacklist_result.scalars().first()
+
+                if blacklisted_entry:
+                    should_buy = False
+                    buy_reason = f"{base_symbol} is blacklisted: {blacklisted_entry.reason or 'No reason provided'}"
+                    print(f"🔍 Should buy: FALSE - {buy_reason}")
+                    logger.info(f"  🚫 BLACKLISTED: {buy_reason}")
+                else:
+                    print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
+                    should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
+                    print(f"🔍 Should buy result: {should_buy}, amount: {quote_amount:.8f}, reason: {buy_reason}")
         else:
             # Position already exists for this pair - check for DCA
             should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)

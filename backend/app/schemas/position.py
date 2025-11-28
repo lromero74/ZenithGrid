@@ -34,6 +34,8 @@ class PositionResponse(BaseModel):
     closing_via_limit: bool = False  # Whether position is closing via limit order
     limit_close_order_id: Optional[str] = None  # Coinbase order ID for limit close
     limit_order_details: Optional["LimitOrderDetails"] = None  # Details of limit close order
+    is_blacklisted: bool = False  # Whether the coin is in the blacklist
+    blacklist_reason: Optional[str] = None  # Reason the coin is blacklisted (if applicable)
 
     class Config:
         from_attributes = True

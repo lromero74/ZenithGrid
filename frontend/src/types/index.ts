@@ -26,6 +26,8 @@ export interface Position {
   closing_via_limit?: boolean;  // Whether position is closing via limit order
   limit_close_order_id?: string | null;  // Coinbase order ID for limit close
   limit_order_details?: LimitOrderDetails | null;  // Details of the limit close order
+  is_blacklisted?: boolean;  // Whether the coin is on the blacklist
+  blacklist_reason?: string | null;  // Reason the coin is blacklisted
 }
 
 export interface LimitOrderDetails {
@@ -162,6 +164,8 @@ export interface Bot {
   strategy_type: string;
   strategy_config: Record<string, any>;
   product_id: string;
+  product_ids?: string[];  // Multi-pair support
+  split_budget_across_pairs?: boolean;
   reserved_btc_balance: number;
   reserved_usd_balance: number;
   budget_percentage: number;

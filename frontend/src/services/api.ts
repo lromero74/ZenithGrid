@@ -151,3 +151,25 @@ export const orderHistoryApi = {
       params: botId !== undefined ? { bot_id: botId } : undefined
     }).then((res) => res.data),
 };
+
+export interface BlacklistEntry {
+  id: number;
+  symbol: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export const blacklistApi = {
+  getAll: () =>
+    api.get<BlacklistEntry[]>('/blacklist').then((res) => res.data),
+  add: (symbol: string, reason?: string) =>
+    api.post<BlacklistEntry>('/blacklist/single', { symbol, reason }).then((res) => res.data),
+  addBulk: (symbols: string[], reason?: string) =>
+    api.post<BlacklistEntry[]>('/blacklist', { symbols, reason }).then((res) => res.data),
+  remove: (symbol: string) =>
+    api.delete<{ message: string }>(`/blacklist/${symbol}`).then((res) => res.data),
+  updateReason: (symbol: string, reason: string | null) =>
+    api.put<BlacklistEntry>(`/blacklist/${symbol}`, { reason }).then((res) => res.data),
+  check: (symbol: string) =>
+    api.get<{ symbol: string; is_blacklisted: boolean; reason: string | null }>(`/blacklist/check/${symbol}`).then((res) => res.data),
+};
