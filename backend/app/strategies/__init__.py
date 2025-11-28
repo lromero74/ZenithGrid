@@ -167,6 +167,10 @@ from app.strategies import (  # noqa: E402
     macd_dca,
     rsi,
     simple_dca,
+    # Arbitrage strategies
+    spatial_arbitrage,
+    triangular_arbitrage,
+    statistical_arbitrage,
 )
 
 __all__ = [
@@ -182,4 +186,8 @@ __all__ = [
     "macd_dca",
     "rsi",
     "simple_dca",
+    # Arbitrage strategies
+    "spatial_arbitrage",
+    "triangular_arbitrage",
+    "statistical_arbitrage",
 ]
