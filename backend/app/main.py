@@ -13,6 +13,7 @@ from app.routers import bots_router, order_history_router, templates_router
 from app.routers import positions_router
 from app.routers import account_router
 from app.routers import accounts_router  # Multi-account management (CEX + DEX)
+from app.routers.accounts_router import set_coinbase_client
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
@@ -76,6 +77,9 @@ app.dependency_overrides[market_data_get_coinbase] = override_get_coinbase
 app.dependency_overrides[settings_get_coinbase] = override_get_coinbase
 app.dependency_overrides[system_get_coinbase] = override_get_coinbase
 app.dependency_overrides[system_get_price_monitor] = override_get_price_monitor
+
+# Set coinbase client for accounts router (uses global instead of dependency injection)
+set_coinbase_client(exchange_client)
 
 # Include all routers
 app.include_router(bots_router)  # Existing routers

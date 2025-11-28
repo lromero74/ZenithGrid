@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw } from 'lucide-react'
+import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw, Building2 } from 'lucide-react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+import { useAccount, getChainName } from '../contexts/AccountContext'
 
 interface CandleData {
   time: number
@@ -40,19 +41,41 @@ interface PortfolioData {
   holdings: Holding[]
   holdings_count: number
   balance_breakdown?: {
-    btc: BalanceBreakdown
-    usd: BalanceBreakdown
+    btc?: BalanceBreakdown
+    usd?: BalanceBreakdown
+    usdc?: BalanceBreakdown
+    eth?: BalanceBreakdown
   }
+  pnl?: {
+    today: { usd: number; btc: number; usdc?: number; eth?: number }
+    all_time: { usd: number; btc: number; usdc?: number; eth?: number }
+  }
+  // DEX-specific fields
+  is_dex?: boolean
+  account_type?: 'cex' | 'dex'
+  account_id?: number
+  account_name?: string
+  chain_id?: number
+  wallet_address?: string
 }
 
 type SortColumn = 'asset' | 'total_balance' | 'usd_value' | 'btc_value' | 'percentage' | 'unrealized_pnl_usd'
 type SortDirection = 'asc' | 'desc'
 
 function Portfolio() {
-  // Use React Query with the same key as App.tsx for shared caching
+  const { selectedAccount } = useAccount()
+
+  // Use React Query with account-specific key
   const { data: portfolio, isLoading: loading, error, refetch, isFetching } = useQuery({
-    queryKey: ['account-portfolio'],
+    queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
+      // If we have a selected account, use the account-specific endpoint
+      if (selectedAccount) {
+        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        if (!response.ok) throw new Error('Failed to fetch portfolio')
+        return response.json() as Promise<PortfolioData>
+      }
+      // Fallback to legacy endpoint
       const response = await fetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json() as Promise<PortfolioData>
@@ -61,6 +84,7 @@ function Portfolio() {
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnMount: false, // Don't refetch on page refresh - use cache
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    enabled: true, // Always enabled, will use fallback if no account selected
   })
 
   const [sortColumn, setSortColumn] = useState<SortColumn>('usd_value')
@@ -317,8 +341,22 @@ function Portfolio() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Wallet className="text-blue-400" size={32} />
-            <h1 className="text-3xl font-bold text-white">Portfolio</h1>
+            {selectedAccount?.type === 'dex' ? (
+              <Wallet className="text-orange-400" size={32} />
+            ) : (
+              <Building2 className="text-blue-400" size={32} />
+            )}
+            <div>
+              <h1 className="text-3xl font-bold text-white">Portfolio</h1>
+              {selectedAccount && (
+                <p className="text-sm text-slate-400">
+                  {selectedAccount.name}
+                  {selectedAccount.type === 'dex' && selectedAccount.chain_id && (
+                    <span className="text-slate-500"> ({getChainName(selectedAccount.chain_id)})</span>
+                  )}
+                </p>
+              )}
+            </div>
           </div>
           <button
             onClick={() => refetch()}
