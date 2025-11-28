@@ -416,8 +416,9 @@ class MultiBotMonitor:
                             logger.info(f"  🔄 Retry {attempt}/{max_retries-1} for {product_id}")
                             await asyncio.sleep(0.5 * attempt)  # Brief backoff
 
-                        # Get candles first (they have reliable prices!)
+                        # Get candles for multiple timeframes (for BB% calculations)
                         candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
+                        three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
 
                         # Get current price from most recent candle (more reliable than ticker!)
                         if not candles or len(candles) == 0:
@@ -437,12 +438,18 @@ class MultiBotMonitor:
                             logger.warning(f"  ⚠️  {product_id}: {last_error} after {max_retries} attempts")
                             break
 
+                        # Build candles_by_timeframe for multi-timeframe indicator calculation
+                        candles_by_timeframe = {"FIVE_MINUTE": candles}
+                        if three_min_candles and len(three_min_candles) > 0:
+                            candles_by_timeframe["THREE_MINUTE"] = three_min_candles
+
                         # Prepare market context (for AI batch analysis)
                         market_context = market_analysis.prepare_market_context(candles, current_price)
 
                         pairs_data[product_id] = {
                             "current_price": current_price,
                             "candles": candles,
+                            "candles_by_timeframe": candles_by_timeframe,
                             "market_context": market_context,
                         }
                         success = True
@@ -708,7 +715,8 @@ class MultiBotMonitor:
                 logger.info("    Using pre-fetched market data")
                 current_price = pair_data.get("current_price", 0)
                 candles = pair_data.get("candles", [])
-                candles_by_timeframe = {"FIVE_MINUTE": candles}  # Simplified for batch mode
+                # Use candles_by_timeframe from pair_data if available (supports multiple timeframes for BB%)
+                candles_by_timeframe = pair_data.get("candles_by_timeframe", {"FIVE_MINUTE": candles})
             else:
                 # Fetch candles first to get reliable price
                 temp_candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
@@ -829,7 +837,9 @@ class MultiBotMonitor:
             )
 
             # Process the signal (pass pre_analyzed_signal if available from batch mode)
-            result = await engine.process_signal(candles, current_price, pre_analyzed_signal=pre_analyzed_signal)
+            result = await engine.process_signal(
+                candles, current_price, pre_analyzed_signal=pre_analyzed_signal, candles_by_timeframe=candles_by_timeframe
+            )
 
             logger.info(f"  Result: {result['action']} - {result['reason']}")
 
@@ -870,9 +880,9 @@ class MultiBotMonitor:
                                 print(f"🔍 Checking bot: {bot.name} (ID: {bot.id})")
 
                                 # Two-tier checking strategy:
-                                # 1. Technical conditions checked every 60s (fast, cheap)
+                                # 1. Technical conditions checked every 45s (fast, cheap) - faster to catch BB% crossings
                                 # 2. AI analysis only at longer intervals (expensive)
-                                technical_check_interval = 60  # Always check technical conditions every 60s
+                                technical_check_interval = 45  # Always check technical conditions every 45s
                                 ai_check_interval = bot.check_interval_seconds or self.interval_seconds
                                 now = datetime.utcnow()
 

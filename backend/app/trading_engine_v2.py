@@ -183,7 +183,11 @@ class StrategyTradingEngine:
         )
 
     async def process_signal(
-        self, candles: List[Dict[str, Any]], current_price: float, pre_analyzed_signal: Optional[Dict[str, Any]] = None
+        self,
+        candles: List[Dict[str, Any]],
+        current_price: float,
+        pre_analyzed_signal: Optional[Dict[str, Any]] = None,
+        candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     ) -> Dict[str, Any]:
         """Delegate to signal_processor module"""
         return await signal_processor.process_signal(
@@ -196,4 +200,5 @@ class StrategyTradingEngine:
             candles,
             current_price,
             pre_analyzed_signal,
+            candles_by_timeframe,
         )

@@ -27,107 +27,110 @@ logger = logging.getLogger(__name__)
 _previous_market_context: Dict[str, Dict[str, Any]] = {}
 
 
-def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], current_price: float) -> Dict[str, Any]:
+def _calculate_market_context_with_indicators(
+    candles: List[Dict[str, Any]],
+    current_price: float,
+    candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None
+) -> Dict[str, Any]:
     """
     Calculate market context with technical indicators for custom sell conditions
 
-    Returns a dict with:
-    - price: current price
-    - rsi: RSI indicator value (rsi_14)
-    - macd: MACD line value
-    - macd_signal: MACD signal line value
-    - macd_histogram: MACD histogram value
+    Args:
+        candles: Default candles (FIVE_MINUTE) for backward compatibility
+        current_price: Current market price
+        candles_by_timeframe: Optional dict of {timeframe: candles} for multi-timeframe support
+
+    Returns a dict with timeframe-prefixed keys like:
+    - THREE_MINUTE_bb_percent, THREE_MINUTE_bb_upper_20_2, etc.
+    - FIVE_MINUTE_bb_percent, FIVE_MINUTE_bb_upper_20_2, etc.
     """
-    if not candles or len(candles) < 20:
-        # Not enough data for indicators (need 20 for BB)
-        return {
-            "price": current_price,
-            "rsi": 50.0,  # Neutral
-            "rsi_14": 50.0,  # Also provide standard key
-            "macd": 0.0,
-            "macd_signal": 0.0,
-            "macd_histogram": 0.0,
-            "macd_12_26_9": 0.0,
-            "macd_signal_12_26_9": 0.0,
-            "macd_histogram_12_26_9": 0.0,
-            "bb_percent": 50.0,  # Neutral
-            "bb_upper_20_2": current_price,
-            "bb_lower_20_2": current_price,
-            "bb_middle_20_2": current_price,
-            "FIVE_MINUTE_bb_upper_20_2": current_price,
-            "FIVE_MINUTE_bb_lower_20_2": current_price,
-            "FIVE_MINUTE_price": current_price,
-        }
+    result = {
+        "price": current_price,
+        "rsi": 50.0,
+        "rsi_14": 50.0,
+        "macd": 0.0,
+        "macd_signal": 0.0,
+        "macd_histogram": 0.0,
+        "macd_12_26_9": 0.0,
+        "macd_signal_12_26_9": 0.0,
+        "macd_histogram_12_26_9": 0.0,
+        "bb_percent": 50.0,
+    }
 
-    # Extract prices from candles
-    prices = [float(c.get("close", c.get("price", 0))) for c in candles]
+    calc = IndicatorCalculator()
 
-    # Calculate indicators using IndicatorCalculator
-    try:
-        calc = IndicatorCalculator()
+    # Build candles_by_timeframe if not provided (backward compatibility)
+    if candles_by_timeframe is None:
+        candles_by_timeframe = {"FIVE_MINUTE": candles} if candles else {}
 
-        # Calculate RSI (14 period)
-        rsi = calc.calculate_rsi(prices, period=14) if len(prices) >= 15 else 50.0
+    # Calculate indicators for each timeframe
+    for timeframe, tf_candles in candles_by_timeframe.items():
+        if not tf_candles or len(tf_candles) < 20:
+            # Not enough data - set neutral defaults for this timeframe
+            result[f"{timeframe}_bb_percent"] = 50.0
+            result[f"{timeframe}_bb_upper_20_2"] = current_price
+            result[f"{timeframe}_bb_lower_20_2"] = current_price
+            result[f"{timeframe}_bb_middle_20_2"] = current_price
+            result[f"{timeframe}_price"] = current_price
+            continue
 
-        # Calculate MACD (12, 26, 9)
-        macd_line, signal_line, histogram = calc.calculate_macd(prices, 12, 26, 9)
+        try:
+            prices = [float(c.get("close", c.get("price", 0))) for c in tf_candles]
 
-        # Calculate Bollinger Bands (20 period, 2 std dev)
-        bb_upper, bb_middle, bb_lower = calc.calculate_bollinger_bands(prices, period=20, std_dev=2.0)
+            # Calculate Bollinger Bands (20 period, 2 std dev)
+            bb_upper, bb_middle, bb_lower = calc.calculate_bollinger_bands(prices, period=20, std_dev=2.0)
 
-        # Calculate BB% = (price - lower) / (upper - lower) * 100
-        if bb_upper and bb_lower and bb_upper != bb_lower:
-            bb_percent = ((current_price - bb_lower) / (bb_upper - bb_lower)) * 100
-        else:
-            bb_percent = 50.0  # Neutral
+            # Calculate BB% = (price - lower) / (upper - lower) * 100
+            if bb_upper and bb_lower and bb_upper != bb_lower:
+                bb_percent = ((current_price - bb_lower) / (bb_upper - bb_lower)) * 100
+            else:
+                bb_percent = 50.0
 
-        # Use defaults if calculation failed
-        if macd_line is None:
-            macd_line, signal_line, histogram = 0.0, 0.0, 0.0
-        if rsi is None:
-            rsi = 50.0
-        if bb_upper is None:
-            bb_upper, bb_middle, bb_lower = current_price, current_price, current_price
+            # Use defaults if calculation failed
+            if bb_upper is None:
+                bb_upper, bb_middle, bb_lower = current_price, current_price, current_price
+                bb_percent = 50.0
 
-        return {
-            "price": current_price,
-            "rsi": rsi,  # For simple access
-            "rsi_14": rsi,  # Standard key format
-            "macd": macd_line,  # For simple access
-            "macd_signal": signal_line,  # For simple access
-            "macd_histogram": histogram,  # For simple access
-            "macd_12_26_9": macd_line,  # Standard key format
-            "macd_signal_12_26_9": signal_line,  # Standard key format
-            "macd_histogram_12_26_9": histogram,  # Standard key format
-            # Bollinger Bands (for PhaseConditionEvaluator compatibility)
-            "bb_percent": bb_percent,
-            "bb_upper_20_2": bb_upper,
-            "bb_lower_20_2": bb_lower,
-            "bb_middle_20_2": bb_middle,
-            "FIVE_MINUTE_bb_upper_20_2": bb_upper,  # Timeframe-prefixed keys
-            "FIVE_MINUTE_bb_lower_20_2": bb_lower,
-            "FIVE_MINUTE_price": current_price,
-        }
-    except Exception as e:
-        logger.warning(f"Error calculating indicators for custom conditions: {e}")
-        return {
-            "price": current_price,
-            "rsi": 50.0,
-            "rsi_14": 50.0,
-            "macd": 0.0,
-            "macd_signal": 0.0,
-            "macd_histogram": 0.0,
-            "macd_12_26_9": 0.0,
-            "macd_signal_12_26_9": 0.0,
-            "macd_histogram_12_26_9": 0.0,
-            "bb_percent": 50.0,
-            "bb_upper_20_2": current_price,
-            "bb_lower_20_2": current_price,
-            "bb_middle_20_2": current_price,
-            "FIVE_MINUTE_bb_upper_20_2": current_price,
-            "FIVE_MINUTE_bb_lower_20_2": current_price,
-            "FIVE_MINUTE_price": current_price,
-        }
+            # Add timeframe-prefixed keys
+            result[f"{timeframe}_bb_percent"] = bb_percent
+            result[f"{timeframe}_bb_upper_20_2"] = bb_upper
+            result[f"{timeframe}_bb_lower_20_2"] = bb_lower
+            result[f"{timeframe}_bb_middle_20_2"] = bb_middle
+            result[f"{timeframe}_price"] = current_price
+
+            # Also set non-prefixed bb_percent from the primary timeframe (first one)
+            if "bb_percent" not in result or result["bb_percent"] == 50.0:
+                result["bb_percent"] = bb_percent
+                result["bb_upper_20_2"] = bb_upper
+                result["bb_lower_20_2"] = bb_lower
+                result["bb_middle_20_2"] = bb_middle
+
+            # Calculate RSI and MACD from this timeframe (use first available)
+            if result["rsi"] == 50.0 and len(prices) >= 15:
+                rsi = calc.calculate_rsi(prices, period=14)
+                if rsi is not None:
+                    result["rsi"] = rsi
+                    result["rsi_14"] = rsi
+
+            if result["macd"] == 0.0:
+                macd_line, signal_line, histogram = calc.calculate_macd(prices, 12, 26, 9)
+                if macd_line is not None:
+                    result["macd"] = macd_line
+                    result["macd_signal"] = signal_line
+                    result["macd_histogram"] = histogram
+                    result["macd_12_26_9"] = macd_line
+                    result["macd_signal_12_26_9"] = signal_line
+                    result["macd_histogram_12_26_9"] = histogram
+
+        except Exception as e:
+            logger.warning(f"Error calculating {timeframe} indicators: {e}")
+            result[f"{timeframe}_bb_percent"] = 50.0
+            result[f"{timeframe}_bb_upper_20_2"] = current_price
+            result[f"{timeframe}_bb_lower_20_2"] = current_price
+            result[f"{timeframe}_bb_middle_20_2"] = current_price
+            result[f"{timeframe}_price"] = current_price
+
+    return result
 
 
 async def process_signal(
@@ -140,6 +143,7 @@ async def process_signal(
     candles: List[Dict[str, Any]],
     current_price: float,
     pre_analyzed_signal: Optional[Dict[str, Any]] = None,
+    candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
     """
     Process market data with bot's strategy
@@ -154,6 +158,7 @@ async def process_signal(
         candles: Recent candle data
         current_price: Current market price
         pre_analyzed_signal: Optional pre-analyzed signal from batch mode (prevents duplicate AI calls)
+        candles_by_timeframe: Optional dict of {timeframe: candles} for multi-timeframe indicator calculation
 
     Returns:
         Dict with action taken and details
@@ -441,7 +446,7 @@ async def process_signal(
     # Check if we should sell
     if position is not None:
         # Calculate market context with indicators for custom sell conditions
-        market_context = _calculate_market_context_with_indicators(candles, current_price)
+        market_context = _calculate_market_context_with_indicators(candles, current_price, candles_by_timeframe)
 
         # Add previous indicators for crossing detection
         cache_key = f"{bot.id}_{product_id}"
