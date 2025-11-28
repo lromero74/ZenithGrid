@@ -31,10 +31,23 @@ _price_cache: Dict[str, tuple] = {}  # {address: (price, timestamp)}
 PRICE_CACHE_TTL = 60  # seconds
 
 # Legacy token address mappings (old token -> current token for pricing)
-# Used when CoinGecko doesn't have pricing for deprecated/migrated tokens
+# NOTE: We intentionally DON'T map deprecated tokens to current prices because
+# the old tokens aren't directly tradeable - they need migration first.
+# Showing the "potential" value after migration would be misleading.
+# Instead, show $0 and let the UI indicate migration is needed.
 LEGACY_TOKEN_PRICE_MAP = {
-    # GALA v1 -> GALA v2 (1:1 migration)
-    "0x15D4c048F83bd7e37d49eA4C83a07267Ec4203dA".lower(): "0xd1d2Eb1B1e90B638588728b4130137D262C87cae".lower(),
+    # GALA v1 is deprecated - don't price it as v2, it needs migration first
+    # "0x15D4c048F83bd7e37d49eA4C83a07267Ec4203dA".lower(): "0xd1d2Eb1B1e90B638588728b4130137D262C87cae".lower(),
+}
+
+# Tokens that require migration (for UI to show migration prompts)
+DEPRECATED_TOKENS = {
+    "0x15D4c048F83bd7e37d49eA4C83a07267Ec4203dA".lower(): {
+        "symbol": "GALA",
+        "new_token": "0xd1d2Eb1B1e90B638588728b4130137D262C87cae",
+        "migration_url": "https://app.gala.games/",
+        "note": "Migrate v1 to v2 before trading",
+    },
 }
 
 # Common ERC20 ABI for balanceOf
@@ -462,7 +475,7 @@ class DexWalletService:
             token_btc = token_usd / Decimal(str(btc_usd_price)) if btc_usd_price > 0 else Decimal("0")
             total_usd += token_usd
 
-            holdings.append({
+            holding = {
                 "asset": token.symbol,
                 "total_balance": float(token.balance),
                 "available": float(token.balance),
@@ -471,7 +484,16 @@ class DexWalletService:
                 "usd_value": float(token_usd),
                 "btc_value": float(token_btc),
                 "percentage": 0,
-            })
+            }
+
+            # Check if this is a deprecated token requiring migration
+            if addr_lower in DEPRECATED_TOKENS:
+                deprecated_info = DEPRECATED_TOKENS[addr_lower]
+                holding["requires_migration"] = True
+                holding["migration_url"] = deprecated_info.get("migration_url", "")
+                holding["migration_note"] = deprecated_info.get("note", "Token requires migration")
+
+            holdings.append(holding)
 
         # Calculate percentages
         for holding in holdings:
