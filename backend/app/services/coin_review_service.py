@@ -16,12 +16,13 @@ from sqlalchemy import select, delete
 
 from app.config import settings
 from app.database import async_session_maker, init_db
-from app.models import Bot, BlacklistedCoin
+from app.models import BlacklistedCoin
+from app.coinbase_unified_client import CoinbaseClient
 
 logger = logging.getLogger(__name__)
 
 # Review history table would be nice but for now we'll just log
-COIN_REVIEW_PROMPT = """You are a cryptocurrency analyst evaluating coins for a BTC-denominated trading bot.
+COIN_REVIEW_PROMPT = """You are a cryptocurrency analyst evaluating coins for a trading bot.
 
 Analyze each coin and categorize it into one of four categories:
 - APPROVED: Legitimate projects with strong fundamentals, active development, clear utility
@@ -42,7 +43,7 @@ Consider factors like:
 - Team credibility and project longevity
 - Tokenomics and unlock schedules
 
-Here are the coins to analyze (all trade against BTC on Coinbase):
+Here are the coins to analyze (available on Coinbase across BTC, USD, and USDC markets):
 {coins_list}
 
 Respond with ONLY valid JSON in this exact format:
@@ -56,57 +57,82 @@ Include ALL coins from the list. Be concise but specific in reasons."""
 
 
 async def get_tracked_coins() -> List[str]:
-    """Get all unique coin symbols tracked by bots."""
-    async with async_session_maker() as db:
-        result = await db.execute(select(Bot))
-        bots = result.scalars().all()
+    """Get all unique coin symbols available on Coinbase across BTC, USD, USDC markets."""
+    client = CoinbaseClient()
+    products = await client.list_products()
 
-        symbols = set()
-        for bot in bots:
-            if bot.product_id and '-BTC' in bot.product_id:
-                symbols.add(bot.product_id.split('-')[0])
-            if bot.product_ids:
-                for pid in bot.product_ids:
-                    if '-BTC' in pid:
-                        symbols.add(pid.split('-')[0])
+    symbols = set()
+    quote_currencies = ["USD", "USDC", "BTC"]
 
-        return sorted(symbols)
+    for product in products:
+        product_id = product.get("product_id", "")
+        status = product.get("status", "")
+
+        # Only include online/active products
+        if status != "online":
+            continue
+
+        # Only include USD, USDC, and BTC pairs
+        for quote in quote_currencies:
+            if product_id.endswith(f"-{quote}"):
+                base = product.get("base_currency_id", "")
+                # Skip BTC itself on BTC market
+                if base != "BTC" or quote != "BTC":
+                    symbols.add(base)
+                break
+
+    return sorted(symbols)
 
 
-async def call_claude_for_review(coins: List[str]) -> Dict[str, Dict[str, str]]:
-    """Call Claude API to analyze coins."""
+async def call_claude_for_review(coins: List[str], batch_size: int = 50) -> Dict[str, Dict[str, str]]:
+    """Call Claude API to analyze coins in batches."""
     api_key = settings.anthropic_api_key
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY not configured")
 
-    coins_list = ", ".join(coins)
-    prompt = COIN_REVIEW_PROMPT.format(coins_list=coins_list)
-
     client = AsyncAnthropic(api_key=api_key)
+    all_analysis = {}
 
-    logger.info(f"Calling Claude API to review {len(coins)} coins...")
+    # Process in batches
+    total_batches = (len(coins) + batch_size - 1) // batch_size
+    logger.info(f"Processing {len(coins)} coins in {total_batches} batches of {batch_size}...")
 
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
-        temperature=0,
-        messages=[{"role": "user", "content": prompt}]
-    )
+    for i in range(0, len(coins), batch_size):
+        batch = coins[i:i + batch_size]
+        batch_num = (i // batch_size) + 1
 
-    response_text = response.content[0].text.strip()
+        coins_list = ", ".join(batch)
+        prompt = COIN_REVIEW_PROMPT.format(coins_list=coins_list)
 
-    # Remove markdown if present
-    if response_text.startswith("```"):
-        response_text = response_text.split("```")[1]
-        if response_text.startswith("json"):
-            response_text = response_text[4:]
-        response_text = response_text.strip()
+        logger.info(f"Batch {batch_num}/{total_batches}: Reviewing {len(batch)} coins...")
 
-    analysis = json.loads(response_text)
+        response = await client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=8192,
+            temperature=0,
+            messages=[{"role": "user", "content": prompt}]
+        )
 
-    logger.info(f"Claude API response - Input: {response.usage.input_tokens}, Output: {response.usage.output_tokens} tokens")
+        response_text = response.content[0].text.strip()
 
-    return analysis
+        # Remove markdown if present
+        if response_text.startswith("```"):
+            response_text = response_text.split("```")[1]
+            if response_text.startswith("json"):
+                response_text = response_text[4:]
+            response_text = response_text.strip()
+
+        batch_analysis = json.loads(response_text)
+        all_analysis.update(batch_analysis)
+
+        logger.info(f"  Batch {batch_num}: Got {len(batch_analysis)} results (tokens: {response.usage.input_tokens} in, {response.usage.output_tokens} out)")
+
+        # Small delay between batches to avoid rate limits
+        if i + batch_size < len(coins):
+            await asyncio.sleep(1)
+
+    logger.info(f"Total analysis: {len(all_analysis)} coins")
+    return all_analysis
 
 
 async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str, int]:
