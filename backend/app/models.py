@@ -37,6 +37,12 @@ class Bot(Base):
     name = Column(String, unique=True, index=True)  # User-defined bot name
     description = Column(Text, nullable=True)  # Optional description
 
+    # Exchange configuration (CEX or DEX)
+    exchange_type = Column(String, default="cex", nullable=False)  # "cex" or "dex"
+    chain_id = Column(Integer, nullable=True)  # Blockchain chain ID (1=Ethereum, 56=BSC, 137=Polygon, 42161=Arbitrum)
+    dex_router = Column(String, nullable=True)  # DEX router address (Uniswap, PancakeSwap, SushiSwap)
+    wallet_address = Column(String, nullable=True)  # MetaMask wallet address for DEX trading
+
     # Strategy configuration
     strategy_type = Column(String, index=True)  # e.g., "macd_dca", "rsi", "bollinger_bands"
     strategy_config = Column(JSON)  # JSON object with strategy-specific parameters
@@ -147,6 +153,12 @@ class Position(Base):
     status = Column(String, default="open")  # open, closed
     opened_at = Column(DateTime, default=datetime.utcnow)
     closed_at = Column(DateTime, nullable=True)
+
+    # Exchange configuration (frozen at position creation)
+    exchange_type = Column(String, default="cex", nullable=False)  # "cex" or "dex"
+    chain_id = Column(Integer, nullable=True)  # Blockchain chain ID (for DEX positions)
+    dex_router = Column(String, nullable=True)  # DEX router address (for DEX positions)
+    wallet_address = Column(String, nullable=True)  # Wallet address used (for DEX positions)
 
     # Strategy config snapshot (frozen at position creation - like 3Commas)
     strategy_config_snapshot = Column(JSON, nullable=True)  # Bot's strategy_config at time of position creation
