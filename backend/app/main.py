@@ -113,7 +113,7 @@ async def run_order_reconciliation_monitor():
     while True:
         try:
             async with async_session_maker() as db:
-                monitor = OrderReconciliationMonitor(db, coinbase_client)
+                monitor = OrderReconciliationMonitor(db, exchange_client)
                 await monitor.check_and_fix_orphaned_positions()
         except Exception as e:
             logger.error(f"Error in order reconciliation monitor loop: {e}")
