@@ -1,15 +1,16 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { botsApi, templatesApi } from '../services/api'
-import { Bot, BotCreate, StrategyDefinition, StrategyParameter } from '../types'
-import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical, FastForward } from 'lucide-react'
+import { Bot, BotCreate } from '../types'
+import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 import PhaseConditionSelector from '../components/PhaseConditionSelector'
 import AIBotLogs from '../components/AIBotLogs'
 import { PnLChart } from '../components/PnLChart'
 import DexConfigSection, { type DexConfig } from '../components/DexConfigSection'
 import axios from 'axios'
+import { useAccount, getChainName } from '../contexts/AccountContext'
 
 interface BotFormData {
   name: string
@@ -41,6 +42,7 @@ interface ValidationWarning {
 function Bots() {
   const queryClient = useQueryClient()
   const location = useLocation()
+  const { selectedAccount } = useAccount()
   const [showModal, setShowModal] = useState(false)
   const [editingBot, setEditingBot] = useState<Bot | null>(null)
   const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
@@ -66,11 +68,16 @@ function Bots() {
     rpc_url: undefined,
   })
 
-  // Fetch all bots
+  // Fetch all bots (filtered by selected account)
   const { data: bots = [], isLoading: botsLoading } = useQuery({
-    queryKey: ['bots'],
+    queryKey: ['bots', selectedAccount?.id],
     queryFn: botsApi.getAll,
     refetchInterval: 5000,
+    select: (data) => {
+      if (!selectedAccount) return data
+      // Filter bots by account_id
+      return data.filter((bot: Bot) => bot.account_id === selectedAccount.id || !bot.account_id)
+    },
   })
 
   // Fetch available strategies
@@ -79,10 +86,15 @@ function Bots() {
     queryFn: botsApi.getStrategies,
   })
 
-  // Fetch portfolio data for percentage calculations
+  // Fetch portfolio data for percentage calculations (account-specific)
   const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio-bots'],
+    queryKey: ['account-portfolio-bots', selectedAccount?.id],
     queryFn: async () => {
+      if (selectedAccount) {
+        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        if (!response.ok) throw new Error('Failed to fetch portfolio')
+        return response.json()
+      }
       const response = await fetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
@@ -599,9 +611,27 @@ function Bots() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Bot Management</h2>
-          <p className="text-slate-400 text-sm mt-1">Create and manage multiple trading bots</p>
+        <div className="flex items-center gap-3">
+          {selectedAccount?.type === 'dex' ? (
+            <Wallet className="w-8 h-8 text-orange-400" />
+          ) : (
+            <Building2 className="w-8 h-8 text-blue-400" />
+          )}
+          <div>
+            <h2 className="text-2xl font-bold">Bot Management</h2>
+            <p className="text-slate-400 text-sm mt-1">
+              {selectedAccount && (
+                <>
+                  <span className="text-slate-300">{selectedAccount.name}</span>
+                  {selectedAccount.type === 'dex' && selectedAccount.chain_id && (
+                    <span className="text-slate-500"> ({getChainName(selectedAccount.chain_id)})</span>
+                  )}
+                  <span> • </span>
+                </>
+              )}
+              Create and manage multiple trading bots
+            </p>
+          </div>
         </div>
         <button
           onClick={handleOpenCreate}

@@ -17,8 +17,11 @@ import {
   Settings,
   Search,
   BarChart2,
-  Minus
+  Minus,
+  Building2,
+  Wallet
 } from 'lucide-react'
+import { useAccount, getChainName } from '../contexts/AccountContext'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import axios from 'axios'
 import type { Position, Trade } from '../types'
@@ -1228,6 +1231,7 @@ function AISentimentIcon({ botId, productId }: { botId: number, productId: strin
 }
 
 export default function Positions() {
+  const { selectedAccount } = useAccount()
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null)
   const [showAddFundsModal, setShowAddFundsModal] = useState(false)
   const [addFundsAmount, setAddFundsAmount] = useState('')
@@ -1261,22 +1265,36 @@ export default function Positions() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const { data: allPositions, refetch: refetchPositions } = useQuery({
-    queryKey: ['positions'],
+    queryKey: ['positions', selectedAccount?.id],
     queryFn: () => positionsApi.getAll(undefined, 100),
     refetchInterval: 5000, // Update every 5 seconds for active deals
+    select: (data) => {
+      if (!selectedAccount) return data
+      // Filter positions by account_id
+      return data.filter((p: Position) => p.account_id === selectedAccount.id || !p.account_id)
+    },
   })
 
-  // Fetch all bots to display bot names
+  // Fetch all bots to display bot names (filtered by account)
   const { data: bots } = useQuery({
-    queryKey: ['bots'],
+    queryKey: ['bots', selectedAccount?.id],
     queryFn: botsApi.getAll,
     refetchInterval: 10000,
+    select: (data) => {
+      if (!selectedAccount) return data
+      return data.filter((bot: any) => bot.account_id === selectedAccount.id || !bot.account_id)
+    },
   })
 
-  // Fetch portfolio for BTC/USD price
+  // Fetch portfolio for BTC/USD price (account-specific)
   const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio'],
+    queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
+      if (selectedAccount) {
+        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        if (!response.ok) throw new Error('Failed to fetch portfolio')
+        return response.json()
+      }
       const response = await fetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
@@ -1611,7 +1629,24 @@ export default function Positions() {
       {/* Active Deals Section */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-3xl font-bold text-white">Active Deals</h2>
+          <div className="flex items-center gap-3">
+            {selectedAccount?.type === 'dex' ? (
+              <Wallet className="w-8 h-8 text-orange-400" />
+            ) : (
+              <Building2 className="w-8 h-8 text-blue-400" />
+            )}
+            <div>
+              <h2 className="text-3xl font-bold text-white">Active Deals</h2>
+              {selectedAccount && (
+                <p className="text-sm text-slate-400">
+                  <span className="text-slate-300">{selectedAccount.name}</span>
+                  {selectedAccount.type === 'dex' && selectedAccount.chain_id && (
+                    <span className="text-slate-500"> ({getChainName(selectedAccount.chain_id)})</span>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-medium">
               {openPositions.length} Active

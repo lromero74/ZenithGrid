@@ -9,11 +9,14 @@ import {
   Bot as BotIcon,
   Target,
   Award,
-  Clock
+  Clock,
+  Building2,
+  Wallet
 } from 'lucide-react'
 import { Bot } from '../types'
 import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
+import { useAccount, getChainName } from '../contexts/AccountContext'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
@@ -22,24 +25,41 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
-  // Fetch all bots
+  const { selectedAccount } = useAccount()
+
+  // Fetch all bots (filtered by account if selected)
   const { data: bots = [] } = useQuery({
-    queryKey: ['bots'],
+    queryKey: ['bots', selectedAccount?.id],
     queryFn: botsApi.getAll,
     refetchInterval: 5000,
+    select: (data) => {
+      if (!selectedAccount) return data
+      // Filter bots by account_id
+      return data.filter((bot: Bot) => bot.account_id === selectedAccount.id || !bot.account_id)
+    },
   })
 
-  // Fetch all positions for metrics
+  // Fetch all positions for metrics (filtered by account)
   const { data: allPositions = [] } = useQuery({
-    queryKey: ['all-positions'],
+    queryKey: ['all-positions', selectedAccount?.id],
     queryFn: () => positionsApi.getAll(undefined, 100),
     refetchInterval: 10000,
+    select: (data) => {
+      if (!selectedAccount) return data
+      // Filter positions by account_id
+      return data.filter((p: any) => p.account_id === selectedAccount.id || !p.account_id)
+    },
   })
 
-  // Fetch portfolio for account value
+  // Fetch portfolio for account value (account-specific)
   const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio'],
+    queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
+      if (selectedAccount) {
+        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        if (!response.ok) throw new Error('Failed to fetch portfolio')
+        return response.json()
+      }
       const response = await fetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
@@ -83,11 +103,25 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-white">Dashboard</h2>
-          <p className="text-slate-400 text-sm mt-1">
-            {activeBots.length} active bot{activeBots.length !== 1 ? 's' : ''} • {openPositions.length} open deal{openPositions.length !== 1 ? 's' : ''}
-          </p>
+        <div className="flex items-center gap-3">
+          {selectedAccount?.type === 'dex' ? (
+            <Wallet className="w-8 h-8 text-orange-400" />
+          ) : (
+            <Building2 className="w-8 h-8 text-blue-400" />
+          )}
+          <div>
+            <h2 className="text-3xl font-bold text-white">Dashboard</h2>
+            <p className="text-slate-400 text-sm mt-1">
+              {selectedAccount && (
+                <span className="text-slate-300">{selectedAccount.name}</span>
+              )}
+              {selectedAccount?.type === 'dex' && selectedAccount.chain_id && (
+                <span className="text-slate-500"> ({getChainName(selectedAccount.chain_id)})</span>
+              )}
+              {selectedAccount && ' • '}
+              {activeBots.length} active bot{activeBots.length !== 1 ? 's' : ''} • {openPositions.length} open deal{openPositions.length !== 1 ? 's' : ''}
+            </p>
+          </div>
         </div>
       </div>
 
