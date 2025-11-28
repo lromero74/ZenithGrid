@@ -53,7 +53,8 @@ TOKEN_ADDRESSES = {
         "UNI": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
         "AAVE": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
         "cUSDC": "0x39AA39c021dfbAE8faC545936693aC917d5E7563",  # Compound USDC
-        "GALA": "0xd1d2Eb1B1e90B638588728b4130137D262C87cae",  # Gala Games
+        "GALA": "0xd1d2Eb1B1e90B638588728b4130137D262C87cae",  # Gala Games (new)
+        "GALAv1": "0x15D4c048F83bd7e37d49eA4C83a07267Ec4203dA",  # Gala Games (old/v1)
         "MANA": "0x0F5D2fB29fb7d3CFeE444a200298f468908cC942",  # Decentraland
     },
     42161: {  # Arbitrum One
