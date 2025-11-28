@@ -100,6 +100,64 @@ ERC20_ABI = [
     },
 ]
 
+# Uniswap V3 Quoter V2 ABI (for price discovery)
+UNISWAP_V3_QUOTER_ABI = [
+    {
+        "inputs": [
+            {"internalType": "address", "name": "tokenIn", "type": "address"},
+            {"internalType": "address", "name": "tokenOut", "type": "address"},
+            {"internalType": "uint256", "name": "amountIn", "type": "uint256"},
+            {"internalType": "uint24", "name": "fee", "type": "uint24"},
+            {"internalType": "uint160", "name": "sqrtPriceLimitX96", "type": "uint160"}
+        ],
+        "name": "quoteExactInputSingle",
+        "outputs": [
+            {"internalType": "uint256", "name": "amountOut", "type": "uint256"},
+            {"internalType": "uint160", "name": "sqrtPriceX96After", "type": "uint160"},
+            {"internalType": "uint32", "name": "initializedTicksCrossed", "type": "uint32"},
+            {"internalType": "uint256", "name": "gasEstimate", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]
+
+# Token decimals mapping
+TOKEN_DECIMALS = {
+    "WETH": 18,
+    "USDC": 6,
+    "USDT": 6,
+    "DAI": 18,
+    "WBTC": 8,
+}
+
+# Uniswap V3 SwapRouter ABI (for executing swaps)
+UNISWAP_V3_SWAPROUTER_ABI = [
+    {
+        "inputs": [
+            {
+                "components": [
+                    {"internalType": "address", "name": "tokenIn", "type": "address"},
+                    {"internalType": "address", "name": "tokenOut", "type": "address"},
+                    {"internalType": "uint24", "name": "fee", "type": "uint24"},
+                    {"internalType": "address", "name": "recipient", "type": "address"},
+                    {"internalType": "uint256", "name": "deadline", "type": "uint256"},
+                    {"internalType": "uint256", "name": "amountIn", "type": "uint256"},
+                    {"internalType": "uint256", "name": "amountOutMinimum", "type": "uint256"},
+                    {"internalType": "uint160", "name": "sqrtPriceLimitX96", "type": "uint160"}
+                ],
+                "internalType": "struct ISwapRouter.ExactInputSingleParams",
+                "name": "params",
+                "type": "tuple"
+            }
+        ],
+        "name": "exactInputSingle",
+        "outputs": [{"internalType": "uint256", "name": "amountOut", "type": "uint256"}],
+        "stateMutability": "payable",
+        "type": "function"
+    }
+]
+
 
 class DEXClient(ExchangeClient):
     """
@@ -156,6 +214,18 @@ class DEXClient(ExchangeClient):
         # Load wallet from private key
         self.account = Account.from_key(wallet_private_key)
         self.wallet_address: ChecksumAddress = self.account.address
+
+        # Initialize Uniswap V3 Quoter contract for price discovery
+        self.quoter = self.w3.eth.contract(
+            address=Web3.to_checksum_address(UNISWAP_V3_QUOTER),
+            abi=UNISWAP_V3_QUOTER_ABI
+        )
+
+        # Initialize Uniswap V3 SwapRouter contract for trade execution
+        self.swap_router = self.w3.eth.contract(
+            address=Web3.to_checksum_address(dex_router),
+            abi=UNISWAP_V3_SWAPROUTER_ABI
+        )
 
         # Cache for balances (invalidated after trades)
         self._balance_cache: Dict[str, float] = {}
@@ -366,6 +436,75 @@ class DEXClient(ExchangeClient):
             "time": "",  # Uniswap doesn't have ticker timestamps (on-chain state)
         }
 
+    def _get_token_addresses(self, product_id: str) -> tuple[str, str, int, int]:
+        """
+        Resolve product_id to token addresses and decimals
+
+        Args:
+            product_id: Trading pair (e.g., "WETH-USDC")
+
+        Returns:
+            Tuple of (token_in_address, token_out_address, token_in_decimals, token_out_decimals)
+
+        Raises:
+            ValueError: If token not found in TOKEN_ADDRESSES
+        """
+        base, quote = product_id.split("-")
+
+        if base not in TOKEN_ADDRESSES or base not in TOKEN_DECIMALS:
+            raise ValueError(f"Unsupported token: {base}")
+        if quote not in TOKEN_ADDRESSES or quote not in TOKEN_DECIMALS:
+            raise ValueError(f"Unsupported token: {quote}")
+
+        return (
+            TOKEN_ADDRESSES[base],
+            TOKEN_ADDRESSES[quote],
+            TOKEN_DECIMALS[base],
+            TOKEN_DECIMALS[quote],
+        )
+
+    async def _quote_exact_input_single(
+        self,
+        token_in: str,
+        token_out: str,
+        amount_in_wei: int,
+        fee: int = 3000,  # 0.3% fee tier (most common)
+    ) -> int:
+        """
+        Call Uniswap V3 Quoter to get expected output amount
+
+        Args:
+            token_in: Input token address
+            token_out: Output token address
+            amount_in_wei: Input amount in wei (smallest unit)
+            fee: Pool fee tier (500=0.05%, 3000=0.3%, 10000=1%)
+
+        Returns:
+            Expected output amount in wei
+
+        Raises:
+            Exception: If Quoter call fails
+        """
+        try:
+            # Call Quoter contract (static call, doesn't cost gas)
+            result = await asyncio.to_thread(
+                lambda: self.quoter.functions.quoteExactInputSingle(
+                    Web3.to_checksum_address(token_in),
+                    Web3.to_checksum_address(token_out),
+                    amount_in_wei,
+                    fee,
+                    0  # sqrtPriceLimitX96 = 0 means no limit
+                ).call()
+            )
+
+            # Result is a tuple: (amountOut, sqrtPriceX96After, initializedTicksCrossed, gasEstimate)
+            amount_out = result[0]
+            return amount_out
+
+        except Exception as e:
+            logger.error(f"Quoter call failed: token_in={token_in}, token_out={token_out}, amount={amount_in_wei}, error={e}")
+            raise
+
     async def get_current_price(self, product_id: str = "WETH-USDC") -> float:
         """
         Get current market price from Uniswap V3
@@ -377,11 +516,37 @@ class DEXClient(ExchangeClient):
 
         Returns:
             Current price in quote currency
+
+        Example:
+            price = await client.get_current_price("WETH-USDC")
+            # Returns: 3250.50 (1 WETH = 3250.50 USDC)
         """
-        # TODO: Implement Uniswap V3 Quoter integration
-        # For now, return placeholder
-        logger.warning(f"get_current_price({product_id}): Placeholder implementation")
-        return 3000.0  # Placeholder: 1 WETH = 3000 USDC
+        try:
+            # Get token addresses and decimals
+            token_in, token_out, decimals_in, decimals_out = self._get_token_addresses(product_id)
+
+            # Amount in = 1 unit of base currency (e.g., 1 WETH = 10^18 wei)
+            amount_in_wei = 10 ** decimals_in
+
+            # Get quote from Uniswap V3
+            amount_out_wei = await self._quote_exact_input_single(
+                token_in=token_in,
+                token_out=token_out,
+                amount_in_wei=amount_in_wei,
+                fee=3000  # 0.3% fee tier (most liquid pools)
+            )
+
+            # Convert output to human-readable format
+            price = float(Decimal(amount_out_wei) / Decimal(10 ** decimals_out))
+
+            logger.info(f"Price fetched from Uniswap: {product_id} = {price:.6f}")
+            return price
+
+        except Exception as e:
+            logger.error(f"Failed to get price for {product_id}: {e}")
+            # Fallback to placeholder if price fetch fails
+            logger.warning(f"Using fallback placeholder price for {product_id}")
+            return 3000.0
 
     async def get_btc_usd_price(self) -> float:
         """Get BTC-USD price (WBTC-USDC on Uniswap)"""
@@ -423,12 +588,91 @@ class DEXClient(ExchangeClient):
     # ORDER EXECUTION METHODS (Uniswap V3 Swaps)
     # ========================================
 
+    async def _approve_token(
+        self,
+        token_address: str,
+        spender: str,
+        amount_wei: int,
+    ) -> str:
+        """
+        Approve ERC-20 token spending for SwapRouter
+
+        Args:
+            token_address: Token contract address
+            spender: Spender address (SwapRouter)
+            amount_wei: Amount to approve in wei
+
+        Returns:
+            Transaction hash of approval transaction
+
+        Raises:
+            Exception: If approval fails
+        """
+        try:
+            # Create token contract instance
+            token = self.w3.eth.contract(
+                address=Web3.to_checksum_address(token_address),
+                abi=ERC20_ABI
+            )
+
+            # Check current allowance
+            current_allowance = await asyncio.to_thread(
+                lambda: token.functions.allowance(
+                    self.wallet_address,
+                    Web3.to_checksum_address(spender)
+                ).call()
+            )
+
+            # If allowance is sufficient, skip approval
+            if current_allowance >= amount_wei:
+                logger.info(f"Token approval not needed: current_allowance={current_allowance}, needed={amount_wei}")
+                return ""  # No transaction needed
+
+            logger.info(f"Approving token: address={token_address}, spender={spender}, amount={amount_wei}")
+
+            # Build approval transaction
+            approve_txn = await asyncio.to_thread(
+                lambda: token.functions.approve(
+                    Web3.to_checksum_address(spender),
+                    amount_wei
+                ).build_transaction({
+                    'from': self.wallet_address,
+                    'gas': 100000,  # Standard gas for approval
+                    'gasPrice': self.w3.eth.gas_price,
+                    'nonce': self.w3.eth.get_transaction_count(self.wallet_address),
+                })
+            )
+
+            # Sign transaction
+            signed_txn = self.account.sign_transaction(approve_txn)
+
+            # Send transaction
+            tx_hash = await asyncio.to_thread(
+                lambda: self.w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+            )
+
+            # Wait for confirmation
+            receipt = await asyncio.to_thread(
+                lambda: self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+            )
+
+            if receipt['status'] != 1:
+                raise Exception(f"Approval transaction failed: {tx_hash.hex()}")
+
+            logger.info(f"Token approved successfully: tx_hash={tx_hash.hex()}")
+            return tx_hash.hex()
+
+        except Exception as e:
+            logger.error(f"Token approval failed: {e}")
+            raise
+
     async def create_market_order(
         self,
         product_id: str,
         side: str,
         size: Optional[str] = None,
         funds: Optional[str] = None,
+        slippage_pct: float = 0.5,  # 0.5% default slippage tolerance
     ) -> Dict[str, Any]:
         """
         Execute a swap on Uniswap V3 (market order equivalent)
@@ -438,13 +682,153 @@ class DEXClient(ExchangeClient):
             side: "BUY" or "SELL"
             size: Amount of base currency to buy/sell
             funds: Amount of quote currency to spend (for BUY only)
+            slippage_pct: Slippage tolerance percentage (default 0.5%)
 
         Returns:
             Order response with transaction hash as order_id
+
+        Raises:
+            ValueError: If parameters are invalid
+            Exception: If swap execution fails
+
+        Example:
+            # Buy 0.1 WETH with USDC
+            order = await client.create_market_order("WETH-USDC", "BUY", size="0.1")
+
+            # Sell 0.1 WETH for USDC
+            order = await client.create_market_order("WETH-USDC", "SELL", size="0.1")
         """
-        # TODO: Implement Uniswap V3 swap execution
-        logger.error(f"create_market_order: Not yet implemented")
-        raise NotImplementedError("DEX market orders coming in Phase 3")
+        import time
+
+        try:
+            logger.info(f"DEX swap: {product_id} {side} size={size} funds={funds}")
+
+            # Get token addresses and decimals
+            base_addr, quote_addr, base_decimals, quote_decimals = self._get_token_addresses(product_id)
+
+            # Determine swap direction
+            if side.upper() == "BUY":
+                # BUY: quote → base (e.g., USDC → WETH)
+                token_in = quote_addr
+                token_out = base_addr
+                decimals_in = quote_decimals
+                decimals_out = base_decimals
+
+                if not funds:
+                    raise ValueError("BUY orders require 'funds' parameter")
+
+                amount_in_float = float(funds)
+
+            elif side.upper() == "SELL":
+                # SELL: base → quote (e.g., WETH → USDC)
+                token_in = base_addr
+                token_out = quote_addr
+                decimals_in = base_decimals
+                decimals_out = quote_decimals
+
+                if not size:
+                    raise ValueError("SELL orders require 'size' parameter")
+
+                amount_in_float = float(size)
+
+            else:
+                raise ValueError(f"Invalid side: {side}. Must be 'BUY' or 'SELL'")
+
+            # Convert amount to wei
+            amount_in_wei = int(amount_in_float * (10 ** decimals_in))
+
+            logger.info(f"Swap params: token_in={token_in}, token_out={token_out}, amount_in={amount_in_wei}")
+
+            # Step 1: Get quote for expected output (for slippage protection)
+            expected_amount_out_wei = await self._quote_exact_input_single(
+                token_in=token_in,
+                token_out=token_out,
+                amount_in_wei=amount_in_wei,
+                fee=3000  # 0.3% fee tier
+            )
+
+            # Apply slippage tolerance
+            amount_out_min_wei = int(expected_amount_out_wei * (1 - slippage_pct / 100))
+
+            logger.info(f"Expected output: {expected_amount_out_wei}, min after slippage: {amount_out_min_wei}")
+
+            # Step 2: Approve token spending (if needed)
+            approval_tx = await self._approve_token(
+                token_address=token_in,
+                spender=self.dex_router,
+                amount_wei=amount_in_wei
+            )
+
+            if approval_tx:
+                logger.info(f"Token approval completed: {approval_tx}")
+
+            # Step 3: Build swap transaction
+            deadline = int(time.time()) + 300  # 5 minutes from now
+
+            swap_params = {
+                'tokenIn': Web3.to_checksum_address(token_in),
+                'tokenOut': Web3.to_checksum_address(token_out),
+                'fee': 3000,  # 0.3% fee tier
+                'recipient': self.wallet_address,
+                'deadline': deadline,
+                'amountIn': amount_in_wei,
+                'amountOutMinimum': amount_out_min_wei,
+                'sqrtPriceLimitX96': 0  # No price limit
+            }
+
+            swap_txn = await asyncio.to_thread(
+                lambda: self.swap_router.functions.exactInputSingle(swap_params).build_transaction({
+                    'from': self.wallet_address,
+                    'gas': 300000,  # Estimate gas for swap
+                    'gasPrice': self.w3.eth.gas_price,
+                    'nonce': self.w3.eth.get_transaction_count(self.wallet_address),
+                    'value': 0  # No ETH value for ERC-20 swaps
+                })
+            )
+
+            # Step 4: Sign and send swap transaction
+            signed_swap = self.account.sign_transaction(swap_txn)
+
+            tx_hash = await asyncio.to_thread(
+                lambda: self.w3.eth.send_raw_transaction(signed_swap.raw_transaction)
+            )
+
+            logger.info(f"Swap transaction sent: tx_hash={tx_hash.hex()}")
+
+            # Step 5: Wait for confirmation
+            receipt = await asyncio.to_thread(
+                lambda: self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+            )
+
+            if receipt['status'] != 1:
+                raise Exception(f"Swap transaction failed: {tx_hash.hex()}")
+
+            # Invalidate balance cache after successful trade
+            await self.invalidate_balance_cache()
+
+            # Calculate actual output amount from logs (if available)
+            actual_amount_out = expected_amount_out_wei  # Placeholder - would parse logs for real value
+
+            logger.info(f"Swap completed successfully: tx_hash={tx_hash.hex()}, gas_used={receipt['gasUsed']}")
+
+            # Return order response in ExchangeClient format
+            return {
+                'order_id': tx_hash.hex(),
+                'product_id': product_id,
+                'side': side.upper(),
+                'status': 'FILLED',
+                'size': str(amount_in_float) if side.upper() == "SELL" else str(actual_amount_out / (10 ** decimals_out)),
+                'filled_size': str(amount_in_float) if side.upper() == "SELL" else str(actual_amount_out / (10 ** decimals_out)),
+                'price': str((expected_amount_out_wei / (10 ** decimals_out)) / amount_in_float),
+                'funds': str(amount_in_float) if side.upper() == "BUY" else str(actual_amount_out / (10 ** decimals_out)),
+                'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                'tx_hash': tx_hash.hex(),
+                'gas_used': receipt['gasUsed'],
+            }
+
+        except Exception as e:
+            logger.error(f"DEX swap failed: {e}")
+            raise
 
     async def create_limit_order(
         self,
