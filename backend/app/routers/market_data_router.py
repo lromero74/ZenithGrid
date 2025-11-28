@@ -152,7 +152,7 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
     try:
         products = await coinbase.list_products()
 
-        # Filter to only USD and BTC pairs that are tradeable
+        # Filter to only USD, USDC, and BTC pairs that are tradeable
         filtered_products = []
         for product in products:
             product_id = product.get("product_id", "")
@@ -162,8 +162,8 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
             if status != "online":
                 continue
 
-            # Only include USD and BTC pairs
-            if product_id.endswith("-USD") or product_id.endswith("-BTC"):
+            # Only include USD, USDC, and BTC pairs
+            if product_id.endswith("-USD") or product_id.endswith("-USDC") or product_id.endswith("-BTC"):
                 base_currency = product.get("base_currency_id", "")
                 quote_currency = product.get("quote_currency_id", "")
 
@@ -182,13 +182,76 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
                 return "0"
             elif p["quote_currency"] == "USD":
                 return "1_" + p["product_id"]
-            else:  # BTC pairs
+            elif p["quote_currency"] == "USDC":
                 return "2_" + p["product_id"]
+            else:  # BTC pairs
+                return "3_" + p["product_id"]
 
         filtered_products.sort(key=sort_key)
 
         return {"products": filtered_products, "count": len(filtered_products)}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/coins")
+async def get_unique_coins(coinbase: CoinbaseClient = Depends(get_coinbase)):
+    """
+    Get unique coins (base currencies) available across all markets.
+
+    Returns coins that trade on USD, USDC, or BTC markets.
+    Each coin appears once regardless of how many markets it trades on.
+    """
+    try:
+        products = await coinbase.list_products()
+
+        # Track unique coins and which markets they trade on
+        coins: dict[str, dict] = {}
+
+        for product in products:
+            product_id = product.get("product_id", "")
+            status = product.get("status", "")
+
+            # Only include online/active products
+            if status != "online":
+                continue
+
+            # Only include USD, USDC, and BTC pairs
+            quote_currencies = ["USD", "USDC", "BTC"]
+            quote = None
+            for q in quote_currencies:
+                if product_id.endswith(f"-{q}"):
+                    quote = q
+                    break
+
+            if not quote:
+                continue
+
+            base_currency = product.get("base_currency_id", "")
+
+            # Skip BTC itself (it's a quote currency, not tradeable as base on BTC market)
+            if base_currency == "BTC" and quote == "BTC":
+                continue
+
+            if base_currency not in coins:
+                coins[base_currency] = {
+                    "symbol": base_currency,
+                    "markets": [],
+                    "product_ids": [],
+                }
+
+            coins[base_currency]["markets"].append(quote)
+            coins[base_currency]["product_ids"].append(product_id)
+
+        # Convert to list and sort alphabetically
+        coin_list = sorted(coins.values(), key=lambda c: c["symbol"])
+
+        return {
+            "coins": coin_list,
+            "count": len(coin_list),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching unique coins: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -24,7 +24,7 @@ import {
   ChevronDown,
   Coins,
 } from 'lucide-react'
-import { blacklistApi, BlacklistEntry, botsApi, CategorySettings } from '../services/api'
+import { blacklistApi, BlacklistEntry, marketDataApi, CategorySettings } from '../services/api'
 
 // Category display config
 const CATEGORY_CONFIG: Record<string, { color: string; bgColor: string; borderColor: string; label: string; description: string }> = {
@@ -36,9 +36,16 @@ const CATEGORY_CONFIG: Record<string, { color: string; bgColor: string; borderCo
 
 const CATEGORIES = ['APPROVED', 'BORDERLINE', 'QUESTIONABLE', 'BLACKLISTED']
 
+// Coin with market info
+interface CoinInfo {
+  symbol: string
+  markets: string[]
+  product_ids: string[]
+}
+
 export function BlacklistManager() {
   const [blacklistedCoins, setBlacklistedCoins] = useState<BlacklistEntry[]>([])
-  const [allTrackedSymbols, setAllTrackedSymbols] = useState<string[]>([])
+  const [allCoins, setAllCoins] = useState<CoinInfo[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingSymbol, setSavingSymbol] = useState<string | null>(null)
@@ -67,27 +74,15 @@ export function BlacklistManager() {
     setError(null)
 
     try {
-      const [blacklist, bots, categories] = await Promise.all([
+      const [blacklist, coinsData, categories] = await Promise.all([
         blacklistApi.getAll(),
-        botsApi.getAll(),
+        marketDataApi.getCoins(),
         blacklistApi.getCategories(),
       ])
 
       setBlacklistedCoins(blacklist)
       setCategorySettings(categories)
-
-      // Extract unique symbols from all bots' product_ids
-      const symbols = new Set<string>()
-      for (const bot of bots) {
-        const productIds = bot.product_ids || []
-        if (bot.product_id) productIds.push(bot.product_id)
-
-        for (const productId of productIds) {
-          const base = productId.split('-')[0]
-          symbols.add(base)
-        }
-      }
-      setAllTrackedSymbols(Array.from(symbols).sort())
+      setAllCoins(coinsData.coins)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
     } finally {
@@ -127,20 +122,21 @@ export function BlacklistManager() {
   const coinList = useMemo(() => {
     const blacklistMap = new Map(blacklistedCoins.map(c => [c.symbol, c]))
 
-    return allTrackedSymbols.map(symbol => {
-      const entry = blacklistMap.get(symbol)
+    return allCoins.map(coin => {
+      const entry = blacklistMap.get(coin.symbol)
       const category = entry ? getCategoryFromReason(entry.reason) : 'APPROVED'
       const reasonText = entry ? getReasonText(entry.reason) : ''
 
       return {
-        symbol,
+        symbol: coin.symbol,
+        markets: coin.markets,
         category,
         reasonText,
         id: entry?.id,
         created_at: entry?.created_at,
       }
     })
-  }, [allTrackedSymbols, blacklistedCoins])
+  }, [allCoins, blacklistedCoins])
 
   // Filtered coin list
   const filteredCoins = useMemo(() => {
@@ -431,8 +427,9 @@ export function BlacklistManager() {
         </div>
 
         {/* Table Header */}
-        <div className="grid grid-cols-[1fr_140px_2fr] gap-4 px-4 py-2 bg-slate-900 border-b border-slate-700 text-xs font-medium text-slate-400 uppercase">
+        <div className="grid grid-cols-[100px_80px_130px_1fr] gap-4 px-4 py-2 bg-slate-900 border-b border-slate-700 text-xs font-medium text-slate-400 uppercase">
           <span>Symbol</span>
+          <span>Markets</span>
           <span>Category</span>
           <span>Reason</span>
         </div>
@@ -452,15 +449,31 @@ export function BlacklistManager() {
               return (
                 <div
                   key={coin.symbol}
-                  className={`grid grid-cols-[1fr_140px_2fr] gap-4 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 items-center ${
+                  className={`grid grid-cols-[100px_80px_130px_1fr] gap-4 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 items-center ${
                     isSaving ? 'opacity-50' : ''
                   }`}
                 >
                   {/* Symbol */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center">
                     <span className={`font-mono font-medium ${config.color}`}>
                       {coin.symbol}
                     </span>
+                  </div>
+
+                  {/* Markets */}
+                  <div className="flex flex-wrap gap-1">
+                    {coin.markets.map((market) => (
+                      <span
+                        key={market}
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          market === 'BTC' ? 'bg-orange-600/20 text-orange-400' :
+                          market === 'USD' ? 'bg-green-600/20 text-green-400' :
+                          'bg-blue-600/20 text-blue-400'
+                        }`}
+                      >
+                        {market}
+                      </span>
+                    ))}
                   </div>
 
                   {/* Category Dropdown */}

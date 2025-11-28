@@ -54,6 +54,8 @@ export const signalsApi = {
 export const marketDataApi = {
   getRecent: (hours = 24) =>
     api.get<MarketData[]>('/market-data', { params: { hours } }).then((res) => res.data),
+  getCoins: () =>
+    api.get<{ coins: { symbol: string; markets: string[]; product_ids: string[] }[]; count: number }>('/coins').then((res) => res.data),
 };
 
 export const settingsApi = {
