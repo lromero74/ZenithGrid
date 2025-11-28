@@ -427,20 +427,28 @@ async def should_sell(
     if profit_pct < min_profit:
         return False, f"Profit {profit_pct:.2f}% below minimum {min_profit}%"
 
-    # RULE 3: Check custom technical sell conditions (if configured)
-    custom_conditions = config.get("custom_sell_conditions")
-    if custom_conditions and market_context:
-        from app.conditions import ConditionEvaluator
+    # RULE 3: Check take profit conditions (if configured) - uses PhaseConditionEvaluator
+    # Supports conditions like: BB% crossing below 90, RSI crossing below 70, etc.
+    take_profit_conditions = config.get("take_profit_conditions", [])
+    take_profit_logic = config.get("take_profit_logic", "or")
+
+    if take_profit_conditions and market_context:
+        from app.phase_conditions import PhaseConditionEvaluator
+        from app.indicator_calculator import IndicatorCalculator
 
         try:
-            evaluator = ConditionEvaluator(custom_conditions)
-            if evaluator.evaluate(market_context):
-                # Custom condition triggered - sell with profit protection
-                return True, f"Custom technical condition triggered at {profit_pct:.2f}% profit"
+            evaluator = PhaseConditionEvaluator(IndicatorCalculator())
+            # Get previous indicators for crossing detection
+            previous_indicators = market_context.get("_previous")
+            if evaluator.evaluate_phase_conditions(
+                take_profit_conditions, take_profit_logic, market_context, previous_indicators
+            ):
+                # Technical condition triggered - sell with profit protection
+                return True, f"Take profit condition triggered at {profit_pct:.2f}% profit"
         except Exception as e:
             # Log error but don't block trading if condition evaluation fails
             import logging
-            logging.getLogger(__name__).warning(f"Error evaluating custom sell conditions: {e}")
+            logging.getLogger(__name__).warning(f"Error evaluating take profit conditions: {e}")
 
     # RULE 4: AI decides when to sell (with profit protection from rules 1 & 2)
     if signal_data.get("signal_type") == "sell":

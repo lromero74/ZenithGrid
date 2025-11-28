@@ -23,6 +23,9 @@ from app.indicator_calculator import IndicatorCalculator
 
 logger = logging.getLogger(__name__)
 
+# Cache previous market context for crossing detection (bot_id_product_id -> context)
+_previous_market_context: Dict[str, Dict[str, Any]] = {}
+
 
 def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], current_price: float) -> Dict[str, Any]:
     """
@@ -35,8 +38,8 @@ def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], cur
     - macd_signal: MACD signal line value
     - macd_histogram: MACD histogram value
     """
-    if not candles or len(candles) < 14:
-        # Not enough data for indicators
+    if not candles or len(candles) < 20:
+        # Not enough data for indicators (need 20 for BB)
         return {
             "price": current_price,
             "rsi": 50.0,  # Neutral
@@ -47,6 +50,13 @@ def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], cur
             "macd_12_26_9": 0.0,
             "macd_signal_12_26_9": 0.0,
             "macd_histogram_12_26_9": 0.0,
+            "bb_percent": 50.0,  # Neutral
+            "bb_upper_20_2": current_price,
+            "bb_lower_20_2": current_price,
+            "bb_middle_20_2": current_price,
+            "FIVE_MINUTE_bb_upper_20_2": current_price,
+            "FIVE_MINUTE_bb_lower_20_2": current_price,
+            "FIVE_MINUTE_price": current_price,
         }
 
     # Extract prices from candles
@@ -62,11 +72,22 @@ def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], cur
         # Calculate MACD (12, 26, 9)
         macd_line, signal_line, histogram = calc.calculate_macd(prices, 12, 26, 9)
 
+        # Calculate Bollinger Bands (20 period, 2 std dev)
+        bb_upper, bb_middle, bb_lower = calc.calculate_bollinger_bands(prices, period=20, std_dev=2.0)
+
+        # Calculate BB% = (price - lower) / (upper - lower) * 100
+        if bb_upper and bb_lower and bb_upper != bb_lower:
+            bb_percent = ((current_price - bb_lower) / (bb_upper - bb_lower)) * 100
+        else:
+            bb_percent = 50.0  # Neutral
+
         # Use defaults if calculation failed
         if macd_line is None:
             macd_line, signal_line, histogram = 0.0, 0.0, 0.0
         if rsi is None:
             rsi = 50.0
+        if bb_upper is None:
+            bb_upper, bb_middle, bb_lower = current_price, current_price, current_price
 
         return {
             "price": current_price,
@@ -78,6 +99,14 @@ def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], cur
             "macd_12_26_9": macd_line,  # Standard key format
             "macd_signal_12_26_9": signal_line,  # Standard key format
             "macd_histogram_12_26_9": histogram,  # Standard key format
+            # Bollinger Bands (for PhaseConditionEvaluator compatibility)
+            "bb_percent": bb_percent,
+            "bb_upper_20_2": bb_upper,
+            "bb_lower_20_2": bb_lower,
+            "bb_middle_20_2": bb_middle,
+            "FIVE_MINUTE_bb_upper_20_2": bb_upper,  # Timeframe-prefixed keys
+            "FIVE_MINUTE_bb_lower_20_2": bb_lower,
+            "FIVE_MINUTE_price": current_price,
         }
     except Exception as e:
         logger.warning(f"Error calculating indicators for custom conditions: {e}")
@@ -91,6 +120,13 @@ def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], cur
             "macd_12_26_9": 0.0,
             "macd_signal_12_26_9": 0.0,
             "macd_histogram_12_26_9": 0.0,
+            "bb_percent": 50.0,
+            "bb_upper_20_2": current_price,
+            "bb_lower_20_2": current_price,
+            "bb_middle_20_2": current_price,
+            "FIVE_MINUTE_bb_upper_20_2": current_price,
+            "FIVE_MINUTE_bb_lower_20_2": current_price,
+            "FIVE_MINUTE_price": current_price,
         }
 
 
@@ -406,6 +442,13 @@ async def process_signal(
     if position is not None:
         # Calculate market context with indicators for custom sell conditions
         market_context = _calculate_market_context_with_indicators(candles, current_price)
+
+        # Add previous indicators for crossing detection
+        cache_key = f"{bot.id}_{product_id}"
+        previous_context = _previous_market_context.get(cache_key)
+        market_context["_previous"] = previous_context
+        # Update cache with current context (copy to avoid mutation issues)
+        _previous_market_context[cache_key] = {k: v for k, v in market_context.items() if k != "_previous"}
 
         should_sell, sell_reason = await strategy.should_sell(signal_data, position, current_price, market_context)
 
