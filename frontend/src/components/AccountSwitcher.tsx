@@ -10,7 +10,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Plus, Building2, Wallet, Check, Settings, ExternalLink } from 'lucide-react'
+import { ChevronDown, Plus, Building2, Wallet, Check, Settings } from 'lucide-react'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 
 interface AccountSwitcherProps {

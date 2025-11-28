@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
+import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Positions from './pages/Positions'
@@ -11,11 +11,13 @@ import Portfolio from './pages/Portfolio'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History } from 'lucide-react'
 import { positionsApi } from './services/api'
 import { useEffect, useState } from 'react'
-import { AccountProvider } from './contexts/AccountContext'
 import { AccountSwitcher } from './components/AccountSwitcher'
+import { AddAccountModal } from './components/AddAccountModal'
 
 function App() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false)
 
   // Track last seen count of history items (closed + failed)
   const [lastSeenHistoryCount, setLastSeenHistoryCount] = useState<number>(() => {
@@ -94,7 +96,10 @@ function App() {
             </div>
             <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
               {/* Account Switcher */}
-              <AccountSwitcher />
+              <AccountSwitcher
+                onAddAccount={() => setShowAddAccountModal(true)}
+                onManageAccounts={() => navigate('/settings')}
+              />
 
               <div className="text-right hidden sm:block">
                 <p className="text-xs text-slate-400">BTC Price</p>
@@ -252,6 +257,12 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      {/* Add Account Modal */}
+      <AddAccountModal
+        isOpen={showAddAccountModal}
+        onClose={() => setShowAddAccountModal(false)}
+      />
     </div>
   )
 }

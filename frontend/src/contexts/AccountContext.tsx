@@ -6,7 +6,7 @@
  * with all pages filtering data by the selected account.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 // =============================================================================

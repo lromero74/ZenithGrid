@@ -3,8 +3,11 @@ import { settingsApi } from '../services/api'
 import { useState, useEffect } from 'react'
 import { Save, AlertCircle, CheckCircle, Key, TestTube, Trash2, Info, Eye, EyeOff } from 'lucide-react'
 import type { Settings as SettingsType } from '../types'
+import { AccountsManagement } from '../components/AccountsManagement'
+import { AddAccountModal } from '../components/AddAccountModal'
 
 export default function Settings() {
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [formData, setFormData] = useState<SettingsType | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
@@ -96,7 +99,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold">Settings</h2>
         {saveStatus === 'success' && (
@@ -112,6 +115,9 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {/* Accounts Management Section */}
+      <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Coinbase API Credentials */}
@@ -398,6 +404,12 @@ export default function Settings() {
           </button>
         </div>
       </form>
+
+      {/* Add Account Modal */}
+      <AddAccountModal
+        isOpen={showAddAccountModal}
+        onClose={() => setShowAddAccountModal(false)}
+      />
     </div>
   )
 }
