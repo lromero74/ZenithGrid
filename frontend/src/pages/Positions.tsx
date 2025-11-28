@@ -1948,14 +1948,24 @@ export default function Positions() {
                                 <AlertCircle size={14} className="text-red-400" />
                               </div>
                             )}
-                            {/* Blacklist Warning Badge - different colors by category */}
+                            {/* Coin Status Badge - different colors by category */}
                             {position.is_blacklisted && (() => {
                               const reason = position.blacklist_reason || '';
+                              const isApproved = reason.startsWith('[APPROVED]');
                               const isBorderline = reason.startsWith('[BORDERLINE]');
                               const isQuestionable = reason.startsWith('[QUESTIONABLE]');
-                              const displayReason = reason.replace(/^\[(BORDERLINE|QUESTIONABLE)\]\s*/, '');
+                              const displayReason = reason.replace(/^\[(APPROVED|BORDERLINE|QUESTIONABLE)\]\s*/, '');
 
-                              if (isBorderline) {
+                              if (isApproved) {
+                                return (
+                                  <span
+                                    className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-600/20 border border-green-600/50 text-green-400 cursor-help"
+                                    title={displayReason || 'Approved coin'}
+                                  >
+                                    APPROVED
+                                  </span>
+                                );
+                              } else if (isBorderline) {
                                 return (
                                   <span
                                     className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-600/20 border border-yellow-600/50 text-yellow-400 cursor-help"

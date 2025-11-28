@@ -346,10 +346,20 @@ async def process_signal(
                 blacklisted_entry = blacklist_result.scalars().first()
 
                 if blacklisted_entry:
-                    should_buy = False
-                    buy_reason = f"{base_symbol} is blacklisted: {blacklisted_entry.reason or 'No reason provided'}"
-                    print(f"🔍 Should buy: FALSE - {buy_reason}")
-                    logger.info(f"  🚫 BLACKLISTED: {buy_reason}")
+                    # Check if it's an APPROVED coin (not actually blocked)
+                    reason = blacklisted_entry.reason or ''
+                    if reason.startswith('[APPROVED]'):
+                        # Approved coins are allowed to trade
+                        print(f"🔍 {base_symbol} is APPROVED: {reason}")
+                        logger.info(f"  ✅ APPROVED: {base_symbol}")
+                        print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
+                        should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
+                        print(f"🔍 Should buy result: {should_buy}, amount: {quote_amount:.8f}, reason: {buy_reason}")
+                    else:
+                        should_buy = False
+                        buy_reason = f"{base_symbol} is blacklisted: {reason or 'No reason provided'}"
+                        print(f"🔍 Should buy: FALSE - {buy_reason}")
+                        logger.info(f"  🚫 BLACKLISTED: {buy_reason}")
                 else:
                     print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
                     should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
