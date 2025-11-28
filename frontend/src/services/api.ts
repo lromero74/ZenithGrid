@@ -184,7 +184,7 @@ export const blacklistApi = {
     api.get<CategorySettings>('/blacklist/categories').then((res) => res.data),
   updateCategories: (allowedCategories: string[]) =>
     api.put<CategorySettings>('/blacklist/categories', { allowed_categories: allowedCategories }).then((res) => res.data),
-  // AI review
+  // AI review (uses longer timeout as it processes 300+ coins in batches)
   triggerAIReview: () =>
-    api.post<{ status: string; categories: Record<string, number> }>('/blacklist/ai-review').then((res) => res.data),
+    api.post<{ status: string; categories: Record<string, number> }>('/blacklist/ai-review', {}, { timeout: 180000 }).then((res) => res.data),
 };
