@@ -873,8 +873,8 @@ async def _get_dex_portfolio(account: Account, db: AsyncSession) -> dict:
     if portfolio.error:
         logger.warning(f"Error fetching DEX portfolio: {portfolio.error}")
 
-    # Format for API response
-    formatted = dex_wallet_service.format_portfolio_for_api(
+    # Format for API response (includes CoinGecko price fetching)
+    formatted = await dex_wallet_service.format_portfolio_for_api(
         portfolio,
         eth_usd_price=eth_usd_price,
         btc_usd_price=btc_usd_price,

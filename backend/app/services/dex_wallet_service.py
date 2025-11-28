@@ -3,6 +3,7 @@ DEX Wallet Service
 
 Fetches wallet balances and token holdings from blockchain networks.
 Supports Ethereum mainnet and common L2s (Arbitrum, Polygon, Base).
+Uses CoinGecko API for real-time token pricing.
 """
 
 import asyncio
@@ -11,10 +12,23 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, List, Optional
 
+import aiohttp
 from web3 import Web3
 from web3.exceptions import Web3Exception
 
 logger = logging.getLogger(__name__)
+
+# CoinGecko chain ID mapping
+COINGECKO_PLATFORM_IDS = {
+    1: "ethereum",
+    42161: "arbitrum-one",
+    137: "polygon-pos",
+    8453: "base",
+}
+
+# Cache for token prices (simple in-memory cache)
+_price_cache: Dict[str, tuple] = {}  # {address: (price, timestamp)}
+PRICE_CACHE_TTL = 60  # seconds
 
 # Common ERC20 ABI for balanceOf
 ERC20_ABI = [
@@ -122,6 +136,75 @@ class DexWalletService:
 
     def __init__(self):
         self._web3_cache: Dict[int, Web3] = {}
+
+    async def fetch_token_prices(
+        self,
+        chain_id: int,
+        token_addresses: List[str],
+    ) -> Dict[str, float]:
+        """
+        Fetch USD prices for tokens from CoinGecko API.
+
+        Args:
+            chain_id: Blockchain chain ID
+            token_addresses: List of token contract addresses
+
+        Returns:
+            Dict mapping lowercase token address to USD price
+        """
+        import time
+
+        if not token_addresses:
+            return {}
+
+        platform_id = COINGECKO_PLATFORM_IDS.get(chain_id)
+        if not platform_id:
+            logger.warning(f"No CoinGecko platform ID for chain {chain_id}")
+            return {}
+
+        # Check cache first
+        now = time.time()
+        prices = {}
+        addresses_to_fetch = []
+
+        for addr in token_addresses:
+            addr_lower = addr.lower()
+            if addr_lower in _price_cache:
+                cached_price, cached_time = _price_cache[addr_lower]
+                if now - cached_time < PRICE_CACHE_TTL:
+                    prices[addr_lower] = cached_price
+                    continue
+            addresses_to_fetch.append(addr)
+
+        if not addresses_to_fetch:
+            return prices
+
+        # Fetch from CoinGecko
+        addresses_str = ",".join(addresses_to_fetch)
+        url = (
+            f"https://api.coingecko.com/api/v3/simple/token_price/{platform_id}"
+            f"?contract_addresses={addresses_str}&vs_currencies=usd"
+        )
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        for addr, price_data in data.items():
+                            addr_lower = addr.lower()
+                            usd_price = price_data.get("usd", 0)
+                            prices[addr_lower] = usd_price
+                            _price_cache[addr_lower] = (usd_price, now)
+                            logger.debug(f"Fetched price for {addr}: ${usd_price}")
+                    elif response.status == 429:
+                        logger.warning("CoinGecko rate limit hit, using cached/fallback prices")
+                    else:
+                        logger.warning(f"CoinGecko API error: {response.status}")
+        except Exception as e:
+            logger.error(f"Error fetching token prices: {e}")
+
+        return prices
 
     def _get_web3(self, chain_id: int, rpc_url: Optional[str] = None) -> Web3:
         """Get or create Web3 instance for chain"""
@@ -277,7 +360,7 @@ class DexWalletService:
                 error=str(e),
             )
 
-    def format_portfolio_for_api(
+    async def format_portfolio_for_api(
         self,
         portfolio: WalletPortfolio,
         eth_usd_price: float = 0,
@@ -285,6 +368,7 @@ class DexWalletService:
     ) -> dict:
         """
         Format portfolio for API response (matching CEX portfolio format).
+        Fetches real-time token prices from CoinGecko.
 
         Args:
             portfolio: WalletPortfolio from get_wallet_portfolio
@@ -296,6 +380,10 @@ class DexWalletService:
         """
         holdings = []
         total_usd = Decimal("0")
+
+        # Fetch token prices from CoinGecko
+        token_addresses = [token.address for token in portfolio.token_balances]
+        token_prices = await self.fetch_token_prices(portfolio.chain_id, token_addresses)
 
         # Add native token
         if portfolio.native_balance > 0:
@@ -314,18 +402,30 @@ class DexWalletService:
                 "percentage": 0,  # Will be calculated later
             })
 
-        # Add token balances
+        # Add token balances with real prices
         for token in portfolio.token_balances:
-            # Price known tokens, show others with $0 value
-            if token.symbol in ["USDC", "USDT", "DAI", "cUSDC"]:
-                token_usd = token.balance  # ~1:1 for stablecoins (cUSDC is approximate)
-            elif token.symbol in ["WETH"]:
+            # Get price from CoinGecko (by address)
+            price_usd = token_prices.get(token.address.lower(), 0)
+
+            if price_usd > 0:
+                # Use CoinGecko price
+                token_usd = token.balance * Decimal(str(price_usd))
+            elif token.symbol in ["USDC", "USDT", "DAI"]:
+                # Fallback for stablecoins if CoinGecko fails
+                token_usd = token.balance
+                price_usd = 1.0
+            elif token.symbol == "WETH":
+                # Fallback for WETH
                 token_usd = token.balance * Decimal(str(eth_usd_price))
-            elif token.symbol in ["WBTC"]:
+                price_usd = eth_usd_price
+            elif token.symbol == "WBTC":
+                # Fallback for WBTC
                 token_usd = token.balance * Decimal(str(btc_usd_price))
+                price_usd = btc_usd_price
             else:
-                # Can't price this token - show with $0 value
+                # No price available
                 token_usd = Decimal("0")
+                price_usd = 0
 
             token_btc = token_usd / Decimal(str(btc_usd_price)) if btc_usd_price > 0 else Decimal("0")
             total_usd += token_usd
@@ -335,7 +435,7 @@ class DexWalletService:
                 "total_balance": float(token.balance),
                 "available": float(token.balance),
                 "hold": 0,
-                "current_price_usd": float(token_usd / token.balance) if token.balance > 0 and token_usd > 0 else 0,
+                "current_price_usd": price_usd,
                 "usd_value": float(token_usd),
                 "btc_value": float(token_btc),
                 "percentage": 0,
