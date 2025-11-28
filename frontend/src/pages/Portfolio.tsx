@@ -434,8 +434,8 @@ function Portfolio() {
               </p>
             </div>
 
-            {/* BTC Balance Breakdown */}
-            {portfolio.balance_breakdown && (
+            {/* BTC Balance Breakdown (CEX only) */}
+            {portfolio.balance_breakdown?.btc && (
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
                 <div className="flex items-center gap-2 mb-4">
                   <Bitcoin size={20} className="text-orange-400" />
@@ -457,6 +457,34 @@ function Portfolio() {
                   <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
                     <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
                     <span className="text-green-400 font-mono text-lg font-bold">{formatCrypto(portfolio.balance_breakdown.btc.free)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ETH Balance Breakdown (DEX only) */}
+            {portfolio.balance_breakdown?.eth && (
+              <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div className="flex items-center gap-2 mb-4">
+                  <Wallet size={20} className="text-blue-400" />
+                  <p className="text-slate-300 text-sm font-semibold">ETH Balance Breakdown</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">Total:</span>
+                    <span className="text-white font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.eth.total)} ETH</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">Reserved by Bots:</span>
+                    <span className="text-orange-400 font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.eth.reserved_by_bots)} ETH</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-sm">In Open Positions:</span>
+                    <span className="text-yellow-400 font-mono text-sm">{formatCrypto(portfolio.balance_breakdown.eth.in_open_positions)} ETH</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
+                    <span className="text-slate-300 text-sm font-semibold">Free (Available):</span>
+                    <span className="text-green-400 font-mono text-lg font-bold">{formatCrypto(portfolio.balance_breakdown.eth.free)} ETH</span>
                   </div>
                 </div>
               </div>
@@ -493,8 +521,8 @@ function Portfolio() {
               </p>
             </div>
 
-            {/* USD Balance Breakdown */}
-            {portfolio.balance_breakdown && (
+            {/* USD Balance Breakdown (CEX only) */}
+            {portfolio.balance_breakdown?.usd && (
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
                 <div className="flex items-center gap-2 mb-4">
                   <DollarSign size={20} className="text-green-400" />
