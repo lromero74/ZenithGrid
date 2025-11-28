@@ -28,7 +28,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+from web3.middleware import ExtraDataToPOAMiddleware
 from eth_account import Account
 from eth_typing import Address, ChecksumAddress
 
@@ -209,7 +209,7 @@ class DEXClient(ExchangeClient):
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
 
         # Add PoA middleware for BSC/Polygon compatibility (not needed for Ethereum mainnet but doesn't hurt)
-        self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
         # Load wallet from private key
         self.account = Account.from_key(wallet_private_key)
