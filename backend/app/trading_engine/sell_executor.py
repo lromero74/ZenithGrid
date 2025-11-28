@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
+from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.trading_client import TradingClient
 from app.currency_utils import get_quote_currency
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 async def execute_limit_sell(
     db: AsyncSession,
-    coinbase: CoinbaseClient,
+    exchange: ExchangeClient,
     trading_client: TradingClient,
     bot: Bot,
     product_id: str,
@@ -35,7 +35,7 @@ async def execute_limit_sell(
 
     Args:
         db: Database session
-        coinbase: CoinbaseClient instance
+        exchange: Exchange client instance (CEX or DEX)
         trading_client: TradingClient instance
         bot: Bot instance
         product_id: Trading pair (e.g., 'ETH-BTC')
@@ -111,7 +111,7 @@ async def execute_limit_sell(
 
 async def execute_sell(
     db: AsyncSession,
-    coinbase: CoinbaseClient,
+    exchange: ExchangeClient,
     trading_client: TradingClient,
     bot: Bot,
     product_id: str,
@@ -124,7 +124,7 @@ async def execute_sell(
 
     Args:
         db: Database session
-        coinbase: CoinbaseClient instance
+        exchange: Exchange client instance (CEX or DEX)
         trading_client: TradingClient instance
         bot: Bot instance
         product_id: Trading pair (e.g., 'ETH-BTC')
@@ -146,7 +146,7 @@ async def execute_sell(
         # Use limit order at mark price (mid between bid/ask)
         try:
             # Get ticker to calculate mark price
-            ticker = await coinbase.get_ticker(product_id)
+            ticker = await exchange.get_ticker(product_id)
             best_bid = float(ticker.get("best_bid", 0))
             best_ask = float(ticker.get("best_ask", 0))
 
@@ -166,7 +166,7 @@ async def execute_sell(
             # TODO: pending_order is currently unused but reserved for future limit order tracking/monitoring
             pending_order = await execute_limit_sell(
                 db=db,
-                coinbase=coinbase,
+                exchange=exchange,
                 trading_client=trading_client,
                 bot=bot,
                 product_id=product_id,
@@ -243,7 +243,7 @@ async def execute_sell(
 
     # Get BTC/USD price for USD profit tracking
     try:
-        btc_usd_price_at_close = await coinbase.get_btc_usd_price()
+        btc_usd_price_at_close = await exchange.get_btc_usd_price()
         # Convert profit to USD if quote is BTC
         if quote_currency == "BTC":
             profit_usd = profit_quote * btc_usd_price_at_close

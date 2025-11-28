@@ -1,14 +1,16 @@
 """
 Quote-currency agnostic trading client wrapper
 
-Wraps CoinbaseClient to provide currency-agnostic buy/sell operations.
+Wraps ExchangeClient to provide currency-agnostic buy/sell operations.
 Automatically detects quote currency and calls appropriate methods.
+
+Works with any exchange type (CEX or DEX) that implements ExchangeClient interface.
 """
 
 import logging
 from typing import Any, Dict
 
-from app.coinbase_unified_client import CoinbaseClient
+from app.exchange_clients.base import ExchangeClient
 from app.currency_utils import get_quote_currency
 
 logger = logging.getLogger(__name__)
@@ -19,17 +21,19 @@ class TradingClient:
     Currency-agnostic trading client
 
     Provides buy/sell methods that automatically detect quote currency
-    and call the appropriate Coinbase API methods.
+    and call the appropriate exchange API methods.
+
+    Works with any ExchangeClient implementation (Coinbase CEX, DEX, etc.)
     """
 
-    def __init__(self, coinbase: CoinbaseClient):
+    def __init__(self, exchange: ExchangeClient):
         """
-        Initialize with Coinbase client
+        Initialize with exchange client
 
         Args:
-            coinbase: CoinbaseClient instance
+            exchange: ExchangeClient instance (CoinbaseAdapter, DEXClient, etc.)
         """
-        self.coinbase = coinbase
+        self.exchange = exchange
 
     async def get_balance(self, currency: str) -> float:
         """
@@ -42,9 +46,9 @@ class TradingClient:
             Balance amount
         """
         if currency == "BTC":
-            return await self.coinbase.get_btc_balance()
+            return await self.exchange.get_btc_balance()
         elif currency == "USD":
-            return await self.coinbase.get_usd_balance()
+            return await self.exchange.get_usd_balance()
         else:
             # Currently only BTC and USD quote currencies are supported
             # If other quote currencies are needed in the future, implement balance fetching here
@@ -77,16 +81,16 @@ class TradingClient:
             quote_amount: Amount of quote currency to spend
 
         Returns:
-            Order response from Coinbase
+            Order response from exchange
         """
         quote_currency = get_quote_currency(product_id)
 
         if quote_currency == "BTC":
             # Buy with BTC
-            return await self.coinbase.buy_eth_with_btc(btc_amount=quote_amount, product_id=product_id)
+            return await self.exchange.buy_eth_with_btc(btc_amount=quote_amount, product_id=product_id)
         elif quote_currency == "USD":
             # Buy with USD
-            return await self.coinbase.buy_with_usd(usd_amount=quote_amount, product_id=product_id)
+            return await self.exchange.buy_with_usd(usd_amount=quote_amount, product_id=product_id)
         else:
             raise ValueError(f"Unsupported quote currency: {quote_currency}")
 
@@ -100,9 +104,9 @@ class TradingClient:
             quote_amount: Amount of quote currency to spend
 
         Returns:
-            Order response from Coinbase
+            Order response from exchange
         """
-        return await self.coinbase.create_limit_order(
+        return await self.exchange.create_limit_order(
             product_id=product_id, side="BUY", limit_price=limit_price, funds=str(quote_amount)
         )
 
@@ -116,9 +120,9 @@ class TradingClient:
             base_amount: Amount of base currency to sell
 
         Returns:
-            Order response from Coinbase
+            Order response from exchange
         """
-        return await self.coinbase.create_limit_order(
+        return await self.exchange.create_limit_order(
             product_id=product_id, side="SELL", limit_price=limit_price, size=str(base_amount)
         )
 
@@ -133,16 +137,16 @@ class TradingClient:
             base_amount: Amount of base currency to sell
 
         Returns:
-            Order response from Coinbase
+            Order response from exchange
         """
         quote_currency = get_quote_currency(product_id)
 
         if quote_currency == "BTC":
             # Sell for BTC
-            return await self.coinbase.sell_eth_for_btc(eth_amount=base_amount, product_id=product_id)
+            return await self.exchange.sell_eth_for_btc(eth_amount=base_amount, product_id=product_id)
         elif quote_currency == "USD":
             # Sell for USD
-            return await self.coinbase.sell_for_usd(base_amount=base_amount, product_id=product_id)
+            return await self.exchange.sell_for_usd(base_amount=base_amount, product_id=product_id)
         else:
             raise ValueError(f"Unsupported quote currency: {quote_currency}")
 
@@ -151,17 +155,17 @@ class TradingClient:
         Cancel an open order
 
         Args:
-            order_id: Coinbase order ID to cancel
+            order_id: Exchange order ID to cancel (order ID for CEX, tx hash for DEX)
 
         Returns:
-            Cancellation result from Coinbase
+            Cancellation result from exchange
         """
-        return await self.coinbase.cancel_order(order_id)
+        return await self.exchange.cancel_order(order_id)
 
     async def invalidate_balance_cache(self):
         """Invalidate balance cache after trades"""
-        await self.coinbase.invalidate_balance_cache()
+        await self.exchange.invalidate_balance_cache()
 
     async def get_btc_usd_price(self) -> float:
         """Get BTC/USD price for logging purposes"""
-        return await self.coinbase.get_btc_usd_price()
+        return await self.exchange.get_btc_usd_price()

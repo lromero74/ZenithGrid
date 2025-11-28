@@ -14,7 +14,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.coinbase_unified_client import CoinbaseClient
+from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, Position
 
 
@@ -43,14 +43,14 @@ async def get_open_positions_count(db: AsyncSession, bot: Bot) -> int:
 
 
 async def create_position(
-    db: AsyncSession, coinbase: CoinbaseClient, bot: Bot, product_id: str, quote_balance: float, quote_amount: float
+    db: AsyncSession, exchange: ExchangeClient, bot: Bot, product_id: str, quote_balance: float, quote_amount: float
 ) -> Position:
     """
     Create a new position for this bot
 
     Args:
         db: Database session
-        coinbase: Coinbase client
+        exchange: Exchange client instance (CEX or DEX)
         bot: Bot instance
         product_id: Trading pair
         quote_balance: Current total quote currency balance (BTC or USD)
@@ -58,7 +58,7 @@ async def create_position(
     """
     # Get BTC/USD price for USD tracking
     try:
-        btc_usd_price = await coinbase.get_btc_usd_price()
+        btc_usd_price = await exchange.get_btc_usd_price()
     except Exception:
         btc_usd_price = None
 

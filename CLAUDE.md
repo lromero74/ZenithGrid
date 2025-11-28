@@ -85,6 +85,83 @@ Then bot budget = (budget_percentage / 100) × total_aggregate_btc
 If you see "INSUFFICIENT FUNDS" errors, verify that `calculate_aggregate_btc_value()` is correctly summing BOTH:
 - BTC balance
 - BTC value of all altcoin holdings in BTC pairs (NOT USD pairs)
+
+## How AI Bot Allocation System Works
+
+**Understanding the full signal-to-execution flow:**
+
+### 1. Budget Hierarchy (Nested Allocations)
+The system uses multiple layers of allocation that multiply together:
+
+```
+Total Account BTC Value (aggregate)
+  └─> Bot Budget Percentage (e.g., 33%)
+      └─> Max Concurrent Deals (e.g., 6) → divides bot budget into per-position budgets
+          └─> AI Suggested Allocation % (e.g., 8%) → final order size
+              └─> Must meet Coinbase minimum (0.0001 BTC)
+```
+
+### 2. Real Example (DASH-BTC that failed):
+```
+- Total account BTC: 0.01193891 BTC
+  - In positions: 0.00792877 BTC
+  - Available: 0.00401014 BTC
+
+- Bot budget (33%): 0.00393984 BTC
+  - Already in positions: 0.00066654 BTC
+  - Available for new: 0.00327331 BTC
+
+- Max concurrent deals: 6
+  - Per-position budget: 0.00393984 / 6 = 0.00065664 BTC
+
+- AI suggests 8% allocation for DASH-BTC
+  - Actual order size: 0.00065664 × 0.08 = 0.00005253 BTC
+
+- Coinbase minimum: 0.0001 BTC
+  - Result: ❌ REJECTED (below minimum)
+```
+
+### 3. Signal Flow Process
+1. **Bot runs check cycle** (every 15 minutes for AI bots)
+2. **AI analyzes all pairs** and returns recommendations with:
+   - Action (buy/sell/hold)
+   - Confidence score (0-100%)
+   - Suggested allocation percentage
+   - Reasoning
+3. **Trading engine picks up signals** and processes each one:
+   - Checks if position already exists
+   - Calculates aggregate account value
+   - Applies bot budget percentage
+   - Divides by max concurrent deals
+   - Applies AI's suggested allocation percentage
+   - Validates against exchange minimums
+4. **Execution or rejection**:
+   - If valid: Place order with Coinbase
+   - If invalid: Log reason (below minimum, insufficient funds, etc.)
+
+### 4. Common Rejection Reasons
+
+**"Below exchange minimum"** (most common):
+- Cause: Small bot budget + many max deals + low AI allocation % = tiny order
+- Solution: Reduce max_concurrent_deals, increase bot budget %, or tune AI prompts for larger allocations
+
+**"Insufficient funds"**:
+- Cause: Not enough available BTC after subtracting open positions
+- Solution: Close some positions or increase bot budget
+
+**"Max concurrent deals reached"**:
+- Cause: Already have 6 open positions (if max_concurrent_deals = 6)
+- Solution: Wait for positions to close or increase max_concurrent_deals
+
+### 5. AI Decision Storage
+- AI decisions are logged in `ai_bot_logs` table regardless of execution
+- Fields: bot_id, timestamp, product_id, decision, confidence, thinking, context
+- Even rejected orders are logged with `position_id: None`
+- Check Dashboard → AI Bot Reasoning tab to see all decisions
+
+### 6. Key Insight
+**The AI doesn't know about exchange minimums or budget constraints.** It just suggests what percentage of the per-position budget to allocate. The trading engine enforces the constraints and may reject the AI's suggestion if it results in an order below Coinbase's minimum (0.0001 BTC for BTC pairs).
+
 - we run on testbot host in EC2
 - keep our repo tidy
 - tidy branch and repo applies to local as well as testbot host
@@ -94,3 +171,4 @@ If you see "INSUFFICIENT FUNDS" errors, verify that `calculate_aggregate_btc_val
 - production trading db is backend/trading.db
 - remember our python is in venv on localhost and in production (testbot host on EC2)
 - lint all code before committing new or changed code
+- CRITICAL!: be sure to stop production services (EC2 testbot host), and back up the database (/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/trading.db), before applying migrations to it

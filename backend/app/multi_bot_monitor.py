@@ -12,8 +12,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
 from app.database import async_session_maker
+from app.exchange_clients.base import ExchangeClient
 from app.models import Bot
 from app.services.order_monitor import OrderMonitor
 from app.strategies import StrategyRegistry
@@ -30,21 +30,21 @@ class MultiBotMonitor:
     Each bot can use a different strategy and trade a different product pair.
     """
 
-    def __init__(self, coinbase: CoinbaseClient, interval_seconds: int = 60):
+    def __init__(self, exchange: ExchangeClient, interval_seconds: int = 60):
         """
         Initialize multi-bot monitor
 
         Args:
-            coinbase: Coinbase API client
+            exchange: Exchange client instance (CEX or DEX)
             interval_seconds: How often to check signals (default: 60s)
         """
-        self.coinbase = coinbase
+        self.exchange = exchange
         self.interval_seconds = interval_seconds
         self.running = False
         self.task: Optional[asyncio.Task] = None
 
         # Initialize order monitor for tracking limit orders
-        self.order_monitor = OrderMonitor(coinbase, check_interval=30)
+        self.order_monitor = OrderMonitor(exchange, check_interval=30)
 
         # Cache for candle data (to avoid fetching same data multiple times)
         self._candle_cache: Dict[str, tuple] = {}  # product_id -> (timestamp, candles)
@@ -129,7 +129,7 @@ class MultiBotMonitor:
                 f"  Requesting {lookback_candles} {granularity} candles for {product_id} (time range: {start_time} to {end_time})"
             )
 
-            candles = await self.coinbase.get_candles(
+            candles = await self.exchange.get_candles(
                 product_id=product_id, start=start_time, end=end_time, granularity=granularity
             )
 
@@ -265,9 +265,9 @@ class MultiBotMonitor:
             quote_currency = bot.get_quote_currency()
             try:
                 if quote_currency == "BTC":
-                    aggregate_value = await self.coinbase.calculate_aggregate_btc_value()
+                    aggregate_value = await self.exchange.calculate_aggregate_btc_value()
                 else:  # USD
-                    aggregate_value = await self.coinbase.calculate_aggregate_usd_value()
+                    aggregate_value = await self.exchange.calculate_aggregate_usd_value()
             except Exception as e:
                 # If portfolio API fails (403/rate limit), use a conservative fallback
                 logger.warning(f"  ⚠️  Failed to get aggregate balance (API error), using 0.001 BTC fallback: {e}")
@@ -276,9 +276,9 @@ class MultiBotMonitor:
             # Get actual available balance (what's spendable right now)
             try:
                 if quote_currency == "BTC":
-                    actual_available = await self.coinbase.get_btc_balance()
+                    actual_available = await self.exchange.get_btc_balance()
                 else:  # USD
-                    actual_available = await self.coinbase.get_usd_balance()
+                    actual_available = await self.exchange.get_usd_balance()
             except Exception as e:
                 logger.warning(f"  ⚠️  Failed to get actual available balance: {e}")
                 actual_available = 0.0
@@ -365,7 +365,7 @@ class MultiBotMonitor:
                     filtered_pairs = []
                     for product_id in pairs_to_analyze:
                         try:
-                            stats = await self.coinbase.get_product_stats(product_id)
+                            stats = await self.exchange.get_product_stats(product_id)
                             volume_24h = stats.get("volume_24h", 0.0)
 
                             if volume_24h >= min_daily_volume:
@@ -457,7 +457,7 @@ class MultiBotMonitor:
             quote_currency = bot.get_quote_currency()
             if quote_currency == "BTC":
                 # Calculate aggregate BTC value if needed
-                aggregate_btc = await self.coinbase.calculate_aggregate_btc_value()
+                aggregate_btc = await self.exchange.calculate_aggregate_btc_value()
                 total_bot_budget = bot.get_reserved_balance(aggregate_btc)
             else:
                 # USD bots - get balance directly (no aggregation needed)
@@ -708,7 +708,7 @@ class MultiBotMonitor:
                     logger.info(f"    Current {product_id} price (from candles): {current_price:.8f}")
                 else:
                     logger.warning(f"    No candles available for {product_id}, using fallback ticker")
-                    current_price = await self.coinbase.get_current_price(product_id)
+                    current_price = await self.exchange.get_current_price(product_id)
                     logger.info(f"    Current {product_id} price (from ticker): {current_price:.8f}")
 
             # For conditional_dca strategy, extract all timeframes from conditions
@@ -813,7 +813,7 @@ class MultiBotMonitor:
             # Create trading engine for this bot/pair combination
             engine = StrategyTradingEngine(
                 db=db,
-                coinbase=self.coinbase,
+                exchange=self.exchange,
                 bot=bot,
                 strategy=strategy,
                 product_id=product_id,  # Specify which pair this engine instance trades

@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
+from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.trading_client import TradingClient
 from app.order_validation import validate_order_size
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 async def execute_buy(
     db: AsyncSession,
-    coinbase: CoinbaseClient,
+    exchange: ExchangeClient,
     trading_client: TradingClient,
     bot: Bot,
     product_id: str,
@@ -40,7 +40,7 @@ async def execute_buy(
 
     Args:
         db: Database session
-        coinbase: CoinbaseClient instance
+        exchange: Exchange client instance (CEX or DEX)
         trading_client: TradingClient instance
         bot: Bot instance
         product_id: Trading pair (e.g., 'ETH-BTC')
@@ -73,7 +73,7 @@ async def execute_buy(
         # TODO: pending_order is currently unused but reserved for future limit order tracking/monitoring
         pending_order = await execute_limit_buy(
             db=db,
-            coinbase=coinbase,
+            exchange=exchange,
             trading_client=trading_client,
             bot=bot,
             product_id=product_id,
@@ -90,7 +90,7 @@ async def execute_buy(
 
     # Execute market order (immediate execution)
     # Validate order meets minimum size requirements
-    is_valid, error_msg = await validate_order_size(coinbase, product_id, quote_amount=quote_amount)
+    is_valid, error_msg = await validate_order_size(exchange, product_id, quote_amount=quote_amount)
 
     if not is_valid:
         logger.warning(f"Order validation failed: {error_msg}")
@@ -204,7 +204,7 @@ async def execute_buy(
                 logger.info(f"Waiting {delay}s before retry {attempt + 1}/{max_retries}...")
                 await asyncio.sleep(delay)
 
-            order_details = await coinbase.get_order(order_id)
+            order_details = await exchange.get_order(order_id)
 
             # get_order() already unwraps the "order" key - access fields directly
             # See app/coinbase_api/order_api.py:118-135
@@ -322,7 +322,7 @@ async def execute_buy(
 
 async def execute_limit_buy(
     db: AsyncSession,
-    coinbase: CoinbaseClient,
+    exchange: ExchangeClient,
     trading_client: TradingClient,
     bot: Bot,
     product_id: str,
@@ -337,7 +337,7 @@ async def execute_limit_buy(
 
     Args:
         db: Database session
-        coinbase: CoinbaseClient instance
+        exchange: Exchange client instance (CEX or DEX)
         trading_client: TradingClient instance
         bot: Bot instance
         product_id: Trading pair (e.g., 'ETH-BTC')

@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
 from app.currency_utils import format_with_usd, get_quote_currency
+from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, Position, Signal
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
@@ -96,7 +96,7 @@ def _calculate_market_context_with_indicators(candles: List[Dict[str, Any]], cur
 
 async def process_signal(
     db: AsyncSession,
-    coinbase: CoinbaseClient,
+    exchange: ExchangeClient,
     trading_client: TradingClient,
     bot: Bot,
     strategy: TradingStrategy,
@@ -110,7 +110,7 @@ async def process_signal(
 
     Args:
         db: Database session
-        coinbase: CoinbaseClient instance
+        exchange: Exchange client instance (CEX or DEX)
         trading_client: TradingClient instance
         bot: Bot instance
         strategy: TradingStrategy instance
@@ -158,7 +158,7 @@ async def process_signal(
                 # This uses the existing execute_sell function which handles limit orders
                 trade, profit_quote, profit_pct = await execute_sell(
                     db=db,
-                    coinbase=coinbase,
+                    exchange=exchange,
                     trading_client=trading_client,
                     bot=bot,
                     product_id=product_id,
@@ -219,11 +219,11 @@ async def process_signal(
     if bot.budget_percentage > 0:
         # Bot uses percentage-based budgeting - calculate aggregate value
         if quote_currency == "USD":
-            aggregate_value = await coinbase.calculate_aggregate_usd_value()
+            aggregate_value = await exchange.calculate_aggregate_usd_value()
             print(f"🔍 Aggregate USD value: ${aggregate_value:.2f}")
             logger.info(f"  💰 Aggregate USD value: ${aggregate_value:.2f}")
         else:
-            aggregate_value = await coinbase.calculate_aggregate_btc_value()
+            aggregate_value = await exchange.calculate_aggregate_btc_value()
             print(f"🔍 Aggregate BTC value: {aggregate_value:.8f} BTC")
             logger.info(f"  💰 Aggregate BTC value: {aggregate_value:.8f} BTC")
 
@@ -314,7 +314,7 @@ async def process_signal(
     if should_buy:
         # Get BTC/USD price for logging
         try:
-            btc_usd_price = await coinbase.get_btc_usd_price()
+            btc_usd_price = await exchange.get_btc_usd_price()
         except Exception:
             btc_usd_price = None
 
@@ -336,13 +336,13 @@ async def process_signal(
             # BUT we do it in a transaction that will rollback if trade fails
             if is_new_position:
                 logger.info("  📝 Creating position (will commit only if trade succeeds)...")
-                position = await create_position(db, coinbase, bot, product_id, quote_balance, quote_amount)
+                position = await create_position(db, exchange, bot, product_id, quote_balance, quote_amount)
                 logger.info(f"  ✅ Position created: ID={position.id} (pending trade execution)")
 
             # Execute the actual trade
             trade = await execute_buy(
                 db=db,
-                coinbase=coinbase,
+                exchange=exchange,
                 trading_client=trading_client,
                 bot=bot,
                 product_id=product_id,
@@ -413,7 +413,7 @@ async def process_signal(
             # Execute sell (market or limit based on config)
             trade, profit_quote, profit_pct = await execute_sell(
                 db=db,
-                coinbase=coinbase,
+                exchange=exchange,
                 trading_client=trading_client,
                 bot=bot,
                 product_id=product_id,

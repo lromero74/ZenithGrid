@@ -4,9 +4,9 @@ from typing import List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import init_db, get_db
+from app.exchange_clients.factory import create_exchange_client
 from app.multi_bot_monitor import MultiBotMonitor
 from app.services.limit_order_monitor import LimitOrderMonitor
 from app.routers import bots_router, order_history_router, templates_router
@@ -37,13 +37,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global instances - Unified client auto-detects CDP vs HMAC authentication
-coinbase_client = CoinbaseClient()  # Auto-detects auth from settings
+# Global instances - Create exchange client using factory (CEX for now, DEX in future)
+# Factory creates CoinbaseAdapter wrapping CoinbaseClient (auto-detects CDP vs HMAC auth)
+exchange_client = create_exchange_client(
+    exchange_type="cex",  # Centralized exchange (Coinbase)
+    coinbase_key_name=settings.coinbase_key_name,
+    coinbase_private_key=settings.coinbase_private_key,
+)
 
 # Multi-bot monitor - monitors all active bots with their strategies
 # Monitor loop runs every 10s to check if any bots need processing
 # Bots can override with their own check_interval_seconds (set in database)
-price_monitor = MultiBotMonitor(coinbase_client, interval_seconds=10)
+price_monitor = MultiBotMonitor(exchange_client, interval_seconds=10)
 
 # Limit order monitor - tracks pending limit orders and processes fills
 # Runs every 10 seconds to check order status
@@ -56,7 +61,7 @@ order_reconciliation_monitor_task = None
 
 # Dependency overrides for router injection
 def override_get_coinbase():
-    return coinbase_client
+    return exchange_client
 
 
 def override_get_price_monitor():
@@ -90,7 +95,7 @@ async def run_limit_order_monitor():
     while True:
         try:
             async with async_session_maker() as db:
-                monitor = LimitOrderMonitor(db, coinbase_client)
+                monitor = LimitOrderMonitor(db, exchange_client)
                 await monitor.check_limit_close_orders()
         except Exception as e:
             logger.error(f"Error in limit order monitor loop: {e}")

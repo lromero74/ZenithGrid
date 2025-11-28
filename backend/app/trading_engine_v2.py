@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
 from app.currency_utils import get_quote_currency
+from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
@@ -38,7 +38,7 @@ class StrategyTradingEngine:
     def __init__(
         self,
         db: AsyncSession,
-        coinbase: CoinbaseClient,
+        exchange: ExchangeClient,
         bot: Bot,
         strategy: TradingStrategy,
         product_id: Optional[str] = None,
@@ -48,14 +48,14 @@ class StrategyTradingEngine:
 
         Args:
             db: Database session
-            coinbase: Coinbase API client
+            exchange: Exchange client instance (CEX or DEX)
             bot: Bot instance to trade for
             strategy: Strategy instance with bot's configuration
             product_id: Trading pair to use (defaults to bot's first pair for backward compatibility)
         """
         self.db = db
-        self.coinbase = coinbase
-        self.trading_client = TradingClient(coinbase)  # Currency-agnostic wrapper
+        self.exchange = exchange
+        self.trading_client = TradingClient(exchange)  # Currency-agnostic wrapper
         self.bot = bot
         self.strategy = strategy
         # Use provided product_id, or fallback to bot's first pair
@@ -83,7 +83,7 @@ class StrategyTradingEngine:
     async def create_position(self, quote_balance: float, quote_amount: float) -> Position:
         """Delegate to position_manager module"""
         return await position_manager.create_position(
-            self.db, self.coinbase, self.bot, self.product_id, quote_balance, quote_amount
+            self.db, self.exchange, self.bot, self.product_id, quote_balance, quote_amount
         )
 
     async def log_order_to_history(
@@ -124,7 +124,7 @@ class StrategyTradingEngine:
         """Delegate to buy_executor module"""
         return await buy_executor.execute_buy(
             self.db,
-            self.coinbase,
+            self.exchange,
             self.trading_client,
             self.bot,
             self.product_id,
@@ -147,7 +147,7 @@ class StrategyTradingEngine:
         """Delegate to buy_executor module"""
         return await buy_executor.execute_limit_buy(
             self.db,
-            self.coinbase,
+            self.exchange,
             self.trading_client,
             self.bot,
             self.product_id,
@@ -163,7 +163,7 @@ class StrategyTradingEngine:
     ) -> Tuple[Optional[Trade], float, float]:
         """Delegate to sell_executor module"""
         return await sell_executor.execute_sell(
-            self.db, self.coinbase, self.trading_client, self.bot, self.product_id, position, current_price, signal_data
+            self.db, self.exchange, self.trading_client, self.bot, self.product_id, position, current_price, signal_data
         )
 
     async def execute_limit_sell(
@@ -172,7 +172,7 @@ class StrategyTradingEngine:
         """Delegate to sell_executor module"""
         return await sell_executor.execute_limit_sell(
             self.db,
-            self.coinbase,
+            self.exchange,
             self.trading_client,
             self.bot,
             self.product_id,
@@ -188,7 +188,7 @@ class StrategyTradingEngine:
         """Delegate to signal_processor module"""
         return await signal_processor.process_signal(
             self.db,
-            self.coinbase,
+            self.exchange,
             self.trading_client,
             self.bot,
             self.strategy,
