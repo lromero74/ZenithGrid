@@ -1,17 +1,17 @@
 /**
  * Blacklist Manager Component
  *
- * Dual-list UI for managing coin blacklist.
- * - Left list: Available coins (from bot product_ids)
- * - Right list: Blacklisted coins with reasons
- * - Category toggles for trading permissions
+ * Manages coin categorization with 4 categories:
+ * - APPROVED: Solid projects, allowed to trade
+ * - BORDERLINE: Decent but with concerns
+ * - QUESTIONABLE: Higher risk projects
+ * - BLACKLISTED: Do not trade
+ *
+ * Category toggles control which categories can open new positions.
  */
 
 import { useState, useEffect, useMemo } from 'react'
 import {
-  Ban,
-  ChevronRight,
-  ChevronLeft,
   RefreshCw,
   AlertCircle,
   Edit2,
@@ -21,22 +21,27 @@ import {
   Sparkles,
   ToggleLeft,
   ToggleRight,
+  ChevronDown,
+  Coins,
 } from 'lucide-react'
 import { blacklistApi, BlacklistEntry, botsApi, CategorySettings } from '../services/api'
 
 // Category display config
-const CATEGORY_CONFIG: Record<string, { color: string; bgColor: string; borderColor: string; label: string }> = {
-  APPROVED: { color: 'text-green-400', bgColor: 'bg-green-600/20', borderColor: 'border-green-600/50', label: 'Approved' },
-  BORDERLINE: { color: 'text-yellow-400', bgColor: 'bg-yellow-600/20', borderColor: 'border-yellow-600/50', label: 'Borderline' },
-  QUESTIONABLE: { color: 'text-orange-400', bgColor: 'bg-orange-600/20', borderColor: 'border-orange-600/50', label: 'Questionable' },
-  BLACKLISTED: { color: 'text-red-400', bgColor: 'bg-red-600/20', borderColor: 'border-red-600/50', label: 'Blacklisted' },
+const CATEGORY_CONFIG: Record<string, { color: string; bgColor: string; borderColor: string; label: string; description: string }> = {
+  APPROVED: { color: 'text-green-400', bgColor: 'bg-green-600/20', borderColor: 'border-green-600/50', label: 'Approved', description: 'Solid project, safe to trade' },
+  BORDERLINE: { color: 'text-yellow-400', bgColor: 'bg-yellow-600/20', borderColor: 'border-yellow-600/50', label: 'Borderline', description: 'Decent but has concerns' },
+  QUESTIONABLE: { color: 'text-orange-400', bgColor: 'bg-orange-600/20', borderColor: 'border-orange-600/50', label: 'Questionable', description: 'Higher risk project' },
+  BLACKLISTED: { color: 'text-red-400', bgColor: 'bg-red-600/20', borderColor: 'border-red-600/50', label: 'Blacklisted', description: 'Do not trade' },
 }
+
+const CATEGORIES = ['APPROVED', 'BORDERLINE', 'QUESTIONABLE', 'BLACKLISTED']
 
 export function BlacklistManager() {
   const [blacklistedCoins, setBlacklistedCoins] = useState<BlacklistEntry[]>([])
   const [allTrackedSymbols, setAllTrackedSymbols] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [savingSymbol, setSavingSymbol] = useState<string | null>(null)
 
   // Category settings
   const [categorySettings, setCategorySettings] = useState<CategorySettings | null>(null)
@@ -45,21 +50,16 @@ export function BlacklistManager() {
   // AI Review
   const [runningAIReview, setRunningAIReview] = useState(false)
 
-  // Selected items in each list
-  const [selectedAvailable, setSelectedAvailable] = useState<Set<string>>(new Set())
-  const [selectedBlacklisted, setSelectedBlacklisted] = useState<Set<string>>(new Set())
-
-  // Search/filter
-  const [availableFilter, setAvailableFilter] = useState('')
-  const [blacklistedFilter, setBlacklistedFilter] = useState('')
-
-  // Add reason modal
-  const [addReasonModal, setAddReasonModal] = useState<{ symbols: string[] } | null>(null)
-  const [newReason, setNewReason] = useState('')
+  // Filter
+  const [searchFilter, setSearchFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
 
   // Edit reason
   const [editingSymbol, setEditingSymbol] = useState<string | null>(null)
   const [editReason, setEditReason] = useState('')
+
+  // Category dropdown
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
 
   // Fetch data
   const fetchData = async () => {
@@ -99,110 +99,79 @@ export function BlacklistManager() {
     fetchData()
   }, [])
 
-  // Compute available coins (tracked but not blacklisted)
-  const blacklistedSymbols = useMemo(
-    () => new Set(blacklistedCoins.map((c) => c.symbol)),
-    [blacklistedCoins]
-  )
-
-  const availableCoins = useMemo(
-    () => allTrackedSymbols.filter((s) => !blacklistedSymbols.has(s)),
-    [allTrackedSymbols, blacklistedSymbols]
-  )
-
-  // Filtered lists
-  const filteredAvailable = useMemo(
-    () =>
-      availableCoins.filter((s) =>
-        s.toLowerCase().includes(availableFilter.toLowerCase())
-      ),
-    [availableCoins, availableFilter]
-  )
-
-  const filteredBlacklisted = useMemo(
-    () =>
-      blacklistedCoins.filter(
-        (c) =>
-          c.symbol.toLowerCase().includes(blacklistedFilter.toLowerCase()) ||
-          (c.reason || '').toLowerCase().includes(blacklistedFilter.toLowerCase())
-      ),
-    [blacklistedCoins, blacklistedFilter]
-  )
-
-  // Toggle selection
-  const toggleAvailable = (symbol: string) => {
-    const newSet = new Set(selectedAvailable)
-    if (newSet.has(symbol)) {
-      newSet.delete(symbol)
-    } else {
-      newSet.add(symbol)
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenDropdown(null)
+    if (openDropdown) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
     }
-    setSelectedAvailable(newSet)
+  }, [openDropdown])
+
+  // Helper to get category from reason
+  const getCategoryFromReason = (reason: string | null): string => {
+    if (!reason) return 'BLACKLISTED'
+    if (reason.startsWith('[APPROVED]')) return 'APPROVED'
+    if (reason.startsWith('[BORDERLINE]')) return 'BORDERLINE'
+    if (reason.startsWith('[QUESTIONABLE]')) return 'QUESTIONABLE'
+    return 'BLACKLISTED'
   }
 
-  const toggleBlacklisted = (symbol: string) => {
-    const newSet = new Set(selectedBlacklisted)
-    if (newSet.has(symbol)) {
-      newSet.delete(symbol)
-    } else {
-      newSet.add(symbol)
+  // Helper to get reason text without category prefix
+  const getReasonText = (reason: string | null): string => {
+    if (!reason) return ''
+    return reason.replace(/^\[(APPROVED|BORDERLINE|QUESTIONABLE|BLACKLISTED)\]\s*/, '')
+  }
+
+  // Build coin list with categories
+  const coinList = useMemo(() => {
+    const blacklistMap = new Map(blacklistedCoins.map(c => [c.symbol, c]))
+
+    return allTrackedSymbols.map(symbol => {
+      const entry = blacklistMap.get(symbol)
+      const category = entry ? getCategoryFromReason(entry.reason) : 'APPROVED'
+      const reasonText = entry ? getReasonText(entry.reason) : ''
+
+      return {
+        symbol,
+        category,
+        reasonText,
+        id: entry?.id,
+        created_at: entry?.created_at,
+      }
+    })
+  }, [allTrackedSymbols, blacklistedCoins])
+
+  // Filtered coin list
+  const filteredCoins = useMemo(() => {
+    return coinList.filter(coin => {
+      // Category filter
+      if (categoryFilter && coin.category !== categoryFilter) return false
+
+      // Search filter
+      if (searchFilter) {
+        const search = searchFilter.toLowerCase()
+        return coin.symbol.toLowerCase().includes(search) ||
+               coin.reasonText.toLowerCase().includes(search)
+      }
+
+      return true
+    })
+  }, [coinList, categoryFilter, searchFilter])
+
+  // Count coins by category
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      APPROVED: 0,
+      BORDERLINE: 0,
+      QUESTIONABLE: 0,
+      BLACKLISTED: 0,
     }
-    setSelectedBlacklisted(newSet)
-  }
-
-  // Move to blacklist (show reason modal)
-  const handleMoveToBlacklist = () => {
-    if (selectedAvailable.size === 0) return
-    setAddReasonModal({ symbols: Array.from(selectedAvailable) })
-    setNewReason('')
-  }
-
-  // Confirm add to blacklist
-  const confirmAddToBlacklist = async () => {
-    if (!addReasonModal) return
-
-    try {
-      await blacklistApi.addBulk(addReasonModal.symbols, newReason || undefined)
-      setSelectedAvailable(new Set())
-      setAddReasonModal(null)
-      await fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add to blacklist')
+    for (const coin of coinList) {
+      counts[coin.category] = (counts[coin.category] || 0) + 1
     }
-  }
-
-  // Remove from blacklist
-  const handleRemoveFromBlacklist = async () => {
-    if (selectedBlacklisted.size === 0) return
-
-    try {
-      await Promise.all(
-        Array.from(selectedBlacklisted).map((symbol) => blacklistApi.remove(symbol))
-      )
-      setSelectedBlacklisted(new Set())
-      await fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove from blacklist')
-    }
-  }
-
-  // Edit reason
-  const startEditReason = (coin: BlacklistEntry) => {
-    setEditingSymbol(coin.symbol)
-    setEditReason(coin.reason || '')
-  }
-
-  const saveEditReason = async () => {
-    if (!editingSymbol) return
-
-    try {
-      await blacklistApi.updateReason(editingSymbol, editReason || null)
-      setEditingSymbol(null)
-      await fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update reason')
-    }
-  }
+    return counts
+  }, [coinList])
 
   // Toggle category trading permission
   const toggleCategory = async (category: string) => {
@@ -216,7 +185,6 @@ export function BlacklistManager() {
       let newAllowed: string[]
 
       if (currentAllowed.includes(category)) {
-        // Remove category (must keep at least one)
         newAllowed = currentAllowed.filter((c) => c !== category)
         if (newAllowed.length === 0) {
           setError('At least one category must be allowed to trade')
@@ -224,7 +192,6 @@ export function BlacklistManager() {
           return
         }
       } else {
-        // Add category
         newAllowed = [...currentAllowed, category]
       }
 
@@ -237,6 +204,66 @@ export function BlacklistManager() {
     }
   }
 
+  // Change coin category
+  const changeCoinCategory = async (symbol: string, newCategory: string, currentReasonText: string) => {
+    setSavingSymbol(symbol)
+    setError(null)
+    setOpenDropdown(null)
+
+    try {
+      // Build new reason with category prefix
+      const newReason = newCategory === 'BLACKLISTED' && !currentReasonText
+        ? null
+        : `[${newCategory}] ${currentReasonText}`.trim()
+
+      // Check if coin exists in blacklist
+      const existingEntry = blacklistedCoins.find(c => c.symbol === symbol)
+
+      if (existingEntry) {
+        // Update existing entry
+        await blacklistApi.updateReason(symbol, newReason)
+      } else {
+        // Add new entry
+        await blacklistApi.add(symbol, newReason || undefined)
+      }
+
+      await fetchData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update category')
+    } finally {
+      setSavingSymbol(null)
+    }
+  }
+
+  // Edit reason
+  const startEditReason = (symbol: string, currentReason: string) => {
+    setEditingSymbol(symbol)
+    setEditReason(currentReason)
+  }
+
+  const saveEditReason = async (symbol: string, category: string) => {
+    setSavingSymbol(symbol)
+    setError(null)
+
+    try {
+      const newReason = `[${category}] ${editReason}`.trim()
+
+      const existingEntry = blacklistedCoins.find(c => c.symbol === symbol)
+      if (existingEntry) {
+        await blacklistApi.updateReason(symbol, newReason)
+      } else {
+        await blacklistApi.add(symbol, newReason)
+      }
+
+      setEditingSymbol(null)
+      await fetchData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update reason')
+    } finally {
+      setSavingSymbol(null)
+    }
+  }
+
   // Trigger AI review
   const triggerAIReview = async () => {
     if (runningAIReview) return
@@ -246,7 +273,6 @@ export function BlacklistManager() {
 
     try {
       await blacklistApi.triggerAIReview()
-      // Refresh data after review completes
       await fetchData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run AI review')
@@ -255,36 +281,12 @@ export function BlacklistManager() {
     }
   }
 
-  // Helper to get category from reason
-  const getCategoryFromReason = (reason: string | null): string => {
-    if (!reason) return 'BLACKLISTED'
-    if (reason.startsWith('[APPROVED]')) return 'APPROVED'
-    if (reason.startsWith('[BORDERLINE]')) return 'BORDERLINE'
-    if (reason.startsWith('[QUESTIONABLE]')) return 'QUESTIONABLE'
-    return 'BLACKLISTED'
-  }
-
-  // Count coins by category
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      APPROVED: 0,
-      BORDERLINE: 0,
-      QUESTIONABLE: 0,
-      BLACKLISTED: 0,
-    }
-    for (const coin of blacklistedCoins) {
-      const category = getCategoryFromReason(coin.reason)
-      counts[category] = (counts[category] || 0) + 1
-    }
-    return counts
-  }, [blacklistedCoins])
-
   if (isLoading) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <div className="flex items-center justify-center">
           <RefreshCw className="w-5 h-5 text-slate-400 animate-spin" />
-          <span className="ml-2 text-slate-400">Loading blacklist...</span>
+          <span className="ml-2 text-slate-400">Loading coin categories...</span>
         </div>
       </div>
     )
@@ -296,11 +298,11 @@ export function BlacklistManager() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <Ban className="w-5 h-5 text-red-400" />
-            Coin Blacklist
+            <Coins className="w-5 h-5 text-blue-400" />
+            Coin Categories
           </h3>
           <p className="text-sm text-slate-400 mt-1">
-            Bots will not open new positions in blacklisted coins
+            Categorize coins and control which categories can trade
           </p>
         </div>
         <button
@@ -332,8 +334,8 @@ export function BlacklistManager() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {categorySettings.all_categories.map((category) => {
-              const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.BLACKLISTED
+            {CATEGORIES.map((category) => {
+              const config = CATEGORY_CONFIG[category]
               const isAllowed = categorySettings.allowed_categories.includes(category)
               const count = categoryCounts[category] || 0
 
@@ -380,230 +382,187 @@ export function BlacklistManager() {
         </div>
       )}
 
-      {/* Dual List */}
-      <div className="grid grid-cols-[1fr_auto_1fr] gap-4">
-        {/* Available Coins (Left) */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-          <div className="px-4 py-3 bg-slate-900 border-b border-slate-700">
-            <h4 className="font-medium text-white text-sm">Available Coins</h4>
-            <p className="text-xs text-slate-400">{availableCoins.length} tracked</p>
-          </div>
-
+      {/* Coin List */}
+      <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+        {/* Filters */}
+        <div className="p-3 border-b border-slate-700 space-y-3">
           {/* Search */}
-          <div className="p-2 border-b border-slate-700">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Filter..."
-                value={availableFilter}
-                onChange={(e) => setAvailableFilter(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded focus:outline-none focus:border-blue-500"
-              />
-            </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search coins..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:border-blue-500"
+            />
           </div>
 
-          {/* List */}
-          <div className="max-h-64 overflow-y-auto">
-            {filteredAvailable.length === 0 ? (
-              <div className="p-4 text-center text-slate-400 text-sm">
-                {availableFilter ? 'No matches' : 'No available coins'}
-              </div>
-            ) : (
-              filteredAvailable.map((symbol) => (
-                <label
-                  key={symbol}
-                  className="flex items-center gap-2 px-4 py-2 hover:bg-slate-700/50 cursor-pointer"
+          {/* Category Filter Tabs */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setCategoryFilter(null)}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                categoryFilter === null
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              All ({coinList.length})
+            </button>
+            {CATEGORIES.map((cat) => {
+              const config = CATEGORY_CONFIG[cat]
+              const count = categoryCounts[cat] || 0
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
+                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                    categoryFilter === cat
+                      ? `${config.bgColor} ${config.color} border ${config.borderColor}`
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedAvailable.has(symbol)}
-                    onChange={() => toggleAvailable(symbol)}
-                    className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
-                  />
-                  <span className="text-sm font-mono text-white">{symbol}</span>
-                </label>
-              ))
-            )}
+                  {config.label} ({count})
+                </button>
+              )
+            })}
           </div>
-
-          {/* Selection count */}
-          {selectedAvailable.size > 0 && (
-            <div className="px-4 py-2 bg-slate-900 border-t border-slate-700 text-xs text-slate-400">
-              {selectedAvailable.size} selected
-            </div>
-          )}
         </div>
 
-        {/* Transfer Buttons */}
-        <div className="flex flex-col justify-center gap-2">
-          <button
-            onClick={handleMoveToBlacklist}
-            disabled={selectedAvailable.size === 0}
-            className="p-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
-            title="Add to blacklist"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleRemoveFromBlacklist}
-            disabled={selectedBlacklisted.size === 0}
-            className="p-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
-            title="Remove from blacklist"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
+        {/* Table Header */}
+        <div className="grid grid-cols-[1fr_140px_2fr] gap-4 px-4 py-2 bg-slate-900 border-b border-slate-700 text-xs font-medium text-slate-400 uppercase">
+          <span>Symbol</span>
+          <span>Category</span>
+          <span>Reason</span>
         </div>
 
-        {/* Blacklisted Coins (Right) */}
-        <div className="bg-slate-800 rounded-lg border border-red-900/50 overflow-hidden">
-          <div className="px-4 py-3 bg-red-900/20 border-b border-red-900/50">
-            <h4 className="font-medium text-red-400 text-sm flex items-center gap-2">
-              <Ban className="w-4 h-4" />
-              Blacklisted
-            </h4>
-            <p className="text-xs text-slate-400">{blacklistedCoins.length} blocked</p>
-          </div>
-
-          {/* Search */}
-          <div className="p-2 border-b border-slate-700">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Filter..."
-                value={blacklistedFilter}
-                onChange={(e) => setBlacklistedFilter(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded focus:outline-none focus:border-blue-500"
-              />
+        {/* Coin Rows */}
+        <div className="max-h-96 overflow-y-auto">
+          {filteredCoins.length === 0 ? (
+            <div className="p-8 text-center text-slate-400">
+              {searchFilter || categoryFilter ? 'No coins match your filters' : 'No tracked coins'}
             </div>
-          </div>
+          ) : (
+            filteredCoins.map((coin) => {
+              const config = CATEGORY_CONFIG[coin.category]
+              const isSaving = savingSymbol === coin.symbol
+              const isEditing = editingSymbol === coin.symbol
 
-          {/* List */}
-          <div className="max-h-64 overflow-y-auto">
-            {filteredBlacklisted.length === 0 ? (
-              <div className="p-4 text-center text-slate-400 text-sm">
-                {blacklistedFilter ? 'No matches' : 'No blacklisted coins'}
-              </div>
-            ) : (
-              filteredBlacklisted.map((coin) => (
+              return (
                 <div
                   key={coin.symbol}
-                  className="flex items-start gap-2 px-4 py-2 hover:bg-slate-700/50"
+                  className={`grid grid-cols-[1fr_140px_2fr] gap-4 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 items-center ${
+                    isSaving ? 'opacity-50' : ''
+                  }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedBlacklisted.has(coin.symbol)}
-                    onChange={() => toggleBlacklisted(coin.symbol)}
-                    className="w-4 h-4 mt-0.5 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-mono text-red-400 font-medium">
-                        {coin.symbol}
-                      </span>
-                      {editingSymbol === coin.symbol ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={saveEditReason}
-                            className="p-0.5 text-green-400 hover:text-green-300"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setEditingSymbol(null)}
-                            className="p-0.5 text-slate-400 hover:text-slate-300"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
+                  {/* Symbol */}
+                  <div className="flex items-center gap-2">
+                    <span className={`font-mono font-medium ${config.color}`}>
+                      {coin.symbol}
+                    </span>
+                  </div>
+
+                  {/* Category Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpenDropdown(openDropdown === coin.symbol ? null : coin.symbol)
+                      }}
+                      disabled={isSaving}
+                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-medium ${config.bgColor} ${config.color} border ${config.borderColor} hover:opacity-80 transition-opacity`}
+                    >
+                      <span>{config.label}</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === coin.symbol ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {openDropdown === coin.symbol && (
+                      <div className="absolute z-20 top-full left-0 mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-xl overflow-hidden">
+                        {CATEGORIES.map((cat) => {
+                          const catConfig = CATEGORY_CONFIG[cat]
+                          const isSelected = cat === coin.category
+                          return (
+                            <button
+                              key={cat}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (!isSelected) {
+                                  changeCoinCategory(coin.symbol, cat, coin.reasonText)
+                                }
+                              }}
+                              className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-700 transition-colors ${
+                                isSelected ? catConfig.bgColor : ''
+                              }`}
+                            >
+                              <div className={`w-2 h-2 rounded-full ${catConfig.bgColor} ${catConfig.borderColor} border`} />
+                              <span className={isSelected ? catConfig.color : 'text-slate-300'}>
+                                {catConfig.label}
+                              </span>
+                              {isSelected && <Check className={`w-3 h-3 ml-auto ${catConfig.color}`} />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Reason */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isEditing ? (
+                      <div className="flex-1 flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editReason}
+                          onChange={(e) => setEditReason(e.target.value)}
+                          placeholder="Enter reason..."
+                          className="flex-1 px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded focus:outline-none focus:border-blue-500"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveEditReason(coin.symbol, coin.category)
+                            if (e.key === 'Escape') setEditingSymbol(null)
+                          }}
+                        />
                         <button
-                          onClick={() => startEditReason(coin)}
-                          className="p-0.5 text-slate-400 hover:text-slate-300"
+                          onClick={() => saveEditReason(coin.symbol, coin.category)}
+                          className="p-1 text-green-400 hover:text-green-300"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingSymbol(null)}
+                          className="p-1 text-slate-400 hover:text-slate-300"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-sm text-slate-400 truncate flex-1" title={coin.reasonText}>
+                          {coin.reasonText || <span className="text-slate-600 italic">No reason</span>}
+                        </span>
+                        <button
+                          onClick={() => startEditReason(coin.symbol, coin.reasonText)}
+                          className="p-1 text-slate-500 hover:text-slate-300 flex-shrink-0"
                           title="Edit reason"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                      )}
-                    </div>
-                    {editingSymbol === coin.symbol ? (
-                      <input
-                        type="text"
-                        value={editReason}
-                        onChange={(e) => setEditReason(e.target.value)}
-                        placeholder="Enter reason..."
-                        className="w-full mt-1 px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded focus:outline-none focus:border-blue-500"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveEditReason()
-                          if (e.key === 'Escape') setEditingSymbol(null)
-                        }}
-                      />
-                    ) : (
-                      coin.reason && (
-                        <p className="text-xs text-slate-400 truncate" title={coin.reason}>
-                          {coin.reason}
-                        </p>
-                      )
+                      </>
                     )}
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-
-          {/* Selection count */}
-          {selectedBlacklisted.size > 0 && (
-            <div className="px-4 py-2 bg-slate-900 border-t border-slate-700 text-xs text-slate-400">
-              {selectedBlacklisted.size} selected
-            </div>
+              )
+            })
           )}
         </div>
-      </div>
 
-      {/* Add Reason Modal */}
-      {addReasonModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md border border-slate-700">
-            <h4 className="text-lg font-bold text-white mb-4">
-              Add to Blacklist
-            </h4>
-            <p className="text-sm text-slate-400 mb-4">
-              Adding {addReasonModal.symbols.length} coin(s):{' '}
-              <span className="text-red-400 font-mono">
-                {addReasonModal.symbols.join(', ')}
-              </span>
-            </p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Reason (optional)
-              </label>
-              <textarea
-                value={newReason}
-                onChange={(e) => setNewReason(e.target.value)}
-                placeholder="Why is this coin being blacklisted?"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm focus:outline-none focus:border-blue-500 resize-none"
-                rows={3}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setAddReasonModal(null)}
-                className="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmAddToBlacklist}
-                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
-              >
-                Add to Blacklist
-              </button>
-            </div>
-          </div>
+        {/* Footer */}
+        <div className="px-4 py-2 bg-slate-900 border-t border-slate-700 text-xs text-slate-500">
+          Showing {filteredCoins.length} of {coinList.length} coins
         </div>
-      )}
+      </div>
     </div>
   )
 }
