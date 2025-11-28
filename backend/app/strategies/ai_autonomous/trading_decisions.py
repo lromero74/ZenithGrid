@@ -167,21 +167,37 @@ async def should_buy(
         if current_price == 0:
             return False, 0.0, "Cannot determine current price for DCA"
 
-        # CRITICAL DCA RULE: Only DCA when price is REASONABLY BELOW average cost basis
-        # DCA (Dollar Cost Averaging) means buying MORE at SIGNIFICANTLY LOWER prices to reduce average cost
+        # CRITICAL DCA RULE: Only DCA when price is REASONABLY BELOW reference price
+        # DCA (Dollar Cost Averaging) means buying MORE at LOWER prices to reduce average cost
         # Buying at or near current average moves the goal post AWAY and defeats the purpose of DCA
-        avg_cost = position.average_buy_price
-        price_drop_from_avg = ((avg_cost - current_price) / avg_cost) * 100  # Positive = price dropped
 
-        # Require meaningful drop below average (not just barely below)
-        # Use a reasonable minimum drop - AI can't override this constraint
-        min_drop_for_dca_pct = 1.0  # Require at least 1% drop below average cost basis
+        # Get configurable DCA settings
+        min_drop_for_dca_pct = config.get("min_dca_drop_pct", 1.0)
+        dca_drop_reference = config.get("dca_drop_reference", "cost_basis")
 
-        if price_drop_from_avg < min_drop_for_dca_pct:
-            if current_price >= avg_cost:
-                return False, 0.0, f"DCA rejected: price ({current_price:.8f}) is ABOVE avg cost ({avg_cost:.8f}). DCA only on significant drops."
+        # Determine reference price based on config
+        if dca_drop_reference == "last_buy":
+            # Use the price of the most recent buy/DCA
+            buy_trades = [t for t in position.trades if t.side == "buy"]
+            if buy_trades:
+                buy_trades.sort(key=lambda t: t.timestamp, reverse=True)
+                reference_price = buy_trades[0].price
+                reference_label = "last buy"
             else:
-                return False, 0.0, f"DCA rejected: drop {price_drop_from_avg:.2f}% below avg cost is too small (need {min_drop_for_dca_pct}%+). Waiting for better entry."
+                reference_price = position.average_buy_price
+                reference_label = "avg cost"
+        else:
+            # Default: use average cost basis
+            reference_price = position.average_buy_price
+            reference_label = "avg cost"
+
+        price_drop_from_ref = ((reference_price - current_price) / reference_price) * 100  # Positive = price dropped
+
+        if price_drop_from_ref < min_drop_for_dca_pct:
+            if current_price >= reference_price:
+                return False, 0.0, f"DCA rejected: price ({current_price:.8f}) is ABOVE {reference_label} ({reference_price:.8f}). DCA only on significant drops."
+            else:
+                return False, 0.0, f"DCA rejected: drop {price_drop_from_ref:.2f}% below {reference_label} is too small (need {min_drop_for_dca_pct}%+). Waiting for better entry."
 
         # Calculate remaining budget
         remaining_budget = position.max_quote_allowed - position.total_quote_spent

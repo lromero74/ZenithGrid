@@ -148,6 +148,25 @@ def get_strategy_definition() -> StrategyDefinition:
                 max_value=50.0,
                 group="DCA (Safety Orders)",
             ),
+            StrategyParameter(
+                name="min_dca_drop_pct",
+                display_name="Min Drop for DCA (%)",
+                description="Minimum price drop required before DCA is allowed. Prevents buying too close to the reference price. Example: 2.0 means price must drop at least 2% before DCA.",
+                type="float",
+                default=1.0,
+                min_value=0.5,
+                max_value=20.0,
+                group="DCA (Safety Orders)",
+            ),
+            StrategyParameter(
+                name="dca_drop_reference",
+                display_name="DCA Drop Reference",
+                description="What price to measure the drop from: cost_basis (average buy price) or last_buy (price of most recent buy/DCA).",
+                type="string",
+                default="cost_basis",
+                options=["cost_basis", "last_buy"],
+                group="DCA (Safety Orders)",
+            ),
 
             # ========================================
             # PROFIT & EXIT STRATEGY
