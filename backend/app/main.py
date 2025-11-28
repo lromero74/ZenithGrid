@@ -41,8 +41,8 @@ app.add_middleware(
 # Factory creates CoinbaseAdapter wrapping CoinbaseClient (auto-detects CDP vs HMAC auth)
 exchange_client = create_exchange_client(
     exchange_type="cex",  # Centralized exchange (Coinbase)
-    coinbase_key_name=settings.coinbase_key_name,
-    coinbase_private_key=settings.coinbase_private_key,
+    coinbase_key_name=settings.coinbase_cdp_key_name,
+    coinbase_private_key=settings.coinbase_cdp_private_key,
 )
 
 # Multi-bot monitor - monitors all active bots with their strategies
