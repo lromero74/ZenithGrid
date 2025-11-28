@@ -418,7 +418,7 @@ class MultiBotMonitor:
 
                         # Get candles for multiple timeframes (for BB% calculations)
                         candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
-                        three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
+                        one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 100)
 
                         # Get current price from most recent candle (more reliable than ticker!)
                         if not candles or len(candles) == 0:
@@ -440,8 +440,8 @@ class MultiBotMonitor:
 
                         # Build candles_by_timeframe for multi-timeframe indicator calculation
                         candles_by_timeframe = {"FIVE_MINUTE": candles}
-                        if three_min_candles and len(three_min_candles) > 0:
-                            candles_by_timeframe["THREE_MINUTE"] = three_min_candles
+                        if one_min_candles and len(one_min_candles) > 0:
+                            candles_by_timeframe["ONE_MINUTE"] = one_min_candles
 
                         # Prepare market context (for AI batch analysis)
                         market_context = market_analysis.prepare_market_context(candles, current_price)
