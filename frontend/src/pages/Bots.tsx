@@ -719,7 +719,7 @@ function Bots() {
                           {aiProvider && (
                             <a
                               href={
-                                aiProvider === 'claude' ? 'https://console.anthropic.com/settings/usage'
+                                aiProvider === 'claude' ? 'https://console.anthropic.com/settings/billing'
                                 : aiProvider === 'gemini' ? 'https://aistudio.google.com/app/apikey'
                                 : aiProvider === 'grok' ? 'https://console.x.ai/'
                                 : '#'
