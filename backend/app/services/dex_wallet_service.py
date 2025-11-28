@@ -316,31 +316,30 @@ class DexWalletService:
 
         # Add token balances
         for token in portfolio.token_balances:
-            # For now, only value stablecoins accurately
-            if token.symbol in ["USDC", "USDT", "DAI"]:
-                token_usd = token.balance  # 1:1 for stablecoins
-            elif token.symbol == "WETH":
+            # Price known tokens, show others with $0 value
+            if token.symbol in ["USDC", "USDT", "DAI", "cUSDC"]:
+                token_usd = token.balance  # ~1:1 for stablecoins (cUSDC is approximate)
+            elif token.symbol in ["WETH"]:
                 token_usd = token.balance * Decimal(str(eth_usd_price))
-            elif token.symbol == "WBTC":
+            elif token.symbol in ["WBTC"]:
                 token_usd = token.balance * Decimal(str(btc_usd_price))
             else:
-                # Skip tokens we can't price yet
+                # Can't price this token - show with $0 value
                 token_usd = Decimal("0")
 
-            if token_usd > 0:
-                token_btc = token_usd / Decimal(str(btc_usd_price)) if btc_usd_price > 0 else Decimal("0")
-                total_usd += token_usd
+            token_btc = token_usd / Decimal(str(btc_usd_price)) if btc_usd_price > 0 else Decimal("0")
+            total_usd += token_usd
 
-                holdings.append({
-                    "asset": token.symbol,
-                    "total_balance": float(token.balance),
-                    "available": float(token.balance),
-                    "hold": 0,
-                    "current_price_usd": float(token_usd / token.balance) if token.balance > 0 else 0,
-                    "usd_value": float(token_usd),
-                    "btc_value": float(token_btc),
-                    "percentage": 0,
-                })
+            holdings.append({
+                "asset": token.symbol,
+                "total_balance": float(token.balance),
+                "available": float(token.balance),
+                "hold": 0,
+                "current_price_usd": float(token_usd / token.balance) if token.balance > 0 and token_usd > 0 else 0,
+                "usd_value": float(token_usd),
+                "btc_value": float(token_btc),
+                "percentage": 0,
+            })
 
         # Calculate percentages
         for holding in holdings:
