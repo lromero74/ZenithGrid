@@ -135,7 +135,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
 
       {/* CEX Accounts */}
       {cexAccounts.length > 0 && (
-        <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+        <div className="bg-slate-800 rounded-lg border border-slate-700">
           <div className="px-4 py-3 bg-slate-900 border-b border-slate-700">
             <h4 className="font-medium text-white flex items-center gap-2">
               <Building2 className="w-4 h-4 text-blue-400" />
@@ -160,7 +160,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
 
       {/* DEX Accounts */}
       {dexAccounts.length > 0 && (
-        <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+        <div className="bg-slate-800 rounded-lg border border-slate-700">
           <div className="px-4 py-3 bg-slate-900 border-b border-slate-700">
             <h4 className="font-medium text-white flex items-center gap-2">
               <Wallet className="w-4 h-4 text-orange-400" />
@@ -254,7 +254,7 @@ function AccountRow({
           </button>
 
           {isMenuOpen && (
-            <div className="absolute right-0 mt-1 w-48 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-10 py-1">
+            <div className="absolute right-0 bottom-full mb-1 w-48 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-1">
               <button
                 onClick={onSetDefault}
                 disabled={account.is_default}
