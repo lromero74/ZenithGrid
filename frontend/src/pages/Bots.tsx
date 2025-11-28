@@ -8,6 +8,7 @@ import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 import PhaseConditionSelector from '../components/PhaseConditionSelector'
 import AIBotLogs from '../components/AIBotLogs'
 import { PnLChart } from '../components/PnLChart'
+import DexConfigSection, { type DexConfig } from '../components/DexConfigSection'
 import axios from 'axios'
 
 interface BotFormData {
@@ -22,6 +23,12 @@ interface BotFormData {
   budget_percentage: number  // % of aggregate portfolio value (preferred)
   check_interval_seconds: number  // How often bot monitors positions
   strategy_config: Record<string, any>
+  // DEX-specific fields
+  exchange_type: 'cex' | 'dex'  // Exchange type
+  chain_id?: number  // Blockchain ID (1=Ethereum, 56=BSC, 137=Polygon, 42161=Arbitrum)
+  dex_router?: string  // DEX router contract address
+  wallet_private_key?: string  // Wallet private key for DEX
+  rpc_url?: string  // RPC endpoint URL
 }
 
 interface ValidationWarning {
@@ -51,6 +58,12 @@ function Bots() {
     budget_percentage: 0,  // No budget percentage by default
     check_interval_seconds: 300,  // Default: 5 minutes
     strategy_config: {},
+    // DEX fields - default to CEX
+    exchange_type: 'cex',
+    chain_id: undefined,
+    dex_router: undefined,
+    wallet_private_key: undefined,
+    rpc_url: undefined,
   })
 
   // Fetch all bots
@@ -429,6 +442,12 @@ function Bots() {
       budget_percentage: formData.budget_percentage,
       check_interval_seconds: formData.check_interval_seconds,  // Monitoring interval
       strategy_config: formData.strategy_config,
+      // DEX configuration fields
+      exchange_type: formData.exchange_type,
+      chain_id: formData.chain_id,
+      dex_router: formData.dex_router,
+      wallet_private_key: formData.wallet_private_key,
+      rpc_url: formData.rpc_url,
     }
 
     if (editingBot) {
@@ -1047,11 +1066,25 @@ function Bots() {
               </div>
 
               {/* ============================================ */}
-              {/* SECTION 2: STRATEGY */}
+              {/* SECTION 2: EXCHANGE CONFIGURATION */}
+              {/* ============================================ */}
+              <DexConfigSection
+                config={{
+                  exchange_type: formData.exchange_type,
+                  chain_id: formData.chain_id,
+                  dex_router: formData.dex_router,
+                  wallet_private_key: formData.wallet_private_key,
+                  rpc_url: formData.rpc_url,
+                }}
+                onChange={(dexConfig) => setFormData({ ...formData, ...dexConfig })}
+              />
+
+              {/* ============================================ */}
+              {/* SECTION 3: STRATEGY */}
               {/* ============================================ */}
               <div className="border-b border-slate-700 pb-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <span className="text-blue-400">2.</span> Strategy
+                  <span className="text-blue-400">3.</span> Strategy
                 </h3>
 
                 {/* Strategy Selection */}
@@ -1081,7 +1114,7 @@ function Bots() {
               {/* ============================================ */}
               <div className="border-b border-slate-700 pb-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <span className="text-blue-400">3.</span> Markets & Trading Pairs
+                  <span className="text-blue-400">4.</span> Markets & Trading Pairs
                 </h3>
 
                 {/* Trading Pairs (3Commas Style Multi-Select with Single Market Constraint) */}
@@ -1237,7 +1270,7 @@ function Bots() {
               {/* ============================================ */}
               <div className="border-b border-slate-700 pb-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <span className="text-blue-400">4.</span> Monitoring & Timing
+                  <span className="text-blue-400">5.</span> Monitoring & Timing
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1268,7 +1301,7 @@ function Bots() {
               {/* ============================================ */}
               <div className="border-b border-slate-700 pb-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <span className="text-blue-400">5.</span> Budget & Risk Management
+                  <span className="text-blue-400">6.</span> Budget & Risk Management
                 </h3>
 
                 {/* Reserved Balance Configuration */}
@@ -1378,7 +1411,7 @@ function Bots() {
               {selectedStrategy && (selectedStrategy.id === 'conditional_dca' || selectedStrategy.parameters.length > 0) && (
               <div className="border-b border-slate-700 pb-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <span className="text-blue-400">6.</span> Strategy Parameters
+                  <span className="text-blue-400">7.</span> Strategy Parameters
                 </h3>
 
               {/* Dynamic Strategy Parameters */}

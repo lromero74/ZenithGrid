@@ -21,6 +21,8 @@ def upgrade():
     op.add_column('bots', sa.Column('exchange_type', sa.String(), nullable=False, server_default='cex'))
     op.add_column('bots', sa.Column('chain_id', sa.Integer(), nullable=True))
     op.add_column('bots', sa.Column('dex_router', sa.String(), nullable=True))
+    op.add_column('bots', sa.Column('wallet_private_key', sa.String(), nullable=True))
+    op.add_column('bots', sa.Column('rpc_url', sa.String(), nullable=True))
     op.add_column('bots', sa.Column('wallet_address', sa.String(), nullable=True))
 
     # Add DEX fields to positions table
@@ -39,6 +41,8 @@ def downgrade():
 
     # Remove DEX fields from bots table
     op.drop_column('bots', 'wallet_address')
+    op.drop_column('bots', 'rpc_url')
+    op.drop_column('bots', 'wallet_private_key')
     op.drop_column('bots', 'dex_router')
     op.drop_column('bots', 'chain_id')
     op.drop_column('bots', 'exchange_type')

@@ -41,7 +41,9 @@ class Bot(Base):
     exchange_type = Column(String, default="cex", nullable=False)  # "cex" or "dex"
     chain_id = Column(Integer, nullable=True)  # Blockchain chain ID (1=Ethereum, 56=BSC, 137=Polygon, 42161=Arbitrum)
     dex_router = Column(String, nullable=True)  # DEX router address (Uniswap, PancakeSwap, SushiSwap)
-    wallet_address = Column(String, nullable=True)  # MetaMask wallet address for DEX trading
+    wallet_private_key = Column(String, nullable=True)  # Encrypted wallet private key for DEX trading (sensitive!)
+    rpc_url = Column(String, nullable=True)  # RPC endpoint URL for blockchain connection
+    wallet_address = Column(String, nullable=True)  # Derived wallet address (computed from private key)
 
     # Strategy configuration
     strategy_type = Column(String, index=True)  # e.g., "macd_dca", "rsi", "bollinger_bands"
