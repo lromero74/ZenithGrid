@@ -75,8 +75,9 @@ TOKEN_ADDRESSES = {
 }
 
 # Default RPC URLs (can be overridden)
+# Using Cloudflare and other reliable public RPCs
 DEFAULT_RPC_URLS = {
-    1: "https://eth.llamarpc.com",
+    1: "https://cloudflare-eth.com",  # Cloudflare's Ethereum gateway - good rate limits
     42161: "https://arb1.arbitrum.io/rpc",
     137: "https://polygon-rpc.com",
     8453: "https://mainnet.base.org",
