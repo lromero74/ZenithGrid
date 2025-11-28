@@ -358,12 +358,21 @@ class MultiBotMonitor:
                 logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
                 logger.info(f"  🔍 Analyzing all {len(trading_pairs)} pairs for opportunities")
 
-                # Filter by minimum daily volume (only for new positions, not existing ones)
+                # Filter by minimum daily volume (only for NEW positions, not existing ones)
+                # Pairs with open positions are ALWAYS analyzed so AI can recommend sells
                 min_daily_volume = strategy.config.get("min_daily_volume", 0.0)
                 if min_daily_volume > 0:
                     logger.info(f"  📊 Filtering pairs by minimum 24h volume: {min_daily_volume}")
+                    # Get pairs that have existing positions - these bypass volume filter
+                    pairs_with_existing_positions = {p.product_id for p in open_positions if p.product_id}
                     filtered_pairs = []
                     for product_id in pairs_to_analyze:
+                        # Always include pairs with existing positions (for sell analysis)
+                        if product_id in pairs_with_existing_positions:
+                            filtered_pairs.append(product_id)
+                            logger.info(f"    🔒 {product_id}: Has open position (bypassing volume filter)")
+                            continue
+
                         try:
                             stats = await self.exchange.get_product_stats(product_id)
                             volume_24h = stats.get("volume_24h", 0.0)
