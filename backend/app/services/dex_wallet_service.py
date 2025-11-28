@@ -144,6 +144,7 @@ class DexWalletService:
     ) -> Dict[str, float]:
         """
         Fetch USD prices for tokens from CoinGecko API.
+        Note: Free tier only allows 1 token per request, so we fetch sequentially.
 
         Args:
             chain_id: Blockchain chain ID
@@ -173,36 +174,45 @@ class DexWalletService:
                 cached_price, cached_time = _price_cache[addr_lower]
                 if now - cached_time < PRICE_CACHE_TTL:
                     prices[addr_lower] = cached_price
+                    logger.info(f"Using cached price for {addr_lower}: ${cached_price}")
                     continue
             addresses_to_fetch.append(addr)
 
         if not addresses_to_fetch:
             return prices
 
-        # Fetch from CoinGecko
-        addresses_str = ",".join(addresses_to_fetch)
-        url = (
-            f"https://api.coingecko.com/api/v3/simple/token_price/{platform_id}"
-            f"?contract_addresses={addresses_str}&vs_currencies=usd"
-        )
+        # Fetch from CoinGecko - one token at a time due to free tier limits
+        async with aiohttp.ClientSession() as session:
+            for addr in addresses_to_fetch:
+                url = (
+                    f"https://api.coingecko.com/api/v3/simple/token_price/{platform_id}"
+                    f"?contract_addresses={addr}&vs_currencies=usd"
+                )
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        for addr, price_data in data.items():
-                            addr_lower = addr.lower()
-                            usd_price = price_data.get("usd", 0)
-                            prices[addr_lower] = usd_price
-                            _price_cache[addr_lower] = (usd_price, now)
-                            logger.debug(f"Fetched price for {addr}: ${usd_price}")
-                    elif response.status == 429:
-                        logger.warning("CoinGecko rate limit hit, using cached/fallback prices")
-                    else:
-                        logger.warning(f"CoinGecko API error: {response.status}")
-        except Exception as e:
-            logger.error(f"Error fetching token prices: {e}")
+                try:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            if data:
+                                for token_addr, price_data in data.items():
+                                    addr_lower = token_addr.lower()
+                                    usd_price = price_data.get("usd", 0)
+                                    prices[addr_lower] = usd_price
+                                    _price_cache[addr_lower] = (usd_price, now)
+                                    logger.info(f"CoinGecko price for {addr}: ${usd_price}")
+                            else:
+                                logger.warning(f"No price data returned for {addr}")
+                        elif response.status == 429:
+                            logger.warning("CoinGecko rate limit hit, stopping price fetch")
+                            break
+                        else:
+                            text = await response.text()
+                            logger.warning(f"CoinGecko API error {response.status} for {addr}: {text[:200]}")
+                except Exception as e:
+                    logger.error(f"Error fetching price for {addr}: {e}")
+
+                # Small delay between requests to avoid rate limiting
+                await asyncio.sleep(0.5)
 
         return prices
 
