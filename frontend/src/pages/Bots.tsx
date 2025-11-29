@@ -39,6 +39,13 @@ interface ValidationWarning {
   current_pct: number
 }
 
+interface ValidationError {
+  field: string
+  message: string
+  calculated_value: number
+  minimum_required: number
+}
+
 function Bots() {
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -48,6 +55,7 @@ function Bots() {
   const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [formData, setFormData] = useState<BotFormData>({
     name: '',
     description: '',
@@ -136,6 +144,87 @@ function Bots() {
     }
   }
 
+  // Validate manual order sizing values against exchange minimums
+  const validateManualOrderSizing = () => {
+    const errors: ValidationError[] = []
+
+    // Only validate if manual sizing mode is enabled
+    if (!formData.strategy_config.use_manual_sizing) {
+      setValidationErrors([])
+      return
+    }
+
+    // Get aggregate portfolio value from portfolio data
+    // For BTC pairs, use aggregate BTC value; for USD pairs, use aggregate USD value
+    const hasBtcPairs = formData.product_ids.some(p => p.endsWith('-BTC'))
+    const hasUsdPairs = formData.product_ids.some(p => p.endsWith('-USD') || p.endsWith('-USDC') || p.endsWith('-USDT'))
+
+    // Exchange minimums
+    const BTC_MINIMUM = 0.0001  // Coinbase minimum for BTC pairs
+    const USD_MINIMUM = 1.0     // Coinbase minimum for USD pairs (roughly)
+
+    if (portfolio) {
+      const aggregateBtc = portfolio.aggregate_btc_value || 0
+      const aggregateUsd = portfolio.aggregate_usd_value || portfolio.total_usd_value || 0
+
+      // Validate base_order_value
+      const baseOrderPct = formData.strategy_config.base_order_value
+      if (baseOrderPct && baseOrderPct > 0) {
+        if (hasBtcPairs) {
+          const calculatedBtc = aggregateBtc * (baseOrderPct / 100)
+          if (calculatedBtc < BTC_MINIMUM) {
+            errors.push({
+              field: 'base_order_value',
+              message: `Base Order Value (${baseOrderPct}%) calculates to ${calculatedBtc.toFixed(8)} BTC, which is below Coinbase's minimum of ${BTC_MINIMUM} BTC`,
+              calculated_value: calculatedBtc,
+              minimum_required: BTC_MINIMUM
+            })
+          }
+        }
+        if (hasUsdPairs) {
+          const calculatedUsd = aggregateUsd * (baseOrderPct / 100)
+          if (calculatedUsd < USD_MINIMUM) {
+            errors.push({
+              field: 'base_order_value',
+              message: `Base Order Value (${baseOrderPct}%) calculates to $${calculatedUsd.toFixed(2)}, which is below Coinbase's minimum of $${USD_MINIMUM}`,
+              calculated_value: calculatedUsd,
+              minimum_required: USD_MINIMUM
+            })
+          }
+        }
+      }
+
+      // Validate dca_order_value
+      const dcaOrderPct = formData.strategy_config.dca_order_value
+      if (dcaOrderPct && dcaOrderPct > 0) {
+        if (hasBtcPairs) {
+          const calculatedBtc = aggregateBtc * (dcaOrderPct / 100)
+          if (calculatedBtc < BTC_MINIMUM) {
+            errors.push({
+              field: 'dca_order_value',
+              message: `DCA Order Value (${dcaOrderPct}%) calculates to ${calculatedBtc.toFixed(8)} BTC, which is below Coinbase's minimum of ${BTC_MINIMUM} BTC`,
+              calculated_value: calculatedBtc,
+              minimum_required: BTC_MINIMUM
+            })
+          }
+        }
+        if (hasUsdPairs) {
+          const calculatedUsd = aggregateUsd * (dcaOrderPct / 100)
+          if (calculatedUsd < USD_MINIMUM) {
+            errors.push({
+              field: 'dca_order_value',
+              message: `DCA Order Value (${dcaOrderPct}%) calculates to $${calculatedUsd.toFixed(2)}, which is below Coinbase's minimum of $${USD_MINIMUM}`,
+              calculated_value: calculatedUsd,
+              minimum_required: USD_MINIMUM
+            })
+          }
+        }
+      }
+    }
+
+    setValidationErrors(errors)
+  }
+
   // Check for bot to edit from navigation state (from Dashboard Edit button)
   useEffect(() => {
     const state = location.state as { editBot?: Bot } | null
@@ -168,10 +257,11 @@ function Bots() {
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       validateBotConfig()
+      validateManualOrderSizing()
     }, 500) // Debounce 500ms
 
     return () => clearTimeout(timeoutId)
-  }, [formData.product_ids, formData.strategy_config])
+  }, [formData.product_ids, formData.strategy_config, portfolio])
 
   // Fetch available templates
   const { data: templates = [] } = useQuery({
@@ -435,6 +525,12 @@ function Bots() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Block save if there are validation errors
+    if (validationErrors.length > 0) {
+      alert('Cannot save: Order values are below exchange minimum. Please increase the percentage values or fund your account with more capital.')
+      return
+    }
 
     // Validate at least one pair is selected
     if (formData.product_ids.length === 0) {
@@ -1719,6 +1815,38 @@ function Bots() {
               </div>
               )}
 
+              {/* Validation Errors (Block Save) */}
+              {validationErrors.length > 0 && (
+                <div className="bg-red-900/40 border-2 border-red-600 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="text-red-500 text-2xl flex-shrink-0">🚫</div>
+                    <div className="flex-1">
+                      <div className="font-bold text-red-300 mb-2 text-lg">
+                        Cannot Save - Order Size Below Exchange Minimum
+                      </div>
+                      <div className="text-sm text-red-200/90 mb-3">
+                        Your configured order percentages result in order sizes below Coinbase's minimum. Increase the percentages or add more funds to your account.
+                      </div>
+                      <div className="space-y-2">
+                        {validationErrors.map((error, idx) => (
+                          <div key={idx} className="bg-red-900/30 rounded p-3 border border-red-600/50">
+                            <div className="font-medium text-red-300 mb-1">
+                              {error.field === 'base_order_value' ? '📊 Base Order Value' : '📈 DCA Order Value'}
+                            </div>
+                            <div className="text-xs text-red-200/80">
+                              {error.message}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-sm text-red-200 mt-3 font-medium">
+                        Save is disabled until this is resolved.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Validation Warnings */}
               {validationWarnings.length > 0 && (
                 <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 mb-4">
@@ -1766,11 +1894,17 @@ function Bots() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 transition-colors"
-                  disabled={createBot.isPending || updateBot.isPending}
+                  className={`px-4 py-2 rounded transition-colors ${
+                    validationErrors.length > 0
+                      ? 'bg-slate-600 cursor-not-allowed opacity-50'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                  disabled={createBot.isPending || updateBot.isPending || validationErrors.length > 0}
                 >
                   {createBot.isPending || updateBot.isPending
                     ? 'Saving...'
+                    : validationErrors.length > 0
+                    ? 'Fix Errors First'
                     : editingBot
                     ? 'Update Bot'
                     : 'Create Bot'}
