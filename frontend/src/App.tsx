@@ -292,6 +292,15 @@ function App() {
         </Suspense>
       </main>
 
+      {/* Footer */}
+      <footer className="bg-slate-800 border-t border-slate-700 py-4 mt-8">
+        <div className="container mx-auto px-4 sm:px-6 text-center">
+          <p className="text-sm text-slate-400">
+            &copy; {new Date().getFullYear()} Romero Tech Solutions. All rights reserved.
+          </p>
+        </div>
+      </footer>
+
       {/* Add Account Modal */}
       <AddAccountModal
         isOpen={showAddAccountModal}

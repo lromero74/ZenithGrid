@@ -2,7 +2,10 @@
 Crypto News Router
 
 Fetches and caches crypto news from multiple sources.
-Cache refreshes once per day (24 hours).
+Cache behavior:
+- Checks for new content every 15 minutes
+- Merges new items with existing cache (new items at top)
+- Prunes items older than 7 days
 
 Sources:
 - Reddit r/cryptocurrency and r/bitcoin (JSON API)
@@ -48,7 +51,9 @@ VIDEO_CACHE_FILE = Path(__file__).parent.parent.parent / "video_cache.json"
 FEAR_GREED_CACHE_FILE = Path(__file__).parent.parent.parent / "fear_greed_cache.json"
 BLOCK_HEIGHT_CACHE_FILE = Path(__file__).parent.parent.parent / "block_height_cache.json"
 US_DEBT_CACHE_FILE = Path(__file__).parent.parent.parent / "us_debt_cache.json"
-CACHE_DURATION_HOURS = 24
+# News/video: check for new content every 15 mins, keep items for 7 days
+NEWS_CACHE_CHECK_MINUTES = 15  # How often to check for new articles/videos
+NEWS_ITEM_MAX_AGE_DAYS = 7  # Prune items older than this
 FEAR_GREED_CACHE_MINUTES = 15  # Update fear/greed every 15 minutes
 BLOCK_HEIGHT_CACHE_MINUTES = 10  # Update block height every 10 minutes
 US_DEBT_CACHE_HOURS = 24  # Update US debt once per day
@@ -1138,8 +1143,12 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
 ]
 
 
-def load_cache() -> Optional[Dict[str, Any]]:
-    """Load news cache from file"""
+def load_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
+    """Load news cache from file.
+
+    Args:
+        for_merge: If True, return cache even if expired (for merging new items)
+    """
     if not CACHE_FILE.exists():
         return None
 
@@ -1147,16 +1156,77 @@ def load_cache() -> Optional[Dict[str, Any]]:
         with open(CACHE_FILE, "r") as f:
             cache = json.load(f)
 
-        # Check if cache is expired
+        # Check if cache needs refresh (15 minutes)
         cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(hours=CACHE_DURATION_HOURS):
-            logger.info("News cache expired")
+        cache_age = datetime.now() - cached_at
+
+        if for_merge:
+            # For merging, return cache regardless of age
+            return cache
+
+        if cache_age > timedelta(minutes=NEWS_CACHE_CHECK_MINUTES):
+            logger.info(f"News cache needs refresh (age: {cache_age})")
             return None
 
         return cache
     except (json.JSONDecodeError, ValueError) as e:
         logger.warning(f"Failed to load news cache: {e}")
         return None
+
+
+def prune_old_items(items: List[Dict], max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS) -> List[Dict]:
+    """Remove items older than max_age_days based on published date."""
+    cutoff = datetime.now() - timedelta(days=max_age_days)
+    pruned = []
+    removed_count = 0
+
+    for item in items:
+        published = item.get("published")
+        if not published:
+            # Keep items without published date (rare edge case)
+            pruned.append(item)
+            continue
+
+        try:
+            # Handle both with and without Z suffix
+            pub_str = published.rstrip("Z")
+            pub_date = datetime.fromisoformat(pub_str)
+
+            if pub_date >= cutoff:
+                pruned.append(item)
+            else:
+                removed_count += 1
+        except (ValueError, TypeError):
+            # If we can't parse date, keep the item
+            pruned.append(item)
+
+    if removed_count > 0:
+        logger.info(f"Pruned {removed_count} items older than {max_age_days} days")
+
+    return pruned
+
+
+def merge_news_items(existing: List[Dict], new_items: List[Dict]) -> List[Dict]:
+    """Merge new items with existing cache. New items go to top, deduped by URL."""
+    # Create set of existing URLs for fast lookup
+    existing_urls = {item.get("url") for item in existing if item.get("url")}
+
+    # Find truly new items
+    truly_new = [item for item in new_items if item.get("url") not in existing_urls]
+
+    if truly_new:
+        logger.info(f"Found {len(truly_new)} new news items to add")
+
+    # New items at top, then existing (already sorted by date)
+    merged = truly_new + existing
+
+    # Sort by published date (most recent first)
+    merged.sort(
+        key=lambda x: x.get("published") or "1970-01-01",
+        reverse=True
+    )
+
+    return merged
 
 
 def save_cache(data: Dict[str, Any]) -> None:
@@ -1169,8 +1239,12 @@ def save_cache(data: Dict[str, Any]) -> None:
         logger.error(f"Failed to save news cache: {e}")
 
 
-def load_video_cache() -> Optional[Dict[str, Any]]:
-    """Load video cache from file"""
+def load_video_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
+    """Load video cache from file.
+
+    Args:
+        for_merge: If True, return cache even if expired (for merging new items)
+    """
     if not VIDEO_CACHE_FILE.exists():
         return None
 
@@ -1178,10 +1252,16 @@ def load_video_cache() -> Optional[Dict[str, Any]]:
         with open(VIDEO_CACHE_FILE, "r") as f:
             cache = json.load(f)
 
-        # Check if cache is expired
+        # Check if cache needs refresh (15 minutes)
         cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(hours=CACHE_DURATION_HOURS):
-            logger.info("Video cache expired")
+        cache_age = datetime.now() - cached_at
+
+        if for_merge:
+            # For merging, return cache regardless of age
+            return cache
+
+        if cache_age > timedelta(minutes=NEWS_CACHE_CHECK_MINUTES):
+            logger.info(f"Video cache needs refresh (age: {cache_age})")
             return None
 
         return cache
@@ -1538,8 +1618,15 @@ async def fetch_youtube_videos(session: aiohttp.ClientSession, source_id: str, c
 
 
 async def fetch_all_videos() -> Dict[str, Any]:
-    """Fetch videos from all YouTube sources"""
-    all_items: List[VideoItem] = []
+    """Fetch videos from all YouTube sources and merge with existing cache.
+
+    Strategy:
+    - Fetch fresh videos from all sources
+    - Merge with existing cached videos (new items at top, dedupe by URL)
+    - Prune videos older than 7 days
+    - Save merged cache
+    """
+    fresh_items: List[VideoItem] = []
 
     async with aiohttp.ClientSession() as session:
         tasks = []
@@ -1550,15 +1637,22 @@ async def fetch_all_videos() -> Dict[str, Any]:
 
         for result in results:
             if isinstance(result, list):
-                all_items.extend(result)
+                fresh_items.extend(result)
             elif isinstance(result, Exception):
                 logger.error(f"Video fetch task failed: {result}")
 
-    # Sort by published date (most recent first)
-    all_items.sort(
-        key=lambda x: x.published or "1970-01-01",
-        reverse=True
-    )
+    # Convert to dicts for merge
+    fresh_dicts = [item.model_dump() for item in fresh_items]
+
+    # Load existing cache for merge (even if "expired")
+    existing_cache = load_video_cache(for_merge=True)
+    existing_items = existing_cache.get("videos", []) if existing_cache else []
+
+    # Merge: add new items to existing, dedupe by URL
+    merged_items = merge_news_items(existing_items, fresh_dicts)
+
+    # Prune videos older than 7 days
+    merged_items = prune_old_items(merged_items)
 
     # Build sources list for UI
     sources_list = [
@@ -1568,11 +1662,11 @@ async def fetch_all_videos() -> Dict[str, Any]:
 
     now = datetime.now()
     cache_data = {
-        "videos": [item.model_dump() for item in all_items],
+        "videos": merged_items,
         "sources": sources_list,
         "cached_at": now.isoformat(),
-        "cache_expires_at": (now + timedelta(hours=CACHE_DURATION_HOURS)).isoformat(),
-        "total_items": len(all_items),
+        "cache_expires_at": (now + timedelta(minutes=NEWS_CACHE_CHECK_MINUTES)).isoformat(),
+        "total_items": len(merged_items),
     }
 
     # Save to cache
@@ -1684,8 +1778,15 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
 
 
 async def fetch_all_news() -> Dict[str, Any]:
-    """Fetch news from all sources"""
-    all_items: List[NewsItem] = []
+    """Fetch news from all sources and merge with existing cache.
+
+    Strategy:
+    - Fetch fresh items from all sources
+    - Merge with existing cached items (new items at top, dedupe by URL)
+    - Prune items older than 7 days
+    - Save merged cache
+    """
+    fresh_items: List[NewsItem] = []
 
     async with aiohttp.ClientSession() as session:
         tasks = []
@@ -1699,15 +1800,22 @@ async def fetch_all_news() -> Dict[str, Any]:
 
         for result in results:
             if isinstance(result, list):
-                all_items.extend(result)
+                fresh_items.extend(result)
             elif isinstance(result, Exception):
                 logger.error(f"Task failed: {result}")
 
-    # Sort by published date (most recent first)
-    all_items.sort(
-        key=lambda x: x.published or "1970-01-01",
-        reverse=True
-    )
+    # Convert to dicts for merge
+    fresh_dicts = [item.model_dump() for item in fresh_items]
+
+    # Load existing cache for merge (even if "expired")
+    existing_cache = load_cache(for_merge=True)
+    existing_items = existing_cache.get("news", []) if existing_cache else []
+
+    # Merge: add new items to existing, dedupe by URL
+    merged_items = merge_news_items(existing_items, fresh_dicts)
+
+    # Prune items older than 7 days
+    merged_items = prune_old_items(merged_items)
 
     # Build sources list for UI
     sources_list = [
@@ -1717,11 +1825,11 @@ async def fetch_all_news() -> Dict[str, Any]:
 
     now = datetime.now()
     cache_data = {
-        "news": [item.model_dump() for item in all_items],
+        "news": merged_items,
         "sources": sources_list,
         "cached_at": now.isoformat(),
-        "cache_expires_at": (now + timedelta(hours=CACHE_DURATION_HOURS)).isoformat(),
-        "total_items": len(all_items),
+        "cache_expires_at": (now + timedelta(minutes=NEWS_CACHE_CHECK_MINUTES)).isoformat(),
+        "total_items": len(merged_items),
     }
 
     # Save to cache
