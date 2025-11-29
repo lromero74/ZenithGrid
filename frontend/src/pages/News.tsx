@@ -1080,9 +1080,9 @@ export default function News() {
                       }}
                     />
                   )}
-                  {/* Click overlay to open preview */}
+                  {/* Click overlay to open preview in reader mode */}
                   <button
-                    onClick={() => setPreviewArticle(item)}
+                    onClick={() => { setPreviewArticle(item); setReaderModeEnabled(true) }}
                     className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/30 transition-colors cursor-pointer"
                   />
                   {/* Open in new tab button */}
@@ -1099,7 +1099,7 @@ export default function News() {
                 </div>
 
                 <button
-                  onClick={() => setPreviewArticle(item)}
+                  onClick={() => { setPreviewArticle(item); setReaderModeEnabled(true) }}
                   className="p-4 space-y-3 text-left w-full cursor-pointer hover:bg-slate-700/30 transition-colors"
                 >
                   {/* Source badge and time */}
@@ -1410,8 +1410,8 @@ export default function News() {
 
             {/* Modal content */}
             <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
-              {/* Full-size thumbnail - hide in reader mode if we have content */}
-              {previewArticle.thumbnail && !(readerModeEnabled && articleContent?.success) && (
+              {/* Full-size thumbnail - always show if available */}
+              {previewArticle.thumbnail && (
                 <div className="w-full aspect-video bg-slate-900">
                   <img
                     src={previewArticle.thumbnail}
