@@ -6,10 +6,28 @@
  * Also includes video news from reputable crypto YouTube channels.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+
+// BTC Halving constants
+const NEXT_HALVING_BLOCK = 1050000 // Block 1,050,000 is the next halving
+const BLOCKS_PER_HALVING = 210000
+const AVG_BLOCK_TIME_MINUTES = 10 // Average Bitcoin block time
+
+interface FearGreedData {
+  value: number
+  value_classification: string
+  timestamp: string
+  time_until_update: string | null
+}
+
+interface FearGreedResponse {
+  data: FearGreedData
+  cached_at: string
+  cache_expires_at: string
+}
 
 interface NewsItem {
   title: string
@@ -62,6 +80,20 @@ interface VideoResponse {
   total_items: number
 }
 
+interface BlockHeightResponse {
+  height: number
+  timestamp: string
+}
+
+interface HalvingCountdown {
+  blocksRemaining: number
+  estimatedDate: Date
+  daysRemaining: number
+  hoursRemaining: number
+  minutesRemaining: number
+  percentComplete: number
+}
+
 // Format relative time (e.g., "2 hours ago")
 function formatRelativeTime(isoString: string | null): string {
   if (!isoString) return ''
@@ -100,6 +132,72 @@ const videoSourceColors: Record<string, string> = {
   bankless: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   the_defiant: 'bg-green-500/20 text-green-400 border-green-500/30',
   crypto_banter: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+}
+
+// Get color for Fear/Greed meter based on value
+function getFearGreedColor(value: number): { bg: string; text: string; border: string; gradient: string } {
+  if (value <= 25) {
+    return {
+      bg: 'bg-red-500/20',
+      text: 'text-red-400',
+      border: 'border-red-500/30',
+      gradient: 'from-red-600 to-red-400',
+    }
+  } else if (value <= 45) {
+    return {
+      bg: 'bg-orange-500/20',
+      text: 'text-orange-400',
+      border: 'border-orange-500/30',
+      gradient: 'from-orange-600 to-orange-400',
+    }
+  } else if (value <= 55) {
+    return {
+      bg: 'bg-yellow-500/20',
+      text: 'text-yellow-400',
+      border: 'border-yellow-500/30',
+      gradient: 'from-yellow-600 to-yellow-400',
+    }
+  } else if (value <= 75) {
+    return {
+      bg: 'bg-lime-500/20',
+      text: 'text-lime-400',
+      border: 'border-lime-500/30',
+      gradient: 'from-lime-600 to-lime-400',
+    }
+  } else {
+    return {
+      bg: 'bg-green-500/20',
+      text: 'text-green-400',
+      border: 'border-green-500/30',
+      gradient: 'from-green-600 to-green-400',
+    }
+  }
+}
+
+// Calculate halving countdown from current block height
+function calculateHalvingCountdown(currentHeight: number): HalvingCountdown {
+  const blocksRemaining = NEXT_HALVING_BLOCK - currentHeight
+  const minutesRemaining = blocksRemaining * AVG_BLOCK_TIME_MINUTES
+  const estimatedDate = new Date(Date.now() + minutesRemaining * 60 * 1000)
+
+  const totalMinutes = minutesRemaining
+  const days = Math.floor(totalMinutes / (24 * 60))
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60)
+  const minutes = Math.floor(totalMinutes % 60)
+
+  // Progress through current halving epoch (210,000 blocks)
+  const currentEpochStart = NEXT_HALVING_BLOCK - BLOCKS_PER_HALVING
+  const blocksIntoEpoch = currentHeight - currentEpochStart
+  const percentComplete = (blocksIntoEpoch / BLOCKS_PER_HALVING) * 100
+
+  return {
+    blocksRemaining,
+    estimatedDate,
+    daysRemaining: days,
+    hoursRemaining: hours,
+    minutesRemaining: minutes,
+    percentComplete: Math.min(100, Math.max(0, percentComplete)),
+  }
 }
 
 type TabType = 'articles' | 'videos'
@@ -144,6 +242,59 @@ export default function News() {
     staleTime: 1000 * 60 * 60,
     refetchOnWindowFocus: false,
   })
+
+  // Fetch Fear & Greed Index (15 minute refresh)
+  const { data: fearGreedData } = useQuery<FearGreedResponse>({
+    queryKey: ['fear-greed'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/fear-greed')
+      if (!response.ok) throw new Error('Failed to fetch fear/greed index')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 15, // 15 minutes
+    refetchInterval: 1000 * 60 * 15, // Refetch every 15 minutes
+    refetchOnWindowFocus: false,
+  })
+
+  // Fetch BTC block height for halving countdown
+  const { data: blockHeight } = useQuery<BlockHeightResponse>({
+    queryKey: ['btc-block-height'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/btc-block-height')
+      if (!response.ok) throw new Error('Failed to fetch block height')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    refetchInterval: 1000 * 60 * 10, // Refetch every 10 minutes
+    refetchOnWindowFocus: false,
+  })
+
+  // Calculate halving countdown
+  const halvingCountdown = blockHeight ? calculateHalvingCountdown(blockHeight.height) : null
+
+  // Live countdown timer
+  const [liveCountdown, setLiveCountdown] = useState<string>('')
+  useEffect(() => {
+    if (!halvingCountdown) return
+
+    const updateCountdown = () => {
+      const now = new Date()
+      const diff = halvingCountdown.estimatedDate.getTime() - now.getTime()
+      if (diff <= 0) {
+        setLiveCountdown('Halving imminent!')
+        return
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const secs = Math.floor((diff % (1000 * 60)) / 1000)
+      setLiveCountdown(`${days}d ${hours}h ${mins}m ${secs}s`)
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+    return () => clearInterval(interval)
+  }, [halvingCountdown])
 
   const handleForceRefresh = async () => {
     if (activeTab === 'articles') {
@@ -232,6 +383,157 @@ export default function News() {
             <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
             <span className="text-sm">Refresh</span>
           </button>
+        </div>
+      </div>
+
+      {/* Market Sentiment & Halving Dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Fear & Greed Index */}
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+          <div className="flex items-center space-x-2 mb-4">
+            <Gauge className="w-5 h-5 text-slate-400" />
+            <h3 className="font-medium text-white">Fear & Greed Index</h3>
+          </div>
+
+          {fearGreedData ? (
+            <div className="flex flex-col items-center">
+              {/* Semicircular gauge */}
+              <div className="relative w-48 h-24 mb-2">
+                {/* Background arc */}
+                <svg viewBox="0 0 200 100" className="w-full h-full">
+                  {/* Gradient background arc */}
+                  <defs>
+                    <linearGradient id="fearGreedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#ef4444" />
+                      <stop offset="25%" stopColor="#f97316" />
+                      <stop offset="50%" stopColor="#eab308" />
+                      <stop offset="75%" stopColor="#84cc16" />
+                      <stop offset="100%" stopColor="#22c55e" />
+                    </linearGradient>
+                  </defs>
+                  {/* Background track */}
+                  <path
+                    d="M 20 95 A 80 80 0 0 1 180 95"
+                    fill="none"
+                    stroke="#334155"
+                    strokeWidth="12"
+                    strokeLinecap="round"
+                  />
+                  {/* Colored arc */}
+                  <path
+                    d="M 20 95 A 80 80 0 0 1 180 95"
+                    fill="none"
+                    stroke="url(#fearGreedGradient)"
+                    strokeWidth="12"
+                    strokeLinecap="round"
+                  />
+                  {/* Needle */}
+                  <g transform={`rotate(${-90 + (fearGreedData.data.value / 100) * 180}, 100, 95)`}>
+                    <line
+                      x1="100"
+                      y1="95"
+                      x2="100"
+                      y2="30"
+                      stroke="white"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <circle cx="100" cy="95" r="6" fill="white" />
+                  </g>
+                </svg>
+              </div>
+
+              {/* Value display */}
+              <div className={`text-4xl font-bold ${getFearGreedColor(fearGreedData.data.value).text}`}>
+                {fearGreedData.data.value}
+              </div>
+              <div
+                className={`px-3 py-1 rounded-full text-sm font-medium mt-1 ${getFearGreedColor(fearGreedData.data.value).bg} ${getFearGreedColor(fearGreedData.data.value).text} border ${getFearGreedColor(fearGreedData.data.value).border}`}
+              >
+                {fearGreedData.data.value_classification}
+              </div>
+
+              {/* Scale labels */}
+              <div className="flex justify-between w-full mt-3 text-xs text-slate-500">
+                <span>Extreme Fear</span>
+                <span>Neutral</span>
+                <span>Extreme Greed</span>
+              </div>
+
+              {/* Cache info */}
+              <div className="mt-3 text-xs text-slate-600">
+                Updates every 15 minutes
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-32">
+              <LoadingSpinner size="sm" text="Loading..." />
+            </div>
+          )}
+        </div>
+
+        {/* BTC Halving Countdown */}
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+          <div className="flex items-center space-x-2 mb-4">
+            <Timer className="w-5 h-5 text-orange-400" />
+            <h3 className="font-medium text-white">Next BTC Halving</h3>
+          </div>
+
+          {halvingCountdown && blockHeight ? (
+            <div className="flex flex-col items-center">
+              {/* Live countdown */}
+              <div className="text-3xl font-mono font-bold text-orange-400 mb-2">
+                {liveCountdown || 'Calculating...'}
+              </div>
+
+              {/* Estimated date */}
+              <div className="text-sm text-slate-400 mb-4">
+                ~{halvingCountdown.estimatedDate.toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full mb-2">
+                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                  <span>Epoch Progress</span>
+                  <span>{halvingCountdown.percentComplete.toFixed(1)}%</span>
+                </div>
+                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-orange-600 to-yellow-500 transition-all duration-500"
+                    style={{ width: `${halvingCountdown.percentComplete}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Block info */}
+              <div className="grid grid-cols-2 gap-4 w-full mt-3 text-center">
+                <div className="bg-slate-900/50 rounded-lg p-2">
+                  <div className="text-xs text-slate-500">Current Block</div>
+                  <div className="text-sm font-mono text-slate-300">
+                    {blockHeight.height.toLocaleString()}
+                  </div>
+                </div>
+                <div className="bg-slate-900/50 rounded-lg p-2">
+                  <div className="text-xs text-slate-500">Blocks Remaining</div>
+                  <div className="text-sm font-mono text-orange-400">
+                    {halvingCountdown.blocksRemaining.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Halving info */}
+              <div className="mt-3 text-xs text-slate-600 text-center">
+                Block reward will drop from 3.125 to 1.5625 BTC
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-32">
+              <LoadingSpinner size="sm" text="Loading..." />
+            </div>
+          )}
         </div>
       </div>
 

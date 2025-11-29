@@ -43,7 +43,11 @@ router = APIRouter(prefix="/api/news", tags=["news"])
 # Cache configuration
 CACHE_FILE = Path(__file__).parent.parent.parent / "news_cache.json"
 VIDEO_CACHE_FILE = Path(__file__).parent.parent.parent / "video_cache.json"
+FEAR_GREED_CACHE_FILE = Path(__file__).parent.parent.parent / "fear_greed_cache.json"
+BLOCK_HEIGHT_CACHE_FILE = Path(__file__).parent.parent.parent / "block_height_cache.json"
 CACHE_DURATION_HOURS = 24
+FEAR_GREED_CACHE_MINUTES = 15  # Update fear/greed every 15 minutes
+BLOCK_HEIGHT_CACHE_MINUTES = 10  # Update block height every 10 minutes
 
 # News sources configuration
 NEWS_SOURCES = {
@@ -180,6 +184,27 @@ class VideoResponse(BaseModel):
     total_items: int
 
 
+class FearGreedData(BaseModel):
+    """Fear & Greed Index data"""
+    value: int  # 0-100
+    value_classification: str  # "Extreme Fear", "Fear", "Neutral", "Greed", "Extreme Greed"
+    timestamp: str
+    time_until_update: Optional[str] = None
+
+
+class FearGreedResponse(BaseModel):
+    """Fear & Greed API response"""
+    data: FearGreedData
+    cached_at: str
+    cache_expires_at: str
+
+
+class BlockHeightResponse(BaseModel):
+    """BTC block height API response"""
+    height: int
+    timestamp: str
+
+
 def load_cache() -> Optional[Dict[str, Any]]:
     """Load news cache from file"""
     if not CACHE_FILE.exists():
@@ -240,6 +265,148 @@ def save_video_cache(data: Dict[str, Any]) -> None:
         logger.info("Video cache saved")
     except Exception as e:
         logger.error(f"Failed to save video cache: {e}")
+
+
+def load_fear_greed_cache() -> Optional[Dict[str, Any]]:
+    """Load fear/greed cache from file (15 minute cache)"""
+    if not FEAR_GREED_CACHE_FILE.exists():
+        return None
+
+    try:
+        with open(FEAR_GREED_CACHE_FILE, "r") as f:
+            cache = json.load(f)
+
+        # Check if cache is expired (15 minutes)
+        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
+        if datetime.now() - cached_at > timedelta(minutes=FEAR_GREED_CACHE_MINUTES):
+            logger.info("Fear/Greed cache expired")
+            return None
+
+        return cache
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to load fear/greed cache: {e}")
+        return None
+
+
+def save_fear_greed_cache(data: Dict[str, Any]) -> None:
+    """Save fear/greed cache to file"""
+    try:
+        with open(FEAR_GREED_CACHE_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        logger.info("Fear/Greed cache saved")
+    except Exception as e:
+        logger.error(f"Failed to save fear/greed cache: {e}")
+
+
+def load_block_height_cache() -> Optional[Dict[str, Any]]:
+    """Load block height cache from file (10 minute cache)"""
+    if not BLOCK_HEIGHT_CACHE_FILE.exists():
+        return None
+
+    try:
+        with open(BLOCK_HEIGHT_CACHE_FILE, "r") as f:
+            cache = json.load(f)
+
+        # Check if cache is expired (10 minutes)
+        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
+        if datetime.now() - cached_at > timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES):
+            logger.info("Block height cache expired")
+            return None
+
+        return cache
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to load block height cache: {e}")
+        return None
+
+
+def save_block_height_cache(data: Dict[str, Any]) -> None:
+    """Save block height cache to file"""
+    try:
+        with open(BLOCK_HEIGHT_CACHE_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        logger.info("Block height cache saved")
+    except Exception as e:
+        logger.error(f"Failed to save block height cache: {e}")
+
+
+async def fetch_btc_block_height() -> Dict[str, Any]:
+    """Fetch current BTC block height from blockchain.info API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+            async with session.get(
+                "https://blockchain.info/q/getblockcount",
+                headers=headers,
+                timeout=10
+            ) as response:
+                if response.status != 200:
+                    logger.warning(f"Blockchain.info API returned {response.status}")
+                    raise HTTPException(status_code=503, detail="Block height API unavailable")
+
+                height_text = await response.text()
+                height = int(height_text.strip())
+
+                now = datetime.now()
+                cache_data = {
+                    "height": height,
+                    "timestamp": now.isoformat(),
+                    "cached_at": now.isoformat(),
+                }
+
+                # Save to cache
+                save_block_height_cache(cache_data)
+
+                return cache_data
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching BTC block height")
+        raise HTTPException(status_code=503, detail="Block height API timeout")
+    except ValueError as e:
+        logger.error(f"Invalid block height response: {e}")
+        raise HTTPException(status_code=503, detail="Invalid block height response")
+    except Exception as e:
+        logger.error(f"Error fetching BTC block height: {e}")
+        raise HTTPException(status_code=503, detail=f"Block height API error: {str(e)}")
+
+
+async def fetch_fear_greed_index() -> Dict[str, Any]:
+    """Fetch Fear & Greed Index from Alternative.me API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+            async with session.get(
+                "https://api.alternative.me/fng/",
+                headers=headers,
+                timeout=10
+            ) as response:
+                if response.status != 200:
+                    logger.warning(f"Fear/Greed API returned {response.status}")
+                    raise HTTPException(status_code=503, detail="Fear/Greed API unavailable")
+
+                data = await response.json()
+                fng_data = data.get("data", [{}])[0]
+
+                now = datetime.now()
+                cache_data = {
+                    "data": {
+                        "value": int(fng_data.get("value", 50)),
+                        "value_classification": fng_data.get("value_classification", "Neutral"),
+                        "timestamp": datetime.fromtimestamp(int(fng_data.get("timestamp", 0))).isoformat(),
+                        "time_until_update": fng_data.get("time_until_update"),
+                    },
+                    "cached_at": now.isoformat(),
+                    "cache_expires_at": (now + timedelta(minutes=FEAR_GREED_CACHE_MINUTES)).isoformat(),
+                }
+
+                # Save to cache
+                save_fear_greed_cache(cache_data)
+
+                return cache_data
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching Fear/Greed index")
+        raise HTTPException(status_code=503, detail="Fear/Greed API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching Fear/Greed index: {e}")
+        raise HTTPException(status_code=503, detail=f"Fear/Greed API error: {str(e)}")
 
 
 async def fetch_youtube_videos(session: aiohttp.ClientSession, source_id: str, config: Dict) -> List[VideoItem]:
@@ -593,3 +760,47 @@ async def get_video_sources():
         "note": "These are reputable crypto YouTube channels providing educational content, "
                 "market analysis, and news coverage."
     }
+
+
+@router.get("/fear-greed", response_model=FearGreedResponse)
+async def get_fear_greed():
+    """
+    Get the Crypto Fear & Greed Index.
+
+    The index ranges from 0 (Extreme Fear) to 100 (Extreme Greed).
+    Data is cached for 15 minutes.
+
+    Source: Alternative.me Crypto Fear & Greed Index
+    """
+    # Try to load from cache first
+    cache = load_fear_greed_cache()
+    if cache:
+        logger.info("Serving Fear/Greed from cache")
+        return FearGreedResponse(**cache)
+
+    # Fetch fresh data
+    logger.info("Fetching fresh Fear/Greed index...")
+    data = await fetch_fear_greed_index()
+    return FearGreedResponse(**data)
+
+
+@router.get("/btc-block-height", response_model=BlockHeightResponse)
+async def get_btc_block_height():
+    """
+    Get the current Bitcoin block height.
+
+    Used for BTC halving countdown calculations.
+    Data is cached for 10 minutes.
+
+    Source: blockchain.info
+    """
+    # Try to load from cache first
+    cache = load_block_height_cache()
+    if cache:
+        logger.info("Serving BTC block height from cache")
+        return BlockHeightResponse(**cache)
+
+    # Fetch fresh data
+    logger.info("Fetching fresh BTC block height...")
+    data = await fetch_btc_block_height()
+    return BlockHeightResponse(**data)
