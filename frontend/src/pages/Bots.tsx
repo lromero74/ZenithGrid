@@ -1544,11 +1544,12 @@ function Bots() {
 
               {/* ============================================ */}
               {/* SECTION 6: STRATEGY CONFIGURATION */}
+              {/* Section number is 6 for AI strategies (Budget section hidden), 7 for others */}
               {/* ============================================ */}
               {selectedStrategy && (selectedStrategy.id === 'conditional_dca' || selectedStrategy.parameters.length > 0) && (
               <div className="border-b border-slate-700 pb-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <span className="text-blue-400">7.</span> Strategy Parameters
+                  <span className="text-blue-400">{formData.strategy_type === 'ai_autonomous' ? '6' : '7'}.</span> Strategy Parameters
                 </h3>
 
               {/* Dynamic Strategy Parameters */}
