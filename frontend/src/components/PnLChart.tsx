@@ -154,9 +154,8 @@ export function PnLChart() {
     // This ensures stats are consistent regardless of which tab is active
     const filteredSummary = data.summary.filter((item) => new Date(item.date) >= cutoffDate)
 
-    const totalPnL = filteredSummary.length > 0
-      ? filteredSummary[filteredSummary.length - 1].cumulative_pnl
-      : 0
+    // Sum up profits for positions within the selected time range (not cumulative_pnl which is all-time running total)
+    const totalPnL = filteredSummary.reduce((sum, item) => sum + item.profit, 0)
     const closedTrades = filteredSummary.length
 
     const bestPair = data.by_pair.length > 0 ? data.by_pair[0] : null
