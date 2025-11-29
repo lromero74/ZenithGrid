@@ -1087,6 +1087,34 @@ export default function News() {
                 )
               })()}
 
+              {/* Debt Ceiling History */}
+              <div className="w-full bg-slate-900/50 rounded-lg p-3 mt-3">
+                <div className="text-[10px] text-slate-500 mb-2 font-medium">Debt Ceiling History (Last 7)</div>
+                <div className="space-y-1.5">
+                  {[
+                    { date: 'Jan 2, 2025', amount: 36.1, note: 'Reset after suspension' },
+                    { date: 'Jun 3, 2023', amount: null, note: 'Suspended → Jan 2025' },
+                    { date: 'Dec 16, 2021', amount: 31.4, note: 'Raised +$2.5T' },
+                    { date: 'Oct 14, 2021', amount: 28.9, note: 'Raised +$480B' },
+                    { date: 'Aug 2, 2019', amount: null, note: 'Suspended → Jul 2021' },
+                    { date: 'Feb 9, 2018', amount: null, note: 'Suspended → Mar 2019' },
+                    { date: 'Mar 16, 2017', amount: 19.8, note: 'Reset after suspension' },
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-500">{item.date}</span>
+                      <div className="text-right flex items-center gap-2">
+                        {item.amount ? (
+                          <span className="text-slate-300 font-mono">${item.amount}T</span>
+                        ) : (
+                          <span className="text-yellow-500 text-[10px]">SUSPENDED</span>
+                        )}
+                        <span className="text-slate-600 text-[10px]">{item.note}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Data source */}
               <div className="mt-2 text-[10px] text-slate-600">
                 Source: Treasury Fiscal Data • FRED
