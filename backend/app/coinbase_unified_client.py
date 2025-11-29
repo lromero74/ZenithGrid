@@ -143,8 +143,10 @@ class CoinbaseClient:
         await account_balance_api.invalidate_balance_cache()
 
     async def calculate_aggregate_btc_value(self) -> float:
-        """Calculate total BTC value of entire account (available BTC + BTC value of all positions)"""
-        return await account_balance_api.calculate_aggregate_btc_value(self._request, self.auth_type)
+        """Calculate total BTC value of entire account (available BTC + liquidation value of all positions)"""
+        return await account_balance_api.calculate_aggregate_btc_value(
+            self._request, self.auth_type, self.get_current_price
+        )
 
     async def calculate_aggregate_usd_value(self) -> float:
         """Calculate aggregate USD value of entire portfolio"""

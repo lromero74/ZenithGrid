@@ -173,15 +173,18 @@ async def invalidate_balance_cache():
     await api_cache.delete("aggregate_usd_value")
 
 
-async def calculate_aggregate_btc_value(request_func: Callable, auth_type: str) -> float:
+async def calculate_aggregate_btc_value(
+    request_func: Callable, auth_type: str, get_current_price_func: Callable = None
+) -> float:
     """
-    Calculate total BTC value of entire account (available BTC + BTC value of all positions).
-    This is used for bot budget allocation (90% of total account value).
+    Calculate total BTC value of entire account (available BTC + liquidation value of all BTC-pair positions).
+    This is used for bot budget allocation.
 
     Uses database to get positions held in open trades (since Coinbase API doesn't provide this).
+    Uses CURRENT market prices (not cost basis) for true liquidation value.
 
     Returns:
-        Total BTC value across all holdings (available + in positions)
+        Total BTC value across all holdings (available + current value of positions)
     """
     logger.warning("📊 Calculating aggregate BTC value for budget allocation...")
 
@@ -190,7 +193,7 @@ async def calculate_aggregate_btc_value(request_func: Callable, auth_type: str) 
     total_btc_value = available_btc
     logger.warning(f"  💰 Available BTC: {available_btc:.8f} BTC")
 
-    # Get BTC value of open positions from database
+    # Get BTC value of open positions from database using CURRENT prices
     try:
         import sqlite3
 
@@ -211,10 +214,31 @@ async def calculate_aggregate_btc_value(request_func: Callable, auth_type: str) 
         btc_in_positions = 0.0
 
         for product_id, amount, avg_price in positions:
-            if amount and avg_price:
-                btc_value = float(amount) * float(avg_price)
+            if amount:
+                amount = float(amount)
+                # Use current market price for liquidation value (not avg_price/cost basis)
+                if get_current_price_func:
+                    try:
+                        current_price = await get_current_price_func(product_id)
+                        btc_value = amount * current_price
+                        logger.warning(f"  💰 Position {product_id}: {amount:.8f} × {current_price:.8f} BTC (current) = {btc_value:.8f} BTC")
+                    except Exception as e:
+                        # Fallback to avg_price if can't get current price
+                        if avg_price:
+                            btc_value = amount * float(avg_price)
+                            logger.warning(f"  💰 Position {product_id}: {amount:.8f} × {avg_price:.8f} BTC (fallback) = {btc_value:.8f} BTC")
+                        else:
+                            btc_value = 0.0
+                            logger.warning(f"  ⚠️  Position {product_id}: Could not get price: {e}")
+                else:
+                    # No price function provided, use avg_price as fallback
+                    if avg_price:
+                        btc_value = amount * float(avg_price)
+                        logger.warning(f"  💰 Position {product_id}: {amount:.8f} × {avg_price:.8f} BTC (cost) = {btc_value:.8f} BTC")
+                    else:
+                        btc_value = 0.0
+
                 btc_in_positions += btc_value
-                logger.warning(f"  💰 Position {product_id}: {amount:.8f} × {avg_price:.8f} BTC = {btc_value:.8f} BTC")
 
         conn.close()
 
@@ -225,7 +249,7 @@ async def calculate_aggregate_btc_value(request_func: Callable, auth_type: str) 
         logger.error(f"Failed to get positions from database: {e}")
         logger.warning("  ⚠️  Continuing with available BTC only")
 
-    logger.warning(f"✅ Total account BTC value: {total_btc_value:.8f} BTC")
+    logger.warning(f"✅ Total account BTC value (liquidation): {total_btc_value:.8f} BTC")
     return total_btc_value
 
 
