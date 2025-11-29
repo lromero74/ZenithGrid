@@ -1483,6 +1483,7 @@ function Bots() {
                     'Web Search (Optional)',
                     'Budget & Position Sizing',
                     'DCA (Safety Orders)',
+                    'Manual Order Sizing',
                     'Profit & Exit',
                     'Market Filters',
                     'Other'
