@@ -6,9 +6,9 @@
  * Also includes video news from reputable crypto YouTube channels.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer, DollarSign, ToggleLeft, ToggleRight } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 
 // BTC Halving constants
@@ -83,6 +83,16 @@ interface VideoResponse {
 interface BlockHeightResponse {
   height: number
   timestamp: string
+}
+
+interface USDebtResponse {
+  total_debt: number
+  debt_per_second: number
+  gdp: number
+  debt_to_gdp_ratio: number
+  record_date: string
+  cached_at: string
+  cache_expires_at: string
 }
 
 interface HalvingCountdown {
@@ -172,6 +182,44 @@ function getFearGreedColor(value: number): { bg: string; text: string; border: s
       gradient: 'from-green-600 to-green-400',
     }
   }
+}
+
+// Format large numbers with commas and optional prefix
+function formatDebt(value: number): string {
+  // Format to 2 decimal places and add commas
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+// Format the countdown in extended format (years, months, days, hours, minutes, seconds)
+function formatExtendedCountdown(diffMs: number): string {
+  if (diffMs <= 0) return 'Halving imminent!'
+
+  // Calculate total days first
+  const totalDays = diffMs / (1000 * 60 * 60 * 24)
+
+  // Approximate years and months (using average days)
+  const years = Math.floor(totalDays / 365.25)
+  const remainingAfterYears = totalDays - (years * 365.25)
+  const months = Math.floor(remainingAfterYears / 30.44)
+  const remainingAfterMonths = remainingAfterYears - (months * 30.44)
+  const days = Math.floor(remainingAfterMonths)
+
+  // Calculate time components from remaining milliseconds
+  const remainingMs = diffMs - (Math.floor(totalDays) * 24 * 60 * 60 * 1000)
+  const hours = Math.floor(remainingMs / (1000 * 60 * 60))
+  const mins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60))
+  const secs = Math.floor((remainingMs % (1000 * 60)) / 1000)
+
+  const parts: string[] = []
+  if (years > 0) parts.push(`${years}y`)
+  if (months > 0) parts.push(`${months}mo`)
+  if (days > 0) parts.push(`${days}d`)
+  parts.push(`${hours}h ${mins}m ${secs}s`)
+
+  return parts.join(' ')
 }
 
 // Calculate halving countdown from current block height
@@ -269,37 +317,88 @@ export default function News() {
     refetchOnWindowFocus: false,
   })
 
+  // Fetch US National Debt
+  const { data: usDebtData } = useQuery<USDebtResponse>({
+    queryKey: ['us-debt'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/us-debt')
+      if (!response.ok) throw new Error('Failed to fetch US debt')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 60 * 24, // 24 hours
+    refetchInterval: 1000 * 60 * 60 * 24, // Refetch once per day
+    refetchOnWindowFocus: false,
+  })
+
   // Calculate halving countdown
   const halvingCountdown = blockHeight ? calculateHalvingCountdown(blockHeight.height) : null
 
+  // Toggle for extended countdown format (years/months)
+  const [showExtendedCountdown, setShowExtendedCountdown] = useState(false)
+
   // Live countdown timer - use blockHeight.height as stable dependency
   const [liveCountdown, setLiveCountdown] = useState<string>('')
+  const targetTimeRef = useRef<number>(0)
+
+  // Calculate target time once when block height changes
+  useEffect(() => {
+    if (!blockHeight?.height) return
+    const blocksRemaining = NEXT_HALVING_BLOCK - blockHeight.height
+    const minutesRemaining = blocksRemaining * AVG_BLOCK_TIME_MINUTES
+    targetTimeRef.current = Date.now() + minutesRemaining * 60 * 1000
+  }, [blockHeight?.height])
+
+  // Update countdown display every second
   useEffect(() => {
     if (!blockHeight?.height) return
 
-    // Calculate target date once when block height changes
-    const blocksRemaining = NEXT_HALVING_BLOCK - blockHeight.height
-    const minutesRemaining = blocksRemaining * AVG_BLOCK_TIME_MINUTES
-    const targetTime = Date.now() + minutesRemaining * 60 * 1000
-
     const updateCountdown = () => {
       const now = Date.now()
-      const diff = targetTime - now
+      const diff = targetTimeRef.current - now
       if (diff <= 0) {
         setLiveCountdown('Halving imminent!')
         return
       }
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-      const secs = Math.floor((diff % (1000 * 60)) / 1000)
-      setLiveCountdown(`${days}d ${hours}h ${mins}m ${secs}s`)
+
+      if (showExtendedCountdown) {
+        setLiveCountdown(formatExtendedCountdown(diff))
+      } else {
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+        const secs = Math.floor((diff % (1000 * 60)) / 1000)
+        setLiveCountdown(`${days}d ${hours}h ${mins}m ${secs}s`)
+      }
     }
 
     updateCountdown()
     const interval = setInterval(updateCountdown, 1000)
     return () => clearInterval(interval)
-  }, [blockHeight?.height])
+  }, [blockHeight?.height, showExtendedCountdown])
+
+  // Animated US debt counter
+  const [liveDebt, setLiveDebt] = useState<number>(0)
+  const debtStartTimeRef = useRef<number>(0)
+  const debtBaseValueRef = useRef<number>(0)
+
+  useEffect(() => {
+    if (!usDebtData) return
+
+    // Store the base debt value and start time
+    debtBaseValueRef.current = usDebtData.total_debt
+    debtStartTimeRef.current = Date.now()
+    setLiveDebt(usDebtData.total_debt)
+
+    // Update debt counter 10 times per second for smooth animation
+    const updateDebt = () => {
+      const elapsedSeconds = (Date.now() - debtStartTimeRef.current) / 1000
+      const newDebt = debtBaseValueRef.current + (elapsedSeconds * usDebtData.debt_per_second)
+      setLiveDebt(newDebt)
+    }
+
+    const interval = setInterval(updateDebt, 100) // Update every 100ms
+    return () => clearInterval(interval)
+  }, [usDebtData])
 
   const handleForceRefresh = async () => {
     if (activeTab === 'articles') {
@@ -392,7 +491,7 @@ export default function News() {
       </div>
 
       {/* Market Sentiment & Halving Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Fear & Greed Index */}
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-4">
@@ -479,9 +578,24 @@ export default function News() {
 
         {/* BTC Halving Countdown */}
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-4">
-            <Timer className="w-5 h-5 text-orange-400" />
-            <h3 className="font-medium text-white">Next BTC Halving</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Timer className="w-5 h-5 text-orange-400" />
+              <h3 className="font-medium text-white">Next BTC Halving</h3>
+            </div>
+            {/* Format toggle */}
+            <button
+              onClick={() => setShowExtendedCountdown(!showExtendedCountdown)}
+              className="flex items-center space-x-1 px-2 py-1 text-xs bg-slate-700/50 hover:bg-slate-700 rounded transition-colors"
+              title={showExtendedCountdown ? 'Show short format (days)' : 'Show extended format (years/months)'}
+            >
+              {showExtendedCountdown ? (
+                <ToggleRight className="w-4 h-4 text-orange-400" />
+              ) : (
+                <ToggleLeft className="w-4 h-4 text-slate-400" />
+              )}
+              <span className="text-slate-400">{showExtendedCountdown ? 'Y/M/D' : 'Days'}</span>
+            </button>
           </div>
 
           {halvingCountdown && blockHeight ? (
@@ -532,6 +646,69 @@ export default function News() {
               {/* Halving info */}
               <div className="mt-3 text-xs text-slate-600 text-center">
                 Block reward will drop from 3.125 to 1.5625 BTC
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-32">
+              <LoadingSpinner size="sm" text="Loading..." />
+            </div>
+          )}
+        </div>
+
+        {/* US National Debt */}
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+          <div className="flex items-center space-x-2 mb-4">
+            <DollarSign className="w-5 h-5 text-green-400" />
+            <h3 className="font-medium text-white">US National Debt</h3>
+          </div>
+
+          {usDebtData ? (
+            <div className="flex flex-col items-center">
+              {/* Animated debt counter */}
+              <div className="text-2xl font-mono font-bold text-red-400 mb-2 tracking-tight">
+                ${formatDebt(liveDebt)}
+              </div>
+
+              {/* Debt rate */}
+              <div className="text-xs text-slate-400 mb-3">
+                {usDebtData.debt_per_second > 0 ? '+' : ''}
+                ${formatDebt(usDebtData.debt_per_second)}/sec
+              </div>
+
+              {/* Debt-to-GDP ratio */}
+              <div className="w-full bg-slate-900/50 rounded-lg p-3 mb-3">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs text-slate-500">Debt-to-GDP Ratio</span>
+                  <span className={`text-sm font-bold ${usDebtData.debt_to_gdp_ratio > 100 ? 'text-red-400' : 'text-yellow-400'}`}>
+                    {usDebtData.debt_to_gdp_ratio.toFixed(1)}%
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      usDebtData.debt_to_gdp_ratio > 100
+                        ? 'bg-gradient-to-r from-red-600 to-red-400'
+                        : 'bg-gradient-to-r from-yellow-600 to-yellow-400'
+                    }`}
+                    style={{ width: `${Math.min(150, usDebtData.debt_to_gdp_ratio)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+                  <span>0%</span>
+                  <span>100%</span>
+                  <span>150%</span>
+                </div>
+              </div>
+
+              {/* GDP value */}
+              <div className="text-xs text-slate-500">
+                GDP: ${(usDebtData.gdp / 1_000_000_000_000).toFixed(2)}T
+              </div>
+
+              {/* Data source */}
+              <div className="mt-2 text-[10px] text-slate-600">
+                Source: Treasury Fiscal Data • FRED
               </div>
             </div>
           ) : (

@@ -45,9 +45,11 @@ CACHE_FILE = Path(__file__).parent.parent.parent / "news_cache.json"
 VIDEO_CACHE_FILE = Path(__file__).parent.parent.parent / "video_cache.json"
 FEAR_GREED_CACHE_FILE = Path(__file__).parent.parent.parent / "fear_greed_cache.json"
 BLOCK_HEIGHT_CACHE_FILE = Path(__file__).parent.parent.parent / "block_height_cache.json"
+US_DEBT_CACHE_FILE = Path(__file__).parent.parent.parent / "us_debt_cache.json"
 CACHE_DURATION_HOURS = 24
 FEAR_GREED_CACHE_MINUTES = 15  # Update fear/greed every 15 minutes
 BLOCK_HEIGHT_CACHE_MINUTES = 10  # Update block height every 10 minutes
+US_DEBT_CACHE_HOURS = 24  # Update US debt once per day
 
 # News sources configuration
 NEWS_SOURCES = {
@@ -203,6 +205,17 @@ class BlockHeightResponse(BaseModel):
     """BTC block height API response"""
     height: int
     timestamp: str
+
+
+class USDebtResponse(BaseModel):
+    """US National Debt API response"""
+    total_debt: float  # Total public debt in dollars
+    debt_per_second: float  # Rate of change per second (for animation)
+    gdp: float  # US GDP in dollars
+    debt_to_gdp_ratio: float  # Debt as percentage of GDP
+    record_date: str  # Date of the debt record
+    cached_at: str
+    cache_expires_at: str
 
 
 def load_cache() -> Optional[Dict[str, Any]]:
@@ -366,6 +379,132 @@ async def fetch_btc_block_height() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error fetching BTC block height: {e}")
         raise HTTPException(status_code=503, detail=f"Block height API error: {str(e)}")
+
+
+def load_us_debt_cache() -> Optional[Dict[str, Any]]:
+    """Load US debt cache from file (24-hour cache)"""
+    if not US_DEBT_CACHE_FILE.exists():
+        return None
+
+    try:
+        with open(US_DEBT_CACHE_FILE, "r") as f:
+            cache = json.load(f)
+
+        # Check if cache is expired (24 hours)
+        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
+        if datetime.now() - cached_at > timedelta(hours=US_DEBT_CACHE_HOURS):
+            logger.info("US debt cache expired")
+            return None
+
+        return cache
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to load US debt cache: {e}")
+        return None
+
+
+def save_us_debt_cache(data: Dict[str, Any]) -> None:
+    """Save US debt cache to file"""
+    try:
+        with open(US_DEBT_CACHE_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        logger.info("US debt cache saved")
+    except Exception as e:
+        logger.error(f"Failed to save US debt cache: {e}")
+
+
+async def fetch_us_debt() -> Dict[str, Any]:
+    """Fetch US National Debt from Treasury Fiscal Data API and GDP from FRED"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            # Get most recent debt data (last 2 records to calculate rate)
+            debt_url = (
+                "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/"
+                "v2/accounting/od/debt_to_penny"
+                "?sort=-record_date&page[size]=2"
+            )
+
+            # Fetch debt data
+            async with session.get(debt_url, headers=headers, timeout=15) as response:
+                if response.status != 200:
+                    logger.warning(f"Treasury API returned {response.status}")
+                    raise HTTPException(status_code=503, detail="Treasury API unavailable")
+
+                data = await response.json()
+                records = data.get("data", [])
+
+                if len(records) < 1:
+                    raise HTTPException(status_code=503, detail="No debt data available")
+
+                # Get current debt
+                latest = records[0]
+                total_debt = float(latest.get("tot_pub_debt_out_amt", 0))
+                record_date = latest.get("record_date", "")
+
+                # Calculate rate of change per second
+                debt_per_second = 31710.0  # Default fallback (~$1T/year)
+
+                if len(records) >= 2:
+                    prev = records[1]
+                    prev_debt = float(prev.get("tot_pub_debt_out_amt", 0))
+                    prev_date = prev.get("record_date", "")
+
+                    if prev_date and record_date:
+                        date1 = datetime.strptime(record_date, "%Y-%m-%d")
+                        date2 = datetime.strptime(prev_date, "%Y-%m-%d")
+                        days_diff = (date1 - date2).days
+
+                        if days_diff > 0:
+                            debt_change = total_debt - prev_debt
+                            seconds_diff = days_diff * 24 * 60 * 60
+                            debt_per_second = debt_change / seconds_diff
+
+            # Fetch GDP from FRED (Federal Reserve) - no API key needed for this endpoint
+            gdp = 28_000_000_000_000.0  # Default ~$28T fallback
+            try:
+                gdp_url = (
+                    "https://api.stlouisfed.org/fred/series/observations"
+                    "?series_id=GDP&api_key=DEMO_KEY&file_type=json"
+                    "&sort_order=desc&limit=1"
+                )
+                async with session.get(gdp_url, headers=headers, timeout=10) as gdp_response:
+                    if gdp_response.status == 200:
+                        gdp_data = await gdp_response.json()
+                        observations = gdp_data.get("observations", [])
+                        if observations:
+                            # FRED GDP is in billions, convert to dollars
+                            gdp_billions = float(observations[0].get("value", 28000))
+                            gdp = gdp_billions * 1_000_000_000
+                    else:
+                        logger.warning(f"FRED GDP API returned {gdp_response.status}, using fallback")
+            except Exception as e:
+                logger.warning(f"Failed to fetch GDP: {e}, using fallback")
+
+            # Calculate debt-to-GDP ratio
+            debt_to_gdp_ratio = (total_debt / gdp * 100) if gdp > 0 else 0
+
+            now = datetime.now()
+            cache_data = {
+                "total_debt": total_debt,
+                "debt_per_second": debt_per_second,
+                "gdp": gdp,
+                "debt_to_gdp_ratio": round(debt_to_gdp_ratio, 2),
+                "record_date": record_date,
+                "cached_at": now.isoformat(),
+                "cache_expires_at": (now + timedelta(hours=US_DEBT_CACHE_HOURS)).isoformat(),
+            }
+
+            # Save to cache
+            save_us_debt_cache(cache_data)
+
+            return cache_data
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching US debt")
+        raise HTTPException(status_code=503, detail="Treasury API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching US debt: {e}")
+        raise HTTPException(status_code=503, detail=f"Treasury API error: {str(e)}")
 
 
 async def fetch_fear_greed_index() -> Dict[str, Any]:
@@ -804,3 +943,27 @@ async def get_btc_block_height():
     logger.info("Fetching fresh BTC block height...")
     data = await fetch_btc_block_height()
     return BlockHeightResponse(**data)
+
+
+@router.get("/us-debt", response_model=USDebtResponse)
+async def get_us_debt():
+    """
+    Get the current US National Debt with rate of change.
+
+    Returns total debt, debt per second (for animation), GDP, and debt-to-GDP ratio.
+    Data is cached for 24 hours.
+
+    Sources:
+    - Treasury Fiscal Data API (debt)
+    - FRED Federal Reserve API (GDP)
+    """
+    # Try to load from cache first
+    cache = load_us_debt_cache()
+    if cache:
+        logger.info("Serving US debt from cache")
+        return USDebtResponse(**cache)
+
+    # Fetch fresh data
+    logger.info("Fetching fresh US debt data...")
+    data = await fetch_us_debt()
+    return USDebtResponse(**data)
