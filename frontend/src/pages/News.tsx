@@ -627,7 +627,8 @@ export default function News() {
       if (!response.ok) throw new Error('Failed to fetch news')
       return response.json()
     },
-    staleTime: 1000 * 60 * 60, // Consider fresh for 1 hour
+    staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
+    refetchInterval: 1000 * 60 * 15, // Auto-refresh every 15 minutes
     refetchOnWindowFocus: false,
   })
 
@@ -645,7 +646,8 @@ export default function News() {
       if (!response.ok) throw new Error('Failed to fetch videos')
       return response.json()
     },
-    staleTime: 1000 * 60 * 60,
+    staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
+    refetchInterval: 1000 * 60 * 15, // Auto-refresh every 15 minutes
     refetchOnWindowFocus: false,
   })
 
@@ -1498,7 +1500,7 @@ export default function News() {
           )}
         </div>
         <p className="mt-3 text-xs text-slate-600">
-          Content is cached for 24 hours. Click refresh to fetch the latest {activeTab}.
+          Auto-refreshes every 15 minutes. Click refresh to fetch immediately.
         </p>
       </div>
 
