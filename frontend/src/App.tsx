@@ -157,6 +157,19 @@ function App() {
               </div>
             </Link>
             <Link
+              to="/news"
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+                location.pathname === '/news'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <Newspaper className="w-4 h-4" />
+                <span className="hidden sm:inline">News</span>
+              </div>
+            </Link>
+            <Link
               to="/bots"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/bots'
@@ -211,19 +224,6 @@ function App() {
               <div className="flex items-center space-x-1 sm:space-x-2">
                 <Wallet className="w-4 h-4" />
                 <span className="hidden sm:inline">Portfolio</span>
-              </div>
-            </Link>
-            <Link
-              to="/news"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                location.pathname === '/news'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <Newspaper className="w-4 h-4" />
-                <span className="hidden sm:inline">News</span>
               </div>
             </Link>
             <Link
