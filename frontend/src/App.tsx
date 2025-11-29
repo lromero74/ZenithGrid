@@ -1,18 +1,22 @@
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
-import Dashboard from './pages/Dashboard'
-import Settings from './pages/Settings'
-import Positions from './pages/Positions'
-import ClosedPositions from './pages/ClosedPositions'
-import Bots from './pages/Bots'
-import Charts from './pages/Charts'
-import Strategies from './pages/Strategies'
-import Portfolio from './pages/Portfolio'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History } from 'lucide-react'
 import { positionsApi } from './services/api'
-import { useEffect, useState } from 'react'
 import { AccountSwitcher } from './components/AccountSwitcher'
 import { AddAccountModal } from './components/AddAccountModal'
+import { LoadingSpinner } from './components/LoadingSpinner'
+
+// Lazy load pages for faster initial render
+// Dashboard is eager-loaded since it's the landing page
+import Dashboard from './pages/Dashboard'
+const Settings = lazy(() => import('./pages/Settings'))
+const Positions = lazy(() => import('./pages/Positions'))
+const ClosedPositions = lazy(() => import('./pages/ClosedPositions'))
+const Bots = lazy(() => import('./pages/Bots'))
+const Charts = lazy(() => import('./pages/Charts'))
+const Strategies = lazy(() => import('./pages/Strategies'))
+const Portfolio = lazy(() => import('./pages/Portfolio'))
 
 function App() {
   const location = useLocation()
@@ -24,6 +28,13 @@ function App() {
     const saved = localStorage.getItem('last-seen-history-count')
     return saved ? parseInt(saved) : 0
   })
+
+  // Defer non-critical API calls until after initial render
+  const [deferredQueriesEnabled, setDeferredQueriesEnabled] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setDeferredQueriesEnabled(true), 2000) // Enable after 2s
+    return () => clearTimeout(timer)
+  }, [])
 
   // Fetch full portfolio data (all coins)
   const { data: portfolio } = useQuery({
@@ -46,17 +57,19 @@ function App() {
   const btcUsdPrice = totalBtcValue > 0 ? totalUsdValue / totalBtcValue : 0
   const usdBtcPrice = btcUsdPrice > 0 ? 1 / btcUsdPrice : 0
 
-  // Fetch closed and failed positions to count total history items
+  // Fetch closed and failed positions to count total history items (deferred)
   const { data: closedPositions = [] } = useQuery({
     queryKey: ['closed-positions-badge'],
     queryFn: () => positionsApi.getAll('closed', 100),
     refetchInterval: 10000, // Check every 10 seconds
+    enabled: deferredQueriesEnabled, // Defer until 2s after initial render
   })
 
   const { data: failedPositions = [] } = useQuery({
     queryKey: ['failed-positions-badge'],
     queryFn: () => positionsApi.getAll('failed', 100),
     refetchInterval: 10000, // Check every 10 seconds
+    enabled: deferredQueriesEnabled, // Defer until 2s after initial render
   })
 
   // Calculate total history count and badge delta
@@ -244,18 +257,24 @@ function App() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        <Routes>
-          <Route path="/" element={<Dashboard onNavigate={(page) => {}} />} />
-          <Route path="/bots" element={<Bots />} />
-          <Route path="/positions" element={<Positions />} />
-          <Route path="/history" element={<ClosedPositions />} />
-          <Route path="/portfolio" element={<Portfolio />} />
-          <Route path="/charts" element={<Charts />} />
-          <Route path="/strategies" element={<Strategies />} />
-          <Route path="/settings" element={<Settings />} />
-          {/* Redirect unknown routes to dashboard */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={
+          <div className="flex items-center justify-center min-h-[400px]">
+            <LoadingSpinner size="lg" text="Loading..." />
+          </div>
+        }>
+          <Routes>
+            <Route path="/" element={<Dashboard onNavigate={(page) => {}} />} />
+            <Route path="/bots" element={<Bots />} />
+            <Route path="/positions" element={<Positions />} />
+            <Route path="/history" element={<ClosedPositions />} />
+            <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/charts" element={<Charts />} />
+            <Route path="/strategies" element={<Strategies />} />
+            <Route path="/settings" element={<Settings />} />
+            {/* Redirect unknown routes to dashboard */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
 
       {/* Add Account Modal */}
