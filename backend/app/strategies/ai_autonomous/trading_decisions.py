@@ -11,6 +11,68 @@ from typing import Any, Dict, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+def calculate_manual_dca_amount(
+    position: Any,
+    config: Dict[str, Any],
+    remaining_budget: float,
+    current_price: float,
+) -> Tuple[bool, float, str]:
+    """
+    Calculate DCA amount using manual 3Commas-style settings.
+
+    This replaces AI decision-making when use_manual_sizing is enabled.
+    Uses fixed rules with configurable multipliers for order size and drop requirements.
+
+    Args:
+        position: Current position object
+        config: Strategy configuration with manual sizing parameters
+        remaining_budget: Remaining budget for this position
+        current_price: Current market price
+
+    Returns:
+        Tuple of (should_buy: bool, btc_amount: float, reasoning: str)
+    """
+    # Get manual DCA config
+    dca_type = config.get("dca_order_type", "percentage")
+    base_dca_value = config.get("dca_order_value", 20.0)
+    dca_multiplier = config.get("dca_order_multiplier", 1.0)
+    base_drop_pct = config.get("manual_dca_min_drop_pct", 2.0)
+    drop_multiplier = config.get("dca_drop_multiplier", 1.0)
+    max_dcas = config.get("manual_max_dca_orders", 3)
+
+    # Count existing DCAs
+    current_dcas = len([t for t in position.trades if t.side == "buy" and t.trade_type != "initial"])
+
+    if current_dcas >= max_dcas:
+        return False, 0.0, f"Max manual DCA orders reached ({current_dcas}/{max_dcas})"
+
+    # Calculate required drop for THIS DCA order
+    # Each subsequent DCA requires more drop: base_drop × (drop_multiplier ^ dca_number)
+    required_drop = base_drop_pct * (drop_multiplier ** current_dcas)
+
+    # Check if price has dropped enough from average entry
+    price_drop_pct = ((position.average_buy_price - current_price) / position.average_buy_price) * 100
+    if price_drop_pct < required_drop:
+        return False, 0.0, f"Manual DCA: drop {price_drop_pct:.2f}% < required {required_drop:.2f}% for DCA #{current_dcas + 1}"
+
+    # Calculate DCA order size with multiplier
+    # Each subsequent DCA is larger: base_value × (dca_multiplier ^ dca_number)
+    order_size = base_dca_value * (dca_multiplier ** current_dcas)
+
+    if dca_type == "percentage":
+        btc_amount = remaining_budget * (order_size / 100.0)
+    else:  # fixed
+        btc_amount = order_size
+
+    # Cap to remaining budget
+    btc_amount = min(btc_amount, remaining_budget)
+
+    if btc_amount <= 0:
+        return False, 0.0, "Insufficient remaining budget for manual DCA"
+
+    return True, btc_amount, f"Manual DCA #{current_dcas + 1}: {order_size:.1f}{'%' if dca_type == 'percentage' else ' fixed'} after {price_drop_pct:.2f}% drop (required: {required_drop:.2f}%)"
+
+
 async def ask_ai_for_dca_decision(
     client,
     provider: str,
@@ -44,6 +106,19 @@ async def ask_ai_for_dca_decision(
         Dict with AI's decision: {"should_buy": bool, "amount": float, "reasoning": str}
     """
     import json
+
+    # Check if manual sizing is enabled - bypass AI decision entirely
+    if config.get("use_manual_sizing", False):
+        should_buy, amount, reasoning = calculate_manual_dca_amount(
+            position, config, remaining_budget, current_price
+        )
+        return {
+            "should_buy": should_buy,
+            "amount": round(amount, 8),
+            "amount_percentage": (amount / remaining_budget * 100) if remaining_budget > 0 else 0,
+            "confidence": 100 if should_buy else 0,  # Manual mode always has 100% confidence (rule-based)
+            "reasoning": reasoning,
+        }
 
     prompt = build_dca_prompt_func(position, current_price, remaining_budget, market_context, config, product_minimum)
 
@@ -267,42 +342,61 @@ async def should_buy(
     if confidence < min_confidence:
         return False, 0.0, f"AI confidence too low ({confidence}% - need {min_confidence}%+ to open position)"
 
-    # Calculate DCA budget reserve if DCA is enabled
-    max_initial_pct = 100.0  # Default: can use full budget if no DCA
-    if config.get("enable_dca", True):
-        max_safety_orders = config.get("max_safety_orders", 3)
-        safety_order_pct = config.get("safety_order_percentage", 20.0)
+    # Check if manual sizing mode is enabled
+    use_manual_sizing = config.get("use_manual_sizing", False)
 
-        # Reserve budget for all potential DCA safety orders
-        required_dca_reserve = max_safety_orders * safety_order_pct
-        max_initial_pct = max(100.0 - required_dca_reserve, 10.0)  # Reserve DCA budget, but allow at least 10%
+    if use_manual_sizing:
+        # MANUAL MODE: Use fixed base order sizing (3Commas style)
+        base_type = config.get("base_order_type", "percentage")
+        base_value = config.get("base_order_value", 40.0)
 
-        logger.info(
-            f"  💰 DCA Reserve: {max_safety_orders} orders × {safety_order_pct}% = {required_dca_reserve}% reserved, "
-            f"max initial buy: {max_initial_pct}%"
-        )
+        if base_type == "percentage":
+            btc_amount = btc_balance * (base_value / 100.0)
+            logger.info(f"  📊 Manual base order: {base_value}% of budget = {btc_amount:.8f}")
+        else:  # fixed
+            btc_amount = base_value
+            logger.info(f"  📊 Manual base order: fixed {base_value}")
 
-    # Determine initial buy percentage
-    initial_budget_pct = config.get("initial_budget_percentage", None)
-    if initial_budget_pct is not None:
-        # User explicitly configured initial budget percentage - use it (capped by DCA reserve)
-        use_pct = min(initial_budget_pct, max_initial_pct)
-        logger.info(f"  📊 Using configured initial_budget_percentage: {initial_budget_pct}% (capped at {use_pct}%)")
+        # Cap to available balance
+        btc_amount = min(btc_amount, btc_balance)
+
     else:
-        # Let AI decide, but cap by both max_position_budget_percentage AND DCA reserve
-        suggested_pct = signal_data.get("suggested_allocation_pct", 10)
-        max_pct = config.get("max_position_budget_percentage", 100)
-        use_pct = min(suggested_pct, max_pct, max_initial_pct)
-        logger.info(
-            f"  🤖 AI suggested {suggested_pct}%, capped by max_position ({max_pct}%) and DCA reserve ({max_initial_pct}%) "
-            f"= {use_pct}%"
-        )
+        # AI MODE: Calculate DCA budget reserve if DCA is enabled
+        max_initial_pct = 100.0  # Default: can use full budget if no DCA
+        if config.get("enable_dca", True):
+            max_safety_orders = config.get("max_safety_orders", 3)
+            safety_order_pct = config.get("safety_order_percentage", 20.0)
 
-    # NOTE: Do NOT divide by max_concurrent_deals here - the btc_balance
-    # passed in has ALREADY been divided by max_concurrent_deals in trading_engine_v2.py
-    # (per_position_budget = reserved_balance / max_concurrent_deals)
+            # Reserve budget for all potential DCA safety orders
+            required_dca_reserve = max_safety_orders * safety_order_pct
+            max_initial_pct = max(100.0 - required_dca_reserve, 10.0)  # Reserve DCA budget, but allow at least 10%
 
-    btc_amount = btc_balance * (use_pct / 100.0)
+            logger.info(
+                f"  💰 DCA Reserve: {max_safety_orders} orders × {safety_order_pct}% = {required_dca_reserve}% reserved, "
+                f"max initial buy: {max_initial_pct}%"
+            )
+
+        # Determine initial buy percentage
+        initial_budget_pct = config.get("initial_budget_percentage", None)
+        if initial_budget_pct is not None:
+            # User explicitly configured initial budget percentage - use it (capped by DCA reserve)
+            use_pct = min(initial_budget_pct, max_initial_pct)
+            logger.info(f"  📊 Using configured initial_budget_percentage: {initial_budget_pct}% (capped at {use_pct}%)")
+        else:
+            # Let AI decide, but cap by both max_position_budget_percentage AND DCA reserve
+            suggested_pct = signal_data.get("suggested_allocation_pct", 10)
+            max_pct = config.get("max_position_budget_percentage", 100)
+            use_pct = min(suggested_pct, max_pct, max_initial_pct)
+            logger.info(
+                f"  🤖 AI suggested {suggested_pct}%, capped by max_position ({max_pct}%) and DCA reserve ({max_initial_pct}%) "
+                f"= {use_pct}%"
+            )
+
+        # NOTE: Do NOT divide by max_concurrent_deals here - the btc_balance
+        # passed in has ALREADY been divided by max_concurrent_deals in trading_engine_v2.py
+        # (per_position_budget = reserved_balance / max_concurrent_deals)
+
+        btc_amount = btc_balance * (use_pct / 100.0)
 
     if btc_amount <= 0:
         return False, 0.0, "Insufficient balance"
@@ -435,7 +529,19 @@ async def should_sell(
 
     min_profit = config.get("min_profit_percentage", 1.0)
 
-    # RULE 1: Never sell at a loss
+    # MANUAL EXIT RULES (3Commas style) - checked first if manual sizing is enabled
+    if config.get("use_manual_sizing", False):
+        # Check manual take-profit (overrides AI if set > 0)
+        manual_tp = config.get("manual_take_profit_pct", 0)
+        if manual_tp > 0 and profit_pct >= manual_tp:
+            return True, f"📈 Manual take-profit triggered at {profit_pct:.2f}% (target: {manual_tp}%)"
+
+        # Check manual stop-loss (overrides "never sell at loss" rule if set > 0)
+        manual_sl = config.get("manual_stop_loss_pct", 0)
+        if manual_sl > 0 and profit_pct <= -manual_sl:
+            return True, f"🛑 Manual stop-loss triggered at {profit_pct:.2f}% (limit: -{manual_sl}%)"
+
+    # RULE 1: Never sell at a loss (unless manual stop-loss triggered above)
     if profit_pct <= 0:
         return False, f"Never sell at loss (current: {profit_pct:.2f}%)"
 
