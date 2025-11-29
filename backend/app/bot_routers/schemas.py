@@ -68,7 +68,9 @@ class BotStats(BaseModel):
     total_positions: int
     open_positions: int
     closed_positions: int
-    total_profit_btc: float
+    max_concurrent_deals: int  # Max deals allowed simultaneously
+    total_profit_btc: float  # Legacy field name
+    total_profit_quote: float  # Profit in quote currency (BTC for BTC pairs, USD for USD pairs)
     win_rate: float
     insufficient_funds: bool
     budget_utilization_percentage: float = 0.0  # % of allocated budget in open positions

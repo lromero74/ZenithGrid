@@ -371,7 +371,7 @@ function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => vo
             <div className="flex items-center justify-between text-sm pt-2 border-t border-slate-700">
               <span className="text-slate-400">Deals:</span>
               <span className="text-white font-medium">
-                {stats.open_positions} / {stats.total_positions}
+                {stats.open_positions} / {stats.max_concurrent_deals}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">

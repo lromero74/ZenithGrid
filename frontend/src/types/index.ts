@@ -193,6 +193,7 @@ export interface BotStats {
   total_positions: number;
   open_positions: number;
   closed_positions: number;
+  max_concurrent_deals: number;  // Max deals allowed simultaneously
   total_profit_quote: number;  // Total profit in quote currency
   total_profit_usd: number;
   win_rate: number;
