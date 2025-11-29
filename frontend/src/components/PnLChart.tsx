@@ -272,23 +272,24 @@ export function PnLChart() {
   useEffect(() => {
     if (!areaSeriesRef.current || !data || activeTab !== 'summary') return
 
-    const filteredData = getFilteredData()
+    const filteredData = getFilteredData() as PnLDataPoint[]
     if (filteredData.length === 0) return
 
-    // Convert to chart format and deduplicate by timestamp
-    // Multiple positions can close on the same day, so we keep only the last one per day
-    const dataByTimestamp = new Map<Time, number>()
-
+    // First, aggregate profits by day (multiple positions can close on same day)
+    const dailyProfits = new Map<string, number>()
     filteredData.forEach((point) => {
-      const timestamp = Math.floor(new Date(point.date).getTime() / 1000) as Time
-      // Keep the latest cumulative_pnl for each timestamp
-      dataByTimestamp.set(timestamp, point.cumulative_pnl)
+      const current = dailyProfits.get(point.date) || 0
+      dailyProfits.set(point.date, current + point.profit)
     })
 
-    // Convert map to sorted array
-    const chartData = Array.from(dataByTimestamp.entries())
-      .map(([time, value]) => ({ time, value }))
-      .sort((a, b) => (a.time as number) - (b.time as number))
+    // Sort by date and calculate cumulative PnL starting from 0 for this time range
+    const sortedDays = Array.from(dailyProfits.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+    let cumulativePnL = 0
+    const chartData = sortedDays.map(([date, dailyProfit]) => {
+      cumulativePnL += dailyProfit
+      const timestamp = Math.floor(new Date(date).getTime() / 1000) as Time
+      return { time: timestamp, value: Math.round(cumulativePnL * 100) / 100 }
+    })
 
     // Determine if we have profits or losses
     const latestValue = chartData[chartData.length - 1]?.value || 0
