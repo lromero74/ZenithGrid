@@ -239,6 +239,8 @@ class DebtCeilingEvent(BaseModel):
     suspension_end: Optional[str]  # When suspension ends (if applicable)
     note: str  # Description of the event
     legislation: Optional[str]  # Name of the bill/act
+    political_context: Optional[str]  # Political circumstances and key facts
+    source_url: Optional[str]  # URL to source/reference for this event
 
 
 class DebtCeilingHistoryResponse(BaseModel):
@@ -259,6 +261,8 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Reset after suspension ended",
         "legislation": "Fiscal Responsibility Act of 2023",
+        "political_context": "Automatic reset per the 2023 deal. Biden administration inherited the ceiling at record high. Republicans expected to use upcoming increase as leverage for spending cuts.",
+        "source_url": "https://www.congress.gov/bill/118th-congress/house-bill/3746",
     },
     {
         "date": "2023-06-03",
@@ -267,6 +271,8 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2025-01-01",
         "note": "Suspended until January 1, 2025",
         "legislation": "Fiscal Responsibility Act of 2023",
+        "political_context": "Result of tense 2023 debt ceiling standoff. Biden vs. McCarthy negotiations. Republicans demanded spending caps in exchange for raising limit. Deal included work requirements for some benefits and clawback of COVID funds.",
+        "source_url": "https://www.congress.gov/bill/118th-congress/house-bill/3746",
     },
     {
         "date": "2021-12-16",
@@ -275,6 +281,8 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $2.5T",
         "legislation": "P.L. 117-73",
+        "political_context": "Democrats used reconciliation to pass without Republican votes. McConnell agreed to procedural workaround after threatening default. Avoided filibuster through special expedited process.",
+        "source_url": "https://www.congress.gov/bill/117th-congress/senate-bill/3273",
     },
     {
         "date": "2021-10-14",
@@ -283,6 +291,8 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $480B (short-term)",
         "legislation": "P.L. 117-50",
+        "political_context": "Emergency short-term fix after summer 2021 standoff. Republicans initially refused to cooperate. Treasury used extraordinary measures. McConnell eventually allowed 11 Republicans to break filibuster.",
+        "source_url": "https://www.congress.gov/bill/117th-congress/senate-bill/1301",
     },
     {
         "date": "2019-08-02",
@@ -291,6 +301,8 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2021-07-31",
         "note": "Suspended until July 31, 2021",
         "legislation": "Bipartisan Budget Act of 2019",
+        "political_context": "Bipartisan deal between Trump administration and Democratic House. Pelosi negotiated with Mnuchin. Suspended ceiling through 2021 election cycle to avoid political volatility.",
+        "source_url": "https://www.congress.gov/bill/116th-congress/house-bill/3877",
     },
     {
         "date": "2018-02-09",
@@ -299,6 +311,8 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2019-03-01",
         "note": "Suspended until March 1, 2019",
         "legislation": "Bipartisan Budget Act of 2018",
+        "political_context": "Part of deal ending brief government shutdown. Trump era with Republican Congress. Increased defense and domestic spending. Rand Paul objected, causing temporary lapse.",
+        "source_url": "https://www.congress.gov/bill/115th-congress/house-bill/1892",
     },
     {
         "date": "2017-03-16",
@@ -307,6 +321,8 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Reset after suspension ended",
         "legislation": "No Suspense Act (P.L. 114-74)",
+        "political_context": "Automatic reset from Obama-era suspension. Trump inherited debt ceiling issue. Republicans controlled both chambers but struggled to raise limit they had previously opposed under Obama.",
+        "source_url": "https://www.congress.gov/bill/114th-congress/house-bill/1314",
     },
 ]
 

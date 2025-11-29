@@ -121,6 +121,8 @@ interface DebtCeilingEvent {
   suspension_end: string | null
   note: string
   legislation: string | null
+  political_context: string | null
+  source_url: string | null
 }
 
 interface DebtCeilingHistoryResponse {
@@ -1743,6 +1745,22 @@ export default function News() {
                             year: 'numeric'
                           })}
                         </p>
+                      )}
+                      {event.political_context && (
+                        <p className="text-xs text-slate-400 mt-2 border-t border-slate-700 pt-2">
+                          {event.political_context}
+                        </p>
+                      )}
+                      {event.source_url && (
+                        <a
+                          href={event.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View on Congress.gov
+                        </a>
                       )}
                     </div>
                   ))}
