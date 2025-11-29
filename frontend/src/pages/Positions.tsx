@@ -2231,7 +2231,7 @@ export default function Positions() {
                           </div>
                           <div className="text-slate-400">Active: {position.pending_orders_count || 0}</div>
                           <div className="text-slate-400">
-                            Max: {bot?.strategy_type === 'ai_autonomous' ? 'None' : (position.strategy_config_snapshot?.max_safety_orders || 0)}
+                            Max: {position.strategy_config_snapshot?.max_safety_orders ?? bot?.strategy_config?.max_safety_orders ?? 0}
                           </div>
                         </div>
                       </div>
