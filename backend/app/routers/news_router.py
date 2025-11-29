@@ -1075,10 +1075,10 @@ async def get_article_content(url: str):
                 lambda: trafilatura.extract(
                     html_content,
                     include_comments=False,
-                    include_tables=False,
+                    include_tables=True,  # Include tables for structure
                     no_fallback=False,
                     favor_precision=True,
-                    output_format="txt"
+                    output_format="markdown"  # Use markdown to preserve headings, lists, etc.
                 )
             )
 

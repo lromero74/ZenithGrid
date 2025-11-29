@@ -114,6 +114,195 @@ interface HalvingCountdown {
   percentComplete: number
 }
 
+// Lightweight markdown renderer for article content
+// Supports: headings, lists, horizontal rules, bold, italic, links
+function renderMarkdown(markdown: string): React.ReactNode[] {
+  const lines = markdown.split('\n')
+  const elements: React.ReactNode[] = []
+  let key = 0
+  let listItems: React.ReactNode[] = []
+  let listType: 'ul' | 'ol' | null = null
+
+  const flushList = () => {
+    if (listItems.length > 0 && listType) {
+      if (listType === 'ul') {
+        elements.push(
+          <ul key={key++} className="list-disc list-inside text-slate-300 mb-4 space-y-1 ml-4">
+            {listItems}
+          </ul>
+        )
+      } else {
+        elements.push(
+          <ol key={key++} className="list-decimal list-inside text-slate-300 mb-4 space-y-1 ml-4">
+            {listItems}
+          </ol>
+        )
+      }
+      listItems = []
+      listType = null
+    }
+  }
+
+  // Process inline formatting (bold, italic, links)
+  const processInline = (text: string): React.ReactNode => {
+    // Replace **bold** and __bold__
+    // Replace *italic* and _italic_
+    // Replace [link](url)
+    const parts: React.ReactNode[] = []
+    let remaining = text
+    let inlineKey = 0
+
+    while (remaining.length > 0) {
+      // Check for links first [text](url)
+      const linkMatch = remaining.match(/^\[([^\]]+)\]\(([^)]+)\)/)
+      if (linkMatch) {
+        parts.push(
+          <a
+            key={inlineKey++}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 underline"
+          >
+            {linkMatch[1]}
+          </a>
+        )
+        remaining = remaining.slice(linkMatch[0].length)
+        continue
+      }
+
+      // Check for bold **text** or __text__
+      const boldMatch = remaining.match(/^(\*\*|__)([^*_]+)\1/)
+      if (boldMatch) {
+        parts.push(<strong key={inlineKey++} className="font-semibold text-white">{boldMatch[2]}</strong>)
+        remaining = remaining.slice(boldMatch[0].length)
+        continue
+      }
+
+      // Check for italic *text* or _text_
+      const italicMatch = remaining.match(/^(\*|_)([^*_]+)\1/)
+      if (italicMatch) {
+        parts.push(<em key={inlineKey++} className="italic">{italicMatch[2]}</em>)
+        remaining = remaining.slice(italicMatch[0].length)
+        continue
+      }
+
+      // Find next special character or end
+      const nextSpecial = remaining.search(/[\[*_]/)
+      if (nextSpecial === -1) {
+        parts.push(remaining)
+        break
+      } else if (nextSpecial === 0) {
+        // Not a match, take single character
+        parts.push(remaining[0])
+        remaining = remaining.slice(1)
+      } else {
+        parts.push(remaining.slice(0, nextSpecial))
+        remaining = remaining.slice(nextSpecial)
+      }
+    }
+
+    return parts.length === 1 ? parts[0] : parts
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    // Skip empty lines but flush any pending list
+    if (trimmed === '') {
+      flushList()
+      continue
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}$/.test(trimmed)) {
+      flushList()
+      elements.push(<hr key={key++} className="border-slate-600 my-6" />)
+      continue
+    }
+
+    // Headings
+    const h1Match = trimmed.match(/^#\s+(.+)$/)
+    if (h1Match) {
+      flushList()
+      elements.push(
+        <h1 key={key++} className="text-2xl font-bold text-white mb-4 mt-6">
+          {processInline(h1Match[1])}
+        </h1>
+      )
+      continue
+    }
+
+    const h2Match = trimmed.match(/^##\s+(.+)$/)
+    if (h2Match) {
+      flushList()
+      elements.push(
+        <h2 key={key++} className="text-xl font-bold text-white mb-3 mt-5">
+          {processInline(h2Match[1])}
+        </h2>
+      )
+      continue
+    }
+
+    const h3Match = trimmed.match(/^###\s+(.+)$/)
+    if (h3Match) {
+      flushList()
+      elements.push(
+        <h3 key={key++} className="text-lg font-semibold text-white mb-2 mt-4">
+          {processInline(h3Match[1])}
+        </h3>
+      )
+      continue
+    }
+
+    const h4Match = trimmed.match(/^####\s+(.+)$/)
+    if (h4Match) {
+      flushList()
+      elements.push(
+        <h4 key={key++} className="text-base font-semibold text-white mb-2 mt-3">
+          {processInline(h4Match[1])}
+        </h4>
+      )
+      continue
+    }
+
+    // Unordered list items (- or *)
+    const ulMatch = trimmed.match(/^[-*]\s+(.+)$/)
+    if (ulMatch) {
+      if (listType !== 'ul') {
+        flushList()
+        listType = 'ul'
+      }
+      listItems.push(<li key={key++}>{processInline(ulMatch[1])}</li>)
+      continue
+    }
+
+    // Ordered list items (1. 2. etc)
+    const olMatch = trimmed.match(/^\d+\.\s+(.+)$/)
+    if (olMatch) {
+      if (listType !== 'ol') {
+        flushList()
+        listType = 'ol'
+      }
+      listItems.push(<li key={key++}>{processInline(olMatch[1])}</li>)
+      continue
+    }
+
+    // Regular paragraph
+    flushList()
+    elements.push(
+      <p key={key++} className="text-slate-300 leading-relaxed mb-4">
+        {processInline(trimmed)}
+      </p>
+    )
+  }
+
+  // Flush any remaining list
+  flushList()
+
+  return elements
+}
+
 // Format relative time (e.g., "2 hours ago")
 function formatRelativeTime(isoString: string | null): string {
   if (!isoString) return ''
@@ -1264,18 +1453,8 @@ export default function News() {
                     {/* Success - Full article content */}
                     {articleContent?.success && articleContent.content && (
                       <div className="prose prose-invert prose-slate max-w-none">
-                        {/* Render content with proper paragraph breaks */}
-                        {/* Split on double newlines first, then on single newlines for remaining blocks */}
-                        {articleContent.content
-                          .split(/\n\s*\n/)  // Split on any blank lines (one or more newlines with optional whitespace)
-                          .flatMap((block) => block.split('\n'))  // Then split each block on single newlines
-                          .filter((line) => line.trim().length > 0)  // Remove empty lines
-                          .map((paragraph, idx) => (
-                            <p key={idx} className="text-slate-300 leading-relaxed mb-4">
-                              {paragraph.trim()}
-                            </p>
-                          ))
-                        }
+                        {/* Render markdown content with headings, lists, and formatting */}
+                        {renderMarkdown(articleContent.content)}
                       </div>
                     )}
                   </>
