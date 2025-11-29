@@ -1609,10 +1609,10 @@ function Bots() {
                         </div>
                       </div>
 
-                      {/* Bot Budget Allocation - Always visible for AI strategies */}
+                      {/* Bot Budget Allocation - Content varies by mode */}
                       <div className="bg-slate-750 rounded-lg p-4 border border-slate-700">
                         <h4 className="text-sm font-semibold text-slate-300 mb-4 border-b border-slate-600 pb-2">
-                          Bot Budget Allocation
+                          {useManualSizing ? 'Position Limits' : 'Bot Budget Allocation'}
                         </h4>
                         <div className="space-y-4">
                           {/* Max Concurrent Positions - Shows in both modes */}
@@ -1631,36 +1631,36 @@ function Bots() {
                             </div>
                           )}
 
-                          {/* Budget Percentage */}
-                          <div>
-                            <label className="block text-sm font-medium mb-2">
-                              Budget Percentage <span className="text-slate-400 text-xs ml-2">(% of aggregate portfolio)</span>
-                            </label>
-                            <p className="text-xs text-slate-400 mb-2">
-                              {useManualSizing
-                                ? 'This caps maximum budget usage. Manual order sizes are based on aggregate value, but cannot exceed this allocation.'
-                                : 'AI determines order sizes within this budget allocation.'}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max="100"
-                                value={formData.budget_percentage}
-                                onChange={(e) => setFormData({ ...formData, budget_percentage: parseFloat(e.target.value) || 0 })}
-                                className="flex-1 rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
-                                placeholder="0.0"
-                              />
-                              <span className="text-slate-400 font-medium">%</span>
+                          {/* Budget Percentage - AI mode only */}
+                          {!useManualSizing && (
+                            <div>
+                              <label className="block text-sm font-medium mb-2">
+                                Budget Percentage <span className="text-slate-400 text-xs ml-2">(% of aggregate portfolio)</span>
+                              </label>
+                              <p className="text-xs text-slate-400 mb-2">
+                                AI determines order sizes within this budget allocation.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  max="100"
+                                  value={formData.budget_percentage}
+                                  onChange={(e) => setFormData({ ...formData, budget_percentage: parseFloat(e.target.value) || 0 })}
+                                  className="flex-1 rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                                  placeholder="0.0"
+                                />
+                                <span className="text-slate-400 font-medium">%</span>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Recommended: 33% for 3 bots, 50% for 2 bots, 100% for 1 bot
+                              </p>
                             </div>
-                            <p className="text-xs text-slate-500 mt-1">
-                              Recommended: 33% for 3 bots, 50% for 2 bots, 100% for 1 bot
-                            </p>
-                          </div>
+                          )}
 
-                          {/* Budget Splitting Toggle - Only show for multi-pair */}
-                          {formData.product_ids.length > 1 && (
+                          {/* Budget Splitting Toggle - AI mode only, multi-pair */}
+                          {!useManualSizing && formData.product_ids.length > 1 && (
                             <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-3">
                               <label className="flex items-start space-x-3 cursor-pointer">
                                 <input
