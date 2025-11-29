@@ -883,8 +883,9 @@ export default function News() {
 
               {/* Estimated date */}
               <div className="text-sm text-slate-400 mb-4">
-                ~{halvingCountdown.estimatedDate.toLocaleDateString('en-US', {
+                {halvingCountdown.estimatedDate.toLocaleDateString('en-US', {
                   month: 'long',
+                  day: 'numeric',
                   year: 'numeric',
                 })}
               </div>
