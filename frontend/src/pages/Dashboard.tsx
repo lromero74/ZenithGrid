@@ -51,21 +51,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
   })
 
-  // Fetch portfolio for account value (account-specific)
+  // Fetch portfolio for account value - use same endpoint/queryKey as header for consistency
   const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio', selectedAccount?.id],
+    queryKey: ['account-portfolio'],
     queryFn: async () => {
-      if (selectedAccount) {
-        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json()
-      }
       const response = await fetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
-    refetchInterval: 60000,
-    staleTime: 30000,
+    refetchInterval: 120000, // Match header timing
+    staleTime: 60000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   })
