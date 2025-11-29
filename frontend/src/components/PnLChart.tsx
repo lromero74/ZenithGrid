@@ -134,7 +134,29 @@ export function PnLChart() {
       ? filteredData[filteredData.length - 1].cumulative_pnl
       : 0
 
-    const closedTrades = filteredData.length
+    // Always calculate closed trades from summary data (one entry per position),
+    // not from filteredData which could be by_day (one entry per day) or by_pair
+    const now = new Date()
+    const cutoffDate = new Date()
+    switch (timeRange) {
+      case '7d':
+        cutoffDate.setDate(now.getDate() - 7)
+        break
+      case '30d':
+        cutoffDate.setDate(now.getDate() - 30)
+        break
+      case '3m':
+        cutoffDate.setMonth(now.getMonth() - 3)
+        break
+      case '6m':
+        cutoffDate.setMonth(now.getMonth() - 6)
+        break
+      case 'all':
+        cutoffDate.setTime(0) // Include all
+        break
+    }
+    const filteredSummary = data.summary.filter((item) => new Date(item.date) >= cutoffDate)
+    const closedTrades = filteredSummary.length
 
     const bestPair = data.by_pair.length > 0 ? data.by_pair[0] : null
     const worstPair = data.by_pair.length > 0 ? data.by_pair[data.by_pair.length - 1] : null
