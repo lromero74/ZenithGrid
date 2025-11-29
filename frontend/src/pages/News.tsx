@@ -256,6 +256,8 @@ export default function News() {
   const [activeTab, setActiveTab] = useState<TabType>('articles')
   // Track which video is playing inline (null means none)
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null)
+  // Track which article is being previewed (null means none)
+  const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
 
   // Force re-render every minute to update relative timestamps
   const [, setTimeTick] = useState(0)
@@ -799,29 +801,44 @@ export default function News() {
           {/* News grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredNews.map((item, index) => (
-              <a
+              <div
                 key={`${item.source}-${index}`}
-                href={item.url}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="group bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-slate-900/50"
               >
-                {/* Thumbnail */}
-                {item.thumbnail && (
-                  <div className="aspect-video w-full overflow-hidden bg-slate-900">
+                {/* Thumbnail with preview/external link buttons */}
+                <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
+                  {item.thumbnail && (
                     <img
                       src={item.thumbnail}
                       alt=""
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       onError={(e) => {
-                        // Hide broken images
                         (e.target as HTMLImageElement).style.display = 'none'
                       }}
                     />
-                  </div>
-                )}
+                  )}
+                  {/* Click overlay to open preview */}
+                  <button
+                    onClick={() => setPreviewArticle(item)}
+                    className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/30 transition-colors cursor-pointer"
+                  />
+                  {/* Open in new tab button */}
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
+                    title="Open on website"
+                  >
+                    <ExternalLink className="w-4 h-4 text-white" />
+                  </a>
+                </div>
 
-                <div className="p-4 space-y-3">
+                <button
+                  onClick={() => setPreviewArticle(item)}
+                  className="p-4 space-y-3 text-left w-full cursor-pointer hover:bg-slate-700/30 transition-colors"
+                >
                   {/* Source badge and time */}
                   <div className="flex items-center justify-between">
                     <span
@@ -848,13 +865,13 @@ export default function News() {
                     <p className="text-sm text-slate-400 line-clamp-2">{item.summary}</p>
                   )}
 
-                  {/* External link indicator */}
+                  {/* Click to preview indicator */}
                   <div className="flex items-center space-x-1 text-xs text-slate-500 group-hover:text-blue-400 transition-colors">
-                    <ExternalLink className="w-3 h-3" />
-                    <span>Read more</span>
+                    <Newspaper className="w-3 h-3" />
+                    <span>Click to preview</span>
                   </div>
-                </div>
-              </a>
+                </button>
+              </div>
             ))}
           </div>
 
@@ -1076,6 +1093,100 @@ export default function News() {
           Content is cached for 24 hours. Click refresh to fetch the latest {activeTab}.
         </p>
       </div>
+
+      {/* Article Preview Modal */}
+      {previewArticle && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setPreviewArticle(null)}
+        >
+          <div
+            className="bg-slate-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header with close button */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <div className="flex items-center space-x-2">
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-medium border ${
+                    sourceColors[previewArticle.source] || 'bg-slate-600 text-slate-300'
+                  }`}
+                >
+                  {previewArticle.source_name}
+                </span>
+                {previewArticle.published && (
+                  <span className="text-xs text-slate-500">
+                    {formatRelativeTime(previewArticle.published)}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setPreviewArticle(null)}
+                className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            {/* Modal content */}
+            <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+              {/* Full-size thumbnail */}
+              {previewArticle.thumbnail && (
+                <div className="w-full aspect-video bg-slate-900">
+                  <img
+                    src={previewArticle.thumbnail}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                  />
+                </div>
+              )}
+
+              <div className="p-6 space-y-4">
+                {/* Title */}
+                <h2 className="text-xl font-bold text-white leading-tight">
+                  {previewArticle.title}
+                </h2>
+
+                {/* Full summary */}
+                {previewArticle.summary && (
+                  <p className="text-slate-300 leading-relaxed">
+                    {previewArticle.summary}
+                  </p>
+                )}
+
+                {/* No summary message */}
+                {!previewArticle.summary && (
+                  <p className="text-slate-500 italic">
+                    No summary available. Click below to read the full article.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Modal footer with action button */}
+            <div className="p-4 border-t border-slate-700 flex justify-between items-center">
+              <button
+                onClick={() => setPreviewArticle(null)}
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              >
+                Close
+              </button>
+              <a
+                href={previewArticle.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center space-x-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Read Full Article</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
