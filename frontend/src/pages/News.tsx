@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer, DollarSign, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, X } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 
 // BTC Halving constants
@@ -254,6 +254,8 @@ export default function News() {
   const [selectedSource, setSelectedSource] = useState<string>('all')
   const [selectedVideoSource, setSelectedVideoSource] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<TabType>('articles')
+  // Track which video is playing inline (null means none)
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null)
 
   // Force re-render every minute to update relative timestamps
   const [, setTimeTick] = useState(0)
@@ -910,69 +912,102 @@ export default function News() {
 
           {/* Videos grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredVideos.map((video, index) => (
-              <a
-                key={`${video.source}-${index}`}
-                href={video.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-slate-900/50"
-              >
-                {/* Video Thumbnail with play button overlay */}
-                <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
-                  {video.thumbnail && (
-                    <img
-                      src={video.thumbnail}
-                      alt=""
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none'
-                      }}
-                    />
-                  )}
-                  {/* Play button overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                    <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Play className="w-7 h-7 text-white ml-1" fill="white" />
-                    </div>
-                  </div>
-                </div>
+            {filteredVideos.map((video, index) => {
+              const isPlaying = playingVideoId === video.video_id
 
-                <div className="p-4 space-y-3">
-                  {/* Channel badge and time */}
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                        videoSourceColors[video.source] || 'bg-slate-600 text-slate-300'
-                      }`}
-                    >
-                      {video.channel_name}
-                    </span>
-                    {video.published && (
-                      <span className="text-xs text-slate-500">
-                        {formatRelativeTime(video.published)}
-                      </span>
+              return (
+                <div
+                  key={`${video.source}-${index}`}
+                  className="group bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-slate-900/50"
+                >
+                  {/* Video area - either thumbnail or embedded player */}
+                  <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
+                    {isPlaying ? (
+                      // Embedded YouTube player
+                      <>
+                        <iframe
+                          src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1&rel=0`}
+                          title={video.title}
+                          className="w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                        {/* Close button */}
+                        <button
+                          onClick={() => setPlayingVideoId(null)}
+                          className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
+                          title="Close video"
+                        >
+                          <X className="w-5 h-5 text-white" />
+                        </button>
+                      </>
+                    ) : (
+                      // Thumbnail with play button
+                      <button
+                        onClick={() => setPlayingVideoId(video.video_id)}
+                        className="w-full h-full relative cursor-pointer"
+                      >
+                        {video.thumbnail && (
+                          <img
+                            src={video.thumbnail}
+                            alt=""
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
+                        )}
+                        {/* Play button overlay */}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                          <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Play className="w-7 h-7 text-white ml-1" fill="white" />
+                          </div>
+                        </div>
+                      </button>
                     )}
                   </div>
 
-                  {/* Title */}
-                  <h3 className="font-medium text-white group-hover:text-red-400 transition-colors line-clamp-2">
-                    {video.title}
-                  </h3>
+                  <div className="p-4 space-y-3">
+                    {/* Channel badge and time */}
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-medium border ${
+                          videoSourceColors[video.source] || 'bg-slate-600 text-slate-300'
+                        }`}
+                      >
+                        {video.channel_name}
+                      </span>
+                      {video.published && (
+                        <span className="text-xs text-slate-500">
+                          {formatRelativeTime(video.published)}
+                        </span>
+                      )}
+                    </div>
 
-                  {/* Description */}
-                  {video.description && (
-                    <p className="text-sm text-slate-400 line-clamp-2">{video.description}</p>
-                  )}
+                    {/* Title */}
+                    <h3 className="font-medium text-white line-clamp-2">
+                      {video.title}
+                    </h3>
 
-                  {/* Watch on YouTube indicator */}
-                  <div className="flex items-center space-x-1 text-xs text-slate-500 group-hover:text-red-400 transition-colors">
-                    <Video className="w-3 h-3" />
-                    <span>Watch on YouTube</span>
+                    {/* Description */}
+                    {video.description && (
+                      <p className="text-sm text-slate-400 line-clamp-2">{video.description}</p>
+                    )}
+
+                    {/* Action link */}
+                    <a
+                      href={video.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Open on YouTube</span>
+                    </a>
                   </div>
                 </div>
-              </a>
-            ))}
+              )
+            })}
           </div>
 
           {/* Empty state for videos */}
