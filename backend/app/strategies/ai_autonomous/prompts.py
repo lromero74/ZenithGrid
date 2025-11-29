@@ -128,9 +128,18 @@ def build_standard_batch_analysis_prompt(
         if quote_currency == "USD":
             budget_str = f"${per_position_budget:.2f} USD"
             min_str = "$1.00 USD"
+            product_min = 1.0  # USD minimum
         else:
             budget_str = f"{per_position_budget:.8f} BTC"
             min_str = "0.0001 BTC"
+            product_min = 0.0001  # BTC minimum
+
+        # Calculate minimum percentage needed to meet exchange minimum
+        if per_position_budget > 0:
+            min_percentage_needed = (product_min / per_position_budget) * 100
+            min_percentage_needed = min(min_percentage_needed, 100)  # Cap at 100%
+        else:
+            min_percentage_needed = 100
 
         # Calculate DCA reserve information
         dca_info = ""
@@ -150,6 +159,7 @@ def build_standard_batch_analysis_prompt(
 - Budget per deal: {budget_str}
 - Max concurrent positions: {max_concurrent_deals}
 - Exchange minimum: {min_str}
+- **MINIMUM ALLOCATION: {min_percentage_needed:.0f}%** (any lower will fail exchange minimum)
 - Your allocation % is applied to the per-position budget above{dca_info}"""
 
     prompt = f"""You are analyzing {len(pairs_data)} cryptocurrency pairs simultaneously. Provide trading recommendations for ALL pairs in a single JSON response.
@@ -185,14 +195,12 @@ Remember:
 - Return valid JSON only (no markdown, no code blocks)
 
 **CRITICAL - Budget Allocation Rules:**
-1. Exchange Minimums: Coinbase requires minimum 0.0001 BTC per order (or equivalent USD)
+1. **MINIMUM ALLOCATION enforced**: See "MINIMUM ALLOCATION" percentage above - orders below this WILL FAIL
 2. DCA Reserve: If DCA is enabled, you MUST leave budget for safety orders (see max_initial_buy % above)
 3. Your suggested_allocation_pct is applied to the PER-POSITION budget
 4. Ensure allocation meets BOTH exchange minimum AND leaves room for DCA
-5. Example: With 0.00126 BTC per-position budget, 3 DCA orders at 20% each = 60% reserved
-   - Max initial: 40% × 0.00126 = 0.000504 BTC ✓ (above minimum and leaves DCA room)
-   - Too high: 80% × 0.00126 = 0.001008 BTC ✗ (leaves only 0.000252 for 3 DCAs - insufficient!)
-6. Never suggest allocations that violate exchange minimums OR leave insufficient DCA budget!"""
+5. If you want to buy but MINIMUM ALLOCATION > max_initial_buy %, suggest "hold" (budget too small)
+6. Never suggest allocations below the MINIMUM ALLOCATION percentage - orders will be rejected!"""
 
     return prompt
 
@@ -234,6 +242,13 @@ def build_dca_decision_prompt(
         curr_price_str = f"{current_price:.8f} BTC"
         min_order_str = f"{product_minimum:.8f} BTC"
 
+    # Calculate minimum percentage needed to meet exchange minimum
+    if remaining_budget > 0:
+        min_percentage_needed = (product_minimum / remaining_budget) * 100
+        min_percentage_needed = min(min_percentage_needed, 100)  # Cap at 100%
+    else:
+        min_percentage_needed = 100
+
     prompt = f"""You are an autonomous trading AI managing real cryptocurrency positions. Your goal is to maximize profit through intelligent DCA decisions.
 
 **Your Objective:**
@@ -248,6 +263,7 @@ Your job is to grow this portfolio. The better you perform, the more resources y
 - Remaining Budget: {budget_str}
 - DCA Buys So Far: {current_dcas}/{max_dcas}
 - **MINIMUM ORDER SIZE: {min_order_str}** (Coinbase exchange requirement)
+- **MINIMUM PERCENTAGE: {min_percentage_needed:.0f}%** (minimum amount_percentage to meet exchange minimum)
 
 **CRITICAL RULE - DCA CONSTRAINT:**
 You can ONLY make this DCA decision if the current price is BELOW the average entry price.
@@ -285,6 +301,6 @@ Strategic Considerations:
 - What's the market momentum and volatility telling you?
 - Only buy if you see genuine value, not just because price dropped
 - Remember: Your goal is to maximize long-term profit, not to spend budget quickly
-- IMPORTANT: Ensure your buy amount meets the minimum order size ({min_order_str}) - orders below this will be rejected by the exchange"""
+- **CRITICAL**: If you want to buy, amount_percentage MUST be at least {min_percentage_needed:.0f}% to meet exchange minimum. Orders below {min_order_str} will be REJECTED."""
 
     return prompt
