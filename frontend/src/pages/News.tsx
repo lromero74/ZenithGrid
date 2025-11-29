@@ -272,14 +272,19 @@ export default function News() {
   // Calculate halving countdown
   const halvingCountdown = blockHeight ? calculateHalvingCountdown(blockHeight.height) : null
 
-  // Live countdown timer
+  // Live countdown timer - use blockHeight.height as stable dependency
   const [liveCountdown, setLiveCountdown] = useState<string>('')
   useEffect(() => {
-    if (!halvingCountdown) return
+    if (!blockHeight?.height) return
+
+    // Calculate target date once when block height changes
+    const blocksRemaining = NEXT_HALVING_BLOCK - blockHeight.height
+    const minutesRemaining = blocksRemaining * AVG_BLOCK_TIME_MINUTES
+    const targetTime = Date.now() + minutesRemaining * 60 * 1000
 
     const updateCountdown = () => {
-      const now = new Date()
-      const diff = halvingCountdown.estimatedDate.getTime() - now.getTime()
+      const now = Date.now()
+      const diff = targetTime - now
       if (diff <= 0) {
         setLiveCountdown('Halving imminent!')
         return
@@ -294,7 +299,7 @@ export default function News() {
     updateCountdown()
     const interval = setInterval(updateCountdown, 1000)
     return () => clearInterval(interval)
-  }, [halvingCountdown])
+  }, [blockHeight?.height])
 
   const handleForceRefresh = async () => {
     if (activeTab === 'articles') {
