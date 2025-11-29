@@ -231,6 +231,86 @@ class ArticleContentResponse(BaseModel):
     error: Optional[str] = None
 
 
+class DebtCeilingEvent(BaseModel):
+    """Individual debt ceiling event"""
+    date: str  # ISO format date
+    amount_trillion: Optional[float]  # Amount in trillions (None if suspended)
+    suspended: bool  # True if ceiling was suspended
+    suspension_end: Optional[str]  # When suspension ends (if applicable)
+    note: str  # Description of the event
+    legislation: Optional[str]  # Name of the bill/act
+
+
+class DebtCeilingHistoryResponse(BaseModel):
+    """Debt ceiling history API response"""
+    events: List[DebtCeilingEvent]
+    total_events: int
+    last_updated: str  # When this data was last verified
+
+
+# Historical debt ceiling events (most recent first)
+# Source: Congressional Research Service, Treasury, Congress.gov
+# This data changes only when Congress passes new legislation (~1-2 years)
+DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
+    {
+        "date": "2025-01-02",
+        "amount_trillion": 36.1,
+        "suspended": False,
+        "suspension_end": None,
+        "note": "Reset after suspension ended",
+        "legislation": "Fiscal Responsibility Act of 2023",
+    },
+    {
+        "date": "2023-06-03",
+        "amount_trillion": None,
+        "suspended": True,
+        "suspension_end": "2025-01-01",
+        "note": "Suspended until January 1, 2025",
+        "legislation": "Fiscal Responsibility Act of 2023",
+    },
+    {
+        "date": "2021-12-16",
+        "amount_trillion": 31.4,
+        "suspended": False,
+        "suspension_end": None,
+        "note": "Raised by $2.5T",
+        "legislation": "P.L. 117-73",
+    },
+    {
+        "date": "2021-10-14",
+        "amount_trillion": 28.9,
+        "suspended": False,
+        "suspension_end": None,
+        "note": "Raised by $480B (short-term)",
+        "legislation": "P.L. 117-50",
+    },
+    {
+        "date": "2019-08-02",
+        "amount_trillion": None,
+        "suspended": True,
+        "suspension_end": "2021-07-31",
+        "note": "Suspended until July 31, 2021",
+        "legislation": "Bipartisan Budget Act of 2019",
+    },
+    {
+        "date": "2018-02-09",
+        "amount_trillion": None,
+        "suspended": True,
+        "suspension_end": "2019-03-01",
+        "note": "Suspended until March 1, 2019",
+        "legislation": "Bipartisan Budget Act of 2018",
+    },
+    {
+        "date": "2017-03-16",
+        "amount_trillion": 19.8,
+        "suspended": False,
+        "suspension_end": None,
+        "note": "Reset after suspension ended",
+        "legislation": "No Suspense Act (P.L. 114-74)",
+    },
+]
+
+
 def load_cache() -> Optional[Dict[str, Any]]:
     """Load news cache from file"""
     if not CACHE_FILE.exists():
@@ -992,6 +1072,32 @@ async def get_us_debt():
     logger.info("Fetching fresh US debt data...")
     data = await fetch_us_debt()
     return USDebtResponse(**data)
+
+
+@router.get("/debt-ceiling-history", response_model=DebtCeilingHistoryResponse)
+async def get_debt_ceiling_history(limit: int = 7):
+    """
+    Get historical debt ceiling changes/suspensions.
+
+    Returns the most recent debt ceiling legislation events.
+    Data is sourced from Congressional Research Service and Treasury records.
+
+    Note: Debt ceiling changes require Congressional action and happen infrequently
+    (typically every 1-2 years). This data is updated when new legislation passes.
+
+    Query params:
+    - limit: Number of events to return (default: 7, max: 20)
+    """
+    # Clamp limit to reasonable range
+    limit = max(1, min(limit, 20))
+
+    events = DEBT_CEILING_HISTORY[:limit]
+
+    return DebtCeilingHistoryResponse(
+        events=[DebtCeilingEvent(**e) for e in events],
+        total_events=len(events),
+        last_updated="2025-01-02",  # Update this when adding new ceiling events
+    )
 
 
 # Allowed domains for article content extraction (security measure)
