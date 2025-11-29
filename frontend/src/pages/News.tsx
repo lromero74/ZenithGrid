@@ -410,6 +410,69 @@ function formatDebt(value: number): string {
   })
 }
 
+// Calculate next debt milestone and countdown
+// milestoneSize: 1 trillion or 5 trillion
+function calculateDebtMilestone(currentDebt: number, debtPerSecond: number, milestoneSize: number): {
+  milestone: number
+  secondsUntil: number
+  estimatedDate: Date
+  isIncreasing: boolean
+} {
+  const TRILLION = 1_000_000_000_000
+  const milestone = milestoneSize * TRILLION
+  const isIncreasing = debtPerSecond > 0
+
+  // Find the next milestone based on direction
+  let nextMilestone: number
+  if (isIncreasing) {
+    // Round up to next milestone
+    nextMilestone = Math.ceil(currentDebt / milestone) * milestone
+  } else {
+    // Round down to next milestone (debt decreasing)
+    nextMilestone = Math.floor(currentDebt / milestone) * milestone
+  }
+
+  // If we're exactly on a milestone, go to the next one
+  if (nextMilestone === currentDebt) {
+    nextMilestone = isIncreasing ? nextMilestone + milestone : nextMilestone - milestone
+  }
+
+  const debtDifference = isIncreasing
+    ? nextMilestone - currentDebt
+    : currentDebt - nextMilestone
+  const secondsUntil = Math.abs(debtDifference / debtPerSecond)
+  const estimatedDate = new Date(Date.now() + secondsUntil * 1000)
+
+  return {
+    milestone: nextMilestone,
+    secondsUntil,
+    estimatedDate,
+    isIncreasing
+  }
+}
+
+// Format time in days/hours/mins format (compact)
+function formatDebtCountdown(seconds: number): string {
+  const days = Math.floor(seconds / (24 * 60 * 60))
+  const hours = Math.floor((seconds % (24 * 60 * 60)) / (60 * 60))
+  const mins = Math.floor((seconds % (60 * 60)) / 60)
+
+  if (days > 365) {
+    const years = Math.floor(days / 365)
+    const remainingDays = days % 365
+    const months = Math.floor(remainingDays / 30)
+    return `${years}y ${months}mo`
+  } else if (days > 30) {
+    const months = Math.floor(days / 30)
+    const remainingDays = days % 30
+    return `${months}mo ${remainingDays}d`
+  } else if (days > 0) {
+    return `${days}d ${hours}h`
+  } else {
+    return `${hours}h ${mins}m`
+  }
+}
+
 // Format the countdown in extended format (years, months, days, hours, minutes, seconds)
 function formatExtendedCountdown(diffMs: number): string {
   if (diffMs <= 0) return 'Halving imminent!'
@@ -982,6 +1045,47 @@ export default function News() {
               <div className="text-xs text-slate-500">
                 GDP: ${(usDebtData.gdp / 1_000_000_000_000).toFixed(2)}T
               </div>
+
+              {/* Debt milestones */}
+              {(() => {
+                const m1T = calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 1)
+                const m5T = calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 5)
+                return (
+                  <div className="w-full bg-slate-900/50 rounded-lg p-3 mt-3">
+                    <div className="text-[10px] text-slate-500 mb-2 font-medium">Milestones</div>
+                    <div className="space-y-2">
+                      {/* $1T milestone */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-400">
+                          {m1T.isIncreasing ? '' : ''}${(m1T.milestone / 1_000_000_000_000).toFixed(0)}T
+                        </span>
+                        <div className="text-right">
+                          <span className="text-xs font-mono text-orange-400">
+                            {formatDebtCountdown(m1T.secondsUntil)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 ml-2">
+                            {m1T.estimatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                      </div>
+                      {/* $5T milestone */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-400">
+                          {m5T.isIncreasing ? '' : ''}${(m5T.milestone / 1_000_000_000_000).toFixed(0)}T
+                        </span>
+                        <div className="text-right">
+                          <span className="text-xs font-mono text-orange-400">
+                            {formatDebtCountdown(m5T.secondsUntil)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 ml-2">
+                            {m5T.estimatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Data source */}
               <div className="mt-2 text-[10px] text-slate-600">
