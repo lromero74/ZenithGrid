@@ -1453,7 +1453,7 @@ function Bots() {
                   }
                 />
               ) : selectedStrategy.parameters.length > 0 ? (
-                (() => {
+(() => {
                   // Helper function to check if parameter should be visible
                   const isParameterVisible = (param: StrategyParameter): boolean => {
                     if (!param.visible_when) return true
@@ -1465,9 +1465,14 @@ function Bots() {
                     })
                   }
 
+                  // Check if manual sizing mode is enabled
+                  const useManualSizing = formData.strategy_config.use_manual_sizing === true
+
                   // Group parameters by group property
+                  // Exclude use_manual_sizing since we render it as a custom toggle
                   const parametersByGroup = selectedStrategy.parameters.reduce((acc, param) => {
                     if (!isParameterVisible(param)) return acc
+                    if (param.name === 'use_manual_sizing') return acc  // Skip - rendered separately
 
                     const group = param.group || 'Other'
                     if (!acc[group]) acc[group] = []
@@ -1475,82 +1480,141 @@ function Bots() {
                     return acc
                   }, {} as Record<string, StrategyParameter[]>)
 
-                  // Define group display order
-                  const groupOrder = [
+                  // Define group display order - separated into always-show and conditional groups
+                  const alwaysShowGroups = [
                     'Control Mode',
                     'AI Configuration',
                     'Analysis Timing',
                     'Web Search (Optional)',
+                  ]
+
+                  // AI-driven budget groups (shown when manual sizing is OFF)
+                  const aiBudgetGroups = [
                     'Budget & Position Sizing',
                     'DCA (Safety Orders)',
+                  ]
+
+                  // Manual sizing group (shown when manual sizing is ON)
+                  const manualSizingGroups = [
                     'Manual Order Sizing',
+                  ]
+
+                  const alwaysShowAfterGroups = [
                     'Profit & Exit',
                     'Market Filters',
                     'Other'
                   ]
 
+                  // Helper to render a group
+                  const renderGroup = (groupName: string) => {
+                    const groupParams = parametersByGroup[groupName]
+                    if (!groupParams || groupParams.length === 0) return null
+
+                    return (
+                      <div key={groupName} className="bg-slate-750 rounded-lg p-4 border border-slate-700">
+                        <h4 className="text-sm font-semibold text-slate-300 mb-4 border-b border-slate-600 pb-2">
+                          {groupName}
+                        </h4>
+                        <div className="space-y-4">
+                          {groupParams.map((param) => (
+                            <div key={param.name}>
+                              <label className="block text-sm font-medium mb-2">
+                                {param.display_name || param.description}
+                                {param.min_value !== undefined && param.max_value !== undefined && (
+                                  <span className="text-slate-400 text-xs ml-2">
+                                    ({param.min_value} - {param.max_value})
+                                  </span>
+                                )}
+                              </label>
+                              {param.description && param.display_name && (
+                                <p className="text-xs text-slate-400 mb-2">{param.description}</p>
+                              )}
+                              {renderParameterInput(param)}
+
+                              {/* Show preset threshold values when risk_tolerance is not manual */}
+                              {param.name === 'risk_tolerance' && formData.strategy_config.risk_tolerance && formData.strategy_config.risk_tolerance !== 'manual' && (
+                                <div className="mt-2 p-3 bg-blue-900/20 border border-blue-700/50 rounded text-xs">
+                                  <p className="font-semibold text-blue-400 mb-2">Preset Confidence Thresholds:</p>
+                                  <div className="grid grid-cols-3 gap-2 text-slate-300">
+                                    {formData.strategy_config.risk_tolerance === 'aggressive' && (
+                                      <>
+                                        <div>Open: <span className="text-white font-semibold">70%</span></div>
+                                        <div>DCA: <span className="text-white font-semibold">65%</span></div>
+                                        <div>Sell: <span className="text-white font-semibold">60%</span></div>
+                                      </>
+                                    )}
+                                    {formData.strategy_config.risk_tolerance === 'moderate' && (
+                                      <>
+                                        <div>Open: <span className="text-white font-semibold">75%</span></div>
+                                        <div>DCA: <span className="text-white font-semibold">70%</span></div>
+                                        <div>Sell: <span className="text-white font-semibold">65%</span></div>
+                                      </>
+                                    )}
+                                    {formData.strategy_config.risk_tolerance === 'conservative' && (
+                                      <>
+                                        <div>Open: <span className="text-white font-semibold">80%</span></div>
+                                        <div>DCA: <span className="text-white font-semibold">75%</span></div>
+                                        <div>Sell: <span className="text-white font-semibold">70%</span></div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  }
+
                   return (
                     <div className="space-y-6">
-                      {groupOrder.map((groupName) => {
-                        const groupParams = parametersByGroup[groupName]
-                        if (!groupParams || groupParams.length === 0) return null
+                      {/* Always-show groups first */}
+                      {alwaysShowGroups.map(renderGroup)}
 
-                        return (
-                          <div key={groupName} className="bg-slate-750 rounded-lg p-4 border border-slate-700">
-                            <h4 className="text-sm font-semibold text-slate-300 mb-4 border-b border-slate-600 pb-2">
-                              {groupName}
+                      {/* Manual vs AI Sizing Toggle - Always visible */}
+                      <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-lg p-4 border border-purple-700/50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <h4 className="text-sm font-semibold text-white mb-1">
+                              Order Sizing Mode
                             </h4>
-                            <div className="space-y-4">
-                              {groupParams.map((param) => (
-                                <div key={param.name}>
-                                  <label className="block text-sm font-medium mb-2">
-                                    {param.display_name || param.description}
-                                    {param.min_value !== undefined && param.max_value !== undefined && (
-                                      <span className="text-slate-400 text-xs ml-2">
-                                        ({param.min_value} - {param.max_value})
-                                      </span>
-                                    )}
-                                  </label>
-                                  {param.description && param.display_name && (
-                                    <p className="text-xs text-slate-400 mb-2">{param.description}</p>
-                                  )}
-                                  {renderParameterInput(param)}
-
-                                  {/* Show preset threshold values when risk_tolerance is not manual */}
-                                  {param.name === 'risk_tolerance' && formData.strategy_config.risk_tolerance && formData.strategy_config.risk_tolerance !== 'manual' && (
-                                    <div className="mt-2 p-3 bg-blue-900/20 border border-blue-700/50 rounded text-xs">
-                                      <p className="font-semibold text-blue-400 mb-2">Preset Confidence Thresholds:</p>
-                                      <div className="grid grid-cols-3 gap-2 text-slate-300">
-                                        {formData.strategy_config.risk_tolerance === 'aggressive' && (
-                                          <>
-                                            <div>Open: <span className="text-white font-semibold">70%</span></div>
-                                            <div>DCA: <span className="text-white font-semibold">65%</span></div>
-                                            <div>Sell: <span className="text-white font-semibold">60%</span></div>
-                                          </>
-                                        )}
-                                        {formData.strategy_config.risk_tolerance === 'moderate' && (
-                                          <>
-                                            <div>Open: <span className="text-white font-semibold">75%</span></div>
-                                            <div>DCA: <span className="text-white font-semibold">70%</span></div>
-                                            <div>Sell: <span className="text-white font-semibold">65%</span></div>
-                                          </>
-                                        )}
-                                        {formData.strategy_config.risk_tolerance === 'conservative' && (
-                                          <>
-                                            <div>Open: <span className="text-white font-semibold">80%</span></div>
-                                            <div>DCA: <span className="text-white font-semibold">75%</span></div>
-                                            <div>Sell: <span className="text-white font-semibold">70%</span></div>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
+                            <p className="text-xs text-slate-400">
+                              {useManualSizing
+                                ? '📊 Manual: Fixed percentages based on total portfolio value'
+                                : '🤖 AI-Directed: AI determines allocation within budget limits'}
+                            </p>
                           </div>
-                        )
-                      })}
+                          <label className="relative inline-flex items-center cursor-pointer ml-4">
+                            <input
+                              type="checkbox"
+                              checked={useManualSizing}
+                              onChange={(e) => handleParamChange('use_manual_sizing', e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-14 h-7 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                            <span className="ml-3 text-sm font-medium text-slate-300">
+                              {useManualSizing ? 'Manual' : 'AI'}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Conditional budget groups based on manual sizing toggle */}
+                      {useManualSizing ? (
+                        // Manual Mode: Show Manual Order Sizing options
+                        <>
+                          {manualSizingGroups.map(renderGroup)}
+                        </>
+                      ) : (
+                        // AI Mode: Show AI-driven budget groups
+                        <>
+                          {aiBudgetGroups.map(renderGroup)}
+                        </>
+                      )}
+
+                      {/* Always-show groups after budget section */}
+                      {alwaysShowAfterGroups.map(renderGroup)}
                     </div>
                   )
                 })()
