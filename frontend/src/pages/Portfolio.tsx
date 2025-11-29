@@ -65,17 +65,10 @@ type SortDirection = 'asc' | 'desc'
 function Portfolio() {
   const { selectedAccount } = useAccount()
 
-  // Use React Query with account-specific key
+  // Use React Query - use same endpoint/queryKey as header for consistency
   const { data: portfolio, isLoading: loading, error, refetch, isFetching } = useQuery({
-    queryKey: ['account-portfolio', selectedAccount?.id],
+    queryKey: ['account-portfolio'],
     queryFn: async () => {
-      // If we have a selected account, use the account-specific endpoint
-      if (selectedAccount) {
-        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json() as Promise<PortfolioData>
-      }
-      // Fallback to legacy endpoint
       const response = await fetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json() as Promise<PortfolioData>
@@ -84,7 +77,6 @@ function Portfolio() {
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnMount: false, // Don't refetch on page refresh - use cache
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    enabled: true, // Always enabled, will use fallback if no account selected
   })
 
   const [sortColumn, setSortColumn] = useState<SortColumn>('usd_value')
