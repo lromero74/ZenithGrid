@@ -1265,13 +1265,17 @@ export default function News() {
                     {articleContent?.success && articleContent.content && (
                       <div className="prose prose-invert prose-slate max-w-none">
                         {/* Render content with proper paragraph breaks */}
-                        {articleContent.content.split('\n\n').map((paragraph, idx) => (
-                          paragraph.trim() && (
+                        {/* Split on double newlines first, then on single newlines for remaining blocks */}
+                        {articleContent.content
+                          .split(/\n\s*\n/)  // Split on any blank lines (one or more newlines with optional whitespace)
+                          .flatMap((block) => block.split('\n'))  // Then split each block on single newlines
+                          .filter((line) => line.trim().length > 0)  // Remove empty lines
+                          .map((paragraph, idx) => (
                             <p key={idx} className="text-slate-300 leading-relaxed mb-4">
                               {paragraph.trim()}
                             </p>
-                          )
-                        ))}
+                          ))
+                        }
                       </div>
                     )}
                   </>
