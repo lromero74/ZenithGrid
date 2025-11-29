@@ -116,12 +116,14 @@ interface HalvingCountdown {
 
 // Lightweight markdown renderer for article content
 // Supports: headings, lists, horizontal rules, bold, italic, links
-function renderMarkdown(markdown: string): React.ReactNode[] {
+// titleToSkip: optional title to skip (avoids duplicate title when metadata title is shown)
+function renderMarkdown(markdown: string, titleToSkip?: string | null): React.ReactNode[] {
   const lines = markdown.split('\n')
   const elements: React.ReactNode[] = []
   let key = 0
   let listItems: React.ReactNode[] = []
   let listType: 'ul' | 'ol' | null = null
+  let skippedTitle = false  // Track if we've already skipped a matching title
 
   const flushList = () => {
     if (listItems.length > 0 && listType) {
@@ -224,6 +226,22 @@ function renderMarkdown(markdown: string): React.ReactNode[] {
     // Headings
     const h1Match = trimmed.match(/^#\s+(.+)$/)
     if (h1Match) {
+      // Skip the first h1 if it's similar to the title (to avoid duplicate title display)
+      // Uses fuzzy matching since extracted titles may differ slightly from metadata titles
+      const headingText = h1Match[1].trim()
+      if (titleToSkip && !skippedTitle) {
+        const normalizedHeading = headingText.toLowerCase().replace(/[^\w\s]/g, '').trim()
+        const normalizedTitle = titleToSkip.toLowerCase().replace(/[^\w\s]/g, '').trim()
+        // Check if one contains the other, or they share significant overlap
+        const isSimilar = normalizedHeading.includes(normalizedTitle) ||
+                          normalizedTitle.includes(normalizedHeading) ||
+                          normalizedHeading.startsWith(normalizedTitle.substring(0, 30)) ||
+                          normalizedTitle.startsWith(normalizedHeading.substring(0, 30))
+        if (isSimilar) {
+          skippedTitle = true
+          continue  // Skip this h1 since it's already shown in metadata
+        }
+      }
       flushList()
       elements.push(
         <h1 key={key++} className="text-2xl font-bold text-white mb-4 mt-6">
@@ -1454,7 +1472,8 @@ export default function News() {
                     {articleContent?.success && articleContent.content && (
                       <div className="prose prose-invert prose-slate max-w-none">
                         {/* Render markdown content with headings, lists, and formatting */}
-                        {renderMarkdown(articleContent.content)}
+                        {/* Pass title to skip duplicate h1 that matches the article title */}
+                        {renderMarkdown(articleContent.content, articleContent.title)}
                       </div>
                     )}
                   </>
