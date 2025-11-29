@@ -11,6 +11,8 @@ interface PnLDataPoint {
   cumulative_pnl: number
   profit: number
   product_id?: string
+  bot_id?: number
+  bot_name?: string
 }
 
 interface DailyPnL {
@@ -127,7 +129,8 @@ export function PnLChart() {
         closedTrades: 0,
         bestPair: null as PairPnL | null,
         worstPair: null as PairPnL | null,
-        filteredByPair: [] as PairPnL[]
+        filteredByPair: [] as PairPnL[],
+        filteredMostProfitableBot: null as MostProfitableBot | null
       }
     }
 
@@ -175,7 +178,21 @@ export function PnLChart() {
     const bestPair = filteredByPair.length > 0 ? filteredByPair[0] : null
     const worstPair = filteredByPair.length > 0 ? filteredByPair[filteredByPair.length - 1] : null
 
-    return { totalPnL, closedTrades, bestPair, worstPair, filteredByPair }
+    // Calculate most profitable bot from filtered summary (respects time range)
+    const botPnLMap = new Map<number, { total_pnl: number; bot_name: string }>()
+    filteredSummary.forEach((item) => {
+      if (item.bot_id) {
+        const current = botPnLMap.get(item.bot_id) || { total_pnl: 0, bot_name: item.bot_name || 'Unknown' }
+        current.total_pnl += item.profit
+        botPnLMap.set(item.bot_id, current)
+      }
+    })
+    const sortedBots = Array.from(botPnLMap.entries())
+      .map(([bot_id, { total_pnl, bot_name }]) => ({ bot_id, bot_name, total_pnl: Math.round(total_pnl * 100) / 100 }))
+      .sort((a, b) => b.total_pnl - a.total_pnl)
+    const filteredMostProfitableBot = sortedBots.length > 0 ? sortedBots[0] : null
+
+    return { totalPnL, closedTrades, bestPair, worstPair, filteredByPair, filteredMostProfitableBot }
   }
 
   // Initialize chart - recreate when switching to summary tab
@@ -408,15 +425,15 @@ export function PnLChart() {
             </div>
           </div>
 
-          {/* Most Profitable Bot Card */}
+          {/* Most Profitable Bot Card (filtered by time range) */}
           <div className="bg-slate-800/50 rounded-lg p-4">
             <div className="text-sm text-slate-400 mb-1">Most profitable bot</div>
-            {data.most_profitable_bot ? (
+            {stats.filteredMostProfitableBot ? (
               <>
-                <div className={`text-2xl font-bold mb-1 ${data.most_profitable_bot.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {data.most_profitable_bot.total_pnl >= 0 ? '+' : ''}${data.most_profitable_bot.total_pnl.toFixed(2)}
+                <div className={`text-2xl font-bold mb-1 ${stats.filteredMostProfitableBot.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {stats.filteredMostProfitableBot.total_pnl >= 0 ? '+' : ''}${stats.filteredMostProfitableBot.total_pnl.toFixed(2)}
                 </div>
-                <div className="text-xs text-blue-400 truncate">{data.most_profitable_bot.bot_name}</div>
+                <div className="text-xs text-blue-400 truncate">{stats.filteredMostProfitableBot.bot_name}</div>
               </>
             ) : (
               <div className="text-sm text-slate-500">No data</div>

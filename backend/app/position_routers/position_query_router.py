@@ -126,6 +126,15 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
         # No data yet
         return {"summary": [], "by_day": [], "by_pair": []}
 
+    # Pre-fetch bot names for all positions to avoid N+1 queries
+    bot_ids = list(set(pos.bot_id for pos in positions if pos.bot_id))
+    bot_name_map: Dict[int, str] = {}
+    if bot_ids:
+        bots_query = select(Bot).where(Bot.id.in_(bot_ids))
+        bots_result = await db.execute(bots_query)
+        for bot in bots_result.scalars().all():
+            bot_name_map[bot.id] = bot.name
+
     # Build cumulative P&L over time
     cumulative_pnl = 0.0
     summary_data = []
@@ -144,6 +153,8 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
                 "cumulative_pnl": round(cumulative_pnl, 2),
                 "profit": round(profit, 2),
                 "product_id": pos.product_id,  # Include pair for frontend filtering
+                "bot_id": pos.bot_id,  # Include bot_id for frontend filtering
+                "bot_name": bot_name_map.get(pos.bot_id, "Unknown"),  # Include bot name for display
             }
         )
 
