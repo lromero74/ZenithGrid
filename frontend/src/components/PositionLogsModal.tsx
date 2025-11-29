@@ -27,14 +27,18 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
 
       const allLogs = await botsApi.getLogs(botId, 200, 0, productId, since)
 
-      // Find the most recent "buy" decision before or at the position opened time
-      // Then return all logs from that buy decision onwards
+      // Find the most recent "buy" decision near the position opened time
+      // The buy log may be slightly AFTER the position opened_at (by ~5-10ms) because
+      // the log is updated with position_id after the position is created in the database.
+      // We use a 1-second tolerance window after position opened time to catch this.
       const positionTime = openedDate.getTime()
+      const toleranceMs = 1000 // 1 second tolerance for log timing
       let buyIndex = -1
 
       for (let i = allLogs.length - 1; i >= 0; i--) {
         const logTime = new Date(allLogs[i].timestamp).getTime()
-        if (logTime <= positionTime && allLogs[i].decision === 'buy') {
+        // Accept buy logs from 5 minutes before to 1 second after position opened time
+        if (logTime <= positionTime + toleranceMs && allLogs[i].decision === 'buy') {
           buyIndex = i
           break
         }
