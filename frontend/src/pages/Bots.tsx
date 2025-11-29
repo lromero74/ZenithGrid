@@ -164,8 +164,9 @@ function Bots() {
     const USD_MINIMUM = 1.0     // Coinbase minimum for USD pairs (roughly)
 
     if (portfolio) {
-      const aggregateBtc = portfolio.aggregate_btc_value || 0
-      const aggregateUsd = portfolio.aggregate_usd_value || portfolio.total_usd_value || 0
+      // Use balance_breakdown.btc.total which is the true aggregate (free + in positions)
+      const aggregateBtc = portfolio.balance_breakdown?.btc?.total || portfolio.total_btc_value || 0
+      const aggregateUsd = portfolio.total_usd_value || 0
 
       // Validate base_order_value
       const baseOrderPct = formData.strategy_config.base_order_value
