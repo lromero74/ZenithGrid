@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineStyle } from 'lightweight-charts'
+import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { TrendingUp, TrendingDown, Calendar } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 
 interface PnLDataPoint {
@@ -10,6 +10,7 @@ interface PnLDataPoint {
   date: string
   cumulative_pnl: number
   profit: number
+  product_id?: string
 }
 
 interface DailyPnL {
@@ -125,7 +126,8 @@ export function PnLChart() {
         totalPnL: 0,
         closedTrades: 0,
         bestPair: null as PairPnL | null,
-        worstPair: null as PairPnL | null
+        worstPair: null as PairPnL | null,
+        filteredByPair: [] as PairPnL[]
       }
     }
 
@@ -158,10 +160,22 @@ export function PnLChart() {
     const totalPnL = filteredSummary.reduce((sum, item) => sum + item.profit, 0)
     const closedTrades = filteredSummary.length
 
-    const bestPair = data.by_pair.length > 0 ? data.by_pair[0] : null
-    const worstPair = data.by_pair.length > 0 ? data.by_pair[data.by_pair.length - 1] : null
+    // Calculate by_pair from filtered summary data (respects time range)
+    const pairPnLMap = new Map<string, number>()
+    filteredSummary.forEach((item) => {
+      if (item.product_id) {
+        const current = pairPnLMap.get(item.product_id) || 0
+        pairPnLMap.set(item.product_id, current + item.profit)
+      }
+    })
+    const filteredByPair: PairPnL[] = Array.from(pairPnLMap.entries())
+      .map(([pair, total_pnl]) => ({ pair, total_pnl: Math.round(total_pnl * 100) / 100 }))
+      .sort((a, b) => b.total_pnl - a.total_pnl)
 
-    return { totalPnL, closedTrades, bestPair, worstPair }
+    const bestPair = filteredByPair.length > 0 ? filteredByPair[0] : null
+    const worstPair = filteredByPair.length > 0 ? filteredByPair[filteredByPair.length - 1] : null
+
+    return { totalPnL, closedTrades, bestPair, worstPair, filteredByPair }
   }
 
   // Initialize chart - recreate when switching to summary tab
@@ -378,11 +392,11 @@ export function PnLChart() {
             <div className="text-xs text-slate-500">Active trades: {data.active_trades}</div>
           </div>
 
-          {/* Best Pairs Card */}
+          {/* Best Pairs Card (filtered by time range) */}
           <div className="bg-slate-800/50 rounded-lg p-4">
             <div className="text-sm text-slate-400 mb-3">Best pairs</div>
             <div className="space-y-2">
-              {data.by_pair.slice(0, 3).map((pair, index) => (
+              {stats.filteredByPair.slice(0, 3).map((pair, index) => (
                 <div key={pair.pair} className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">#{index + 1}</span>
                   <span className="text-sm text-white flex-1">{pair.pair}</span>
@@ -480,9 +494,9 @@ export function PnLChart() {
             </BarChart>
           </ResponsiveContainer>
         ) : activeTab === 'by_pair' ? (
-          // Pair P&L bar chart
+          // Pair P&L bar chart (filtered by time range)
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.by_pair} margin={{ top: 5, right: 30, left: 20, bottom: 80 }}>
+            <BarChart data={stats.filteredByPair} margin={{ top: 5, right: 30, left: 20, bottom: 80 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
                 dataKey="pair"
@@ -500,7 +514,7 @@ export function PnLChart() {
                 cursor={false}
               />
               <Bar dataKey="total_pnl" radius={[4, 4, 0, 0]}>
-                {data.by_pair.map((entry, index) => (
+                {stats.filteredByPair.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={entry.total_pnl >= 0 ? '#22c55e' : '#ef4444'}

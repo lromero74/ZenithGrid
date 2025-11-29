@@ -143,6 +143,7 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
                 "date": pos.closed_at.strftime("%Y-%m-%d"),
                 "cumulative_pnl": round(cumulative_pnl, 2),
                 "profit": round(profit, 2),
+                "product_id": pos.product_id,  # Include pair for frontend filtering
             }
         )
 
