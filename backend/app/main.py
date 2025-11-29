@@ -18,6 +18,7 @@ from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
 from app.routers import blacklist_router
+from app.routers import news_router
 import asyncio
 
 # Import dependency functions for override
@@ -93,6 +94,7 @@ app.include_router(market_data_router.router)
 app.include_router(settings_router.router)
 app.include_router(system_router.router)
 app.include_router(blacklist_router.router)
+app.include_router(news_router.router)  # Crypto news with 24h caching
 
 
 # Background task for limit order monitoring
