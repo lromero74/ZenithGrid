@@ -118,7 +118,7 @@ export function PnLChart() {
     return []
   }
 
-  // Calculate stats
+  // Calculate stats - always use summary data for stats cards (tab-independent)
   const calculateStats = () => {
     if (!data || data.summary.length === 0) {
       return {
@@ -129,13 +129,7 @@ export function PnLChart() {
       }
     }
 
-    const filteredData = getFilteredData()
-    const totalPnL = filteredData.length > 0
-      ? filteredData[filteredData.length - 1].cumulative_pnl
-      : 0
-
-    // Always calculate closed trades from summary data (one entry per position),
-    // not from filteredData which could be by_day (one entry per day) or by_pair
+    // Calculate cutoff date based on time range
     const now = new Date()
     const cutoffDate = new Date()
     switch (timeRange) {
@@ -155,7 +149,14 @@ export function PnLChart() {
         cutoffDate.setTime(0) // Include all
         break
     }
+
+    // Always use summary data for stats (one entry per position, not per day/pair)
+    // This ensures stats are consistent regardless of which tab is active
     const filteredSummary = data.summary.filter((item) => new Date(item.date) >= cutoffDate)
+
+    const totalPnL = filteredSummary.length > 0
+      ? filteredSummary[filteredSummary.length - 1].cumulative_pnl
+      : 0
     const closedTrades = filteredSummary.length
 
     const bestPair = data.by_pair.length > 0 ? data.by_pair[0] : null
