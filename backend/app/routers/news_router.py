@@ -575,7 +575,8 @@ async def fetch_youtube_videos(session: aiohttp.ClientSession, source_id: str, c
                 published = None
                 if hasattr(entry, "published_parsed") and entry.published_parsed:
                     try:
-                        published = datetime(*entry.published_parsed[:6]).isoformat()
+                        # Add Z suffix to indicate UTC timezone
+                        published = datetime(*entry.published_parsed[:6]).isoformat() + "Z"
                     except (ValueError, TypeError):
                         pass
 
@@ -692,7 +693,8 @@ async def fetch_reddit_news(session: aiohttp.ClientSession, source_id: str, conf
                     url=f"https://reddit.com{post_data.get('permalink', '')}",
                     source=source_id,
                     source_name=config["name"],
-                    published=datetime.fromtimestamp(post_data.get("created_utc", 0)).isoformat(),
+                    # Add Z suffix to indicate UTC timezone (created_utc is Unix UTC timestamp)
+                    published=datetime.utcfromtimestamp(post_data.get("created_utc", 0)).isoformat() + "Z",
                     summary=post_data.get("selftext", "")[:200] if post_data.get("selftext") else None,
                     thumbnail=thumbnail,
                 ))
@@ -722,7 +724,8 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
                 published = None
                 if hasattr(entry, "published_parsed") and entry.published_parsed:
                     try:
-                        published = datetime(*entry.published_parsed[:6]).isoformat()
+                        # Add Z suffix to indicate UTC timezone
+                        published = datetime(*entry.published_parsed[:6]).isoformat() + "Z"
                     except (ValueError, TypeError):
                         pass
 
