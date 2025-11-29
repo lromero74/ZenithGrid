@@ -21,3 +21,4 @@ web3==6.11.3
 eth-account==0.10.0
 aiohttp==3.11.10
 feedparser==6.0.11
+trafilatura==2.0.0

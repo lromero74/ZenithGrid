@@ -33,8 +33,10 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import feedparser
+import trafilatura
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +218,17 @@ class USDebtResponse(BaseModel):
     record_date: str  # Date of the debt record
     cached_at: str
     cache_expires_at: str
+
+
+class ArticleContentResponse(BaseModel):
+    """Article content extraction response"""
+    url: str
+    title: Optional[str] = None
+    content: Optional[str] = None
+    author: Optional[str] = None
+    date: Optional[str] = None
+    success: bool
+    error: Optional[str] = None
 
 
 def load_cache() -> Optional[Dict[str, Any]]:
@@ -979,3 +992,142 @@ async def get_us_debt():
     logger.info("Fetching fresh US debt data...")
     data = await fetch_us_debt()
     return USDebtResponse(**data)
+
+
+# Allowed domains for article content extraction (security measure)
+ALLOWED_ARTICLE_DOMAINS = {
+    "coindesk.com",
+    "www.coindesk.com",
+    "cointelegraph.com",
+    "www.cointelegraph.com",
+    "decrypt.co",
+    "www.decrypt.co",
+    "theblock.co",
+    "www.theblock.co",
+    "cryptoslate.com",
+    "www.cryptoslate.com",
+    "reddit.com",
+    "www.reddit.com",
+    "old.reddit.com",
+}
+
+
+@router.get("/article-content", response_model=ArticleContentResponse)
+async def get_article_content(url: str):
+    """
+    Extract article content from a news URL.
+
+    Uses trafilatura to extract the main article text, title, and metadata.
+    Only allows fetching from trusted crypto news domains for security.
+
+    Returns clean, readable article content like browser reader mode.
+    """
+    # Validate URL
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return ArticleContentResponse(
+                url=url,
+                success=False,
+                error="Invalid URL format"
+            )
+
+        # Security check: only allow known news domains
+        domain = parsed.netloc.lower()
+        if domain not in ALLOWED_ARTICLE_DOMAINS:
+            logger.warning(f"Attempted to fetch article from non-allowed domain: {domain}")
+            return ArticleContentResponse(
+                url=url,
+                success=False,
+                error=f"Domain not allowed. Supported: {', '.join(sorted(ALLOWED_ARTICLE_DOMAINS))}"
+            )
+    except Exception as e:
+        return ArticleContentResponse(
+            url=url,
+            success=False,
+            error=f"URL validation failed: {str(e)}"
+        )
+
+    try:
+        # Fetch the page content
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                              "AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/120.0.0.0 Safari/537.36"
+            }
+            async with session.get(url, headers=headers, timeout=15) as response:
+                if response.status != 200:
+                    return ArticleContentResponse(
+                        url=url,
+                        success=False,
+                        error=f"Failed to fetch article: HTTP {response.status}"
+                    )
+
+                html_content = await response.text()
+
+        # Extract article content using trafilatura
+        # Run in executor since trafilatura is synchronous
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            extracted = await asyncio.get_event_loop().run_in_executor(
+                executor,
+                lambda: trafilatura.extract(
+                    html_content,
+                    include_comments=False,
+                    include_tables=False,
+                    no_fallback=False,
+                    favor_precision=True,
+                    output_format="txt"
+                )
+            )
+
+            # Also extract metadata
+            metadata = await asyncio.get_event_loop().run_in_executor(
+                executor,
+                lambda: trafilatura.extract_metadata(html_content)
+            )
+
+        if not extracted:
+            return ArticleContentResponse(
+                url=url,
+                success=False,
+                error="Could not extract article content. The page may be paywalled or use dynamic loading."
+            )
+
+        # Build response with metadata if available
+        title = None
+        author = None
+        date = None
+
+        if metadata:
+            title = metadata.title
+            author = metadata.author
+            if metadata.date:
+                date = metadata.date
+
+        logger.info(f"Successfully extracted article from {domain}: {len(extracted)} chars")
+
+        return ArticleContentResponse(
+            url=url,
+            title=title,
+            content=extracted,
+            author=author,
+            date=date,
+            success=True
+        )
+
+    except asyncio.TimeoutError:
+        logger.warning(f"Timeout fetching article: {url}")
+        return ArticleContentResponse(
+            url=url,
+            success=False,
+            error="Request timed out. The website may be slow or unavailable."
+        )
+    except Exception as e:
+        logger.error(f"Error extracting article content: {e}")
+        return ArticleContentResponse(
+            url=url,
+            success=False,
+            error=f"Failed to extract content: {str(e)}"
+        )

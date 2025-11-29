@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, X } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, X, BookOpen, AlertCircle } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 
 // BTC Halving constants
@@ -93,6 +93,16 @@ interface USDebtResponse {
   record_date: string
   cached_at: string
   cache_expires_at: string
+}
+
+interface ArticleContentResponse {
+  url: string
+  title: string | null
+  content: string | null
+  author: string | null
+  date: string | null
+  success: boolean
+  error: string | null
 }
 
 interface HalvingCountdown {
@@ -258,6 +268,52 @@ export default function News() {
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null)
   // Track which article is being previewed (null means none)
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
+  // Track article reader mode content
+  const [articleContent, setArticleContent] = useState<ArticleContentResponse | null>(null)
+  const [articleContentLoading, setArticleContentLoading] = useState(false)
+  const [readerModeEnabled, setReaderModeEnabled] = useState(false)
+
+  // Fetch article content when reader mode is enabled
+  useEffect(() => {
+    if (!previewArticle || !readerModeEnabled) {
+      return
+    }
+
+    const fetchArticleContent = async () => {
+      setArticleContentLoading(true)
+      setArticleContent(null)
+
+      try {
+        const response = await fetch(`/api/news/article-content?url=${encodeURIComponent(previewArticle.url)}`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch article content')
+        }
+        const data: ArticleContentResponse = await response.json()
+        setArticleContent(data)
+      } catch {
+        setArticleContent({
+          url: previewArticle.url,
+          title: null,
+          content: null,
+          author: null,
+          date: null,
+          success: false,
+          error: 'Failed to connect to article extraction service'
+        })
+      } finally {
+        setArticleContentLoading(false)
+      }
+    }
+
+    fetchArticleContent()
+  }, [previewArticle, readerModeEnabled])
+
+  // Reset reader mode when closing modal
+  const handleCloseModal = () => {
+    setPreviewArticle(null)
+    setReaderModeEnabled(false)
+    setArticleContent(null)
+  }
 
   // Force re-render every minute to update relative timestamps
   const [, setTimeTick] = useState(0)
@@ -1098,13 +1154,15 @@ export default function News() {
       {previewArticle && (
         <div
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setPreviewArticle(null)}
+          onClick={handleCloseModal}
         >
           <div
-            className="bg-slate-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+            className={`bg-slate-800 rounded-lg w-full max-h-[90vh] overflow-hidden shadow-2xl transition-all duration-300 ${
+              readerModeEnabled ? 'max-w-4xl' : 'max-w-2xl'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal header with close button */}
+            {/* Modal header with reader mode toggle */}
             <div className="flex items-center justify-between p-4 border-b border-slate-700">
               <div className="flex items-center space-x-2">
                 <span
@@ -1120,18 +1178,33 @@ export default function News() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => setPreviewArticle(null)}
-                className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
-              >
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
+              <div className="flex items-center space-x-2">
+                {/* Reader Mode Toggle */}
+                <button
+                  onClick={() => setReaderModeEnabled(!readerModeEnabled)}
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                    readerModeEnabled
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600'
+                  }`}
+                  title="Toggle reader mode to fetch and display full article content"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span className="hidden sm:inline">Reader Mode</span>
+                </button>
+                <button
+                  onClick={handleCloseModal}
+                  className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
             </div>
 
             {/* Modal content */}
             <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
-              {/* Full-size thumbnail */}
-              {previewArticle.thumbnail && (
+              {/* Full-size thumbnail - hide in reader mode if we have content */}
+              {previewArticle.thumbnail && !(readerModeEnabled && articleContent?.success) && (
                 <div className="w-full aspect-video bg-slate-900">
                   <img
                     src={previewArticle.thumbnail}
@@ -1145,23 +1218,92 @@ export default function News() {
               )}
 
               <div className="p-6 space-y-4">
-                {/* Title */}
+                {/* Title - use extracted title in reader mode if available */}
                 <h2 className="text-xl font-bold text-white leading-tight">
-                  {previewArticle.title}
+                  {readerModeEnabled && articleContent?.title ? articleContent.title : previewArticle.title}
                 </h2>
 
-                {/* Full summary */}
-                {previewArticle.summary && (
-                  <p className="text-slate-300 leading-relaxed">
-                    {previewArticle.summary}
-                  </p>
+                {/* Author and date in reader mode */}
+                {readerModeEnabled && articleContent?.success && (articleContent.author || articleContent.date) && (
+                  <div className="flex items-center space-x-3 text-sm text-slate-400">
+                    {articleContent.author && <span>By {articleContent.author}</span>}
+                    {articleContent.author && articleContent.date && <span>•</span>}
+                    {articleContent.date && <span>{articleContent.date}</span>}
+                  </div>
                 )}
 
-                {/* No summary message */}
-                {!previewArticle.summary && (
-                  <p className="text-slate-500 italic">
-                    No summary available. Click below to read the full article.
-                  </p>
+                {/* Reader Mode Content */}
+                {readerModeEnabled ? (
+                  <>
+                    {/* Loading state */}
+                    {articleContentLoading && (
+                      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                        <LoadingSpinner size="md" text="Fetching article content..." />
+                        <p className="text-sm text-slate-500">
+                          Extracting readable content from the source
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Error state */}
+                    {articleContent && !articleContent.success && (
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                        <div className="flex items-start space-x-3">
+                          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-red-400 font-medium">Unable to extract article content</p>
+                            <p className="text-sm text-red-400/70 mt-1">{articleContent.error}</p>
+                            <p className="text-sm text-slate-400 mt-3">
+                              Try opening the full article on the source website instead.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Success - Full article content */}
+                    {articleContent?.success && articleContent.content && (
+                      <div className="prose prose-invert prose-slate max-w-none">
+                        {/* Render content with proper paragraph breaks */}
+                        {articleContent.content.split('\n\n').map((paragraph, idx) => (
+                          paragraph.trim() && (
+                            <p key={idx} className="text-slate-300 leading-relaxed mb-4">
+                              {paragraph.trim()}
+                            </p>
+                          )
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* Default preview mode - summary only */}
+                    {previewArticle.summary && (
+                      <p className="text-slate-300 leading-relaxed">
+                        {previewArticle.summary}
+                      </p>
+                    )}
+
+                    {/* No summary message */}
+                    {!previewArticle.summary && (
+                      <p className="text-slate-500 italic">
+                        No summary available. Enable Reader Mode or click below to read the full article.
+                      </p>
+                    )}
+
+                    {/* Hint to enable reader mode */}
+                    <div className="bg-slate-700/50 rounded-lg p-4 mt-4">
+                      <div className="flex items-start space-x-3">
+                        <BookOpen className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-slate-300 font-medium">Want to read the full article here?</p>
+                          <p className="text-sm text-slate-400 mt-1">
+                            Enable <span className="text-blue-400">Reader Mode</span> above to extract and display the full article content in a clean, readable format.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -1169,7 +1311,7 @@ export default function News() {
             {/* Modal footer with action button */}
             <div className="p-4 border-t border-slate-700 flex justify-between items-center">
               <button
-                onClick={() => setPreviewArticle(null)}
+                onClick={handleCloseModal}
                 className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
               >
                 Close
@@ -1181,7 +1323,7 @@ export default function News() {
                 className="flex items-center space-x-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
-                <span>Read Full Article</span>
+                <span>Read on Website</span>
               </a>
             </div>
           </div>
