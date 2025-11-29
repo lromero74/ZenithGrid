@@ -15,6 +15,7 @@ from app.trading_client import TradingClient
 from app.order_validation import validate_order_size
 from app.currency_utils import get_quote_currency
 from app.trading_engine.order_logger import log_order_to_history
+from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -313,6 +314,18 @@ async def execute_buy(
 
     await db.commit()
     await db.refresh(trade)
+
+    # Broadcast order fill notification via WebSocket
+    # Determine fill type based on trade_type
+    fill_type = "base_order" if trade_type == "initial" else "dca_order"
+    await ws_manager.broadcast_order_fill(
+        fill_type=fill_type,
+        product_id=product_id,
+        base_amount=actual_base_amount,
+        quote_amount=actual_quote_amount,
+        price=actual_price,
+        position_id=position.id,
+    )
 
     # Invalidate balance cache after trade
     await trading_client.invalidate_balance_cache()

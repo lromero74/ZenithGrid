@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Position, PendingOrder, Trade
 from app.coinbase_unified_client import CoinbaseClient
+from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,16 @@ class LimitOrderMonitor:
                         order_id=position.limit_close_order_id,
                     )
                     self.db.add(trade)
+
+                    # Broadcast partial fill notification
+                    await ws_manager.broadcast_order_fill(
+                        fill_type="partial_fill",
+                        product_id=position.product_id,
+                        base_amount=new_fill_size,
+                        quote_amount=new_fill_value,
+                        price=avg_fill_price,
+                        position_id=position.id,
+                    )
 
                     # Update position totals (reduce remaining base, add quote received)
                     if not position.total_quote_received:
@@ -382,6 +393,18 @@ class LimitOrderMonitor:
 
                 await self.db.commit()
                 logger.info(f"Position {position.id} closed successfully via limit order")
+
+                # Broadcast sell order fill notification
+                await ws_manager.broadcast_order_fill(
+                    fill_type="sell_order",
+                    product_id=position.product_id,
+                    base_amount=filled_size,
+                    quote_amount=filled_value,
+                    price=avg_fill_price,
+                    position_id=position.id,
+                    profit=position.profit_quote,
+                    profit_percentage=position.profit_percentage,
+                )
 
             elif order_status in ["CANCELLED", "EXPIRED", "FAILED"]:
                 # Order cancelled/expired - reset position flags

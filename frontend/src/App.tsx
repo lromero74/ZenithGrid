@@ -6,6 +6,7 @@ import { positionsApi } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
 import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
+import { NotificationProvider } from './contexts/NotificationContext'
 
 // Lazy load pages for faster initial render
 // Dashboard is eager-loaded since it's the landing page
@@ -96,6 +97,7 @@ function App() {
   }, [location.pathname, currentHistoryCount, lastSeenHistoryCount])
 
   return (
+    <NotificationProvider>
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700">
@@ -307,6 +309,7 @@ function App() {
         onClose={() => setShowAddAccountModal(false)}
       />
     </div>
+    </NotificationProvider>
   )
 }
 

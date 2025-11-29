@@ -19,6 +19,7 @@ from app.routers import settings_router
 from app.routers import system_router
 from app.routers import blacklist_router
 from app.routers import news_router
+from app.services.websocket_manager import ws_manager
 import asyncio
 
 # Import dependency functions for override
@@ -182,40 +183,18 @@ async def shutdown_event():
     logger.info("🛑 Monitors stopped - shutdown complete")
 
 
-# WebSocket for real-time updates
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception:
-                pass
-
-
-manager = ConnectionManager()
-
-
+# WebSocket for real-time updates (order fill notifications)
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+    await ws_manager.connect(websocket)
     try:
         while True:
             # Keep connection alive and wait for messages
             data = await websocket.receive_text()
-            # Echo back for now
-            await websocket.send_text(f"Message received: {data}")
+            # Echo back for debugging
+            await websocket.send_json({"type": "echo", "message": f"Received: {data}"})
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        await ws_manager.disconnect(websocket)
 
 
 if __name__ == "__main__":
