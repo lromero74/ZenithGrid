@@ -20,3 +20,4 @@ openai==2.8.1
 web3==6.11.3
 eth-account==0.10.0
 aiohttp==3.11.10
+feedparser==6.0.11
