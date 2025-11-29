@@ -578,20 +578,28 @@ function Bots() {
     const inputType = param.type === 'int' || param.type === 'float' ? 'number' : 'text'
     const step = param.type === 'float' ? 'any' : param.type === 'int' ? '1' : undefined
 
+    // Handle NaN and undefined values for display
+    const displayValue = (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) ? '' : value
+
     return (
       <input
         type={inputType}
         step={step}
         min={param.min_value}
         max={param.max_value}
-        value={value ?? ''}
+        value={displayValue}
         onChange={(e) => {
-          const val =
-            param.type === 'float'
-              ? parseFloat(e.target.value)
-              : param.type === 'int'
-              ? parseInt(e.target.value)
-              : e.target.value
+          const rawVal = e.target.value
+          let val
+          if (param.type === 'float') {
+            val = rawVal === '' ? undefined : parseFloat(rawVal)
+            if (typeof val === 'number' && isNaN(val)) val = undefined
+          } else if (param.type === 'int') {
+            val = rawVal === '' ? undefined : parseInt(rawVal)
+            if (typeof val === 'number' && isNaN(val)) val = undefined
+          } else {
+            val = rawVal
+          }
           handleParamChange(param.name, val)
         }}
         className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
