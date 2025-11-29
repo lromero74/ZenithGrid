@@ -1471,17 +1471,23 @@ function Bots() {
                   // Check if manual sizing mode is enabled
                   const useManualSizing = formData.strategy_config.use_manual_sizing === true
 
+                  // Parameters to render separately in the custom budget section
+                  const customBudgetParams = ['use_manual_sizing', 'max_concurrent_deals']
+
                   // Group parameters by group property
-                  // Exclude use_manual_sizing since we render it as a custom toggle
+                  // Exclude params we render in custom budget section
                   const parametersByGroup = selectedStrategy.parameters.reduce((acc, param) => {
                     if (!isParameterVisible(param)) return acc
-                    if (param.name === 'use_manual_sizing') return acc  // Skip - rendered separately
+                    if (customBudgetParams.includes(param.name)) return acc  // Skip - rendered separately
 
                     const group = param.group || 'Other'
                     if (!acc[group]) acc[group] = []
                     acc[group].push(param)
                     return acc
                   }, {} as Record<string, StrategyParameter[]>)
+
+                  // Get max_concurrent_deals param for custom rendering
+                  const maxConcurrentDealsParam = selectedStrategy.parameters.find(p => p.name === 'max_concurrent_deals')
 
                   // Define group display order - separated into always-show and conditional groups
                   const alwaysShowGroups = [
@@ -1609,6 +1615,22 @@ function Bots() {
                           Bot Budget Allocation
                         </h4>
                         <div className="space-y-4">
+                          {/* Max Concurrent Positions - Shows in both modes */}
+                          {maxConcurrentDealsParam && (
+                            <div>
+                              <label className="block text-sm font-medium mb-2">
+                                {maxConcurrentDealsParam.display_name || 'Max Concurrent Positions'}
+                                <span className="text-slate-400 text-xs ml-2">
+                                  ({maxConcurrentDealsParam.min_value} - {maxConcurrentDealsParam.max_value})
+                                </span>
+                              </label>
+                              <p className="text-xs text-slate-400 mb-2">
+                                {maxConcurrentDealsParam.description}
+                              </p>
+                              {renderParameterInput(maxConcurrentDealsParam)}
+                            </div>
+                          )}
+
                           {/* Budget Percentage */}
                           <div>
                             <label className="block text-sm font-medium mb-2">
