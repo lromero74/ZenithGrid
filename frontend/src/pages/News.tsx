@@ -1684,14 +1684,21 @@ export default function News() {
           onClick={() => setShowDebtCeilingModal(false)}
         >
           <div
-            className="bg-slate-800 rounded-lg w-full max-w-lg max-h-[80vh] overflow-hidden shadow-2xl"
+            className="bg-slate-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-700">
               <div className="flex items-center space-x-2">
                 <DollarSign className="w-5 h-5 text-green-400" />
-                <h3 className="font-medium text-white">US Debt Ceiling History</h3>
+                <div>
+                  <h3 className="font-medium text-white">US Debt Ceiling History</h3>
+                  {debtCeilingHistory && (
+                    <p className="text-xs text-slate-500">
+                      {debtCeilingHistory.total_events} events from 1939 to present
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => setShowDebtCeilingModal(false)}
@@ -1702,11 +1709,12 @@ export default function News() {
             </div>
 
             {/* Modal content */}
-            <div className="p-4 overflow-y-auto max-h-[calc(80vh-120px)]">
+            <div className="p-4 overflow-y-auto max-h-[calc(90vh-140px)]">
               {debtCeilingHistory ? (
                 <div className="space-y-3">
                   <p className="text-sm text-slate-400 mb-4">
-                    Recent debt ceiling increases and suspensions by Congress
+                    Complete history of US debt ceiling changes since the first statutory limit was established in 1939.
+                    The debt ceiling has been raised or suspended {debtCeilingHistory.total_events} times.
                   </p>
                   {debtCeilingHistory.events.map((event, idx) => (
                     <div
