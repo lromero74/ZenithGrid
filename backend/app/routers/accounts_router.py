@@ -620,11 +620,9 @@ async def _get_cex_portfolio(account: Account, db: AsyncSession) -> dict:
         if asset not in ["USD", "USDC", "BTC"]:
             assets_to_price.append((asset, total_balance, position))
 
-    # Fetch all prices with rate limiting
-    async def fetch_price(asset: str, delay: float = 0):
+    # Fetch all prices in parallel (no rate limiting needed for reads)
+    async def fetch_price(asset: str):
         try:
-            if delay > 0:
-                await asyncio.sleep(delay)
             price = await coinbase.get_current_price(f"{asset}-USD")
             return (asset, price)
         except Exception as e:
@@ -632,7 +630,7 @@ async def _get_cex_portfolio(account: Account, db: AsyncSession) -> dict:
             return (asset, None)
 
     price_results = await asyncio.gather(
-        *[fetch_price(asset, idx * 0.1) for idx, (asset, _, _) in enumerate(assets_to_price)]
+        *[fetch_price(asset) for asset, _, _ in assets_to_price]
     )
 
     prices = {asset: price for asset, price in price_results if price is not None}
@@ -719,33 +717,49 @@ async def _get_cex_portfolio(account: Account, db: AsyncSession) -> dict:
     positions_result = await db.execute(positions_query)
     open_positions = positions_result.scalars().all()
 
+    # Fetch all position prices in PARALLEL to avoid slow sequential API calls
+    position_prices = {}
+    if open_positions:
+        async def fetch_price_for_product(product_id: str):
+            try:
+                price = await coinbase.get_current_price(product_id)
+                return (product_id, price)
+            except Exception as e:
+                logger.warning(f"Could not get price for {product_id}: {e}")
+                return (product_id, None)
+
+        # Get unique product_ids to avoid duplicate fetches
+        unique_products = list({f"{p.get_base_currency()}-{p.get_quote_currency()}" for p in open_positions})
+        price_results = await asyncio.gather(*[fetch_price_for_product(pid) for pid in unique_products])
+        position_prices = {pid: price for pid, price in price_results if price is not None}
+
     asset_pnl = {}
     for position in open_positions:
         base = position.get_base_currency()
         quote = position.get_quote_currency()
+        product_id = f"{base}-{quote}"
 
-        try:
-            current_price = await coinbase.get_current_price(f"{base}-{quote}")
-            current_value_quote = position.total_base_acquired * current_price
-            profit_quote = current_value_quote - position.total_quote_spent
+        current_price = position_prices.get(product_id)
+        if current_price is None:
+            continue
 
-            if quote == "USD":
-                profit_usd = profit_quote
-                cost_usd = position.total_quote_spent
-            elif quote == "BTC":
-                profit_usd = profit_quote * btc_usd_price
-                cost_usd = position.total_quote_spent * btc_usd_price
-            else:
-                continue
+        current_value_quote = position.total_base_acquired * current_price
+        profit_quote = current_value_quote - position.total_quote_spent
 
-            if base not in asset_pnl:
-                asset_pnl[base] = {"pnl_usd": 0.0, "cost_usd": 0.0}
+        if quote == "USD":
+            profit_usd = profit_quote
+            cost_usd = position.total_quote_spent
+        elif quote == "BTC":
+            profit_usd = profit_quote * btc_usd_price
+            cost_usd = position.total_quote_spent * btc_usd_price
+        else:
+            continue
 
-            asset_pnl[base]["pnl_usd"] += profit_usd
-            asset_pnl[base]["cost_usd"] += cost_usd
+        if base not in asset_pnl:
+            asset_pnl[base] = {"pnl_usd": 0.0, "cost_usd": 0.0}
 
-        except Exception as e:
-            logger.warning(f"Could not calculate PnL for position {position.id}: {e}")
+        asset_pnl[base]["pnl_usd"] += profit_usd
+        asset_pnl[base]["cost_usd"] += cost_usd
 
     for holding in portfolio_holdings:
         asset = holding["asset"]
@@ -773,26 +787,25 @@ async def _get_cex_portfolio(account: Account, db: AsyncSession) -> dict:
     total_in_positions_usd = 0.0
     total_in_positions_usdc = 0.0
 
+    # Use cached prices from earlier parallel fetch
     for position in open_positions:
         quote = position.get_quote_currency()
         base = position.get_base_currency()
-        try:
-            current_price = await coinbase.get_current_price(f"{base}-{quote}")
-            current_value = position.total_base_acquired * current_price
+        product_id = f"{base}-{quote}"
 
-            if quote == "USD":
-                total_in_positions_usd += current_value
-            elif quote == "USDC":
-                total_in_positions_usdc += current_value
-            else:
-                total_in_positions_btc += current_value
-        except Exception:
-            if quote == "USD":
-                total_in_positions_usd += position.total_quote_spent
-            elif quote == "USDC":
-                total_in_positions_usdc += position.total_quote_spent
-            else:
-                total_in_positions_btc += position.total_quote_spent
+        current_price = position_prices.get(product_id)
+        if current_price is not None:
+            current_value = position.total_base_acquired * current_price
+        else:
+            # Fallback to quote spent if price unavailable
+            current_value = position.total_quote_spent
+
+        if quote == "USD":
+            total_in_positions_usd += current_value
+        elif quote == "USDC":
+            total_in_positions_usdc += current_value
+        else:
+            total_in_positions_btc += current_value
 
     total_btc_portfolio = actual_btc_balance + total_in_positions_btc
     total_usd_portfolio = actual_usd_balance + total_in_positions_usd
