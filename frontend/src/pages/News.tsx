@@ -943,10 +943,7 @@ export default function News() {
                       </>
                     ) : (
                       // Thumbnail with play button
-                      <button
-                        onClick={() => setPlayingVideoId(video.video_id)}
-                        className="w-full h-full relative cursor-pointer"
-                      >
+                      <>
                         {video.thumbnail && (
                           <img
                             src={video.thumbnail}
@@ -957,13 +954,27 @@ export default function News() {
                             }}
                           />
                         )}
-                        {/* Play button overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                        {/* Play button overlay - click to play inline */}
+                        <button
+                          onClick={() => setPlayingVideoId(video.video_id)}
+                          className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors cursor-pointer"
+                        >
                           <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                             <Play className="w-7 h-7 text-white ml-1" fill="white" />
                           </div>
-                        </div>
-                      </button>
+                        </button>
+                        {/* Open in new tab button */}
+                        <a
+                          href={video.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
+                          title="Open on YouTube"
+                        >
+                          <ExternalLink className="w-4 h-4 text-white" />
+                        </a>
+                      </>
                     )}
                   </div>
 
