@@ -15,9 +15,13 @@ build/
 *.sqlite
 *.sqlite3
 *.db-journal
-*.db.backup-*
-**/trading.db.backup-*
-**/trading.db.backup.*
+*.db.backup*
+*.db.bak*
+**/trading.db.backup*
+**/trading.db.bak*
+
+# Runtime caches (news, fear/greed, etc.)
+backend/*_cache.json
 
 # Environment variables
 .env
