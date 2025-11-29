@@ -16,6 +16,7 @@ def calculate_manual_dca_amount(
     config: Dict[str, Any],
     remaining_budget: float,
     current_price: float,
+    aggregate_value: float = None,
 ) -> Tuple[bool, float, str]:
     """
     Calculate DCA amount using manual 3Commas-style settings.
@@ -26,8 +27,9 @@ def calculate_manual_dca_amount(
     Args:
         position: Current position object
         config: Strategy configuration with manual sizing parameters
-        remaining_budget: Remaining budget for this position
+        remaining_budget: Remaining budget for this position (used as cap)
         current_price: Current market price
+        aggregate_value: Total account liquidation value (used for percentage calculations)
 
     Returns:
         Tuple of (should_buy: bool, btc_amount: float, reasoning: str)
@@ -60,17 +62,24 @@ def calculate_manual_dca_amount(
     order_size = base_dca_value * (dca_multiplier ** current_dcas)
 
     if dca_type == "percentage":
-        btc_amount = remaining_budget * (order_size / 100.0)
+        # Use aggregate value for percentage (total liquidation value of market)
+        # This gives predictable order sizes based on total portfolio
+        base_for_pct = aggregate_value if aggregate_value is not None else remaining_budget
+        btc_amount = base_for_pct * (order_size / 100.0)
+        pct_source = "aggregate" if aggregate_value is not None else "remaining"
     else:  # fixed
         btc_amount = order_size
+        pct_source = "fixed"
 
-    # Cap to remaining budget
-    btc_amount = min(btc_amount, remaining_budget)
+    # Cap to remaining budget (can't spend more than allocated to this position)
+    if btc_amount > remaining_budget:
+        logger.info(f"  📊 Manual DCA: {btc_amount:.8f} exceeds remaining {remaining_budget:.8f}, capping")
+        btc_amount = remaining_budget
 
     if btc_amount <= 0:
         return False, 0.0, "Insufficient remaining budget for manual DCA"
 
-    return True, btc_amount, f"Manual DCA #{current_dcas + 1}: {order_size:.1f}{'%' if dca_type == 'percentage' else ' fixed'} after {price_drop_pct:.2f}% drop (required: {required_drop:.2f}%)"
+    return True, btc_amount, f"Manual DCA #{current_dcas + 1}: {order_size:.1f}% of {pct_source} = {btc_amount:.8f} after {price_drop_pct:.2f}% drop"
 
 
 async def ask_ai_for_dca_decision(
@@ -85,6 +94,7 @@ async def ask_ai_for_dca_decision(
     settings,
     total_tokens_tracker: Dict[str, int],
     product_minimum: float = 0.0001,
+    aggregate_value: float = None,
 ) -> Dict[str, Any]:
     """
     Ask AI if we should add to an existing position and how much
@@ -101,6 +111,7 @@ async def ask_ai_for_dca_decision(
         settings: App settings (for API keys)
         total_tokens_tracker: Dict with 'total' key to track token usage
         product_minimum: Minimum order size for this product (in quote currency)
+        aggregate_value: Total account liquidation value for manual % calculations
 
     Returns:
         Dict with AI's decision: {"should_buy": bool, "amount": float, "reasoning": str}
@@ -110,7 +121,7 @@ async def ask_ai_for_dca_decision(
     # Check if manual sizing is enabled - bypass AI decision entirely
     if config.get("use_manual_sizing", False):
         should_buy, amount, reasoning = calculate_manual_dca_amount(
-            position, config, remaining_budget, current_price
+            position, config, remaining_budget, current_price, aggregate_value
         )
         return {
             "should_buy": should_buy,
@@ -189,6 +200,7 @@ async def should_buy(
     get_confidence_threshold_func,
     ask_dca_decision_func,
     product_minimum: float = 0.0001,
+    aggregate_value: float = None,
 ) -> Tuple[bool, float, str]:
     """
     Determine if we should buy based on AI's analysis
@@ -202,11 +214,12 @@ async def should_buy(
     Args:
         signal_data: AI analysis result
         position: Current position (None for new position)
-        btc_balance: Available balance
+        btc_balance: Available balance (per-position budget, used as cap)
         config: Strategy configuration
         get_confidence_threshold_func: Function to get confidence threshold
         ask_dca_decision_func: Function to ask AI for DCA decision
         product_minimum: Minimum order size for this product (in quote currency)
+        aggregate_value: Total account liquidation value (for manual % calculations)
 
     Returns:
         Tuple of (should_buy: bool, amount: float, reasoning: str)
@@ -347,18 +360,25 @@ async def should_buy(
 
     if use_manual_sizing:
         # MANUAL MODE: Use fixed base order sizing (3Commas style)
+        # For percentage mode, use aggregate value (total liquidation value of market)
         base_type = config.get("base_order_type", "percentage")
         base_value = config.get("base_order_value", 40.0)
 
         if base_type == "percentage":
-            btc_amount = btc_balance * (base_value / 100.0)
-            logger.info(f"  📊 Manual base order: {base_value}% of budget = {btc_amount:.8f}")
+            # Use aggregate value for percentage (total liquidation value of market)
+            # This gives predictable order sizes based on total portfolio
+            base_for_pct = aggregate_value if aggregate_value is not None else btc_balance
+            btc_amount = base_for_pct * (base_value / 100.0)
+            pct_source = "aggregate" if aggregate_value is not None else "budget"
+            logger.info(f"  📊 Manual base order: {base_value}% of {pct_source} ({base_for_pct:.8f}) = {btc_amount:.8f}")
         else:  # fixed
             btc_amount = base_value
             logger.info(f"  📊 Manual base order: fixed {base_value}")
 
-        # Cap to available balance
-        btc_amount = min(btc_amount, btc_balance)
+        # Cap to available per-position budget (can't spend more than allocated)
+        if btc_amount > btc_balance:
+            logger.info(f"  📊 Manual base order: {btc_amount:.8f} exceeds position budget {btc_balance:.8f}, capping")
+            btc_amount = btc_balance
 
     else:
         # AI MODE: Calculate DCA budget reserve if DCA is enabled

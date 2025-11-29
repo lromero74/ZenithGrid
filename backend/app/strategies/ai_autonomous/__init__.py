@@ -431,18 +431,26 @@ class AIAutonomousStrategy(TradingStrategy):
             return results
 
     async def should_buy(
-        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], btc_balance: float,
+        aggregate_value: float = None
     ) -> Tuple[bool, float, str]:
         """
         Determine if we should buy based on AI's analysis
 
         Uses extracted trading_decisions module
+
+        Args:
+            signal_data: AI analysis result
+            position: Current position (None for new position)
+            btc_balance: Available balance (per-position budget)
+            aggregate_value: Total account liquidation value (for manual % calculations)
         """
 
         # Get product minimum from product_precision.json
         product_minimum = self._get_product_minimum(position, signal_data)
 
         # Create wrapper for DCA decision that uses instance methods
+        # Pass aggregate_value for manual sizing calculations
         async def ask_dca_wrapper(pos, price, budget, ctx):
             return await trading_decisions.ask_ai_for_dca_decision(
                 self.client,
@@ -456,10 +464,13 @@ class AIAutonomousStrategy(TradingStrategy):
                 settings,
                 self._token_tracker,
                 product_minimum,
+                aggregate_value,  # Pass aggregate value for manual DCA %
             )
 
         return await trading_decisions.should_buy(
-            signal_data, position, btc_balance, self.config, self._get_confidence_threshold_for_action, ask_dca_wrapper, product_minimum
+            signal_data, position, btc_balance, self.config,
+            self._get_confidence_threshold_for_action, ask_dca_wrapper,
+            product_minimum, aggregate_value
         )
 
     async def should_sell(self, signal_data: Dict[str, Any], position: Any, current_price: float, market_context: Dict[str, Any] = None) -> Tuple[bool, str]:

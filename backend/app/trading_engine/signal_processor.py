@@ -373,8 +373,8 @@ async def process_signal(
                         # Category is allowed to trade
                         print(f"🔍 {base_symbol} is {coin_category} (allowed): {reason}")
                         logger.info(f"  ✅ {coin_category}: {base_symbol} - allowed to trade")
-                        print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
-                        should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
+                        print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}, aggregate={aggregate_value:.8f}")
+                        should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
                         print(f"🔍 Should buy result: {should_buy}, amount: {quote_amount:.8f}, reason: {buy_reason}")
                     else:
                         should_buy = False
@@ -382,12 +382,12 @@ async def process_signal(
                         print(f"🔍 Should buy: FALSE - {buy_reason}")
                         logger.info(f"  🚫 {coin_category} (blocked): {buy_reason}")
                 else:
-                    print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}")
-                    should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
+                    print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}, aggregate={aggregate_value}")
+                    should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
                     print(f"🔍 Should buy result: {should_buy}, amount: {quote_amount:.8f}, reason: {buy_reason}")
         else:
             # Position already exists for this pair - check for DCA
-            should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance)
+            should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
     else:
         # Bot is stopped - don't open new positions
         if position is None:
