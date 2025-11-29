@@ -255,6 +255,15 @@ export default function News() {
   const [selectedVideoSource, setSelectedVideoSource] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<TabType>('articles')
 
+  // Force re-render every minute to update relative timestamps
+  const [, setTimeTick] = useState(0)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimeTick((t) => t + 1)
+    }, 60000) // Update every minute
+    return () => clearInterval(interval)
+  }, [])
+
   // Fetch news articles
   const {
     data: newsData,
