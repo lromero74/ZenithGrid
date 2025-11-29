@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, X, BookOpen, AlertCircle } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, X, BookOpen, AlertCircle, Info } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 
 // BTC Halving constants
@@ -557,6 +557,8 @@ export default function News() {
   const [articleContent, setArticleContent] = useState<ArticleContentResponse | null>(null)
   const [articleContentLoading, setArticleContentLoading] = useState(false)
   const [readerModeEnabled, setReaderModeEnabled] = useState(false)
+  // Track debt ceiling history modal
+  const [showDebtCeilingModal, setShowDebtCeilingModal] = useState(false)
 
   // Fetch article content when reader mode is enabled
   useEffect(() => {
@@ -1031,9 +1033,18 @@ export default function News() {
 
           {usDebtData ? (
             <div className="flex flex-col items-center">
-              {/* Animated debt counter */}
-              <div className="text-2xl font-mono font-bold text-red-400 mb-2 tracking-tight">
-                ${formatDebt(liveDebt)}
+              {/* Animated debt counter with info badge */}
+              <div className="flex items-center gap-2 mb-2">
+                <div className="text-2xl font-mono font-bold text-red-400 tracking-tight">
+                  ${formatDebt(liveDebt)}
+                </div>
+                <button
+                  onClick={() => setShowDebtCeilingModal(true)}
+                  className="w-5 h-5 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors"
+                  title="View debt ceiling history"
+                >
+                  <Info className="w-3 h-3 text-slate-400" />
+                </button>
               </div>
 
               {/* Debt rate */}
@@ -1079,7 +1090,7 @@ export default function News() {
                 const m5T = calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 5)
                 return (
                   <div className="w-full bg-slate-900/50 rounded-lg p-3 mt-3">
-                    <div className="text-[10px] text-slate-500 mb-2 font-medium">Milestones</div>
+                    <div className="text-[10px] text-slate-500 mb-2 font-medium">Projected Milestones</div>
                     <div className="space-y-2">
                       {/* $1T milestone */}
                       <div className="flex justify-between items-center">
@@ -1113,35 +1124,6 @@ export default function News() {
                   </div>
                 )
               })()}
-
-              {/* Debt Ceiling History */}
-              {debtCeilingHistory && (
-                <div className="w-full bg-slate-900/50 rounded-lg p-3 mt-3">
-                  <div className="text-[10px] text-slate-500 mb-2 font-medium">
-                    Debt Ceiling History (Last {debtCeilingHistory.total_events})
-                  </div>
-                  <div className="space-y-1.5">
-                    {debtCeilingHistory.events.map((event, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-[11px]">
-                        <span className="text-slate-500">
-                          {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                        <div className="text-right flex items-center gap-2">
-                          {event.suspended ? (
-                            <span className="text-yellow-500 text-[10px]">SUSPENDED</span>
-                          ) : (
-                            <span className="text-slate-300 font-mono">${event.amount_trillion}T</span>
-                          )}
-                          <span className="text-slate-600 text-[10px]">{event.note}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-[9px] text-slate-600 mt-2">
-                    Updated: {debtCeilingHistory.last_updated}
-                  </div>
-                </div>
-              )}
 
               {/* Data source */}
               <div className="mt-2 text-[10px] text-slate-600">
@@ -1688,6 +1670,101 @@ export default function News() {
                 <ExternalLink className="w-4 h-4" />
                 <span>Read on Website</span>
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debt Ceiling History Modal */}
+      {showDebtCeilingModal && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowDebtCeilingModal(false)}
+        >
+          <div
+            className="bg-slate-800 rounded-lg w-full max-w-lg max-h-[80vh] overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <div className="flex items-center space-x-2">
+                <DollarSign className="w-5 h-5 text-green-400" />
+                <h3 className="font-medium text-white">US Debt Ceiling History</h3>
+              </div>
+              <button
+                onClick={() => setShowDebtCeilingModal(false)}
+                className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            {/* Modal content */}
+            <div className="p-4 overflow-y-auto max-h-[calc(80vh-120px)]">
+              {debtCeilingHistory ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-400 mb-4">
+                    Recent debt ceiling increases and suspensions by Congress
+                  </p>
+                  {debtCeilingHistory.events.map((event, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-slate-900/50 rounded-lg p-3 border border-slate-700"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-sm font-medium text-slate-300">
+                          {new Date(event.date).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </span>
+                        {event.suspended ? (
+                          <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded border border-yellow-500/30">
+                            SUSPENDED
+                          </span>
+                        ) : (
+                          <span className="text-lg font-mono font-bold text-green-400">
+                            ${event.amount_trillion}T
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-400">{event.note}</p>
+                      {event.legislation && (
+                        <p className="text-xs text-slate-500 mt-1 italic">
+                          {event.legislation}
+                        </p>
+                      )}
+                      {event.suspended && event.suspension_end && (
+                        <p className="text-xs text-yellow-500/70 mt-1">
+                          Suspension ended: {new Date(event.suspension_end).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="text-xs text-slate-600 pt-2 border-t border-slate-700">
+                    Last updated: {debtCeilingHistory.last_updated}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <LoadingSpinner size="sm" text="Loading..." />
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="p-4 border-t border-slate-700">
+              <button
+                onClick={() => setShowDebtCeilingModal(false)}
+                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
