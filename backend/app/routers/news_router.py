@@ -443,7 +443,9 @@ async def fetch_us_debt() -> Dict[str, Any]:
                 record_date = latest.get("record_date", "")
 
                 # Calculate rate of change per second
-                debt_per_second = 31710.0  # Default fallback (~$1T/year)
+                # Default: ~$1T/year = ~$31,710/second (debt always grows long-term)
+                default_rate = 31710.0
+                debt_per_second = default_rate
 
                 if len(records) >= 2:
                     prev = records[1]
@@ -458,7 +460,14 @@ async def fetch_us_debt() -> Dict[str, Any]:
                         if days_diff > 0:
                             debt_change = total_debt - prev_debt
                             seconds_diff = days_diff * 24 * 60 * 60
-                            debt_per_second = debt_change / seconds_diff
+                            calculated_rate = debt_change / seconds_diff
+                            # Only use calculated rate if positive (debt normally grows)
+                            # Negative rates can occur due to temporary accounting adjustments
+                            if calculated_rate > 0:
+                                debt_per_second = calculated_rate
+                            else:
+                                logger.info(f"Treasury data shows temporary debt decrease, using default rate")
+                                debt_per_second = default_rate
 
             # Fetch GDP from FRED (Federal Reserve) - no API key needed for this endpoint
             gdp = 28_000_000_000_000.0  # Default ~$28T fallback
