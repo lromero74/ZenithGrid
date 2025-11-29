@@ -1735,7 +1735,9 @@ export default function News() {
                           </span>
                         ) : (
                           <span className="text-lg font-mono font-bold text-green-400">
-                            ${event.amount_trillion}T
+                            {event.amount_trillion && event.amount_trillion >= 1
+                              ? `$${event.amount_trillion}T`
+                              : `$${((event.amount_trillion || 0) * 1000).toFixed(0)}B`}
                           </span>
                         )}
                       </div>
