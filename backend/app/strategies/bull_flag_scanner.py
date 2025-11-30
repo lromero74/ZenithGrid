@@ -7,6 +7,7 @@ Used by the BullFlagStrategy to find entry opportunities.
 
 import json
 import logging
+import random
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -486,7 +487,7 @@ async def scan_for_bull_flag_opportunities(
     db: AsyncSession,
     exchange_client: Any,
     config: Dict[str, Any],
-    max_coins: int = 50,
+    max_coins: int = 200,
     bot_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
@@ -498,7 +499,7 @@ async def scan_for_bull_flag_opportunities(
         db: Database session
         exchange_client: Coinbase client instance
         config: Strategy configuration
-        max_coins: Maximum coins to scan (for rate limiting)
+        max_coins: Maximum coins to scan (default 200 to cover all approved)
         bot_id: Bot ID for logging scanner decisions (optional)
 
     Returns:
@@ -506,14 +507,19 @@ async def scan_for_bull_flag_opportunities(
     """
     opportunities = []
 
-    # Get tradeable coins
+    # Get tradeable coins from allowed categories
     product_ids = await get_tradeable_usd_coins(db)
     if not product_ids:
         logger.warning("No tradeable USD coins found")
         return []
 
-    # Limit to max_coins for rate limiting
-    product_ids = product_ids[:max_coins]
+    total_available = len(product_ids)
+
+    # If we need to limit, shuffle first so different coins get priority each scan
+    if len(product_ids) > max_coins:
+        random.shuffle(product_ids)
+        product_ids = product_ids[:max_coins]
+        logger.info(f"Limiting scan to {max_coins} of {total_available} available coins (shuffled)")
 
     volume_multiplier = config.get("volume_multiplier", 5.0)
     timeframe = config.get("timeframe", "FIFTEEN_MINUTE")

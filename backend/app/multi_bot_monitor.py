@@ -1035,11 +1035,13 @@ class MultiBotMonitor:
                 return results
 
             # Step 4: Scan for new opportunities
+            # max_scan_coins: configurable limit for rate limiting, defaults to 200 (covers 151 approved)
+            max_scan_coins = bot.strategy_config.get("max_scan_coins", 200)
             opportunities = await scan_for_bull_flag_opportunities(
                 db=db,
                 exchange_client=self.exchange,
                 config=bot.strategy_config,
-                max_coins=50,
+                max_coins=max_scan_coins,
                 bot_id=bot.id  # Pass bot_id for scanner logging
             )
 
