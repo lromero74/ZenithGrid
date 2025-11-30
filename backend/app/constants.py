@@ -64,4 +64,6 @@ CANDLE_INTERVALS = [
 
 # Cache TTL (seconds)
 BALANCE_CACHE_TTL = 60  # Cache balances for 60 seconds
-PRICE_CACHE_TTL = 10  # Cache prices for 10 seconds
+PRICE_CACHE_TTL = 60  # Cache prices for 60 seconds (budget calc doesn't need real-time prices)
+AGGREGATE_VALUE_CACHE_TTL = 120  # Cache aggregate portfolio values for 2 minutes
+MIN_USD_BALANCE_FOR_AGGREGATE = 1.0  # Skip dust balances below $1 in aggregate calculations

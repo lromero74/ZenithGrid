@@ -7,7 +7,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from app.cache import api_cache
-from app.constants import BALANCE_CACHE_TTL
+from app.constants import BALANCE_CACHE_TTL, AGGREGATE_VALUE_CACHE_TTL, MIN_USD_BALANCE_FOR_AGGREGATE
 
 logger = logging.getLogger(__name__)
 
@@ -303,9 +303,9 @@ async def calculate_aggregate_btc_value(
         logger.error(f"Failed to get positions from database: {e}")
         logger.debug("  ⚠️  Continuing with available BTC only")
 
-    # Cache the result for 30 seconds
-    await api_cache.set(cache_key, total_btc_value, ttl_seconds=30)
-    logger.info(f"✅ Total account BTC value (liquidation): {total_btc_value:.8f} BTC")
+    # Cache the result using configured TTL
+    await api_cache.set(cache_key, total_btc_value, ttl_seconds=AGGREGATE_VALUE_CACHE_TTL)
+    logger.info(f"✅ Total account BTC value (liquidation): {total_btc_value:.8f} BTC (cached for {AGGREGATE_VALUE_CACHE_TTL}s)")
     return total_btc_value
 
 
@@ -338,6 +338,9 @@ async def calculate_aggregate_usd_value(
         currencies_to_price = []
         account_data = []  # (currency, available, needs_price)
 
+        # Count skipped dust balances for logging
+        dust_skipped = 0
+
         for account in accounts:
             currency = account.get("currency", "")
             available_str = account.get("available_balance", {}).get("value", "0")
@@ -349,10 +352,22 @@ async def calculate_aggregate_usd_value(
             if currency in ["USD", "USDC"]:
                 total_usd_value += available
             elif currency == "BTC":
-                total_usd_value += available * btc_usd_price
+                btc_value_usd = available * btc_usd_price
+                if btc_value_usd >= MIN_USD_BALANCE_FOR_AGGREGATE:
+                    total_usd_value += btc_value_usd
+                else:
+                    dust_skipped += 1
             else:
+                # Heuristic: skip very small quantities that are likely dust
+                # Most coins have prices < $100k, so 0.00001 of any coin is < $1
+                if available < 0.00001:
+                    dust_skipped += 1
+                    continue
                 currencies_to_price.append(currency)
                 account_data.append((currency, available))
+
+        if dust_skipped > 0:
+            logger.debug(f"Skipped {dust_skipped} dust balances in aggregate USD calculation")
 
         # Fetch all prices in PARALLEL instead of sequentially
         if currencies_to_price:
@@ -381,9 +396,9 @@ async def calculate_aggregate_usd_value(
                 if price is not None:
                     total_usd_value += available * price
 
-        # Cache the result for 30 seconds
-        await api_cache.set(cache_key, total_usd_value, ttl_seconds=30)
-        logger.info(f"✅ Calculated aggregate USD value: ${total_usd_value:.2f}")
+        # Cache the result using configured TTL
+        await api_cache.set(cache_key, total_usd_value, ttl_seconds=AGGREGATE_VALUE_CACHE_TTL)
+        logger.info(f"✅ Calculated aggregate USD value: ${total_usd_value:.2f} (cached for {AGGREGATE_VALUE_CACHE_TTL}s)")
         return total_usd_value
 
     except Exception as e:
