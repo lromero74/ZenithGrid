@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 
 interface SlippageWarningModalProps {
+  // Note: positionId and productId available for future use (e.g., analytics, logging)
   positionId: number
   productId: string
   slippageData: {
@@ -18,8 +19,8 @@ interface SlippageWarningModalProps {
 }
 
 export function SlippageWarningModal({
-  positionId,
-  productId,
+  positionId: _positionId,
+  productId: _productId,
   slippageData,
   quoteCurrency,
   onClose,

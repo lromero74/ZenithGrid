@@ -297,7 +297,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 }
 
 // Enhanced Bot Card Component
-function BotCard({ bot, onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
+function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
   const navigate = useNavigate()
   const { data: stats } = useQuery({
     queryKey: ['bot-stats', bot.id],

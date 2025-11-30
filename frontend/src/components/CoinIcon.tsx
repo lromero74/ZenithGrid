@@ -6,8 +6,8 @@ interface CoinIconProps {
   className?: string
 }
 
-// Mapping of coin symbols to CoinGecko IDs
-const COIN_ID_MAP: Record<string, string> = {
+// Mapping of coin symbols to CoinGecko IDs (exported for potential future use)
+export const COIN_ID_MAP: Record<string, string> = {
   'BTC': 'bitcoin',
   'ETH': 'ethereum',
   'USDT': 'tether',
@@ -120,10 +120,8 @@ export default function CoinIcon({ symbol, size = 'sm', className = '' }: CoinIc
   // Normalize symbol (remove any whitespace, convert to uppercase)
   const normalizedSymbol = symbol?.trim().toUpperCase() || ''
 
-  // Get CoinGecko ID for this symbol
-  const coinId = COIN_ID_MAP[normalizedSymbol] || normalizedSymbol.toLowerCase()
-
-  // CoinGecko API endpoint for coin images (free, no API key needed)
+  // CoinCap API endpoint for coin images (free, no API key needed)
+  // Note: COIN_ID_MAP is kept for potential future CoinGecko API integration
   const imageUrl = `https://assets.coincap.io/assets/icons/${normalizedSymbol.toLowerCase()}@2x.png`
 
   const sizeClass = SIZE_CLASSES[size]

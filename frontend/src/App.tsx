@@ -279,7 +279,7 @@ function App() {
           </div>
         }>
           <Routes>
-            <Route path="/" element={<Dashboard onNavigate={(page) => {}} />} />
+            <Route path="/" element={<Dashboard onNavigate={() => {}} />} />
             <Route path="/bots" element={<Bots />} />
             <Route path="/positions" element={<Positions />} />
             <Route path="/history" element={<ClosedPositions />} />

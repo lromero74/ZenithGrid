@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, IChartApi, ISeriesApi, ColorType, Time } from 'lightweight-charts'
-import { TrendingUp, BarChart3, Activity } from 'lucide-react'
+import { BarChart3, Activity } from 'lucide-react'
 import type { Candle } from '../types'
 
 // Types for lightweight-charts v5

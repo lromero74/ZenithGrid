@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineData } from 'lightweight-charts'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { BarChart2, Activity, TrendingUp, ChevronDown, X, Settings, Search } from 'lucide-react'
+import { BarChart2, X, Settings, Search, Activity } from 'lucide-react'
 import {
   calculateSMA,
   calculateEMA,
@@ -128,7 +128,7 @@ function Charts() {
   const [editingIndicator, setEditingIndicator] = useState<IndicatorConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [btcPrice, setBtcPrice] = useState<number | null>(null)
+  const [_btcPrice, _setBtcPrice] = useState<number | null>(null)
   const lastUpdateRef = useRef<string>('')
   const isCleanedUpRef = useRef<boolean>(false)
   const candleDataRef = useRef<CandleData[]>([])
@@ -841,7 +841,7 @@ function Charts() {
           }
         )
 
-        const { candles, product_id: returnedProductId } = response.data
+        const { candles, product_id: returnedProductId } = response.data as { candles: CandleData[], product_id?: string }
 
         console.log(`Requested: ${selectedPair}, Received: ${returnedProductId || 'unknown'}, Candles: ${candles?.length || 0}`)
 
@@ -950,14 +950,14 @@ function Charts() {
           className="bg-slate-700 text-white px-3 py-2 rounded text-sm font-medium border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <optgroup label="USD Pairs">
-            {TRADING_PAIRS.filter(p => p.group === 'USD Pairs').map((pair) => (
+            {TRADING_PAIRS.filter((p: { value: string; label: string; group: string; inPortfolio?: boolean }) => p.group === 'USD Pairs').map((pair: { value: string; label: string; group: string; inPortfolio?: boolean }) => (
               <option key={pair.value} value={pair.value}>
                 {pair.inPortfolio ? '• ' : ''}{pair.label}
               </option>
             ))}
           </optgroup>
           <optgroup label="BTC Pairs">
-            {TRADING_PAIRS.filter(p => p.group === 'BTC Pairs').map((pair) => (
+            {TRADING_PAIRS.filter((p: { value: string; label: string; group: string; inPortfolio?: boolean }) => p.group === 'BTC Pairs').map((pair: { value: string; label: string; group: string; inPortfolio?: boolean }) => (
               <option key={pair.value} value={pair.value}>
                 {pair.inPortfolio ? '• ' : ''}{pair.label}
               </option>

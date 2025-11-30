@@ -3,6 +3,8 @@ export interface Position {
   bot_id?: number | null;
   product_id?: string;
   status: string;
+  account_id?: number | null;  // For multi-account support
+  bot_config?: Record<string, any>;  // Snapshot of bot config at position open
   opened_at: string;
   closed_at: string | null;
   initial_quote_balance: number;  // BTC or USD
@@ -175,6 +177,8 @@ export interface Bot {
   last_signal_check: string | null;
   insufficient_funds?: boolean;
   budget_utilization_percentage?: number;
+  account_id?: number | null;  // For multi-account support
+  exchange_type?: 'cex' | 'dex';  // Exchange type
 }
 
 export interface BotCreate {

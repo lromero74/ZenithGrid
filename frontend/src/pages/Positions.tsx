@@ -1,18 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi } from '../services/api'
-import { format } from 'date-fns'
 import { useState, useEffect, useRef } from 'react'
 import { formatDateTime, formatDateTimeCompact } from '../utils/dateFormat'
 import {
   TrendingUp,
   TrendingDown,
-  ChevronDown,
-  ChevronUp,
   X,
-  Plus,
   AlertCircle,
   BarChart3,
-  Brain,
   Activity,
   Settings,
   Search,
@@ -34,10 +29,7 @@ import CoinIcon from '../components/CoinIcon'
 import {
   calculateSMA,
   calculateEMA,
-  calculateRSI,
-  calculateMACD,
   calculateBollingerBands,
-  calculateStochastic,
   calculateHeikinAshi,
   AVAILABLE_INDICATORS,
   TIME_INTERVALS,
@@ -147,7 +139,7 @@ function DealChart({ position, productId: initialProductId, currentPrice, trades
     if (hasExactCandle) return candles
 
     // Find where to insert the synthetic candle
-    const insertIndex = candles.findIndex(c => c.time > openedTime)
+    const insertIndex = candles.findIndex(c => Number(c.time) > openedTime)
 
     if (insertIndex === -1) {
       // Entry is after all candles, add to end
@@ -668,10 +660,10 @@ function DealChart({ position, productId: initialProductId, currentPrice, trades
         // Entry marker (base order)
         const openedTime = Math.floor(new Date(position.opened_at).getTime() / 1000)
         const nearestCandle = chartData.reduce((prev, curr) =>
-          Math.abs(curr.time - openedTime) < Math.abs(prev.time - openedTime) ? curr : prev
+          Math.abs(Number(curr.time) - openedTime) < Math.abs(Number(prev.time) - openedTime) ? curr : prev
         )
 
-        console.log(`Entry arrow: openedTime=${openedTime}, nearestCandle.time=${nearestCandle?.time}, diff=${Math.abs((nearestCandle?.time || 0) - openedTime)}s, price=${nearestCandle?.close}`)
+        console.log(`Entry arrow: openedTime=${openedTime}, nearestCandle.time=${nearestCandle?.time}, diff=${Math.abs(Number(nearestCandle?.time || 0) - openedTime)}s, price=${nearestCandle?.close}`)
 
         if (nearestCandle) {
           markers.push({
@@ -693,7 +685,7 @@ function DealChart({ position, productId: initialProductId, currentPrice, trades
           dcaTrades.forEach((trade, index) => {
             const tradeTime = Math.floor(new Date(trade.timestamp).getTime() / 1000)
             const nearestCandle = chartData.reduce((prev, curr) =>
-              Math.abs(curr.time - tradeTime) < Math.abs(prev.time - tradeTime) ? curr : prev
+              Math.abs(Number(curr.time) - tradeTime) < Math.abs(Number(prev.time) - tradeTime) ? curr : prev
             )
 
             if (nearestCandle) {
@@ -1261,7 +1253,7 @@ export default function Positions() {
   const [filterBot, setFilterBot] = useState<number | 'all'>('all')
   const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>('all')
   const [filterPair, setFilterPair] = useState<string>('all')
-  const [sortBy, setSortBy] = useState<'created' | 'pnl' | 'invested' | 'pair'>('created')
+  const [sortBy, setSortBy] = useState<'created' | 'pnl' | 'invested' | 'pair' | 'bot'>('created')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const { data: allPositions, refetch: refetchPositions } = useQuery({
@@ -1452,10 +1444,6 @@ export default function Positions() {
   // Get unique pairs for filter dropdown
   const uniquePairs = Array.from(new Set(allPositions?.filter(p => p.status === 'open').map(p => p.product_id || 'ETH-BTC') || []))
 
-  const formatCrypto = (amount: number, decimals: number = 8) => {
-    return amount.toFixed(decimals)
-  }
-
   const checkSlippageBeforeMarketClose = async (positionId: number) => {
     try {
       const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/positions/${positionId}/slippage-check`)
@@ -1555,49 +1543,12 @@ export default function Positions() {
     }
   }
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value)
-  }
-
   const togglePosition = (positionId: number) => {
     if (selectedPosition === positionId) {
       setSelectedPosition(null)
     } else {
       setSelectedPosition(positionId)
     }
-  }
-
-  // Calculate safety orders from trades
-  const getSafetyOrders = (positionTrades: Trade[] | undefined) => {
-    if (!positionTrades) return []
-
-    const buyTrades = positionTrades.filter(t => t.side === 'buy').sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
-
-    return buyTrades.map((trade, index) => {
-      let orderType = 'Base Order'
-      if (index > 0) {
-        // Safety orders - distinguish manual vs automatic (3Commas style)
-        const isManual = trade.trade_type === 'manual_safety_order'
-        orderType = `Safety Order ${index}${isManual ? ' (Manual)' : ''}`
-      }
-
-      return {
-        orderNumber: index,
-        type: orderType,
-        quoteAmount: trade.quote_amount,
-        baseAmount: trade.base_amount,
-        price: trade.price,
-        timestamp: trade.timestamp,
-        filled: true
-      }
-    })
   }
 
   // Calculate overall statistics
@@ -1791,7 +1742,7 @@ export default function Positions() {
                     if (sortBy === 'bot') {
                       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
                     } else {
-                      setSortBy('bot' as any)
+                      setSortBy('bot')
                       setSortOrder('asc')
                     }
                   }}
@@ -1873,7 +1824,6 @@ export default function Positions() {
             {openPositions.map((position) => {
               const currentPrice = currentPrices[position.product_id || 'ETH-BTC']
               const pnl = calculateUnrealizedPnL(position, currentPrice)
-              const safetyOrders = selectedPosition === position.id ? getSafetyOrders(trades) : []
               const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
 
               const bot = bots?.find(b => b.id === position.bot_id)
@@ -2492,7 +2442,7 @@ export default function Positions() {
       {/* Position AI Logs Modal */}
       {logsModalPosition && (
         <PositionLogsModal
-          botId={logsModalPosition.bot_id}
+          botId={logsModalPosition.bot_id || 0}
           productId={logsModalPosition.product_id || 'ETH-BTC'}
           positionOpenedAt={logsModalPosition.opened_at}
           isOpen={showLogsModal}

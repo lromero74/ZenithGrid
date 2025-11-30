@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi, orderHistoryApi } from '../services/api'
-import { format } from 'date-fns'
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { Trade, AIBotLog } from '../types'
+import type { Trade, AIBotLog, Position } from '../types'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { formatDateTime } from '../utils/dateFormat'
 
@@ -31,18 +30,18 @@ function ClosedPositions() {
 
   const { data: allPositions, isLoading } = useQuery({
     queryKey: ['positions'],
-    queryFn: positionsApi.getAll,
+    queryFn: () => positionsApi.getAll(),
     refetchInterval: 5000,
   })
 
-  const { data: failedOrders, isLoading: isLoadingFailed } = useQuery({
+  const { data: failedOrders, isLoading: _isLoadingFailed } = useQuery({
     queryKey: ['order-history-failed'],
     queryFn: () => orderHistoryApi.getFailed(undefined, 100),
     refetchInterval: 30000,
   })
 
-  const closedPositions = (allPositions?.filter(p => p.status === 'closed') || [])
-    .sort((a, b) => {
+  const closedPositions = (allPositions?.filter((p: Position) => p.status === 'closed') || [])
+    .sort((a: Position, b: Position) => {
       // Sort by closed_at date, most recent first (descending)
       if (!a.closed_at) return 1 // Move positions without closed_at to end
       if (!b.closed_at) return -1
@@ -200,7 +199,7 @@ function ClosedPositions() {
           </div>
         ) : (
           <div className="space-y-3">
-            {closedPositions.map((position) => (
+            {closedPositions.map((position: Position) => (
               <div key={position.id} className="bg-slate-800 rounded-lg border border-slate-700">
                 <div
                   className="p-4 cursor-pointer hover:bg-slate-750 transition-colors"

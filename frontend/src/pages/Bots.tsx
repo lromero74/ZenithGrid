@@ -2,13 +2,13 @@ import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { botsApi, templatesApi } from '../services/api'
-import { Bot, BotCreate } from '../types'
-import { Plus, Play, Square, Edit, Trash2, TrendingUp, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet } from 'lucide-react'
+import { Bot, BotCreate, StrategyParameter } from '../types'
+import { Plus, Edit, Trash2, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 import PhaseConditionSelector from '../components/PhaseConditionSelector'
 import AIBotLogs from '../components/AIBotLogs'
 import { PnLChart } from '../components/PnLChart'
-import DexConfigSection, { type DexConfig } from '../components/DexConfigSection'
+import DexConfigSection from '../components/DexConfigSection'
 import axios from 'axios'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 
@@ -247,6 +247,7 @@ function Bots() {
         product_ids: productIds,
         split_budget_across_pairs: (bot as any).split_budget_across_pairs || false,
         strategy_config: bot.strategy_config,
+        exchange_type: bot.exchange_type || 'cex',
       })
       setShowModal(true)
       // Clear navigation state to prevent reopening on refresh
@@ -449,6 +450,7 @@ function Bots() {
       budget_percentage: 0,
       check_interval_seconds: 300,
       strategy_config: {},
+      exchange_type: 'cex',
     })
     setEditingBot(null)
   }
@@ -469,6 +471,7 @@ function Bots() {
       budget_percentage: template.budget_percentage || 0,
       check_interval_seconds: template.check_interval_seconds || 300,
       strategy_config: template.strategy_config,
+      exchange_type: template.exchange_type || 'cex',
     })
   }
 
@@ -493,6 +496,7 @@ function Bots() {
       product_ids: productIds,
       split_budget_across_pairs: (bot as any).split_budget_across_pairs || false,
       strategy_config: bot.strategy_config,
+      exchange_type: bot.exchange_type || 'cex',
     })
     setShowModal(true)
   }
@@ -609,11 +613,11 @@ function Bots() {
     }
 
     // Handle conditions type (condition builder for indicators)
-    if (param.type === 'conditions') {
+    if ((param.type as string) === 'conditions') {
       return (
         <PhaseConditionSelector
-          title={param.display_name}
-          description={param.description}
+          title={param.display_name || ''}
+          description={param.description || ''}
           conditions={formData.strategy_config[param.name] || []}
           onChange={(conditions) => handleParamChange(param.name, conditions)}
           allowMultiple={true}
@@ -1324,7 +1328,7 @@ function Bots() {
                       {/* Quick filter buttons - only show for markets with pairs */}
                       <div className="flex flex-wrap gap-2 mb-3 px-1">
                         {['BTC', 'USD', 'USDC', 'USDT'].map((market) => {
-                          const marketPairs = TRADING_PAIRS.filter(p => p.group === market).map(p => p.value)
+                          const marketPairs = TRADING_PAIRS.filter((p: { value: string; label: string; group: string }) => p.group === market).map((p: { value: string; label: string; group: string }) => p.value)
 
                           // Don't show button if market has no pairs
                           if (marketPairs.length === 0) return null
@@ -1358,7 +1362,7 @@ function Bots() {
                       {/* Pair list - grouped by quote currency, sorted by volume */}
                       <div className="border border-slate-600 border-t-0 rounded-b bg-slate-700 p-3 max-h-72 overflow-y-auto">
                         {['BTC', 'USD', 'USDC', 'USDT'].map((group) => {
-                          const groupPairs = TRADING_PAIRS.filter(p => p.group === group)
+                          const groupPairs = TRADING_PAIRS.filter((p: { value: string; label: string; group: string }) => p.group === group)
                           if (groupPairs.length === 0) return null
 
                           // Hide this market group if locked and not the selected market
@@ -1371,7 +1375,7 @@ function Bots() {
                                 {group} Pairs
                               </div>
                               <div className="grid grid-cols-2 gap-1">
-                                {groupPairs.map((pair) => {
+                                {groupPairs.map((pair: { value: string; label: string; group: string }) => {
                                   const isChecked = formData.product_ids.includes(pair.value)
 
                                   return (

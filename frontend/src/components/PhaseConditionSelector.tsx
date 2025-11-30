@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 
 // Condition types matching 3Commas
