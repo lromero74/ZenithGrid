@@ -30,12 +30,8 @@ function ClosedPositions() {
     queryFn: botsApi.getAll,
     select: (data) => {
       if (!selectedAccount) return data
-      // For DEX accounts, only show items with matching account_id
-      // For CEX accounts, also include legacy items without account_id
-      return data.filter((bot: Bot) =>
-        bot.account_id === selectedAccount.id ||
-        (selectedAccount.type === 'cex' && !bot.account_id)
-      )
+      // Filter by account_id
+      return data.filter((bot: Bot) => bot.account_id === selectedAccount.id)
     },
   })
 
@@ -45,12 +41,8 @@ function ClosedPositions() {
     refetchInterval: 5000,
     select: (data) => {
       if (!selectedAccount) return data
-      // For DEX accounts, only show items with matching account_id
-      // For CEX accounts, also include legacy items without account_id
-      return data.filter((p: Position) =>
-        p.account_id === selectedAccount.id ||
-        (selectedAccount.type === 'cex' && !p.account_id)
-      )
+      // Filter by account_id
+      return data.filter((p: Position) => p.account_id === selectedAccount.id)
     },
   })
 
@@ -60,12 +52,8 @@ function ClosedPositions() {
     refetchInterval: 30000,
     select: (data) => {
       if (!selectedAccount) return data
-      // For DEX accounts, only show items with matching account_id
-      // For CEX accounts, also include legacy items without account_id
-      return data.filter((order: any) =>
-        order.account_id === selectedAccount.id ||
-        (selectedAccount.type === 'cex' && !order.account_id)
-      )
+      // Filter by account_id
+      return data.filter((order: any) => order.account_id === selectedAccount.id)
     },
   })
 
