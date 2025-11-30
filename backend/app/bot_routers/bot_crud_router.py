@@ -160,7 +160,12 @@ async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db
         # Calculate budget utilization percentage (for all bots with open positions)
         insufficient_funds = False
         budget_utilization_percentage = 0.0
-        max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+        # Check for both "max_concurrent_deals" and "max_concurrent_positions" (used by bull_flag)
+        max_concurrent_deals = (
+            bot.strategy_config.get("max_concurrent_deals")
+            or bot.strategy_config.get("max_concurrent_positions")
+            or 1
+        )
 
         try:
             quote_currency = bot.get_quote_currency()
@@ -454,7 +459,12 @@ async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
     # Check if bot has insufficient funds for new positions and calculate budget utilization
     insufficient_funds = False
     budget_utilization_percentage = 0.0
-    max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+    # Check for both "max_concurrent_deals" and "max_concurrent_positions" (used by bull_flag)
+    max_concurrent_deals = (
+        bot.strategy_config.get("max_concurrent_deals")
+        or bot.strategy_config.get("max_concurrent_positions")
+        or 1
+    )
 
     try:
         coinbase = CoinbaseClient()

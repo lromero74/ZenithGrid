@@ -161,17 +161,21 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                 actual_btc_balance += total_balance
             else:
                 # Use price from parallel fetch
-                if asset not in prices:
-                    # Skip assets we couldn't price
-                    continue
+                if asset in prices:
+                    current_price_usd = prices[asset]
+                    usd_value = total_balance * current_price_usd
+                    # Calculate BTC value from USD value
+                    btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
+                else:
+                    # Still include asset even if we couldn't get price
+                    # Log this for debugging
+                    logger.warning(f"Could not get USD price for {asset}, including with $0 value")
+                    current_price_usd = 0.0
+                    usd_value = 0.0
+                    btc_value = 0.0
 
-                current_price_usd = prices[asset]
-                usd_value = total_balance * current_price_usd
-                # Calculate BTC value from USD value
-                btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
-
-            # Skip assets worth less than $0.01 USD
-            if usd_value < 0.01:
+            # Skip assets worth less than $0.01 USD, UNLESS we couldn't get price (they might be valuable)
+            if usd_value < 0.01 and current_price_usd > 0:
                 continue
 
             total_usd_value += usd_value
