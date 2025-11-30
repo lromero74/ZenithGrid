@@ -13,7 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 async def get_accounts(request_func: Callable, force_fresh: bool = False) -> List[Dict[str, Any]]:
-    """Get all accounts (cached to reduce API calls unless force_fresh=True)"""
+    """
+    Get all accounts with pagination support (cached to reduce API calls unless force_fresh=True).
+
+    Coinbase API may paginate results. This function fetches all pages to ensure
+    no accounts are missed.
+    """
     cache_key = "accounts_list"
 
     if not force_fresh:
@@ -22,13 +27,36 @@ async def get_accounts(request_func: Callable, force_fresh: bool = False) -> Lis
             logger.debug(f"Using cached accounts list ({len(cached)} accounts)")
             return cached
 
-    result = await request_func("GET", "/api/v3/brokerage/accounts")
-    accounts = result.get("accounts", [])
+    all_accounts = []
+    cursor = None
+    page_count = 0
+    max_pages = 10  # Safety limit to prevent infinite loops
+
+    while page_count < max_pages:
+        # Build URL with pagination parameters
+        url = "/api/v3/brokerage/accounts?limit=250"  # Max limit per page
+        if cursor:
+            url += f"&cursor={cursor}"
+
+        result = await request_func("GET", url)
+        accounts = result.get("accounts", [])
+        all_accounts.extend(accounts)
+        page_count += 1
+
+        logger.debug(f"Fetched page {page_count}: {len(accounts)} accounts (total so far: {len(all_accounts)})")
+
+        # Check for next page
+        cursor = result.get("cursor")
+        if not cursor or len(accounts) == 0:
+            break  # No more pages
+
+    if page_count >= max_pages:
+        logger.warning(f"Hit max page limit ({max_pages}) when fetching accounts - some may be missing")
 
     # Cache for 60 seconds (same as BALANCE_CACHE_TTL)
-    await api_cache.set(cache_key, accounts, BALANCE_CACHE_TTL)
-    logger.debug(f"Cached accounts list ({len(accounts)} accounts) for {BALANCE_CACHE_TTL}s")
-    return accounts
+    await api_cache.set(cache_key, all_accounts, BALANCE_CACHE_TTL)
+    logger.info(f"Fetched {len(all_accounts)} total accounts across {page_count} page(s), cached for {BALANCE_CACHE_TTL}s")
+    return all_accounts
 
 
 async def get_account(request_func: Callable, account_id: str) -> Dict[str, Any]:

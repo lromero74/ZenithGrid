@@ -79,6 +79,9 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
         breakdown = await coinbase.get_portfolio_breakdown()
         spot_positions = breakdown.get("spot_positions", [])
 
+        # Log raw position count for debugging
+        logger.info(f"Portfolio API returned {len(spot_positions)} spot positions")
+
         # Get BTC/USD price for valuations
         btc_usd_price = await coinbase.get_btc_usd_price()
 
@@ -358,6 +361,9 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
                         pnl_today_usdc += position.profit_quote
                     else:  # BTC
                         pnl_today_btc += position.profit_quote
+
+        # Log portfolio summary for debugging inconsistent results
+        logger.info(f"Portfolio summary: {len(spot_positions)} raw positions -> {len(portfolio_holdings)} after filtering (${total_usd_value:.2f} total)")
 
         return {
             "total_usd_value": total_usd_value,
