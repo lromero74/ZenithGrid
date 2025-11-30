@@ -1624,6 +1624,17 @@ function Bots() {
                     'Other'
                   ]
 
+                  // Non-AI strategy groups (bull_flag, etc.)
+                  const nonAIStrategyGroups = [
+                    'Pattern Detection',
+                    'Risk Management',
+                    'Budget',
+                  ]
+
+                  // Check if this is a non-AI strategy (e.g., bull_flag)
+                  const isNonAIStrategy = formData.strategy_type === 'bull_flag' ||
+                    (!selectedStrategy.parameters.some(p => p.group === 'AI Configuration'))
+
                   // Helper to render a group
                   const renderGroup = (groupName: string) => {
                     const groupParams = parametersByGroup[groupName]
@@ -1682,6 +1693,18 @@ function Bots() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )
+                  }
+
+                  // For non-AI strategies like bull_flag, render all their groups directly
+                  if (isNonAIStrategy) {
+                    return (
+                      <div className="space-y-6">
+                        {/* Render non-AI strategy groups */}
+                        {nonAIStrategyGroups.map(renderGroup)}
+                        {/* Also render any 'Other' parameters */}
+                        {renderGroup('Other')}
                       </div>
                     )
                   }
