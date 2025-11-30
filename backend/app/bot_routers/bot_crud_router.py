@@ -135,18 +135,24 @@ async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db
     coinbase = CoinbaseClient()
 
     # Pre-fetch aggregate values ONCE (not per-bot) to avoid repeated API calls
-    aggregate_btc_value = None
-    aggregate_usd_value = None
+    # Fetch BOTH in parallel for better performance
+    async def fetch_btc_aggregate():
+        try:
+            return await coinbase.calculate_aggregate_btc_value()
+        except Exception as e:
+            logger.warning(f"Could not calculate aggregate BTC value: {e}")
+            return None
 
-    try:
-        aggregate_btc_value = await coinbase.calculate_aggregate_btc_value()
-    except Exception as e:
-        logger.warning(f"Could not calculate aggregate BTC value: {e}")
+    async def fetch_usd_aggregate():
+        try:
+            return await coinbase.calculate_aggregate_usd_value()
+        except Exception as e:
+            logger.warning(f"Could not calculate aggregate USD value: {e}")
+            return None
 
-    try:
-        aggregate_usd_value = await coinbase.calculate_aggregate_usd_value()
-    except Exception as e:
-        logger.warning(f"Could not calculate aggregate USD value: {e}")
+    aggregate_btc_value, aggregate_usd_value = await asyncio.gather(
+        fetch_btc_aggregate(), fetch_usd_aggregate()
+    )
 
     # Pre-fetch all open position prices in parallel
     all_open_positions_query = select(Position).where(Position.status == "open")

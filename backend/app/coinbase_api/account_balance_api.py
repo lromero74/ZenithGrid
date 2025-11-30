@@ -214,12 +214,21 @@ async def calculate_aggregate_btc_value(
     Returns:
         Total BTC value across all holdings (available + current value of positions)
     """
-    logger.warning("📊 Calculating aggregate BTC value for budget allocation...")
+    import asyncio
+
+    # Check cache first to reduce API spam
+    cache_key = "aggregate_btc_value"
+    cached = await api_cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"✅ Using cached aggregate BTC value: {cached:.8f} BTC")
+        return cached
+
+    logger.info("📊 Calculating aggregate BTC value for budget allocation...")
 
     # Get available BTC balance from Coinbase
     available_btc = await get_btc_balance(request_func, auth_type)
     total_btc_value = available_btc
-    logger.warning(f"  💰 Available BTC: {available_btc:.8f} BTC")
+    logger.debug(f"  💰 Available BTC: {available_btc:.8f} BTC")
 
     # Get BTC value of open positions from database using CURRENT prices
     try:
@@ -239,45 +248,64 @@ async def calculate_aggregate_btc_value(
         )
 
         positions = cursor.fetchall()
+        conn.close()
         btc_in_positions = 0.0
 
-        for product_id, amount, avg_price in positions:
-            if amount:
-                amount = float(amount)
-                # Use current market price for liquidation value (not avg_price/cost basis)
-                if get_current_price_func:
-                    try:
-                        current_price = await get_current_price_func(product_id)
+        if positions and get_current_price_func:
+            # Fetch all prices in PARALLEL instead of sequentially
+            unique_products = list({p[0] for p in positions if p[0]})
+
+            async def fetch_price(product_id: str):
+                try:
+                    price = await get_current_price_func(product_id)
+                    return (product_id, price)
+                except Exception:
+                    return (product_id, None)
+
+            # Batch fetch prices (15 at a time to avoid rate limits)
+            price_map = {}
+            batch_size = 15
+            for i in range(0, len(unique_products), batch_size):
+                batch = unique_products[i:i + batch_size]
+                batch_results = await asyncio.gather(*[fetch_price(pid) for pid in batch])
+                for pid, price in batch_results:
+                    if price is not None:
+                        price_map[pid] = price
+                if i + batch_size < len(unique_products):
+                    await asyncio.sleep(0.1)
+
+            # Now calculate BTC value using cached prices
+            for product_id, amount, avg_price in positions:
+                if amount:
+                    amount = float(amount)
+                    current_price = price_map.get(product_id)
+                    if current_price is not None:
                         btc_value = amount * current_price
-                        logger.warning(f"  💰 Position {product_id}: {amount:.8f} × {current_price:.8f} BTC (current) = {btc_value:.8f} BTC")
-                    except Exception as e:
-                        # Fallback to avg_price if can't get current price
-                        if avg_price:
-                            btc_value = amount * float(avg_price)
-                            logger.warning(f"  💰 Position {product_id}: {amount:.8f} × {avg_price:.8f} BTC (fallback) = {btc_value:.8f} BTC")
-                        else:
-                            btc_value = 0.0
-                            logger.warning(f"  ⚠️  Position {product_id}: Could not get price: {e}")
-                else:
-                    # No price function provided, use avg_price as fallback
-                    if avg_price:
+                        logger.debug(f"  💰 Position {product_id}: {amount:.8f} × {current_price:.8f} BTC = {btc_value:.8f} BTC")
+                    elif avg_price:
+                        # Fallback to avg_price if price fetch failed
                         btc_value = amount * float(avg_price)
-                        logger.warning(f"  💰 Position {product_id}: {amount:.8f} × {avg_price:.8f} BTC (cost) = {btc_value:.8f} BTC")
+                        logger.debug(f"  💰 Position {product_id}: {amount:.8f} × {avg_price:.8f} BTC (fallback) = {btc_value:.8f} BTC")
                     else:
                         btc_value = 0.0
-
-                btc_in_positions += btc_value
-
-        conn.close()
+                    btc_in_positions += btc_value
+        elif positions:
+            # No price function, use avg_price for all
+            for product_id, amount, avg_price in positions:
+                if amount and avg_price:
+                    btc_value = float(amount) * float(avg_price)
+                    btc_in_positions += btc_value
 
         total_btc_value += btc_in_positions
-        logger.warning(f"  💰 BTC in positions: {btc_in_positions:.8f} BTC")
+        logger.debug(f"  💰 BTC in positions: {btc_in_positions:.8f} BTC")
 
     except Exception as e:
         logger.error(f"Failed to get positions from database: {e}")
-        logger.warning("  ⚠️  Continuing with available BTC only")
+        logger.debug("  ⚠️  Continuing with available BTC only")
 
-    logger.warning(f"✅ Total account BTC value (liquidation): {total_btc_value:.8f} BTC")
+    # Cache the result for 30 seconds
+    await api_cache.set(cache_key, total_btc_value, ttl_seconds=30)
+    logger.info(f"✅ Total account BTC value (liquidation): {total_btc_value:.8f} BTC")
     return total_btc_value
 
 
@@ -291,6 +319,8 @@ async def calculate_aggregate_usd_value(
     Returns:
         Total USD value across all holdings
     """
+    import asyncio
+
     # Check cache first to reduce API spam
     cache_key = "aggregate_usd_value"
     cached = await api_cache.get(cache_key)
@@ -304,6 +334,10 @@ async def calculate_aggregate_usd_value(
         btc_usd_price = await get_btc_usd_price_func()
         total_usd_value = 0.0
 
+        # Build list of currencies that need USD price fetching
+        currencies_to_price = []
+        account_data = []  # (currency, available, needs_price)
+
         for account in accounts:
             currency = account.get("currency", "")
             available_str = account.get("available_balance", {}).get("value", "0")
@@ -312,17 +346,40 @@ async def calculate_aggregate_usd_value(
             if available == 0:
                 continue
 
-            # Convert all currencies to USD value
             if currency in ["USD", "USDC"]:
                 total_usd_value += available
             elif currency == "BTC":
                 total_usd_value += available * btc_usd_price
             else:
+                currencies_to_price.append(currency)
+                account_data.append((currency, available))
+
+        # Fetch all prices in PARALLEL instead of sequentially
+        if currencies_to_price:
+            async def fetch_usd_price(currency: str):
                 try:
-                    usd_price = await get_current_price_func(f"{currency}-USD")
-                    total_usd_value += available * usd_price
+                    price = await get_current_price_func(f"{currency}-USD")
+                    return (currency, price)
                 except Exception:
-                    pass  # Skip assets we can't price
+                    return (currency, None)
+
+            # Batch fetch prices (15 at a time to avoid rate limits)
+            price_map = {}
+            batch_size = 15
+            for i in range(0, len(currencies_to_price), batch_size):
+                batch = currencies_to_price[i:i + batch_size]
+                batch_results = await asyncio.gather(*[fetch_usd_price(c) for c in batch])
+                for currency, price in batch_results:
+                    if price is not None:
+                        price_map[currency] = price
+                if i + batch_size < len(currencies_to_price):
+                    await asyncio.sleep(0.1)
+
+            # Add values using fetched prices
+            for currency, available in account_data:
+                price = price_map.get(currency)
+                if price is not None:
+                    total_usd_value += available * price
 
         # Cache the result for 30 seconds
         await api_cache.set(cache_key, total_usd_value, ttl_seconds=30)
