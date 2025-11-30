@@ -7,6 +7,7 @@ import { AccountSwitcher } from './components/AccountSwitcher'
 import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { useAccount } from './contexts/AccountContext'
 
 // Lazy load pages for faster initial render
 // Dashboard is eager-loaded since it's the landing page
@@ -23,6 +24,7 @@ const News = lazy(() => import('./pages/News'))
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { selectedAccount } = useAccount()
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
 
   // Track last seen count of history items (closed + failed)
@@ -38,10 +40,17 @@ function App() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Fetch full portfolio data (all coins)
+  // Fetch full portfolio data (all coins) - account-specific for CEX/DEX switching
   const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio'],
+    queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
+      // If we have a selected account, use the account-specific endpoint
+      if (selectedAccount) {
+        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        if (!response.ok) throw new Error('Failed to fetch portfolio')
+        return response.json()
+      }
+      // Fallback to legacy endpoint
       const response = await fetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
