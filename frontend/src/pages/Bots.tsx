@@ -866,14 +866,14 @@ function Bots() {
 
                       {/* Active Trades */}
                       <td className="px-2 sm:px-4 py-2 sm:py-3">
-                        {bot.strategy_config?.max_concurrent_deals ? (
+                        {(bot.strategy_config?.max_concurrent_deals || bot.strategy_config?.max_concurrent_positions) ? (
                           <div className="text-sm">
                             <span className="text-blue-400 font-medium">
                               {(bot as any).open_positions_count || 0}
                             </span>
                             <span className="text-slate-500"> / </span>
                             <span className="text-slate-400">
-                              {bot.strategy_config.max_concurrent_deals}
+                              {bot.strategy_config.max_concurrent_deals || bot.strategy_config.max_concurrent_positions}
                             </span>
                           </div>
                         ) : (
