@@ -25,6 +25,7 @@ import {
   Coins,
 } from 'lucide-react'
 import { blacklistApi, BlacklistEntry, marketDataApi, CategorySettings } from '../services/api'
+import CoinIcon from './CoinIcon'
 
 // Category display config
 const CATEGORY_CONFIG: Record<string, { color: string; bgColor: string; borderColor: string; label: string; description: string }> = {
@@ -427,7 +428,7 @@ export function BlacklistManager() {
         </div>
 
         {/* Table Header */}
-        <div className="grid grid-cols-[100px_80px_130px_1fr] gap-4 px-4 py-2 bg-slate-900 border-b border-slate-700 text-xs font-medium text-slate-400 uppercase">
+        <div className="grid grid-cols-[140px_80px_130px_1fr] gap-4 px-4 py-2 bg-slate-900 border-b border-slate-700 text-xs font-medium text-slate-400 uppercase">
           <span>Symbol</span>
           <span>Markets</span>
           <span>Category</span>
@@ -449,12 +450,13 @@ export function BlacklistManager() {
               return (
                 <div
                   key={coin.symbol}
-                  className={`grid grid-cols-[100px_80px_130px_1fr] gap-4 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 items-center ${
+                  className={`grid grid-cols-[140px_80px_130px_1fr] gap-4 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 items-center ${
                     isSaving ? 'opacity-50' : ''
                   }`}
                 >
-                  {/* Symbol */}
-                  <div className="flex items-center">
+                  {/* Symbol with Icon */}
+                  <div className="flex items-center gap-2">
+                    <CoinIcon symbol={coin.symbol} size="sm" />
                     <span className={`font-mono font-medium ${config.color}`}>
                       {coin.symbol}
                     </span>
