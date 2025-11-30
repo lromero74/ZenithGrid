@@ -102,10 +102,14 @@ async def calculate_volume_sma_50(
 
     try:
         # Fetch 55 days of daily candles (extra buffer for calculation)
+        # Calculate start/end timestamps (Coinbase API requires these, not limit)
+        end_time = int(datetime.utcnow().timestamp())
+        start_time = int((datetime.utcnow() - timedelta(days=55)).timestamp())
         candles = await exchange_client.get_candles(
             product_id=product_id,
             granularity="ONE_DAY",
-            limit=55
+            start=start_time,
+            end=end_time
         )
 
         if not candles or len(candles) < 50:
@@ -453,10 +457,21 @@ async def scan_for_bull_flag_opportunities(
                 continue
 
             # Step 2: Get candles for pattern detection
+            # Calculate timeframe-appropriate lookback period
+            granularity_minutes = {
+                "ONE_MINUTE": 1, "FIVE_MINUTE": 5, "FIFTEEN_MINUTE": 15,
+                "THIRTY_MINUTE": 30, "ONE_HOUR": 60, "TWO_HOUR": 120,
+                "SIX_HOUR": 360, "ONE_DAY": 1440
+            }
+            minutes = granularity_minutes.get(timeframe, 15)
+            lookback_minutes = minutes * 50  # 50 candles worth
+            pattern_end_time = int(datetime.utcnow().timestamp())
+            pattern_start_time = int((datetime.utcnow() - timedelta(minutes=lookback_minutes)).timestamp())
             candles = await exchange_client.get_candles(
                 product_id=product_id,
                 granularity=timeframe,
-                limit=50  # Enough for pattern detection
+                start=pattern_start_time,
+                end=pattern_end_time
             )
 
             if not candles:
