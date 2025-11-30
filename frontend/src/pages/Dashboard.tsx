@@ -51,10 +51,17 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
   })
 
-  // Fetch portfolio for account value - use same endpoint/queryKey as header for consistency
+  // Fetch portfolio for account value - account-specific for CEX/DEX switching
   const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio'],
+    queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
+      // If we have a selected account, use the account-specific endpoint
+      if (selectedAccount) {
+        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        if (!response.ok) throw new Error('Failed to fetch portfolio')
+        return response.json()
+      }
+      // Fallback to legacy endpoint
       const response = await fetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()

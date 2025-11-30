@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi, orderHistoryApi } from '../services/api'
-import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp, Building2, Wallet } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { Trade, AIBotLog, Position } from '../types'
+import type { Trade, AIBotLog, Position, Bot } from '../types'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { formatDateTime } from '../utils/dateFormat'
+import { useAccount, getChainName } from '../contexts/AccountContext'
 
 function ClosedPositions() {
+  const { selectedAccount } = useAccount()
   const [activeTab, setActiveTab] = useState<'closed' | 'failed'>('closed')
   const [expandedPositionId, setExpandedPositionId] = useState<number | null>(null)
   const [positionTrades, setPositionTrades] = useState<Record<number, Trade[]>>({})
@@ -24,20 +26,32 @@ function ClosedPositions() {
   })
 
   const { data: bots } = useQuery({
-    queryKey: ['bots'],
+    queryKey: ['bots', selectedAccount?.id],
     queryFn: botsApi.getAll,
+    select: (data) => {
+      if (!selectedAccount) return data
+      return data.filter((bot: Bot) => bot.account_id === selectedAccount.id || !bot.account_id)
+    },
   })
 
   const { data: allPositions, isLoading } = useQuery({
-    queryKey: ['positions'],
+    queryKey: ['positions', selectedAccount?.id],
     queryFn: () => positionsApi.getAll(),
     refetchInterval: 5000,
+    select: (data) => {
+      if (!selectedAccount) return data
+      return data.filter((p: Position) => p.account_id === selectedAccount.id || !p.account_id)
+    },
   })
 
   const { data: failedOrders, isLoading: _isLoadingFailed } = useQuery({
-    queryKey: ['order-history-failed'],
+    queryKey: ['order-history-failed', selectedAccount?.id],
     queryFn: () => orderHistoryApi.getFailed(undefined, 100),
     refetchInterval: 30000,
+    select: (data) => {
+      if (!selectedAccount) return data
+      return data.filter((order: any) => order.account_id === selectedAccount.id || !order.account_id)
+    },
   })
 
   const closedPositions = (allPositions?.filter((p: Position) => p.status === 'closed') || [])
@@ -147,9 +161,27 @@ function ClosedPositions() {
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white">History</h1>
-          <p className="text-slate-400 mt-2">Closed positions and failed orders</p>
+        <div className="flex items-center gap-3 mb-6">
+          {selectedAccount?.type === 'dex' ? (
+            <Wallet className="w-8 h-8 text-orange-400" />
+          ) : (
+            <Building2 className="w-8 h-8 text-blue-400" />
+          )}
+          <div>
+            <h1 className="text-3xl font-bold text-white">History</h1>
+            <p className="text-slate-400 mt-1">
+              {selectedAccount && (
+                <>
+                  <span className="text-slate-300">{selectedAccount.name}</span>
+                  {selectedAccount.type === 'dex' && selectedAccount.chain_id && (
+                    <span className="text-slate-500"> ({getChainName(selectedAccount.chain_id)})</span>
+                  )}
+                  <span> • </span>
+                </>
+              )}
+              Closed positions and failed orders
+            </p>
+          </div>
         </div>
 
         {/* Tabs */}
