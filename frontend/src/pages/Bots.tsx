@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { botsApi, templatesApi } from '../services/api'
 import { Bot, BotCreate, StrategyParameter } from '../types'
-import { Plus, Edit, Trash2, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet } from 'lucide-react'
+import { Plus, Edit, Trash2, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet, ScanLine } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 import PhaseConditionSelector from '../components/PhaseConditionSelector'
 import AIBotLogs from '../components/AIBotLogs'
+import ScannerLogs from '../components/ScannerLogs'
 import { PnLChart } from '../components/PnLChart'
 import DexConfigSection from '../components/DexConfigSection'
 import axios from 'axios'
@@ -53,6 +54,7 @@ function Bots() {
   const [showModal, setShowModal] = useState(false)
   const [editingBot, setEditingBot] = useState<Bot | null>(null)
   const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
+  const [scannerLogsBotId, setScannerLogsBotId] = useState<number | null>(null)
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
@@ -990,6 +992,15 @@ function Bots() {
                               title="View AI Reasoning Logs"
                             >
                               <Brain className="w-4 h-4" />
+                            </button>
+                          )}
+                          {bot.strategy_type === 'bull_flag' && (
+                            <button
+                              onClick={() => setScannerLogsBotId(bot.id)}
+                              className="p-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded transition-colors"
+                              title="View Scanner Logs"
+                            >
+                              <ScanLine className="w-4 h-4" />
                             </button>
                           )}
 
@@ -1950,6 +1961,15 @@ function Bots() {
           botId={aiLogsBotId}
           isOpen={aiLogsBotId !== null}
           onClose={() => setAiLogsBotId(null)}
+        />
+      )}
+
+      {/* Scanner Logs Modal */}
+      {scannerLogsBotId !== null && (
+        <ScannerLogs
+          botId={scannerLogsBotId}
+          isOpen={scannerLogsBotId !== null}
+          onClose={() => setScannerLogsBotId(null)}
         />
       )}
     </div>

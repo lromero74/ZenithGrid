@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import BlacklistedCoin, Settings
+from app.models import BlacklistedCoin, ScannerLog, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -444,11 +444,54 @@ def clear_volume_cache():
     _volume_sma_cache = {}
 
 
+async def log_scanner_decision(
+    db: AsyncSession,
+    bot_id: int,
+    product_id: str,
+    scan_type: str,
+    decision: str,
+    reason: str,
+    current_price: Optional[float] = None,
+    volume_ratio: Optional[float] = None,
+    pattern_data: Optional[Dict[str, Any]] = None
+):
+    """
+    Log a scanner decision to the database.
+
+    Args:
+        db: Database session
+        bot_id: Bot ID making the decision
+        product_id: Trading pair being scanned
+        scan_type: Type of scan (volume_check, pattern_check, entry_signal)
+        decision: Decision made (passed, rejected, triggered, hold)
+        reason: Human-readable explanation
+        current_price: Current price (optional)
+        volume_ratio: Volume ratio vs average (optional)
+        pattern_data: Pattern detection data (optional)
+    """
+    try:
+        log_entry = ScannerLog(
+            bot_id=bot_id,
+            product_id=product_id,
+            scan_type=scan_type,
+            decision=decision,
+            reason=reason,
+            current_price=current_price,
+            volume_ratio=volume_ratio,
+            pattern_data=pattern_data,
+        )
+        db.add(log_entry)
+        # Don't commit here - let caller handle transaction
+    except Exception as e:
+        logger.error(f"Error logging scanner decision: {e}")
+
+
 async def scan_for_bull_flag_opportunities(
     db: AsyncSession,
     exchange_client: Any,
     config: Dict[str, Any],
-    max_coins: int = 50
+    max_coins: int = 50,
+    bot_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Scan allowed USD coins for bull flag opportunities.
@@ -460,6 +503,7 @@ async def scan_for_bull_flag_opportunities(
         exchange_client: Coinbase client instance
         config: Strategy configuration
         max_coins: Maximum coins to scan (for rate limiting)
+        bot_id: Bot ID for logging scanner decisions (optional)
 
     Returns:
         List of opportunities with product_id and pattern data
@@ -487,8 +531,34 @@ async def scan_for_bull_flag_opportunities(
                 exchange_client, product_id, volume_multiplier
             )
 
+            vol_ratio = current_vol / avg_vol if avg_vol > 0 else 0
+
             if not is_spike:
+                # Log volume check rejection (only log a sample to avoid too many logs)
+                # Log every 10th coin that fails volume check to keep log size manageable
+                if bot_id and hash(product_id) % 10 == 0:
+                    await log_scanner_decision(
+                        db=db,
+                        bot_id=bot_id,
+                        product_id=product_id,
+                        scan_type="volume_check",
+                        decision="rejected",
+                        reason=f"Volume {current_vol:.0f} below {volume_multiplier}x threshold ({avg_vol * volume_multiplier:.0f}). Ratio: {vol_ratio:.2f}x",
+                        volume_ratio=vol_ratio,
+                    )
                 continue
+
+            # Log volume spike passed
+            if bot_id:
+                await log_scanner_decision(
+                    db=db,
+                    bot_id=bot_id,
+                    product_id=product_id,
+                    scan_type="volume_check",
+                    decision="passed",
+                    reason=f"Volume spike detected: {current_vol:.0f} >= {volume_multiplier}x avg ({avg_vol:.0f}). Ratio: {vol_ratio:.2f}x",
+                    volume_ratio=vol_ratio,
+                )
 
             # Step 2: Get candles for pattern detection
             # Calculate timeframe-appropriate lookback period
@@ -509,7 +579,26 @@ async def scan_for_bull_flag_opportunities(
             )
 
             if not candles:
+                if bot_id:
+                    await log_scanner_decision(
+                        db=db,
+                        bot_id=bot_id,
+                        product_id=product_id,
+                        scan_type="pattern_check",
+                        decision="rejected",
+                        reason="No candle data available for pattern analysis",
+                        volume_ratio=vol_ratio,
+                    )
                 continue
+
+            # Get current price for logging
+            current_price = None
+            if candles:
+                last_candle = candles[-1] if not isinstance(candles[0], dict) or candles[0].get("start", 0) < candles[-1].get("start", 0) else candles[0]
+                if isinstance(last_candle, dict):
+                    current_price = float(last_candle.get("close", 0))
+                elif len(last_candle) > 4:
+                    current_price = float(last_candle[4])
 
             # Step 3: Detect bull flag pattern
             pattern = detect_bull_flag_pattern(candles, config)
@@ -523,8 +612,49 @@ async def scan_for_bull_flag_opportunities(
                     "volume_multiplier": current_vol / avg_vol if avg_vol > 0 else 0,
                 })
 
+                # Log successful pattern detection (entry signal)
+                if bot_id:
+                    await log_scanner_decision(
+                        db=db,
+                        bot_id=bot_id,
+                        product_id=product_id,
+                        scan_type="entry_signal",
+                        decision="triggered",
+                        reason=(
+                            f"Bull flag pattern detected! Entry: ${pattern['entry_price']:.4f}, "
+                            f"SL: ${pattern['stop_loss']:.4f}, TP: ${pattern['take_profit_target']:.4f}, "
+                            f"R:R={pattern['risk_reward_ratio']:.1f}x, Pole gain: {pattern['pole_gain_pct']:.1f}%, "
+                            f"Retracement: {pattern['retracement_pct']:.1f}%"
+                        ),
+                        current_price=current_price,
+                        volume_ratio=vol_ratio,
+                        pattern_data=pattern,
+                    )
+            else:
+                # Log pattern check rejection
+                if bot_id:
+                    await log_scanner_decision(
+                        db=db,
+                        bot_id=bot_id,
+                        product_id=product_id,
+                        scan_type="pattern_check",
+                        decision="rejected",
+                        reason="Volume spike present but no valid bull flag pattern detected",
+                        current_price=current_price,
+                        volume_ratio=vol_ratio,
+                    )
+
         except Exception as e:
             logger.error(f"Error scanning {product_id}: {e}")
+            if bot_id:
+                await log_scanner_decision(
+                    db=db,
+                    bot_id=bot_id,
+                    product_id=product_id,
+                    scan_type="error",
+                    decision="rejected",
+                    reason=f"Scanner error: {str(e)}",
+                )
             continue
 
     logger.info(f"Found {len(opportunities)} bull flag opportunities")

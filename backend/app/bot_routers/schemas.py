@@ -103,6 +103,32 @@ class AIBotLogResponse(BaseModel):
         from_attributes = True
 
 
+class ScannerLogCreate(BaseModel):
+    product_id: str
+    scan_type: str  # "volume_check", "pattern_check", "entry_signal", "exit_signal"
+    decision: str  # "passed", "rejected", "triggered", "hold"
+    reason: str
+    current_price: Optional[float] = None
+    volume_ratio: Optional[float] = None
+    pattern_data: Optional[dict] = None
+
+
+class ScannerLogResponse(BaseModel):
+    id: int
+    bot_id: int
+    timestamp: datetime
+    product_id: str
+    scan_type: str
+    decision: str
+    reason: str
+    current_price: Optional[float]
+    volume_ratio: Optional[float]
+    pattern_data: Optional[dict]
+
+    class Config:
+        from_attributes = True
+
+
 class ValidateBotConfigRequest(BaseModel):
     product_ids: List[str]
     strategy_config: dict

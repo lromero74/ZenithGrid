@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from app.bot_routers import bot_crud_router
 from app.bot_routers import bot_control_router
 from app.bot_routers import bot_ai_logs_router
+from app.bot_routers import bot_scanner_logs_router
 from app.bot_routers import bot_validation_router
 
 router = APIRouter(prefix="/api/bots", tags=["bots"])
@@ -18,4 +19,5 @@ router = APIRouter(prefix="/api/bots", tags=["bots"])
 router.include_router(bot_crud_router.router)
 router.include_router(bot_control_router.router)
 router.include_router(bot_ai_logs_router.router)
+router.include_router(bot_scanner_logs_router.router)
 router.include_router(bot_validation_router.router)

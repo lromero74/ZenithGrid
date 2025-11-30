@@ -18,7 +18,7 @@ from app.models import Bot
 from app.services.order_monitor import OrderMonitor
 from app.strategies import StrategyRegistry
 from app.strategies.ai_autonomous import market_analysis
-from app.strategies.bull_flag_scanner import scan_for_bull_flag_opportunities
+from app.strategies.bull_flag_scanner import log_scanner_decision, scan_for_bull_flag_opportunities
 from app.trading_engine.trailing_stops import (
     check_bull_flag_exit_conditions,
     setup_bull_flag_position_stops,
@@ -985,6 +985,17 @@ class MultiBotMonitor:
                         position, current_price, db
                     )
 
+                    # Log exit signal check
+                    await log_scanner_decision(
+                        db=db,
+                        bot_id=bot.id,
+                        product_id=position.product_id,
+                        scan_type="exit_signal",
+                        decision="triggered" if should_sell else "hold",
+                        reason=reason,
+                        current_price=current_price,
+                    )
+
                     if should_sell:
                         logger.info(f"  🔔 Exit signal for {position.product_id}: {reason}")
 
@@ -1028,7 +1039,8 @@ class MultiBotMonitor:
                 db=db,
                 exchange_client=self.exchange,
                 config=bot.strategy_config,
-                max_coins=50
+                max_coins=50,
+                bot_id=bot.id  # Pass bot_id for scanner logging
             )
 
             results["scanned"] = len(opportunities)

@@ -113,6 +113,17 @@ export const botsApi = {
     if (since) params.append('since', since);
     return api.get<any[]>(`/bots/${id}/logs?${params}`).then((res) => res.data);
   },
+  getScannerLogs: (id: number, limit = 100, offset = 0, productId?: string, scanType?: string, decision?: string, since?: string) => {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+    });
+    if (productId) params.append('product_id', productId);
+    if (scanType) params.append('scan_type', scanType);
+    if (decision) params.append('decision', decision);
+    if (since) params.append('since', since);
+    return api.get<any[]>(`/bots/${id}/scanner-logs?${params}`).then((res) => res.data);
+  },
 };
 
 export const templatesApi = {

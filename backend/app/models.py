@@ -398,6 +398,34 @@ class AIBotLog(Base):
     position = relationship("Position", foreign_keys=[position_id])
 
 
+class ScannerLog(Base):
+    """
+    Scanner/Monitor logs for non-AI strategies like bull flag.
+    Captures pattern detection decisions, volume checks, and reasoning.
+    """
+    __tablename__ = "scanner_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # What was scanned
+    product_id = Column(String, nullable=False)  # Trading pair (e.g., "BTC-USD")
+    scan_type = Column(String, nullable=False)  # "volume_check", "pattern_check", "entry_signal", "exit_signal"
+
+    # Decision made
+    decision = Column(String, nullable=False)  # "passed", "rejected", "triggered", "hold"
+    reason = Column(Text)  # Detailed explanation of why
+
+    # Numeric data for the check
+    current_price = Column(Float, nullable=True)
+    volume_ratio = Column(Float, nullable=True)  # Current volume / average volume
+    pattern_data = Column(JSON, nullable=True)  # Pattern details if detected
+
+    # Relationships
+    bot = relationship("Bot", foreign_keys=[bot_id])
+
+
 class PendingOrder(Base):
     """
     Pending limit orders that haven't been filled yet.
