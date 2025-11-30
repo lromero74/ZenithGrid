@@ -200,6 +200,10 @@ async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db
         # Calculate trades per day (closed positions / days active)
         trades_per_day = len(closed_positions) / days_active if days_active > 0 else 0.0
 
+        # Calculate win rate (percentage of profitable closed positions)
+        winning_positions = [p for p in closed_positions if p.profit_usd is not None and p.profit_usd > 0]
+        win_rate = (len(winning_positions) / len(closed_positions) * 100) if closed_positions else 0.0
+
         # Calculate budget utilization percentage (for all bots with open positions)
         insufficient_funds = False
         budget_utilization_percentage = 0.0
@@ -260,6 +264,7 @@ async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db
         bot_response.avg_daily_pnl_usd = avg_daily_pnl_usd
         bot_response.insufficient_funds = insufficient_funds
         bot_response.budget_utilization_percentage = budget_utilization_percentage
+        bot_response.win_rate = win_rate
         bot_responses.append(bot_response)
 
     return bot_responses

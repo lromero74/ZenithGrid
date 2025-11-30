@@ -59,6 +59,7 @@ class BotResponse(BaseModel):
     avg_daily_pnl_usd: float = 0.0
     insufficient_funds: bool = False
     budget_utilization_percentage: float = 0.0
+    win_rate: float = 0.0  # Percentage of profitable closed positions
     account_id: Optional[int] = None  # For multi-account support
     exchange_type: Optional[str] = None  # 'cex' or 'dex'
 

@@ -783,6 +783,7 @@ function Bots() {
                   <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Pair</th>
                   <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
                   <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Trade Stats</th>
+                  <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Win Rate</th>
                   <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">PnL</th>
                   <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Projected PnL</th>
                   <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Budget</th>
@@ -893,6 +894,23 @@ function Bots() {
                             {((bot as any).trades_per_day || 0).toFixed(2)}/day
                           </div>
                         </div>
+                      </td>
+
+                      {/* Win Rate */}
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-right">
+                        {(() => {
+                          const winRate = (bot as any).win_rate || 0
+                          const closedCount = (bot as any).closed_positions_count || 0
+                          const colorClass = closedCount === 0 ? 'text-slate-500' :
+                            winRate >= 70 ? 'text-green-400' :
+                            winRate >= 50 ? 'text-yellow-400' :
+                            'text-red-400'
+                          return (
+                            <span className={`text-sm font-medium ${colorClass}`}>
+                              {closedCount === 0 ? '—' : `${winRate.toFixed(1)}%`}
+                            </span>
+                          )
+                        })()}
                       </td>
 
                       {/* PnL */}
