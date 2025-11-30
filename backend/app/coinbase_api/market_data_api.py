@@ -28,9 +28,10 @@ async def list_products(request_func: Callable) -> List[Dict[str, Any]]:
 
 
 async def get_product(request_func: Callable, product_id: str = "ETH-BTC") -> Dict[str, Any]:
-    """Get product details"""
+    """Get product details including volume_24h"""
     result = await request_func("GET", f"/api/v3/brokerage/products/{product_id}")
-    return result.get("product", {})
+    # Coinbase API returns product data directly, not nested under "product" key
+    return result
 
 
 async def get_ticker(request_func: Callable, product_id: str = "ETH-BTC") -> Dict[str, Any]:

@@ -28,7 +28,11 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from web3 import Web3
-from web3.middleware import ExtraDataToPOAMiddleware
+# web3.py 6.x uses geth_poa_middleware, 7.x uses ExtraDataToPOAMiddleware
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware as poa_middleware
+except ImportError:
+    from web3.middleware import geth_poa_middleware as poa_middleware
 from eth_account import Account
 from eth_typing import Address, ChecksumAddress
 

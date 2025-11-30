@@ -386,13 +386,9 @@ def detect_bull_flag_pattern(
 
     take_profit_target = entry_price + (risk * reward_risk_ratio)
 
-    # Step 6: REJECT if take profit target exceeds pole high
-    if take_profit_target > pole_high:
-        logger.debug(
-            f"TTP target {take_profit_target:.4f} exceeds pole high {pole_high:.4f}, "
-            f"pattern rejected"
-        )
-        return None
+    # Note: Bull flags are continuation patterns - we EXPECT price to break above pole_high
+    # So we do NOT reject patterns where take_profit_target > pole_high
+    # That's actually the whole point of trading a bull flag!
 
     # Calculate volume ratio for logging
     volume_ratio = pole_avg_volume / pullback_avg_volume if pullback_avg_volume > 0 else float('inf')
