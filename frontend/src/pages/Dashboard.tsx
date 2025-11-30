@@ -31,7 +31,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const { data: bots = [] } = useQuery({
     queryKey: ['bots', selectedAccount?.id],
     queryFn: botsApi.getAll,
-    refetchInterval: 5000,
+    refetchInterval: 30000, // 30 seconds - API takes time due to Coinbase calls
+    staleTime: 15000, // Consider fresh for 15 seconds
     select: (data) => {
       if (!selectedAccount) return data
       // Filter by account_id
@@ -43,7 +44,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const { data: allPositions = [] } = useQuery({
     queryKey: ['all-positions', selectedAccount?.id],
     queryFn: () => positionsApi.getAll(undefined, 100),
-    refetchInterval: 10000,
+    refetchInterval: 30000, // 30 seconds
     select: (data) => {
       if (!selectedAccount) return data
       // Filter by account_id
