@@ -236,7 +236,8 @@ class BullFlagStrategy(TradingStrategy):
         self,
         signal_data: Dict[str, Any],
         position: Optional[Any],
-        usd_balance: float
+        usd_balance: float,
+        aggregate_value: Optional[float] = None
     ) -> Tuple[bool, float, str]:
         """
         Determine if we should buy and how much.
@@ -245,6 +246,7 @@ class BullFlagStrategy(TradingStrategy):
             signal_data: Signal information from analyze_signal
             position: Current position (should be None for new entries)
             usd_balance: Available USD balance
+            aggregate_value: Optional aggregate portfolio value (not used for USD strategy)
 
         Returns:
             Tuple of (should_buy: bool, usd_amount: float, reason: str)
