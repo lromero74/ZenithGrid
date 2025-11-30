@@ -226,33 +226,41 @@ async def should_buy(
     """
     print(f"🔍 should_buy() called with signal_data keys: {signal_data.keys()}")
     print(f"🔍 signal_type={signal_data.get('signal_type')}, confidence={signal_data.get('confidence')}")
+    print(f"🔍 position={position is not None}, btc_balance={btc_balance:.8f}")
 
     if signal_data.get("signal_type") != "buy":
+        print(f"🔍 EARLY RETURN: signal_type != buy")
         return False, 0.0, "AI did not suggest buying"
 
     confidence = signal_data.get("confidence", 0)
 
     # Check if we have an existing position (DCA scenario)
     if position is not None:
+        print(f"🔍 DCA check for position {position.id}: trades={len(position.trades) if position.trades else 0}")
         # Check if DCA is enabled
         enable_dca = config.get("enable_dca", True)
         if not enable_dca:
+            print(f"🔍 EARLY RETURN: DCA disabled")
             return False, 0.0, "DCA disabled - already have open position for this pair"
 
         # Check DCA limits
         max_safety_orders = config.get("max_safety_orders", 3)
         current_safety_orders = len([t for t in position.trades if t.side == "buy" and t.trade_type != "initial"])
+        print(f"🔍 DCA orders: {current_safety_orders}/{max_safety_orders}")
 
         if current_safety_orders >= max_safety_orders:
+            print(f"🔍 EARLY RETURN: max safety orders reached")
             return False, 0.0, f"Max safety orders reached ({current_safety_orders}/{max_safety_orders})"
 
         # Check if we have budget left for DCA
         if position.total_quote_spent >= position.max_quote_allowed:
+            print(f"🔍 EARLY RETURN: budget used {position.total_quote_spent} >= {position.max_quote_allowed}")
             return False, 0.0, "Position budget fully used"
 
         # Get current price from signal_data or position
         current_price = signal_data.get("current_price", 0)
         if current_price == 0:
+            print(f"🔍 EARLY RETURN: no current price")
             return False, 0.0, "Cannot determine current price for DCA"
 
         # CRITICAL DCA RULE: Only DCA when price is REASONABLY BELOW reference price
@@ -280,11 +288,14 @@ async def should_buy(
             reference_label = "avg cost"
 
         price_drop_from_ref = ((reference_price - current_price) / reference_price) * 100  # Positive = price dropped
+        print(f"🔍 Price drop check: current={current_price:.8f}, ref={reference_price:.8f} ({reference_label}), drop={price_drop_from_ref:.2f}%, min={min_drop_for_dca_pct}%")
 
         if price_drop_from_ref < min_drop_for_dca_pct:
             if current_price >= reference_price:
+                print(f"🔍 EARLY RETURN: price above reference")
                 return False, 0.0, f"DCA rejected: price ({current_price:.8f}) is ABOVE {reference_label} ({reference_price:.8f}). DCA only on significant drops."
             else:
+                print(f"🔍 EARLY RETURN: drop too small")
                 return False, 0.0, f"DCA rejected: drop {price_drop_from_ref:.2f}% below {reference_label} is too small (need {min_drop_for_dca_pct}%+). Waiting for better entry."
 
         # Calculate remaining budget
