@@ -41,7 +41,7 @@ class BotResponse(BaseModel):
     description: Optional[str]
     strategy_type: str
     strategy_config: dict
-    product_id: str
+    product_id: Optional[str] = None  # Optional for multi-pair strategies like bull_flag
     product_ids: Optional[List[str]] = None
     split_budget_across_pairs: bool = False
     reserved_btc_balance: float = 0.0
