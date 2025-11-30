@@ -739,8 +739,17 @@ async def _get_cex_portfolio(account: Account, db: AsyncSession) -> dict:
 
         # Get unique product_ids to avoid duplicate fetches
         unique_products = list({f"{p.get_base_currency()}-{p.get_quote_currency()}" for p in open_positions})
-        price_results = await asyncio.gather(*[fetch_price_for_product(pid) for pid in unique_products])
-        position_prices = {pid: price for pid, price in price_results if price is not None}
+
+        # Batch price fetching for positions: 15 concurrent, then 0.2s delay
+        position_price_results = []
+        for i in range(0, len(unique_products), batch_size):
+            batch = unique_products[i:i + batch_size]
+            batch_results = await asyncio.gather(*[fetch_price_for_product(pid) for pid in batch])
+            position_price_results.extend(batch_results)
+            if i + batch_size < len(unique_products):
+                await asyncio.sleep(0.2)
+
+        position_prices = {pid: price for pid, price in position_price_results if price is not None}
 
     asset_pnl = {}
     for position in open_positions:
