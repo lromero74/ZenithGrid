@@ -751,9 +751,9 @@ function Bots() {
         </button>
       </div>
 
-      {/* P&L Chart - 3Commas-style */}
+      {/* P&L Chart - 3Commas-style (filtered by account) */}
       <div className="mb-6">
-        <PnLChart />
+        <PnLChart accountId={selectedAccount?.id} />
       </div>
 
       {/* Bot List - 3Commas-style Table */}

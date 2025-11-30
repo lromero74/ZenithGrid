@@ -106,18 +106,28 @@ async def get_positions(
 
 
 @router.get("/pnl-timeseries")
-async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
+async def get_pnl_timeseries(
+    account_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
     """
     Get P&L time series data for cumulative profit chart (3Commas-style).
 
-    Returns cumulative profit over time from all closed positions.
+    Returns cumulative profit over time from closed positions.
+    If account_id is provided, only returns data for that account.
     """
-    # Get all closed positions ordered by close date
-    query = (
-        select(Position)
-        .where(Position.status == "closed", Position.closed_at is not None, Position.profit_usd is not None)
-        .order_by(Position.closed_at)
+    # Get closed positions ordered by close date
+    query = select(Position).where(
+        Position.status == "closed",
+        Position.closed_at is not None,
+        Position.profit_usd is not None
     )
+
+    # Filter by account_id if provided
+    if account_id is not None:
+        query = query.where(Position.account_id == account_id)
+
+    query = query.order_by(Position.closed_at)
 
     result = await db.execute(query)
     positions = result.scalars().all()
@@ -178,15 +188,22 @@ async def get_pnl_timeseries(db: AsyncSession = Depends(get_db)):
         for pair, pnl in sorted(pair_pnl.items(), key=lambda x: x[1], reverse=True)
     ]
 
-    # Get active trades count
+    # Get active trades count (filtered by account if specified)
     active_count_query = select(func.count(Position.id)).where(Position.status == "open")
+    if account_id is not None:
+        active_count_query = active_count_query.where(Position.account_id == account_id)
     active_count_result = await db.execute(active_count_query)
     active_trades = active_count_result.scalar() or 0
 
-    # Get bot-level P&L for most profitable bot
+    # Get bot-level P&L for most profitable bot (filtered by account if specified)
     bot_pnl_query = (
         select(Position.bot_id, func.sum(Position.profit_usd).label("total_pnl"))
         .where(Position.status == "closed", Position.profit_usd is not None)
+    )
+    if account_id is not None:
+        bot_pnl_query = bot_pnl_query.where(Position.account_id == account_id)
+    bot_pnl_query = (
+        bot_pnl_query
         .group_by(Position.bot_id)
         .order_by(func.sum(Position.profit_usd).desc())
     )

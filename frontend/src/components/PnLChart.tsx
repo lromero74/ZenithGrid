@@ -43,6 +43,10 @@ interface PnLTimeSeriesData {
 type TimeRange = '7d' | '30d' | '3m' | '6m' | 'all'
 type TabType = 'summary' | 'by_day' | 'by_pair'
 
+interface PnLChartProps {
+  accountId?: number
+}
+
 // Custom tooltip component for 3Commas-style tooltips
 const CustomTooltip = ({ active, payload, label, labelFormatter }: any) => {
   if (!active || !payload || !payload.length) return null
@@ -65,18 +69,21 @@ const CustomTooltip = ({ active, payload, label, labelFormatter }: any) => {
   )
 }
 
-export function PnLChart() {
+export function PnLChart({ accountId }: PnLChartProps) {
   const [activeTab, setActiveTab] = useState<TabType>('summary')
   const [timeRange, setTimeRange] = useState<TimeRange>('30d')
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const areaSeriesRef = useRef<ISeriesApi<'Area'> | null>(null)
 
-  // Fetch P&L data
+  // Fetch P&L data (filtered by account)
   const { data, isLoading } = useQuery<PnLTimeSeriesData>({
-    queryKey: ['pnl-timeseries'],
+    queryKey: ['pnl-timeseries', accountId],
     queryFn: async () => {
-      const response = await fetch('/api/positions/pnl-timeseries')
+      const url = accountId
+        ? `/api/positions/pnl-timeseries?account_id=${accountId}`
+        : '/api/positions/pnl-timeseries'
+      const response = await fetch(url)
       if (!response.ok) throw new Error('Failed to fetch P&L data')
       return response.json()
     },
