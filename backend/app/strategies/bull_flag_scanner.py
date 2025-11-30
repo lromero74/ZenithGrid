@@ -165,12 +165,12 @@ async def detect_volume_spike(
         if avg_volume is None or avg_volume <= 0:
             return (False, 0.0, 0.0)
 
-        # Get current 24h volume from ticker or recent candle
-        ticker = await exchange_client.get_ticker(product_id)
-        if not ticker:
+        # Get current 24h volume from product endpoint (ticker doesn't have volume)
+        product = await exchange_client.get_product(product_id)
+        if not product:
             return (False, 0.0, avg_volume)
 
-        current_volume = float(ticker.get("volume_24h", 0) or ticker.get("volume", 0))
+        current_volume = float(product.get("volume_24h", 0) or product.get("volume", 0))
 
         # Check for spike
         threshold = avg_volume * multiplier
