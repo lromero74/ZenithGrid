@@ -300,6 +300,7 @@ async def should_buy(
 
         # Calculate remaining budget
         remaining_budget = position.max_quote_allowed - position.total_quote_spent
+        print(f"🔍 DCA price drop PASSED! Remaining budget: {remaining_budget:.8f}")
 
         # AI-Directed DCA: AI decides both WHEN and HOW MUCH to buy
         # AI evaluates market conditions, position state, and remaining budget to make intelligent decisions
@@ -310,10 +311,16 @@ async def should_buy(
             "recent_prices": signal_data.get("raw_analysis", {}).get("recent_prices", []),
         }
 
+        print(f"🔍 Calling AI for DCA decision...")
         logger.info(
             f"  🤖 Asking AI for DCA decision (remaining budget: {remaining_budget:.8f}, DCAs: {current_safety_orders}/{max_safety_orders})"
         )
-        dca_decision = await ask_dca_decision_func(position, current_price, remaining_budget, market_context)
+        try:
+            dca_decision = await ask_dca_decision_func(position, current_price, remaining_budget, market_context)
+            print(f"🔍 AI DCA response: should_buy={dca_decision.get('should_buy')}, amount={dca_decision.get('amount')}, reason={dca_decision.get('reasoning', '')[:50]}")
+        except Exception as e:
+            print(f"🔍 AI DCA ERROR: {e}")
+            raise
 
         if not dca_decision["should_buy"]:
             return False, 0.0, f"AI decided not to DCA: {dca_decision['reasoning']}"
