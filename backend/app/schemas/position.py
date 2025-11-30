@@ -9,6 +9,7 @@ from pydantic import BaseModel
 class PositionResponse(BaseModel):
     id: int
     bot_id: Optional[int] = None
+    account_id: Optional[int] = None  # For multi-account support
     product_id: str = "ETH-BTC"
     status: str
     opened_at: datetime
