@@ -99,22 +99,28 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseCl
             if asset not in ["USD", "USDC", "BTC"]:
                 assets_to_price.append((asset, total_balance, position))
 
-        # Fetch all prices with rate limiting to avoid 429 errors
-        async def fetch_price(asset: str, delay: float = 0):
+        # Fetch all prices in batches to balance speed vs rate limiting
+        async def fetch_price(asset: str):
             try:
-                # Add small delay to avoid rate limiting
-                if delay > 0:
-                    await asyncio.sleep(delay)
                 price = await coinbase.get_current_price(f"{asset}-USD")
                 return (asset, price)
             except Exception as e:
-                print(f"Could not get USD price for {asset}, skipping: {e}")
+                logger.warning(f"Could not get USD price for {asset}: {e}")
                 return (asset, None)
 
-        # Fetch prices with staggered delays (every 0.1 seconds) to avoid rate limits
-        price_results = await asyncio.gather(
-            *[fetch_price(asset, idx * 0.1) for idx, (asset, _, _) in enumerate(assets_to_price)]
-        )
+        # Batch price fetching: 15 concurrent requests, then 0.2s delay, repeat
+        # This is much faster than 0.1s delay per coin while still avoiding rate limits
+        batch_size = 15
+        price_results = []
+        for i in range(0, len(assets_to_price), batch_size):
+            batch = assets_to_price[i:i + batch_size]
+            batch_results = await asyncio.gather(
+                *[fetch_price(asset) for asset, _, _ in batch]
+            )
+            price_results.extend(batch_results)
+            # Small delay between batches (not between individual requests)
+            if i + batch_size < len(assets_to_price):
+                await asyncio.sleep(0.2)
 
         # Create price lookup dict
         prices = {asset: price for asset, price in price_results if price is not None}
