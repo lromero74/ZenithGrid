@@ -14,7 +14,6 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import BlacklistedCoin, Settings
-from app.routers.blacklist_router import get_allowed_categories
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +32,9 @@ async def get_tradeable_usd_coins(db: AsyncSession) -> List[str]:
     Returns:
         List of product IDs (e.g., ["ETH-USD", "SOL-USD", ...])
     """
+    # Import here to avoid circular import
+    from app.routers.blacklist_router import get_allowed_categories
+
     # Get allowed categories from Settings
     allowed = await get_allowed_categories(db)
     logger.debug(f"Allowed categories: {allowed}")
