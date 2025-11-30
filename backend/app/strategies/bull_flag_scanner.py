@@ -5,6 +5,7 @@ Utilities for detecting volume spikes and bull flag patterns on USD trading pair
 Used by the BullFlagStrategy to find entry opportunities.
 """
 
+import asyncio
 import json
 import logging
 import random
@@ -494,6 +495,9 @@ async def scan_for_bull_flag_opportunities(
     Scan allowed USD coins for bull flag opportunities.
 
     This is the main entry point for the bull flag scanner.
+    Uses two-phase batched concurrency for efficient API usage:
+    - Phase 1: Parallel volume checks (10 concurrent, 0.1s between batches)
+    - Phase 2: Parallel pattern checks only for coins that passed volume
 
     Args:
         db: Database session
@@ -524,20 +528,32 @@ async def scan_for_bull_flag_opportunities(
     volume_multiplier = config.get("volume_multiplier", 5.0)
     timeframe = config.get("timeframe", "FIFTEEN_MINUTE")
 
-    logger.info(f"Scanning {len(product_ids)} USD coins for bull flag patterns...")
+    # Rate limiting config (stay well under Coinbase's 10 req/sec)
+    batch_size = config.get("scan_batch_size", 10)  # Concurrent requests per batch
+    batch_delay = config.get("scan_batch_delay", 0.15)  # Seconds between batches
 
-    for product_id in product_ids:
+    logger.info(f"Scanning {len(product_ids)} USD coins for bull flag patterns (batch_size={batch_size})...")
+
+    # ============================================================
+    # PHASE 1: Parallel volume checks
+    # ============================================================
+    async def check_volume(product_id: str) -> Optional[Dict[str, Any]]:
+        """Check volume for a single coin. Returns data if spike detected."""
         try:
-            # Step 1: Check for volume spike
             is_spike, current_vol, avg_vol = await detect_volume_spike(
                 exchange_client, product_id, volume_multiplier
             )
-
             vol_ratio = current_vol / avg_vol if avg_vol > 0 else 0
 
-            if not is_spike:
-                # Log volume check rejection (only log a sample to avoid too many logs)
-                # Log every 10th coin that fails volume check to keep log size manageable
+            if is_spike:
+                return {
+                    "product_id": product_id,
+                    "current_vol": current_vol,
+                    "avg_vol": avg_vol,
+                    "vol_ratio": vol_ratio,
+                }
+            else:
+                # Log rejection (sample only to avoid log spam)
                 if bot_id and hash(product_id) % 10 == 0:
                     await log_scanner_decision(
                         db=db,
@@ -548,29 +564,57 @@ async def scan_for_bull_flag_opportunities(
                         reason=f"Volume {current_vol:.0f} below {volume_multiplier}x threshold ({avg_vol * volume_multiplier:.0f}). Ratio: {vol_ratio:.2f}x",
                         volume_ratio=vol_ratio,
                     )
-                continue
+                return None
+        except Exception as e:
+            logger.debug(f"Volume check error for {product_id}: {e}")
+            return None
 
-            # Log volume spike passed
-            if bot_id:
-                await log_scanner_decision(
-                    db=db,
-                    bot_id=bot_id,
-                    product_id=product_id,
-                    scan_type="volume_check",
-                    decision="passed",
-                    reason=f"Volume spike detected: {current_vol:.0f} >= {volume_multiplier}x avg ({avg_vol:.0f}). Ratio: {vol_ratio:.2f}x",
-                    volume_ratio=vol_ratio,
-                )
+    # Process volume checks in batches
+    volume_passed = []
+    for i in range(0, len(product_ids), batch_size):
+        batch = product_ids[i:i + batch_size]
+        results = await asyncio.gather(*[check_volume(pid) for pid in batch])
+        volume_passed.extend([r for r in results if r is not None])
 
-            # Step 2: Get candles for pattern detection
-            # Calculate timeframe-appropriate lookback period
-            granularity_minutes = {
-                "ONE_MINUTE": 1, "FIVE_MINUTE": 5, "FIFTEEN_MINUTE": 15,
-                "THIRTY_MINUTE": 30, "ONE_HOUR": 60, "TWO_HOUR": 120,
-                "SIX_HOUR": 360, "ONE_DAY": 1440
-            }
-            minutes = granularity_minutes.get(timeframe, 15)
-            lookback_minutes = minutes * 50  # 50 candles worth
+        # Small delay between batches to avoid rate limiting
+        if i + batch_size < len(product_ids):
+            await asyncio.sleep(batch_delay)
+
+    logger.info(f"Phase 1 complete: {len(volume_passed)} of {len(product_ids)} coins passed volume check")
+
+    if not volume_passed:
+        return []
+
+    # Log volume spike passes
+    for vp in volume_passed:
+        if bot_id:
+            await log_scanner_decision(
+                db=db,
+                bot_id=bot_id,
+                product_id=vp["product_id"],
+                scan_type="volume_check",
+                decision="passed",
+                reason=f"Volume spike detected: {vp['current_vol']:.0f} >= {volume_multiplier}x avg ({vp['avg_vol']:.0f}). Ratio: {vp['vol_ratio']:.2f}x",
+                volume_ratio=vp["vol_ratio"],
+            )
+
+    # ============================================================
+    # PHASE 2: Parallel pattern checks (only for volume-passed coins)
+    # ============================================================
+    granularity_minutes = {
+        "ONE_MINUTE": 1, "FIVE_MINUTE": 5, "FIFTEEN_MINUTE": 15,
+        "THIRTY_MINUTE": 30, "ONE_HOUR": 60, "TWO_HOUR": 120,
+        "SIX_HOUR": 360, "ONE_DAY": 1440
+    }
+    minutes = granularity_minutes.get(timeframe, 15)
+    lookback_minutes = minutes * 50  # 50 candles worth
+
+    async def check_pattern(vol_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Check pattern for a single coin. Returns opportunity if pattern found."""
+        product_id = vol_data["product_id"]
+        vol_ratio = vol_data["vol_ratio"]
+
+        try:
             pattern_end_time = int(datetime.utcnow().timestamp())
             pattern_start_time = int((datetime.utcnow() - timedelta(minutes=lookback_minutes)).timestamp())
             candles = await exchange_client.get_candles(
@@ -591,30 +635,21 @@ async def scan_for_bull_flag_opportunities(
                         reason="No candle data available for pattern analysis",
                         volume_ratio=vol_ratio,
                     )
-                continue
+                return None
 
             # Get current price for logging
             current_price = None
-            if candles:
-                last_candle = candles[-1] if not isinstance(candles[0], dict) or candles[0].get("start", 0) < candles[-1].get("start", 0) else candles[0]
-                if isinstance(last_candle, dict):
-                    current_price = float(last_candle.get("close", 0))
-                elif len(last_candle) > 4:
-                    current_price = float(last_candle[4])
+            last_candle = candles[-1] if not isinstance(candles[0], dict) or candles[0].get("start", 0) < candles[-1].get("start", 0) else candles[0]
+            if isinstance(last_candle, dict):
+                current_price = float(last_candle.get("close", 0))
+            elif len(last_candle) > 4:
+                current_price = float(last_candle[4])
 
-            # Step 3: Detect bull flag pattern
+            # Detect pattern
             pattern = detect_bull_flag_pattern(candles, config)
 
             if pattern:
-                opportunities.append({
-                    "product_id": product_id,
-                    "pattern": pattern,
-                    "current_volume": current_vol,
-                    "avg_volume": avg_vol,
-                    "volume_multiplier": current_vol / avg_vol if avg_vol > 0 else 0,
-                })
-
-                # Log successful pattern detection (entry signal)
+                # Log entry signal
                 if bot_id:
                     await log_scanner_decision(
                         db=db,
@@ -632,8 +667,14 @@ async def scan_for_bull_flag_opportunities(
                         volume_ratio=vol_ratio,
                         pattern_data=pattern,
                     )
+                return {
+                    "product_id": product_id,
+                    "pattern": pattern,
+                    "current_volume": vol_data["current_vol"],
+                    "avg_volume": vol_data["avg_vol"],
+                    "volume_multiplier": vol_ratio,
+                }
             else:
-                # Log pattern check rejection
                 if bot_id:
                     await log_scanner_decision(
                         db=db,
@@ -645,9 +686,10 @@ async def scan_for_bull_flag_opportunities(
                         current_price=current_price,
                         volume_ratio=vol_ratio,
                     )
+                return None
 
         except Exception as e:
-            logger.error(f"Error scanning {product_id}: {e}")
+            logger.error(f"Error checking pattern for {product_id}: {e}")
             if bot_id:
                 await log_scanner_decision(
                     db=db,
@@ -657,7 +699,17 @@ async def scan_for_bull_flag_opportunities(
                     decision="rejected",
                     reason=f"Scanner error: {str(e)}",
                 )
-            continue
+            return None
 
-    logger.info(f"Found {len(opportunities)} bull flag opportunities")
+    # Process pattern checks in batches
+    for i in range(0, len(volume_passed), batch_size):
+        batch = volume_passed[i:i + batch_size]
+        results = await asyncio.gather(*[check_pattern(vd) for vd in batch])
+        opportunities.extend([r for r in results if r is not None])
+
+        # Small delay between batches
+        if i + batch_size < len(volume_passed):
+            await asyncio.sleep(batch_delay)
+
+    logger.info(f"Phase 2 complete: Found {len(opportunities)} bull flag opportunities")
     return opportunities
