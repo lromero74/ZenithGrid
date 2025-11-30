@@ -1262,8 +1262,12 @@ export default function Positions() {
     refetchInterval: 5000, // Update every 5 seconds for active deals
     select: (data) => {
       if (!selectedAccount) return data
-      // Filter positions by account_id
-      return data.filter((p: Position) => p.account_id === selectedAccount.id || !p.account_id)
+      // For DEX accounts, only show items with matching account_id
+      // For CEX accounts, also include legacy items without account_id
+      return data.filter((p: Position) =>
+        p.account_id === selectedAccount.id ||
+        (selectedAccount.type === 'cex' && !p.account_id)
+      )
     },
   })
 
@@ -1274,7 +1278,12 @@ export default function Positions() {
     refetchInterval: 10000,
     select: (data) => {
       if (!selectedAccount) return data
-      return data.filter((bot: any) => bot.account_id === selectedAccount.id || !bot.account_id)
+      // For DEX accounts, only show items with matching account_id
+      // For CEX accounts, also include legacy items without account_id
+      return data.filter((bot: any) =>
+        bot.account_id === selectedAccount.id ||
+        (selectedAccount.type === 'cex' && !bot.account_id)
+      )
     },
   })
 
