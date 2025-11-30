@@ -293,7 +293,8 @@ class BullFlagStrategy(TradingStrategy):
         self,
         signal_data: Dict[str, Any],
         position: Any,
-        current_price: float
+        current_price: float,
+        market_context: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str]:
         """
         Determine if we should sell based on TSL/TTP.
@@ -305,6 +306,7 @@ class BullFlagStrategy(TradingStrategy):
             signal_data: Signal information from analyze_signal
             position: Current position
             current_price: Current market price
+            market_context: Optional market context data (not used for TSL/TTP)
 
         Returns:
             Tuple of (should_sell: bool, reason: str)

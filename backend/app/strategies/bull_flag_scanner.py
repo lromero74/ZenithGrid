@@ -200,8 +200,11 @@ def detect_bull_flag_pattern(
     1. Find the POLE: Series of up candles with significant gain
     2. Find the FLAG: Pullback with minimum red candles
     3. Find CONFIRMATION: First green candle after pullback
-    4. Calculate stop_loss (pullback low) and take_profit_target (2x risk)
-    5. REJECT if take_profit_target > pole_high
+    4. Validate retracement is within acceptable range
+    4.5. Validate VOLUME CONFIRMATION: pullback (sell) volume must be lower than
+         pole (buy) volume - indicates weak selling pressure during pullback
+    5. Calculate stop_loss (pullback low) and take_profit_target (2x risk)
+    6. REJECT if take_profit_target > pole_high
 
     Args:
         candles: List of candle dicts, most recent first. Each has:
@@ -249,6 +252,14 @@ def detect_bull_flag_pattern(
             # List format: [timestamp, low, high, open, close, volume]
             return (float(candle[3]), float(candle[2]), float(candle[1]), float(candle[4]))
 
+    def get_volume(candle):
+        """Extract volume from candle (dict or list format)."""
+        if isinstance(candle, dict):
+            return float(candle.get("volume", 0))
+        else:
+            # List format: [timestamp, low, high, open, close, volume]
+            return float(candle[5]) if len(candle) > 5 else 0
+
     def is_green(candle):
         o, h, l, c = get_ohlc(candle)
         return c > o
@@ -279,6 +290,7 @@ def detect_bull_flag_pattern(
     red_count = 0
     pullback_low = float("inf")
     pullback_high = 0.0
+    pullback_total_volume = 0.0  # Track sell/red volume during pullback
 
     for i in range(pullback_start, -1, -1):
         candle = candles[i]
@@ -290,6 +302,7 @@ def detect_bull_flag_pattern(
 
         if is_red(candle):
             red_count += 1
+            pullback_total_volume += get_volume(candle)  # Accumulate sell volume
         else:
             # First non-red candle marks end of pullback
             break
@@ -304,6 +317,7 @@ def detect_bull_flag_pattern(
         return None
 
     pullback_end_idx = pullback_start - red_count
+    pullback_avg_volume = pullback_total_volume / red_count if red_count > 0 else 0
 
     # Step 3: Find POLE before pullback
     pole_end_idx = pullback_end_idx
@@ -311,6 +325,7 @@ def detect_bull_flag_pattern(
     pole_high = 0.0
     pole_low = float("inf")
     pole_candle_count = 0
+    pole_total_volume = 0.0  # Track buy/green volume during pole
 
     for i in range(pole_end_idx, -1, -1):
         candle = candles[i]
@@ -322,6 +337,7 @@ def detect_bull_flag_pattern(
             pole_low = min(pole_low, l)
             pole_candle_count += 1
             pole_start_idx = i
+            pole_total_volume += get_volume(candle)  # Accumulate buy volume
         else:
             # End of pole trend
             break
@@ -329,6 +345,8 @@ def detect_bull_flag_pattern(
     if pole_candle_count < min_pole_candles:
         logger.debug(f"Insufficient pole candles: {pole_candle_count} < {min_pole_candles}")
         return None
+
+    pole_avg_volume = pole_total_volume / pole_candle_count if pole_candle_count > 0 else 0
 
     # Calculate pole gain
     if pole_low <= 0:
@@ -349,6 +367,15 @@ def detect_bull_flag_pattern(
         logger.debug(f"Retracement too deep: {retracement:.2f}% > {pullback_retracement_max}%")
         return None
 
+    # Step 4.5: Validate volume confirmation - pullback (sell) volume should be lower than pole (buy) volume
+    # This indicates weak selling pressure during pullback, a healthy bull flag characteristic
+    if pole_avg_volume > 0 and pullback_avg_volume >= pole_avg_volume:
+        logger.debug(
+            f"Volume confirmation failed: pullback avg volume ({pullback_avg_volume:.2f}) >= "
+            f"pole avg volume ({pole_avg_volume:.2f}). Sell pressure too high for healthy bull flag."
+        )
+        return None
+
     # Step 5: Calculate stop loss and take profit target
     stop_loss = pullback_low
     risk = entry_price - stop_loss
@@ -367,6 +394,9 @@ def detect_bull_flag_pattern(
         )
         return None
 
+    # Calculate volume ratio for logging
+    volume_ratio = pole_avg_volume / pullback_avg_volume if pullback_avg_volume > 0 else float('inf')
+
     # Pattern is valid - return pattern data
     pattern = {
         "entry_price": entry_price,
@@ -376,8 +406,11 @@ def detect_bull_flag_pattern(
         "pole_low": pole_low,
         "pole_gain_pct": pole_gain_pct,
         "pole_candle_count": pole_candle_count,
+        "pole_avg_volume": pole_avg_volume,
         "pullback_low": pullback_low,
         "pullback_candles": red_count,
+        "pullback_avg_volume": pullback_avg_volume,
+        "volume_ratio": volume_ratio,  # pole_volume / pullback_volume (higher = better)
         "retracement_pct": retracement,
         "risk": risk,
         "reward": take_profit_target - entry_price,
@@ -389,7 +422,8 @@ def detect_bull_flag_pattern(
     logger.info(
         f"Bull flag pattern detected: entry={entry_price:.4f}, "
         f"SL={stop_loss:.4f}, TP={take_profit_target:.4f}, "
-        f"pole_gain={pole_gain_pct:.2f}%, retracement={retracement:.2f}%"
+        f"pole_gain={pole_gain_pct:.2f}%, retracement={retracement:.2f}%, "
+        f"volume_ratio={volume_ratio:.2f}x (pole/pullback)"
     )
 
     return pattern
