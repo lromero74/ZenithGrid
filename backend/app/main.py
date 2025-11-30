@@ -31,7 +31,7 @@ from app.routers.system_router import get_coinbase as system_get_coinbase, get_p
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ETH/BTC Trading Bot", redirect_slashes=False)
+app = FastAPI(title="ETH/BTC Trading Bot")
 
 # CORS middleware
 app.add_middleware(
