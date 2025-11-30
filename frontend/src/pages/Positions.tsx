@@ -2163,16 +2163,20 @@ export default function Positions() {
                           <div className="text-slate-400">
                             Completed: {(() => {
                               // Calculate DCA count from trade_count (total trades - 1 initial = DCA count)
-                              // If trades array is available, use it for more detail
+                              // If trades array is available AND has trades for THIS position, use it for more detail
                               if (trades && trades.length > 0) {
                                 const positionTrades = trades.filter(t => t.position_id === position.id && t.side === 'buy') || []
-                                const autoSO = positionTrades.filter(t => t.trade_type === 'dca').length
-                                const manualSO = positionTrades.filter(t => t.trade_type === 'manual_safety_order').length
+                                // Only use trades array if it actually has trades for this position
+                                // Otherwise the trades are for a different selected position
+                                if (positionTrades.length > 0) {
+                                  const autoSO = positionTrades.filter(t => t.trade_type === 'dca').length
+                                  const manualSO = positionTrades.filter(t => t.trade_type === 'manual_safety_order').length
 
-                                if (manualSO > 0) {
-                                  return `${autoSO} (+${manualSO})`
+                                  if (manualSO > 0) {
+                                    return `${autoSO} (+${manualSO})`
+                                  }
+                                  return autoSO
                                 }
-                                return autoSO
                               }
 
                               // Fallback: use trade_count from position (trade_count - 1 = DCA count)
