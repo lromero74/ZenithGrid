@@ -1,3 +1,74 @@
+# Bull Flag USD Trading Strategy
+**Date:** November 30, 2025
+**Status:** IMPLEMENTATION COMPLETE ✅ - Ready for Testing
+**Branch:** `feature/bull-flag-usd-strategy`
+
+## Overview
+USD-based pattern trading strategy that scans coins for volume spikes and bull flag patterns, then enters with trailing stop loss and trailing take profit. No DCA - single entry with win/loss based on stops.
+
+## Key Features
+1. **Volume Spike Detection**: Scans USD pairs for volume ≥ 5x their 50-day average
+2. **Bull Flag Pattern Detection**: Pole (uptrend) + Flag (pullback) + Confirmation (green candle)
+3. **Trailing Stop Loss (TSL)**: Set at pullback low, trails up as price rises
+4. **Trailing Take Profit (TTP)**: Activates at 2x risk target, trails from peak
+5. **Pattern Rejection**: If TTP target exceeds pole high, pattern is rejected
+6. **Coin Category Filtering**: Only scans coins in allowed categories (APPROVED, BORDERLINE, etc.)
+
+## TSL/TTP Logic
+- **TSL**: Trails up as price rises, maintains risk distance below current price, DISABLED when TTP activates
+- **TTP**: Activates when price ≥ take profit target (2x risk), then trails from peak price
+- Once TTP triggers, sells at current price (price dropped by risk distance from peak)
+
+## Files Created/Modified
+
+### New Files
+1. `backend/app/strategies/bull_flag.py` - Strategy class with parameters
+2. `backend/app/strategies/bull_flag_scanner.py` - Volume spike and pattern detection
+3. `backend/app/trading_engine/trailing_stops.py` - TSL/TTP update logic
+4. `backend/migrations/add_bull_flag_position_fields.py` - Database migration
+
+### Modified Files
+1. `backend/app/strategies/__init__.py` - Registered bull_flag strategy
+2. `backend/app/multi_bot_monitor.py` - Added `process_bull_flag_bot()` method
+
+## Position Model Fields Added
+- `entry_stop_loss` - Stop loss price set at entry (pullback low)
+- `entry_take_profit_target` - Take profit target (2x risk above entry)
+- `trailing_stop_loss_price` - Current TSL price (trails up)
+- `trailing_stop_loss_active` - Whether TSL is active
+- `trailing_tp_active` - Whether TTP has activated
+- `highest_price_since_entry` - Track for TSL trailing
+- `highest_price_since_tp` - Track peak price for TTP
+- `pattern_data` - JSON blob with pattern details
+- `exit_reason` - Why position was closed (trailing_stop_loss, trailing_take_profit)
+
+## Strategy Parameters
+- `timeframe` - Analysis timeframe (FIVE_MINUTE to TWO_HOUR)
+- `volume_multiplier` - Volume spike threshold (default 5x)
+- `min_pole_candles` / `min_pole_gain_pct` - Pole requirements
+- `min_pullback_candles` / `max_pullback_candles` - Pullback requirements
+- `pullback_retracement_max` - Max % of pole that can be retraced
+- `reward_risk_ratio` - TTP target multiplier (default 2x)
+- `budget_mode` - "fixed_usd" or "percentage"
+- `fixed_usd_amount` / `budget_percentage` - Position sizing
+- `max_concurrent_positions` - Limit open positions
+
+## Testing Required
+1. Run database migration on production: `python backend/migrations/add_bull_flag_position_fields.py`
+2. Create a bull_flag bot via UI or API
+3. Monitor for volume spikes and pattern detection
+4. Verify TSL/TTP behavior on live positions
+
+## Pattern Detection Algorithm
+1. Find CONFIRMATION candle (most recent green candle)
+2. Find FLAG (pullback) - consecutive red candles before confirmation
+3. Find POLE - uptrend before pullback with minimum gain
+4. Validate retracement doesn't exceed max %
+5. Calculate stop_loss (pullback low) and take_profit_target (2x risk)
+6. REJECT if take_profit_target > pole_high
+
+---
+
 # Fix: Duplicate AI Opinions Race Condition
 **Date:** November 17, 2025
 **Status:** COMPLETE ✅

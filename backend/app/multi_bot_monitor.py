@@ -18,6 +18,11 @@ from app.models import Bot
 from app.services.order_monitor import OrderMonitor
 from app.strategies import StrategyRegistry
 from app.strategies.ai_autonomous import market_analysis
+from app.strategies.bull_flag_scanner import scan_for_bull_flag_opportunities
+from app.trading_engine.trailing_stops import (
+    check_bull_flag_exit_conditions,
+    setup_bull_flag_position_stops,
+)
 from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
@@ -224,6 +229,10 @@ class MultiBotMonitor:
         """
         try:
             print(f"🔍 process_bot() ENTERED for {bot.name}")
+
+            # Bull flag strategy uses a different processing flow
+            if bot.strategy_type == "bull_flag":
+                return await self.process_bull_flag_bot(db, bot)
             # Get all trading pairs for this bot (supports multi-pair)
             trading_pairs = bot.get_trading_pairs()
             print(f"🔍 Got {len(trading_pairs)} trading pairs: {trading_pairs}")
@@ -930,6 +939,200 @@ class MultiBotMonitor:
 
         except Exception as e:
             logger.error(f"Error processing bot {bot.name}: {e}", exc_info=True)
+            return {"error": str(e)}
+
+    async def process_bull_flag_bot(self, db: AsyncSession, bot: Bot) -> Dict[str, Any]:
+        """
+        Process a bull flag strategy bot.
+
+        Bull flag bots work differently from other strategies:
+        1. Scan allowed USD coins for volume spikes and bull flag patterns
+        2. Enter positions when patterns are detected (with TSL at pullback low, TTP at 2x risk)
+        3. Monitor existing positions for TSL/TTP exit conditions
+
+        Args:
+            db: Database session
+            bot: Bot instance with bull_flag strategy
+
+        Returns:
+            Result dictionary with actions taken
+        """
+        from app.models import Position
+
+        try:
+            logger.info(f"Processing bull flag bot: {bot.name}")
+            results = {"scanned": 0, "opportunities": 0, "entries": [], "exits": [], "errors": []}
+
+            # Step 1: Get open positions for this bot
+            open_positions_query = select(Position).where(
+                Position.bot_id == bot.id,
+                Position.status == "open"
+            )
+            open_positions_result = await db.execute(open_positions_query)
+            open_positions = list(open_positions_result.scalars().all())
+
+            # Step 2: Check trailing stops on existing positions
+            for position in open_positions:
+                try:
+                    # Get current price
+                    current_price = await self.exchange.get_current_price(position.product_id)
+                    if not current_price or current_price <= 0:
+                        logger.warning(f"  Could not get price for {position.product_id}")
+                        continue
+
+                    # Check exit conditions (TSL/TTP)
+                    should_sell, reason = await check_bull_flag_exit_conditions(
+                        position, current_price, db
+                    )
+
+                    if should_sell:
+                        logger.info(f"  🔔 Exit signal for {position.product_id}: {reason}")
+
+                        # Execute sell order
+                        try:
+                            order = await self.exchange.create_market_sell_order(
+                                product_id=position.product_id,
+                                quantity=position.total_quantity
+                            )
+
+                            if order:
+                                # Update position
+                                position.status = "closed"
+                                position.closed_at = datetime.utcnow()
+                                position.close_price = current_price
+                                await db.commit()
+
+                                results["exits"].append({
+                                    "product_id": position.product_id,
+                                    "reason": reason,
+                                    "price": current_price,
+                                    "quantity": position.total_quantity,
+                                })
+                                logger.info(f"  ✅ Sold {position.product_id}: {reason}")
+                        except Exception as e:
+                            logger.error(f"  Error executing sell for {position.product_id}: {e}")
+                            results["errors"].append(f"Sell error {position.product_id}: {e}")
+
+                except Exception as e:
+                    logger.error(f"  Error checking position {position.product_id}: {e}")
+                    results["errors"].append(f"Position check error: {e}")
+
+            # Step 3: Check if we can open new positions
+            max_concurrent = bot.strategy_config.get("max_concurrent_positions", 5)
+            if len(open_positions) >= max_concurrent:
+                logger.info(f"  At max positions ({len(open_positions)}/{max_concurrent}), skipping scan")
+                return results
+
+            # Step 4: Scan for new opportunities
+            opportunities = await scan_for_bull_flag_opportunities(
+                db=db,
+                exchange_client=self.exchange,
+                config=bot.strategy_config,
+                max_coins=50
+            )
+
+            results["scanned"] = len(opportunities)
+            results["opportunities"] = len([o for o in opportunities if o.get("pattern")])
+
+            # Step 5: Enter positions for valid opportunities
+            # Skip coins we already have positions in
+            existing_product_ids = {p.product_id for p in open_positions}
+            available_slots = max_concurrent - len(open_positions)
+
+            for opportunity in opportunities[:available_slots]:
+                product_id = opportunity.get("product_id")
+                pattern = opportunity.get("pattern")
+
+                if not product_id or not pattern:
+                    continue
+
+                if product_id in existing_product_ids:
+                    logger.info(f"  Skipping {product_id} - already have position")
+                    continue
+
+                try:
+                    # Calculate position size
+                    budget_mode = bot.strategy_config.get("budget_mode", "percentage")
+                    if budget_mode == "fixed_usd":
+                        usd_amount = bot.strategy_config.get("fixed_usd_amount", 100.0)
+                    else:
+                        # Get aggregate USD value
+                        aggregate_usd = await self.exchange.calculate_aggregate_usd_value()
+                        budget_pct = bot.strategy_config.get("budget_percentage", 5.0)
+                        usd_amount = aggregate_usd * (budget_pct / 100.0)
+
+                    # Check minimum
+                    if usd_amount < 10.0:
+                        logger.warning(f"  Position size ${usd_amount:.2f} below minimum for {product_id}")
+                        continue
+
+                    # Get current price
+                    current_price = pattern.get("entry_price", 0)
+                    if current_price <= 0:
+                        current_price = await self.exchange.get_current_price(product_id)
+
+                    if not current_price or current_price <= 0:
+                        logger.warning(f"  Could not get entry price for {product_id}")
+                        continue
+
+                    # Calculate quantity
+                    quantity = usd_amount / current_price
+
+                    # Execute buy order
+                    order = await self.exchange.create_market_buy_order(
+                        product_id=product_id,
+                        quantity=quantity
+                    )
+
+                    if order:
+                        # Create position
+                        position = Position(
+                            bot_id=bot.id,
+                            account_id=bot.account_id,
+                            product_id=product_id,
+                            status="open",
+                            opened_at=datetime.utcnow(),
+                            average_buy_price=current_price,
+                            total_quantity=quantity,
+                            total_quote_spent=usd_amount,
+                            strategy_type="bull_flag",
+                            strategy_config_snapshot=bot.strategy_config.copy(),
+                        )
+
+                        # Set up trailing stops using pattern data
+                        setup_bull_flag_position_stops(position, pattern)
+
+                        db.add(position)
+                        await db.commit()
+
+                        results["entries"].append({
+                            "product_id": product_id,
+                            "price": current_price,
+                            "quantity": quantity,
+                            "usd_amount": usd_amount,
+                            "stop_loss": pattern.get("stop_loss"),
+                            "take_profit_target": pattern.get("take_profit_target"),
+                        })
+
+                        logger.info(
+                            f"  ✅ Entered {product_id}: ${usd_amount:.2f} at ${current_price:.4f}, "
+                            f"SL=${pattern.get('stop_loss'):.4f}, TP=${pattern.get('take_profit_target'):.4f}"
+                        )
+
+                        # Update existing_product_ids to prevent duplicate entries
+                        existing_product_ids.add(product_id)
+
+                except Exception as e:
+                    logger.error(f"  Error entering {product_id}: {e}")
+                    results["errors"].append(f"Entry error {product_id}: {e}")
+
+            await db.commit()
+            return results
+
+        except Exception as e:
+            logger.error(f"Error processing bull flag bot {bot.name}: {e}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e)}
 
     async def monitor_loop(self):

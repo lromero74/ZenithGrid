@@ -260,6 +260,20 @@ class Position(Base):
     closing_via_limit = Column(Boolean, default=False)  # Whether position is closing via limit order
     limit_close_order_id = Column(String, nullable=True)  # Coinbase order ID for limit close order
 
+    # Bull Flag Strategy - Trailing Stop Loss tracking
+    trailing_stop_loss_price = Column(Float, nullable=True)  # Current trailing stop loss price
+    trailing_stop_loss_active = Column(Boolean, default=False)  # Whether TSL is active (disabled when TTP activates)
+
+    # Bull Flag Strategy - Entry-time targets (set at position open)
+    entry_stop_loss = Column(Float, nullable=True)  # Initial stop loss (pullback low)
+    entry_take_profit_target = Column(Float, nullable=True)  # TTP activation target (2x risk)
+
+    # Bull Flag Strategy - Pattern data (JSON)
+    pattern_data = Column(Text, nullable=True)  # JSON: pole_high, pole_low, pullback_low, etc.
+
+    # Exit reason tracking
+    exit_reason = Column(String, nullable=True)  # "trailing_stop_loss", "trailing_take_profit", "manual", etc.
+
     # Relationships
     bot = relationship("Bot", back_populates="positions")
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")
