@@ -154,6 +154,7 @@ function App() {
       <nav className="bg-slate-800 border-b border-slate-700 overflow-x-auto">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex space-x-1 min-w-max sm:min-w-0">
+            {/* Account-Specific Pages */}
             <Link
               to="/"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
@@ -165,19 +166,6 @@ function App() {
               <div className="flex items-center space-x-1 sm:space-x-2">
                 <Activity className="w-4 h-4" />
                 <span className="hidden sm:inline">Dashboard</span>
-              </div>
-            </Link>
-            <Link
-              to="/news"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                location.pathname === '/news'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <Newspaper className="w-4 h-4" />
-                <span className="hidden sm:inline">News</span>
               </div>
             </Link>
             <Link
@@ -235,6 +223,26 @@ function App() {
               <div className="flex items-center space-x-1 sm:space-x-2">
                 <Wallet className="w-4 h-4" />
                 <span className="hidden sm:inline">Portfolio</span>
+              </div>
+            </Link>
+
+            {/* Separator */}
+            <div className="flex items-center px-1">
+              <div className="h-6 w-px bg-slate-600" />
+            </div>
+
+            {/* General Pages */}
+            <Link
+              to="/news"
+              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
+                location.pathname === '/news'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <Newspaper className="w-4 h-4" />
+                <span className="hidden sm:inline">News</span>
               </div>
             </Link>
             <Link
