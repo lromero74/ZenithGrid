@@ -121,6 +121,8 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
 @router.get("/", response_model=List[BotResponse])
 async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db)):
     """Get list of all bots"""
+    import asyncio
+
     query = select(Bot).order_by(desc(Bot.created_at))
 
     if active_only:
@@ -131,6 +133,47 @@ async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db
 
     # Initialize coinbase client for budget calculations
     coinbase = CoinbaseClient()
+
+    # Pre-fetch aggregate values ONCE (not per-bot) to avoid repeated API calls
+    aggregate_btc_value = None
+    aggregate_usd_value = None
+
+    try:
+        aggregate_btc_value = await coinbase.calculate_aggregate_btc_value()
+    except Exception as e:
+        logger.warning(f"Could not calculate aggregate BTC value: {e}")
+
+    try:
+        aggregate_usd_value = await coinbase.calculate_aggregate_usd_value()
+    except Exception as e:
+        logger.warning(f"Could not calculate aggregate USD value: {e}")
+
+    # Pre-fetch all open position prices in parallel
+    all_open_positions_query = select(Position).where(Position.status == "open")
+    all_open_result = await db.execute(all_open_positions_query)
+    all_open_positions = all_open_result.scalars().all()
+
+    # Get unique product IDs and fetch prices in parallel
+    unique_products = list({p.product_id for p in all_open_positions})
+
+    async def fetch_price(product_id: str):
+        try:
+            price = await coinbase.get_current_price(product_id)
+            return (product_id, price)
+        except Exception:
+            return (product_id, None)
+
+    # Batch fetch prices (15 at a time to avoid rate limits)
+    position_prices = {}
+    batch_size = 15
+    for i in range(0, len(unique_products), batch_size):
+        batch = unique_products[i:i + batch_size]
+        batch_results = await asyncio.gather(*[fetch_price(pid) for pid in batch])
+        for pid, price in batch_results:
+            if price is not None:
+                position_prices[pid] = price
+        if i + batch_size < len(unique_products):
+            await asyncio.sleep(0.2)
 
     # Add position counts and PnL for each bot
     bot_responses = []
@@ -170,22 +213,26 @@ async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db
         try:
             quote_currency = bot.get_quote_currency()
 
+            # Use pre-fetched aggregate values
             if quote_currency == "BTC":
-                aggregate_value = await coinbase.calculate_aggregate_btc_value()
+                aggregate_value = aggregate_btc_value
             else:  # USD
-                aggregate_value = await coinbase.calculate_aggregate_usd_value()
+                aggregate_value = aggregate_usd_value
+
+            if aggregate_value is None:
+                raise ValueError(f"No aggregate {quote_currency} value available")
 
             reserved_balance = bot.get_reserved_balance(aggregate_value)
 
-            # Calculate budget utilization (current value of positions / reserved balance)
+            # Calculate budget utilization using pre-fetched prices
             total_in_positions_value = 0.0
             for position in open_positions:
-                try:
-                    current_price = await coinbase.get_current_price(position.product_id)
+                current_price = position_prices.get(position.product_id)
+                if current_price is not None:
                     position_value = position.total_base_acquired * current_price
                     total_in_positions_value += position_value
-                except Exception as _:
-                    logger.warning(f"Could not get current price for position {position.id}, using quote spent")
+                else:
+                    # Fallback to quote spent if price unavailable
                     total_in_positions_value += position.total_quote_spent
 
             if reserved_balance > 0:
