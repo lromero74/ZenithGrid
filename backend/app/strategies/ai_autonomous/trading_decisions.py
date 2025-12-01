@@ -229,10 +229,16 @@ async def should_buy(
     print(f"🔍 position={position is not None}, btc_balance={btc_balance:.8f}")
 
     # Check if we have an existing position (DCA scenario)
-    # IMPORTANT: DCA does NOT require signal_type=buy - it triggers based on price drop conditions
-    # The AI buy signal is only required for OPENING new positions
+    # AI bots: DCA REQUIRES AI buy signal + price must be below cost basis
+    # The AI makes the buy/DCA decision, price drop is the safety check
     if position is not None:
         print(f"🔍 DCA check for position {position.id}: trades={len(position.trades) if position.trades else 0}")
+
+        # DCA requires AI buy signal - AI makes the decision to add to position
+        if signal_data.get("signal_type") != "buy":
+            print(f"🔍 EARLY RETURN: DCA requires AI buy signal (got: {signal_data.get('signal_type')})")
+            return False, 0.0, "Waiting for AI buy signal to DCA"
+
         # Check if DCA is enabled
         enable_dca = config.get("enable_dca", True)
         if not enable_dca:
@@ -362,7 +368,7 @@ async def should_buy(
             f"AI DCA #{current_safety_orders + 1} ({dca_conf}% confidence, {amount_pct}% of budget): {reasoning}",
         )
 
-    # New position (base order) - REQUIRES AI buy signal
+    # New position (base order) - also requires AI buy signal (already checked for DCA above)
     if signal_data.get("signal_type") != "buy":
         print(f"🔍 EARLY RETURN: signal_type != buy (for new position)")
         return False, 0.0, "AI did not suggest buying"
