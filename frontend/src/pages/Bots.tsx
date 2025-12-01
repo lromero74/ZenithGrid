@@ -97,7 +97,7 @@ function Bots() {
   })
 
   // Fetch portfolio data for percentage calculations (account-specific)
-  const { data: portfolio } = useQuery({
+  const { data: portfolio, isLoading: portfolioLoading } = useQuery({
     queryKey: ['account-portfolio-bots', selectedAccount?.id],
     queryFn: async () => {
       if (selectedAccount) {
@@ -1122,31 +1122,37 @@ function Bots() {
                 const yearlyPct = portfolioUsd > 0 ? (totalYearlyPnl / portfolioUsd) * 100 : 0
                 const pctPrefix = isPositive ? '+' : ''
 
+                // Format percentage - show loading indicator if portfolio not loaded yet
+                const formatPct = (pct: number) => {
+                  if (portfolioLoading || portfolioUsd === 0) return '--'
+                  return `${pctPrefix}${pct.toFixed(2)}`
+                }
+
                 return (
                   <tr>
                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-sm font-semibold text-slate-300">Projected PnL</td>
                     <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalDailyPnl.toFixed(2)}
                       <span className="text-xs ml-1 text-slate-400">
-                        ({pctPrefix}{dailyPct.toFixed(2)}%)
+                        ({formatPct(dailyPct)}%)
                       </span>
                     </td>
                     <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalWeeklyPnl.toFixed(2)}
                       <span className="text-xs ml-1 text-slate-400">
-                        ({pctPrefix}{weeklyPct.toFixed(2)}%)
+                        ({formatPct(weeklyPct)}%)
                       </span>
                     </td>
                     <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalMonthlyPnl.toFixed(2)}
                       <span className="text-xs ml-1 text-slate-400">
-                        ({pctPrefix}{monthlyPct.toFixed(2)}%)
+                        ({formatPct(monthlyPct)}%)
                       </span>
                     </td>
                     <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalYearlyPnl.toFixed(2)}
                       <span className="text-xs ml-1 text-slate-400">
-                        ({pctPrefix}{yearlyPct.toFixed(2)}%)
+                        ({formatPct(yearlyPct)}%)
                       </span>
                     </td>
                   </tr>
