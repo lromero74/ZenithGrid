@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi, orderHistoryApi } from '../services/api'
-import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp, Building2, Wallet } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp, Building2, Wallet, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Trade, AIBotLog, Position, Bot } from '../types'
 import { LoadingSpinner } from '../components/LoadingSpinner'
@@ -13,6 +13,11 @@ function ClosedPositions() {
   const [expandedPositionId, setExpandedPositionId] = useState<number | null>(null)
   const [positionTrades, setPositionTrades] = useState<Record<number, Trade[]>>({})
   const [positionAILogs, setPositionAILogs] = useState<Record<number, AIBotLog[]>>({})
+
+  // Pagination state
+  const [failedPage, setFailedPage] = useState(1)
+  const [closedPage, setClosedPage] = useState(1)
+  const pageSize = 25
 
   // Track last seen counts separately for closed and failed
   const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(() => {
@@ -46,18 +51,20 @@ function ClosedPositions() {
     },
   })
 
-  const { data: failedOrders, isLoading: _isLoadingFailed } = useQuery({
-    queryKey: ['order-history-failed', selectedAccount?.id],
-    queryFn: () => orderHistoryApi.getFailed(undefined, 100),
+  const { data: failedOrdersData, isLoading: isLoadingFailed } = useQuery({
+    queryKey: ['order-history-failed-paginated', selectedAccount?.id, failedPage],
+    queryFn: () => orderHistoryApi.getFailedPaginated(failedPage, pageSize),
     refetchInterval: 30000,
-    select: (data) => {
-      if (!selectedAccount) return data
-      // Filter by account_id
-      return data.filter((order: any) => order.account_id === selectedAccount.id)
-    },
   })
 
-  const closedPositions = (allPositions?.filter((p: Position) => p.status === 'closed') || [])
+  // Filter by account_id on the client side (API returns all accounts)
+  const failedOrders = failedOrdersData?.items?.filter((order: any) =>
+    !selectedAccount || order.account_id === selectedAccount.id
+  ) || []
+  const failedTotal = failedOrdersData?.total || 0
+  const failedTotalPages = failedOrdersData?.total_pages || 1
+
+  const allClosedPositions = (allPositions?.filter((p: Position) => p.status === 'closed') || [])
     .sort((a: Position, b: Position) => {
       // Sort by closed_at date, most recent first (descending)
       if (!a.closed_at) return 1 // Move positions without closed_at to end
@@ -65,9 +72,16 @@ function ClosedPositions() {
       return new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime()
     })
 
-  // Calculate badge counts for each tab
-  const currentClosedCount = closedPositions.length
-  const currentFailedCount = failedOrders?.length || 0
+  // Client-side pagination for closed positions
+  const closedTotalPages = Math.ceil(allClosedPositions.length / pageSize) || 1
+  const closedPositions = allClosedPositions.slice(
+    (closedPage - 1) * pageSize,
+    closedPage * pageSize
+  )
+
+  // Calculate badge counts for each tab (use total counts, not paginated)
+  const currentClosedCount = allClosedPositions.length
+  const currentFailedCount = failedTotal
   const newClosedCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
   const newFailedCount = Math.max(0, currentFailedCount - lastSeenFailedCount)
 
@@ -215,7 +229,7 @@ function ClosedPositions() {
             }`}
           >
             <span className="flex items-center space-x-2">
-              <span>Failed Orders ({failedOrders?.length || 0})</span>
+              <span>Failed Orders ({failedTotal})</span>
               {newFailedCount > 0 && (
                 <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                   {newFailedCount > 9 ? '9+' : newFailedCount}
@@ -413,78 +427,171 @@ function ClosedPositions() {
             ))}
           </div>
         )}
+
+          {/* Pagination Controls for Closed Positions */}
+          {closedTotalPages > 1 && (
+            <div className="flex items-center justify-between mt-6 px-2">
+              <p className="text-sm text-slate-400">
+                Page {closedPage} of {closedTotalPages} ({allClosedPositions.length} total)
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setClosedPage(1)}
+                  disabled={closedPage === 1}
+                  className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="First page"
+                >
+                  <ChevronsLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setClosedPage(p => Math.max(1, p - 1))}
+                  disabled={closedPage === 1}
+                  className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="px-4 py-2 text-sm text-slate-300">
+                  {closedPage}
+                </span>
+                <button
+                  onClick={() => setClosedPage(p => Math.min(closedTotalPages, p + 1))}
+                  disabled={closedPage === closedTotalPages}
+                  className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setClosedPage(closedTotalPages)}
+                  disabled={closedPage === closedTotalPages}
+                  className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Last page"
+                >
+                  <ChevronsRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
           </>
         )}
 
         {/* Failed Orders Tab */}
         {activeTab === 'failed' && (
           <>
-            {!failedOrders || failedOrders.length === 0 ? (
+            {isLoadingFailed ? (
+              <div className="flex justify-center py-12">
+                <LoadingSpinner size="lg" text="Loading failed orders..." />
+              </div>
+            ) : failedOrders.length === 0 ? (
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center">
                 <p className="text-slate-400">No failed orders</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {[...failedOrders]
-                  .sort((a, b) => {
-                    // Sort by timestamp, most recent first (descending)
-                    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-                  })
-                  .map((order) => (
-                  <div key={order.id} className="bg-slate-800 rounded-lg border border-red-900/30 p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                      <div>
-                        <p className="text-slate-400 text-xs mb-1">Bot</p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-xs font-medium">
-                            {order.bot_name}
-                          </span>
-                          <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-xs font-medium">
-                            {order.product_id}
-                          </span>
+              <>
+                <div className="space-y-3">
+                  {failedOrders.map((order: any) => (
+                    <div key={order.id} className="bg-slate-800 rounded-lg border border-red-900/30 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                        <div>
+                          <p className="text-slate-400 text-xs mb-1">Bot</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-xs font-medium">
+                              {order.bot_name}
+                            </span>
+                            <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-xs font-medium">
+                              {order.product_id}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 text-xs mb-1">Time</p>
+                          <p className="font-semibold text-white">
+                            {formatDateTime(order.timestamp)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 text-xs mb-1">Type</p>
+                          <p className="font-semibold text-white">
+                            {order.trade_type === 'initial' ? 'Base Order' : order.trade_type.toUpperCase()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 text-xs mb-1">Amount</p>
+                          <p className="font-semibold text-white">
+                            {order.quote_amount.toFixed(order.product_id.endsWith('USD') ? 2 : 8)} {order.product_id.split('-')[1]}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 text-xs mb-1">Price</p>
+                          <p className="font-semibold text-white">
+                            {order.price ? order.price.toFixed(8) : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 text-xs mb-1">Status</p>
+                          <div className="flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-red-500" />
+                            <span className="font-semibold text-red-400">FAILED</span>
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <p className="text-slate-400 text-xs mb-1">Time</p>
-                        <p className="font-semibold text-white">
-                          {formatDateTime(order.timestamp)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-xs mb-1">Type</p>
-                        <p className="font-semibold text-white">
-                          {order.trade_type === 'initial' ? 'Base Order' : order.trade_type.toUpperCase()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-xs mb-1">Amount</p>
-                        <p className="font-semibold text-white">
-                          {order.quote_amount.toFixed(order.product_id.endsWith('USD') ? 2 : 8)} {order.product_id.split('-')[1]}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-xs mb-1">Price</p>
-                        <p className="font-semibold text-white">
-                          {order.price ? order.price.toFixed(8) : '-'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-xs mb-1">Status</p>
-                        <div className="flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-red-500" />
-                          <span className="font-semibold text-red-400">FAILED</span>
+                      {order.error_message && (
+                        <div className="mt-3 pt-3 border-t border-slate-700">
+                          <p className="text-slate-400 text-xs mb-1">Error:</p>
+                          <p className="text-red-400 text-sm font-mono">{order.error_message}</p>
                         </div>
-                      </div>
+                      )}
                     </div>
-                    {order.error_message && (
-                      <div className="mt-3 pt-3 border-t border-slate-700">
-                        <p className="text-slate-400 text-xs mb-1">Error:</p>
-                        <p className="text-red-400 text-sm font-mono">{order.error_message}</p>
-                      </div>
-                    )}
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {failedTotalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 px-2">
+                    <p className="text-sm text-slate-400">
+                      Page {failedPage} of {failedTotalPages} ({failedTotal} total)
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setFailedPage(1)}
+                        disabled={failedPage === 1}
+                        className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="First page"
+                      >
+                        <ChevronsLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setFailedPage(p => Math.max(1, p - 1))}
+                        disabled={failedPage === 1}
+                        className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Previous page"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="px-4 py-2 text-sm text-slate-300">
+                        {failedPage}
+                      </span>
+                      <button
+                        onClick={() => setFailedPage(p => Math.min(failedTotalPages, p + 1))}
+                        disabled={failedPage === failedTotalPages}
+                        className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Next page"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setFailedPage(failedTotalPages)}
+                        disabled={failedPage === failedTotalPages}
+                        className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Last page"
+                      >
+                        <ChevronsRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </>
         )}

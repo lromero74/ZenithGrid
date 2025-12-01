@@ -141,6 +141,14 @@ export const templatesApi = {
     api.post<{ message: string; templates: string[] }>('/templates/seed-defaults').then((res) => res.data),
 };
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export const orderHistoryApi = {
   getAll: (botId?: number, status?: string, limit = 100, offset = 0) => {
     const params: any = { limit, offset };
@@ -151,6 +159,10 @@ export const orderHistoryApi = {
   getFailed: (botId?: number, limit = 50) =>
     api.get<OrderHistory[]>('/order-history/failed', {
       params: { bot_id: botId, limit }
+    }).then((res) => res.data),
+  getFailedPaginated: (page = 1, pageSize = 25, botId?: number) =>
+    api.get<PaginatedResponse<OrderHistory>>('/order-history/failed/paginated', {
+      params: { page, page_size: pageSize, bot_id: botId }
     }).then((res) => res.data),
   getStats: (botId?: number) =>
     api.get<{

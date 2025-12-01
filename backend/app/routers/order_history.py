@@ -6,15 +6,17 @@ Similar to 3Commas order history page.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Generic, List, Optional, TypeVar
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Bot, OrderHistory
+
+T = TypeVar("T")
 
 router = APIRouter(prefix="/api/order-history", tags=["order-history"])
 
@@ -41,6 +43,16 @@ class OrderHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Generic paginated response wrapper"""
+
+    items: List[T]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 @router.get("/", response_model=List[OrderHistoryResponse])
@@ -117,6 +129,43 @@ async def get_failed_orders(
     Useful for debugging and troubleshooting.
     """
     return await get_order_history(db=db, bot_id=bot_id, status="failed", limit=limit, offset=0)
+
+
+@router.get("/failed/paginated")
+async def get_failed_orders_paginated(
+    db: AsyncSession = Depends(get_db),
+    bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(25, ge=1, le=100, description="Items per page"),
+):
+    """
+    Get paginated failed orders with total count.
+
+    Returns items plus pagination metadata for UI controls.
+    """
+    # Build base query for counting
+    count_query = select(func.count()).select_from(OrderHistory).where(OrderHistory.status == "failed")
+    if bot_id is not None:
+        count_query = count_query.where(OrderHistory.bot_id == bot_id)
+
+    # Get total count
+    result = await db.execute(count_query)
+    total = result.scalar() or 0
+
+    # Calculate offset
+    offset = (page - 1) * page_size
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+    # Get paginated items
+    items = await get_order_history(db=db, bot_id=bot_id, status="failed", limit=page_size, offset=offset)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
 
 
 @router.get("/stats")
