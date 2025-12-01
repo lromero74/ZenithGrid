@@ -26,6 +26,7 @@ class OrderHistoryResponse(BaseModel):
     timestamp: datetime
     bot_id: int
     bot_name: str
+    account_id: Optional[int]
     position_id: Optional[int]
     product_id: str
     side: str
@@ -56,9 +57,9 @@ async def get_order_history(
     Returns all order attempts (successful and failed) in reverse chronological order.
     Similar to 3Commas order history.
     """
-    # Build query
+    # Build query - include account_id from Bot for filtering
     query = (
-        select(OrderHistory, Bot.name.label("bot_name"))
+        select(OrderHistory, Bot.name.label("bot_name"), Bot.account_id.label("account_id"))
         .join(Bot, OrderHistory.bot_id == Bot.id)
         .order_by(desc(OrderHistory.timestamp))
     )
@@ -79,13 +80,14 @@ async def get_order_history(
 
     # Format response
     history = []
-    for order_history, bot_name in rows:
+    for order_history, bot_name, account_id in rows:
         history.append(
             OrderHistoryResponse(
                 id=order_history.id,
                 timestamp=order_history.timestamp,
                 bot_id=order_history.bot_id,
                 bot_name=bot_name,
+                account_id=account_id,
                 position_id=order_history.position_id,
                 product_id=order_history.product_id,
                 side=order_history.side,
