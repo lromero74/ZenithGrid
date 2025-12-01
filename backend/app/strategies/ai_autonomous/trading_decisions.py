@@ -304,8 +304,14 @@ async def should_buy(
         remaining_budget = position.max_quote_allowed - position.total_quote_spent
         print(f"🔍 DCA price drop PASSED! Remaining budget: {remaining_budget:.8f}")
 
-        # AI-Directed DCA: AI decides both WHEN and HOW MUCH to buy
-        # AI evaluates market conditions, position state, and remaining budget to make intelligent decisions
+        # Get confidence from initial AI analysis
+        initial_confidence = signal_data.get("confidence", 0)
+        min_dca_confidence = get_confidence_threshold_func("dca")
+        print(f"🔍 Initial AI confidence: {initial_confidence}%, DCA threshold: {min_dca_confidence}%")
+
+        # Trust the initial AI "buy" signal for DCA - don't ask AI again
+        # The AI has already analyzed the market and recommended buying
+        # We just need to determine the DCA amount using rule-based logic
         market_context = {
             "current_price": current_price,
             "price_change_24h_pct": signal_data.get("raw_analysis", {}).get("price_change_24h_pct", 0),
@@ -313,34 +319,43 @@ async def should_buy(
             "recent_prices": signal_data.get("raw_analysis", {}).get("recent_prices", []),
         }
 
-        print(f"🔍 Calling AI for DCA decision...")
+        print(f"🔍 Getting DCA amount (AI already said buy with {initial_confidence}% confidence)...")
         logger.info(
-            f"  🤖 Asking AI for DCA decision (remaining budget: {remaining_budget:.8f}, DCAs: {current_safety_orders}/{max_safety_orders})"
+            f"  🤖 DCA triggered by AI buy signal ({initial_confidence}% confidence), calculating amount (remaining budget: {remaining_budget:.8f}, DCAs: {current_safety_orders}/{max_safety_orders})"
         )
         try:
             dca_decision = await ask_dca_decision_func(position, current_price, remaining_budget, market_context)
-            print(f"🔍 AI DCA response: should_buy={dca_decision.get('should_buy')}, amount={dca_decision.get('amount')}, reason={dca_decision.get('reasoning', '')[:50]}")
+            print(f"🔍 DCA sizing response: should_buy={dca_decision.get('should_buy')}, amount={dca_decision.get('amount')}, reason={dca_decision.get('reasoning', '')[:50]}")
         except Exception as e:
-            print(f"🔍 AI DCA ERROR: {e}")
+            print(f"🔍 DCA sizing ERROR: {e}")
             raise
 
+        # IMPORTANT: Since initial AI already said "buy", we trust that decision
+        # The ask_dca_decision_func may say "should_buy=False" due to secondary AI conservatism
+        # But when use_manual_sizing=True (rule-based), it respects price drop conditions
+        # If using AI for sizing and it says no, fall back to default DCA amount
         if not dca_decision["should_buy"]:
-            return False, 0.0, f"AI decided not to DCA: {dca_decision['reasoning']}"
-
-        # Check DCA confidence threshold
-        dca_conf = dca_decision["confidence"]
-        min_dca_confidence = get_confidence_threshold_func("dca")
-        if dca_conf < min_dca_confidence:
-            return False, 0.0, f"AI DCA confidence too low ({dca_conf}% - need {min_dca_confidence}%+)"
-
-        btc_amount = dca_decision["amount"]
+            # AI DCA decision is too conservative - but initial AI said buy!
+            # Use default DCA amount based on config
+            safety_order_pct = config.get("safety_order_percentage", 20.0)
+            btc_amount = remaining_budget * (safety_order_pct / 100.0)
+            logger.info(f"  📊 AI DCA conservative, using default {safety_order_pct}% = {btc_amount:.8f}")
+            print(f"🔍 Using default DCA amount: {safety_order_pct}% of {remaining_budget:.8f} = {btc_amount:.8f}")
+            dca_conf = initial_confidence  # Use initial AI confidence
+            amount_pct = safety_order_pct
+            reasoning = f"DCA triggered by AI buy signal ({initial_confidence}% confidence), {price_drop_from_ref:.2f}% below {reference_label}"
+        else:
+            dca_conf = dca_decision.get("confidence", initial_confidence)
+            btc_amount = dca_decision["amount"]
+            amount_pct = dca_decision.get("amount_percentage", 0)
+            reasoning = dca_decision.get("reasoning", "AI DCA decision")
 
         # Validate amount
         if btc_amount <= 0:
-            return False, 0.0, "AI suggested 0 amount for DCA"
+            return False, 0.0, "DCA amount is 0"
 
         if btc_amount > remaining_budget:
-            logger.warning(f"  ⚠️ AI suggested {btc_amount:.8f} but only {remaining_budget:.8f} available, capping")
+            logger.warning(f"  ⚠️ DCA amount {btc_amount:.8f} exceeds remaining {remaining_budget:.8f}, capping")
             btc_amount = remaining_budget
 
         # Round to 8 decimal places (satoshi precision)
@@ -355,17 +370,13 @@ async def should_buy(
             return (
                 False,
                 0.0,
-                f"DCA amount {btc_amount:.8f} {quote_currency} below exchange minimum {product_minimum:.8f} {quote_currency}. "
-                f"AI should suggest at least {product_minimum:.8f} {quote_currency} or skip DCA.",
+                f"DCA amount {btc_amount:.8f} {quote_currency} below exchange minimum {product_minimum:.8f} {quote_currency}.",
             )
-
-        reasoning = dca_decision["reasoning"]
-        amount_pct = dca_decision["amount_percentage"]
 
         return (
             True,
             btc_amount,
-            f"AI DCA #{current_safety_orders + 1} ({dca_conf}% confidence, {amount_pct}% of budget): {reasoning}",
+            f"AI DCA #{current_safety_orders + 1} ({dca_conf}% confidence, {amount_pct:.1f}% of budget): {reasoning}",
         )
 
     # New position (base order) - also requires AI buy signal (already checked for DCA above)
