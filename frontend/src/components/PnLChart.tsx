@@ -128,6 +128,82 @@ export function PnLChart({ accountId }: PnLChartProps) {
     return []
   }
 
+  // Get by_day data with all dates filled in (no gaps)
+  const getFilledByDayData = (): DailyPnL[] => {
+    if (!data || data.by_day.length === 0) return []
+
+    // First apply time range filter
+    const now = new Date()
+    const cutoffDate = new Date()
+    switch (timeRange) {
+      case '7d':
+        cutoffDate.setDate(now.getDate() - 7)
+        break
+      case '30d':
+        cutoffDate.setDate(now.getDate() - 30)
+        break
+      case '3m':
+        cutoffDate.setMonth(now.getMonth() - 3)
+        break
+      case '6m':
+        cutoffDate.setMonth(now.getMonth() - 6)
+        break
+      case 'all':
+        cutoffDate.setTime(0)
+        break
+    }
+
+    // Build a map of existing daily data
+    const dailyMap = new Map<string, DailyPnL>()
+    data.by_day.forEach((day) => {
+      dailyMap.set(day.date, day)
+    })
+
+    // Get date range - from first trade (or cutoff) to today
+    const sortedDates = data.by_day.map(d => d.date).sort()
+    if (sortedDates.length === 0) return []
+
+    const firstDataDate = new Date(sortedDates[0])
+    const firstDate = new Date(Math.max(firstDataDate.getTime(), cutoffDate.getTime()))
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const lastDate = new Date(Math.max(new Date(sortedDates[sortedDates.length - 1]).getTime(), today.getTime()))
+
+    // Fill in all dates from first to last
+    const filledData: DailyPnL[] = []
+    const currentDate = new Date(firstDate)
+    let runningCumulativePnL = 0
+
+    // Find cumulative PnL up to cutoff if not starting from beginning
+    if (timeRange !== 'all') {
+      for (const day of data.by_day) {
+        if (new Date(day.date) < cutoffDate) {
+          runningCumulativePnL = day.cumulative_pnl
+        }
+      }
+    }
+
+    while (currentDate <= lastDate) {
+      const dateStr = currentDate.toISOString().split('T')[0]
+      const existingData = dailyMap.get(dateStr)
+
+      if (existingData && new Date(existingData.date) >= cutoffDate) {
+        runningCumulativePnL = existingData.cumulative_pnl
+        filledData.push(existingData)
+      } else {
+        // No trade on this day - show 0 daily PnL, maintain cumulative
+        filledData.push({
+          date: dateStr,
+          daily_pnl: 0,
+          cumulative_pnl: runningCumulativePnL
+        })
+      }
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+
+    return filledData
+  }
+
   // Calculate stats - always use summary data for stats cards (tab-independent)
   const calculateStats = () => {
     if (!data || data.summary.length === 0) {
@@ -289,10 +365,27 @@ export function PnLChart({ accountId }: PnLChartProps) {
       dailyProfits.set(point.date, current + point.profit)
     })
 
-    // Sort by date and calculate cumulative PnL starting from 0 for this time range
-    const sortedDays = Array.from(dailyProfits.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+    // Get date range - from first trade to today (or last trade if in the future somehow)
+    const sortedDates = Array.from(dailyProfits.keys()).sort()
+    if (sortedDates.length === 0) return
+
+    const firstDate = new Date(sortedDates[0])
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const lastDate = new Date(Math.max(new Date(sortedDates[sortedDates.length - 1]).getTime(), today.getTime()))
+
+    // Fill in all dates from first to last (including days with no trades)
+    const allDates: string[] = []
+    const currentDate = new Date(firstDate)
+    while (currentDate <= lastDate) {
+      allDates.push(currentDate.toISOString().split('T')[0])
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+
+    // Build chart data with all dates, using 0 profit for missing days
     let cumulativePnL = 0
-    const chartData = sortedDays.map(([date, dailyProfit]) => {
+    const chartData = allDates.map((date) => {
+      const dailyProfit = dailyProfits.get(date) || 0
       cumulativePnL += dailyProfit
       const timestamp = Math.floor(new Date(date).getTime() / 1000) as Time
       return { time: timestamp, value: Math.round(cumulativePnL * 100) / 100 }
@@ -488,9 +581,9 @@ export function PnLChart({ accountId }: PnLChartProps) {
           {/* Chart Container */}
           <div className="flex-1 min-h-0">
         {activeTab === 'by_day' ? (
-          // Daily P&L bar chart
+          // Daily P&L bar chart - uses filled data to show all dates including days with no trades
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={getFilteredData()} margin={{ top: 5, right: 30, left: 20, bottom: 40 }}>
+            <BarChart data={getFilledByDayData()} margin={{ top: 5, right: 30, left: 20, bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
                 dataKey="date"
@@ -509,7 +602,7 @@ export function PnLChart({ accountId }: PnLChartProps) {
                 cursor={false}
               />
               <Bar dataKey="daily_pnl" radius={[4, 4, 0, 0]}>
-                {getFilteredData().map((entry: any, index: number) => (
+                {getFilledByDayData().map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={entry.daily_pnl >= 0 ? '#22c55e' : '#ef4444'}
