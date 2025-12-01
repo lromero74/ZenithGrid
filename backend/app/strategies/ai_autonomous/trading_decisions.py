@@ -228,13 +228,9 @@ async def should_buy(
     print(f"🔍 signal_type={signal_data.get('signal_type')}, confidence={signal_data.get('confidence')}")
     print(f"🔍 position={position is not None}, btc_balance={btc_balance:.8f}")
 
-    if signal_data.get("signal_type") != "buy":
-        print(f"🔍 EARLY RETURN: signal_type != buy")
-        return False, 0.0, "AI did not suggest buying"
-
-    confidence = signal_data.get("confidence", 0)
-
     # Check if we have an existing position (DCA scenario)
+    # IMPORTANT: DCA does NOT require signal_type=buy - it triggers based on price drop conditions
+    # The AI buy signal is only required for OPENING new positions
     if position is not None:
         print(f"🔍 DCA check for position {position.id}: trades={len(position.trades) if position.trades else 0}")
         # Check if DCA is enabled
@@ -366,7 +362,12 @@ async def should_buy(
             f"AI DCA #{current_safety_orders + 1} ({dca_conf}% confidence, {amount_pct}% of budget): {reasoning}",
         )
 
-    # New position (base order)
+    # New position (base order) - REQUIRES AI buy signal
+    if signal_data.get("signal_type") != "buy":
+        print(f"🔍 EARLY RETURN: signal_type != buy (for new position)")
+        return False, 0.0, "AI did not suggest buying"
+
+    confidence = signal_data.get("confidence", 0)
     min_confidence = get_confidence_threshold_func("open")
     if min_confidence is None:
         return False, 0.0, "AI confidence threshold not configured for opening positions"
