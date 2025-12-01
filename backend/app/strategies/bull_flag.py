@@ -215,10 +215,11 @@ class BullFlagStrategy(TradingStrategy):
             "reward_risk_ratio": self.config.get("reward_risk_ratio", 2.0),
         }
 
-        # Detect pattern
-        pattern = detect_bull_flag_pattern(candles, pattern_config)
+        # Detect pattern - returns (pattern, rejection_reason) tuple
+        pattern, rejection_reason = detect_bull_flag_pattern(candles, pattern_config)
 
         if not pattern:
+            logger.debug(f"Pattern detection failed: {rejection_reason}")
             return None
 
         return {

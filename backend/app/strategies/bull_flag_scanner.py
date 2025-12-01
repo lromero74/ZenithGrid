@@ -194,7 +194,7 @@ async def detect_volume_spike(
 def detect_bull_flag_pattern(
     candles: List[Dict[str, Any]],
     config: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Detect bull flag pattern in candle data.
 
@@ -220,7 +220,9 @@ def detect_bull_flag_pattern(
                 - reward_risk_ratio: TTP target multiplier (default 2.0)
 
     Returns:
-        Pattern dict with entry details, or None if no valid pattern
+        Tuple of (pattern_dict, rejection_reason):
+        - On success: (pattern_dict, None)
+        - On failure: (None, "specific rejection reason")
     """
     # Extract config with defaults
     min_pole_candles = config.get("min_pole_candles", 3)
@@ -231,7 +233,7 @@ def detect_bull_flag_pattern(
     reward_risk_ratio = config.get("reward_risk_ratio", 2.0)
 
     if not candles or len(candles) < (min_pole_candles + min_pullback_candles + 1):
-        return None
+        return (None, f"Not enough candles: {len(candles) if candles else 0} < {min_pole_candles + min_pullback_candles + 1}")
 
     # Ensure candles are in chronological order (oldest first for analysis)
     # API usually returns newest first, so we may need to reverse
@@ -280,9 +282,10 @@ def detect_bull_flag_pattern(
             confirmation_idx = i
             break
 
-    if confirmation_idx is None or confirmation_idx < min_pullback_candles + min_pole_candles:
-        logger.debug("No confirmation candle found or not enough history")
-        return None
+    if confirmation_idx is None:
+        return (None, "No green confirmation candle found in recent history")
+    if confirmation_idx < min_pullback_candles + min_pole_candles:
+        return (None, f"Confirmation at idx {confirmation_idx} too early, need {min_pullback_candles + min_pole_candles} candles before it")
 
     confirmation_candle = candles[confirmation_idx]
     _, _, _, entry_price = get_ohlc(confirmation_candle)
@@ -311,12 +314,10 @@ def detect_bull_flag_pattern(
 
         # Check max pullback length
         if (pullback_start - i + 1) > max_pullback_candles:
-            logger.debug(f"Pullback too long: {pullback_start - i + 1} > {max_pullback_candles}")
-            return None
+            return (None, f"Pullback too long: {pullback_start - i + 1} > {max_pullback_candles} max")
 
     if red_count < min_pullback_candles:
-        logger.debug(f"Insufficient pullback candles: {red_count} < {min_pullback_candles}")
-        return None
+        return (None, f"Insufficient pullback: {red_count} red candles < {min_pullback_candles} min")
 
     pullback_end_idx = pullback_start - red_count
     pullback_avg_volume = pullback_total_volume / red_count if red_count > 0 else 0
@@ -345,46 +346,38 @@ def detect_bull_flag_pattern(
             break
 
     if pole_candle_count < min_pole_candles:
-        logger.debug(f"Insufficient pole candles: {pole_candle_count} < {min_pole_candles}")
-        return None
+        return (None, f"Insufficient pole: {pole_candle_count} candles < {min_pole_candles} min")
 
     pole_avg_volume = pole_total_volume / pole_candle_count if pole_candle_count > 0 else 0
 
     # Calculate pole gain
     if pole_low <= 0:
-        return None
+        return (None, "Invalid pole_low <= 0")
     pole_gain_pct = ((pole_high - pole_low) / pole_low) * 100
 
     if pole_gain_pct < min_pole_gain_pct:
-        logger.debug(f"Insufficient pole gain: {pole_gain_pct:.2f}% < {min_pole_gain_pct}%")
-        return None
+        return (None, f"Insufficient pole gain: {pole_gain_pct:.2f}% < {min_pole_gain_pct}% min")
 
     # Step 4: Validate retracement
     pole_range = pole_high - pole_low
     if pole_range <= 0:
-        return None
+        return (None, "Invalid pole_range <= 0")
 
     retracement = ((pole_high - pullback_low) / pole_range) * 100
     if retracement > pullback_retracement_max:
-        logger.debug(f"Retracement too deep: {retracement:.2f}% > {pullback_retracement_max}%")
-        return None
+        return (None, f"Retracement too deep: {retracement:.2f}% > {pullback_retracement_max}% max")
 
     # Step 4.5: Validate volume confirmation - pullback (sell) volume should be lower than pole (buy) volume
     # This indicates weak selling pressure during pullback, a healthy bull flag characteristic
     if pole_avg_volume > 0 and pullback_avg_volume >= pole_avg_volume:
-        logger.debug(
-            f"Volume confirmation failed: pullback avg volume ({pullback_avg_volume:.2f}) >= "
-            f"pole avg volume ({pole_avg_volume:.2f}). Sell pressure too high for healthy bull flag."
-        )
-        return None
+        return (None, f"Volume confirmation failed: pullback_avg_vol {pullback_avg_volume:.0f} >= pole_avg_vol {pole_avg_volume:.0f}")
 
     # Step 5: Calculate stop loss and take profit target
     stop_loss = pullback_low
     risk = entry_price - stop_loss
 
     if risk <= 0:
-        logger.debug(f"Invalid risk (entry {entry_price} <= stop_loss {stop_loss})")
-        return None
+        return (None, f"Invalid risk: entry {entry_price:.4f} <= stop_loss {stop_loss:.4f}")
 
     take_profit_target = entry_price + (risk * reward_risk_ratio)
 
@@ -424,7 +417,7 @@ def detect_bull_flag_pattern(
         f"volume_ratio={volume_ratio:.2f}x (pole/pullback)"
     )
 
-    return pattern
+    return (pattern, None)  # Success: pattern dict, no rejection reason
 
 
 def _get_candle_timestamp(candle: Any) -> int:
@@ -645,8 +638,8 @@ async def scan_for_bull_flag_opportunities(
             elif len(last_candle) > 4:
                 current_price = float(last_candle[4])
 
-            # Detect pattern
-            pattern = detect_bull_flag_pattern(candles, config)
+            # Detect pattern - returns (pattern, rejection_reason) tuple
+            pattern, rejection_reason = detect_bull_flag_pattern(candles, config)
 
             if pattern:
                 # Log entry signal
@@ -682,7 +675,7 @@ async def scan_for_bull_flag_opportunities(
                         product_id=product_id,
                         scan_type="pattern_check",
                         decision="rejected",
-                        reason="Volume spike present but no valid bull flag pattern detected",
+                        reason=rejection_reason or "Unknown rejection reason",
                         current_price=current_price,
                         volume_ratio=vol_ratio,
                     )
