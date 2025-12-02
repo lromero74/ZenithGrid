@@ -870,16 +870,22 @@ class MultiBotMonitor:
                 timeframe = bot.strategy_config.get("timeframe", "FIVE_MINUTE")
                 logger.info(f"  Using timeframe: {timeframe}")
 
-                # Get historical candles for signal analysis
-                candles = await self.get_candles_cached(
-                    product_id=product_id, granularity=timeframe, lookback_candles=100
-                )
+                # Get historical candles for signal analysis (if not already provided via pair_data)
+                if not candles:
+                    candles = await self.get_candles_cached(
+                        product_id=product_id, granularity=timeframe, lookback_candles=100
+                    )
 
                 if not candles:
                     logger.warning(f"    No candles available for {product_id}")
                     return {"error": "No candles available"}
 
-                candles_by_timeframe = {timeframe: candles}
+                # Only set default candles_by_timeframe if not already populated from pair_data
+                # This preserves THREE_MINUTE and other timeframes from batch mode
+                if not candles_by_timeframe or len(candles_by_timeframe) == 0:
+                    candles_by_timeframe = {timeframe: candles}
+                else:
+                    logger.info(f"  📊 Using pre-fetched candles_by_timeframe with {len(candles_by_timeframe)} timeframes: {list(candles_by_timeframe.keys())}")
 
             # Use pre-analyzed signal if provided (from batch analysis), otherwise analyze now
             if pre_analyzed_signal:
