@@ -82,7 +82,7 @@ async def force_close_position(
 
         # Execute sell using trading engine
         engine = StrategyTradingEngine(
-            db=db, coinbase=coinbase, bot=bot, strategy=strategy, product_id=position.product_id
+            db=db, exchange=coinbase, bot=bot, strategy=strategy, product_id=position.product_id
         )
         trade, profit_quote, profit_percentage = await engine.execute_sell(
             position=position, current_price=current_price, signal_data=None

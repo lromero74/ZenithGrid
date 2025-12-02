@@ -518,6 +518,8 @@ class MultiBotMonitor:
                             candles_by_timeframe["ONE_MINUTE"] = one_min_candles
                         if three_min_candles and len(three_min_candles) > 0:
                             candles_by_timeframe["THREE_MINUTE"] = three_min_candles
+                        else:
+                            logger.warning(f"  ⚠️ THREE_MINUTE candles empty for {product_id} (needed for BB% conditions)")
 
                         # Prepare market context (for AI batch analysis)
                         market_context = market_analysis.prepare_market_context(candles, current_price)

@@ -67,6 +67,7 @@ def _calculate_market_context_with_indicators(
     for timeframe, tf_candles in candles_by_timeframe.items():
         if not tf_candles or len(tf_candles) < 20:
             # Not enough data - set neutral defaults for this timeframe
+            logger.debug(f"  📊 {timeframe}: Not enough candles ({len(tf_candles) if tf_candles else 0} < 20), using defaults")
             result[f"{timeframe}_bb_percent"] = 50.0
             result[f"{timeframe}_bb_upper_20_2"] = current_price
             result[f"{timeframe}_bb_lower_20_2"] = current_price
@@ -97,6 +98,7 @@ def _calculate_market_context_with_indicators(
             result[f"{timeframe}_bb_lower_20_2"] = bb_lower
             result[f"{timeframe}_bb_middle_20_2"] = bb_middle
             result[f"{timeframe}_price"] = current_price
+            logger.debug(f"  📊 {timeframe}: BB%={bb_percent:.1f}%, upper={bb_upper:.8f}, lower={bb_lower:.8f}")
 
             # Also set non-prefixed bb_percent from the primary timeframe (first one)
             if "bb_percent" not in result or result["bb_percent"] == 50.0:
@@ -488,6 +490,13 @@ async def process_signal(
 
     # Check if we should sell
     if position is not None:
+        # Debug: Log timeframes available in candles_by_timeframe
+        if candles_by_timeframe:
+            for tf, tf_candles in candles_by_timeframe.items():
+                logger.debug(f"  📊 candles_by_timeframe[{tf}]: {len(tf_candles) if tf_candles else 0} candles")
+        else:
+            logger.debug("  📊 candles_by_timeframe is None or empty")
+
         # Calculate market context with indicators for custom sell conditions
         market_context = _calculate_market_context_with_indicators(candles, current_price, candles_by_timeframe)
 
