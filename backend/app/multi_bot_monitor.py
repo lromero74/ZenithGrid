@@ -175,8 +175,8 @@ class MultiBotMonitor:
             # THREE_MINUTE is synthetic - fetch 1-minute candles and aggregate
             if granularity == "THREE_MINUTE":
                 # Need 3x as many 1-minute candles to create the requested number of 3-minute candles
-                # Double the request to account for sparse trading pairs (gaps in candle data)
-                one_min_candles_needed = lookback_candles * 6  # 2x buffer for sparse pairs
+                # Coinbase API limit is 300 candles max per request, so we cap at 300
+                one_min_candles_needed = min(lookback_candles * 3, 300)
                 one_min_candles = await self.get_candles_cached(
                     product_id, "ONE_MINUTE", one_min_candles_needed
                 )
@@ -487,10 +487,9 @@ class MultiBotMonitor:
 
                         # Get candles for multiple timeframes (for BB% calculations)
                         candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
-                        # Fetch 600 ONE_MINUTE candles upfront (10 hours of data)
-                        # THREE_MINUTE needs 3x lookback: 100 * 3 = 300 minimum
-                        # Extra buffer for sparse trading pairs that may have gaps
-                        one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 600)
+                        # Fetch 300 ONE_MINUTE candles (max allowed by Coinbase API per request)
+                        # This allows up to 100 THREE_MINUTE candles (300/3 = 100)
+                        one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 300)
                         # THREE_MINUTE is synthetic (aggregated from 1-min) but now supported
                         three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
 
