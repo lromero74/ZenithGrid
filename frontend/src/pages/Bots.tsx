@@ -933,9 +933,25 @@ function Bots() {
                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-right">
                         {(() => {
                           const dailyPnl = (bot as any).avg_daily_pnl_usd || 0
-                          const weeklyPnl = dailyPnl * 7
-                          const monthlyPnl = dailyPnl * 30
-                          const yearlyPnl = dailyPnl * 365
+                          const portfolioUsd = portfolio?.total_usd_value || 0
+
+                          // Calculate bot's allocated value based on its budget percentage
+                          const botBudgetPct = bot.budget_percentage || 100
+                          const botAllocatedValue = portfolioUsd * (botBudgetPct / 100)
+
+                          // Calculate daily rate for this bot
+                          const dailyRate = botAllocatedValue > 0 ? dailyPnl / botAllocatedValue : 0
+
+                          // Use compound interest for projections
+                          const compoundGain = (days: number) => {
+                            if (botAllocatedValue <= 0 || dailyRate === 0) return dailyPnl * days
+                            return botAllocatedValue * (Math.pow(1 + dailyRate, days) - 1)
+                          }
+
+                          const weeklyPnl = compoundGain(7)
+                          const monthlyPnl = compoundGain(30)
+                          const yearlyPnl = compoundGain(365)
+
                           const isPositive = dailyPnl > 0
                           const isNegative = dailyPnl < 0
                           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
@@ -1106,17 +1122,29 @@ function Bots() {
             <tbody>
               {(() => {
                 const totalDailyPnl = bots.reduce((sum, bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
-                const totalWeeklyPnl = totalDailyPnl * 7
-                const totalMonthlyPnl = totalDailyPnl * 30
-                const totalYearlyPnl = totalDailyPnl * 365
+                const portfolioUsd = portfolio?.total_usd_value || 0
+
+                // Calculate daily rate as a decimal (e.g., 0.0009 for 0.09%)
+                const dailyRate = portfolioUsd > 0 ? totalDailyPnl / portfolioUsd : 0
+
+                // Use compound interest for projections: P * (1 + r)^n - P
+                // This accounts for percentage-based bots where gains compound
+                const compoundGain = (days: number) => {
+                  if (portfolioUsd <= 0 || dailyRate === 0) return totalDailyPnl * days
+                  return portfolioUsd * (Math.pow(1 + dailyRate, days) - 1)
+                }
+
+                const totalWeeklyPnl = compoundGain(7)
+                const totalMonthlyPnl = compoundGain(30)
+                const totalYearlyPnl = compoundGain(365)
+
                 const isPositive = totalDailyPnl > 0
                 const isNegative = totalDailyPnl < 0
                 const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
                 const prefix = isPositive ? '+' : ''
 
-                // Calculate percentage gains based on portfolio value
-                const portfolioUsd = portfolio?.total_usd_value || 0
-                const dailyPct = portfolioUsd > 0 ? (totalDailyPnl / portfolioUsd) * 100 : 0
+                // Calculate percentage gains based on portfolio value (also compounded)
+                const dailyPct = dailyRate * 100
                 const weeklyPct = portfolioUsd > 0 ? (totalWeeklyPnl / portfolioUsd) * 100 : 0
                 const monthlyPct = portfolioUsd > 0 ? (totalMonthlyPnl / portfolioUsd) * 100 : 0
                 const yearlyPct = portfolioUsd > 0 ? (totalYearlyPnl / portfolioUsd) * 100 : 0
