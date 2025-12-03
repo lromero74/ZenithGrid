@@ -377,6 +377,17 @@ export default function News() {
     setArticleContent(null)
   }
 
+  // Close modal on ESC key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && previewArticle) {
+        handleCloseModal()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [previewArticle])
+
   // Force re-render every minute to update relative timestamps
   const [, setTimeTick] = useState(0)
   useEffect(() => {
