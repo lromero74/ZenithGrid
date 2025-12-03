@@ -143,6 +143,68 @@ class MultiBotMonitor:
 
         return aggregated
 
+    def _fill_candle_gaps(
+        self, candles: List[Dict[str, Any]], interval_seconds: int, max_candles: int = 300
+    ) -> List[Dict[str, Any]]:
+        """
+        Fill gaps in candle data by creating synthetic candles.
+
+        When there are no trades for a time period, Coinbase doesn't return a candle.
+        Charting platforms fill these gaps by copying the previous close price.
+        This function does the same to ensure continuous data for indicator calculations.
+
+        Args:
+            candles: List of candles sorted by time ascending
+            interval_seconds: Expected interval between candles (60 for ONE_MINUTE)
+            max_candles: Maximum number of candles to return (to avoid memory issues)
+
+        Returns:
+            List of candles with gaps filled
+        """
+        if not candles or len(candles) < 2:
+            return candles
+
+        filled = []
+
+        for i, candle in enumerate(candles):
+            if i == 0:
+                filled.append(candle)
+                continue
+
+            prev_candle = filled[-1]
+            prev_time = int(prev_candle.get("start", prev_candle.get("time", 0)))
+            curr_time = int(candle.get("start", candle.get("time", 0)))
+
+            # Calculate how many candles are missing between prev and curr
+            time_gap = curr_time - prev_time
+            missing_count = (time_gap // interval_seconds) - 1
+
+            # Fill in missing candles (use previous close as OHLC, volume = 0)
+            if missing_count > 0:
+                prev_close = prev_candle.get("close")
+                for j in range(1, missing_count + 1):
+                    synthetic_time = prev_time + (j * interval_seconds)
+                    synthetic_candle = {
+                        "start": synthetic_time,
+                        "open": prev_close,
+                        "high": prev_close,
+                        "low": prev_close,
+                        "close": prev_close,
+                        "volume": 0,  # No trades in this period
+                    }
+                    filled.append(synthetic_candle)
+
+                    # Safety check to avoid memory issues
+                    if len(filled) >= max_candles:
+                        break
+
+            filled.append(candle)
+
+            if len(filled) >= max_candles:
+                break
+
+        return filled[-max_candles:] if len(filled) > max_candles else filled
+
     async def get_candles_cached(
         self, product_id: str, granularity: str, lookback_candles: int = 100
     ) -> List[Dict[str, Any]]:
@@ -181,10 +243,22 @@ class MultiBotMonitor:
                     product_id, "ONE_MINUTE", one_min_candles_needed
                 )
                 if one_min_candles:
+                    # Gap-fill the ONE_MINUTE candles first (for sparse BTC pairs)
+                    # This ensures continuous data like charting platforms show
+                    original_count = len(one_min_candles)
+                    one_min_candles = self._fill_candle_gaps(one_min_candles, 60, one_min_candles_needed)
+                    filled_count = len(one_min_candles)
+
                     candles = self._aggregate_candles(one_min_candles, 3)
-                    logger.debug(
-                        f"Aggregated {len(one_min_candles)} ONE_MINUTE into {len(candles)} THREE_MINUTE for {product_id}"
-                    )
+                    if filled_count > original_count:
+                        logger.debug(
+                            f"Gap-filled {original_count}→{filled_count} ONE_MINUTE, "
+                            f"aggregated to {len(candles)} THREE_MINUTE for {product_id}"
+                        )
+                    else:
+                        logger.debug(
+                            f"Aggregated {len(one_min_candles)} ONE_MINUTE into {len(candles)} THREE_MINUTE for {product_id}"
+                        )
                     # Cache the aggregated result
                     self._candle_cache[cache_key] = (now, candles)
                     return candles
