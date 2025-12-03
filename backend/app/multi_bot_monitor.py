@@ -165,12 +165,8 @@ class MultiBotMonitor:
         if cache_key in self._candle_cache:
             cached_time, cached_candles = self._candle_cache[cache_key]
             if now - cached_time < self._cache_ttl:
-                print(f"  📦 Cache HIT for {cache_key}: {len(cached_candles)} candles (age: {now - cached_time:.1f}s)")
+                # Cache hit - silent to reduce log noise
                 return cached_candles
-            else:
-                print(f"  📦 Cache EXPIRED for {cache_key} (age: {now - cached_time:.1f}s > TTL {self._cache_ttl}s)")
-        else:
-            print(f"  📦 Cache MISS for {cache_key}")
 
         # Fetch new candles
         try:
@@ -180,19 +176,18 @@ class MultiBotMonitor:
             if granularity == "THREE_MINUTE":
                 # Need 3x as many 1-minute candles to create the requested number of 3-minute candles
                 one_min_candles_needed = lookback_candles * 3
-                print(f"  📊 THREE_MINUTE requested for {product_id}, fetching {one_min_candles_needed} ONE_MINUTE candles...")
                 one_min_candles = await self.get_candles_cached(
                     product_id, "ONE_MINUTE", one_min_candles_needed
                 )
                 if one_min_candles:
                     candles = self._aggregate_candles(one_min_candles, 3)
-                    print(
-                        f"  ✅ Aggregated {len(one_min_candles)} ONE_MINUTE candles into {len(candles)} THREE_MINUTE candles for {product_id}"
+                    logger.debug(
+                        f"Aggregated {len(one_min_candles)} ONE_MINUTE into {len(candles)} THREE_MINUTE for {product_id}"
                     )
                     # Cache the aggregated result
                     self._candle_cache[cache_key] = (now, candles)
                     return candles
-                print(f"  ❌ No ONE_MINUTE candles available for {product_id}, THREE_MINUTE will be empty!")
+                logger.debug(f"No ONE_MINUTE candles for {product_id}, THREE_MINUTE empty")
                 return []
 
             # Calculate time range based on granularity
@@ -200,15 +195,9 @@ class MultiBotMonitor:
             end_time = int(time.time())
             start_time = end_time - (lookback_candles * granularity_seconds)
 
-            print(
-                f"  📥 Requesting {lookback_candles} {granularity} candles for {product_id} (time range: {start_time} to {end_time})"
-            )
-
             candles = await self.exchange.get_candles(
                 product_id=product_id, start=start_time, end=end_time, granularity=granularity
             )
-
-            print(f"  📥 Coinbase returned {len(candles)} {granularity} candles for {product_id}")
 
             # Coinbase returns newest first, reverse to get oldest first
             candles = list(reversed(candles))
