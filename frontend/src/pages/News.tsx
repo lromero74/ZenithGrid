@@ -729,11 +729,13 @@ export default function News() {
           {/* Videos grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredVideos.map((video, index) => {
-              const isPlaying = playingVideoId === video.video_id
+              // Use unique key combining source and video_id to avoid collisions
+              const uniqueKey = `${video.source}-${video.video_id}`
+              const isPlaying = playingVideoId === uniqueKey
 
               return (
                 <div
-                  key={`${video.source}-${index}`}
+                  key={uniqueKey}
                   className="group bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-slate-900/50"
                 >
                   {/* Video area - either thumbnail or embedded player */}
@@ -772,7 +774,7 @@ export default function News() {
                         )}
                         {/* Play button overlay - click to play inline */}
                         <button
-                          onClick={() => setPlayingVideoId(video.video_id)}
+                          onClick={() => setPlayingVideoId(uniqueKey)}
                           className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors cursor-pointer"
                         >
                           <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
