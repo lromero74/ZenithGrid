@@ -161,7 +161,11 @@ class MultiBotMonitor:
         Returns:
             List of candles with gaps filled
         """
+        # Log entry point for debugging
+        logger.info(f"    _fill_candle_gaps called: len={len(candles) if candles else 0}")
+
         if not candles or len(candles) < 2:
+            logger.info(f"    _fill_candle_gaps early return: insufficient candles")
             return candles
 
         filled = []
