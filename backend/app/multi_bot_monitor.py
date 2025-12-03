@@ -251,9 +251,9 @@ class MultiBotMonitor:
 
                     candles = self._aggregate_candles(one_min_candles, 3)
                     if filled_count > original_count:
-                        logger.debug(
-                            f"Gap-filled {original_count}→{filled_count} ONE_MINUTE, "
-                            f"aggregated to {len(candles)} THREE_MINUTE for {product_id}"
+                        logger.info(
+                            f"  📊 Gap-filled {product_id}: {original_count}→{filled_count} ONE_MINUTE, "
+                            f"aggregated to {len(candles)} THREE_MINUTE"
                         )
                     else:
                         logger.debug(
@@ -592,14 +592,16 @@ class MultiBotMonitor:
                         if three_min_candles and len(three_min_candles) >= 20:
                             # Need at least 20 THREE_MINUTE candles for reliable BB% calculation
                             candles_by_timeframe["THREE_MINUTE"] = three_min_candles
+                            logger.debug(
+                                f"  ✅ THREE_MINUTE OK for {product_id}: {len(three_min_candles)} candles"
+                            )
                         else:
                             # Log why THREE_MINUTE is insufficient
-                            one_min_count = len(one_min_candles) if one_min_candles else 0
+                            # Note: three_min_candles already went through gap-filling in get_candles_cached
                             three_min_count = len(three_min_candles) if three_min_candles else 0
                             logger.warning(
                                 f"  ⚠️ THREE_MINUTE insufficient for {product_id}: "
-                                f"have {three_min_count}/20 candles "
-                                f"(from {one_min_count} ONE_MINUTE candles, low volume pair)"
+                                f"have {three_min_count}/20 candles after gap-filling (very low volume pair)"
                             )
 
                         # Prepare market context (for AI batch analysis)
