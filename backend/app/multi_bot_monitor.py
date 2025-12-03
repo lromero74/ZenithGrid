@@ -497,7 +497,9 @@ class MultiBotMonitor:
 
                         # Get candles for multiple timeframes (for BB% calculations)
                         candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
-                        one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 100)
+                        # Fetch 300 ONE_MINUTE candles upfront - THREE_MINUTE needs 3x lookback
+                        # This ensures the cache has enough data for both ONE_MINUTE and THREE_MINUTE requests
+                        one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 300)
                         # THREE_MINUTE is synthetic (aggregated from 1-min) but now supported
                         three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
 
