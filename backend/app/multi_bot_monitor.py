@@ -165,12 +165,12 @@ class MultiBotMonitor:
         if cache_key in self._candle_cache:
             cached_time, cached_candles = self._candle_cache[cache_key]
             if now - cached_time < self._cache_ttl:
-                logger.debug(f"  📦 Cache HIT for {cache_key}: {len(cached_candles)} candles (age: {now - cached_time:.1f}s)")
+                logger.info(f"  📦 Cache HIT for {cache_key}: {len(cached_candles)} candles (age: {now - cached_time:.1f}s)")
                 return cached_candles
             else:
-                logger.debug(f"  📦 Cache EXPIRED for {cache_key} (age: {now - cached_time:.1f}s > TTL {self._cache_ttl}s)")
+                logger.info(f"  📦 Cache EXPIRED for {cache_key} (age: {now - cached_time:.1f}s > TTL {self._cache_ttl}s)")
         else:
-            logger.debug(f"  📦 Cache MISS for {cache_key}")
+            logger.info(f"  📦 Cache MISS for {cache_key}")
 
         # Fetch new candles
         try:
