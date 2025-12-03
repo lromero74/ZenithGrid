@@ -175,7 +175,8 @@ class MultiBotMonitor:
             # THREE_MINUTE is synthetic - fetch 1-minute candles and aggregate
             if granularity == "THREE_MINUTE":
                 # Need 3x as many 1-minute candles to create the requested number of 3-minute candles
-                one_min_candles_needed = lookback_candles * 3
+                # Double the request to account for sparse trading pairs (gaps in candle data)
+                one_min_candles_needed = lookback_candles * 6  # 2x buffer for sparse pairs
                 one_min_candles = await self.get_candles_cached(
                     product_id, "ONE_MINUTE", one_min_candles_needed
                 )
@@ -486,9 +487,10 @@ class MultiBotMonitor:
 
                         # Get candles for multiple timeframes (for BB% calculations)
                         candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
-                        # Fetch 300 ONE_MINUTE candles upfront - THREE_MINUTE needs 3x lookback
-                        # This ensures the cache has enough data for both ONE_MINUTE and THREE_MINUTE requests
-                        one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 300)
+                        # Fetch 600 ONE_MINUTE candles upfront (10 hours of data)
+                        # THREE_MINUTE needs 3x lookback: 100 * 3 = 300 minimum
+                        # Extra buffer for sparse trading pairs that may have gaps
+                        one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 600)
                         # THREE_MINUTE is synthetic (aggregated from 1-min) but now supported
                         three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
 
@@ -514,10 +516,18 @@ class MultiBotMonitor:
                         candles_by_timeframe = {"FIVE_MINUTE": candles}
                         if one_min_candles and len(one_min_candles) > 0:
                             candles_by_timeframe["ONE_MINUTE"] = one_min_candles
-                        if three_min_candles and len(three_min_candles) > 0:
+                        if three_min_candles and len(three_min_candles) >= 20:
+                            # Need at least 20 THREE_MINUTE candles for reliable BB% calculation
                             candles_by_timeframe["THREE_MINUTE"] = three_min_candles
                         else:
-                            logger.warning(f"  ⚠️ THREE_MINUTE candles empty for {product_id} (needed for BB% conditions)")
+                            # Log why THREE_MINUTE is insufficient
+                            one_min_count = len(one_min_candles) if one_min_candles else 0
+                            three_min_count = len(three_min_candles) if three_min_candles else 0
+                            logger.warning(
+                                f"  ⚠️ THREE_MINUTE insufficient for {product_id}: "
+                                f"have {three_min_count}/20 candles "
+                                f"(from {one_min_count} ONE_MINUTE candles, low volume pair)"
+                            )
 
                         # Prepare market context (for AI batch analysis)
                         market_context = market_analysis.prepare_market_context(candles, current_price)
