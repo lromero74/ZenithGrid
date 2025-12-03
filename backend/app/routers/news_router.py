@@ -1580,11 +1580,14 @@ async def fetch_youtube_videos(session: aiohttp.ClientSession, source_id: str, c
                     except (ValueError, TypeError):
                         pass
 
-                # Extract video ID from link
+                # Extract video ID from link (supports regular videos and Shorts)
                 video_id = ""
                 link = entry.get("link", "")
                 if "watch?v=" in link:
                     video_id = link.split("watch?v=")[-1].split("&")[0]
+                elif "/shorts/" in link:
+                    # YouTube Shorts: https://www.youtube.com/shorts/VIDEO_ID
+                    video_id = link.split("/shorts/")[-1].split("?")[0]
 
                 # Get thumbnail (YouTube provides standard thumbnails)
                 thumbnail = f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg" if video_id else None
