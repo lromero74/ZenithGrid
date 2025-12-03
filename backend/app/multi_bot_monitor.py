@@ -161,11 +161,11 @@ class MultiBotMonitor:
         Returns:
             List of candles with gaps filled
         """
-        # Log entry point for debugging
-        logger.info(f"    _fill_candle_gaps called: len={len(candles) if candles else 0}")
+        # Log entry point for debugging with PRINT to ensure visibility
+        print(f">>> _fill_candle_gaps called: len={len(candles) if candles else 0}")
 
         if not candles or len(candles) < 2:
-            logger.info(f"    _fill_candle_gaps early return: insufficient candles")
+            print(f">>> _fill_candle_gaps early return: insufficient candles")
             return candles
 
         filled = []
@@ -211,9 +211,9 @@ class MultiBotMonitor:
             if len(filled) >= max_candles:
                 break
 
-        # Always log gap-fill stats for debugging
-        logger.info(
-            f"    Gap-fill: input={len(candles)}, gaps_filled={total_gaps_filled}, "
+        # Always log gap-fill stats for debugging with PRINT
+        print(
+            f">>> Gap-fill: input={len(candles)}, gaps_filled={total_gaps_filled}, "
             f"max_gap={max_gap_seen}s, output={len(filled)}"
         )
 
