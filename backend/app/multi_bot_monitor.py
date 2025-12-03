@@ -166,6 +166,7 @@ class MultiBotMonitor:
 
         filled = []
         total_gaps_filled = 0
+        max_gap_seen = 0
 
         for i, candle in enumerate(candles):
             if i == 0:
@@ -178,6 +179,7 @@ class MultiBotMonitor:
 
             # Calculate how many candles are missing between prev and curr
             time_gap = curr_time - prev_time
+            max_gap_seen = max(max_gap_seen, time_gap)
             missing_count = (time_gap // interval_seconds) - 1
 
             # Fill in missing candles (use previous close as OHLC, volume = 0)
@@ -205,12 +207,11 @@ class MultiBotMonitor:
             if len(filled) >= max_candles:
                 break
 
-        # Log if we actually filled gaps
-        if total_gaps_filled > 0:
-            logger.info(
-                f"    Gap-fill debug: input={len(candles)}, gaps_filled={total_gaps_filled}, "
-                f"output={len(filled)}, returned={min(len(filled), max_candles)}"
-            )
+        # Always log gap-fill stats for debugging
+        logger.info(
+            f"    Gap-fill: input={len(candles)}, gaps_filled={total_gaps_filled}, "
+            f"max_gap={max_gap_seen}s, output={len(filled)}"
+        )
 
         return filled[-max_candles:] if len(filled) > max_candles else filled
 
