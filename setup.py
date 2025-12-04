@@ -1244,6 +1244,41 @@ def run_setup():
     print(f"Current user: {current_user}")
     print()
 
+    # Show what setup will do
+    print_header("What This Setup Will Do")
+    print()
+    print("  This wizard will configure Zenith Grid for first-time use.")
+    print("  The following steps will be performed:")
+    print()
+    print("  1. Python Environment")
+    print("     - Create a Python virtual environment (backend/venv)")
+    print("     - Install Python dependencies from requirements.txt")
+    print()
+    print("  2. Frontend Dependencies")
+    print("     - Install Node.js packages (npm install)")
+    print()
+    print("  3. Database Initialization")
+    print("     - Create SQLite database (backend/trading.db)")
+    print("     - Set up required tables")
+    print()
+    print("  4. Environment Configuration")
+    print("     - Generate .env file with JWT secrets")
+    print("     - Optionally configure AI provider for coin categorization")
+    print()
+    print("  5. Admin User Creation")
+    print("     - Create your initial admin account")
+    print()
+    print("  6. System Services (Optional)")
+    print("     - Install systemd/launchd services for auto-start")
+    print()
+
+    if not prompt_yes_no("Proceed with setup?", default='yes'):
+        print()
+        print_info("Setup cancelled.")
+        return False
+
+    print()
+
     # Check Python version
     if not check_python_version():
         return False
