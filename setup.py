@@ -908,16 +908,26 @@ def create_admin_user(project_root, email, password, display_name=None):
     """Create the initial admin user"""
     db_path = project_root / 'backend' / 'trading.db'
 
-    # Import bcrypt to hash password
-    try:
-        import bcrypt
-    except ImportError:
-        # Install bcrypt if not available
-        pip_path = get_venv_pip(project_root)
-        subprocess.run([str(pip_path), 'install', 'bcrypt'], capture_output=True)
-        import bcrypt
+    # Get venv Python path
+    venv_python = get_venv_python(project_root)
 
-    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    # Hash password using bcrypt via venv Python (bcrypt is installed there)
+    hash_script = f'''
+import bcrypt
+hashed = bcrypt.hashpw({repr(password.encode('utf-8'))}, bcrypt.gensalt())
+print(hashed.decode('utf-8'))
+'''
+    result = subprocess.run(
+        [str(venv_python), '-c', hash_script],
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        print_error(f"Failed to hash password: {result.stderr}")
+        return False
+
+    hashed = result.stdout.strip()
 
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
