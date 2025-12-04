@@ -550,6 +550,7 @@ class MultiBotMonitor:
             # Collect market data for pairs we're analyzing
             pairs_data = {}
             failed_pairs = {}  # Track pairs that failed to load data
+            successful_pairs = set()  # Track pairs that succeeded (to clear stale errors)
             print(f"🔍 Fetching market data for {len(pairs_to_analyze)} pairs...")
             logger.info(f"  Fetching market data for {len(pairs_to_analyze)} pairs...")
 
@@ -634,10 +635,13 @@ class MultiBotMonitor:
                             continue  # Retry
                         logger.error(f"  ❌ {product_id}: Error after {max_retries} attempts: {e}")
 
-                # Track failures for open positions
+                # Track failures and successes for open positions
                 if not success and has_open_position:
                     failed_pairs[product_id] = last_error
                     logger.error(f"  🚨 CRITICAL: Failed to fetch data for open position {product_id}: {last_error}")
+                elif success and has_open_position:
+                    # Track successful fetches so we can clear any stale errors
+                    successful_pairs.add(product_id)
 
             # Calculate per-position budget (total budget / max concurrent deals)
             max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
@@ -734,6 +738,19 @@ class MultiBotMonitor:
                         position.last_error_message = f"Market data fetch failed: {error_msg}"
                         position.last_error_timestamp = datetime.utcnow()
                         logger.info(f"    📝 Position #{position.id} ({product_id}): Error logged")
+
+            # Clear stale errors for positions that succeeded this cycle
+            if successful_pairs:
+                cleared_count = 0
+                for product_id in successful_pairs:
+                    position = next((p for p in open_positions if p.product_id == product_id), None)
+                    if position and position.last_error_message:
+                        position.last_error_message = None
+                        position.last_error_timestamp = None
+                        cleared_count += 1
+                        logger.debug(f"    ✅ Position #{position.id} ({product_id}): Stale error cleared")
+                if cleared_count > 0:
+                    logger.info(f"  🧹 Cleared {cleared_count} stale error(s) from positions")
 
             # Note: bot.last_signal_check is updated BEFORE processing starts (in monitor_loop)
             # to prevent race conditions where the same bot gets processed twice
