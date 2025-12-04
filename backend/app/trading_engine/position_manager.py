@@ -64,6 +64,7 @@ async def create_position(
 
     position = Position(
         bot_id=bot.id,
+        account_id=bot.account_id,  # Copy account_id from bot for filtering
         product_id=product_id,  # Use the engine's product_id (specific pair being traded)
         status="open",
         opened_at=datetime.utcnow(),
