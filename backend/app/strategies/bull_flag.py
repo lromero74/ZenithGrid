@@ -53,7 +53,7 @@ class BullFlagStrategy(TradingStrategy):
                     description="Candle timeframe for pattern detection",
                     type="string",
                     default="FIFTEEN_MINUTE",
-                    options=["FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR", "TWO_HOUR"],
+                    options=["ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR", "TWO_HOUR"],
                     group="Pattern Detection",
                 ),
                 StrategyParameter(
