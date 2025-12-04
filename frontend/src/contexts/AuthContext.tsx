@@ -30,6 +30,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
+  signup: (email: string, password: string, displayName?: string) => Promise<void>
   logout: () => void
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   getAccessToken: () => string | null
@@ -60,6 +61,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   isLoading: true,
   login: async () => {},
+  signup: async () => {},
   logout: () => {},
   changePassword: async () => {},
   getAccessToken: () => null,
@@ -208,6 +210,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user)
   }
 
+  // Signup function
+  const signup = async (email: string, password: string, displayName?: string): Promise<void> => {
+    const response = await fetch(`${API_BASE}/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password, display_name: displayName || null }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Signup failed')
+    }
+
+    const data: LoginResponse = await response.json()
+
+    // Calculate and store token expiry
+    const expiryTime = Date.now() + data.expires_in * 1000
+
+    // Store in localStorage (auto-login after signup)
+    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token)
+    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
+    localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString())
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user))
+
+    setTokenExpiry(expiryTime)
+    setUser(data.user)
+  }
+
   // Logout function
   const logout = useCallback(() => {
     // Clear localStorage
@@ -254,6 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: !!user,
     isLoading,
     login,
+    signup,
     logout,
     changePassword,
     getAccessToken,

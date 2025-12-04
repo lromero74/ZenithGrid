@@ -460,3 +460,56 @@ async def logout():
     For true token invalidation, implement a token blacklist (not included here).
     """
     return {"message": "Logged out successfully"}
+
+
+@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def signup(
+    request: RegisterRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Public user registration endpoint.
+
+    Creates a new user account and returns JWT tokens for immediate login.
+    """
+    # Check if email already exists
+    existing_user = await get_user_by_email(db, request.email.lower())
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
+        )
+
+    # Create new user
+    new_user = User(
+        email=request.email.lower(),
+        hashed_password=hash_password(request.password),
+        display_name=request.display_name,
+        is_active=True,
+        is_superuser=False,
+    )
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    # Generate tokens for immediate login
+    access_token = create_access_token(new_user.id, new_user.email)
+    refresh_token = create_refresh_token(new_user.id)
+
+    logger.info(f"New user signed up: {new_user.email}")
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.jwt_access_token_expire_minutes * 60,
+        user=UserResponse(
+            id=new_user.id,
+            email=new_user.email,
+            display_name=new_user.display_name,
+            is_active=new_user.is_active,
+            is_superuser=new_user.is_superuser,
+            created_at=new_user.created_at,
+            last_login_at=new_user.last_login_at,
+        ),
+    )
