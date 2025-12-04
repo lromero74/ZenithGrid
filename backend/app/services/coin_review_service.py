@@ -1,7 +1,7 @@
 """
 Weekly Coin Review Service
 
-Uses Claude API to analyze tracked coins and update their status/reasons.
+Uses AI API (Claude, Gemini, OpenAI, or Grok) to analyze tracked coins and update their status/reasons.
 Runs weekly via systemd timer.
 """
 
@@ -9,9 +9,8 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
-from anthropic import AsyncAnthropic
 from sqlalchemy import select, delete
 
 from app.config import settings
@@ -84,13 +83,127 @@ async def get_tracked_coins() -> List[str]:
     return sorted(symbols)
 
 
-async def call_claude_for_review(coins: List[str], batch_size: int = 50) -> Dict[str, Dict[str, str]]:
-    """Call Claude API to analyze coins in batches."""
+def _parse_ai_response(response_text: str) -> Dict[str, Dict[str, str]]:
+    """Parse AI response, handling markdown code blocks."""
+    response_text = response_text.strip()
+
+    # Remove markdown if present
+    if response_text.startswith("```"):
+        response_text = response_text.split("```")[1]
+        if response_text.startswith("json"):
+            response_text = response_text[4:]
+        response_text = response_text.strip()
+
+    return json.loads(response_text)
+
+
+async def _call_claude(prompt: str) -> str:
+    """Call Claude API."""
+    from anthropic import AsyncAnthropic
+
     api_key = settings.anthropic_api_key
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY not configured")
 
     client = AsyncAnthropic(api_key=api_key)
+    response = await client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8192,
+        temperature=0,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    logger.info(f"  Claude tokens: {response.usage.input_tokens} in, {response.usage.output_tokens} out")
+    return response.content[0].text
+
+
+async def _call_openai(prompt: str) -> str:
+    """Call OpenAI API."""
+    from openai import AsyncOpenAI
+
+    api_key = settings.openai_api_key
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY not configured")
+
+    client = AsyncOpenAI(api_key=api_key)
+    response = await client.chat.completions.create(
+        model="gpt-4o",
+        max_tokens=8192,
+        temperature=0,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    usage = response.usage
+    if usage:
+        logger.info(f"  OpenAI tokens: {usage.prompt_tokens} in, {usage.completion_tokens} out")
+    return response.choices[0].message.content or ""
+
+
+async def _call_gemini(prompt: str) -> str:
+    """Call Google Gemini API."""
+    import google.generativeai as genai
+
+    api_key = settings.gemini_api_key
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY not configured")
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-pro")
+    response = await asyncio.to_thread(
+        model.generate_content,
+        prompt,
+        generation_config=genai.GenerationConfig(
+            temperature=0,
+            max_output_tokens=8192,
+        )
+    )
+
+    return response.text
+
+
+async def _call_grok(prompt: str) -> str:
+    """Call x.AI Grok API (OpenAI-compatible)."""
+    from openai import AsyncOpenAI
+
+    api_key = settings.grok_api_key
+    if not api_key:
+        raise ValueError("GROK_API_KEY not configured")
+
+    client = AsyncOpenAI(
+        api_key=api_key,
+        base_url="https://api.x.ai/v1"
+    )
+    response = await client.chat.completions.create(
+        model="grok-2-latest",
+        max_tokens=8192,
+        temperature=0,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    usage = response.usage
+    if usage:
+        logger.info(f"  Grok tokens: {usage.prompt_tokens} in, {usage.completion_tokens} out")
+    return response.choices[0].message.content or ""
+
+
+async def call_ai_for_review(coins: List[str], batch_size: int = 50) -> Dict[str, Dict[str, str]]:
+    """Call configured AI provider to analyze coins in batches."""
+    provider = settings.system_ai_provider.lower()
+
+    # Map provider to call function
+    provider_funcs = {
+        "claude": _call_claude,
+        "openai": _call_openai,
+        "chatgpt": _call_openai,  # Alias
+        "gemini": _call_gemini,
+        "grok": _call_grok,
+    }
+
+    call_func = provider_funcs.get(provider)
+    if not call_func:
+        raise ValueError(f"Unknown AI provider: {provider}. Valid options: claude, openai, gemini, grok")
+
+    logger.info(f"Using AI provider: {provider}")
     all_analysis = {}
 
     # Process in batches
@@ -106,26 +219,11 @@ async def call_claude_for_review(coins: List[str], batch_size: int = 50) -> Dict
 
         logger.info(f"Batch {batch_num}/{total_batches}: Reviewing {len(batch)} coins...")
 
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8192,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        response_text = response.content[0].text.strip()
-
-        # Remove markdown if present
-        if response_text.startswith("```"):
-            response_text = response_text.split("```")[1]
-            if response_text.startswith("json"):
-                response_text = response_text[4:]
-            response_text = response_text.strip()
-
-        batch_analysis = json.loads(response_text)
+        response_text = await call_func(prompt)
+        batch_analysis = _parse_ai_response(response_text)
         all_analysis.update(batch_analysis)
 
-        logger.info(f"  Batch {batch_num}: Got {len(batch_analysis)} results (tokens: {response.usage.input_tokens} in, {response.usage.output_tokens} out)")
+        logger.info(f"  Batch {batch_num}: Got {len(batch_analysis)} results")
 
         # Small delay between batches to avoid rate limits
         if i + batch_size < len(coins):
@@ -201,8 +299,8 @@ async def run_weekly_review() -> Dict[str, Any]:
             logger.warning("No tracked coins found!")
             return {"status": "error", "message": "No tracked coins found"}
 
-        # Call Claude for analysis
-        analysis = await call_claude_for_review(coins)
+        # Call AI provider for analysis
+        analysis = await call_ai_for_review(coins)
         logger.info(f"Received analysis for {len(analysis)} coins")
 
         # Update database

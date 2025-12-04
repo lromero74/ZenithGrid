@@ -241,6 +241,70 @@ def validate_password(password):
         return False, "Password must be at least 8 characters"
     return True, ""
 
+
+# AI Provider configuration with API key URLs
+AI_PROVIDERS = {
+    '1': {
+        'name': 'Claude (Anthropic)',
+        'key': 'claude',
+        'env_key': 'anthropic_api_key',
+        'url': 'https://console.anthropic.com/settings/keys',
+    },
+    '2': {
+        'name': 'ChatGPT (OpenAI)',
+        'key': 'openai',
+        'env_key': 'openai_api_key',
+        'url': 'https://platform.openai.com/api-keys',
+    },
+    '3': {
+        'name': 'Gemini (Google)',
+        'key': 'gemini',
+        'env_key': 'gemini_api_key',
+        'url': 'https://aistudio.google.com/apikey',
+    },
+    '4': {
+        'name': 'Grok (xAI)',
+        'key': 'grok',
+        'env_key': 'grok_api_key',
+        'url': 'https://console.x.ai/',
+    },
+}
+
+
+def prompt_for_ai_provider(config):
+    """Prompt user to select an AI provider and enter their API key"""
+    print()
+    print_header("Select AI Provider")
+    print()
+
+    for num, provider in AI_PROVIDERS.items():
+        print(f"  {num}. {provider['name']}")
+    print()
+
+    while True:
+        choice = input("Enter choice (1-4): ").strip()
+        if choice in AI_PROVIDERS:
+            break
+        print_warning("Please enter 1, 2, 3, or 4")
+
+    provider = AI_PROVIDERS[choice]
+    print()
+    print_info(f"Selected: {provider['name']}")
+    print_info(f"Get your API key at: {provider['url']}")
+    print()
+
+    api_key = prompt_input(f"{provider['name']} API key", required=False)
+
+    if api_key:
+        config['system_ai_provider'] = provider['key']
+        config[provider['env_key']] = api_key
+        print_success(f"Configured {provider['name']} as system AI provider")
+    else:
+        print_warning("No API key provided, skipping AI configuration")
+
+    return config
+
+
 def check_python_version():
     """Ensure Python 3.10+ is being used (required for numpy 2.x, pandas 2.x)"""
     version = sys.version_info
@@ -912,11 +976,16 @@ DATABASE_URL=sqlite+aiosqlite:///./trading.db
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
 # =============================================================================
-# System AI API Keys (for news analysis, YouTube analysis, coin categorization)
-# These are shared across all users. Per-user AI trading bot keys are stored
-# in the database and configured via Settings in the UI.
+# System AI Configuration (for coin categorization)
+# This AI analyzes coins to categorize them (APPROVED, BORDERLINE, BLACKLISTED).
+# News and YouTube are pulled directly from RSS feeds, not AI.
+# Per-user AI trading bot keys are stored in the database via Settings.
 # =============================================================================
 """
+
+    # Add system AI provider
+    provider = config.get('system_ai_provider', 'claude')
+    env_content += f"SYSTEM_AI_PROVIDER={provider}\n"
 
     if config.get('anthropic_api_key'):
         env_content += f"ANTHROPIC_API_KEY={config['anthropic_api_key']}\n"
@@ -928,10 +997,15 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173
     else:
         env_content += "# OPENAI_API_KEY=\n"
 
-    if config.get('google_api_key'):
-        env_content += f"GOOGLE_API_KEY={config['google_api_key']}\n"
+    if config.get('gemini_api_key'):
+        env_content += f"GEMINI_API_KEY={config['gemini_api_key']}\n"
     else:
-        env_content += "# GOOGLE_API_KEY=\n"
+        env_content += "# GEMINI_API_KEY=\n"
+
+    if config.get('grok_api_key'):
+        env_content += f"GROK_API_KEY={config['grok_api_key']}\n"
+    else:
+        env_content += "# GROK_API_KEY=\n"
 
     env_content += """
 # =============================================================================
@@ -1231,36 +1305,28 @@ def run_setup():
             print_success(f"Backed up existing .env to {backup_path}")
 
             print()
-            print_info("System AI keys (optional) - used for news analysis, YouTube analysis,")
-            print_info("and coin categorization. These are shared across all users.")
-            print_info("(Note: AI trading bot keys are configured per-user in Settings)")
+            print_info("System AI (optional) - used for coin categorization.")
+            print_info("This AI analyzes coins weekly to categorize them as APPROVED,")
+            print_info("BORDERLINE, QUESTIONABLE, or BLACKLISTED.")
+            print_info("(News and YouTube are pulled directly from RSS feeds, not AI)")
+            print_info("(Per-user AI trading bot keys are configured in Settings)")
             print()
 
-            if prompt_yes_no("Configure system Anthropic (Claude) API key?", default='no'):
-                config['anthropic_api_key'] = prompt_input("Anthropic API key", required=False)
-
-            if prompt_yes_no("Configure system OpenAI API key?", default='no'):
-                config['openai_api_key'] = prompt_input("OpenAI API key", required=False)
-
-            if prompt_yes_no("Configure system Google (Gemini) API key?", default='no'):
-                config['google_api_key'] = prompt_input("Google API key", required=False)
+            if prompt_yes_no("Configure a system AI provider for coin categorization?", default='no'):
+                config = prompt_for_ai_provider(config)
 
             generate_env_file(project_root, config)
     else:
         print()
-        print_info("System AI keys (optional) - used for news analysis, YouTube analysis,")
-        print_info("and coin categorization. These are shared across all users.")
-        print_info("(Note: AI trading bot keys are configured per-user in Settings)")
+        print_info("System AI (optional) - used for coin categorization.")
+        print_info("This AI analyzes coins weekly to categorize them as APPROVED,")
+        print_info("BORDERLINE, QUESTIONABLE, or BLACKLISTED.")
+        print_info("(News and YouTube are pulled directly from RSS feeds, not AI)")
+        print_info("(Per-user AI trading bot keys are configured in Settings)")
         print()
 
-        if prompt_yes_no("Configure system Anthropic (Claude) API key?", default='no'):
-            config['anthropic_api_key'] = prompt_input("Anthropic API key", required=False)
-
-        if prompt_yes_no("Configure system OpenAI API key?", default='no'):
-            config['openai_api_key'] = prompt_input("OpenAI API key", required=False)
-
-        if prompt_yes_no("Configure system Google (Gemini) API key?", default='no'):
-            config['google_api_key'] = prompt_input("Google API key", required=False)
+        if prompt_yes_no("Configure a system AI provider for coin categorization?", default='no'):
+            config = prompt_for_ai_provider(config)
 
         generate_env_file(project_root, config)
 

@@ -22,10 +22,15 @@ class Settings(BaseSettings):
             return v.replace("\\n", "\n")
         return v
 
-    # AI Provider API Keys (for AI Autonomous Trading)
+    # System AI Provider (for news analysis, coin categorization, YouTube analysis)
+    # Options: claude, gemini, grok, openai
+    system_ai_provider: str = "claude"
+
+    # AI Provider API Keys
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     grok_api_key: str = ""  # x.AI Grok API
+    openai_api_key: str = ""
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./trading.db"
