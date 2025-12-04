@@ -15,9 +15,10 @@ Handles:
 - Auto-start services and display access URL
 
 Usage:
-  python3 setup.py                 # Full setup wizard
-  python3 setup.py --services-only # Only create/install service files
-  python3 setup.py --help          # Show help
+  python3 setup.py                    # Full setup wizard
+  python3 setup.py --services-only    # Only create/install service files
+  python3 setup.py --uninstall-services # Stop and remove service files
+  python3 setup.py --help             # Show help
 """
 
 import argparse
@@ -1279,6 +1280,129 @@ def run_services_only():
     return True
 
 
+def run_uninstall_services():
+    """Stop and remove service files"""
+    print_header("Zenith Grid Service Removal")
+
+    project_root = get_project_root()
+    os_type = detect_os()
+
+    print(f"Project directory: {project_root}")
+    print(f"Detected OS: {os_type.capitalize()}")
+    print()
+
+    if os_type == 'linux':
+        print_info("Removing systemd services...")
+
+        backend_service = Path('/etc/systemd/system/zenith-backend.service')
+        frontend_service = Path('/etc/systemd/system/zenith-frontend.service')
+
+        # Check if services exist
+        backend_exists = backend_service.exists()
+        frontend_exists = frontend_service.exists()
+
+        if not backend_exists and not frontend_exists:
+            print_warning("No Zenith Grid services found installed")
+            return True
+
+        try:
+            # Stop services first
+            print_info("Stopping services...")
+            subprocess.run(['sudo', 'systemctl', 'stop', 'zenith-backend'], capture_output=True)
+            subprocess.run(['sudo', 'systemctl', 'stop', 'zenith-frontend'], capture_output=True)
+            print_success("Services stopped")
+
+            # Disable services
+            print_info("Disabling services...")
+            subprocess.run(['sudo', 'systemctl', 'disable', 'zenith-backend'], capture_output=True)
+            subprocess.run(['sudo', 'systemctl', 'disable', 'zenith-frontend'], capture_output=True)
+            print_success("Services disabled")
+
+            # Remove service files
+            print_info("Removing service files...")
+            if backend_exists:
+                subprocess.run(['sudo', 'rm', str(backend_service)], check=True)
+                print_success(f"Removed {backend_service}")
+            if frontend_exists:
+                subprocess.run(['sudo', 'rm', str(frontend_service)], check=True)
+                print_success(f"Removed {frontend_service}")
+
+            # Reload systemd
+            subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
+            print_success("Systemd reloaded")
+
+        except subprocess.CalledProcessError as e:
+            print_error(f"Failed to remove services: {e}")
+            return False
+
+    elif os_type == 'mac':
+        print_info("Removing launchd services...")
+
+        launch_agents_dir = Path.home() / 'Library' / 'LaunchAgents'
+        backend_plist = launch_agents_dir / 'com.zenithgrid.backend.plist'
+        frontend_plist = launch_agents_dir / 'com.zenithgrid.frontend.plist'
+
+        # Check if services exist
+        backend_exists = backend_plist.exists()
+        frontend_exists = frontend_plist.exists()
+
+        if not backend_exists and not frontend_exists:
+            print_warning("No Zenith Grid services found installed")
+            return True
+
+        try:
+            # Unload services first (stop them)
+            print_info("Unloading services...")
+            if backend_exists:
+                subprocess.run(['launchctl', 'unload', str(backend_plist)], capture_output=True)
+            if frontend_exists:
+                subprocess.run(['launchctl', 'unload', str(frontend_plist)], capture_output=True)
+            print_success("Services unloaded (stopped)")
+
+            # Remove plist files
+            print_info("Removing plist files...")
+            if backend_exists:
+                backend_plist.unlink()
+                print_success(f"Removed {backend_plist}")
+            if frontend_exists:
+                frontend_plist.unlink()
+                print_success(f"Removed {frontend_plist}")
+
+        except Exception as e:
+            print_error(f"Failed to remove services: {e}")
+            return False
+
+    else:
+        print_error("Unknown OS - cannot remove services")
+        return False
+
+    # Also remove local deployment files if they exist
+    deployment_dir = project_root / 'deployment'
+    if deployment_dir.exists():
+        if prompt_yes_no("Also remove local service files in deployment/?", default='no'):
+            try:
+                shutil.rmtree(deployment_dir)
+                print_success("Removed deployment/ directory")
+            except Exception as e:
+                print_warning(f"Could not remove deployment/: {e}")
+
+    print()
+    print_header("Service Removal Complete!")
+    print()
+    print("Services have been stopped and removed.")
+    print("To run Zenith Grid manually:")
+    print()
+    print("  Backend:")
+    print(f"    cd {project_root}/backend")
+    print("    ./venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8100")
+    print()
+    print("  Frontend:")
+    print(f"    cd {project_root}/frontend")
+    print("    npm run dev -- --host 0.0.0.0")
+    print()
+    return True
+
+
 def main():
     """Main entry point with argument parsing"""
     parser = argparse.ArgumentParser(
@@ -1286,8 +1410,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python3 setup.py                 Full interactive setup
-  python3 setup.py --services-only Create and install service files only
+  python3 setup.py                    Full interactive setup
+  python3 setup.py --services-only    Create and install service files only
+  python3 setup.py --uninstall-services  Stop and remove installed services
         """
     )
     parser.add_argument(
@@ -1295,10 +1420,17 @@ Examples:
         action='store_true',
         help='Only create/install service files (skip full setup)'
     )
+    parser.add_argument(
+        '--uninstall-services',
+        action='store_true',
+        help='Stop and remove installed service files'
+    )
 
     args = parser.parse_args()
 
-    if args.services_only:
+    if args.uninstall_services:
+        return run_uninstall_services()
+    elif args.services_only:
         return run_services_only()
     else:
         return run_setup()
