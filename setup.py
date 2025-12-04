@@ -15,10 +15,11 @@ Handles:
 - Auto-start services and display access URL
 
 Usage:
-  python3 setup.py                    # Full setup wizard
-  python3 setup.py --services-only    # Only create/install service files
+  python3 setup.py                      # Full setup wizard
+  python3 setup.py --services-only      # Only create/install service files
   python3 setup.py --uninstall-services # Stop and remove service files
-  python3 setup.py --help             # Show help
+  python3 setup.py --cleanup            # Remove dependencies (venv, node_modules, optionally db)
+  python3 setup.py --help               # Show help
 """
 
 import argparse
@@ -1403,6 +1404,112 @@ def run_uninstall_services():
     return True
 
 
+def run_cleanup():
+    """Remove dependencies and optionally database for fresh setup"""
+    print_header("Zenith Grid Cleanup")
+
+    project_root = get_project_root()
+
+    print(f"Project directory: {project_root}")
+    print()
+
+    venv_path = project_root / 'backend' / 'venv'
+    node_modules_path = project_root / 'frontend' / 'node_modules'
+    db_path = project_root / 'backend' / 'trading.db'
+    env_path = project_root / 'backend' / '.env'
+    deployment_path = project_root / 'deployment'
+
+    # Show what exists
+    print_info("Current state:")
+    print(f"  Python venv:      {'exists' if venv_path.exists() else 'not found'}")
+    print(f"  node_modules:     {'exists' if node_modules_path.exists() else 'not found'}")
+    print(f"  Database:         {'exists' if db_path.exists() else 'not found'}")
+    print(f"  .env file:        {'exists' if env_path.exists() else 'not found'}")
+    print(f"  deployment/:      {'exists' if deployment_path.exists() else 'not found'}")
+    print()
+
+    # Always remove venv and node_modules
+    if venv_path.exists():
+        print_info("Removing Python virtual environment...")
+        try:
+            shutil.rmtree(venv_path)
+            print_success(f"Removed {venv_path}")
+        except Exception as e:
+            print_error(f"Failed to remove venv: {e}")
+
+    if node_modules_path.exists():
+        print_info("Removing node_modules...")
+        try:
+            shutil.rmtree(node_modules_path)
+            print_success(f"Removed {node_modules_path}")
+        except Exception as e:
+            print_error(f"Failed to remove node_modules: {e}")
+
+    # Ask about database
+    if db_path.exists():
+        print()
+        print_warning("Database contains user accounts, bots, and trading history!")
+        if prompt_yes_no("Delete database (trading.db)?", default='no'):
+            try:
+                db_path.unlink()
+                print_success(f"Removed {db_path}")
+            except Exception as e:
+                print_error(f"Failed to remove database: {e}")
+
+            # Also look for database backups
+            backend_path = project_root / 'backend'
+            backups = list(backend_path.glob('trading.db*backup*')) + list(backend_path.glob('*.db.bak'))
+            if backups:
+                print_info(f"Found {len(backups)} database backup(s)")
+                if prompt_yes_no("Delete database backups too?", default='no'):
+                    for backup in backups:
+                        try:
+                            backup.unlink()
+                            print_success(f"Removed {backup.name}")
+                        except Exception as e:
+                            print_warning(f"Failed to remove {backup.name}: {e}")
+
+    # Ask about .env
+    if env_path.exists():
+        print()
+        print_warning(".env contains API keys and configuration!")
+        if prompt_yes_no("Delete .env file?", default='no'):
+            try:
+                env_path.unlink()
+                print_success(f"Removed {env_path}")
+            except Exception as e:
+                print_error(f"Failed to remove .env: {e}")
+
+            # Check for .env backups
+            env_backups = list((project_root / 'backend').glob('.env.backup*'))
+            if env_backups:
+                if prompt_yes_no("Delete .env backups too?", default='no'):
+                    for backup in env_backups:
+                        try:
+                            backup.unlink()
+                            print_success(f"Removed {backup.name}")
+                        except Exception as e:
+                            print_warning(f"Failed to remove {backup.name}: {e}")
+
+    # Ask about deployment directory
+    if deployment_path.exists():
+        if prompt_yes_no("Delete deployment/ (service files)?", default='no'):
+            try:
+                shutil.rmtree(deployment_path)
+                print_success(f"Removed {deployment_path}")
+            except Exception as e:
+                print_error(f"Failed to remove deployment/: {e}")
+
+    print()
+    print_header("Cleanup Complete!")
+    print()
+    print("You can now run a fresh setup with:")
+    print(f"  cd {project_root}")
+    print("  python3 setup.py")
+    print()
+    return True
+
+
 def main():
     """Main entry point with argument parsing"""
     parser = argparse.ArgumentParser(
@@ -1410,9 +1517,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python3 setup.py                    Full interactive setup
-  python3 setup.py --services-only    Create and install service files only
-  python3 setup.py --uninstall-services  Stop and remove installed services
+  python3 setup.py                      Full interactive setup
+  python3 setup.py --services-only      Create and install service files only
+  python3 setup.py --uninstall-services Stop and remove installed services
+  python3 setup.py --cleanup            Remove dependencies for fresh setup
         """
     )
     parser.add_argument(
@@ -1425,10 +1533,17 @@ Examples:
         action='store_true',
         help='Stop and remove installed service files'
     )
+    parser.add_argument(
+        '--cleanup',
+        action='store_true',
+        help='Remove venv, node_modules, and optionally db/.env for fresh setup'
+    )
 
     args = parser.parse_args()
 
-    if args.uninstall_services:
+    if args.cleanup:
+        return run_cleanup()
+    elif args.uninstall_services:
         return run_uninstall_services()
     elif args.services_only:
         return run_services_only()
