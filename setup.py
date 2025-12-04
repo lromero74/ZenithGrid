@@ -188,8 +188,35 @@ def check_python_version():
                     except subprocess.CalledProcessError as e:
                         print_error(f"Failed to install Python 3.11: {e}")
             else:
-                print_info("Install Homebrew first: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
-                print_info("Then run: brew install python@3.11 && python3.11 setup.py")
+                # Homebrew not installed - offer to install it
+                print_warning("Homebrew is not installed (required for Python 3.11 on Mac)")
+                print()
+                if prompt_yes_no("Install Homebrew?", default='yes'):
+                    print_info("Installing Homebrew...")
+                    try:
+                        # Run the official Homebrew installer
+                        subprocess.run(
+                            ['/bin/bash', '-c',
+                             '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'],
+                            check=True
+                        )
+                        print_success("Homebrew installed!")
+                        print()
+                        # Now install Python 3.11
+                        print_info("Installing Python 3.11...")
+                        subprocess.run(['/opt/homebrew/bin/brew', 'install', 'python@3.11'], check=True)
+                        print_success("Python 3.11 installed!")
+                        print()
+                        print_info("Please re-run setup with: python3.11 setup.py")
+                    except subprocess.CalledProcessError as e:
+                        print_error(f"Installation failed: {e}")
+                        print_info("Try manually: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+                        print_info("Then run: brew install python@3.11 && python3.11 setup.py")
+                else:
+                    print_info("To install manually:")
+                    print_info("  1. /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+                    print_info("  2. brew install python@3.11")
+                    print_info("  3. python3.11 setup.py")
 
         elif os_type == 'linux':
             # Detect package manager
