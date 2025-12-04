@@ -1,13 +1,15 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History, Newspaper } from 'lucide-react'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History, Newspaper, LogOut } from 'lucide-react'
 import { positionsApi } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
 import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { useAccount } from './contexts/AccountContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import Login from './pages/Login'
 
 // Lazy load pages for faster initial render
 // Dashboard is eager-loaded since it's the landing page
@@ -21,10 +23,12 @@ const Strategies = lazy(() => import('./pages/Strategies'))
 const Portfolio = lazy(() => import('./pages/Portfolio'))
 const News = lazy(() => import('./pages/News'))
 
-function App() {
+// Main App content (shown when authenticated)
+function AppContent() {
   const location = useLocation()
   const navigate = useNavigate()
   const { selectedAccount } = useAccount()
+  const { user, logout } = useAuth()
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
 
   // Track last seen count of history items (closed + failed)
@@ -145,6 +149,21 @@ function App() {
                 </p>
               </div>
               <DollarSign className="w-8 h-8 sm:w-10 sm:h-10 text-green-500 opacity-50" />
+
+              {/* User Info & Logout */}
+              <div className="flex items-center space-x-2 pl-4 border-l border-slate-600">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs text-slate-400">Logged in as</p>
+                  <p className="text-sm text-slate-200">{user?.display_name || user?.email}</p>
+                </div>
+                <button
+                  onClick={logout}
+                  className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -330,4 +349,35 @@ function App() {
   )
 }
 
-export default App
+// Root App component - handles authentication wrapper
+function App() {
+  const { isAuthenticated, isLoading } = useAuth()
+
+  // Show loading spinner while checking auth state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <LoadingSpinner size="lg" text="Loading..." />
+      </div>
+    )
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <Login />
+  }
+
+  // Show main app content
+  return <AppContent />
+}
+
+// Export with AuthProvider wrapper
+function AppWithAuth() {
+  return (
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  )
+}
+
+export default AppWithAuth

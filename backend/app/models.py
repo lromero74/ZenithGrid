@@ -31,6 +31,39 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
+class User(Base):
+    """
+    User model for authentication and multi-tenancy.
+
+    Each user has their own:
+    - Exchange accounts (CEX/DEX)
+    - Bots and trading configurations
+    - Positions and trade history
+    - Templates and blacklisted coins
+    """
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)  # Admin privileges
+
+    # Profile info
+    display_name = Column(String, nullable=True)  # Optional display name
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
+    bots = relationship("Bot", back_populates="user", cascade="all, delete-orphan")
+    bot_templates = relationship("BotTemplate", back_populates="user", cascade="all, delete-orphan")
+    blacklisted_coins = relationship("BlacklistedCoin", back_populates="user", cascade="all, delete-orphan")
+
+
 class Account(Base):
     """
     Account model for managing CEX and DEX connections.
@@ -45,6 +78,7 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for migration)
     name = Column(String, nullable=False)  # User-friendly account name
     type = Column(String, nullable=False)  # "cex" or "dex"
     is_default = Column(Boolean, default=False)  # Default account for UI
@@ -68,6 +102,7 @@ class Account(Base):
     last_used_at = Column(DateTime, nullable=True)
 
     # Relationships
+    user = relationship("User", back_populates="accounts")
     bots = relationship("Bot", back_populates="account")
 
     def get_display_name(self) -> str:
@@ -86,6 +121,7 @@ class Bot(Base):
     __tablename__ = "bots"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for migration)
     name = Column(String, unique=True, index=True)  # User-defined bot name
     description = Column(Text, nullable=True)  # Optional description
 
@@ -129,6 +165,7 @@ class Bot(Base):
     last_ai_check = Column(DateTime, nullable=True)  # Last time AI analysis was performed (expensive operation)
 
     # Relationships
+    user = relationship("User", back_populates="bots")
     account = relationship("Account", back_populates="bots")
     positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
     pending_orders = relationship("PendingOrder", back_populates="bot", cascade="all, delete-orphan")
@@ -185,6 +222,7 @@ class BotTemplate(Base):
     __tablename__ = "bot_templates"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for system presets)
     name = Column(String, unique=True, index=True)  # Template name
     description = Column(Text, nullable=True)  # Optional description
 
@@ -200,6 +238,9 @@ class BotTemplate(Base):
     is_default = Column(Boolean, default=False)  # System preset vs user-created
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="bot_templates")
 
 
 class Position(Base):
@@ -519,6 +560,10 @@ class BlacklistedCoin(Base):
     __tablename__ = "blacklisted_coins"
 
     id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String, unique=True, index=True)  # e.g., "ICP", "EOS", "DOGE"
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for migration)
+    symbol = Column(String, index=True)  # e.g., "ICP", "EOS", "DOGE" - unique per user, not globally
     reason = Column(Text, nullable=True)  # Why the coin is blacklisted
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="blacklisted_coins")

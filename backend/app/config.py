@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-secret-key"
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # JWT Authentication
+    jwt_secret_key: str = "jwt-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+    jwt_refresh_token_expire_days: int = 7
+
     # Trading Parameters
     initial_btc_percentage: float = 5.0
     dca_percentage: float = 3.0

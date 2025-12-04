@@ -11,7 +11,7 @@ and the UI can filter by selected account.
 
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -19,8 +19,9 @@ from sqlalchemy import select, update, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Account, Bot, Position
+from app.models import Account, Bot, Position, User
 from app.services.dex_wallet_service import dex_wallet_service
+from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
 
@@ -139,16 +140,20 @@ class AccountWithBalance(AccountResponse):
 @router.get("", response_model=List[AccountResponse])
 async def list_accounts(
     include_inactive: bool = False,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
-    List all accounts.
+    List all accounts for the current user.
 
     Returns all active accounts by default. Set include_inactive=true to include
-    disabled accounts.
+    disabled accounts. If authenticated, returns only accounts belonging to the user.
     """
     try:
         query = select(Account)
+        # Filter by user if authenticated
+        if current_user:
+            query = query.where(Account.user_id == current_user.id)
         if not include_inactive:
             query = query.where(Account.is_active == True)
         query = query.order_by(Account.is_default.desc(), Account.created_at.asc())
@@ -193,11 +198,15 @@ async def list_accounts(
 @router.get("/{account_id}", response_model=AccountResponse)
 async def get_account(
     account_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get a specific account by ID."""
+    """Get a specific account by ID (must belong to current user if authenticated)."""
     try:
         query = select(Account).where(Account.id == account_id)
+        # Filter by user if authenticated
+        if current_user:
+            query = query.where(Account.user_id == current_user.id)
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
@@ -239,10 +248,11 @@ async def get_account(
 @router.post("", response_model=AccountResponse)
 async def create_account(
     account_data: AccountCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
-    Create a new account.
+    Create a new account for the current user.
 
     For CEX accounts, provide exchange, api_key_name, and api_private_key.
     For DEX accounts, provide chain_id, wallet_address, and optionally rpc_url and wallet_private_key.
@@ -262,10 +272,13 @@ async def create_account(
             if not account_data.wallet_address:
                 raise HTTPException(status_code=400, detail="DEX accounts require 'wallet_address' field")
 
-        # If this is set as default, unset other defaults
+        # If this is set as default, unset other defaults (for this user if authenticated)
         if account_data.is_default:
+            default_filter = Account.is_default == True
+            if current_user:
+                default_filter = (Account.is_default == True) & (Account.user_id == current_user.id)
             await db.execute(
-                update(Account).where(Account.is_default == True).values(is_default=False)
+                update(Account).where(default_filter).values(is_default=False)
             )
 
         # Create the account
@@ -273,6 +286,7 @@ async def create_account(
             name=account_data.name,
             type=account_data.type,
             is_default=account_data.is_default,
+            user_id=current_user.id if current_user else None,
             is_active=True,
             exchange=account_data.exchange,
             api_key_name=account_data.api_key_name,

@@ -19,6 +19,7 @@ from app.routers import settings_router
 from app.routers import system_router
 from app.routers import blacklist_router
 from app.routers import news_router
+from app.routers import auth_router  # User authentication
 from app.services.websocket_manager import ws_manager
 import asyncio
 
@@ -85,6 +86,7 @@ app.dependency_overrides[system_get_price_monitor] = override_get_price_monitor
 set_coinbase_client(exchange_client)
 
 # Include all routers
+app.include_router(auth_router.router)  # Authentication (login, register, etc.)
 app.include_router(bots_router)  # Existing routers
 app.include_router(order_history_router)
 app.include_router(templates_router)
