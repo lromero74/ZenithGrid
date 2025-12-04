@@ -513,3 +513,49 @@ async def signup(
             last_login_at=new_user.last_login_at,
         ),
     )
+
+
+# =============================================================================
+# User Preferences Endpoints
+# =============================================================================
+
+
+class LastSeenHistoryRequest(BaseModel):
+    """Request to update last seen history count"""
+    count: int = Field(..., ge=0)
+
+
+class LastSeenHistoryResponse(BaseModel):
+    """Response with last seen history count"""
+    last_seen_history_count: int
+
+
+@router.get("/preferences/last-seen-history", response_model=LastSeenHistoryResponse)
+async def get_last_seen_history(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the user's last seen history count.
+    Used for the "new items" badge in the History tab.
+    """
+    return LastSeenHistoryResponse(
+        last_seen_history_count=current_user.last_seen_history_count or 0
+    )
+
+
+@router.put("/preferences/last-seen-history", response_model=LastSeenHistoryResponse)
+async def update_last_seen_history(
+    request: LastSeenHistoryRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update the user's last seen history count.
+    Called when the user views the History tab.
+    """
+    current_user.last_seen_history_count = request.count
+    await db.commit()
+
+    return LastSeenHistoryResponse(
+        last_seen_history_count=current_user.last_seen_history_count
+    )

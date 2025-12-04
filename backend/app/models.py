@@ -52,6 +52,9 @@ class User(Base):
     # Profile info
     display_name = Column(String, nullable=True)  # Optional display name
 
+    # UI preferences
+    last_seen_history_count = Column(Integer, default=0)  # For "new items" badge in History tab
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

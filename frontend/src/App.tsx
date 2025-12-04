@@ -28,15 +28,34 @@ function AppContent() {
   const location = useLocation()
   const navigate = useNavigate()
   const { selectedAccount } = useAccount()
-  const { user, logout } = useAuth()
+  const { user, logout, getAccessToken } = useAuth()
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
-  // Track last seen count of history items (closed + failed)
-  const [lastSeenHistoryCount, setLastSeenHistoryCount] = useState<number>(() => {
-    const saved = localStorage.getItem('last-seen-history-count')
-    return saved ? parseInt(saved) : 0
-  })
+  // Track last seen count of history items (closed + failed) - fetched from server
+  const [lastSeenHistoryCount, setLastSeenHistoryCount] = useState<number>(0)
+
+  // Fetch last seen history count from server on mount
+  useEffect(() => {
+    const fetchLastSeenCount = async () => {
+      const token = getAccessToken()
+      if (!token) return
+
+      try {
+        const response = await fetch('/api/auth/preferences/last-seen-history', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setLastSeenHistoryCount(data.last_seen_history_count || 0)
+        }
+      } catch (error) {
+        console.error('Failed to fetch last seen history count:', error)
+      }
+    }
+
+    fetchLastSeenCount()
+  }, [getAccessToken])
 
   // Defer non-critical API calls until after initial render
   const [deferredQueriesEnabled, setDeferredQueriesEnabled] = useState(false)
@@ -95,20 +114,32 @@ function AppContent() {
   // Mark history as viewed after a few seconds on History page
   useEffect(() => {
     if (location.pathname === '/history') {
-      console.log('🔴 History page opened, setting 3s timer')
-      const timer = setTimeout(() => {
-        console.log('✅ Timer fired! Updating last seen count from', lastSeenHistoryCount, 'to', currentHistoryCount)
+      const timer = setTimeout(async () => {
+        // Update local state immediately
         setLastSeenHistoryCount(currentHistoryCount)
-        localStorage.setItem('last-seen-history-count', currentHistoryCount.toString())
+
+        // Save to server
+        const token = getAccessToken()
+        if (token) {
+          try {
+            await fetch('/api/auth/preferences/last-seen-history', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ count: currentHistoryCount })
+            })
+          } catch (error) {
+            console.error('Failed to save last seen history count:', error)
+          }
+        }
       }, 3000) // Clear badge after 3 seconds
 
       // Cleanup timer if user navigates away before it completes
-      return () => {
-        console.log('🧹 Cleaning up timer (page navigation)')
-        clearTimeout(timer)
-      }
+      return () => clearTimeout(timer)
     }
-  }, [location.pathname, currentHistoryCount, lastSeenHistoryCount])
+  }, [location.pathname, currentHistoryCount, getAccessToken])
 
   return (
     <NotificationProvider>
