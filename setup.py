@@ -24,6 +24,7 @@ Usage:
 
 import argparse
 import getpass
+import itertools
 import os
 import platform
 import re
@@ -32,6 +33,8 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -95,6 +98,72 @@ def print_error(text):
 
 def print_info(text):
     print(f"{Colors.BLUE}ℹ {text}{Colors.ENDC}")
+
+
+class Spinner:
+    """Animated spinner for long-running operations"""
+
+    def __init__(self, message="Working"):
+        self.message = message
+        self.running = False
+        self.thread = None
+        self.spinner_chars = itertools.cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
+
+    def _spin(self):
+        while self.running:
+            char = next(self.spinner_chars)
+            sys.stdout.write(f"\r{Colors.CYAN}{char} {self.message}...{Colors.ENDC}")
+            sys.stdout.flush()
+            time.sleep(0.1)
+
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._spin)
+        self.thread.start()
+
+    def stop(self, success=True, message=None):
+        self.running = False
+        if self.thread:
+            self.thread.join()
+        # Clear the spinner line
+        sys.stdout.write('\r' + ' ' * (len(self.message) + 10) + '\r')
+        sys.stdout.flush()
+        # Print final status
+        if message:
+            if success:
+                print_success(message)
+            else:
+                print_error(message)
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop(success=(exc_type is None))
+        return False
+
+
+def run_with_spinner(command, message, success_msg=None, error_msg=None, **kwargs):
+    """Run a subprocess command with a spinner animation"""
+    spinner = Spinner(message)
+    spinner.start()
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            **kwargs
+        )
+        spinner.stop(
+            success=(result.returncode == 0),
+            message=success_msg if result.returncode == 0 else (error_msg or f"Failed: {result.stderr[:100]}")
+        )
+        return result
+    except Exception as e:
+        spinner.stop(success=False, message=error_msg or str(e))
+        raise
+
 
 def get_project_root():
     """Get the project root directory"""
@@ -179,36 +248,44 @@ def check_python_version():
             if shutil.which('brew'):
                 print()
                 if prompt_yes_no("Install Python 3.11 via Homebrew?", default='yes'):
-                    print_info("Installing Python 3.11...")
                     try:
-                        subprocess.run(['brew', 'install', 'python@3.11'], check=True)
-                        print_success("Python 3.11 installed!")
-                        print()
-                        print_info("Please re-run setup with: python3.11 setup.py")
-                    except subprocess.CalledProcessError as e:
+                        result = run_with_spinner(
+                            ['brew', 'install', 'python@3.11'],
+                            "Installing Python 3.11 (this may take a few minutes)",
+                            success_msg="Python 3.11 installed!",
+                            error_msg="Failed to install Python 3.11"
+                        )
+                        if result.returncode == 0:
+                            print()
+                            print_info("Please re-run setup with: python3.11 setup.py")
+                    except Exception as e:
                         print_error(f"Failed to install Python 3.11: {e}")
             else:
                 # Homebrew not installed - offer to install it
                 print_warning("Homebrew is not installed (required for Python 3.11 on Mac)")
                 print()
                 if prompt_yes_no("Install Homebrew?", default='yes'):
-                    print_info("Installing Homebrew...")
                     try:
-                        # Run the official Homebrew installer
-                        subprocess.run(
+                        result = run_with_spinner(
                             ['/bin/bash', '-c',
-                             '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'],
-                            check=True
+                             'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'],
+                            "Installing Homebrew (this may take a few minutes)",
+                            success_msg="Homebrew installed!",
+                            error_msg="Failed to install Homebrew"
                         )
-                        print_success("Homebrew installed!")
-                        print()
-                        # Now install Python 3.11
-                        print_info("Installing Python 3.11...")
-                        subprocess.run(['/opt/homebrew/bin/brew', 'install', 'python@3.11'], check=True)
-                        print_success("Python 3.11 installed!")
-                        print()
-                        print_info("Please re-run setup with: python3.11 setup.py")
-                    except subprocess.CalledProcessError as e:
+                        if result.returncode == 0:
+                            print()
+                            # Now install Python 3.11
+                            result = run_with_spinner(
+                                ['/opt/homebrew/bin/brew', 'install', 'python@3.11'],
+                                "Installing Python 3.11 (this may take a few minutes)",
+                                success_msg="Python 3.11 installed!",
+                                error_msg="Failed to install Python 3.11"
+                            )
+                            if result.returncode == 0:
+                                print()
+                                print_info("Please re-run setup with: python3.11 setup.py")
+                    except Exception as e:
                         print_error(f"Installation failed: {e}")
                         print_info("Try manually: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
                         print_info("Then run: brew install python@3.11 && python3.11 setup.py")
@@ -223,25 +300,37 @@ def check_python_version():
             if shutil.which('dnf'):
                 print()
                 if prompt_yes_no("Install Python 3.11 via dnf?", default='yes'):
-                    print_info("Installing Python 3.11...")
                     try:
-                        subprocess.run(['sudo', 'dnf', 'install', '-y', 'python3.11'], check=True)
-                        print_success("Python 3.11 installed!")
-                        print()
-                        print_info("Please re-run setup with: python3.11 setup.py")
-                    except subprocess.CalledProcessError as e:
+                        result = run_with_spinner(
+                            ['sudo', 'dnf', 'install', '-y', 'python3.11'],
+                            "Installing Python 3.11",
+                            success_msg="Python 3.11 installed!",
+                            error_msg="Failed to install Python 3.11"
+                        )
+                        if result.returncode == 0:
+                            print()
+                            print_info("Please re-run setup with: python3.11 setup.py")
+                    except Exception as e:
                         print_error(f"Failed to install Python 3.11: {e}")
             elif shutil.which('apt'):
                 print()
                 if prompt_yes_no("Install Python 3.11 via apt?", default='yes'):
-                    print_info("Installing Python 3.11...")
                     try:
-                        subprocess.run(['sudo', 'apt', 'update'], check=True)
-                        subprocess.run(['sudo', 'apt', 'install', '-y', 'python3.11', 'python3.11-venv'], check=True)
-                        print_success("Python 3.11 installed!")
-                        print()
-                        print_info("Please re-run setup with: python3.11 setup.py")
-                    except subprocess.CalledProcessError as e:
+                        run_with_spinner(
+                            ['sudo', 'apt', 'update'],
+                            "Updating package lists",
+                            success_msg="Package lists updated"
+                        )
+                        result = run_with_spinner(
+                            ['sudo', 'apt', 'install', '-y', 'python3.11', 'python3.11-venv'],
+                            "Installing Python 3.11",
+                            success_msg="Python 3.11 installed!",
+                            error_msg="Failed to install Python 3.11"
+                        )
+                        if result.returncode == 0:
+                            print()
+                            print_info("Please re-run setup with: python3.11 setup.py")
+                    except Exception as e:
                         print_error(f"Failed to install Python 3.11: {e}")
             else:
                 print_info("Please install Python 3.11 manually, then run: python3.11 setup.py")
