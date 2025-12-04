@@ -165,6 +165,20 @@ def run_with_spinner(command, message, success_msg=None, error_msg=None, **kwarg
         raise
 
 
+def reexec_with_python311():
+    """Re-execute this script with Python 3.11"""
+    python311_path = shutil.which('python3.11')
+    if python311_path:
+        print()
+        print_info("Restarting setup with Python 3.11...")
+        print()
+        # Re-exec with new Python, preserving any arguments
+        os.execv(python311_path, [python311_path, __file__] + sys.argv[1:])
+    else:
+        print_error("Could not find python3.11 in PATH after installation")
+        print_info("Please re-run setup manually with: python3.11 setup.py")
+
+
 def get_project_root():
     """Get the project root directory"""
     return Path(__file__).parent.resolve()
@@ -239,8 +253,8 @@ def check_python_version():
         python311_path = shutil.which('python3.11')
         if python311_path:
             print_info(f"Python 3.11 found at: {python311_path}")
-            print_info("Please re-run setup with: python3.11 setup.py")
-            return False
+            reexec_with_python311()
+            return False  # Only reached if reexec fails
 
         # Offer to install Python 3.11
         if os_type == 'mac':
@@ -256,8 +270,7 @@ def check_python_version():
                             error_msg="Failed to install Python 3.11"
                         )
                         if result.returncode == 0:
-                            print()
-                            print_info("Please re-run setup with: python3.11 setup.py")
+                            reexec_with_python311()
                     except Exception as e:
                         print_error(f"Failed to install Python 3.11: {e}")
             else:
@@ -283,12 +296,11 @@ def check_python_version():
                                 error_msg="Failed to install Python 3.11"
                             )
                             if result.returncode == 0:
-                                print()
-                                print_info("Please re-run setup with: python3.11 setup.py")
+                                reexec_with_python311()
                     except Exception as e:
                         print_error(f"Installation failed: {e}")
                         print_info("Try manually: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
-                        print_info("Then run: brew install python@3.11 && python3.11 setup.py")
+                        print_info("Then: brew install python@3.11 && python3.11 setup.py")
                 else:
                     print_info("To install manually:")
                     print_info("  1. /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
@@ -308,8 +320,7 @@ def check_python_version():
                             error_msg="Failed to install Python 3.11"
                         )
                         if result.returncode == 0:
-                            print()
-                            print_info("Please re-run setup with: python3.11 setup.py")
+                            reexec_with_python311()
                     except Exception as e:
                         print_error(f"Failed to install Python 3.11: {e}")
             elif shutil.which('apt'):
@@ -328,8 +339,7 @@ def check_python_version():
                             error_msg="Failed to install Python 3.11"
                         )
                         if result.returncode == 0:
-                            print()
-                            print_info("Please re-run setup with: python3.11 setup.py")
+                            reexec_with_python311()
                     except Exception as e:
                         print_error(f"Failed to install Python 3.11: {e}")
             else:
