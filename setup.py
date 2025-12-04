@@ -163,9 +163,64 @@ def check_python_version():
     version = sys.version_info
     if version.major < 3 or (version.major == 3 and version.minor < 10):
         print_error(f"Python 3.10+ required. You have Python {version.major}.{version.minor}")
-        print_info("On Mac: brew install python@3.11 && python3.11 setup.py")
-        print_info("On Linux: sudo dnf install python3.11 (or apt install python3.11)")
+
+        os_type = detect_os()
+
+        # Check if Python 3.11 is already installed
+        python311_path = shutil.which('python3.11')
+        if python311_path:
+            print_info(f"Python 3.11 found at: {python311_path}")
+            print_info("Please re-run setup with: python3.11 setup.py")
+            return False
+
+        # Offer to install Python 3.11
+        if os_type == 'mac':
+            # Check if brew is available
+            if shutil.which('brew'):
+                print()
+                if prompt_yes_no("Install Python 3.11 via Homebrew?", default='yes'):
+                    print_info("Installing Python 3.11...")
+                    try:
+                        subprocess.run(['brew', 'install', 'python@3.11'], check=True)
+                        print_success("Python 3.11 installed!")
+                        print()
+                        print_info("Please re-run setup with: python3.11 setup.py")
+                    except subprocess.CalledProcessError as e:
+                        print_error(f"Failed to install Python 3.11: {e}")
+            else:
+                print_info("Install Homebrew first: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+                print_info("Then run: brew install python@3.11 && python3.11 setup.py")
+
+        elif os_type == 'linux':
+            # Detect package manager
+            if shutil.which('dnf'):
+                print()
+                if prompt_yes_no("Install Python 3.11 via dnf?", default='yes'):
+                    print_info("Installing Python 3.11...")
+                    try:
+                        subprocess.run(['sudo', 'dnf', 'install', '-y', 'python3.11'], check=True)
+                        print_success("Python 3.11 installed!")
+                        print()
+                        print_info("Please re-run setup with: python3.11 setup.py")
+                    except subprocess.CalledProcessError as e:
+                        print_error(f"Failed to install Python 3.11: {e}")
+            elif shutil.which('apt'):
+                print()
+                if prompt_yes_no("Install Python 3.11 via apt?", default='yes'):
+                    print_info("Installing Python 3.11...")
+                    try:
+                        subprocess.run(['sudo', 'apt', 'update'], check=True)
+                        subprocess.run(['sudo', 'apt', 'install', '-y', 'python3.11', 'python3.11-venv'], check=True)
+                        print_success("Python 3.11 installed!")
+                        print()
+                        print_info("Please re-run setup with: python3.11 setup.py")
+                    except subprocess.CalledProcessError as e:
+                        print_error(f"Failed to install Python 3.11: {e}")
+            else:
+                print_info("Please install Python 3.11 manually, then run: python3.11 setup.py")
+
         return False
+
     print_success(f"Python {version.major}.{version.minor} detected")
     return True
 
