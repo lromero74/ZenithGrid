@@ -20,6 +20,35 @@ const api = axios.create({
   timeout: 30000,
 });
 
+// Add request interceptor to attach auth token to all requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Add response interceptor to handle 401 errors (redirect to login)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear auth data and let the app redirect to login
+      localStorage.removeItem('auth_access_token');
+      localStorage.removeItem('auth_refresh_token');
+      localStorage.removeItem('auth_token_expiry');
+      localStorage.removeItem('auth_user');
+      // Trigger a page reload to show login screen
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const dashboardApi = {
   getStats: () => api.get<DashboardStats>('/dashboard').then((res) => res.data),
 };

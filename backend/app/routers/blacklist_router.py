@@ -19,7 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import BlacklistedCoin, Settings
+from app.models import BlacklistedCoin, Settings, User
+from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
 
@@ -164,9 +165,15 @@ async def update_category_settings(
 # ============================================================================
 
 @router.get("/", response_model=List[BlacklistEntry])
-async def list_blacklisted_coins(db: AsyncSession = Depends(get_db)):
+async def list_blacklisted_coins(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Get all blacklisted coins"""
     query = select(BlacklistedCoin).order_by(BlacklistedCoin.symbol)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(BlacklistedCoin.user_id == current_user.id)
     result = await db.execute(query)
     coins = result.scalars().all()
 
@@ -182,7 +189,11 @@ async def list_blacklisted_coins(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/", response_model=List[BlacklistEntry], status_code=201)
-async def add_to_blacklist(request: BlacklistAddRequest, db: AsyncSession = Depends(get_db)):
+async def add_to_blacklist(
+    request: BlacklistAddRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """
     Add one or more coins to the blacklist.
 
@@ -197,15 +208,21 @@ async def add_to_blacklist(request: BlacklistAddRequest, db: AsyncSession = Depe
         if not normalized_symbol:
             continue
 
-        # Check if already blacklisted
+        # Check if already blacklisted (for this user)
         existing_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
+        if current_user:
+            existing_query = existing_query.where(BlacklistedCoin.user_id == current_user.id)
         existing_result = await db.execute(existing_query)
         if existing_result.scalars().first():
             logger.info(f"Symbol {normalized_symbol} already blacklisted, skipping")
             continue
 
         # Add to blacklist
-        entry = BlacklistedCoin(symbol=normalized_symbol, reason=request.reason)
+        entry = BlacklistedCoin(
+            symbol=normalized_symbol,
+            reason=request.reason,
+            user_id=current_user.id if current_user else None
+        )
         db.add(entry)
         await db.flush()  # Get the ID without committing
 
@@ -225,7 +242,11 @@ async def add_to_blacklist(request: BlacklistAddRequest, db: AsyncSession = Depe
 
 
 @router.post("/single", response_model=BlacklistEntry, status_code=201)
-async def add_single_to_blacklist(request: BlacklistAddSingleRequest, db: AsyncSession = Depends(get_db)):
+async def add_single_to_blacklist(
+    request: BlacklistAddSingleRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """
     Add a single coin to the blacklist with its own reason.
     Returns error if coin is already blacklisted.
@@ -236,14 +257,20 @@ async def add_single_to_blacklist(request: BlacklistAddSingleRequest, db: AsyncS
     if not normalized_symbol:
         raise HTTPException(status_code=400, detail="Symbol cannot be empty")
 
-    # Check if already blacklisted
+    # Check if already blacklisted (for this user)
     existing_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
+    if current_user:
+        existing_query = existing_query.where(BlacklistedCoin.user_id == current_user.id)
     existing_result = await db.execute(existing_query)
     if existing_result.scalars().first():
         raise HTTPException(status_code=409, detail=f"{normalized_symbol} is already blacklisted")
 
     # Add to blacklist
-    entry = BlacklistedCoin(symbol=normalized_symbol, reason=request.reason)
+    entry = BlacklistedCoin(
+        symbol=normalized_symbol,
+        reason=request.reason,
+        user_id=current_user.id if current_user else None
+    )
     db.add(entry)
     await db.commit()
     await db.refresh(entry)
@@ -259,11 +286,18 @@ async def add_single_to_blacklist(request: BlacklistAddSingleRequest, db: AsyncS
 
 
 @router.delete("/{symbol}")
-async def remove_from_blacklist(symbol: str, db: AsyncSession = Depends(get_db)):
+async def remove_from_blacklist(
+    symbol: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Remove a coin from the blacklist"""
     normalized_symbol = symbol.upper().strip()
 
     query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(BlacklistedCoin.user_id == current_user.id)
     result = await db.execute(query)
     entry = result.scalars().first()
 
@@ -279,11 +313,19 @@ async def remove_from_blacklist(symbol: str, db: AsyncSession = Depends(get_db))
 
 
 @router.put("/{symbol}", response_model=BlacklistEntry)
-async def update_blacklist_reason(symbol: str, request: BlacklistUpdateRequest, db: AsyncSession = Depends(get_db)):
+async def update_blacklist_reason(
+    symbol: str,
+    request: BlacklistUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Update the reason for a blacklisted coin"""
     normalized_symbol = symbol.upper().strip()
 
     query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(BlacklistedCoin.user_id == current_user.id)
     result = await db.execute(query)
     entry = result.scalars().first()
 
@@ -305,11 +347,18 @@ async def update_blacklist_reason(symbol: str, request: BlacklistUpdateRequest, 
 
 
 @router.get("/check/{symbol}")
-async def check_if_blacklisted(symbol: str, db: AsyncSession = Depends(get_db)):
+async def check_if_blacklisted(
+    symbol: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Check if a specific coin is blacklisted"""
     normalized_symbol = symbol.upper().strip()
 
     query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(BlacklistedCoin.user_id == current_user.id)
     result = await db.execute(query)
     entry = result.scalars().first()
 

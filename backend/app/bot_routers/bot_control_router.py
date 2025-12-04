@@ -6,22 +6,31 @@ Handles bot activation, deactivation, and force-run operations.
 
 import logging
 from datetime import datetime, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot
+from app.models import Bot, User
+from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/{bot_id}/start")
-async def start_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
+async def start_bot(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Activate a bot to start trading"""
     query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -40,9 +49,16 @@ async def start_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{bot_id}/stop")
-async def stop_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
+async def stop_bot(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Deactivate a bot to stop trading"""
     query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -61,9 +77,16 @@ async def stop_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{bot_id}/force-run")
-async def force_run_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
+async def force_run_bot(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Force bot to run immediately on next monitor cycle"""
     query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 

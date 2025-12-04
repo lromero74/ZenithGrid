@@ -15,11 +15,12 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade
+from app.models import Account, AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
 from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails, LimitOrderFill
 from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
+from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -31,9 +32,23 @@ async def get_positions(
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get positions with optional status filter"""
     query = select(Position)
+
+    # Filter by user's accounts if authenticated
+    if current_user:
+        # Get user's account IDs
+        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+        accounts_result = await db.execute(accounts_query)
+        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        if user_account_ids:
+            query = query.where(Position.account_id.in_(user_account_ids))
+        else:
+            # User has no accounts, return empty
+            return []
+
     if status:
         query = query.where(Position.status == status)
         # Sort closed positions by close date (most recent first), others by opened_at
@@ -108,7 +123,8 @@ async def get_positions(
 @router.get("/pnl-timeseries")
 async def get_pnl_timeseries(
     account_id: Optional[int] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Get P&L time series data for cumulative profit chart (3Commas-style).
@@ -123,7 +139,17 @@ async def get_pnl_timeseries(
         Position.profit_usd is not None
     )
 
-    # Filter by account_id if provided
+    # Filter by user's accounts if authenticated
+    if current_user:
+        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+        accounts_result = await db.execute(accounts_query)
+        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        if user_account_ids:
+            query = query.where(Position.account_id.in_(user_account_ids))
+        else:
+            return {"summary": [], "by_day": [], "by_pair": [], "active_trades": 0, "most_profitable_bot": None}
+
+    # Filter by account_id if provided (must be owned by user)
     if account_id is not None:
         query = query.where(Position.account_id == account_id)
 
@@ -231,11 +257,26 @@ async def get_pnl_timeseries(
 
 
 @router.get("/{position_id}", response_model=PositionResponse)
-async def get_position(position_id: int, db: AsyncSession = Depends(get_db)):
+async def get_position(
+    position_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Get specific position details"""
     from fastapi import HTTPException
 
     query = select(Position).where(Position.id == position_id)
+
+    # Filter by user's accounts if authenticated
+    if current_user:
+        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+        accounts_result = await db.execute(accounts_query)
+        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        if user_account_ids:
+            query = query.where(Position.account_id.in_(user_account_ids))
+        else:
+            raise HTTPException(status_code=404, detail="Position not found")
+
     result = await db.execute(query)
     position = result.scalars().first()
 

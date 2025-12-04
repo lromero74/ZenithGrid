@@ -7,17 +7,18 @@ Also includes bot stats and clone operations.
 
 import logging
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot, Position
+from app.models import Bot, Position, User
 from app.strategies import StrategyDefinition, StrategyRegistry
 from app.coinbase_unified_client import CoinbaseClient
 from app.bot_routers.schemas import BotCreate, BotUpdate, BotResponse, BotStats
+from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -41,7 +42,11 @@ async def get_strategy_definition(strategy_id: str):
 
 # Bot CRUD Endpoints
 @router.post("/", response_model=BotResponse, status_code=201)
-async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
+async def create_bot(
+    bot_data: BotCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Create a new trading bot"""
     # Validate strategy exists
     try:
@@ -104,6 +109,7 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
         reserved_usd_balance=bot_data.reserved_usd_balance,
         budget_percentage=bot_data.budget_percentage,
         is_active=False,
+        user_id=current_user.id if current_user else None,
     )
 
     db.add(bot)
@@ -119,11 +125,19 @@ async def create_bot(bot_data: BotCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/", response_model=List[BotResponse])
-async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db)):
+async def list_bots(
+    active_only: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Get list of all bots"""
     import asyncio
 
     query = select(Bot).order_by(desc(Bot.created_at))
+
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
 
     if active_only:
         query = query.where(Bot.is_active)
@@ -277,9 +291,16 @@ async def list_bots(active_only: bool = False, db: AsyncSession = Depends(get_db
 
 
 @router.get("/{bot_id}", response_model=BotResponse)
-async def get_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
+async def get_bot(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Get details for a specific bot"""
     query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -301,9 +322,17 @@ async def get_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{bot_id}", response_model=BotResponse)
-async def update_bot(bot_id: int, bot_update: BotUpdate, db: AsyncSession = Depends(get_db)):
+async def update_bot(
+    bot_id: int,
+    bot_update: BotUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Update bot configuration"""
     query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -391,9 +420,16 @@ async def update_bot(bot_id: int, bot_update: BotUpdate, db: AsyncSession = Depe
 
 
 @router.delete("/{bot_id}")
-async def delete_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_bot(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Delete a bot (only if it has no open positions)"""
     query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -413,7 +449,11 @@ async def delete_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{bot_id}/clone", response_model=BotResponse, status_code=201)
-async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
+async def clone_bot(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """
     Clone/duplicate a bot configuration
 
@@ -426,6 +466,9 @@ async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
     """
     # Get original bot
     query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     original_bot = result.scalars().first()
 
@@ -479,6 +522,7 @@ async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
         is_active=False,  # Start stopped
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
+        user_id=current_user.id if current_user else None,
     )
 
     db.add(cloned_bot)
@@ -490,9 +534,16 @@ async def clone_bot(bot_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{bot_id}/stats", response_model=BotStats)
-async def get_bot_stats(bot_id: int, db: AsyncSession = Depends(get_db)):
+async def get_bot_stats(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Get statistics for a specific bot"""
     query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 

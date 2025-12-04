@@ -6,26 +6,43 @@ Handles basic position actions: cancel and force-close.
 
 import logging
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot, Position
+from app.models import Account, Bot, Position, User
 from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
 from app.trading_engine_v2 import StrategyTradingEngine
+from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/{position_id}/cancel")
-async def cancel_position(position_id: int, db: AsyncSession = Depends(get_db)):
+async def cancel_position(
+    position_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Cancel a position without selling (leave balances as-is)"""
     try:
         query = select(Position).where(Position.id == position_id)
+
+        # Filter by user's accounts if authenticated
+        if current_user:
+            accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+            accounts_result = await db.execute(accounts_query)
+            user_account_ids = [row[0] for row in accounts_result.fetchall()]
+            if user_account_ids:
+                query = query.where(Position.account_id.in_(user_account_ids))
+            else:
+                raise HTTPException(status_code=404, detail="Position not found")
+
         result = await db.execute(query)
         position = result.scalars().first()
 
@@ -50,11 +67,25 @@ async def cancel_position(position_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{position_id}/force-close")
 async def force_close_position(
-    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)
+    position_id: int,
+    db: AsyncSession = Depends(get_db),
+    coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Force close a position at current market price"""
     try:
         query = select(Position).where(Position.id == position_id)
+
+        # Filter by user's accounts if authenticated
+        if current_user:
+            accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+            accounts_result = await db.execute(accounts_query)
+            user_account_ids = [row[0] for row in accounts_result.fetchall()]
+            if user_account_ids:
+                query = query.where(Position.account_id.in_(user_account_ids))
+            else:
+                raise HTTPException(status_code=404, detail="Position not found")
+
         result = await db.execute(query)
         position = result.scalars().first()
 

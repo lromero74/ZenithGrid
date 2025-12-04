@@ -13,18 +13,27 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import AIBotLog, Bot
+from app.models import AIBotLog, Bot, User
 from app.bot_routers.schemas import AIBotLogCreate, AIBotLogResponse
+from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/{bot_id}/logs", response_model=AIBotLogResponse, status_code=201)
-async def create_ai_bot_log(bot_id: int, log_data: AIBotLogCreate, db: AsyncSession = Depends(get_db)):
+async def create_ai_bot_log(
+    bot_id: int,
+    log_data: AIBotLogCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     """Save AI bot reasoning/thinking log"""
-    # Verify bot exists
+    # Verify bot exists and belongs to user
     bot_query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        bot_query = bot_query.where(Bot.user_id == current_user.id)
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 
@@ -59,6 +68,7 @@ async def get_ai_bot_logs(
     position_id: Optional[int] = None,
     since: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Get AI bot reasoning logs (most recent first)
@@ -71,8 +81,11 @@ async def get_ai_bot_logs(
         position_id: Optional filter by position ID
         since: Optional filter for logs since this timestamp
     """
-    # Verify bot exists
+    # Verify bot exists and belongs to user
     bot_query = select(Bot).where(Bot.id == bot_id)
+    # Filter by user if authenticated
+    if current_user:
+        bot_query = bot_query.where(Bot.user_id == current_user.id)
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 
