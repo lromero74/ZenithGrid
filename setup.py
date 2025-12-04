@@ -912,24 +912,26 @@ DATABASE_URL=sqlite+aiosqlite:///./trading.db
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
 # =============================================================================
-# AI API Keys (for AI-powered trading strategies)
+# System AI API Keys (for news analysis, YouTube analysis, coin categorization)
+# These are shared across all users. Per-user AI trading bot keys are stored
+# in the database and configured via Settings in the UI.
 # =============================================================================
 """
 
     if config.get('anthropic_api_key'):
         env_content += f"ANTHROPIC_API_KEY={config['anthropic_api_key']}\n"
     else:
-        env_content += "# ANTHROPIC_API_KEY=your_anthropic_api_key_here\n"
+        env_content += "# ANTHROPIC_API_KEY=\n"
 
     if config.get('openai_api_key'):
         env_content += f"OPENAI_API_KEY={config['openai_api_key']}\n"
     else:
-        env_content += "# OPENAI_API_KEY=your_openai_api_key_here\n"
+        env_content += "# OPENAI_API_KEY=\n"
 
     if config.get('google_api_key'):
         env_content += f"GOOGLE_API_KEY={config['google_api_key']}\n"
     else:
-        env_content += "# GOOGLE_API_KEY=your_google_api_key_here\n"
+        env_content += "# GOOGLE_API_KEY=\n"
 
     env_content += """
 # =============================================================================
@@ -1229,31 +1231,35 @@ def run_setup():
             print_success(f"Backed up existing .env to {backup_path}")
 
             print()
-            print_info("AI API keys are optional but required for AI-powered trading strategies.")
+            print_info("System AI keys (optional) - used for news analysis, YouTube analysis,")
+            print_info("and coin categorization. These are shared across all users.")
+            print_info("(Note: AI trading bot keys are configured per-user in Settings)")
             print()
 
-            if prompt_yes_no("Configure Anthropic (Claude) API key?"):
+            if prompt_yes_no("Configure system Anthropic (Claude) API key?", default='no'):
                 config['anthropic_api_key'] = prompt_input("Anthropic API key", required=False)
 
-            if prompt_yes_no("Configure OpenAI API key?", default='no'):
+            if prompt_yes_no("Configure system OpenAI API key?", default='no'):
                 config['openai_api_key'] = prompt_input("OpenAI API key", required=False)
 
-            if prompt_yes_no("Configure Google (Gemini) API key?", default='no'):
+            if prompt_yes_no("Configure system Google (Gemini) API key?", default='no'):
                 config['google_api_key'] = prompt_input("Google API key", required=False)
 
             generate_env_file(project_root, config)
     else:
         print()
-        print_info("AI API keys are optional but required for AI-powered trading strategies.")
+        print_info("System AI keys (optional) - used for news analysis, YouTube analysis,")
+        print_info("and coin categorization. These are shared across all users.")
+        print_info("(Note: AI trading bot keys are configured per-user in Settings)")
         print()
 
-        if prompt_yes_no("Configure Anthropic (Claude) API key?"):
+        if prompt_yes_no("Configure system Anthropic (Claude) API key?", default='no'):
             config['anthropic_api_key'] = prompt_input("Anthropic API key", required=False)
 
-        if prompt_yes_no("Configure OpenAI API key?", default='no'):
+        if prompt_yes_no("Configure system OpenAI API key?", default='no'):
             config['openai_api_key'] = prompt_input("OpenAI API key", required=False)
 
-        if prompt_yes_no("Configure Google (Gemini) API key?", default='no'):
+        if prompt_yes_no("Configure system Google (Gemini) API key?", default='no'):
             config['google_api_key'] = prompt_input("Google API key", required=False)
 
         generate_env_file(project_root, config)
