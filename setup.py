@@ -159,11 +159,14 @@ def validate_password(password):
     return True, ""
 
 def check_python_version():
-    """Ensure Python 3.8+ is being used"""
+    """Ensure Python 3.10+ is being used (required for numpy 2.x, pandas 2.x)"""
     version = sys.version_info
-    if version.major < 3 or (version.major == 3 and version.minor < 8):
-        print_error(f"Python 3.8+ required. You have Python {version.major}.{version.minor}")
+    if version.major < 3 or (version.major == 3 and version.minor < 10):
+        print_error(f"Python 3.10+ required. You have Python {version.major}.{version.minor}")
+        print_info("On Mac: brew install python@3.11 && python3.11 setup.py")
+        print_info("On Linux: sudo dnf install python3.11 (or apt install python3.11)")
         return False
+    print_success(f"Python {version.major}.{version.minor} detected")
     return True
 
 def check_venv_exists(project_root):
