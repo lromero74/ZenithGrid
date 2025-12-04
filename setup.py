@@ -6,6 +6,8 @@ Zenith Grid Setup Wizard
 Interactive setup script for initial application configuration.
 Handles:
 - OS detection (Linux/Mac)
+- Python venv creation and dependency installation
+- Frontend npm dependency installation
 - Database initialization and migrations
 - .env configuration with API keys
 - Initial admin user creation
@@ -26,6 +28,36 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# Required Python packages (mapped to import names where different)
+REQUIRED_PACKAGES = {
+    'fastapi': 'fastapi',
+    'uvicorn': 'uvicorn',
+    'websockets': 'websockets',
+    'sqlalchemy': 'sqlalchemy',
+    'aiosqlite': 'aiosqlite',
+    'greenlet': 'greenlet',
+    'pydantic': 'pydantic',
+    'pydantic-settings': 'pydantic_settings',
+    'email-validator': 'email_validator',
+    'python-dotenv': 'dotenv',
+    'httpx': 'httpx',
+    'pandas': 'pandas',
+    'numpy': 'numpy',
+    'ta': 'ta',
+    'python-jose': 'jose',
+    'passlib': 'passlib',
+    'bcrypt': 'bcrypt',
+    'coinbase-advanced-py': 'coinbase',
+    'anthropic': 'anthropic',
+    'google-generativeai': 'google.generativeai',
+    'openai': 'openai',
+    'web3': 'web3',
+    'eth-account': 'eth_account',
+    'aiohttp': 'aiohttp',
+    'feedparser': 'feedparser',
+    'trafilatura': 'trafilatura',
+}
 
 # Color codes for terminal output
 class Colors:
@@ -162,20 +194,89 @@ def get_venv_pip(project_root):
     else:
         return project_root / 'backend' / 'venv' / 'Scripts' / 'pip.exe'
 
-def install_dependencies(project_root):
+def check_package_installed(pip_path, package_name, import_name):
+    """Check if a Python package is installed in the venv"""
+    try:
+        # Use pip show to check if package is installed
+        result = subprocess.run(
+            [str(pip_path), 'show', package_name],
+            capture_output=True,
+            text=True
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+def get_missing_packages(project_root):
+    """Get list of missing Python packages"""
+    pip_path = get_venv_pip(project_root)
+    missing = []
+
+    for package_name, import_name in REQUIRED_PACKAGES.items():
+        if not check_package_installed(pip_path, package_name, import_name):
+            missing.append(package_name)
+
+    return missing
+
+def install_dependencies(project_root, force_reinstall=False):
     """Install Python dependencies"""
     pip_path = get_venv_pip(project_root)
     requirements_path = project_root / 'backend' / 'requirements.txt'
 
-    print_info("Installing Python dependencies...")
+    # First check what's missing
+    missing = get_missing_packages(project_root)
+
+    if not missing and not force_reinstall:
+        print_success("All Python dependencies already installed")
+        return True
+
+    if missing:
+        print_info(f"Missing packages: {', '.join(missing[:5])}{'...' if len(missing) > 5 else ''}")
+
+    print_info("Installing Python dependencies from requirements.txt...")
 
     try:
-        subprocess.run([str(pip_path), 'install', '-r', str(requirements_path)],
-                      check=True, capture_output=True)
-        print_success("Dependencies installed")
+        # Upgrade pip first
+        subprocess.run([str(pip_path), 'install', '--upgrade', 'pip'],
+                      capture_output=True, check=False)
+
+        # Install all requirements
+        result = subprocess.run(
+            [str(pip_path), 'install', '-r', str(requirements_path)],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            print_warning("Some packages may have failed to install")
+            print_info(result.stderr[-500:] if len(result.stderr) > 500 else result.stderr)
+        else:
+            print_success("Dependencies installed successfully")
+
+        # Verify critical packages
+        critical = ['fastapi', 'uvicorn', 'sqlalchemy', 'bcrypt', 'pydantic']
+        still_missing = []
+        for pkg in critical:
+            if not check_package_installed(pip_path, pkg, REQUIRED_PACKAGES.get(pkg, pkg)):
+                still_missing.append(pkg)
+
+        if still_missing:
+            print_warning(f"Critical packages still missing: {', '.join(still_missing)}")
+            return False
+
         return True
     except subprocess.CalledProcessError as e:
-        print_error(f"Failed to install dependencies: {e.stderr.decode()}")
+        print_error(f"Failed to install dependencies: {e}")
+        return False
+
+def install_single_package(project_root, package_name):
+    """Install a single Python package"""
+    pip_path = get_venv_pip(project_root)
+    try:
+        subprocess.run([str(pip_path), 'install', package_name],
+                      capture_output=True, check=True)
+        return True
+    except subprocess.CalledProcessError:
         return False
 
 def check_npm_installed():
@@ -186,18 +287,49 @@ def check_npm_installed():
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
-def install_frontend_dependencies(project_root):
+def check_node_modules_exists(project_root):
+    """Check if frontend node_modules exists and has packages"""
+    node_modules = project_root / 'frontend' / 'node_modules'
+    if not node_modules.exists():
+        return False
+    # Check if it has some content (not empty)
+    try:
+        contents = list(node_modules.iterdir())
+        return len(contents) > 10  # Should have many packages
+    except Exception:
+        return False
+
+def install_frontend_dependencies(project_root, force_reinstall=False):
     """Install frontend dependencies"""
     frontend_path = project_root / 'frontend'
+
+    # Check if already installed
+    if check_node_modules_exists(project_root) and not force_reinstall:
+        print_success("Frontend dependencies already installed")
+        return True
 
     print_info("Installing frontend dependencies...")
 
     try:
-        subprocess.run(['npm', 'install'], cwd=str(frontend_path), check=True, capture_output=True)
-        print_success("Frontend dependencies installed")
-        return True
+        result = subprocess.run(
+            ['npm', 'install'],
+            cwd=str(frontend_path),
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            print_warning("npm install had issues")
+            print_info(result.stderr[-300:] if len(result.stderr) > 300 else result.stderr)
+        else:
+            print_success("Frontend dependencies installed")
+
+        return check_node_modules_exists(project_root)
     except subprocess.CalledProcessError as e:
         print_error(f"Failed to install frontend dependencies: {e}")
+        return False
+    except FileNotFoundError:
+        print_error("npm not found. Please install Node.js first.")
         return False
 
 def initialize_database(project_root):
@@ -840,31 +972,42 @@ def run_setup():
     if not check_python_version():
         return False
 
-    # Step 1: Python Virtual Environment
-    print_step(1, "Python Virtual Environment")
+    # Step 1: Python Virtual Environment & Dependencies
+    print_step(1, "Python Environment Setup")
+
+    # Auto-create venv if it doesn't exist
     if not check_venv_exists(project_root):
-        if prompt_yes_no("Virtual environment not found. Create it?"):
-            if not create_venv(project_root):
-                return False
-        else:
-            print_error("Virtual environment required. Exiting.")
+        print_info("Virtual environment not found. Creating...")
+        if not create_venv(project_root):
+            print_error("Failed to create virtual environment. Exiting.")
             return False
     else:
         print_success("Virtual environment exists")
 
-    # Install dependencies
-    if prompt_yes_no("Install/update Python dependencies?"):
+    # Check and install missing Python dependencies automatically
+    missing_packages = get_missing_packages(project_root)
+    if missing_packages:
+        print_info(f"Found {len(missing_packages)} missing Python packages")
         if not install_dependencies(project_root):
-            if not prompt_yes_no("Continue despite errors?"):
+            print_warning("Some dependencies failed to install")
+            if not prompt_yes_no("Continue anyway?", default='no'):
                 return False
+    else:
+        print_success("All Python dependencies installed")
 
     # Step 2: Frontend Dependencies
     print_step(2, "Frontend Dependencies")
     if check_npm_installed():
-        if prompt_yes_no("Install/update frontend (npm) dependencies?"):
-            install_frontend_dependencies(project_root)
+        # Auto-install if node_modules doesn't exist
+        if not check_node_modules_exists(project_root):
+            print_info("Frontend dependencies not found. Installing...")
+            if not install_frontend_dependencies(project_root):
+                print_warning("Frontend dependencies failed to install")
+        else:
+            print_success("Frontend dependencies already installed")
     else:
         print_warning("npm not found. Please install Node.js to run the frontend.")
+        print_info("Download from: https://nodejs.org/")
 
     # Step 3: Database Initialization
     print_step(3, "Database Initialization")
@@ -935,16 +1078,18 @@ def run_setup():
     user_count = cursor.fetchone()[0]
     conn.close()
 
+    create_user = False
     if user_count > 0:
         print_info(f"{user_count} user(s) already exist in database")
-        if not prompt_yes_no("Create another admin user?", default='no'):
-            print_info("Skipping user creation")
-        else:
+        if prompt_yes_no("Create another admin user?", default='no'):
             create_user = True
+        else:
+            print_info("Skipping user creation")
     else:
+        print_info("No users found. Creating initial admin user...")
         create_user = True
 
-    if user_count == 0 or (user_count > 0 and prompt_yes_no("Create another admin user?", default='no') if user_count > 0 else True):
+    if create_user:
         print()
         while True:
             email = prompt_input("Admin email address")
