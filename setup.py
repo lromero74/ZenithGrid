@@ -14,9 +14,13 @@ Handles:
 - Optional service installation (systemd/launchd)
 - Auto-start services and display access URL
 
-Usage: python3 setup.py
+Usage:
+  python3 setup.py                 # Full setup wizard
+  python3 setup.py --services-only # Only create/install service files
+  python3 setup.py --help          # Show help
 """
 
+import argparse
 import getpass
 import os
 import platform
@@ -1172,9 +1176,137 @@ def run_setup():
 
     return True
 
+
+def run_services_only():
+    """Create and optionally install service files only (skip full setup)"""
+    print_header("Zenith Grid Service Installation")
+
+    project_root = get_project_root()
+    os_type = detect_os()
+    current_user = os.getenv('USER', 'user')
+
+    print(f"Project directory: {project_root}")
+    print(f"Detected OS: {os_type.capitalize()}")
+    print(f"Current user: {current_user}")
+    print()
+
+    if os_type == 'linux':
+        print_info("Linux detected - creating systemd service files")
+        service_user = prompt_input("User to run services as", default=current_user)
+        if not create_systemd_service(project_root, service_user):
+            return False
+
+        print()
+        if prompt_yes_no("Install services now (requires sudo)?"):
+            services_dir = project_root / 'deployment'
+            backend_path = services_dir / 'zenith-backend.service'
+            frontend_path = services_dir / 'zenith-frontend.service'
+
+            print_info("Installing systemd services...")
+            try:
+                subprocess.run(['sudo', 'cp', str(backend_path), '/etc/systemd/system/'], check=True)
+                subprocess.run(['sudo', 'cp', str(frontend_path), '/etc/systemd/system/'], check=True)
+                subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
+                print_success("Service files installed")
+
+                if prompt_yes_no("Enable services to start on boot?"):
+                    subprocess.run(['sudo', 'systemctl', 'enable', 'zenith-backend', 'zenith-frontend'], check=True)
+                    print_success("Services enabled")
+
+                if prompt_yes_no("Start services now?"):
+                    subprocess.run(['sudo', 'systemctl', 'start', 'zenith-backend', 'zenith-frontend'], check=True)
+                    print_success("Services started")
+                    print()
+                    print(f"Access the application at: {Colors.CYAN}http://localhost:5173{Colors.ENDC}")
+
+            except subprocess.CalledProcessError as e:
+                print_error(f"Failed to install services: {e}")
+                return False
+
+    elif os_type == 'mac':
+        print_info("macOS detected - creating launchd plist files")
+        if not create_launchd_plist(project_root, current_user):
+            return False
+
+        print()
+        if prompt_yes_no("Install LaunchAgents now?"):
+            plist_dir = project_root / 'deployment'
+            backend_plist = plist_dir / 'com.zenithgrid.backend.plist'
+            frontend_plist = plist_dir / 'com.zenithgrid.frontend.plist'
+            launch_agents_dir = Path.home() / 'Library' / 'LaunchAgents'
+
+            print_info("Installing LaunchAgents...")
+            try:
+                # Ensure LaunchAgents directory exists
+                launch_agents_dir.mkdir(parents=True, exist_ok=True)
+
+                # Copy plist files
+                shutil.copy(backend_plist, launch_agents_dir / 'com.zenithgrid.backend.plist')
+                shutil.copy(frontend_plist, launch_agents_dir / 'com.zenithgrid.frontend.plist')
+                print_success("Plist files copied to ~/Library/LaunchAgents/")
+
+                if prompt_yes_no("Load services now (start on boot)?"):
+                    # Unload first if already loaded (ignore errors)
+                    subprocess.run(['launchctl', 'unload', str(launch_agents_dir / 'com.zenithgrid.backend.plist')],
+                                  capture_output=True)
+                    subprocess.run(['launchctl', 'unload', str(launch_agents_dir / 'com.zenithgrid.frontend.plist')],
+                                  capture_output=True)
+
+                    # Load services
+                    subprocess.run(['launchctl', 'load', str(launch_agents_dir / 'com.zenithgrid.backend.plist')], check=True)
+                    subprocess.run(['launchctl', 'load', str(launch_agents_dir / 'com.zenithgrid.frontend.plist')], check=True)
+                    print_success("Services loaded and will start on boot")
+                    print()
+                    print_info("Services are starting... wait a few seconds then access:")
+                    print(f"  {Colors.CYAN}http://localhost:5173{Colors.ENDC}")
+                    print()
+                    print("To check service status:")
+                    print("  launchctl list | grep zenithgrid")
+                    print()
+                    print("To view logs:")
+                    print("  tail -f /tmp/zenith-backend.log")
+                    print("  tail -f /tmp/zenith-frontend.log")
+
+            except Exception as e:
+                print_error(f"Failed to install services: {e}")
+                return False
+    else:
+        print_error("Unknown OS - cannot create service files")
+        return False
+
+    print()
+    print_header("Service Installation Complete!")
+    return True
+
+
+def main():
+    """Main entry point with argument parsing"""
+    parser = argparse.ArgumentParser(
+        description='Zenith Grid Setup Wizard',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python3 setup.py                 Full interactive setup
+  python3 setup.py --services-only Create and install service files only
+        """
+    )
+    parser.add_argument(
+        '--services-only',
+        action='store_true',
+        help='Only create/install service files (skip full setup)'
+    )
+
+    args = parser.parse_args()
+
+    if args.services_only:
+        return run_services_only()
+    else:
+        return run_setup()
+
+
 if __name__ == '__main__':
     try:
-        success = run_setup()
+        success = main()
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:
         print("\n\nSetup cancelled by user.")
