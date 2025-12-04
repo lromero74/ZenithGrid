@@ -1675,14 +1675,28 @@ def run_cleanup():
                         except Exception as e:
                             print_warning(f"Failed to remove {backup.name}: {e}")
 
-    # Ask about deployment directory
+    # Ask about deployment directory - but warn about git-tracked files
     if deployment_path.exists():
-        if prompt_yes_no("Delete deployment/ (service files)?", default='no'):
-            try:
-                shutil.rmtree(deployment_path)
-                print_success(f"Removed {deployment_path}")
-            except Exception as e:
-                print_error(f"Failed to remove deployment/: {e}")
+        # Check for generated (non-git-tracked) files like plist files
+        generated_files = list(deployment_path.glob('*.plist'))
+        git_tracked = ['auto-deploy.sh', 'deploy-from-git.sh', 'deploy.sh',
+                       'manage-auto-deploy.sh', 'nginx-trading-bot.conf', 'trading-bot.service']
+
+        if generated_files:
+            print()
+            print_info(f"Found {len(generated_files)} generated plist file(s) in deployment/")
+            if prompt_yes_no("Delete generated service files (keeps git-tracked scripts)?", default='no'):
+                for f in generated_files:
+                    try:
+                        f.unlink()
+                        print_success(f"Removed {f.name}")
+                    except Exception as e:
+                        print_warning(f"Failed to remove {f.name}: {e}")
+        else:
+            print()
+            print_warning("deployment/ contains git-tracked deployment scripts")
+            print_info("  These are templates for Linux/EC2 production deployment")
+            print_info("  Use 'git checkout deployment/' to restore if deleted")
 
     print()
     print_header("Cleanup Complete!")
