@@ -10,6 +10,7 @@ Handles account-related endpoints:
 import asyncio
 import logging
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -17,23 +18,63 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.models import Bot, Position
+from app.models import Bot, Position, Account
+from app.exchange_clients.factory import create_exchange_client
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/account", tags=["account"])
 
 
-# Dependency - will be injected from main.py
-def get_coinbase() -> CoinbaseClient:
-    """Get coinbase client - will be overridden in main.py"""
-    raise NotImplementedError("Must override coinbase dependency")
+async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
+    """
+    Get Coinbase client from the first active CEX account in the database.
+
+    TODO: Once authentication is wired up, this should get the exchange
+    client for the currently logged-in user's account.
+    """
+    # Get first active CEX account
+    result = await db.execute(
+        select(Account).where(
+            Account.type == "cex",
+            Account.is_active.is_(True)
+        ).order_by(Account.is_default.desc(), Account.created_at)
+    )
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(
+            status_code=503,
+            detail="No Coinbase account configured. Please add your API credentials in Settings."
+        )
+
+    if not account.api_key_name or not account.api_private_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Coinbase account missing API credentials. Please update in Settings."
+        )
+
+    # Create and return the client
+    client = create_exchange_client(
+        exchange_type="cex",
+        coinbase_key_name=account.api_key_name,
+        coinbase_private_key=account.api_private_key,
+    )
+
+    if not client:
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to create Coinbase client. Please check your API credentials."
+        )
+
+    return client
 
 
 @router.get("/balances")
-async def get_balances(coinbase: CoinbaseClient = Depends(get_coinbase)):
+async def get_balances(db: AsyncSession = Depends(get_db)):
     """Get current account balances"""
     try:
+        coinbase = await get_coinbase_from_db(db)
         btc_balance = await coinbase.get_btc_balance()
         eth_balance = await coinbase.get_eth_balance()
         current_price = await coinbase.get_current_price()
@@ -55,9 +96,10 @@ async def get_balances(coinbase: CoinbaseClient = Depends(get_coinbase)):
 
 
 @router.get("/aggregate-value")
-async def get_aggregate_value(coinbase: CoinbaseClient = Depends(get_coinbase)):
+async def get_aggregate_value(db: AsyncSession = Depends(get_db)):
     """Get aggregate portfolio value (BTC + USD) for bot budgeting"""
     try:
+        coinbase = await get_coinbase_from_db(db)
         aggregate_btc = await coinbase.calculate_aggregate_btc_value()
         aggregate_usd = await coinbase.calculate_aggregate_usd_value()
         btc_usd_price = await coinbase.get_btc_usd_price()
@@ -72,9 +114,10 @@ async def get_aggregate_value(coinbase: CoinbaseClient = Depends(get_coinbase)):
 
 
 @router.get("/portfolio")
-async def get_portfolio(db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)):
+async def get_portfolio(db: AsyncSession = Depends(get_db)):
     """Get full portfolio breakdown (all coins like 3Commas)"""
     try:
+        coinbase = await get_coinbase_from_db(db)
         # Get portfolio breakdown with all holdings
         breakdown = await coinbase.get_portfolio_breakdown()
         spot_positions = breakdown.get("spot_positions", [])
