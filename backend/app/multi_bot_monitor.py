@@ -1403,8 +1403,9 @@ class MultiBotMonitor:
         if not self.running:
             self.running = True  # Set IMMEDIATELY to prevent race condition (double-start)
             self.task = asyncio.create_task(self.monitor_loop())
-            # Start order monitor alongside bot monitor
-            asyncio.create_task(self.order_monitor.start())
+            # Start order monitor alongside bot monitor (if available)
+            if self.order_monitor:
+                asyncio.create_task(self.order_monitor.start())
             logger.info("Multi-bot monitor task started")
         else:
             logger.warning("Monitor already running, ignoring duplicate start() call")
@@ -1416,8 +1417,9 @@ class MultiBotMonitor:
             print("🔍 Setting self.running=True and creating tasks")
             self.running = True  # Set IMMEDIATELY to prevent race condition (double-start)
             self.task = asyncio.create_task(self.monitor_loop())
-            # Start order monitor alongside bot monitor
-            asyncio.create_task(self.order_monitor.start())
+            # Start order monitor alongside bot monitor (if available)
+            if self.order_monitor:
+                asyncio.create_task(self.order_monitor.start())
             print("✅ Multi-bot monitor task started")
             # Give the task a moment to actually start
             await asyncio.sleep(0.1)
@@ -1428,8 +1430,9 @@ class MultiBotMonitor:
     async def stop(self):
         """Stop the monitoring task"""
         self.running = False
-        # Stop order monitor
-        await self.order_monitor.stop()
+        # Stop order monitor (if available)
+        if self.order_monitor:
+            await self.order_monitor.stop()
         if self.task:
             await self.task
             logger.info("Multi-bot monitor task stopped")
