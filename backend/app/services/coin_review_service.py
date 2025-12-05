@@ -275,8 +275,11 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str,
             prefix = category_prefix.get(category, "")
             full_reason = f"{prefix} {reason}".strip() if prefix else reason
 
-            # Check if coin exists
-            query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == symbol.upper())
+            # Check if global coin entry exists (user_id IS NULL)
+            query = select(BlacklistedCoin).where(
+                BlacklistedCoin.symbol == symbol.upper(),
+                BlacklistedCoin.user_id.is_(None)
+            )
             result = await db.execute(query)
             existing = result.scalars().first()
 
@@ -288,7 +291,8 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str,
                 else:
                     stats["unchanged"] += 1
             else:
-                entry = BlacklistedCoin(symbol=symbol.upper(), reason=full_reason)
+                # Create global entry (user_id=None)
+                entry = BlacklistedCoin(symbol=symbol.upper(), reason=full_reason, user_id=None)
                 db.add(entry)
                 stats["added"] += 1
                 logger.info(f"  Added {symbol}: {full_reason}")

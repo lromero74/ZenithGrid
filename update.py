@@ -15,6 +15,7 @@ Usage:
   python3 update.py                # Full update with confirmation prompts
   python3 update.py --yes          # Skip confirmation prompts
   python3 update.py --no-backup    # Skip database backup (not recommended)
+  python3 update.py --skip-pull    # Skip git pull (useful if already pulled manually)
   python3 update.py --dry-run      # Show what would be done without executing
   python3 update.py --help         # Show help
 """
@@ -385,6 +386,8 @@ Examples:
                         help='Skip database backup (not recommended)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Show what would be done without executing')
+    parser.add_argument('--skip-pull', action='store_true',
+                        help='Skip git pull (useful if already pulled manually)')
 
     args = parser.parse_args()
 
@@ -405,12 +408,20 @@ Examples:
     if not args.yes and not args.dry_run:
         print()
         print_warning("This will:")
-        print("  1. Pull latest changes from git")
-        print("  2. Stop services (backend and frontend)")
+        step = 1
+        if not args.skip_pull:
+            print(f"  {step}. Pull latest changes from git")
+            step += 1
+        else:
+            print_info("  (Skipping git pull)")
+        print(f"  {step}. Stop services (backend and frontend)")
+        step += 1
         if not args.no_backup:
-            print("  3. Backup the database")
-        print("  4. Run all database migrations")
-        print("  5. Restart services (backend and frontend)")
+            print(f"  {step}. Backup the database")
+            step += 1
+        print(f"  {step}. Run all database migrations")
+        step += 1
+        print(f"  {step}. Restart services (backend and frontend)")
         print()
 
         response = input(f"{Colors.BOLD}Continue? [y/N]: {Colors.ENDC}").strip().lower()
@@ -420,18 +431,23 @@ Examples:
 
     print()
 
-    # Step 1: Git pull
-    success, has_changes = git_pull(project_root, args.dry_run)
-    if not success:
-        print_error("Update failed at git pull step")
-        sys.exit(1)
+    # Step 1: Git pull (unless --skip-pull)
+    if args.skip_pull:
+        print_step(1, "Skipping git pull (--skip-pull)")
+        print_info("Assuming changes were already pulled manually")
+        has_changes = True  # Assume there are changes to process
+    else:
+        success, has_changes = git_pull(project_root, args.dry_run)
+        if not success:
+            print_error("Update failed at git pull step")
+            sys.exit(1)
 
-    # If no changes were pulled, skip service restart
-    if not has_changes and not args.dry_run:
-        print()
-        print_header("No Updates Available")
-        print_success("Already running the latest version - services left running")
-        sys.exit(0)
+        # If no changes were pulled, skip service restart
+        if not has_changes and not args.dry_run:
+            print()
+            print_header("No Updates Available")
+            print_success("Already running the latest version - services left running")
+            sys.exit(0)
 
     # Step 2: Stop services
     if not stop_services(os_type, project_root, args.dry_run):
