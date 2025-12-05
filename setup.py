@@ -752,6 +752,8 @@ def initialize_database(project_root):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 bot_id INTEGER REFERENCES bots(id),
                 account_id INTEGER REFERENCES accounts(id),
+                user_id INTEGER REFERENCES users(id),
+                user_deal_number INTEGER,
                 product_id TEXT DEFAULT 'ETH-BTC',
                 status TEXT DEFAULT 'open',
                 opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -789,6 +791,8 @@ def initialize_database(project_root):
                 exit_reason TEXT
             )
         """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_id ON positions(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_deal_number ON positions(user_deal_number)")
 
         # Trades table
         cursor.execute("""
