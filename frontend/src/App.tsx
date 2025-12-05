@@ -9,6 +9,7 @@ import { LoadingSpinner } from './components/LoadingSpinner'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { useAccount } from './contexts/AccountContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { RiskDisclaimer } from './components/RiskDisclaimer'
 import Login from './pages/Login'
 
 // Lazy load pages for faster initial render
@@ -430,7 +431,25 @@ function AppContent() {
 
 // Root App component - handles authentication wrapper
 function App() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, user, acceptTerms, logout } = useAuth()
+  const [isAcceptingTerms, setIsAcceptingTerms] = useState(false)
+
+  // Handle terms acceptance
+  const handleAcceptTerms = async () => {
+    setIsAcceptingTerms(true)
+    try {
+      await acceptTerms()
+    } catch (error) {
+      console.error('Failed to accept terms:', error)
+    } finally {
+      setIsAcceptingTerms(false)
+    }
+  }
+
+  // Handle terms decline - log the user out
+  const handleDeclineTerms = () => {
+    logout()
+  }
 
   // Show loading spinner while checking auth state
   if (isLoading) {
@@ -444,6 +463,17 @@ function App() {
   // Show login page if not authenticated
   if (!isAuthenticated) {
     return <Login />
+  }
+
+  // Show risk disclaimer if user hasn't accepted terms yet
+  if (user && !user.terms_accepted_at) {
+    return (
+      <RiskDisclaimer
+        onAccept={handleAcceptTerms}
+        onDecline={handleDeclineTerms}
+        isLoading={isAcceptingTerms}
+      />
+    )
   }
 
   // Show main app content

@@ -80,6 +80,7 @@ class UserResponse(BaseModel):
     is_superuser: bool
     created_at: datetime
     last_login_at: Optional[datetime]
+    terms_accepted_at: Optional[datetime] = None  # NULL = must accept terms
 
     class Config:
         from_attributes = True
@@ -292,6 +293,7 @@ async def login(
             is_superuser=user.is_superuser,
             created_at=user.created_at,
             last_login_at=user.last_login_at,
+            terms_accepted_at=user.terms_accepted_at,
         ),
     )
 
@@ -347,6 +349,7 @@ async def refresh_token(
             is_superuser=user.is_superuser,
             created_at=user.created_at,
             last_login_at=user.last_login_at,
+            terms_accepted_at=user.terms_accepted_at,
         ),
     )
 
@@ -429,6 +432,7 @@ async def register(
         is_superuser=new_user.is_superuser,
         created_at=new_user.created_at,
         last_login_at=new_user.last_login_at,
+        terms_accepted_at=new_user.terms_accepted_at,
     )
 
 
@@ -447,6 +451,7 @@ async def get_current_user_info(
         is_superuser=current_user.is_superuser,
         created_at=current_user.created_at,
         last_login_at=current_user.last_login_at,
+        terms_accepted_at=current_user.terms_accepted_at,
     )
 
 
@@ -511,7 +516,42 @@ async def signup(
             is_superuser=new_user.is_superuser,
             created_at=new_user.created_at,
             last_login_at=new_user.last_login_at,
+            terms_accepted_at=new_user.terms_accepted_at,
         ),
+    )
+
+
+# =============================================================================
+# Terms and Conditions Endpoints
+# =============================================================================
+
+
+@router.post("/accept-terms", response_model=UserResponse)
+async def accept_terms(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Accept the terms of service and risk disclaimer.
+
+    Users must accept terms before accessing the dashboard.
+    This only needs to be done once per user.
+    """
+    current_user.terms_accepted_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(current_user)
+
+    logger.info(f"User accepted terms: {current_user.email}")
+
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        display_name=current_user.display_name,
+        is_active=current_user.is_active,
+        is_superuser=current_user.is_superuser,
+        created_at=current_user.created_at,
+        last_login_at=current_user.last_login_at,
+        terms_accepted_at=current_user.terms_accepted_at,
     )
 
 

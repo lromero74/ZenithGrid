@@ -655,6 +655,7 @@ def initialize_database(project_root):
                 display_name TEXT,
                 last_seen_history_count INTEGER DEFAULT 0,
                 last_seen_failed_count INTEGER DEFAULT 0,
+                terms_accepted_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_login_at DATETIME

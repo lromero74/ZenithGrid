@@ -56,6 +56,9 @@ class User(Base):
     last_seen_history_count = Column(Integer, default=0)  # For "new items" badge in History tab (closed positions)
     last_seen_failed_count = Column(Integer, default=0)  # For "new items" badge in Failed tab
 
+    # Terms and conditions acceptance
+    terms_accepted_at = Column(DateTime, nullable=True)  # NULL = not accepted, timestamp = when accepted
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

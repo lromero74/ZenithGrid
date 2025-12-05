@@ -16,6 +16,7 @@ interface User {
   is_superuser: boolean
   created_at: string
   last_login_at: string | null
+  terms_accepted_at: string | null  // NULL = must accept terms before accessing dashboard
 }
 
 // AuthTokens interface (used by LoginResponse)
@@ -34,6 +35,7 @@ interface AuthContextType {
   logout: () => void
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   getAccessToken: () => string | null
+  acceptTerms: () => Promise<void>  // Accept terms and update user state
 }
 
 interface LoginResponse {
@@ -65,6 +67,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
   changePassword: async () => {},
   getAccessToken: () => null,
+  acceptTerms: async () => {},
 })
 
 // Helper to check if token is expired
@@ -281,6 +284,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Accept terms function - called after user accepts the risk disclaimer
+  const acceptTerms = async (): Promise<void> => {
+    const token = getAccessToken()
+    if (!token) {
+      throw new Error('Not authenticated')
+    }
+
+    const response = await fetch(`${API_BASE}/accept-terms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to accept terms')
+    }
+
+    // Update user state with the new terms_accepted_at timestamp
+    const updatedUser: User = await response.json()
+    setUser(updatedUser)
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
+  }
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -290,6 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     changePassword,
     getAccessToken,
+    acceptTerms,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
