@@ -17,6 +17,8 @@ Usage:
   python3 update.py --no-backup    # Skip database backup (not recommended)
   python3 update.py --skip-pull    # Skip git pull (useful if already pulled manually)
   python3 update.py --dry-run      # Show what would be done without executing
+  python3 update.py --preview      # Preview incoming changes (commits) before pulling
+  python3 update.py --preview -d   # Preview with file diffs
   python3 update.py --help         # Show help
 """
 
@@ -149,6 +151,97 @@ def service_exists(service_commands, project_root):
         run_command(service_commands['exists'], cwd=project_root, capture_output=True, check=True)
         return True
     except subprocess.CalledProcessError:
+        return False
+
+
+def preview_incoming_changes(project_root, show_diff=False):
+    """Preview commits and optionally diffs before pulling.
+
+    Returns:
+        bool: True if there are incoming changes, False if already up to date
+    """
+    print_header("Preview Incoming Changes")
+
+    try:
+        # Fetch latest from remote without merging
+        print_info("Fetching from remote...")
+        run_command('git fetch origin', cwd=project_root, capture_output=True)
+
+        # Get current HEAD and remote HEAD
+        current = run_command('git rev-parse HEAD', cwd=project_root, capture_output=True)
+        current_hash = current.stdout.strip()
+
+        remote = run_command('git rev-parse origin/main', cwd=project_root, capture_output=True)
+        remote_hash = remote.stdout.strip()
+
+        if current_hash == remote_hash:
+            print_success("Already up to date - no new commits")
+            return False
+
+        # Show commit log
+        print()
+        print(f"{Colors.CYAN}{Colors.BOLD}Commits since last pull:{Colors.ENDC}")
+        print()
+
+        result = run_command(
+            'git log --oneline HEAD..origin/main',
+            cwd=project_root,
+            capture_output=True
+        )
+
+        if result.stdout:
+            commit_count = len(result.stdout.strip().split('\n'))
+            for line in result.stdout.strip().split('\n'):
+                print(f"  {Colors.YELLOW}•{Colors.ENDC} {line}")
+            print()
+            print_info(f"Total: {commit_count} commit(s)")
+
+        # Show file summary
+        print()
+        print(f"{Colors.CYAN}{Colors.BOLD}Files changed:{Colors.ENDC}")
+        print()
+
+        result = run_command(
+            'git diff --stat HEAD..origin/main',
+            cwd=project_root,
+            capture_output=True
+        )
+
+        if result.stdout:
+            for line in result.stdout.strip().split('\n'):
+                print(f"  {line}")
+
+        # Optionally show full diff
+        if show_diff:
+            print()
+            print(f"{Colors.CYAN}{Colors.BOLD}Full diff:{Colors.ENDC}")
+            print()
+
+            result = run_command(
+                'git diff HEAD..origin/main',
+                cwd=project_root,
+                capture_output=True
+            )
+
+            if result.stdout:
+                for line in result.stdout.split('\n'):
+                    # Colorize diff output
+                    if line.startswith('+') and not line.startswith('+++'):
+                        print(f"{Colors.GREEN}{line}{Colors.ENDC}")
+                    elif line.startswith('-') and not line.startswith('---'):
+                        print(f"{Colors.RED}{line}{Colors.ENDC}")
+                    elif line.startswith('@@'):
+                        print(f"{Colors.CYAN}{line}{Colors.ENDC}")
+                    elif line.startswith('diff '):
+                        print(f"\n{Colors.BOLD}{line}{Colors.ENDC}")
+                    else:
+                        print(line)
+
+        print()
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print_error(f"Failed to preview changes: {e.stderr if e.stderr else str(e)}")
         return False
 
 
@@ -388,6 +481,10 @@ Examples:
                         help='Show what would be done without executing')
     parser.add_argument('--skip-pull', action='store_true',
                         help='Skip git pull (useful if already pulled manually)')
+    parser.add_argument('--preview', '-p', action='store_true',
+                        help='Preview incoming commits before pulling (then exit)')
+    parser.add_argument('--diff', '-d', action='store_true',
+                        help='With --preview, also show full file diffs')
 
     args = parser.parse_args()
 
@@ -396,6 +493,13 @@ Examples:
 
     # Detect OS
     os_type = detect_os()
+
+    # Handle --preview mode (exit after showing preview)
+    if args.preview:
+        has_changes = preview_incoming_changes(project_root, show_diff=args.diff)
+        if has_changes:
+            print_info("Run 'python3 update.py' to apply these changes")
+        sys.exit(0)
 
     print_header("Zenith Grid Update")
     print_info(f"Project root: {project_root}")
