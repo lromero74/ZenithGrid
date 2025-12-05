@@ -3,6 +3,14 @@ Add strategy_config_snapshot column to positions table
 This allows each position to freeze the bot's configuration at creation time
 """
 import asyncio
+import os
+import sys
+
+# Change to backend directory so database path resolves correctly
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(backend_dir)
+sys.path.insert(0, backend_dir)
+
 from sqlalchemy import text
 from app.database import engine
 

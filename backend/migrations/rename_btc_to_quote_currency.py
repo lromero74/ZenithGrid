@@ -22,10 +22,12 @@ import sqlite3
 import sys
 import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Change to backend directory so database path resolves correctly
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(backend_dir)
+sys.path.insert(0, backend_dir)
 
-DB_PATH = "backend/trading.db"
+DB_PATH = "trading.db"
 
 
 def migrate():

@@ -11,6 +11,14 @@ def upgrade():
     conn = sqlite3.connect('trading.db')
     cursor = conn.cursor()
 
+    # Check if column already exists
+    cursor.execute("PRAGMA table_info(positions)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'strategy_config_snapshot' in columns:
+        print("✅ Column strategy_config_snapshot already exists")
+        conn.close()
+        return
+
     # Add column (nullable for existing positions)
     cursor.execute("""
         ALTER TABLE positions

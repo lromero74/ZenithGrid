@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Change to backend directory so database path resolves correctly
-backend_dir = '/Users/louis/GetRidOf3CommasBecauseTheyGoDownTooOften/backend'
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(backend_dir)
 sys.path.insert(0, backend_dir)
 
