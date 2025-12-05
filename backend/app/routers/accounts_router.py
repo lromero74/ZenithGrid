@@ -11,7 +11,7 @@ and the UI can filter by selected account.
 
 import logging
 from datetime import datetime
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -22,25 +22,49 @@ from app.database import get_db
 from app.models import Account, Bot, Position, User
 from app.services.dex_wallet_service import dex_wallet_service
 from app.routers.auth_dependencies import get_current_user_optional
+from app.exchange_clients.factory import create_exchange_client
+from app.coinbase_unified_client import CoinbaseClient
 
 logger = logging.getLogger(__name__)
 
 
-# Dependency - will be injected from main.py
-_coinbase_client = None
+async def get_coinbase_for_account(
+    account: Account,
+) -> CoinbaseClient:
+    """
+    Create a Coinbase client for a specific account.
 
+    Args:
+        account: The CEX account with API credentials
 
-def set_coinbase_client(client):
-    """Set the coinbase client (called from main.py)"""
-    global _coinbase_client
-    _coinbase_client = client
+    Returns:
+        CoinbaseClient instance
+    """
+    if account.type != "cex":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot create Coinbase client for non-CEX account"
+        )
 
+    if not account.api_key_name or not account.api_private_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Coinbase account missing API credentials. Please update in Settings."
+        )
 
-def get_coinbase():
-    """Get coinbase client"""
-    if _coinbase_client is None:
-        raise RuntimeError("Coinbase client not initialized")
-    return _coinbase_client
+    client = create_exchange_client(
+        exchange_type="cex",
+        coinbase_key_name=account.api_key_name,
+        coinbase_private_key=account.api_private_key,
+    )
+
+    if not client:
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to create Coinbase client. Please check your API credentials."
+        )
+
+    return client
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -613,7 +637,7 @@ async def _get_cex_portfolio(account: Account, db: AsyncSession) -> dict:
     """Get portfolio for a CEX (Coinbase) account."""
     import asyncio
 
-    coinbase = get_coinbase()
+    coinbase = await get_coinbase_for_account(account)
 
     # Get portfolio breakdown with all holdings
     breakdown = await coinbase.get_portfolio_breakdown()
@@ -915,11 +939,23 @@ async def _get_cex_portfolio(account: Account, db: AsyncSession) -> dict:
 
 async def _get_dex_portfolio(account: Account, db: AsyncSession) -> dict:
     """Get portfolio for a DEX (wallet) account."""
-    # Get ETH/USD price for valuations (from Coinbase or other source)
+    # Get ETH/USD price for valuations (from default CEX account or fallback)
     try:
-        coinbase = get_coinbase()
-        eth_usd_price = await coinbase.get_current_price("ETH-USD")
-        btc_usd_price = await coinbase.get_btc_usd_price()
+        # Find a CEX account to get price data
+        cex_result = await db.execute(
+            select(Account).where(
+                Account.type == "cex",
+                Account.is_active.is_(True)
+            ).order_by(Account.is_default.desc(), Account.created_at)
+        )
+        cex_account = cex_result.scalar_one_or_none()
+
+        if cex_account and cex_account.api_key_name and cex_account.api_private_key:
+            coinbase = await get_coinbase_for_account(cex_account)
+            eth_usd_price = await coinbase.get_current_price("ETH-USD")
+            btc_usd_price = await coinbase.get_btc_usd_price()
+        else:
+            raise ValueError("No CEX account available for price data")
     except Exception:
         # Fallback prices if Coinbase is not available
         eth_usd_price = 3500.0
