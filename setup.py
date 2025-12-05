@@ -210,6 +210,53 @@ def prompt_yes_no(question, default='yes'):
         else:
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').")
 
+
+def display_license_and_get_acceptance(project_root):
+    """Display the license file and require user to accept it before proceeding"""
+    license_path = project_root / 'LICENSE'
+
+    if not license_path.exists():
+        print_error("LICENSE file not found in project root!")
+        print_info("Cannot proceed without license file.")
+        return False
+
+    print_header("License Agreement")
+    print()
+
+    # Read and display the license
+    try:
+        with open(license_path, 'r') as f:
+            license_text = f.read()
+    except Exception as e:
+        print_error(f"Failed to read LICENSE file: {e}")
+        return False
+
+    # Display the license with a border
+    print(f"{Colors.CYAN}{'─' * 60}{Colors.ENDC}")
+    print()
+    for line in license_text.strip().split('\n'):
+        print(f"  {line}")
+    print()
+    print(f"{Colors.CYAN}{'─' * 60}{Colors.ENDC}")
+    print()
+
+    print_warning("IMPORTANT: You must read and agree to the license above before using this software.")
+    print()
+
+    # Require explicit "I AGREE" instead of just yes/no
+    while True:
+        response = input(f"{Colors.BOLD}Type 'I AGREE' to accept the license terms (or 'quit' to exit): {Colors.ENDC}").strip()
+        if response.upper() == 'I AGREE':
+            print()
+            print_success("License accepted. Proceeding with setup...")
+            return True
+        elif response.lower() in ('quit', 'exit', 'q'):
+            print()
+            print_info("Setup cancelled. You must accept the license to use this software.")
+            return False
+        else:
+            print_warning("Please type 'I AGREE' exactly to accept, or 'quit' to exit.")
+
 def prompt_input(question, default=None, required=True, password=False):
     """Prompt for user input"""
     if default:
@@ -1350,6 +1397,10 @@ def run_setup():
     print(f"Detected OS: {os_type.capitalize()}")
     print(f"Current user: {current_user}")
     print()
+
+    # Require license acceptance before proceeding
+    if not display_license_and_get_acceptance(project_root):
+        return False
 
     # Show what setup will do
     print_header("What This Setup Will Do")
