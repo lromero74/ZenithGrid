@@ -12,8 +12,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
 import Login from './pages/Login'
 
-// App version - update this when tagging releases
-const APP_VERSION = 'v0.81.0'
+// App version - injected by Vite at build time from git tags
+declare const __APP_VERSION__: string
+const APP_VERSION = __APP_VERSION__
 
 // Lazy load pages for faster initial render
 // Dashboard is eager-loaded since it's the landing page
