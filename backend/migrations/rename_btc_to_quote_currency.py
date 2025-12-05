@@ -37,6 +37,15 @@ def migrate():
     print("🔄 Starting migration: Rename BTC-specific columns to quote currency...")
 
     try:
+        # Check if migration already applied by looking for new column names
+        cursor.execute("PRAGMA table_info(positions)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if 'initial_quote_balance' in columns:
+            print("✅ Migration already applied (positions table has quote currency columns)")
+            conn.close()
+            return
+
         # Step 1: Create new positions table with renamed columns
         print("  Creating new positions table...")
         cursor.execute("""

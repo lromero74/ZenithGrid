@@ -20,14 +20,25 @@ async def migrate():
     async with async_session_maker() as db:
         print("🔧 Adding balance reservation columns to bots table...")
 
-        # Add columns
-        await db.execute(text("ALTER TABLE bots ADD COLUMN reserved_btc_balance REAL DEFAULT 0.0"))
-        await db.execute(text("ALTER TABLE bots ADD COLUMN reserved_usd_balance REAL DEFAULT 0.0"))
+        # Check if columns already exist
+        result = await db.execute(text("PRAGMA table_info(bots)"))
+        columns = [row[1] for row in result]
+
+        if 'reserved_btc_balance' in columns and 'reserved_usd_balance' in columns:
+            print("✅ Balance reservation columns already exist")
+            return
+
+        # Add columns if they don't exist
+        if 'reserved_btc_balance' not in columns:
+            await db.execute(text("ALTER TABLE bots ADD COLUMN reserved_btc_balance REAL DEFAULT 0.0"))
+            print("   - Added reserved_btc_balance (REAL, default 0.0)")
+
+        if 'reserved_usd_balance' not in columns:
+            await db.execute(text("ALTER TABLE bots ADD COLUMN reserved_usd_balance REAL DEFAULT 0.0"))
+            print("   - Added reserved_usd_balance (REAL, default 0.0)")
 
         await db.commit()
         print("✅ Successfully added balance reservation columns")
-        print("   - reserved_btc_balance (REAL, default 0.0)")
-        print("   - reserved_usd_balance (REAL, default 0.0)")
 
 async def rollback():
     """Remove balance reservation columns"""
