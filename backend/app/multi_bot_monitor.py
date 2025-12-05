@@ -48,6 +48,9 @@ class MultiBotMonitor:
         self.running = False
         self.task: Optional[asyncio.Task] = None
 
+        # Current exchange client (set per-bot in the monitoring loop)
+        self.exchange: Optional[ExchangeClient] = None
+
         # Initialize order monitor (will get exchange per-bot)
         self.order_monitor = None  # Initialized lazily when needed
 
@@ -1336,6 +1339,12 @@ class MultiBotMonitor:
                         for bot in bots:
                             try:
                                 print(f"🔍 Checking bot: {bot.name} (ID: {bot.id})")
+
+                                # Get exchange client for this bot (per-user/per-account)
+                                self.exchange = await self.get_exchange_for_bot(db, bot)
+                                if not self.exchange:
+                                    logger.warning(f"No exchange client for bot {bot.name} (account_id={bot.account_id})")
+                                    continue
 
                                 # Two-tier checking strategy:
                                 # 1. Technical conditions checked every 45s (fast, cheap) - faster to catch BB% crossings
