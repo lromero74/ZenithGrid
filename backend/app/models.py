@@ -256,6 +256,8 @@ class Position(Base):
     id = Column(Integer, primary_key=True, index=True)
     bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True)  # Link to bot (nullable for backwards compatibility)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # Link to account (for filtering)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (for user-specific deal numbers)
+    user_deal_number = Column(Integer, nullable=True, index=True)  # User-specific deal number (starts at 1 per user)
     product_id = Column(String, default="ETH-BTC")  # Trading pair (e.g., "ETH-BTC", "SOL-USD")
     status = Column(String, default="open")  # open, closed
     opened_at = Column(DateTime, default=datetime.utcnow)

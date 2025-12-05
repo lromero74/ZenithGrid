@@ -42,6 +42,14 @@ async def get_open_positions_count(db: AsyncSession, bot: Bot) -> int:
     return result.scalar() or 0
 
 
+async def get_next_user_deal_number(db: AsyncSession, user_id: int) -> int:
+    """Get the next deal number for a user (max + 1, or 1 if no positions exist)"""
+    query = select(func.max(Position.user_deal_number)).where(Position.user_id == user_id)
+    result = await db.execute(query)
+    max_deal_number = result.scalar()
+    return (max_deal_number or 0) + 1
+
+
 async def create_position(
     db: AsyncSession, exchange: ExchangeClient, bot: Bot, product_id: str, quote_balance: float, quote_amount: float
 ) -> Position:
@@ -62,9 +70,15 @@ async def create_position(
     except Exception:
         btc_usd_price = None
 
+    # Get next user-specific deal number
+    user_id = bot.user_id
+    user_deal_number = await get_next_user_deal_number(db, user_id) if user_id else None
+
     position = Position(
         bot_id=bot.id,
         account_id=bot.account_id,  # Copy account_id from bot for filtering
+        user_id=user_id,  # Owner (for user-specific deal numbers)
+        user_deal_number=user_deal_number,  # User-specific sequential deal number
         product_id=product_id,  # Use the engine's product_id (specific pair being traded)
         status="open",
         opened_at=datetime.utcnow(),

@@ -2194,7 +2194,7 @@ export default function Positions() {
                       {/* Column 6: Created (1 col) */}
                       <div className="col-span-1">
                         <div className="text-[10px] space-y-0.5">
-                          <div className="text-slate-400">ID: {position.id}</div>
+                          <div className="text-slate-400">Deal #{position.user_deal_number ?? position.id}</div>
                           <div className="text-slate-400">Start: {formatDateTimeCompact(position.opened_at)}</div>
                         </div>
                       </div>

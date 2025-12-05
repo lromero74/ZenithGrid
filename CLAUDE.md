@@ -182,3 +182,4 @@ See **COMMERCIALIZATION.md** for the full roadmap to make Zenith Grid sale-ready
 2. Are credentials stored securely (encrypted, not in code)?
 3. Is this feature something users would pay for?
 4. Does it help differentiate from 3Commas?
+- when updating prod, use our "update.py --yes" script to ensure user experience will be good when they* too use it

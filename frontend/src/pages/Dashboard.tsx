@@ -216,7 +216,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   {recentDeals.map((position) => (
                     <tr key={position.id} className="hover:bg-slate-750 transition-colors">
                       <td className="px-4 py-3">
-                        <span className="font-semibold text-white">#{position.id}</span>
+                        <span className="font-semibold text-white">#{position.user_deal_number ?? position.id}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${

@@ -1,5 +1,7 @@
 export interface Position {
   id: number;
+  user_id?: number | null;  // Owner (for user-specific deal numbers)
+  user_deal_number?: number | null;  // User-specific sequential deal number
   bot_id?: number | null;
   product_id?: string;
   status: string;

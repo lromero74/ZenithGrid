@@ -308,7 +308,7 @@ function ClosedPositions() {
                     <div>
                       <p className="text-slate-400 text-xs mb-1">Deal</p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-white">#{position.id}</p>
+                        <p className="font-semibold text-white">#{position.user_deal_number ?? position.id}</p>
                         {bots && position.bot_id && (
                           <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-xs font-medium">
                             {bots.find(b => b.id === position.bot_id)?.name || `Bot #${position.bot_id}`}
