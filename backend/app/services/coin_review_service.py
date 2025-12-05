@@ -15,8 +15,9 @@ from sqlalchemy import select, delete
 
 from app.config import settings
 from app.database import async_session_maker, init_db
-from app.models import BlacklistedCoin
+from app.models import Account, BlacklistedCoin
 from app.coinbase_unified_client import CoinbaseClient
+from app.exchange_clients.factory import create_exchange_client
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +56,30 @@ Respond with ONLY valid JSON in this exact format:
 Include ALL coins from the list. Be concise but specific in reasons."""
 
 
+async def get_coinbase_client_from_db() -> CoinbaseClient:
+    """Get Coinbase client from the first active CEX account in the database."""
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(Account).where(
+                Account.type == "cex",
+                Account.is_active.is_(True)
+            ).order_by(Account.is_default.desc(), Account.created_at)
+        )
+        account = result.scalar_one_or_none()
+
+        if not account or not account.api_key_name or not account.api_private_key:
+            raise RuntimeError("No Coinbase account configured with valid credentials")
+
+        return create_exchange_client(
+            exchange_type="cex",
+            coinbase_key_name=account.api_key_name,
+            coinbase_private_key=account.api_private_key,
+        )
+
+
 async def get_tracked_coins() -> List[str]:
     """Get all unique coin symbols available on Coinbase across BTC, USD, USDC markets."""
-    client = CoinbaseClient()
+    client = await get_coinbase_client_from_db()
     products = await client.list_products()
 
     symbols = set()

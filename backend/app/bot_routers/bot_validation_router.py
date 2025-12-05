@@ -8,15 +8,38 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import Account
 from app.coinbase_unified_client import CoinbaseClient
+from app.exchange_clients.factory import create_exchange_client
 from app.order_validation import calculate_minimum_budget_percentage
 from app.bot_routers.schemas import ValidateBotConfigRequest, ValidateBotConfigResponse, ValidationWarning
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
+    """Get Coinbase client from the first active CEX account in the database."""
+    result = await db.execute(
+        select(Account).where(
+            Account.type == "cex",
+            Account.is_active.is_(True)
+        ).order_by(Account.is_default.desc(), Account.created_at)
+    )
+    account = result.scalar_one_or_none()
+
+    if not account or not account.api_key_name or not account.api_private_key:
+        return None
+
+    return create_exchange_client(
+        exchange_type="cex",
+        coinbase_key_name=account.api_key_name,
+        coinbase_private_key=account.api_private_key,
+    )
 
 
 @router.post("/validate-config", response_model=ValidateBotConfigResponse)
@@ -29,7 +52,12 @@ async def validate_bot_config(request: ValidateBotConfigRequest, db: AsyncSessio
 
     Returns warnings with suggested minimum percentages if validation fails.
     """
-    coinbase = CoinbaseClient()
+    coinbase = await get_coinbase_from_db(db)
+    if not coinbase:
+        raise HTTPException(
+            status_code=503,
+            detail="No Coinbase account configured. Please add your API credentials in Settings."
+        )
 
     # Get quote balance if not provided
     quote_balance = request.quote_balance

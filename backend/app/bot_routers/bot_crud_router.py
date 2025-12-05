@@ -14,13 +14,36 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot, Position, User
+from app.models import Account, Bot, Position, User
 from app.strategies import StrategyDefinition, StrategyRegistry
 from app.coinbase_unified_client import CoinbaseClient
+from app.exchange_clients.factory import create_exchange_client
 from app.bot_routers.schemas import BotCreate, BotUpdate, BotResponse, BotStats
 from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
+
+
+async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
+    """Get Coinbase client from the first active CEX account in the database."""
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(Account).where(
+            Account.type == "cex",
+            Account.is_active.is_(True)
+        ).order_by(Account.is_default.desc(), Account.created_at)
+    )
+    account = result.scalar_one_or_none()
+
+    if not account or not account.api_key_name or not account.api_private_key:
+        return None
+
+    return create_exchange_client(
+        exchange_type="cex",
+        coinbase_key_name=account.api_key_name,
+        coinbase_private_key=account.api_private_key,
+    )
 router = APIRouter()
 
 
@@ -145,8 +168,25 @@ async def list_bots(
     result = await db.execute(query)
     bots = result.scalars().all()
 
-    # Initialize coinbase client for budget calculations
-    coinbase = CoinbaseClient()
+    # Initialize coinbase client for budget calculations (from database)
+    coinbase = await get_coinbase_from_db(db)
+    if not coinbase:
+        # Return bots without budget calculations if no CEX account configured
+        bot_responses = []
+        for bot in bots:
+            open_count_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
+            open_result = await db.execute(open_count_query)
+            open_count = len(open_result.scalars().all())
+
+            total_count_query = select(Position).where(Position.bot_id == bot.id)
+            total_result = await db.execute(total_count_query)
+            total_count = len(total_result.scalars().all())
+
+            response = BotResponse.model_validate(bot)
+            response.open_positions_count = open_count
+            response.total_positions_count = total_count
+            bot_responses.append(response)
+        return bot_responses
 
     # Pre-fetch aggregate values ONCE (not per-bot) to avoid repeated API calls
     # Fetch BOTH in parallel for better performance
@@ -576,7 +616,10 @@ async def get_bot_stats(
     )
 
     try:
-        coinbase = CoinbaseClient()
+        coinbase = await get_coinbase_from_db(db)
+        if not coinbase:
+            raise ValueError("No CEX account configured")
+
         quote_currency = bot.get_quote_currency()
 
         if quote_currency == "BTC":
