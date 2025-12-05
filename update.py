@@ -6,10 +6,10 @@ Zenith Grid Update Script
 Automated update script for production deployments.
 Handles:
 - Git pull to fetch latest changes
-- Service shutdown (backend)
+- Service shutdown (backend and frontend)
 - Database backup
 - Running all migrations
-- Service restart
+- Service restart (backend and frontend)
 
 Usage:
   python3 update.py                # Full update with confirmation prompts
@@ -101,24 +101,54 @@ def run_command(cmd, cwd=None, capture_output=False, check=True):
 
 
 def get_service_commands(os_type, project_root):
-    """Get the service management commands based on OS."""
+    """Get the service management commands based on OS for both backend and frontend."""
     if os_type == 'linux':
         return {
-            'stop': 'sudo systemctl stop trading-bot-backend',
-            'start': 'sudo systemctl start trading-bot-backend',
-            'restart': 'sudo systemctl restart trading-bot-backend',
-            'status': 'sudo systemctl status trading-bot-backend --no-pager',
+            'backend': {
+                'stop': 'sudo systemctl stop trading-bot-backend',
+                'start': 'sudo systemctl start trading-bot-backend',
+                'restart': 'sudo systemctl restart trading-bot-backend',
+                'status': 'sudo systemctl status trading-bot-backend --no-pager',
+                'exists': 'systemctl list-unit-files | grep -q trading-bot-backend',
+            },
+            'frontend': {
+                'stop': 'sudo systemctl stop trading-bot-frontend',
+                'start': 'sudo systemctl start trading-bot-frontend',
+                'restart': 'sudo systemctl restart trading-bot-frontend',
+                'status': 'sudo systemctl status trading-bot-frontend --no-pager',
+                'exists': 'systemctl list-unit-files | grep -q trading-bot-frontend',
+            },
         }
     elif os_type == 'mac':
-        plist_name = 'com.zenithgrid.backend'
+        backend_plist = 'com.zenithgrid.backend'
+        frontend_plist = 'com.zenithgrid.frontend'
         return {
-            'stop': f'launchctl unload ~/Library/LaunchAgents/{plist_name}.plist 2>/dev/null || true',
-            'start': f'launchctl load ~/Library/LaunchAgents/{plist_name}.plist',
-            'restart': f'launchctl unload ~/Library/LaunchAgents/{plist_name}.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/{plist_name}.plist',
-            'status': f'launchctl list | grep {plist_name} || echo "Service not running"',
+            'backend': {
+                'stop': f'launchctl unload ~/Library/LaunchAgents/{backend_plist}.plist 2>/dev/null || true',
+                'start': f'launchctl load ~/Library/LaunchAgents/{backend_plist}.plist',
+                'restart': f'launchctl unload ~/Library/LaunchAgents/{backend_plist}.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/{backend_plist}.plist',
+                'status': f'launchctl list | grep {backend_plist} || echo "Service not running"',
+                'exists': f'test -f ~/Library/LaunchAgents/{backend_plist}.plist',
+            },
+            'frontend': {
+                'stop': f'launchctl unload ~/Library/LaunchAgents/{frontend_plist}.plist 2>/dev/null || true',
+                'start': f'launchctl load ~/Library/LaunchAgents/{frontend_plist}.plist',
+                'restart': f'launchctl unload ~/Library/LaunchAgents/{frontend_plist}.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/{frontend_plist}.plist',
+                'status': f'launchctl list | grep {frontend_plist} || echo "Service not running"',
+                'exists': f'test -f ~/Library/LaunchAgents/{frontend_plist}.plist',
+            },
         }
     else:
         return None
+
+
+def service_exists(service_commands, project_root):
+    """Check if a service exists on the system."""
+    try:
+        run_command(service_commands['exists'], cwd=project_root, capture_output=True, check=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
 
 
 def git_pull(project_root, dry_run=False):
@@ -158,25 +188,36 @@ def git_pull(project_root, dry_run=False):
 
 
 def stop_services(os_type, project_root, dry_run=False):
-    """Stop the backend service."""
+    """Stop the backend and frontend services."""
     print_step(2, "Stopping services...")
 
-    commands = get_service_commands(os_type, project_root)
-    if not commands:
+    all_commands = get_service_commands(os_type, project_root)
+    if not all_commands:
         print_warning("Unknown OS - skipping service management")
         return True
 
-    if dry_run:
-        print_info(f"DRY RUN: Would run '{commands['stop']}'")
-        return True
+    services_stopped = []
 
-    try:
-        run_command(commands['stop'], cwd=project_root, check=False)
-        print_success("Backend service stopped")
-        return True
-    except Exception as e:
-        print_warning(f"Could not stop service (may not be running): {e}")
-        return True  # Continue even if service wasn't running
+    for service_name in ['backend', 'frontend']:
+        commands = all_commands[service_name]
+
+        # Check if service exists
+        if not dry_run and not service_exists(commands, project_root):
+            print_info(f"{service_name.capitalize()} service not installed - skipping")
+            continue
+
+        if dry_run:
+            print_info(f"DRY RUN: Would stop {service_name} service")
+            continue
+
+        try:
+            run_command(commands['stop'], cwd=project_root, check=False)
+            print_success(f"{service_name.capitalize()} service stopped")
+            services_stopped.append(service_name)
+        except Exception as e:
+            print_warning(f"Could not stop {service_name} service (may not be running): {e}")
+
+    return True  # Continue even if services weren't running
 
 
 def backup_database(project_root, dry_run=False):
@@ -282,38 +323,48 @@ def run_migrations(project_root, dry_run=False):
 
 
 def start_services(os_type, project_root, dry_run=False):
-    """Start the backend service."""
+    """Start the backend and frontend services."""
     print_step(5, "Starting services...")
 
-    commands = get_service_commands(os_type, project_root)
-    if not commands:
+    all_commands = get_service_commands(os_type, project_root)
+    if not all_commands:
         print_warning("Unknown OS - skipping service management")
         return True
 
-    if dry_run:
-        print_info(f"DRY RUN: Would run '{commands['start']}'")
-        return True
+    all_started = True
 
-    try:
-        run_command(commands['start'], cwd=project_root)
-        print_success("Backend service started")
+    for service_name in ['backend', 'frontend']:
+        commands = all_commands[service_name]
 
-        # Show service status
-        print_info("Checking service status...")
+        # Check if service exists
+        if not dry_run and not service_exists(commands, project_root):
+            print_info(f"{service_name.capitalize()} service not installed - skipping")
+            continue
+
+        if dry_run:
+            print_info(f"DRY RUN: Would start {service_name} service")
+            continue
+
         try:
-            result = run_command(commands['status'], cwd=project_root, capture_output=True, check=False)
-            if result.stdout:
-                # Show relevant status lines
-                for line in result.stdout.split('\n')[:5]:
-                    if line.strip():
-                        print(f"    {line}")
-        except Exception:
-            pass
+            run_command(commands['start'], cwd=project_root, check=False)
+            print_success(f"{service_name.capitalize()} service started")
 
-        return True
-    except Exception as e:
-        print_error(f"Could not start service: {e}")
-        return False
+            # Show service status
+            try:
+                result = run_command(commands['status'], cwd=project_root, capture_output=True, check=False)
+                if result.stdout:
+                    # Show relevant status lines (just first 3 for brevity)
+                    for line in result.stdout.split('\n')[:3]:
+                        if line.strip():
+                            print(f"    {line}")
+            except Exception:
+                pass
+
+        except Exception as e:
+            print_error(f"Could not start {service_name} service: {e}")
+            all_started = False
+
+    return all_started
 
 
 def main():
@@ -355,11 +406,11 @@ Examples:
         print()
         print_warning("This will:")
         print("  1. Pull latest changes from git")
-        print("  2. Stop the backend service")
+        print("  2. Stop services (backend and frontend)")
         if not args.no_backup:
             print("  3. Backup the database")
         print("  4. Run all database migrations")
-        print("  5. Restart the backend service")
+        print("  5. Restart services (backend and frontend)")
         print()
 
         response = input(f"{Colors.BOLD}Continue? [y/N]: {Colors.ENDC}").strip().lower()
@@ -408,7 +459,9 @@ Examples:
         print_info("This was a dry run - no changes were made")
     else:
         print_success("Zenith Grid has been updated successfully")
-        print_info("Check the service status with: sudo systemctl status trading-bot-backend")
+        print_info("Check service status with:")
+        print_info("  sudo systemctl status trading-bot-backend")
+        print_info("  sudo systemctl status trading-bot-frontend")
 
 
 if __name__ == '__main__':
