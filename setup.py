@@ -588,6 +588,14 @@ def check_npm_installed():
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
+def check_git_installed():
+    """Check if git is installed (required for version display in frontend)"""
+    try:
+        subprocess.run(['git', '--version'], capture_output=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
 def check_node_modules_exists(project_root):
     """Check if frontend node_modules exists and has packages"""
     node_modules = project_root / 'frontend' / 'node_modules'
@@ -1469,6 +1477,14 @@ def run_setup():
 
     # Step 2: Frontend Dependencies
     print_step(2, "Frontend Dependencies")
+
+    # Check for git (needed for version display in frontend)
+    if check_git_installed():
+        print_success("Git is installed")
+    else:
+        print_warning("git not found. Version display in frontend will show 'dev'.")
+        print_info("Install git for proper version display: https://git-scm.com/downloads")
+
     if check_npm_installed():
         # Auto-install if node_modules doesn't exist
         if not check_node_modules_exists(project_root):
