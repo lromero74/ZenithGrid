@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import BlacklistedCoin, Settings, User
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user_optional, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ class BlacklistEntry(BaseModel):
     symbol: str
     reason: Optional[str] = None
     created_at: str
+    is_global: bool = False  # True if this is an AI-generated global entry
 
     class Config:
         from_attributes = True
@@ -169,11 +170,18 @@ async def list_blacklisted_coins(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get all blacklisted coins"""
-    query = select(BlacklistedCoin).order_by(BlacklistedCoin.symbol)
-    # Filter by user if authenticated
-    if current_user:
-        query = query.where(BlacklistedCoin.user_id == current_user.id)
+    """
+    Get all coin categorizations.
+
+    Returns global AI-generated entries (visible to all users).
+    Users can view categories but cannot modify them - only admins can.
+    """
+    # Show global entries (user_id IS NULL) to everyone
+    # These are the AI-generated categorizations
+    query = select(BlacklistedCoin).where(
+        BlacklistedCoin.user_id.is_(None)
+    ).order_by(BlacklistedCoin.symbol)
+
     result = await db.execute(query)
     coins = result.scalars().all()
 
@@ -183,6 +191,7 @@ async def list_blacklisted_coins(
             symbol=coin.symbol,
             reason=coin.reason,
             created_at=coin.created_at.isoformat() if coin.created_at else "",
+            is_global=True,
         )
         for coin in coins
     ]
@@ -192,13 +201,20 @@ async def list_blacklisted_coins(
 async def add_to_blacklist(
     request: BlacklistAddRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Add one or more coins to the blacklist.
+    Add one or more coins to the global categorization list.
 
-    If a coin is already blacklisted, it will be skipped (no error).
+    Admin only - regular users cannot modify coin categories.
     """
+    # Only admins can add/modify coin categories
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can modify coin categories"
+        )
+
     added_entries = []
 
     for symbol in request.symbols:
@@ -208,20 +224,21 @@ async def add_to_blacklist(
         if not normalized_symbol:
             continue
 
-        # Check if already blacklisted (for this user)
-        existing_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
-        if current_user:
-            existing_query = existing_query.where(BlacklistedCoin.user_id == current_user.id)
+        # Check if already exists in global entries
+        existing_query = select(BlacklistedCoin).where(
+            BlacklistedCoin.symbol == normalized_symbol,
+            BlacklistedCoin.user_id.is_(None)
+        )
         existing_result = await db.execute(existing_query)
         if existing_result.scalars().first():
-            logger.info(f"Symbol {normalized_symbol} already blacklisted, skipping")
+            logger.info(f"Symbol {normalized_symbol} already categorized, skipping")
             continue
 
-        # Add to blacklist
+        # Add to global categorization (user_id = None)
         entry = BlacklistedCoin(
             symbol=normalized_symbol,
             reason=request.reason,
-            user_id=current_user.id if current_user else None
+            user_id=None  # Global entry
         )
         db.add(entry)
         await db.flush()  # Get the ID without committing
@@ -232,9 +249,10 @@ async def add_to_blacklist(
                 symbol=entry.symbol,
                 reason=entry.reason,
                 created_at=entry.created_at.isoformat() if entry.created_at else "",
+                is_global=True,
             )
         )
-        logger.info(f"Added {normalized_symbol} to blacklist: {request.reason}")
+        logger.info(f"Added {normalized_symbol} to categorization: {request.reason}")
 
     await db.commit()
 
@@ -245,43 +263,53 @@ async def add_to_blacklist(
 async def add_single_to_blacklist(
     request: BlacklistAddSingleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Add a single coin to the blacklist with its own reason.
-    Returns error if coin is already blacklisted.
+    Add a single coin to the global categorization with its own reason.
+
+    Admin only - regular users cannot modify coin categories.
     """
+    # Only admins can add/modify coin categories
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can modify coin categories"
+        )
+
     # Normalize symbol to uppercase
     normalized_symbol = request.symbol.upper().strip()
 
     if not normalized_symbol:
         raise HTTPException(status_code=400, detail="Symbol cannot be empty")
 
-    # Check if already blacklisted (for this user)
-    existing_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
-    if current_user:
-        existing_query = existing_query.where(BlacklistedCoin.user_id == current_user.id)
+    # Check if already exists in global entries
+    existing_query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol == normalized_symbol,
+        BlacklistedCoin.user_id.is_(None)
+    )
     existing_result = await db.execute(existing_query)
     if existing_result.scalars().first():
-        raise HTTPException(status_code=409, detail=f"{normalized_symbol} is already blacklisted")
+        raise HTTPException(status_code=409, detail=f"{normalized_symbol} is already categorized")
 
-    # Add to blacklist
+    # Add to global categorization (user_id = None)
     entry = BlacklistedCoin(
         symbol=normalized_symbol,
         reason=request.reason,
-        user_id=current_user.id if current_user else None
+        user_id=None  # Global entry
     )
     db.add(entry)
     await db.commit()
     await db.refresh(entry)
 
-    logger.info(f"Added {normalized_symbol} to blacklist: {request.reason}")
+    logger.info(f"Added {normalized_symbol} to categorization: {request.reason}")
 
     return BlacklistEntry(
         id=entry.id,
         symbol=entry.symbol,
         reason=entry.reason,
         created_at=entry.created_at.isoformat() if entry.created_at else "",
+        is_global=True,
     )
 
 
@@ -289,27 +317,39 @@ async def add_single_to_blacklist(
 async def remove_from_blacklist(
     symbol: str,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
-    """Remove a coin from the blacklist"""
+    """
+    Remove a coin from the global categorization list.
+
+    Admin only - regular users cannot modify coin categories.
+    """
+    # Only admins can remove coin categories
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can modify coin categories"
+        )
+
     normalized_symbol = symbol.upper().strip()
 
-    query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
-    # Filter by user if authenticated
-    if current_user:
-        query = query.where(BlacklistedCoin.user_id == current_user.id)
+    # Only look at global entries (user_id IS NULL)
+    query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol == normalized_symbol,
+        BlacklistedCoin.user_id.is_(None)
+    )
     result = await db.execute(query)
     entry = result.scalars().first()
 
     if not entry:
-        raise HTTPException(status_code=404, detail=f"{normalized_symbol} is not in the blacklist")
+        raise HTTPException(status_code=404, detail=f"{normalized_symbol} is not categorized")
 
     await db.delete(entry)
     await db.commit()
 
-    logger.info(f"Removed {normalized_symbol} from blacklist")
+    logger.info(f"Removed {normalized_symbol} from categorization")
 
-    return {"message": f"{normalized_symbol} removed from blacklist"}
+    return {"message": f"{normalized_symbol} removed from categorization"}
 
 
 @router.put("/{symbol}", response_model=BlacklistEntry)
@@ -317,32 +357,45 @@ async def update_blacklist_reason(
     symbol: str,
     request: BlacklistUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
-    """Update the reason for a blacklisted coin"""
+    """
+    Update the category/reason for a coin.
+
+    Admin only - regular users cannot modify coin categories.
+    """
+    # Only admins can update coin categories
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can modify coin categories"
+        )
+
     normalized_symbol = symbol.upper().strip()
 
-    query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
-    # Filter by user if authenticated
-    if current_user:
-        query = query.where(BlacklistedCoin.user_id == current_user.id)
+    # Only look at global entries (user_id IS NULL)
+    query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol == normalized_symbol,
+        BlacklistedCoin.user_id.is_(None)
+    )
     result = await db.execute(query)
     entry = result.scalars().first()
 
     if not entry:
-        raise HTTPException(status_code=404, detail=f"{normalized_symbol} is not in the blacklist")
+        raise HTTPException(status_code=404, detail=f"{normalized_symbol} is not categorized")
 
     entry.reason = request.reason
     await db.commit()
     await db.refresh(entry)
 
-    logger.info(f"Updated reason for {normalized_symbol}: {request.reason}")
+    logger.info(f"Updated category for {normalized_symbol}: {request.reason}")
 
     return BlacklistEntry(
         id=entry.id,
         symbol=entry.symbol,
         reason=entry.reason,
         created_at=entry.created_at.isoformat() if entry.created_at else "",
+        is_global=True,
     )
 
 
@@ -352,34 +405,60 @@ async def check_if_blacklisted(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Check if a specific coin is blacklisted"""
+    """
+    Check if a specific coin is categorized and get its category.
+
+    Returns the global AI-generated categorization for the coin.
+    """
     normalized_symbol = symbol.upper().strip()
 
-    query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == normalized_symbol)
-    # Filter by user if authenticated
-    if current_user:
-        query = query.where(BlacklistedCoin.user_id == current_user.id)
+    # Only look at global entries (user_id IS NULL)
+    query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol == normalized_symbol,
+        BlacklistedCoin.user_id.is_(None)
+    )
     result = await db.execute(query)
     entry = result.scalars().first()
 
+    # Parse category from reason prefix
+    category = None
+    if entry and entry.reason:
+        for cat in ["APPROVED", "BORDERLINE", "QUESTIONABLE", "BLACKLISTED"]:
+            if entry.reason.startswith(f"[{cat}]"):
+                category = cat
+                break
+        if not category:
+            # No prefix means BLACKLISTED
+            category = "BLACKLISTED"
+
     return {
         "symbol": normalized_symbol,
-        "is_blacklisted": entry is not None,
+        "is_categorized": entry is not None,
+        "category": category,
         "reason": entry.reason if entry else None,
     }
 
 
 @router.post("/ai-review")
-async def trigger_ai_review():
+async def trigger_ai_review(
+    current_user: User = Depends(get_current_user)
+):
     """
     Trigger an AI-powered review of all tracked coins.
 
-    Uses Claude API to analyze each coin and update categorizations.
-    This is the same review that runs weekly via cron/systemd timer.
+    Admin only - uses configured AI provider to analyze each coin
+    and update global categorizations.
     """
+    # Only admins can trigger AI review
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can trigger AI coin review"
+        )
+
     from app.services.coin_review_service import run_weekly_review
 
-    logger.info("Manual AI coin review triggered via API")
+    logger.info(f"Manual AI coin review triggered by admin user {current_user.email}")
     result = await run_weekly_review()
 
     if result["status"] == "error":
