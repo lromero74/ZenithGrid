@@ -152,27 +152,27 @@ def service_exists(service_commands, project_root):
 
 
 def git_pull(project_root, dry_run=False):
-    """Pull latest changes from git."""
+    """Pull latest changes from git.
+
+    Returns:
+        tuple: (success: bool, has_changes: bool)
+    """
     print_step(1, "Pulling latest changes from git...")
 
     if dry_run:
         print_info("DRY RUN: Would run 'git pull origin main'")
-        return True
+        return True, True  # Assume changes in dry run
 
     try:
         # First fetch to see what's available
-        result = run_command('git fetch origin', cwd=project_root, capture_output=True)
-
-        # Check if there are changes
-        result = run_command('git status -uno', cwd=project_root, capture_output=True)
-        if 'Your branch is up to date' in result.stdout:
-            print_info("Already up to date with origin/main")
+        run_command('git fetch origin', cwd=project_root, capture_output=True)
 
         # Pull the changes
         result = run_command('git pull origin main', cwd=project_root, capture_output=True)
 
         if 'Already up to date' in result.stdout:
-            print_success("Already up to date")
+            print_success("Already up to date - no changes pulled")
+            return True, False  # Success but no changes
         else:
             print_success("Successfully pulled latest changes")
             if result.stdout:
@@ -180,11 +180,11 @@ def git_pull(project_root, dry_run=False):
                 lines = result.stdout.strip().split('\n')
                 for line in lines[:10]:  # Show first 10 lines
                     print_info(line)
+            return True, True  # Success with changes
 
-        return True
     except subprocess.CalledProcessError as e:
         print_error(f"Git pull failed: {e.stderr if e.stderr else str(e)}")
-        return False
+        return False, False
 
 
 def stop_services(os_type, project_root, dry_run=False):
@@ -421,9 +421,17 @@ Examples:
     print()
 
     # Step 1: Git pull
-    if not git_pull(project_root, args.dry_run):
+    success, has_changes = git_pull(project_root, args.dry_run)
+    if not success:
         print_error("Update failed at git pull step")
         sys.exit(1)
+
+    # If no changes were pulled, skip service restart
+    if not has_changes and not args.dry_run:
+        print()
+        print_header("No Updates Available")
+        print_success("Already running the latest version - services left running")
+        sys.exit(0)
 
     # Step 2: Stop services
     if not stop_services(os_type, project_root, args.dry_run):
