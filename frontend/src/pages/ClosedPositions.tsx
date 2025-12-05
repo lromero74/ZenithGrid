@@ -104,55 +104,63 @@ function ClosedPositions() {
   const newFailedCount = Math.max(0, currentFailedCount - lastSeenFailedCount)
 
   // Update last seen count when user views a specific tab for 3 seconds (synced to server)
+  // Use a ref to track the timer and prevent re-saves on data refetch
   useEffect(() => {
-    if (activeTab === 'closed') {
-      const timer = setTimeout(async () => {
-        console.log('✅ Marking closed positions as viewed:', currentClosedCount)
-        setLastSeenClosedCount(currentClosedCount)
+    // Don't start timer if count is 0 (data still loading)
+    if (activeTab === 'closed' && currentClosedCount > 0) {
+      // Only set timer if there are new items to mark as seen
+      if (currentClosedCount > lastSeenClosedCount) {
+        const timer = setTimeout(async () => {
+          console.log('✅ Marking closed positions as viewed:', currentClosedCount)
+          setLastSeenClosedCount(currentClosedCount)
 
-        // Save to server
-        const token = getAccessToken()
-        if (token) {
-          try {
-            await fetch('/api/auth/preferences/last-seen-history', {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({ count: currentClosedCount })
-            })
-          } catch (error) {
-            console.error('Failed to save last seen closed count:', error)
+          // Save to server
+          const token = getAccessToken()
+          if (token) {
+            try {
+              await fetch('/api/auth/preferences/last-seen-history', {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ count: currentClosedCount })
+              })
+            } catch (error) {
+              console.error('Failed to save last seen closed count:', error)
+            }
           }
-        }
-      }, 3000)
-      return () => clearTimeout(timer)
-    } else if (activeTab === 'failed') {
-      const timer = setTimeout(async () => {
-        console.log('✅ Marking failed orders as viewed:', currentFailedCount)
-        setLastSeenFailedCount(currentFailedCount)
+        }, 3000)
+        return () => clearTimeout(timer)
+      }
+    } else if (activeTab === 'failed' && currentFailedCount > 0) {
+      // Only set timer if there are new items to mark as seen
+      if (currentFailedCount > lastSeenFailedCount) {
+        const timer = setTimeout(async () => {
+          console.log('✅ Marking failed orders as viewed:', currentFailedCount)
+          setLastSeenFailedCount(currentFailedCount)
 
-        // Save to server
-        const token = getAccessToken()
-        if (token) {
-          try {
-            await fetch('/api/auth/preferences/last-seen-history', {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({ failed_count: currentFailedCount })
-            })
-          } catch (error) {
-            console.error('Failed to save last seen failed count:', error)
+          // Save to server
+          const token = getAccessToken()
+          if (token) {
+            try {
+              await fetch('/api/auth/preferences/last-seen-history', {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ failed_count: currentFailedCount })
+              })
+            } catch (error) {
+              console.error('Failed to save last seen failed count:', error)
+            }
           }
-        }
-      }, 3000)
-      return () => clearTimeout(timer)
+        }, 3000)
+        return () => clearTimeout(timer)
+      }
     }
-  }, [activeTab, currentClosedCount, currentFailedCount, getAccessToken])
+  }, [activeTab, currentClosedCount, currentFailedCount, lastSeenClosedCount, lastSeenFailedCount, getAccessToken])
 
   const getQuoteCurrency = (productId: string) => {
     const quote = productId?.split('-')[1] || 'BTC'
