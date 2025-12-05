@@ -183,3 +183,4 @@ See **COMMERCIALIZATION.md** for the full roadmap to make Zenith Grid sale-ready
 3. Is this feature something users would pay for?
 4. Does it help differentiate from 3Commas?
 - when updating prod, use our "update.py --yes" script to ensure user experience will be good when they* too use it
+- be sure not to hardcode migrations paths (use os.path.dirname pattern we currently use).  Otherwise the update.py script will fail when other folk try to update and run.

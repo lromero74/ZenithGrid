@@ -37,12 +37,13 @@ function AppContent() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
-  // Track last seen count of history items (closed + failed) - fetched from server
-  const [lastSeenHistoryCount, setLastSeenHistoryCount] = useState<number>(0)
+  // Track last seen counts for history items (separate for closed and failed) - fetched from server
+  const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(0)
+  const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(0)
 
-  // Fetch last seen history count from server on mount
+  // Fetch last seen history counts from server on mount
   useEffect(() => {
-    const fetchLastSeenCount = async () => {
+    const fetchLastSeenCounts = async () => {
       const token = getAccessToken()
       if (!token) return
 
@@ -52,14 +53,15 @@ function AppContent() {
         })
         if (response.ok) {
           const data = await response.json()
-          setLastSeenHistoryCount(data.last_seen_history_count || 0)
+          setLastSeenClosedCount(data.last_seen_history_count || 0)
+          setLastSeenFailedCount(data.last_seen_failed_count || 0)
         }
       } catch (error) {
-        console.error('Failed to fetch last seen history count:', error)
+        console.error('Failed to fetch last seen history counts:', error)
       }
     }
 
-    fetchLastSeenCount()
+    fetchLastSeenCounts()
   }, [getAccessToken])
 
   // Defer non-critical API calls until after initial render
@@ -112,39 +114,41 @@ function AppContent() {
     enabled: deferredQueriesEnabled, // Defer until 2s after initial render
   })
 
-  // Calculate total history count and badge delta
-  const currentHistoryCount = closedPositions.length + failedPositions.length
-  const newHistoryItemsCount = Math.max(0, currentHistoryCount - lastSeenHistoryCount)
+  // Calculate badge counts separately for closed and failed
+  const currentClosedCount = closedPositions.length
+  const currentFailedCount = failedPositions.length
+  const newClosedItemsCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
+  const newFailedItemsCount = Math.max(0, currentFailedCount - lastSeenFailedCount)
+  // Header badge shows combined total of unseen items from both categories
+  const newHistoryItemsCount = newClosedItemsCount + newFailedItemsCount
 
-  // Mark history as viewed after a few seconds on History page
+  // Refetch last seen counts when navigating to History page
+  // This ensures App.tsx stays in sync after ClosedPositions.tsx clears individual counts
   useEffect(() => {
     if (location.pathname === '/history') {
-      const timer = setTimeout(async () => {
-        // Update local state immediately
-        setLastSeenHistoryCount(currentHistoryCount)
-
-        // Save to server
+      const refetchCounts = async () => {
         const token = getAccessToken()
-        if (token) {
-          try {
-            await fetch('/api/auth/preferences/last-seen-history', {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({ count: currentHistoryCount })
-            })
-          } catch (error) {
-            console.error('Failed to save last seen history count:', error)
-          }
-        }
-      }, 3000) // Clear badge after 3 seconds
+        if (!token) return
 
-      // Cleanup timer if user navigates away before it completes
-      return () => clearTimeout(timer)
+        try {
+          const response = await fetch('/api/auth/preferences/last-seen-history', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (response.ok) {
+            const data = await response.json()
+            setLastSeenClosedCount(data.last_seen_history_count || 0)
+            setLastSeenFailedCount(data.last_seen_failed_count || 0)
+          }
+        } catch (error) {
+          console.error('Failed to refetch last seen history counts:', error)
+        }
+      }
+
+      // Refetch periodically while on History page to catch updates from ClosedPositions
+      const interval = setInterval(refetchCounts, 2000)
+      return () => clearInterval(interval)
     }
-  }, [location.pathname, currentHistoryCount, getAccessToken])
+  }, [location.pathname, getAccessToken])
 
   return (
     <NotificationProvider>

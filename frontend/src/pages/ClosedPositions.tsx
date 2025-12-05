@@ -262,7 +262,7 @@ function ClosedPositions() {
             }`}
           >
             <span className="flex items-center space-x-2">
-              <span>Closed Positions ({closedPositions.length})</span>
+              <span>Closed Positions ({currentClosedCount})</span>
               {newClosedCount > 0 && (
                 <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                   {newClosedCount > 9 ? '9+' : newClosedCount}
