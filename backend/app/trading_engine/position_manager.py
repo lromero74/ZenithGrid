@@ -18,6 +18,50 @@ from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, Position
 
 
+def calculate_expected_position_budget(config: dict, aggregate_value: float) -> float:
+    """
+    Calculate the expected total budget for a position based on manual sizing config.
+
+    When using manual sizing with percentage-based orders, the budget should equal
+    the sum of all expected orders (base + DCAs), not the per-position allocation.
+
+    Args:
+        config: Bot strategy config with manual sizing parameters
+        aggregate_value: Total account liquidation value (for percentage calculations)
+
+    Returns:
+        Expected total budget for this position based on configured order sizes
+    """
+    if not config.get("use_manual_sizing", False) or aggregate_value <= 0:
+        return 0.0  # Caller should use default per-position budget
+
+    # Get order sizing config
+    base_order_type = config.get("base_order_type", "percentage")
+    base_order_value = config.get("base_order_value", 0.0)
+    dca_order_type = config.get("dca_order_type", "percentage")
+    dca_order_value = config.get("dca_order_value", 0.0)
+    dca_multiplier = config.get("dca_order_multiplier", 1.0)
+    max_dca_orders = config.get("manual_max_dca_orders", config.get("max_safety_orders", 3))
+
+    total_expected = 0.0
+
+    # Calculate base order amount
+    if base_order_type == "percentage":
+        total_expected += aggregate_value * (base_order_value / 100.0)
+    else:
+        total_expected += base_order_value
+
+    # Calculate DCA orders amount (each can have multiplier)
+    for i in range(max_dca_orders):
+        order_size = dca_order_value * (dca_multiplier ** i)
+        if dca_order_type == "percentage":
+            total_expected += aggregate_value * (order_size / 100.0)
+        else:
+            total_expected += order_size
+
+    return total_expected
+
+
 async def get_active_position(db: AsyncSession, bot: Bot, product_id: str) -> Optional[Position]:
     """Get currently active position for this bot/pair combination"""
     query = (
@@ -51,7 +95,13 @@ async def get_next_user_deal_number(db: AsyncSession, user_id: int) -> int:
 
 
 async def create_position(
-    db: AsyncSession, exchange: ExchangeClient, bot: Bot, product_id: str, quote_balance: float, quote_amount: float
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    bot: Bot,
+    product_id: str,
+    quote_balance: float,
+    quote_amount: float,
+    aggregate_value: float = None,
 ) -> Position:
     """
     Create a new position for this bot
@@ -61,8 +111,9 @@ async def create_position(
         exchange: Exchange client instance (CEX or DEX)
         bot: Bot instance
         product_id: Trading pair
-        quote_balance: Current total quote currency balance (BTC or USD)
+        quote_balance: Current per-position budget (BTC or USD)
         quote_amount: Amount of quote currency being spent on initial buy
+        aggregate_value: Total account liquidation value (for manual sizing budget calc)
     """
     # Get BTC/USD price for USD tracking
     try:
@@ -74,6 +125,16 @@ async def create_position(
     user_id = bot.user_id
     user_deal_number = await get_next_user_deal_number(db, user_id) if user_id else None
 
+    # Calculate max_quote_allowed based on sizing mode
+    # For manual sizing with percentage orders, use expected order totals
+    # For AI mode or fixed orders, use the per-position budget
+    config = bot.strategy_config or {}
+    expected_budget = calculate_expected_position_budget(config, aggregate_value or 0)
+    if expected_budget > 0:
+        max_quote = expected_budget
+    else:
+        max_quote = quote_balance
+
     position = Position(
         bot_id=bot.id,
         account_id=bot.account_id,  # Copy account_id from bot for filtering
@@ -83,7 +144,7 @@ async def create_position(
         status="open",
         opened_at=datetime.utcnow(),
         initial_quote_balance=quote_balance,
-        max_quote_allowed=quote_balance,  # Strategy determines actual limits
+        max_quote_allowed=max_quote,  # Expected total based on order sizes
         total_quote_spent=0.0,
         total_base_acquired=0.0,
         average_buy_price=0.0,

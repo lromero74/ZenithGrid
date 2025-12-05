@@ -422,7 +422,9 @@ async def process_signal(
             # BUT we do it in a transaction that will rollback if trade fails
             if is_new_position:
                 logger.info("  📝 Creating position (will commit only if trade succeeds)...")
-                position = await create_position(db, exchange, bot, product_id, quote_balance, quote_amount)
+                position = await create_position(
+                    db, exchange, bot, product_id, quote_balance, quote_amount, aggregate_value
+                )
                 logger.info(f"  ✅ Position created: ID={position.id} (pending trade execution)")
 
             # Execute the actual trade
