@@ -12,6 +12,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
 import Login from './pages/Login'
 
+// App version - update this when tagging releases
+const APP_VERSION = 'v0.81.0'
+
 // Lazy load pages for faster initial render
 // Dashboard is eager-loaded since it's the landing page
 import Dashboard from './pages/Dashboard'
@@ -153,7 +156,7 @@ function AppContent() {
               <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold">Zenith Grid</h1>
-                <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">Multi-Strategy Trading Platform</p>
+                <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">Multi-Strategy Trading Platform <span className="text-slate-500">{APP_VERSION}</span></p>
               </div>
             </div>
             <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
