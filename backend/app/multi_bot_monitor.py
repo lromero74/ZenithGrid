@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
 from app.models import Bot
-from app.services.order_monitor import OrderMonitor
 from app.strategies import StrategyRegistry
 from app.strategies.ai_autonomous import market_analysis
 from app.strategies.bull_flag_scanner import log_scanner_decision, scan_for_bull_flag_opportunities
@@ -33,27 +32,73 @@ class MultiBotMonitor:
     Monitor prices and signals for multiple active bots.
 
     Each bot can use a different strategy and trade a different product pair.
+    Supports multi-user with per-account exchange clients.
     """
 
-    def __init__(self, exchange: ExchangeClient, interval_seconds: int = 60):
+    def __init__(self, exchange: Optional[ExchangeClient] = None, interval_seconds: int = 60):
         """
         Initialize multi-bot monitor
 
         Args:
-            exchange: Exchange client instance (CEX or DEX)
+            exchange: Optional fallback exchange client (for backwards compatibility)
             interval_seconds: How often to check signals (default: 60s)
         """
-        self.exchange = exchange
+        self._fallback_exchange = exchange  # Fallback for bots without account_id
         self.interval_seconds = interval_seconds
         self.running = False
         self.task: Optional[asyncio.Task] = None
 
-        # Initialize order monitor for tracking limit orders
-        self.order_monitor = OrderMonitor(exchange, check_interval=30)
+        # Initialize order monitor (will get exchange per-bot)
+        self.order_monitor = None  # Initialized lazily when needed
 
         # Cache for candle data (to avoid fetching same data multiple times)
         self._candle_cache: Dict[str, tuple] = {}  # product_id -> (timestamp, candles)
         self._cache_ttl = 30  # Cache candles for 30 seconds
+
+        # Cache for exchange clients per account
+        self._exchange_cache: Dict[int, ExchangeClient] = {}
+
+    async def get_exchange_for_bot(self, db: AsyncSession, bot: Bot) -> Optional[ExchangeClient]:
+        """
+        Get the exchange client for a specific bot based on its account.
+
+        Args:
+            db: Database session
+            bot: The bot to get exchange for
+
+        Returns:
+            ExchangeClient or None if no account/credentials configured
+        """
+        from app.services.exchange_service import get_exchange_client_for_account, get_exchange_client_for_user
+
+        # If bot has an account_id, use that account's credentials
+        if bot.account_id:
+            # Check cache first
+            if bot.account_id in self._exchange_cache:
+                return self._exchange_cache[bot.account_id]
+
+            client = await get_exchange_client_for_account(db, bot.account_id)
+            if client:
+                self._exchange_cache[bot.account_id] = client
+                return client
+
+        # If bot has a user_id but no account_id, get user's default account
+        if bot.user_id:
+            client = await get_exchange_client_for_user(db, bot.user_id, "cex")
+            if client:
+                return client
+
+        # Fallback to global exchange client (for backwards compatibility)
+        if self._fallback_exchange:
+            return self._fallback_exchange
+
+        logger.warning(f"No exchange client available for bot {bot.name} (id={bot.id})")
+        return None
+
+    @property
+    def exchange(self) -> Optional[ExchangeClient]:
+        """Backwards compatibility - returns fallback exchange"""
+        return self._fallback_exchange
 
     async def get_active_bots(self, db: AsyncSession) -> List[Bot]:
         """
@@ -660,7 +705,7 @@ class MultiBotMonitor:
 
             # Call batch AI analysis (1 API call for ALL pairs!) - or skip if technical-only check
             if skip_ai_analysis:
-                print(f"⏭️  Skipping AI analysis (technical-only check)")
+                print("⏭️  Skipping AI analysis (technical-only check)")
                 logger.info(f"  ⏭️  SKIPPING AI: Technical-only check for {len(pairs_data)} pairs")
                 # When skipping AI, we only check existing positions (DCA, TP logic)
                 # Don't open new positions without fresh AI analysis

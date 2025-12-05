@@ -1,19 +1,16 @@
 import logging
-from typing import List
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import init_db, get_db
-from app.exchange_clients.factory import create_exchange_client
+from app.database import init_db
 from app.multi_bot_monitor import MultiBotMonitor
 from app.services.limit_order_monitor import LimitOrderMonitor
 from app.routers import bots_router, order_history_router, templates_router
 from app.routers import positions_router
 from app.routers import account_router
 from app.routers import accounts_router  # Multi-account management (CEX + DEX)
-from app.routers.accounts_router import set_coinbase_client
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
@@ -23,67 +20,32 @@ from app.routers import auth_router  # User authentication
 from app.services.websocket_manager import ws_manager
 import asyncio
 
-# Import dependency functions for override
-from app.position_routers.dependencies import get_coinbase as position_get_coinbase
-from app.routers.account_router import get_coinbase as account_get_coinbase
-from app.routers.market_data_router import get_coinbase as market_data_get_coinbase
-from app.routers.settings_router import get_coinbase as settings_get_coinbase
-from app.routers.system_router import get_coinbase as system_get_coinbase, get_price_monitor as system_get_price_monitor
-
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ETH/BTC Trading Bot")
+app = FastAPI(title="Zenith Grid Trading Bot")
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.get_cors_origins_list(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global instances - Create exchange client using factory (CEX for now, DEX in future)
-# Factory creates CoinbaseAdapter wrapping CoinbaseClient (auto-detects CDP vs HMAC auth)
-exchange_client = create_exchange_client(
-    exchange_type="cex",  # Centralized exchange (Coinbase)
-    coinbase_key_name=settings.coinbase_cdp_key_name,
-    coinbase_private_key=settings.coinbase_cdp_private_key,
-)
-
 # Multi-bot monitor - monitors all active bots with their strategies
+# Each bot gets its exchange client from its associated account in the database
 # Monitor loop runs every 10s to check if any bots need processing
-# Bots can override with their own check_interval_seconds (set in database)
-price_monitor = MultiBotMonitor(exchange_client, interval_seconds=10)
+price_monitor = MultiBotMonitor(interval_seconds=10)
 
-# Limit order monitor - tracks pending limit orders and processes fills
-# Runs every 10 seconds to check order status
+# Background task handles
 limit_order_monitor_task = None
-
-# Order reconciliation monitor - auto-fixes positions with missing fill data
-# Runs every 60 seconds to detect and reconcile orphaned orders
 order_reconciliation_monitor_task = None
-
-
-# Dependency overrides for router injection
-def override_get_coinbase():
-    return exchange_client
 
 
 def override_get_price_monitor():
     return price_monitor
 
-
-# Override dependencies with global instances
-app.dependency_overrides[position_get_coinbase] = override_get_coinbase
-app.dependency_overrides[account_get_coinbase] = override_get_coinbase
-app.dependency_overrides[market_data_get_coinbase] = override_get_coinbase
-app.dependency_overrides[settings_get_coinbase] = override_get_coinbase
-app.dependency_overrides[system_get_coinbase] = override_get_coinbase
-app.dependency_overrides[system_get_price_monitor] = override_get_price_monitor
-
-# Set coinbase client for accounts router (uses global instead of dependency injection)
-set_coinbase_client(exchange_client)
 
 # Include all routers
 app.include_router(auth_router.router)  # Authentication (login, register, etc.)
@@ -101,15 +63,34 @@ app.include_router(news_router.router)  # Crypto news with 24h caching
 
 
 # Background task for limit order monitoring
+# Now works with per-position exchange clients from accounts
 async def run_limit_order_monitor():
     """Background task that monitors pending limit orders"""
     from app.database import async_session_maker
+    from app.services.exchange_service import get_exchange_client_for_account
+    from app.models import Position
+    from sqlalchemy import select
 
     while True:
         try:
             async with async_session_maker() as db:
-                monitor = LimitOrderMonitor(db, exchange_client)
-                await monitor.check_limit_close_orders()
+                # Get positions with pending limit close orders
+                result = await db.execute(
+                    select(Position).where(
+                        Position.closing_via_limit.is_(True),
+                        Position.limit_close_order_id.isnot(None),
+                        Position.status == "open"
+                    )
+                )
+                positions = result.scalars().all()
+
+                for position in positions:
+                    # Get exchange client for this position's account
+                    if position.account_id:
+                        exchange = await get_exchange_client_for_account(db, position.account_id)
+                        if exchange:
+                            monitor = LimitOrderMonitor(db, exchange)
+                            await monitor.check_single_position_limit_order(position)
         except Exception as e:
             logger.error(f"Error in limit order monitor loop: {e}")
 
@@ -122,12 +103,33 @@ async def run_order_reconciliation_monitor():
     """Background task that auto-fixes positions with missing fill data"""
     from app.database import async_session_maker
     from app.services.order_reconciliation_monitor import OrderReconciliationMonitor
+    from app.services.exchange_service import get_exchange_client_for_account
+    from app.models import Position
+    from sqlalchemy import select
 
     while True:
         try:
             async with async_session_maker() as db:
-                monitor = OrderReconciliationMonitor(db, exchange_client)
-                await monitor.check_and_fix_orphaned_positions()
+                # Get positions that might need reconciliation (open positions)
+                result = await db.execute(
+                    select(Position).where(Position.status == "open")
+                )
+                positions = result.scalars().all()
+
+                # Group by account_id to minimize exchange client creation
+                positions_by_account = {}
+                for pos in positions:
+                    account_id = pos.account_id or 0
+                    if account_id not in positions_by_account:
+                        positions_by_account[account_id] = []
+                    positions_by_account[account_id].append(pos)
+
+                for account_id, account_positions in positions_by_account.items():
+                    if account_id > 0:
+                        exchange = await get_exchange_client_for_account(db, account_id)
+                        if exchange:
+                            monitor = OrderReconciliationMonitor(db, exchange)
+                            await monitor.check_and_fix_orphaned_positions()
         except Exception as e:
             logger.error(f"Error in order reconciliation monitor loop: {e}")
 
@@ -145,18 +147,20 @@ async def startup_event():
     print("🚀 Initializing database...")
     await init_db()
     print("🚀 Database initialized successfully")
+
+    # Start multi-bot monitor (gets exchange clients per-bot from accounts)
     print("🚀 Starting multi-bot monitor...")
-    # Start price monitor
     await price_monitor.start_async()
     print("🚀 Multi-bot monitor started - bot monitoring active")
+
     print("🚀 Starting limit order monitor...")
-    # Start limit order monitor as background task
     limit_order_monitor_task = asyncio.create_task(run_limit_order_monitor())
     print("🚀 Limit order monitor started - checking every 10 seconds")
+
     print("🚀 Starting order reconciliation monitor...")
-    # Start order reconciliation monitor as background task
     order_reconciliation_monitor_task = asyncio.create_task(run_order_reconciliation_monitor())
     print("🚀 Order reconciliation monitor started - auto-fixing orphaned positions every 60 seconds")
+
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
@@ -166,7 +170,8 @@ async def shutdown_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task
 
     logger.info("🛑 Shutting down - stopping monitors...")
-    await price_monitor.stop()
+    if price_monitor:
+        await price_monitor.stop()
 
     if limit_order_monitor_task:
         limit_order_monitor_task.cancel()
@@ -203,4 +208,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
-# Test comment for auto-deploy

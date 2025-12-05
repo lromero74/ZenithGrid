@@ -905,7 +905,7 @@ def initialize_database(project_root):
         conn.close()
 
 def create_admin_user(project_root, email, password, display_name=None):
-    """Create the initial admin user"""
+    """Create the initial admin user and return the user_id"""
     db_path = project_root / 'backend' / 'trading.db'
 
     # Get venv Python path
@@ -925,7 +925,7 @@ print(hashed.decode('utf-8'))
 
     if result.returncode != 0:
         print_error(f"Failed to hash password: {result.stderr}")
-        return False
+        return None
 
     hashed = result.stdout.strip()
 
@@ -939,23 +939,120 @@ print(hashed.decode('utf-8'))
 
         if existing:
             print_warning(f"User {email} already exists")
-            return True
+            return existing[0]  # Return existing user_id
 
         cursor.execute("""
             INSERT INTO users (email, hashed_password, is_active, is_superuser, display_name, created_at, updated_at)
             VALUES (?, ?, 1, 1, ?, ?, ?)
         """, (email.lower(), hashed, display_name, datetime.utcnow(), datetime.utcnow()))
 
+        user_id = cursor.lastrowid
         conn.commit()
         print_success(f"Admin user '{email}' created")
-        return True
+        return user_id
 
     except Exception as e:
         conn.rollback()
         print_error(f"Failed to create admin user: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def create_coinbase_account(project_root, user_id, api_key_name, api_private_key):
+    """Create a Coinbase exchange account for the user in the database"""
+    db_path = project_root / 'backend' / 'trading.db'
+
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    try:
+        # Check if user already has a Coinbase account
+        cursor.execute("""
+            SELECT id FROM accounts
+            WHERE user_id = ? AND type = 'cex' AND exchange = 'coinbase'
+        """, (user_id,))
+        existing = cursor.fetchone()
+
+        if existing:
+            # Update existing account
+            cursor.execute("""
+                UPDATE accounts
+                SET api_key_name = ?, api_private_key = ?, updated_at = ?
+                WHERE id = ?
+            """, (api_key_name, api_private_key, datetime.utcnow(), existing[0]))
+            print_success("Coinbase account credentials updated")
+        else:
+            # Create new account
+            cursor.execute("""
+                INSERT INTO accounts (user_id, name, type, exchange, api_key_name, api_private_key,
+                                     is_default, is_active, created_at, updated_at)
+                VALUES (?, 'Coinbase (Primary)', 'cex', 'coinbase', ?, ?, 1, 1, ?, ?)
+            """, (user_id, api_key_name, api_private_key, datetime.utcnow(), datetime.utcnow()))
+            print_success("Coinbase account created")
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        conn.rollback()
+        print_error(f"Failed to create Coinbase account: {e}")
         return False
     finally:
         conn.close()
+
+
+def prompt_for_coinbase_credentials():
+    """Prompt user for Coinbase CDP API credentials"""
+    print()
+    print_header("Coinbase Exchange Configuration")
+    print()
+    print_info("To trade on Coinbase, you need CDP (Coinbase Developer Platform) API credentials.")
+    print_info("Get your API credentials at: https://portal.cdp.coinbase.com/projects")
+    print()
+    print_info("You need:")
+    print("  1. API Key Name (looks like: organizations/.../apiKeys/...)")
+    print("  2. Private Key (EC private key in PEM format)")
+    print()
+
+    if not prompt_yes_no("Configure Coinbase API credentials now?", default='yes'):
+        print_info("You can configure Coinbase credentials later in Settings after login.")
+        return None, None
+
+    print()
+    api_key_name = prompt_input("API Key Name (organizations/.../apiKeys/...)")
+
+    print()
+    print_info("For the private key, you can either:")
+    print("  1. Paste the key directly (with \\n for newlines)")
+    print("  2. Provide a file path to the .pem file")
+    print()
+
+    key_input = prompt_input("Private key or path to .pem file")
+
+    # Check if it's a file path
+    if key_input and not key_input.startswith('-----BEGIN'):
+        key_path = Path(key_input).expanduser()
+        if key_path.exists():
+            try:
+                with open(key_path, 'r') as f:
+                    api_private_key = f.read().strip()
+                print_success(f"Read private key from {key_path}")
+            except Exception as e:
+                print_error(f"Failed to read key file: {e}")
+                return None, None
+        else:
+            # Assume it's the key with escaped newlines
+            api_private_key = key_input.replace('\\n', '\n')
+    else:
+        # Direct key input
+        api_private_key = key_input.replace('\\n', '\n') if key_input else None
+
+    if not api_key_name or not api_private_key:
+        print_warning("Incomplete credentials provided")
+        return None, None
+
+    return api_key_name, api_private_key
 
 def generate_env_file(project_root, config):
     """Generate the .env file with provided configuration"""
@@ -1019,16 +1116,15 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
     env_content += """
 # =============================================================================
-# Coinbase API (Add your credentials in the app after setup)
-# =============================================================================
-# COINBASE_API_KEY=your_coinbase_api_key
-# COINBASE_API_SECRET=your_coinbase_api_secret
-
-# =============================================================================
 # Application Settings
 # =============================================================================
 DEBUG=false
 LOG_LEVEL=INFO
+
+# =============================================================================
+# Exchange Credentials (stored per-user in database, not here)
+# Users configure their Coinbase API credentials in the Settings page after login.
+# =============================================================================
 """
 
     try:
@@ -1233,6 +1329,11 @@ def start_services_manually(project_root):
 
 def run_setup():
     """Main setup wizard"""
+    # Check Python version FIRST - may re-execute with Python 3.11
+    # This must happen before any user interaction to avoid double prompts
+    if not check_python_version():
+        return False
+
     print_header("Zenith Grid Setup Wizard")
 
     project_root = get_project_root()
@@ -1250,12 +1351,17 @@ def run_setup():
     print("  This wizard will configure Zenith Grid for first-time use.")
     print("  The following steps will be performed:")
     print()
+    print("  Prerequisites:")
+    print("     - Python 3.10+ (required)")
+    print("     - Node.js 18+ (required for frontend, https://nodejs.org/)")
+    print()
     print("  1. Python Environment")
     print("     - Create a Python virtual environment (backend/venv)")
     print("     - Install Python dependencies from requirements.txt")
     print()
     print("  2. Frontend Dependencies")
     print("     - Install Node.js packages (npm install)")
+    print("     - Skipped if Node.js not installed")
     print()
     print("  3. Database Initialization")
     print("     - Create SQLite database (backend/trading.db)")
@@ -1267,6 +1373,7 @@ def run_setup():
     print()
     print("  5. Admin User Creation")
     print("     - Create your initial admin account")
+    print("     - Admins can create additional users via API")
     print()
     print("  6. System Services (Optional)")
     print("     - Install systemd/launchd services for auto-start")
@@ -1278,10 +1385,6 @@ def run_setup():
         return False
 
     print()
-
-    # Check Python version
-    if not check_python_version():
-        return False
 
     # Step 1: Python Virtual Environment & Dependencies
     print_step(1, "Python Environment Setup")
@@ -1396,6 +1499,7 @@ def run_setup():
         print_info("No users found. Creating initial admin user...")
         create_user = True
 
+    user_id = None
     if create_user:
         print()
         while True:
@@ -1420,7 +1524,13 @@ def run_setup():
 
         # Need to ensure bcrypt is available
         sys.path.insert(0, str(project_root / 'backend'))
-        create_admin_user(project_root, email, password, display_name or None)
+        user_id = create_admin_user(project_root, email, password, display_name or None)
+
+        # Prompt for Coinbase credentials if user was created
+        if user_id:
+            api_key_name, api_private_key = prompt_for_coinbase_credentials()
+            if api_key_name and api_private_key:
+                create_coinbase_account(project_root, user_id, api_key_name, api_private_key)
 
     # Step 6: Service Installation
     print_step(6, "Service Installation (Optional)")
@@ -1745,6 +1855,27 @@ def run_cleanup():
             print_success(f"Removed {node_modules_path}")
         except Exception as e:
             print_error(f"Failed to remove node_modules: {e}")
+
+    # Clean Vite cache (can cause "Outdated Optimize Dep" errors)
+    vite_cache = project_root / 'frontend' / 'node_modules' / '.vite'
+    if vite_cache.exists():
+        print_info("Removing Vite cache...")
+        try:
+            shutil.rmtree(vite_cache)
+            print_success(f"Removed {vite_cache}")
+        except Exception as e:
+            print_error(f"Failed to remove Vite cache: {e}")
+
+    # Clean Python cache files
+    pycache_count = 0
+    for pycache in project_root.rglob('__pycache__'):
+        try:
+            shutil.rmtree(pycache)
+            pycache_count += 1
+        except Exception:
+            pass
+    if pycache_count > 0:
+        print_success(f"Removed {pycache_count} __pycache__ directories")
 
     # Ask about database
     if db_path.exists():

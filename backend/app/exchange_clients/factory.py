@@ -26,7 +26,7 @@ def create_exchange_client(
     private_key: Optional[str] = None,
     rpc_url: Optional[str] = None,
     dex_router: Optional[str] = None,
-) -> ExchangeClient:
+) -> Optional[ExchangeClient]:
     """
     Factory function to create the appropriate exchange client.
 
@@ -44,10 +44,10 @@ def create_exchange_client(
         dex_router: DEX router contract address (Uniswap V3, PancakeSwap, etc.)
 
     Returns:
-        ExchangeClient instance (CoinbaseAdapter or DEXClient)
+        ExchangeClient instance (CoinbaseAdapter or DEXClient), or None if credentials missing
 
     Raises:
-        ValueError: If exchange_type is invalid or required parameters are missing
+        ValueError: If exchange_type is invalid
 
     Examples:
         # Create Coinbase CEX client
@@ -70,7 +70,9 @@ def create_exchange_client(
     if exchange_type == "cex":
         # Centralized Exchange (Coinbase)
         if not coinbase_key_name or not coinbase_private_key:
-            raise ValueError("CEX requires coinbase_key_name and coinbase_private_key")
+            # Return None instead of raising - allows app to start without credentials
+            # Users can configure credentials later via Settings
+            return None
 
         # Create CoinbaseClient and wrap it with adapter
         coinbase = CoinbaseClient(

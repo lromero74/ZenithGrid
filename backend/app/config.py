@@ -1,10 +1,16 @@
 from typing import List
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",  # Ignore unknown fields in .env
+    )
+
     # Coinbase API - Legacy HMAC (if using old keys)
     coinbase_api_key: str = ""
     coinbase_api_secret: str = ""
@@ -37,7 +43,19 @@ class Settings(BaseSettings):
 
     # Security
     secret_key: str = "change-this-secret-key"
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS origins as comma-separated string (parsed to list via validator)
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    @field_validator("cors_origins")
+    @classmethod
+    def parse_cors_origins(cls, v: str) -> str:
+        """Validate CORS origins format (comma-separated URLs)"""
+        # Just validate it's a string - actual parsing happens in main.py
+        return v
+
+    def get_cors_origins_list(self) -> List[str]:
+        """Get CORS origins as a list"""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     # JWT Authentication
     jwt_secret_key: str = "jwt-secret-key-change-in-production"
@@ -60,10 +78,6 @@ class Settings(BaseSettings):
     # Valid intervals: ONE_MINUTE, FIVE_MINUTE, FIFTEEN_MINUTE, THIRTY_MINUTE, ONE_HOUR, TWO_HOUR, SIX_HOUR, ONE_DAY
     candle_interval: str = "FIVE_MINUTE"  # Default to 5-minute candles
     ticker_interval: str = "1m"  # Legacy support
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 settings = Settings()
