@@ -245,22 +245,22 @@ def validate_password(password):
 # AI Provider configuration with API key URLs
 AI_PROVIDERS = {
     '1': {
+        'name': 'Gemini (Google) - free tier available',
+        'key': 'gemini',
+        'env_key': 'gemini_api_key',
+        'url': 'https://aistudio.google.com/apikey',
+    },
+    '2': {
         'name': 'Claude (Anthropic)',
         'key': 'claude',
         'env_key': 'anthropic_api_key',
         'url': 'https://console.anthropic.com/settings/keys',
     },
-    '2': {
+    '3': {
         'name': 'ChatGPT (OpenAI)',
         'key': 'openai',
         'env_key': 'openai_api_key',
         'url': 'https://platform.openai.com/api-keys',
-    },
-    '3': {
-        'name': 'Gemini (Google)',
-        'key': 'gemini',
-        'env_key': 'gemini_api_key',
-        'url': 'https://aistudio.google.com/apikey',
     },
     '4': {
         'name': 'Grok (xAI)',
@@ -282,7 +282,7 @@ def prompt_for_ai_provider(config):
     print()
 
     while True:
-        choice = input("Enter choice (1-4): ").strip()
+        choice = input("Enter choice [1]: ").strip() or '1'
         if choice in AI_PROVIDERS:
             break
         print_warning("Please enter 1, 2, 3, or 4")
@@ -1042,10 +1042,15 @@ def prompt_for_coinbase_credentials():
                 print_error(f"Failed to read key file: {e}")
                 return None, None
         else:
-            # Assume it's the key with escaped newlines
+            # Could be raw base64 key or key with escaped newlines
             api_private_key = key_input.replace('\\n', '\n')
+            # If it's just the raw base64 without PEM headers, wrap it
+            if not api_private_key.startswith('-----BEGIN'):
+                # Coinbase uses EC private keys
+                api_private_key = f"-----BEGIN EC PRIVATE KEY-----\n{api_private_key}\n-----END EC PRIVATE KEY-----"
+                print_info("Wrapped raw key in PEM format")
     else:
-        # Direct key input
+        # Direct key input with PEM headers
         api_private_key = key_input.replace('\\n', '\n') if key_input else None
 
     if not api_key_name or not api_private_key:
@@ -1091,7 +1096,7 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 """
 
     # Add system AI provider
-    provider = config.get('system_ai_provider', 'claude')
+    provider = config.get('system_ai_provider', 'gemini')
     env_content += f"SYSTEM_AI_PROVIDER={provider}\n"
 
     if config.get('anthropic_api_key'):
