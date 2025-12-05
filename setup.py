@@ -607,6 +607,7 @@ def initialize_database(project_root):
                 is_superuser INTEGER DEFAULT 0,
                 display_name TEXT,
                 last_seen_history_count INTEGER DEFAULT 0,
+                last_seen_failed_count INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_login_at DATETIME

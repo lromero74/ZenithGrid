@@ -6,9 +6,11 @@ import type { Trade, AIBotLog, Position, Bot } from '../types'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { formatDateTime } from '../utils/dateFormat'
 import { useAccount, getChainName } from '../contexts/AccountContext'
+import { useAuth } from '../contexts/AuthContext'
 
 function ClosedPositions() {
   const { selectedAccount } = useAccount()
+  const { getAccessToken } = useAuth()
   const [activeTab, setActiveTab] = useState<'closed' | 'failed'>('closed')
   const [expandedPositionId, setExpandedPositionId] = useState<number | null>(null)
   const [positionTrades, setPositionTrades] = useState<Record<number, Trade[]>>({})
@@ -19,16 +21,32 @@ function ClosedPositions() {
   const [closedPage, setClosedPage] = useState(1)
   const pageSize = 25
 
-  // Track last seen counts separately for closed and failed
-  const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(() => {
-    const saved = localStorage.getItem('last-seen-closed-count')
-    return saved ? parseInt(saved) : 0
-  })
+  // Track last seen counts separately for closed and failed (server-synced)
+  const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(0)
+  const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(0)
 
-  const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(() => {
-    const saved = localStorage.getItem('last-seen-failed-count')
-    return saved ? parseInt(saved) : 0
-  })
+  // Fetch initial counts from server on mount
+  useEffect(() => {
+    const fetchLastSeenCounts = async () => {
+      const token = getAccessToken()
+      if (!token) return
+
+      try {
+        const response = await fetch('/api/auth/preferences/last-seen-history', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setLastSeenClosedCount(data.last_seen_history_count || 0)
+          setLastSeenFailedCount(data.last_seen_failed_count || 0)
+        }
+      } catch (error) {
+        console.error('Failed to fetch last seen counts:', error)
+      }
+    }
+
+    fetchLastSeenCounts()
+  }, [getAccessToken])
 
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccount?.id],
@@ -85,24 +103,56 @@ function ClosedPositions() {
   const newClosedCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
   const newFailedCount = Math.max(0, currentFailedCount - lastSeenFailedCount)
 
-  // Update last seen count when user views a specific tab for 3 seconds
+  // Update last seen count when user views a specific tab for 3 seconds (synced to server)
   useEffect(() => {
     if (activeTab === 'closed') {
-      const timer = setTimeout(() => {
+      const timer = setTimeout(async () => {
         console.log('✅ Marking closed positions as viewed:', currentClosedCount)
         setLastSeenClosedCount(currentClosedCount)
-        localStorage.setItem('last-seen-closed-count', currentClosedCount.toString())
+
+        // Save to server
+        const token = getAccessToken()
+        if (token) {
+          try {
+            await fetch('/api/auth/preferences/last-seen-history', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ count: currentClosedCount })
+            })
+          } catch (error) {
+            console.error('Failed to save last seen closed count:', error)
+          }
+        }
       }, 3000)
       return () => clearTimeout(timer)
     } else if (activeTab === 'failed') {
-      const timer = setTimeout(() => {
+      const timer = setTimeout(async () => {
         console.log('✅ Marking failed orders as viewed:', currentFailedCount)
         setLastSeenFailedCount(currentFailedCount)
-        localStorage.setItem('last-seen-failed-count', currentFailedCount.toString())
+
+        // Save to server
+        const token = getAccessToken()
+        if (token) {
+          try {
+            await fetch('/api/auth/preferences/last-seen-history', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ failed_count: currentFailedCount })
+            })
+          } catch (error) {
+            console.error('Failed to save last seen failed count:', error)
+          }
+        }
       }, 3000)
       return () => clearTimeout(timer)
     }
-  }, [activeTab, currentClosedCount, currentFailedCount])
+  }, [activeTab, currentClosedCount, currentFailedCount, getAccessToken])
 
   const getQuoteCurrency = (productId: string) => {
     const quote = productId?.split('-')[1] || 'BTC'

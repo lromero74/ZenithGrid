@@ -522,12 +522,14 @@ async def signup(
 
 class LastSeenHistoryRequest(BaseModel):
     """Request to update last seen history count"""
-    count: int = Field(..., ge=0)
+    count: Optional[int] = Field(None, ge=0)  # Closed positions count
+    failed_count: Optional[int] = Field(None, ge=0)  # Failed orders count
 
 
 class LastSeenHistoryResponse(BaseModel):
     """Response with last seen history count"""
     last_seen_history_count: int
+    last_seen_failed_count: int = 0
 
 
 @router.get("/preferences/last-seen-history", response_model=LastSeenHistoryResponse)
@@ -535,11 +537,12 @@ async def get_last_seen_history(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get the user's last seen history count.
-    Used for the "new items" badge in the History tab.
+    Get the user's last seen history counts.
+    Used for the "new items" badge in the History tab (closed + failed).
     """
     return LastSeenHistoryResponse(
-        last_seen_history_count=current_user.last_seen_history_count or 0
+        last_seen_history_count=current_user.last_seen_history_count or 0,
+        last_seen_failed_count=current_user.last_seen_failed_count or 0
     )
 
 
@@ -550,12 +553,17 @@ async def update_last_seen_history(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Update the user's last seen history count.
-    Called when the user views the History tab.
+    Update the user's last seen history counts.
+    Called when the user views the History tab (closed or failed).
+    Both counts are optional - only update what's provided.
     """
-    current_user.last_seen_history_count = request.count
+    if request.count is not None:
+        current_user.last_seen_history_count = request.count
+    if request.failed_count is not None:
+        current_user.last_seen_failed_count = request.failed_count
     await db.commit()
 
     return LastSeenHistoryResponse(
-        last_seen_history_count=current_user.last_seen_history_count
+        last_seen_history_count=current_user.last_seen_history_count or 0,
+        last_seen_failed_count=current_user.last_seen_failed_count or 0
     )

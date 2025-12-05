@@ -53,7 +53,8 @@ class User(Base):
     display_name = Column(String, nullable=True)  # Optional display name
 
     # UI preferences
-    last_seen_history_count = Column(Integer, default=0)  # For "new items" badge in History tab
+    last_seen_history_count = Column(Integer, default=0)  # For "new items" badge in History tab (closed positions)
+    last_seen_failed_count = Column(Integer, default=0)  # For "new items" badge in Failed tab
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
