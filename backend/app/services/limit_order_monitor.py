@@ -37,12 +37,12 @@ class LimitOrderMonitor:
             logger.info(f"Checking {len(positions)} positions with pending limit close orders")
 
             for position in positions:
-                await self._check_position_limit_order(position)
+                await self.check_single_position_limit_order(position)
 
         except Exception as e:
             logger.error(f"Error checking limit close orders: {e}")
 
-    async def _check_position_limit_order(self, position: Position):
+    async def check_single_position_limit_order(self, position: Position):
         """Check a single position's limit order status"""
         try:
             if not position.limit_close_order_id:
