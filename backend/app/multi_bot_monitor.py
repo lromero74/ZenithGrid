@@ -49,7 +49,7 @@ class MultiBotMonitor:
         self.task: Optional[asyncio.Task] = None
 
         # Current exchange client (set per-bot in the monitoring loop)
-        self.exchange: Optional[ExchangeClient] = None
+        self._current_exchange: Optional[ExchangeClient] = None
 
         # Initialize order monitor (will get exchange per-bot)
         self.order_monitor = None  # Initialized lazily when needed
@@ -100,8 +100,8 @@ class MultiBotMonitor:
 
     @property
     def exchange(self) -> Optional[ExchangeClient]:
-        """Backwards compatibility - returns fallback exchange"""
-        return self._fallback_exchange
+        """Returns current exchange client (per-bot) or fallback"""
+        return self._current_exchange or self._fallback_exchange
 
     async def get_active_bots(self, db: AsyncSession) -> List[Bot]:
         """
@@ -1341,8 +1341,8 @@ class MultiBotMonitor:
                                 print(f"🔍 Checking bot: {bot.name} (ID: {bot.id})")
 
                                 # Get exchange client for this bot (per-user/per-account)
-                                self.exchange = await self.get_exchange_for_bot(db, bot)
-                                if not self.exchange:
+                                self._current_exchange = await self.get_exchange_for_bot(db, bot)
+                                if not self._current_exchange:
                                     logger.warning(f"No exchange client for bot {bot.name} (account_id={bot.account_id})")
                                     continue
 
