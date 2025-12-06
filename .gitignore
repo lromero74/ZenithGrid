@@ -23,6 +23,10 @@ build/
 # Runtime caches (news, fear/greed, etc.)
 backend/*_cache.json
 
+# Cached news images (downloaded at runtime)
+backend/static/news_images/*
+!backend/static/news_images/.gitkeep
+
 # Environment variables
 .env
 .env.local

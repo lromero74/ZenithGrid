@@ -576,3 +576,35 @@ class BlacklistedCoin(Base):
 
     # Relationships
     user = relationship("User", back_populates="blacklisted_coins")
+
+
+class NewsArticle(Base):
+    """
+    Cached news articles from various crypto news sources.
+
+    Articles are fetched periodically and cached in the database.
+    Images are downloaded and stored locally in static/news_images/.
+    Articles older than 7 days are automatically cleaned up.
+    """
+
+    __tablename__ = "news_articles"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Article content
+    title = Column(String, nullable=False)
+    url = Column(String, unique=True, index=True, nullable=False)  # Unique constraint for deduplication
+    source = Column(String, nullable=False)  # e.g., "cointelegraph", "coindesk", "reddit"
+    published_at = Column(DateTime, nullable=True, index=True)  # When the article was published
+
+    # Optional fields
+    summary = Column(Text, nullable=True)  # Article excerpt/summary
+    author = Column(String, nullable=True)
+
+    # Image caching
+    original_thumbnail_url = Column(String, nullable=True)  # Original external URL
+    cached_thumbnail_path = Column(String, nullable=True)  # Local path: "news_images/abc123.jpg"
+
+    # Metadata
+    fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
+    created_at = Column(DateTime, default=datetime.utcnow)

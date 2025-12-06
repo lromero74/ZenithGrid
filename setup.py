@@ -954,6 +954,26 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_blacklisted_coins_user_id ON blacklisted_coins(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_blacklisted_coins_symbol ON blacklisted_coins(symbol)")
 
+        # News articles table (cached news with local image storage)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS news_articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                url TEXT NOT NULL UNIQUE,
+                source TEXT NOT NULL,
+                published_at DATETIME,
+                summary TEXT,
+                author TEXT,
+                original_thumbnail_url TEXT,
+                cached_thumbnail_path TEXT,
+                fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_url ON news_articles(url)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_published_at ON news_articles(published_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_fetched_at ON news_articles(fetched_at)")
+
         conn.commit()
         print_success("Database tables created")
         return True

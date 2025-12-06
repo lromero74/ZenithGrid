@@ -1,7 +1,9 @@
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
@@ -61,6 +63,12 @@ app.include_router(settings_router.router)
 app.include_router(system_router.router)
 app.include_router(blacklist_router.router)
 app.include_router(news_router.router)  # Crypto news with 24h caching
+
+# Mount static files for cached news images
+# Images are stored in backend/static/news_images/ and served at /static/news_images/
+static_dir = Path(__file__).parent.parent / "static"
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 # Background task for limit order monitoring

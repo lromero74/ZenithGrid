@@ -29,7 +29,6 @@ established crypto news sources with RSS feeds or public APIs.
 import asyncio
 import json
 import logging
-import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -39,9 +38,22 @@ import feedparser
 import trafilatura
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
 
+from app.database import async_session_maker
+from app.models import NewsArticle
+from app.services.news_image_cache import (
+    cache_image,
+    cleanup_old_images,
+    get_disk_usage,
+)
+
 logger = logging.getLogger(__name__)
+
+# Track when we last refreshed news (in-memory for this process)
+_last_news_refresh: Optional[datetime] = None
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -1239,6 +1251,89 @@ def save_cache(data: Dict[str, Any]) -> None:
         logger.error(f"Failed to save news cache: {e}")
 
 
+# =============================================================================
+# Database Functions for News Articles
+# =============================================================================
+
+
+async def get_articles_from_db(db: AsyncSession, limit: int = 100) -> List[NewsArticle]:
+    """Get recent news articles from database, sorted by published date."""
+    cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    result = await db.execute(
+        select(NewsArticle)
+        .where(NewsArticle.published_at >= cutoff)
+        .order_by(desc(NewsArticle.published_at))
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def store_article_in_db(
+    db: AsyncSession,
+    item: NewsItem,
+    cached_thumbnail_path: Optional[str] = None
+) -> Optional[NewsArticle]:
+    """Store a news article in the database. Returns None if already exists."""
+    # Check if article already exists by URL
+    result = await db.execute(
+        select(NewsArticle).where(NewsArticle.url == item.url)
+    )
+    existing = result.scalars().first()
+    if existing:
+        return None  # Already exists
+
+    # Parse published date
+    published_at = None
+    if item.published:
+        try:
+            pub_str = item.published.rstrip("Z")
+            published_at = datetime.fromisoformat(pub_str)
+        except (ValueError, TypeError):
+            pass
+
+    article = NewsArticle(
+        title=item.title,
+        url=item.url,
+        source=item.source,
+        published_at=published_at,
+        summary=item.summary,
+        original_thumbnail_url=item.thumbnail,
+        cached_thumbnail_path=cached_thumbnail_path,
+        fetched_at=datetime.utcnow(),
+    )
+    db.add(article)
+    return article
+
+
+async def cleanup_old_articles(db: AsyncSession, max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS) -> int:
+    """Delete articles older than max_age_days. Returns count deleted."""
+    from sqlalchemy import delete
+    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+    result = await db.execute(
+        delete(NewsArticle).where(NewsArticle.fetched_at < cutoff)
+    )
+    await db.commit()
+    deleted_count = result.rowcount
+    if deleted_count > 0:
+        logger.info(f"Cleaned up {deleted_count} old news articles from database")
+    return deleted_count
+
+
+def article_to_news_item(article: NewsArticle) -> Dict[str, Any]:
+    """Convert a NewsArticle database object to a NewsItem dict for API response."""
+    # Use cached thumbnail if available, otherwise fall back to original
+    thumbnail = article.cached_thumbnail_path or article.original_thumbnail_url
+    return {
+        "title": article.title,
+        "url": article.url,
+        "source": article.source,
+        "source_name": NEWS_SOURCES.get(article.source, {}).get("name", article.source),
+        "published": article.published_at.isoformat() + "Z" if article.published_at else None,
+        "summary": article.summary,
+        "thumbnail": thumbnail,
+    }
+
+
 def load_video_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
     """Load video cache from file.
 
@@ -1466,7 +1561,7 @@ async def fetch_us_debt() -> Dict[str, Any]:
                             if calculated_rate > 0:
                                 debt_per_second = calculated_rate
                             else:
-                                logger.info(f"Treasury data shows temporary debt decrease, using default rate")
+                                logger.info("Treasury data shows temporary debt decrease, using default rate")
                                 debt_per_second = default_rate
 
             # Fetch GDP from FRED (Federal Reserve) - no API key needed for this endpoint
@@ -1780,18 +1875,20 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
     return items
 
 
-async def fetch_all_news() -> Dict[str, Any]:
-    """Fetch news from all sources and merge with existing cache.
+async def fetch_all_news() -> None:
+    """Fetch news from all sources, cache images, and store in database.
 
     Strategy:
     - Fetch fresh items from all sources
-    - Merge with existing cached items (new items at top, dedupe by URL)
-    - Prune items older than 7 days
-    - Save merged cache
+    - Download and cache thumbnail images locally
+    - Store new articles in database (deduped by URL)
+    - Skip articles that already exist
     """
+    global _last_news_refresh
     fresh_items: List[NewsItem] = []
 
     async with aiohttp.ClientSession() as session:
+        # Fetch news from all sources
         tasks = []
         for source_id, config in NEWS_SOURCES.items():
             if config["type"] == "reddit":
@@ -1807,18 +1904,35 @@ async def fetch_all_news() -> Dict[str, Any]:
             elif isinstance(result, Exception):
                 logger.error(f"Task failed: {result}")
 
-    # Convert to dicts for merge
-    fresh_dicts = [item.model_dump() for item in fresh_items]
+        # Cache images and store articles in database
+        new_articles_count = 0
+        async with async_session_maker() as db:
+            for item in fresh_items:
+                # Cache thumbnail image if present
+                cached_path = None
+                if item.thumbnail:
+                    cached_path = await cache_image(session, item.thumbnail)
 
-    # Load existing cache for merge (even if "expired")
-    existing_cache = load_cache(for_merge=True)
-    existing_items = existing_cache.get("news", []) if existing_cache else []
+                # Store in database (returns None if already exists)
+                article = await store_article_in_db(db, item, cached_path)
+                if article:
+                    new_articles_count += 1
 
-    # Merge: add new items to existing, dedupe by URL
-    merged_items = merge_news_items(existing_items, fresh_dicts)
+            await db.commit()
 
-    # Prune items older than 7 days
-    merged_items = prune_old_items(merged_items)
+        if new_articles_count > 0:
+            logger.info(f"Added {new_articles_count} new news articles to database")
+
+    _last_news_refresh = datetime.utcnow()
+
+
+async def get_news_from_db() -> Dict[str, Any]:
+    """Get news articles from database and format for API response."""
+    async with async_session_maker() as db:
+        articles = await get_articles_from_db(db, limit=100)
+
+    # Convert to API response format
+    news_items = [article_to_news_item(article) for article in articles]
 
     # Build sources list for UI
     sources_list = [
@@ -1826,55 +1940,67 @@ async def fetch_all_news() -> Dict[str, Any]:
         for sid, cfg in NEWS_SOURCES.items()
     ]
 
-    now = datetime.now()
-    cache_data = {
-        "news": merged_items,
+    now = datetime.utcnow()
+    return {
+        "news": news_items,
         "sources": sources_list,
-        "cached_at": now.isoformat(),
-        "cache_expires_at": (now + timedelta(minutes=NEWS_CACHE_CHECK_MINUTES)).isoformat(),
-        "total_items": len(merged_items),
+        "cached_at": now.isoformat() + "Z",
+        "cache_expires_at": (now + timedelta(minutes=NEWS_CACHE_CHECK_MINUTES)).isoformat() + "Z",
+        "total_items": len(news_items),
     }
-
-    # Save to cache
-    save_cache(cache_data)
-
-    return cache_data
 
 
 @router.get("/", response_model=NewsResponse)
 async def get_news(force_refresh: bool = False):
     """
-    Get cached crypto news.
+    Get crypto news from database cache.
 
-    News is fetched from multiple sources and cached for 24 hours.
-    Use force_refresh=true to bypass cache and fetch fresh data.
+    News is fetched from multiple sources and stored in the database.
+    Checks for new content every 15 minutes, keeps articles for 7 days.
+    Use force_refresh=true to bypass cache timing and fetch fresh data.
     """
-    # Try to load from cache first
-    if not force_refresh:
-        cache = load_cache()
-        if cache:
-            logger.info("Serving news from cache")
-            return NewsResponse(**cache)
+    global _last_news_refresh
 
-    # Fetch fresh news
-    logger.info("Fetching fresh news from all sources...")
+    # Determine if we need to refresh from sources
+    needs_refresh = force_refresh
+    if not needs_refresh and _last_news_refresh:
+        cache_age = datetime.utcnow() - _last_news_refresh
+        if cache_age > timedelta(minutes=NEWS_CACHE_CHECK_MINUTES):
+            needs_refresh = True
+            logger.info(f"News cache needs refresh (age: {cache_age})")
+    elif not _last_news_refresh:
+        # First request since server start - check if we have recent data
+        needs_refresh = True
+
+    # Fetch fresh news if needed
+    if needs_refresh:
+        logger.info("Fetching fresh news from all sources...")
+        try:
+            await fetch_all_news()
+        except Exception as e:
+            logger.error(f"Failed to fetch news: {e}")
+            # Continue to serve from database even if fetch fails
+
+    # Get news from database
     try:
-        data = await fetch_all_news()
-        return NewsResponse(**data)
+        data = await get_news_from_db()
+        if data["news"]:
+            logger.info(f"Serving {len(data['news'])} news articles from database")
+            return NewsResponse(**data)
     except Exception as e:
-        logger.error(f"Failed to fetch news: {e}")
+        logger.error(f"Failed to get news from database: {e}")
 
-        # Try to serve stale cache if available
-        if CACHE_FILE.exists():
-            try:
-                with open(CACHE_FILE, "r") as f:
-                    stale_cache = json.load(f)
-                logger.warning("Serving stale cache due to fetch failure")
-                return NewsResponse(**stale_cache)
-            except Exception:
-                pass
+    # Fall back to old JSON cache if database is empty or fails
+    if CACHE_FILE.exists():
+        try:
+            with open(CACHE_FILE, "r") as f:
+                stale_cache = json.load(f)
+            logger.warning("Serving from JSON cache (database empty or failed)")
+            return NewsResponse(**stale_cache)
+        except Exception:
+            pass
 
-        raise HTTPException(status_code=503, detail="Unable to fetch news")
+    raise HTTPException(status_code=503, detail="No news available")
 
 
 @router.get("/sources")
@@ -1887,6 +2013,46 @@ async def get_sources():
         ],
         "note": "TikTok is not included as it lacks a public API for content. "
                 "These sources provide reliable crypto news via RSS feeds or public APIs."
+    }
+
+
+@router.get("/cache-stats")
+async def get_cache_stats():
+    """Get news cache statistics including database article count and image storage."""
+    # Get article count from database
+    async with async_session_maker() as db:
+        from sqlalchemy import func
+        result = await db.execute(select(func.count(NewsArticle.id)))
+        article_count = result.scalar() or 0
+
+    # Get image storage stats
+    image_stats = get_disk_usage()
+
+    return {
+        "database": {
+            "article_count": article_count,
+        },
+        "images": image_stats,
+        "last_refresh": _last_news_refresh.isoformat() + "Z" if _last_news_refresh else None,
+        "cache_check_interval_minutes": NEWS_CACHE_CHECK_MINUTES,
+        "max_age_days": NEWS_ITEM_MAX_AGE_DAYS,
+    }
+
+
+@router.post("/cleanup")
+async def cleanup_cache():
+    """Manually trigger cleanup of old news articles and images (older than 7 days)."""
+    # Cleanup old articles from database
+    async with async_session_maker() as db:
+        articles_deleted = await cleanup_old_articles(db)
+
+    # Cleanup old images from filesystem
+    images_deleted = cleanup_old_images(max_age_days=NEWS_ITEM_MAX_AGE_DAYS)
+
+    return {
+        "articles_deleted": articles_deleted,
+        "images_deleted": images_deleted,
+        "message": f"Cleaned up {articles_deleted} articles and {images_deleted} images older than {NEWS_ITEM_MAX_AGE_DAYS} days"
     }
 
 
