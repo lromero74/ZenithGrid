@@ -1,6 +1,26 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 
+// Fee adjustment for profit targets
+// Coinbase Advanced Trade taker fee is ~0.6% (0.006)
+// To achieve X% NET profit after sell fees: gross_target = (1 + X%) / (1 - sell_fee)
+const SELL_FEE_RATE = 0.006 // 0.6% Coinbase taker fee
+
+// Helper to calculate fee-adjusted profit target multiplier
+const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
+  const netMultiplier = 1 + (desiredNetProfitPercent / 100)
+  return netMultiplier / (1 - SELL_FEE_RATE)
+}
+
+// Get take profit percentage from position config
+const getTakeProfitPercent = (position: any): number => {
+  return position?.strategy_config_snapshot?.take_profit_percentage
+    ?? position?.strategy_config_snapshot?.min_profit_percentage
+    ?? position?.bot_config?.take_profit_percentage
+    ?? position?.bot_config?.min_profit_percentage
+    ?? 2.0 // Default 2% if not configured
+}
+
 interface TradingViewChartModalProps {
   isOpen: boolean
   onClose: () => void
@@ -131,8 +151,8 @@ export default function TradingViewChartModal({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-0.5 bg-green-500"></div>
-                  <span className="text-slate-400">Target (+2%):</span>
-                  <span className="text-green-400 font-semibold">{(position.average_buy_price * 1.02)?.toFixed(8)}</span>
+                  <span className="text-slate-400">Target (+{getTakeProfitPercent(position)}%):</span>
+                  <span className="text-green-400 font-semibold">{(position.average_buy_price * getFeeAdjustedProfitMultiplier(getTakeProfitPercent(position)))?.toFixed(8)}</span>
                 </div>
                 {position.bot_config?.safety_order_step_percentage && (
                   <div className="flex items-center gap-1.5">

@@ -37,6 +37,29 @@ import {
 } from '../utils/indicators'
 import { API_BASE_URL } from '../config/api'
 
+// Fee adjustment for profit targets
+// Coinbase Advanced Trade taker fee is ~0.6% (0.006)
+// To achieve X% NET profit after sell fees: gross_target = (1 + X%) / (1 - sell_fee)
+const SELL_FEE_RATE = 0.006 // 0.6% Coinbase taker fee
+
+// Helper to calculate fee-adjusted profit target multiplier
+const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
+  const netMultiplier = 1 + (desiredNetProfitPercent / 100)
+  return netMultiplier / (1 - SELL_FEE_RATE)
+}
+
+// Get take profit percentage from position config (frozen at position open) or bot config
+const getTakeProfitPercent = (
+  position: Position,
+  bot: { strategy_config?: Record<string, any> } | null | undefined
+): number => {
+  return position.strategy_config_snapshot?.take_profit_percentage
+    ?? position.strategy_config_snapshot?.min_profit_percentage
+    ?? bot?.strategy_config?.take_profit_percentage
+    ?? bot?.strategy_config?.min_profit_percentage
+    ?? 2.0 // Default 2% if not configured
+}
+
 interface IndicatorConfig {
   id: string
   name: string
@@ -575,8 +598,10 @@ function DealChart({ position, productId: initialProductId, currentPrice, trades
 
       entryLineSeries.setData(entryLineData)
 
-      // Take Profit line
-      const takeProfitPrice = position.average_buy_price * 1.02
+      // Take Profit line - uses configured profit target with fee adjustment
+      const configuredTakeProfit = getTakeProfitPercent(position, bot)
+      const takeProfitMultiplier = getFeeAdjustedProfitMultiplier(configuredTakeProfit)
+      const takeProfitPrice = position.average_buy_price * takeProfitMultiplier
       const takeProfitSeries = chartRef.current.addLineSeries({
         color: '#10b981',
         lineWidth: 2,
@@ -762,7 +787,9 @@ function DealChart({ position, productId: initialProductId, currentPrice, trades
   const calculateGainLoss = () => {
     const currentPriceValue = currentPrice || (chartData.length > 0 ? chartData[chartData.length - 1].close : 0)
     const entryPrice = position.average_buy_price
-    const profitTarget = entryPrice * 1.02
+    // Use configured take profit with fee adjustment
+    const configuredTakeProfit = getTakeProfitPercent(position, bot)
+    const profitTarget = entryPrice * getFeeAdjustedProfitMultiplier(configuredTakeProfit)
 
     // Use the same calculation as calculateUnrealizedPnL for consistency
     const currentValue = position.total_base_acquired * currentPriceValue

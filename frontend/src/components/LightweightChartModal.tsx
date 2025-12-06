@@ -15,6 +15,17 @@ import type { CandleData, IndicatorConfig } from '../utils/indicators/types'
 import { AVAILABLE_INDICATORS } from '../utils/indicators/definitions'
 import { API_BASE_URL } from '../config/api'
 
+// Fee adjustment for profit targets
+// Coinbase Advanced Trade taker fee is ~0.6% (0.006)
+// To achieve X% NET profit after sell fees: gross_target = (1 + X%) / (1 - sell_fee)
+const SELL_FEE_RATE = 0.006 // 0.6% Coinbase taker fee
+
+// Helper to calculate fee-adjusted profit target multiplier
+const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
+  const netMultiplier = 1 + (desiredNetProfitPercent / 100)
+  return netMultiplier / (1 - SELL_FEE_RATE)
+}
+
 interface LightweightChartModalProps {
   isOpen: boolean
   onClose: () => void
@@ -707,12 +718,13 @@ export default function LightweightChartModal({
     const avgBuyPrice = position.average_buy_price
 
     // Get profit target from strategy config (min_profit_percentage or take_profit_percentage)
-    const profitTarget = position.strategy_config_snapshot?.min_profit_percentage
+    const profitTargetPercent = position.strategy_config_snapshot?.min_profit_percentage
       || position.strategy_config_snapshot?.take_profit_percentage
       || position.bot_config?.min_profit_percentage
       || position.bot_config?.take_profit_percentage
       || 2.0  // Default to 2% if not configured
-    const targetPrice = avgBuyPrice * (1 + profitTarget / 100)
+    // Apply fee adjustment to profit target
+    const targetPrice = avgBuyPrice * getFeeAdjustedProfitMultiplier(profitTargetPercent)
 
     // Entry price line (orange)
     const entrySeries = chartRef.current.addLineSeries({
@@ -732,7 +744,7 @@ export default function LightweightChartModal({
       color: '#10b981',
       lineWidth: 2,
       lineStyle: LineStyle.Dashed,
-      title: `Target (${profitTarget}%)`,
+      title: `Target (+${profitTargetPercent}%)`,
       priceLineVisible: false,
       lastValueVisible: false,
     })
@@ -880,12 +892,13 @@ export default function LightweightChartModal({
             <div className="text-sm text-slate-400">{symbol}</div>
 
             {position && (() => {
-              const profitTarget = position.strategy_config_snapshot?.min_profit_percentage
+              const profitTargetPercent = position.strategy_config_snapshot?.min_profit_percentage
                 || position.strategy_config_snapshot?.take_profit_percentage
                 || position.bot_config?.min_profit_percentage
                 || position.bot_config?.take_profit_percentage
                 || 2.0
-              const targetPrice = position.average_buy_price * (1 + profitTarget / 100)
+              // Apply fee adjustment to profit target
+              const targetPrice = position.average_buy_price * getFeeAdjustedProfitMultiplier(profitTargetPercent)
 
               return (
                 <div className="flex items-center gap-3 text-xs">
@@ -896,7 +909,7 @@ export default function LightweightChartModal({
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-0.5 bg-green-500"></div>
-                    <span className="text-slate-400">Target ({profitTarget}%):</span>
+                    <span className="text-slate-400">Target (+{profitTargetPercent}%):</span>
                     <span className="text-green-400 font-semibold">{targetPrice?.toFixed(8)}</span>
                   </div>
                   {position.bot_config?.safety_order_step_percentage && (
