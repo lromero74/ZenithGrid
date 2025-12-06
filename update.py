@@ -227,17 +227,29 @@ def show_changelog(project_root, changelog_arg):
     print_info("Fetching latest from remote...")
     run_command('git fetch origin --tags', cwd=project_root, capture_output=True, check=False)
 
+    # Get latest version from remote
+    try:
+        latest_tag_result = run_command(
+            'git tag --sort=-v:refname | head -1',
+            cwd=project_root,
+            capture_output=True,
+            check=False
+        )
+        latest_version = latest_tag_result.stdout.strip() if latest_tag_result.stdout else "unknown"
+    except Exception:
+        latest_version = "unknown"
+
     # Show installed version
     current_version, is_exact = get_current_version(project_root)
-    if is_exact:
-        print(f"{Colors.GREEN}{Colors.BOLD}Installed: {current_version}{Colors.ENDC}")
-    else:
-        print(f"{Colors.GREEN}{Colors.BOLD}Installed: {current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes or ahead of tag){Colors.ENDC}")
-    print()
 
-    # Check for unpulled changes from origin/main
+    print(f"Latest: {Colors.CYAN}{Colors.BOLD}{latest_version}{Colors.ENDC}")
+    if is_exact:
+        print(f"Installed: {Colors.GREEN}{Colors.BOLD}{current_version}{Colors.ENDC}")
+    else:
+        print(f"Installed: {Colors.GREEN}{Colors.BOLD}{current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes){Colors.ENDC}")
+
+    # Check if updates available and show brief message
     try:
-        # Get commits on remote that aren't local
         result = run_command(
             'git log --oneline HEAD..origin/main',
             cwd=project_root,
@@ -247,43 +259,9 @@ def show_changelog(project_root, changelog_arg):
         unpulled_commits = result.stdout.strip() if result.stdout else ''
 
         if unpulled_commits:
-            commit_lines = unpulled_commits.split('\n')
-            print(f"{Colors.YELLOW}{Colors.BOLD}📦 Available updates ({len(commit_lines)} commits not yet pulled):{Colors.ENDC}")
+            commit_count = len(unpulled_commits.split('\n'))
             print()
-
-            # Check for new tags in the unpulled commits
-            remote_head = run_command('git rev-parse origin/main', cwd=project_root, capture_output=True, check=False)
-            local_head = run_command('git rev-parse HEAD', cwd=project_root, capture_output=True, check=False)
-
-            if remote_head.stdout.strip() != local_head.stdout.strip():
-                # Get tags between local and remote
-                new_tags_result = run_command(
-                    'git tag --contains HEAD --no-contains origin/main 2>/dev/null || true',
-                    cwd=project_root,
-                    capture_output=True,
-                    check=False
-                )
-                # Actually we want tags that contain origin/main but not HEAD
-                new_tags_result = run_command(
-                    f'git log --oneline --decorate HEAD..origin/main | grep -o "tag: v[0-9.]*" | sed "s/tag: //" || true',
-                    cwd=project_root,
-                    capture_output=True,
-                    check=False
-                )
-                new_tags = [t.strip() for t in new_tags_result.stdout.strip().split('\n') if t.strip().startswith('v')]
-
-                if new_tags:
-                    print(f"  {Colors.CYAN}New versions available: {', '.join(new_tags)}{Colors.ENDC}")
-                    print()
-
-            # Show the unpulled commits
-            for line in commit_lines:
-                print(f"  {Colors.YELLOW}↓{Colors.ENDC} {line}")
-            print()
-            print(f"  {Colors.BLUE}Run 'python3 update.py' to apply these updates{Colors.ENDC}")
-            print()
-            print(f"{Colors.HEADER}{'─' * 50}{Colors.ENDC}")
-            print()
+            print(f"{Colors.YELLOW}📦 {commit_count} update(s) available - run 'python3 update.py' to apply{Colors.ENDC}")
     except Exception:
         pass  # Ignore errors checking for unpulled changes
 
