@@ -15,6 +15,10 @@ export default defineConfig({
         changeOrigin: true,
         timeout: 60000, // 60 second timeout (portfolio endpoint needs time to fetch many prices)
       },
+      '/static': {
+        target: 'http://127.0.0.1:8100',
+        changeOrigin: true,
+      },
       '/ws': {
         target: 'ws://127.0.0.1:8100',
         ws: true,
