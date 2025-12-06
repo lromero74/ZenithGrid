@@ -212,11 +212,43 @@ async def execute_buy(
             filled_size_str = order_details.get("filled_size", "0")
             filled_value_str = order_details.get("filled_value", "0")
             avg_price_str = order_details.get("average_filled_price", "0")
+            total_fees_str = order_details.get("total_fees", "0")
 
             # Convert to floats
-            actual_base_amount = float(filled_size_str)
+            gross_base_amount = float(filled_size_str)
             actual_quote_amount = float(filled_value_str)
             actual_price = float(avg_price_str)
+            total_fees = float(total_fees_str)
+
+            # For BTC pair buy orders, fees are charged IN the base currency (the crypto you buy)
+            # So filled_size is GROSS, and you actually receive filled_size - fee_in_base
+            # For USD pairs, fees are charged in USD (quote currency), so filled_size is NET
+            # Fee calculation: fee_in_base = total_fees_in_usd / avg_price
+            # Or we can estimate: fee ~= gross_base * fee_rate (typically 0.5-0.8% for taker)
+            #
+            # Since total_fees is in USD, we need to convert to base currency for BTC pairs
+            is_btc_pair = product_id.endswith("-BTC")
+            if is_btc_pair and actual_price > 0 and total_fees > 0:
+                # Fee is returned in USD, convert to base currency
+                # fee_in_base = total_fees_usd / (base_price_in_usd)
+                # base_price_in_usd = avg_btc_price * avg_price_btc_pair
+                # For simplicity, estimate fee % from filled_value ratio
+                # Coinbase Advanced Trade taker fee is ~0.5-0.8%
+                # Net base = gross_base * (1 - fee_rate)
+                # We can derive fee_rate = total_fees / filled_value
+                if actual_quote_amount > 0:
+                    fee_rate = total_fees / actual_quote_amount  # This gives us fee as % of trade
+                    fee_in_base = gross_base_amount * fee_rate
+                    actual_base_amount = gross_base_amount - fee_in_base
+                    logger.info(
+                        f"BTC pair fee adjustment: gross={gross_base_amount:.8f}, "
+                        f"fee_rate={fee_rate:.4%}, fee_in_base={fee_in_base:.8f}, "
+                        f"net={actual_base_amount:.8f}"
+                    )
+                else:
+                    actual_base_amount = gross_base_amount
+            else:
+                actual_base_amount = gross_base_amount
 
             # Check if order has filled (non-zero amounts)
             if actual_base_amount > 0 and actual_quote_amount > 0:
