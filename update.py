@@ -19,12 +19,16 @@ Usage:
   python3 update.py --dry-run      # Show what would be done without executing
   python3 update.py --preview      # Preview incoming changes (commits) before pulling
   python3 update.py --preview -d   # Preview with file diffs
+  python3 update.py --changelog    # Show changelog for last 5 versions
+  python3 update.py --changelog 10 # Show changelog for last 10 versions
+  python3 update.py --changelog v0.86.0  # Show what changed in v0.86.0
   python3 update.py --help         # Show help
 """
 
 import argparse
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -152,6 +156,109 @@ def service_exists(service_commands, project_root):
         return True
     except subprocess.CalledProcessError:
         return False
+
+
+def get_sorted_tags(project_root):
+    """Get all version tags sorted in proper semantic version order."""
+    result = run_command('git tag', cwd=project_root, capture_output=True)
+    if not result.stdout:
+        return []
+
+    tags = [t.strip() for t in result.stdout.strip().split('\n') if t.strip().startswith('v')]
+
+    # Sort using semantic versioning (split by . and compare numerically)
+    def version_key(tag):
+        # Remove 'v' prefix and split by '.'
+        version = tag.lstrip('v')
+        parts = []
+        for part in version.split('.'):
+            # Handle parts with non-numeric suffixes like '1-beta'
+            match = re.match(r'^(\d+)', part)
+            if match:
+                parts.append(int(match.group(1)))
+            else:
+                parts.append(0)
+        return parts
+
+    return sorted(tags, key=version_key)
+
+
+def show_changelog(project_root, changelog_arg):
+    """Show changelog between version tags.
+
+    Args:
+        project_root: Path to project root
+        changelog_arg: Either a number (show last N versions), a version string (show that version),
+                      or None (default to last 5 versions)
+    """
+    print_header("Changelog")
+
+    tags = get_sorted_tags(project_root)
+    if len(tags) < 2:
+        print_error("Not enough tags to show changelog (need at least 2)")
+        return
+
+    # Determine what to show based on argument
+    if changelog_arg is None or changelog_arg == '':
+        # Default: show last 5 versions
+        num_versions = 5
+        tags_to_show = tags[-num_versions:] if len(tags) >= num_versions else tags
+    elif changelog_arg.isdigit():
+        # Show last N versions
+        num_versions = int(changelog_arg)
+        tags_to_show = tags[-num_versions:] if len(tags) >= num_versions else tags
+    elif changelog_arg.startswith('v'):
+        # Show specific version
+        if changelog_arg not in tags:
+            print_error(f"Tag '{changelog_arg}' not found")
+            print_info(f"Available tags: {', '.join(tags[-10:])}")
+            return
+        # Find this tag and the previous one
+        tag_idx = tags.index(changelog_arg)
+        if tag_idx == 0:
+            print_warning(f"{changelog_arg} is the first tag - no previous version to compare")
+            return
+        tags_to_show = [tags[tag_idx - 1], changelog_arg]
+    else:
+        print_error(f"Invalid changelog argument: {changelog_arg}")
+        print_info("Use a number (e.g., 10) or a version (e.g., v0.86.0)")
+        return
+
+    # Show commits between consecutive tags (newest first)
+    for i in range(len(tags_to_show) - 1, 0, -1):
+        prev_tag = tags_to_show[i - 1]
+        curr_tag = tags_to_show[i]
+
+        # Get commits between these tags
+        result = run_command(
+            f'git log --format="%s" {prev_tag}..{curr_tag}',
+            cwd=project_root,
+            capture_output=True,
+            check=False
+        )
+
+        # Get tag date
+        date_result = run_command(
+            f'git log -1 --format="%ai" {curr_tag}',
+            cwd=project_root,
+            capture_output=True,
+            check=False
+        )
+        tag_date = date_result.stdout.strip()[:10] if date_result.stdout else ''
+
+        print(f"{Colors.CYAN}{Colors.BOLD}{curr_tag}{Colors.ENDC}", end='')
+        if tag_date:
+            print(f" {Colors.BLUE}({tag_date}){Colors.ENDC}")
+        else:
+            print()
+
+        if result.stdout:
+            for line in result.stdout.strip().split('\n'):
+                if line.strip():
+                    print(f"  {Colors.YELLOW}•{Colors.ENDC} {line.strip()}")
+        else:
+            print(f"  {Colors.BLUE}(no commits){Colors.ENDC}")
+        print()
 
 
 def preview_incoming_changes(project_root, show_diff=False):
@@ -467,10 +574,13 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python3 update.py              # Full update with prompts
-  python3 update.py --yes        # Auto-confirm all prompts
-  python3 update.py --dry-run    # Preview changes without executing
-  python3 update.py --no-backup  # Skip database backup
+  python3 update.py                  # Full update with prompts
+  python3 update.py --yes            # Auto-confirm all prompts
+  python3 update.py --dry-run        # Preview changes without executing
+  python3 update.py --no-backup      # Skip database backup
+  python3 update.py --changelog      # Show last 5 versions' changes
+  python3 update.py --changelog 10   # Show last 10 versions' changes
+  python3 update.py --changelog v0.86.0  # Show what changed in v0.86.0
         """
     )
     parser.add_argument('--yes', '-y', action='store_true',
@@ -485,6 +595,9 @@ Examples:
                         help='Preview incoming commits before pulling (then exit)')
     parser.add_argument('--diff', '-d', action='store_true',
                         help='With --preview, also show full file diffs')
+    parser.add_argument('--changelog', '-c', nargs='?', const='5', default=None,
+                        metavar='N|VERSION',
+                        help='Show changelog: N versions (default 5) or specific version (e.g., v0.86.0)')
 
     args = parser.parse_args()
 
@@ -493,6 +606,11 @@ Examples:
 
     # Detect OS
     os_type = detect_os()
+
+    # Handle --changelog mode (exit after showing changelog)
+    if args.changelog is not None:
+        show_changelog(project_root, args.changelog)
+        sys.exit(0)
 
     # Handle --preview mode (exit after showing preview)
     if args.preview:
