@@ -69,6 +69,7 @@ class User(Base):
     bots = relationship("Bot", back_populates="user", cascade="all, delete-orphan")
     bot_templates = relationship("BotTemplate", back_populates="user", cascade="all, delete-orphan")
     blacklisted_coins = relationship("BlacklistedCoin", back_populates="user", cascade="all, delete-orphan")
+    ai_provider_credentials = relationship("AIProviderCredential", back_populates="user", cascade="all, delete-orphan")
 
 
 class Account(Base):
@@ -576,6 +577,36 @@ class BlacklistedCoin(Base):
 
     # Relationships
     user = relationship("User", back_populates="blacklisted_coins")
+
+
+class AIProviderCredential(Base):
+    """
+    AI provider API credentials for trading bots.
+
+    Stores API keys for AI providers (Claude, Gemini, Grok, Groq, OpenAI)
+    that bots use for market analysis and trading decisions.
+    Each user has their own set of AI credentials.
+    """
+
+    __tablename__ = "ai_provider_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    # Provider identification
+    provider = Column(String, nullable=False, index=True)  # "claude", "gemini", "grok", "groq", "openai"
+
+    # Credentials
+    api_key = Column(String, nullable=False)  # The actual API key (encrypted in production)
+
+    # Metadata
+    is_active = Column(Boolean, default=True)  # Can disable without deleting
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="ai_provider_credentials")
 
 
 class NewsArticle(Base):

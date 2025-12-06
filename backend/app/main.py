@@ -19,6 +19,7 @@ from app.routers import system_router
 from app.routers import blacklist_router
 from app.routers import news_router
 from app.routers import auth_router  # User authentication
+from app.routers import ai_credentials_router  # Per-user AI provider keys
 from app.services.websocket_manager import ws_manager
 import asyncio
 
@@ -63,6 +64,7 @@ app.include_router(settings_router.router)
 app.include_router(system_router.router)
 app.include_router(blacklist_router.router)
 app.include_router(news_router.router)  # Crypto news with 24h caching
+app.include_router(ai_credentials_router.router)  # Per-user AI provider keys
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
