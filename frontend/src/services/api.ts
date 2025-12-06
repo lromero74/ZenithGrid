@@ -53,6 +53,15 @@ export const dashboardApi = {
   getStats: () => api.get<DashboardStats>('/dashboard').then((res) => res.data),
 };
 
+export interface UpdatePositionSettingsRequest {
+  take_profit_percentage?: number;
+  max_safety_orders?: number;
+  trailing_take_profit?: boolean;
+  trailing_tp_deviation?: number;
+  stop_loss_enabled?: boolean;
+  stop_loss_percentage?: number;
+}
+
 export const positionsApi = {
   getAll: (status?: string, limit = 50) =>
     api.get<Position[]>('/positions', { params: { status, limit } }).then((res) => res.data),
@@ -67,6 +76,9 @@ export const positionsApi = {
       .then((res) => res.data),
   addFunds: (id: number, btcAmount: number) =>
     api.post<{ message: string; trade_id: number; price: number; eth_acquired: number }>(`/positions/${id}/add-funds`, { btc_amount: btcAmount })
+      .then((res) => res.data),
+  updateSettings: (id: number, settings: UpdatePositionSettingsRequest) =>
+    api.patch<{ message: string; updated_fields: string[]; new_config: Record<string, unknown> }>(`/positions/${id}/settings`, settings)
       .then((res) => res.data),
 };
 

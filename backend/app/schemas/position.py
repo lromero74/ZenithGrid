@@ -88,3 +88,23 @@ class AIBotLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UpdatePositionSettingsRequest(BaseModel):
+    """
+    Request model for updating position settings (like 3Commas deal editing).
+
+    Only certain fields are safe to modify on an open position:
+    - take_profit_percentage: Target profit % from average buy price
+    - max_safety_orders: Maximum number of safety orders allowed
+    - trailing_take_profit: Enable/disable trailing take profit
+    - trailing_tp_deviation: Trailing TP deviation percentage
+    - stop_loss_enabled: Enable/disable stop loss
+    - stop_loss_percentage: Stop loss percentage
+    """
+    take_profit_percentage: Optional[float] = None
+    max_safety_orders: Optional[int] = None
+    trailing_take_profit: Optional[bool] = None
+    trailing_tp_deviation: Optional[float] = None
+    stop_loss_enabled: Optional[bool] = None
+    stop_loss_percentage: Optional[float] = None

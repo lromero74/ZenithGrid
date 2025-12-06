@@ -25,6 +25,7 @@ import TradingViewChartModal from '../components/TradingViewChartModal'
 import LightweightChartModal from '../components/LightweightChartModal'
 import { LimitCloseModal } from '../components/LimitCloseModal'
 import { SlippageWarningModal } from '../components/SlippageWarningModal'
+import { EditPositionSettingsModal } from '../components/EditPositionSettingsModal'
 import CoinIcon from '../components/CoinIcon'
 import {
   calculateSMA,
@@ -1275,6 +1276,8 @@ export default function Positions() {
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [editingNotesPositionId, setEditingNotesPositionId] = useState<number | null>(null)
   const [notesText, setNotesText] = useState('')
+  const [showEditSettingsModal, setShowEditSettingsModal] = useState(false)
+  const [editSettingsPosition, setEditSettingsPosition] = useState<Position | null>(null)
 
   // Filtering and sorting state (like 3Commas)
   const [filterBot, setFilterBot] = useState<number | 'all'>('all')
@@ -2329,6 +2332,16 @@ export default function Positions() {
                         <span>💰</span> Add funds
                       </button>
                       <button
+                        className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditSettingsPosition(position)
+                          setShowEditSettingsModal(true)
+                        }}
+                      >
+                        <Settings size={12} /> Edit deal
+                      </button>
+                      <button
                         className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
                         onClick={(e) => {
                           e.stopPropagation()
@@ -2597,6 +2610,20 @@ export default function Positions() {
               setShowLimitCloseModal(true)
             }
             setPendingMarketClosePositionId(null)
+          }}
+        />
+      )}
+
+      {/* Edit Position Settings Modal */}
+      {showEditSettingsModal && editSettingsPosition && (
+        <EditPositionSettingsModal
+          position={editSettingsPosition}
+          onClose={() => {
+            setShowEditSettingsModal(false)
+            setEditSettingsPosition(null)
+          }}
+          onSuccess={() => {
+            refetchPositions()
           }}
         />
       )}
