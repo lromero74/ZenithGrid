@@ -12,6 +12,7 @@ Handles system-level endpoints:
 """
 
 import logging
+import subprocess
 from datetime import datetime, timedelta
 from typing import List
 
@@ -36,6 +37,43 @@ from app.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["system"])
+
+
+def get_git_version() -> str:
+    """Get the current git version tag"""
+    try:
+        result = subprocess.run(
+            ["git", "describe", "--tags", "--always"],
+            capture_output=True,
+            text=True,
+            cwd="/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften",  # EC2 path
+            timeout=5
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+
+    # Fallback for local development
+    try:
+        result = subprocess.run(
+            ["git", "describe", "--tags", "--always"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+
+    return "dev"
+
+
+@router.get("/api/version")
+async def get_version():
+    """Get the current application version from git tags"""
+    return {"version": get_git_version()}
 
 
 async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:

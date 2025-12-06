@@ -12,9 +12,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
 import Login from './pages/Login'
 
-// App version - injected by Vite at build time from git tags
-declare const __APP_VERSION__: string
-const APP_VERSION = __APP_VERSION__
+// App version - fetched from backend API at runtime (avoids Vite cache issues)
 
 // Lazy load pages for faster initial render
 // Dashboard is eager-loaded since it's the landing page
@@ -36,6 +34,15 @@ function AppContent() {
   const { user, logout, getAccessToken } = useAuth()
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [appVersion, setAppVersion] = useState<string>('...')
+
+  // Fetch version from backend API (runs once on app load)
+  useEffect(() => {
+    fetch('/api/version')
+      .then(res => res.json())
+      .then(data => setAppVersion(data.version || 'dev'))
+      .catch(() => setAppVersion('dev'))
+  }, [])
 
   // Track last seen counts for history items (separate for closed and failed) - fetched from server
   const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(0)
@@ -161,7 +168,7 @@ function AppContent() {
               <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold">Zenith Grid</h1>
-                <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">Multi-Strategy Trading Platform <span className="text-slate-500">{APP_VERSION}</span></p>
+                <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">Multi-Strategy Trading Platform <span className="text-slate-500">{appVersion}</span></p>
               </div>
             </div>
             <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
