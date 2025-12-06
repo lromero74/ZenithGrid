@@ -48,7 +48,7 @@ export function LimitCloseModal({
   useEffect(() => {
     const fetchPrecision = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/market-data/product-precision/${productId}`)
+        const response = await axios.get(`${API_BASE_URL}/api/product-precision/${productId}`)
         setProductPrecision(response.data)
       } catch (err: any) {
         console.error('Failed to fetch product precision:', err)
