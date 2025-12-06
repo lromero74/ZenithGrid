@@ -41,6 +41,7 @@ price_monitor = MultiBotMonitor(interval_seconds=10)
 # Background task handles
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
+missing_order_detector_task = None
 
 
 def override_get_price_monitor():
@@ -137,10 +138,41 @@ async def run_order_reconciliation_monitor():
         await asyncio.sleep(60)
 
 
+# Background task for detecting missing orders
+async def run_missing_order_detector():
+    """Background task that detects orders on Coinbase not recorded in our DB"""
+    from app.database import async_session_maker
+    from app.services.order_reconciliation_monitor import MissingOrderDetector
+    from app.services.exchange_service import get_exchange_client_for_account
+    from app.models import Account
+    from sqlalchemy import select
+
+    # Wait 2 minutes after startup before first check
+    await asyncio.sleep(120)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                # Get primary account (account_id=1 for now, could be extended)
+                result = await db.execute(select(Account).where(Account.id == 1))
+                account = result.scalars().first()
+
+                if account:
+                    exchange = await get_exchange_client_for_account(db, account.id)
+                    if exchange:
+                        detector = MissingOrderDetector(db, exchange)
+                        await detector.check_for_missing_orders()
+        except Exception as e:
+            logger.error(f"Error in missing order detector loop: {e}")
+
+        # Check every 5 minutes
+        await asyncio.sleep(300)
+
+
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -161,13 +193,17 @@ async def startup_event():
     order_reconciliation_monitor_task = asyncio.create_task(run_order_reconciliation_monitor())
     print("🚀 Order reconciliation monitor started - auto-fixing orphaned positions every 60 seconds")
 
+    print("🚀 Starting missing order detector...")
+    missing_order_detector_task = asyncio.create_task(run_missing_order_detector())
+    print("🚀 Missing order detector started - checking for unrecorded orders every 5 minutes")
+
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task
 
     logger.info("🛑 Shutting down - stopping monitors...")
     if price_monitor:
@@ -184,6 +220,13 @@ async def shutdown_event():
         order_reconciliation_monitor_task.cancel()
         try:
             await order_reconciliation_monitor_task
+        except asyncio.CancelledError:
+            pass
+
+    if missing_order_detector_task:
+        missing_order_detector_task.cancel()
+        try:
+            await missing_order_detector_task
         except asyncio.CancelledError:
             pass
 
