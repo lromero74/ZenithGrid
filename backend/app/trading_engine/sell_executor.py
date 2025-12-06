@@ -280,17 +280,28 @@ async def execute_sell(
     position.btc_usd_price_at_close = btc_usd_price_at_close
     position.profit_usd = profit_usd
 
+    # CRITICAL: Commit trade and position close IMMEDIATELY
+    # This ensures we never lose a sell record even if subsequent operations fail
     await db.commit()
     await db.refresh(trade)
 
-    # Invalidate balance cache after trade
-    await trading_client.invalidate_balance_cache()
+    # === NON-CRITICAL OPERATIONS BELOW ===
+    # These can fail without losing the trade record
 
-    # Trigger immediate re-analysis to find replacement position
+    # Invalidate balance cache after trade (best-effort)
+    try:
+        await trading_client.invalidate_balance_cache()
+    except Exception as e:
+        logger.warning(f"Failed to invalidate balance cache (trade was recorded): {e}")
+
+    # Trigger immediate re-analysis to find replacement position (best-effort)
     # By resetting last_signal_check, the bot will run on the next monitor cycle
     # This is like 3Commas - when a deal closes, immediately look for new opportunities
-    logger.info("🔄 Position closed - triggering immediate re-analysis to find replacement")
-    bot.last_signal_check = None
-    await db.commit()
+    try:
+        logger.info("🔄 Position closed - triggering immediate re-analysis to find replacement")
+        bot.last_signal_check = None
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to trigger re-analysis (trade was recorded): {e}")
 
     return trade, profit_quote, profit_percentage
