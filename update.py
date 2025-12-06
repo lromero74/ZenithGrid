@@ -266,9 +266,9 @@ def show_changelog(project_root, changelog_arg):
         installed_color = Colors.FAIL  # Red - 6+ versions behind
 
     if is_exact:
-        print(f"{installed_color}Installed:{Colors.ENDC} {Colors.BOLD}{current_version}{Colors.ENDC}")
+        print(f"Installed: {installed_color}{Colors.BOLD}{current_version}{Colors.ENDC}")
     else:
-        print(f"{installed_color}Installed:{Colors.ENDC} {Colors.BOLD}{current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes){Colors.ENDC}")
+        print(f"Installed: {installed_color}{Colors.BOLD}{current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes){Colors.ENDC}")
 
     # Check if updates available and show brief message
     try:
