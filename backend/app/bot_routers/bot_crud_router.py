@@ -303,9 +303,9 @@ async def list_bots(
                 budget_utilization_percentage = (total_in_positions_value / reserved_balance) * 100
 
             # Check if bot has insufficient funds for new positions
+            # Use current position values (already calculated above) for consistency with budget utilization
             if len(open_positions) < max_concurrent_deals:
-                total_in_positions = sum(p.total_quote_spent for p in open_positions)
-                available_budget = reserved_balance - total_in_positions
+                available_budget = reserved_balance - total_in_positions_value
                 min_per_position = reserved_balance / max(max_concurrent_deals, 1)
                 insufficient_funds = available_budget < min_per_position
 
