@@ -59,8 +59,8 @@ function ClosedPositions() {
   })
 
   const { data: allPositions, isLoading } = useQuery({
-    queryKey: ['positions', selectedAccount?.id],
-    queryFn: () => positionsApi.getAll(),
+    queryKey: ['positions-closed', selectedAccount?.id],
+    queryFn: () => positionsApi.getAll('closed', 500), // Get closed positions with higher limit
     refetchInterval: 5000,
     select: (data) => {
       if (!selectedAccount) return data
@@ -82,13 +82,8 @@ function ClosedPositions() {
   const failedTotal = failedOrdersData?.total || 0
   const failedTotalPages = failedOrdersData?.total_pages || 1
 
-  const allClosedPositions = (allPositions?.filter((p: Position) => p.status === 'closed') || [])
-    .sort((a: Position, b: Position) => {
-      // Sort by closed_at date, most recent first (descending)
-      if (!a.closed_at) return 1 // Move positions without closed_at to end
-      if (!b.closed_at) return -1
-      return new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime()
-    })
+  // API returns closed positions already sorted by closed_at DESC
+  const allClosedPositions = allPositions || []
 
   // Client-side pagination for closed positions
   const closedTotalPages = Math.ceil(allClosedPositions.length / pageSize) || 1
