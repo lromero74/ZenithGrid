@@ -39,21 +39,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["system"])
 
 
-def get_git_version() -> str:
-    """Get the current git version tag"""
+def get_repo_root():
+    """Get the repository root path"""
     from pathlib import Path
-
-    # Find the repository root by navigating up from this file's location
-    # This works on any deployment: local, EC2 testbot, or production
     current_file = Path(__file__).resolve()
-    repo_root = current_file.parent.parent.parent.parent  # routers -> app -> backend -> repo root
+    return current_file.parent.parent.parent.parent  # routers -> app -> backend -> repo root
 
+
+def get_git_version() -> str:
+    """Get the current git version tag (what we're running)"""
     try:
         result = subprocess.run(
             ["git", "describe", "--tags", "--always"],
             capture_output=True,
             text=True,
-            cwd=str(repo_root),
+            cwd=str(get_repo_root()),
             timeout=5
         )
         if result.returncode == 0:
@@ -62,6 +62,33 @@ def get_git_version() -> str:
         pass
 
     return "dev"
+
+
+def get_latest_git_tag() -> str:
+    """Get the latest git tag available (may be newer than running version)"""
+    try:
+        # Fetch latest tags from origin (silent, quick timeout)
+        subprocess.run(
+            ["git", "fetch", "--tags", "--quiet"],
+            capture_output=True,
+            cwd=str(get_repo_root()),
+            timeout=10
+        )
+        # Get the latest tag sorted by version
+        result = subprocess.run(
+            ["git", "tag", "--sort=-version:refname"],
+            capture_output=True,
+            text=True,
+            cwd=str(get_repo_root()),
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Return the first (latest) tag
+            return result.stdout.strip().split('\n')[0]
+    except Exception:
+        pass
+
+    return get_git_version()  # Fallback to current version
 
 
 @router.get("/api/version")
@@ -122,7 +149,15 @@ def get_price_monitor() -> MultiBotMonitor:
 @router.get("/")
 @router.get("/api/")
 async def root():
-    return {"message": "ETH/BTC Trading Bot API", "status": "running", "version": get_git_version()}
+    current_version = get_git_version()
+    latest_version = get_latest_git_tag()
+    return {
+        "message": "ETH/BTC Trading Bot API",
+        "status": "running",
+        "version": current_version,
+        "latest_version": latest_version,
+        "update_available": latest_version != current_version and current_version != "dev"
+    }
 
 
 @router.get("/api/ai-providers")

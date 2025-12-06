@@ -35,13 +35,19 @@ function AppContent() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('...')
+  const [latestVersion, setLatestVersion] = useState<string | null>(null)
+  const [updateAvailable, setUpdateAvailable] = useState(false)
 
   // Fetch version from backend root endpoint (runs once on app load)
   // Using root / endpoint since it's guaranteed to work (also serves as health check)
   useEffect(() => {
     fetch('/api/')
       .then(res => res.json())
-      .then(data => setAppVersion(data.version || 'dev'))
+      .then(data => {
+        setAppVersion(data.version || 'dev')
+        setLatestVersion(data.latest_version || null)
+        setUpdateAvailable(data.update_available || false)
+      })
       .catch(() => setAppVersion('dev'))
   }, [])
 
@@ -169,7 +175,17 @@ function AppContent() {
               <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold">Zenith Grid</h1>
-                <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">Multi-Strategy Trading Platform <span className="text-slate-500">{appVersion}</span></p>
+                <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
+                  Multi-Strategy Trading Platform{' '}
+                  <span className={updateAvailable ? 'text-yellow-500' : 'text-slate-500'} title={updateAvailable ? `Update available: ${latestVersion}` : undefined}>
+                    {appVersion}
+                  </span>
+                  {updateAvailable && (
+                    <span className="ml-1 text-green-400" title={`Latest: ${latestVersion}`}>
+                      ({latestVersion} available)
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
             <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
