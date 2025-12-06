@@ -183,6 +183,36 @@ def get_sorted_tags(project_root):
     return sorted(tags, key=version_key)
 
 
+def get_current_version(project_root):
+    """Get the current installed version (most recent tag on HEAD or description).
+
+    Returns:
+        tuple: (version_string, is_exact_tag)
+               is_exact_tag is True if HEAD is exactly at a tag
+    """
+    # Try to get exact tag at HEAD
+    result = run_command(
+        'git describe --tags --exact-match HEAD 2>/dev/null',
+        cwd=project_root,
+        capture_output=True,
+        check=False
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip(), True
+
+    # Get describe (tag + commits since)
+    result = run_command(
+        'git describe --tags --always 2>/dev/null',
+        cwd=project_root,
+        capture_output=True,
+        check=False
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip(), False
+
+    return "unknown", False
+
+
 def show_changelog(project_root, changelog_arg):
     """Show changelog between version tags.
 
@@ -192,6 +222,70 @@ def show_changelog(project_root, changelog_arg):
                       or None (default to last 5 versions)
     """
     print_header("Changelog")
+
+    # Fetch from remote to get latest tags
+    print_info("Fetching latest from remote...")
+    run_command('git fetch origin --tags', cwd=project_root, capture_output=True, check=False)
+
+    # Show current installed version
+    current_version, is_exact = get_current_version(project_root)
+    if is_exact:
+        print(f"{Colors.GREEN}{Colors.BOLD}Current version: {current_version}{Colors.ENDC}")
+    else:
+        print(f"{Colors.GREEN}{Colors.BOLD}Current version: {current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes or ahead of tag){Colors.ENDC}")
+    print()
+
+    # Check for unpulled changes from origin/main
+    try:
+        # Get commits on remote that aren't local
+        result = run_command(
+            'git log --oneline HEAD..origin/main',
+            cwd=project_root,
+            capture_output=True,
+            check=False
+        )
+        unpulled_commits = result.stdout.strip() if result.stdout else ''
+
+        if unpulled_commits:
+            commit_lines = unpulled_commits.split('\n')
+            print(f"{Colors.YELLOW}{Colors.BOLD}📦 Available updates ({len(commit_lines)} commits not yet pulled):{Colors.ENDC}")
+            print()
+
+            # Check for new tags in the unpulled commits
+            remote_head = run_command('git rev-parse origin/main', cwd=project_root, capture_output=True, check=False)
+            local_head = run_command('git rev-parse HEAD', cwd=project_root, capture_output=True, check=False)
+
+            if remote_head.stdout.strip() != local_head.stdout.strip():
+                # Get tags between local and remote
+                new_tags_result = run_command(
+                    'git tag --contains HEAD --no-contains origin/main 2>/dev/null || true',
+                    cwd=project_root,
+                    capture_output=True,
+                    check=False
+                )
+                # Actually we want tags that contain origin/main but not HEAD
+                new_tags_result = run_command(
+                    f'git log --oneline --decorate HEAD..origin/main | grep -o "tag: v[0-9.]*" | sed "s/tag: //" || true',
+                    cwd=project_root,
+                    capture_output=True,
+                    check=False
+                )
+                new_tags = [t.strip() for t in new_tags_result.stdout.strip().split('\n') if t.strip().startswith('v')]
+
+                if new_tags:
+                    print(f"  {Colors.CYAN}New versions available: {', '.join(new_tags)}{Colors.ENDC}")
+                    print()
+
+            # Show the unpulled commits
+            for line in commit_lines:
+                print(f"  {Colors.YELLOW}↓{Colors.ENDC} {line}")
+            print()
+            print(f"  {Colors.BLUE}Run 'python3 update.py' to apply these updates{Colors.ENDC}")
+            print()
+            print(f"{Colors.HEADER}{'─' * 50}{Colors.ENDC}")
+            print()
+    except Exception:
+        pass  # Ignore errors checking for unpulled changes
 
     tags = get_sorted_tags(project_root)
     if len(tags) < 2:
@@ -224,6 +318,9 @@ def show_changelog(project_root, changelog_arg):
         print_info("Use a number (e.g., 10) or a version (e.g., v0.86.0)")
         return
 
+    print(f"{Colors.HEADER}{Colors.BOLD}Version History:{Colors.ENDC}")
+    print()
+
     # Show commits between consecutive tags (newest first)
     for i in range(len(tags_to_show) - 1, 0, -1):
         prev_tag = tags_to_show[i - 1]
@@ -246,11 +343,15 @@ def show_changelog(project_root, changelog_arg):
         )
         tag_date = date_result.stdout.strip()[:10] if date_result.stdout else ''
 
+        # Mark current version
+        is_current = (curr_tag == current_version)
+        marker = f" {Colors.GREEN}← current{Colors.ENDC}" if is_current else ""
+
         print(f"{Colors.CYAN}{Colors.BOLD}{curr_tag}{Colors.ENDC}", end='')
         if tag_date:
-            print(f" {Colors.BLUE}({tag_date}){Colors.ENDC}")
+            print(f" {Colors.BLUE}({tag_date}){Colors.ENDC}{marker}")
         else:
-            print()
+            print(f"{marker}")
 
         if result.stdout:
             for line in result.stdout.strip().split('\n'):
