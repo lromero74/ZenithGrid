@@ -120,8 +120,9 @@ def get_price_monitor() -> MultiBotMonitor:
 
 
 @router.get("/")
+@router.get("/api/")
 async def root():
-    return {"message": "ETH/BTC Trading Bot API", "status": "running"}
+    return {"message": "ETH/BTC Trading Bot API", "status": "running", "version": get_git_version()}
 
 
 @router.get("/api/ai-providers")

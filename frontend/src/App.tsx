@@ -36,9 +36,10 @@ function AppContent() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('...')
 
-  // Fetch version from backend API (runs once on app load)
+  // Fetch version from backend root endpoint (runs once on app load)
+  // Using root / endpoint since it's guaranteed to work (also serves as health check)
   useEffect(() => {
-    fetch('/api/version')
+    fetch('/api/')
       .then(res => res.json())
       .then(data => setAppVersion(data.version || 'dev'))
       .catch(() => setAppVersion('dev'))
