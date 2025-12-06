@@ -2124,37 +2124,35 @@ export default function Positions() {
                                         // Calculate completed DCAs (trade_count - 1 for initial trade)
                                         const completedDCAs = Math.max(0, (position.trade_count || 0) - 1)
 
-                                        const dcaLevels = []
-                                        const maxDCA = Math.min(maxDCAOrders, 3) // Limit to 3 to avoid clutter
+                                        // Find the next unfilled DCA (the one that would trigger if price drops further)
+                                        const nextDCA = completedDCAs + 1
 
-                                        // Only show unfilled DCAs (start from completedDCAs + 1)
-                                        for (let i = completedDCAs + 1; i <= maxDCA; i++) {
-                                          const dropPercentage = minPriceDropForDCA * i
-                                          const dcaPrice = entryPrice * (1 - dropPercentage / 100)
-                                          const dcaPosition = ((dcaPrice - minPrice) / priceRange) * 100
+                                        // Only show if we haven't maxed out DCAs
+                                        if (nextDCA > maxDCAOrders) return null
 
-                                          // Only show if visible on the bar (between 0-100%)
-                                          if (dcaPosition >= 0 && dcaPosition <= 100) {
-                                            dcaLevels.push(
-                                              <div
-                                                key={`dca-${i}`}
-                                                className="absolute flex flex-col items-center"
-                                                style={{
-                                                  left: `${dcaPosition}%`,
-                                                  transform: 'translateX(-50%)',
-                                                  top: '100%'
-                                                }}
-                                              >
-                                                <div className="w-px h-2 bg-purple-400" />
-                                                <div className="text-[8px] text-purple-400 whitespace-nowrap mt-0.5">
-                                                  DCA{i}
-                                                </div>
-                                              </div>
-                                            )
-                                          }
-                                        }
+                                        const dropPercentage = minPriceDropForDCA * nextDCA
+                                        const dcaPrice = entryPrice * (1 - dropPercentage / 100)
+                                        const dcaBarPosition = ((dcaPrice - minPrice) / priceRange) * 100
 
-                                        return dcaLevels
+                                        // Only show if visible on the bar (between 0-100%)
+                                        if (dcaBarPosition < 0 || dcaBarPosition > 100) return null
+
+                                        return (
+                                          <div
+                                            key={`dca-${nextDCA}`}
+                                            className="absolute flex flex-col items-center"
+                                            style={{
+                                              left: `${dcaBarPosition}%`,
+                                              transform: 'translateX(-50%)',
+                                              top: '100%'
+                                            }}
+                                          >
+                                            <div className="w-px h-2 bg-purple-400" />
+                                            <div className="text-[8px] text-purple-400 whitespace-nowrap mt-0.5">
+                                              DCA{nextDCA}
+                                            </div>
+                                          </div>
+                                        )
                                       })()}
                                     </>
                                   )
