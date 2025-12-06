@@ -243,10 +243,32 @@ def show_changelog(project_root, changelog_arg):
     current_version, is_exact = get_current_version(project_root)
 
     print(f"Latest: {Colors.CYAN}{Colors.BOLD}{latest_version}{Colors.ENDC}")
-    if is_exact:
-        print(f"Installed: {Colors.GREEN}{Colors.BOLD}{current_version}{Colors.ENDC}")
+
+    # Determine how far behind we are (count versions between installed and latest)
+    versions_behind = 0
+    try:
+        tags = get_sorted_tags(project_root)
+        if current_version in tags and latest_version in tags:
+            current_idx = tags.index(current_version)
+            latest_idx = tags.index(latest_version)
+            versions_behind = current_idx - latest_idx  # Sorted newest first
+    except Exception:
+        pass
+
+    # Choose color based on how far behind
+    if current_version == latest_version:
+        installed_color = Colors.GREEN  # Up to date
+    elif versions_behind <= 2:
+        installed_color = Colors.YELLOW  # 1-2 versions behind
+    elif versions_behind <= 5:
+        installed_color = '\033[38;5;208m'  # Orange (ANSI 256 color) - 3-5 versions behind
     else:
-        print(f"Installed: {Colors.GREEN}{Colors.BOLD}{current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes){Colors.ENDC}")
+        installed_color = Colors.FAIL  # Red - 6+ versions behind
+
+    if is_exact:
+        print(f"{installed_color}Installed:{Colors.ENDC} {Colors.BOLD}{current_version}{Colors.ENDC}")
+    else:
+        print(f"{installed_color}Installed:{Colors.ENDC} {Colors.BOLD}{current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes){Colors.ENDC}")
 
     # Check if updates available and show brief message
     try:
