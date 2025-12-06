@@ -6,9 +6,9 @@
  * Also includes video news from reputable crypto YouTube channels.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, Pause, SkipForward, ListVideo, ChevronDown } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
 
@@ -330,10 +330,102 @@ export default function News() {
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null)
   // Track which article is being previewed (null means none)
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
+
+  // Auto-play playlist state
+  const [autoPlayActive, setAutoPlayActive] = useState(false)
+  const [autoPlayIndex, setAutoPlayIndex] = useState<number>(0)
+  const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
+  const playerRef = useRef<HTMLIFrameElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   // Track article reader mode content
   const [articleContent, setArticleContent] = useState<ArticleContentResponse | null>(null)
   const [articleContentLoading, setArticleContentLoading] = useState(false)
   const [readerModeEnabled, setReaderModeEnabled] = useState(false)
+
+  // Storage key for persisting playlist position
+  const PLAYLIST_STORAGE_KEY = 'crypto-news-video-playlist-position'
+
+  // Load saved playlist position on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PLAYLIST_STORAGE_KEY)
+      if (saved) {
+        const position = parseInt(saved, 10)
+        if (!isNaN(position) && position >= 0) {
+          setAutoPlayIndex(position)
+        }
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [])
+
+  // Save playlist position when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAYLIST_STORAGE_KEY, autoPlayIndex.toString())
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [autoPlayIndex])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowPlaylistDropdown(false)
+      }
+    }
+    if (showPlaylistDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showPlaylistDropdown])
+
+  // Start auto-play from a specific index
+  const startAutoPlay = useCallback((startIndex: number = 0, videos: VideoItem[]) => {
+    if (videos.length === 0) return
+    const clampedIndex = Math.min(Math.max(0, startIndex), videos.length - 1)
+    setAutoPlayIndex(clampedIndex)
+    setAutoPlayActive(true)
+    const video = videos[clampedIndex]
+    const uniqueKey = `${video.source}-${video.video_id}`
+    setPlayingVideoId(uniqueKey)
+  }, [])
+
+  // Stop auto-play
+  const stopAutoPlay = useCallback(() => {
+    setAutoPlayActive(false)
+    setPlayingVideoId(null)
+  }, [])
+
+  // Advance to next video in playlist
+  const advanceToNextVideo = useCallback((videos: VideoItem[]) => {
+    if (!autoPlayActive || videos.length === 0) return
+
+    const nextIndex = autoPlayIndex + 1
+    if (nextIndex >= videos.length) {
+      // End of playlist
+      setAutoPlayActive(false)
+      setPlayingVideoId(null)
+      return
+    }
+
+    setAutoPlayIndex(nextIndex)
+    const video = videos[nextIndex]
+    const uniqueKey = `${video.source}-${video.video_id}`
+    setPlayingVideoId(uniqueKey)
+  }, [autoPlayActive, autoPlayIndex])
+
+  // Skip to next video manually
+  const skipToNextVideo = useCallback((videos: VideoItem[]) => {
+    if (videos.length === 0) return
+    advanceToNextVideo(videos)
+  }, [advanceToNextVideo])
+
+  // Ref to hold current filteredVideos for use in message handler
+  // Will be updated by an effect defined after filteredVideos is computed
+  const filteredVideosRef = useRef<VideoItem[]>([])
 
   // Fetch article content when reader mode is enabled
   useEffect(() => {
@@ -456,6 +548,39 @@ export default function News() {
     selectedVideoSource === 'all'
       ? videoData?.videos || []
       : videoData?.videos.filter((item) => item.source === selectedVideoSource) || []
+
+  // Keep filteredVideosRef in sync for use in YouTube message handler
+  useEffect(() => {
+    filteredVideosRef.current = filteredVideos
+  }, [filteredVideos])
+
+  // Handle YouTube iframe API messages for video end detection
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // YouTube sends messages from its domain
+      if (event.origin !== 'https://www.youtube.com') return
+      if (!autoPlayActive) return
+
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+
+        // YouTube Player API event: state 0 = ended
+        // Also check for 'infoDelivery' with playerState 0
+        if (data.event === 'onStateChange' && data.info === 0) {
+          // Video ended - advance to next
+          advanceToNextVideo(filteredVideosRef.current)
+        } else if (data.event === 'infoDelivery' && data.info?.playerState === 0) {
+          // Alternative format for video end
+          advanceToNextVideo(filteredVideosRef.current)
+        }
+      } catch {
+        // Not a JSON message, ignore
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [autoPlayActive, advanceToNextVideo])
 
   // Get unique sources from actual news items
   const availableSources = newsData?.sources || []
@@ -737,6 +862,108 @@ export default function News() {
             })}
           </div>
 
+          {/* Auto-play controls */}
+          <div className="flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+            <ListVideo className="w-5 h-5 text-red-400" />
+
+            {!autoPlayActive ? (
+              <>
+                {/* Play All button */}
+                <button
+                  onClick={() => startAutoPlay(0, filteredVideos)}
+                  disabled={filteredVideos.length === 0}
+                  className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors"
+                >
+                  <Play className="w-4 h-4" fill="white" />
+                  <span>Play All</span>
+                </button>
+
+                {/* Continue from saved position */}
+                {autoPlayIndex > 0 && autoPlayIndex < filteredVideos.length && (
+                  <button
+                    onClick={() => startAutoPlay(autoPlayIndex, filteredVideos)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>Continue from #{autoPlayIndex + 1}</span>
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Stop button */}
+                <button
+                  onClick={stopAutoPlay}
+                  className="flex items-center space-x-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                >
+                  <Pause className="w-4 h-4" />
+                  <span>Stop</span>
+                </button>
+
+                {/* Skip to next */}
+                <button
+                  onClick={() => skipToNextVideo(filteredVideos)}
+                  disabled={autoPlayIndex >= filteredVideos.length - 1}
+                  className="flex items-center space-x-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-600/50 disabled:cursor-not-allowed rounded-lg text-white transition-colors"
+                >
+                  <SkipForward className="w-4 h-4" />
+                  <span>Skip</span>
+                </button>
+
+                {/* Progress indicator */}
+                <div className="flex items-center space-x-2 text-sm text-slate-300">
+                  <span className="text-red-400 font-medium">Playing:</span>
+                  <span>{autoPlayIndex + 1} / {filteredVideos.length}</span>
+                </div>
+              </>
+            )}
+
+            {/* Position selector dropdown */}
+            <div className="relative ml-auto" ref={dropdownRef}>
+              <button
+                onClick={() => setShowPlaylistDropdown(!showPlaylistDropdown)}
+                className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
+              >
+                <span>Start from video...</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${showPlaylistDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showPlaylistDropdown && (
+                <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-20">
+                  <div className="p-2 border-b border-slate-700">
+                    <p className="text-xs text-slate-400">Select starting video</p>
+                  </div>
+                  {filteredVideos.map((video, idx) => (
+                    <button
+                      key={`${video.source}-${video.video_id}`}
+                      onClick={() => {
+                        setAutoPlayIndex(idx)
+                        setShowPlaylistDropdown(false)
+                        if (autoPlayActive) {
+                          const uniqueKey = `${video.source}-${video.video_id}`
+                          setPlayingVideoId(uniqueKey)
+                        }
+                      }}
+                      className={`w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left ${
+                        idx === autoPlayIndex ? 'bg-red-500/10 border-l-2 border-red-500' : ''
+                      }`}
+                    >
+                      <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                        idx === autoPlayIndex ? 'bg-red-500 text-white' : 'bg-slate-600 text-slate-300'
+                      }`}>
+                        {idx + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{video.title}</p>
+                        <p className="text-xs text-slate-500">{video.channel_name}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Videos grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredVideos.map((video, index) => {
@@ -752,23 +979,58 @@ export default function News() {
                   {/* Video area - either thumbnail or embedded player */}
                   <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
                     {isPlaying ? (
-                      // Embedded YouTube player
+                      // Embedded YouTube player with API enabled for end detection
                       <>
                         <iframe
-                          src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1&rel=0`}
+                          ref={index === autoPlayIndex && autoPlayActive ? playerRef : undefined}
+                          src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
                           title={video.title}
                           className="w-full h-full"
+                          id={`youtube-player-${video.video_id}`}
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
+                          onLoad={() => {
+                            // When iframe loads, set up message listener for this specific player
+                            if (autoPlayActive && index === autoPlayIndex) {
+                              const iframe = document.getElementById(`youtube-player-${video.video_id}`) as HTMLIFrameElement
+                              if (iframe?.contentWindow) {
+                                // Listen to all YouTube events
+                                iframe.contentWindow.postMessage('{"event":"listening","id":"1","channel":"widget"}', '*')
+                              }
+                            }
+                          }}
                         />
-                        {/* Close button */}
+                        {/* Auto-play indicator badge */}
+                        {autoPlayActive && index === autoPlayIndex && (
+                          <div className="absolute top-2 left-2 px-2 py-1 bg-red-600 rounded text-xs text-white font-medium flex items-center space-x-1 z-10">
+                            <ListVideo className="w-3 h-3" />
+                            <span>{autoPlayIndex + 1}/{filteredVideos.length}</span>
+                          </div>
+                        )}
+                        {/* Close/Stop button */}
                         <button
-                          onClick={() => setPlayingVideoId(null)}
+                          onClick={() => {
+                            if (autoPlayActive) {
+                              stopAutoPlay()
+                            } else {
+                              setPlayingVideoId(null)
+                            }
+                          }}
                           className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
-                          title="Close video"
+                          title={autoPlayActive ? "Stop playlist" : "Close video"}
                         >
                           <X className="w-5 h-5 text-white" />
                         </button>
+                        {/* Skip to next button (only in auto-play mode) */}
+                        {autoPlayActive && autoPlayIndex < filteredVideos.length - 1 && (
+                          <button
+                            onClick={() => advanceToNextVideo(filteredVideos)}
+                            className="absolute top-2 right-12 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
+                            title="Skip to next video"
+                          >
+                            <SkipForward className="w-4 h-4 text-white" />
+                          </button>
+                        )}
                       </>
                     ) : (
                       // Thumbnail with play button
