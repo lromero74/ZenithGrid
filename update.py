@@ -352,28 +352,92 @@ def preview_incoming_changes(project_root, show_diff=False):
         return False
 
 
+def determine_services_to_restart(changed_files):
+    """Determine which services need restart based on changed files.
+
+    Args:
+        changed_files: List of file paths that changed
+
+    Returns:
+        set: Set of service names that need restart ('backend', 'frontend')
+    """
+    services = set()
+
+    # Root-level files that don't require restarts
+    no_restart_files = {
+        'update.py', 'setup.py', 'README.md', 'CLAUDE.md', 'LICENSE',
+        '.gitignore', '.pre-commit-config.yaml', 'COMMERCIALIZATION.md',
+    }
+
+    for filepath in changed_files:
+        # Normalize path separators
+        filepath = filepath.replace('\\', '/')
+
+        # Skip files that don't require restarts
+        if filepath in no_restart_files:
+            continue
+
+        # Skip documentation and config files
+        if filepath.endswith('.md') and not filepath.startswith('backend/'):
+            continue
+
+        # Backend files - Python code in backend/, requirements, migrations
+        if (filepath.startswith('backend/') or
+            filepath.startswith('migrations/') or
+            'requirements' in filepath.lower()):
+            services.add('backend')
+
+        # Frontend files - React/TypeScript code, package.json, etc.
+        if (filepath.startswith('frontend/') or
+            'package.json' in filepath or
+            'package-lock.json' in filepath or
+            'vite.config' in filepath or
+            'tailwind.config' in filepath or
+            'tsconfig' in filepath):
+            services.add('frontend')
+
+        # .env files affect both services
+        if '.env' in filepath and not filepath.endswith('.md'):
+            services.add('backend')
+            services.add('frontend')
+
+        # Scripts in scripts/ folder don't need restarts
+        if filepath.startswith('scripts/'):
+            continue
+
+        # Deployment configs don't need service restart (they're for deploying)
+        if filepath.startswith('deployment/'):
+            continue
+
+    return services
+
+
 def git_pull(project_root, dry_run=False):
     """Pull latest changes from git.
 
     Returns:
-        tuple: (success: bool, has_changes: bool)
+        tuple: (success: bool, has_changes: bool, services_to_restart: set)
     """
     print_step(1, "Pulling latest changes from git...")
 
     if dry_run:
         print_info("DRY RUN: Would run 'git pull origin main'")
-        return True, True  # Assume changes in dry run
+        return True, True, {'backend', 'frontend'}  # Assume both in dry run
 
     try:
         # First fetch to see what's available
         run_command('git fetch origin', cwd=project_root, capture_output=True)
+
+        # Get the commit range before pulling
+        current_head = run_command('git rev-parse HEAD', cwd=project_root, capture_output=True)
+        current_hash = current_head.stdout.strip()
 
         # Pull the changes
         result = run_command('git pull origin main', cwd=project_root, capture_output=True)
 
         if 'Already up to date' in result.stdout:
             print_success("Already up to date - no changes pulled")
-            return True, False  # Success but no changes
+            return True, False, set()  # Success but no changes, no services to restart
         else:
             print_success("Successfully pulled latest changes")
             if result.stdout:
@@ -381,16 +445,48 @@ def git_pull(project_root, dry_run=False):
                 lines = result.stdout.strip().split('\n')
                 for line in lines[:10]:  # Show first 10 lines
                     print_info(line)
-            return True, True  # Success with changes
+
+            # Get list of changed files since previous HEAD
+            diff_result = run_command(
+                f'git diff --name-only {current_hash}..HEAD',
+                cwd=project_root,
+                capture_output=True
+            )
+            changed_files = [f.strip() for f in diff_result.stdout.strip().split('\n') if f.strip()]
+
+            # Determine which services need restart
+            services = determine_services_to_restart(changed_files)
+
+            if services:
+                print_info(f"Services requiring restart: {', '.join(sorted(services))}")
+            else:
+                print_info("No service restarts required (config/docs only)")
+
+            return True, True, services
 
     except subprocess.CalledProcessError as e:
         print_error(f"Git pull failed: {e.stderr if e.stderr else str(e)}")
-        return False, False
+        return False, False, set()
 
 
-def stop_services(os_type, project_root, dry_run=False):
-    """Stop the backend and frontend services."""
-    print_step(2, "Stopping services...")
+def stop_services(os_type, project_root, dry_run=False, services_to_stop=None):
+    """Stop the backend and/or frontend services.
+
+    Args:
+        os_type: Operating system type ('linux', 'mac', 'unknown')
+        project_root: Path to project root
+        dry_run: If True, only show what would be done
+        services_to_stop: Set of services to stop ('backend', 'frontend').
+                         If None, stops all services.
+    """
+    if services_to_stop is None:
+        services_to_stop = {'backend', 'frontend'}
+
+    if not services_to_stop:
+        print_step(2, "No services require restart - skipping stop")
+        return True
+
+    print_step(2, f"Stopping services: {', '.join(sorted(services_to_stop))}...")
 
     all_commands = get_service_commands(os_type, project_root)
     if not all_commands:
@@ -400,6 +496,9 @@ def stop_services(os_type, project_root, dry_run=False):
     services_stopped = []
 
     for service_name in ['backend', 'frontend']:
+        if service_name not in services_to_stop:
+            continue
+
         commands = all_commands[service_name]
 
         # Check if service exists
@@ -523,9 +622,24 @@ def run_migrations(project_root, dry_run=False):
     return True
 
 
-def start_services(os_type, project_root, dry_run=False):
-    """Start the backend and frontend services."""
-    print_step(5, "Starting services...")
+def start_services(os_type, project_root, dry_run=False, services_to_start=None):
+    """Start the backend and/or frontend services.
+
+    Args:
+        os_type: Operating system type ('linux', 'mac', 'unknown')
+        project_root: Path to project root
+        dry_run: If True, only show what would be done
+        services_to_start: Set of services to start ('backend', 'frontend').
+                          If None, starts all services.
+    """
+    if services_to_start is None:
+        services_to_start = {'backend', 'frontend'}
+
+    if not services_to_start:
+        print_step(5, "No services require restart - skipping start")
+        return True
+
+    print_step(5, f"Starting services: {', '.join(sorted(services_to_start))}...")
 
     all_commands = get_service_commands(os_type, project_root)
     if not all_commands:
@@ -535,6 +649,9 @@ def start_services(os_type, project_root, dry_run=False):
     all_started = True
 
     for service_name in ['backend', 'frontend']:
+        if service_name not in services_to_start:
+            continue
+
         commands = all_commands[service_name]
 
         # Check if service exists
@@ -654,12 +771,13 @@ Examples:
     print()
 
     # Step 1: Git pull (unless --skip-pull)
+    services_to_restart = {'backend', 'frontend'}  # Default to both
     if args.skip_pull:
         print_step(1, "Skipping git pull (--skip-pull)")
-        print_info("Assuming changes were already pulled manually")
+        print_info("Assuming changes were already pulled manually - will restart all services")
         has_changes = True  # Assume there are changes to process
     else:
-        success, has_changes = git_pull(project_root, args.dry_run)
+        success, has_changes, services_to_restart = git_pull(project_root, args.dry_run)
         if not success:
             print_error("Update failed at git pull step")
             sys.exit(1)
@@ -671,30 +789,36 @@ Examples:
             print_success("Already running the latest version - services left running")
             sys.exit(0)
 
-    # Step 2: Stop services
-    if not stop_services(os_type, project_root, args.dry_run):
+    # Step 2: Stop services (only those that need restart)
+    if not stop_services(os_type, project_root, args.dry_run, services_to_restart):
         print_error("Update failed at stop services step")
         sys.exit(1)
 
-    # Step 3: Backup database
-    if not args.no_backup:
-        if not backup_database(project_root, args.dry_run):
-            print_error("Update failed at database backup step")
+    # Step 3: Backup database (only if backend is being restarted)
+    if 'backend' in services_to_restart:
+        if not args.no_backup:
+            if not backup_database(project_root, args.dry_run):
+                print_error("Update failed at database backup step")
+                # Try to restart services before exiting
+                start_services(os_type, project_root, args.dry_run, services_to_restart)
+                sys.exit(1)
+        else:
+            print_step(3, "Skipping database backup (--no-backup)")
+    else:
+        print_step(3, "Skipping database backup (no backend changes)")
+
+    # Step 4: Run migrations (only if backend is being restarted)
+    if 'backend' in services_to_restart:
+        if not run_migrations(project_root, args.dry_run):
+            print_error("Update failed at migrations step")
             # Try to restart services before exiting
-            start_services(os_type, project_root, args.dry_run)
+            start_services(os_type, project_root, args.dry_run, services_to_restart)
             sys.exit(1)
     else:
-        print_step(3, "Skipping database backup (--no-backup)")
+        print_step(4, "Skipping migrations (no backend changes)")
 
-    # Step 4: Run migrations
-    if not run_migrations(project_root, args.dry_run):
-        print_error("Update failed at migrations step")
-        # Try to restart services before exiting
-        start_services(os_type, project_root, args.dry_run)
-        sys.exit(1)
-
-    # Step 5: Start services
-    if not start_services(os_type, project_root, args.dry_run):
+    # Step 5: Start services (only those that need restart)
+    if not start_services(os_type, project_root, args.dry_run, services_to_restart):
         print_error("Update failed at start services step")
         sys.exit(1)
 
@@ -704,10 +828,15 @@ Examples:
     if args.dry_run:
         print_info("This was a dry run - no changes were made")
     else:
-        print_success("Zenith Grid has been updated successfully")
+        if services_to_restart:
+            print_success(f"Restarted services: {', '.join(sorted(services_to_restart))}")
+        else:
+            print_success("No services required restart (config/docs only changes)")
         print_info("Check service status with:")
-        print_info("  sudo systemctl status trading-bot-backend")
-        print_info("  sudo systemctl status trading-bot-frontend")
+        if 'backend' in services_to_restart:
+            print_info("  sudo systemctl status trading-bot-backend")
+        if 'frontend' in services_to_restart:
+            print_info("  sudo systemctl status trading-bot-frontend")
 
 
 if __name__ == '__main__':
