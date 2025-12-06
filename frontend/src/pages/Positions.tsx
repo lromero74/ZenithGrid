@@ -2011,9 +2011,24 @@ export default function Positions() {
                                   const minProfitPercent = strategyConfig.min_profit_percentage || 1.5
                                   const targetPrice = entryPrice * (1 + minProfitPercent / 100)
 
+                                  // Calculate next DCA level if manual DCA targets are configured
+                                  // This extends the bar range to show where the next DCA would trigger
+                                  const minPriceDropForDCA = strategyConfig.min_price_drop_for_dca
+                                  const maxDCAOrders = strategyConfig.max_safety_orders || 3
+                                  const completedDCAs = Math.max(0, (position.trade_count || 0) - 1)
+                                  const nextDCA = completedDCAs + 1
+                                  let nextDCAPrice: number | null = null
+                                  if (minPriceDropForDCA && position.status === 'open' && nextDCA <= maxDCAOrders) {
+                                    const dropPercentage = minPriceDropForDCA * nextDCA
+                                    nextDCAPrice = entryPrice * (1 - dropPercentage / 100)
+                                  }
+
                                   const defaultMin = entryPrice * 0.95
                                   const defaultMax = entryPrice * 1.05
-                                  const minPrice = Math.min(defaultMin, currentPriceValue * 0.98)
+                                  // Include next DCA price in range calculation so it's always visible
+                                  const minPrice = nextDCAPrice
+                                    ? Math.min(defaultMin, currentPriceValue * 0.98, nextDCAPrice * 0.98)
+                                    : Math.min(defaultMin, currentPriceValue * 0.98)
                                   const maxPrice = Math.max(defaultMax, targetPrice * 1.01, currentPriceValue * 1.02)
                                   const priceRange = maxPrice - minPrice
 
@@ -2113,36 +2128,15 @@ export default function Positions() {
                                         {targetPos === 'top' && <div className="w-px h-3 bg-emerald-400" />}
                                       </div>
 
-                                      {/* DCA Level Tick Marks (for bots with fixed DCA targets configured) */}
-                                      {(() => {
-                                        const minPriceDropForDCA = strategyConfig.min_price_drop_for_dca
-                                        const maxDCAOrders = strategyConfig.max_safety_orders || 3
-
-                                        // Skip if no manual DCA targets configured (AI bots without min_price_drop_for_dca use dynamic DCA decisions)
-                                        if (!minPriceDropForDCA || position.status !== 'open') return null
-
-                                        // Calculate completed DCAs (trade_count - 1 for initial trade)
-                                        const completedDCAs = Math.max(0, (position.trade_count || 0) - 1)
-
-                                        // Find the next unfilled DCA (the one that would trigger if price drops further)
-                                        const nextDCA = completedDCAs + 1
-
-                                        // Only show if we haven't maxed out DCAs
-                                        if (nextDCA > maxDCAOrders) return null
-
-                                        const dropPercentage = minPriceDropForDCA * nextDCA
-                                        const dcaPrice = entryPrice * (1 - dropPercentage / 100)
-                                        const dcaBarPosition = ((dcaPrice - minPrice) / priceRange) * 100
-
-                                        // Only show if visible on the bar (between 0-100%)
-                                        if (dcaBarPosition < 0 || dcaBarPosition > 100) return null
-
+                                      {/* DCA Level Tick Mark (for bots with fixed DCA targets configured) */}
+                                      {nextDCAPrice && (() => {
+                                        const dcaBarPosition = ((nextDCAPrice - minPrice) / priceRange) * 100
                                         return (
                                           <div
                                             key={`dca-${nextDCA}`}
                                             className="absolute flex flex-col items-center"
                                             style={{
-                                              left: `${dcaBarPosition}%`,
+                                              left: `${Math.max(0, Math.min(100, dcaBarPosition))}%`,
                                               transform: 'translateX(-50%)',
                                               top: '100%'
                                             }}
