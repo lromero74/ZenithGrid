@@ -41,25 +41,19 @@ router = APIRouter(tags=["system"])
 
 def get_git_version() -> str:
     """Get the current git version tag"""
-    try:
-        result = subprocess.run(
-            ["git", "describe", "--tags", "--always"],
-            capture_output=True,
-            text=True,
-            cwd="/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften",  # EC2 path
-            timeout=5
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except Exception:
-        pass
+    from pathlib import Path
 
-    # Fallback for local development
+    # Find the repository root by navigating up from this file's location
+    # This works on any deployment: local, EC2 testbot, or production
+    current_file = Path(__file__).resolve()
+    repo_root = current_file.parent.parent.parent.parent  # routers -> app -> backend -> repo root
+
     try:
         result = subprocess.run(
             ["git", "describe", "--tags", "--always"],
             capture_output=True,
             text=True,
+            cwd=str(repo_root),
             timeout=5
         )
         if result.returncode == 0:
