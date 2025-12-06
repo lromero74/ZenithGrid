@@ -2113,14 +2113,12 @@ export default function Positions() {
                                         {targetPos === 'top' && <div className="w-px h-3 bg-emerald-400" />}
                                       </div>
 
-                                      {/* DCA Level Tick Marks (only for non-AI bots with fixed DCA targets) */}
+                                      {/* DCA Level Tick Marks (for bots with fixed DCA targets configured) */}
                                       {(() => {
-                                        // Skip DCA tick marks for AI-controlled bots (they make dynamic DCA decisions)
-                                        if (bot?.strategy_type === 'ai_autonomous') return null
-
                                         const minPriceDropForDCA = strategyConfig.min_price_drop_for_dca
                                         const maxDCAOrders = strategyConfig.max_safety_orders || 3
 
+                                        // Skip if no manual DCA targets configured (AI bots without min_price_drop_for_dca use dynamic DCA decisions)
                                         if (!minPriceDropForDCA || position.status !== 'open') return null
 
                                         // Calculate completed DCAs (trade_count - 1 for initial trade)
