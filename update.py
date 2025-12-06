@@ -227,12 +227,12 @@ def show_changelog(project_root, changelog_arg):
     print_info("Fetching latest from remote...")
     run_command('git fetch origin --tags', cwd=project_root, capture_output=True, check=False)
 
-    # Show current installed version
+    # Show installed version
     current_version, is_exact = get_current_version(project_root)
     if is_exact:
-        print(f"{Colors.GREEN}{Colors.BOLD}Current version: {current_version}{Colors.ENDC}")
+        print(f"{Colors.GREEN}{Colors.BOLD}Installed: {current_version}{Colors.ENDC}")
     else:
-        print(f"{Colors.GREEN}{Colors.BOLD}Current version: {current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes or ahead of tag){Colors.ENDC}")
+        print(f"{Colors.GREEN}{Colors.BOLD}Installed: {current_version}{Colors.ENDC} {Colors.YELLOW}(uncommitted changes or ahead of tag){Colors.ENDC}")
     print()
 
     # Check for unpulled changes from origin/main
@@ -343,9 +343,9 @@ def show_changelog(project_root, changelog_arg):
         )
         tag_date = date_result.stdout.strip()[:10] if date_result.stdout else ''
 
-        # Mark current version
-        is_current = (curr_tag == current_version)
-        marker = f" {Colors.GREEN}← current{Colors.ENDC}" if is_current else ""
+        # Mark installed version in the list
+        is_installed = (curr_tag == current_version)
+        marker = f" {Colors.GREEN}← installed{Colors.ENDC}" if is_installed else ""
 
         print(f"{Colors.CYAN}{Colors.BOLD}{curr_tag}{Colors.ENDC}", end='')
         if tag_date:
