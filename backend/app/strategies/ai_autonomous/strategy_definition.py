@@ -20,10 +20,10 @@ def get_strategy_definition() -> StrategyDefinition:
             StrategyParameter(
                 name="ai_provider",
                 display_name="AI Provider",
-                description="Which AI model to use for market analysis",
+                description="Which AI model to use for market analysis. Groq offers 14,400 RPD free tier (runs Llama 3.1 70B).",
                 type="string",
                 default="claude",
-                options=["claude", "gemini", "grok"],
+                options=["claude", "gemini", "grok", "groq"],
                 group="AI Configuration",
             ),
             StrategyParameter(

@@ -175,10 +175,21 @@ async def get_ai_provider_info():
                 "billing_url": "https://aistudio.google.com/app/apikey",
                 "has_api_key": bool(settings.gemini_api_key),
             },
+            "grok": {
+                "name": "xAI (Grok)",
+                "billing_url": "https://console.x.ai/",
+                "has_api_key": bool(settings.grok_api_key),
+            },
+            "groq": {
+                "name": "Groq (Llama 3.1 70B)",
+                "billing_url": "https://console.groq.com/keys",
+                "has_api_key": bool(settings.groq_api_key),
+                "free_tier": "14,400 RPD",
+            },
             "openai": {
                 "name": "OpenAI (GPT)",
                 "billing_url": "https://platform.openai.com/usage",
-                "has_api_key": False,  # Not currently configured
+                "has_api_key": bool(settings.openai_api_key),
             },
         }
     }

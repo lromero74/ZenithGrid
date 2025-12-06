@@ -22,7 +22,7 @@ from app.strategies import (
 from . import prompts
 from . import market_analysis
 from . import trading_decisions
-from .api_providers import claude, gemini, grok
+from .api_providers import claude, gemini, grok, groq
 
 logger = logging.getLogger(__name__)
 
@@ -264,8 +264,12 @@ class AIAutonomousStrategy(TradingStrategy):
                 # Grok client will be initialized when needed (uses OpenAI library)
                 # Import is deferred to avoid requiring openai for Claude/Gemini users
                 pass
+            elif provider == "groq":
+                # Groq client will be initialized when needed (uses OpenAI library)
+                # Import is deferred to avoid requiring openai for Claude/Gemini users
+                pass
             else:
-                raise ValueError(f"Unknown AI provider: {provider}. Must be 'claude', 'gemini', or 'grok'.")
+                raise ValueError(f"Unknown AI provider: {provider}. Must be 'claude', 'gemini', 'grok', or 'groq'.")
 
         return self._client
 
@@ -362,6 +366,8 @@ class AIAutonomousStrategy(TradingStrategy):
                 analysis = await gemini.get_gemini_analysis(market_context, build_prompt, self._token_tracker)
             elif provider == "grok":
                 analysis = await grok.get_grok_analysis(market_context, build_prompt, self._token_tracker)
+            elif provider == "groq":
+                analysis = await groq.get_groq_analysis(market_context, build_prompt, self._token_tracker)
             else:
                 raise ValueError(f"Unknown AI provider: {provider}")
 
@@ -405,6 +411,8 @@ class AIAutonomousStrategy(TradingStrategy):
             return await gemini.get_gemini_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
         elif provider == "grok":
             return await grok.get_grok_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
+        elif provider == "groq":
+            return await groq.get_groq_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
         elif provider == "claude":
             return await claude.get_claude_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
         else:
@@ -426,6 +434,10 @@ class AIAutonomousStrategy(TradingStrategy):
                     )
                 elif provider == "grok":
                     results[product_id] = await grok.get_grok_analysis(
+                        market_context, build_prompt, self._token_tracker
+                    )
+                elif provider == "groq":
+                    results[product_id] = await groq.get_groq_analysis(
                         market_context, build_prompt, self._token_tracker
                     )
             return results

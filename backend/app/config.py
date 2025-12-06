@@ -29,13 +29,14 @@ class Settings(BaseSettings):
         return v
 
     # System AI Provider (for news analysis, coin categorization, YouTube analysis)
-    # Options: claude, gemini, grok, openai
+    # Options: claude, gemini, grok, groq, openai
     system_ai_provider: str = "claude"
 
     # AI Provider API Keys
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     grok_api_key: str = ""  # x.AI Grok API
+    groq_api_key: str = ""  # Groq API (Llama models - 14,400 RPD free tier)
     openai_api_key: str = ""
 
     # Database
