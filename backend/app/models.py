@@ -601,9 +601,10 @@ class NewsArticle(Base):
     summary = Column(Text, nullable=True)  # Article excerpt/summary
     author = Column(String, nullable=True)
 
-    # Image caching
+    # Image caching - stored as base64 data URI in database
     original_thumbnail_url = Column(String, nullable=True)  # Original external URL
-    cached_thumbnail_path = Column(String, nullable=True)  # Local path: "news_images/abc123.jpg"
+    cached_thumbnail_path = Column(String, nullable=True)  # Deprecated: was local path
+    image_data = Column(Text, nullable=True)  # Base64 data URI (e.g., "data:image/jpeg;base64,...")
 
     # Metadata
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it

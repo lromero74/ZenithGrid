@@ -44,11 +44,7 @@ from urllib.parse import urlparse
 
 from app.database import async_session_maker
 from app.models import NewsArticle
-from app.services.news_image_cache import (
-    cache_image,
-    cleanup_old_images,
-    get_disk_usage,
-)
+from app.services.news_image_cache import download_image_as_base64
 
 logger = logging.getLogger(__name__)
 
@@ -1271,7 +1267,7 @@ async def get_articles_from_db(db: AsyncSession, limit: int = 100) -> List[NewsA
 async def store_article_in_db(
     db: AsyncSession,
     item: NewsItem,
-    cached_thumbnail_path: Optional[str] = None
+    image_data: Optional[str] = None
 ) -> Optional[NewsArticle]:
     """Store a news article in the database. Returns None if already exists."""
     # Check if article already exists by URL
@@ -1298,7 +1294,7 @@ async def store_article_in_db(
         published_at=published_at,
         summary=item.summary,
         original_thumbnail_url=item.thumbnail,
-        cached_thumbnail_path=cached_thumbnail_path,
+        image_data=image_data,  # Base64 data URI
         fetched_at=datetime.utcnow(),
     )
     db.add(article)
@@ -1321,8 +1317,8 @@ async def cleanup_old_articles(db: AsyncSession, max_age_days: int = NEWS_ITEM_M
 
 def article_to_news_item(article: NewsArticle) -> Dict[str, Any]:
     """Convert a NewsArticle database object to a NewsItem dict for API response."""
-    # Use cached thumbnail if available, otherwise fall back to original
-    thumbnail = article.cached_thumbnail_path or article.original_thumbnail_url
+    # Use base64 image data if available, otherwise fall back to original URL
+    thumbnail = article.image_data or article.original_thumbnail_url
     return {
         "title": article.title,
         "url": article.url,
@@ -1904,17 +1900,17 @@ async def fetch_all_news() -> None:
             elif isinstance(result, Exception):
                 logger.error(f"Task failed: {result}")
 
-        # Cache images and store articles in database
+        # Download images as base64 and store articles in database
         new_articles_count = 0
         async with async_session_maker() as db:
             for item in fresh_items:
-                # Cache thumbnail image if present
-                cached_path = None
+                # Download thumbnail as base64 data URI if present
+                image_data = None
                 if item.thumbnail:
-                    cached_path = await cache_image(session, item.thumbnail)
+                    image_data = await download_image_as_base64(session, item.thumbnail)
 
                 # Store in database (returns None if already exists)
-                article = await store_article_in_db(db, item, cached_path)
+                article = await store_article_in_db(db, item, image_data)
                 if article:
                     new_articles_count += 1
 
@@ -2018,21 +2014,24 @@ async def get_sources():
 
 @router.get("/cache-stats")
 async def get_cache_stats():
-    """Get news cache statistics including database article count and image storage."""
-    # Get article count from database
+    """Get news cache statistics including database article count."""
+    # Get article count and articles with images from database
     async with async_session_maker() as db:
         from sqlalchemy import func
         result = await db.execute(select(func.count(NewsArticle.id)))
         article_count = result.scalar() or 0
 
-    # Get image storage stats
-    image_stats = get_disk_usage()
+        # Count articles with embedded images
+        result = await db.execute(
+            select(func.count(NewsArticle.id)).where(NewsArticle.image_data.isnot(None))
+        )
+        articles_with_images = result.scalar() or 0
 
     return {
         "database": {
             "article_count": article_count,
+            "articles_with_images": articles_with_images,
         },
-        "images": image_stats,
         "last_refresh": _last_news_refresh.isoformat() + "Z" if _last_news_refresh else None,
         "cache_check_interval_minutes": NEWS_CACHE_CHECK_MINUTES,
         "max_age_days": NEWS_ITEM_MAX_AGE_DAYS,
@@ -2041,18 +2040,14 @@ async def get_cache_stats():
 
 @router.post("/cleanup")
 async def cleanup_cache():
-    """Manually trigger cleanup of old news articles and images (older than 7 days)."""
-    # Cleanup old articles from database
+    """Manually trigger cleanup of old news articles (older than 7 days)."""
+    # Cleanup old articles from database (images are stored inline, so they're deleted with articles)
     async with async_session_maker() as db:
         articles_deleted = await cleanup_old_articles(db)
 
-    # Cleanup old images from filesystem
-    images_deleted = cleanup_old_images(max_age_days=NEWS_ITEM_MAX_AGE_DAYS)
-
     return {
         "articles_deleted": articles_deleted,
-        "images_deleted": images_deleted,
-        "message": f"Cleaned up {articles_deleted} articles and {images_deleted} images older than {NEWS_ITEM_MAX_AGE_DAYS} days"
+        "message": f"Cleaned up {articles_deleted} articles older than {NEWS_ITEM_MAX_AGE_DAYS} days"
     }
 
 

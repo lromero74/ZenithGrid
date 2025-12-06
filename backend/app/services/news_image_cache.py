@@ -1,16 +1,14 @@
 """
 News Image Caching Service
 
-Downloads and caches news article thumbnails locally.
-Images are stored in static/news_images/ with hashed filenames.
-Cleanup removes images older than 7 days along with their articles.
+Downloads news article thumbnails and converts them to base64 data URIs
+for storage directly in the database. This avoids path/proxy issues with
+SSH tunneling and simplifies serving images from any environment.
 """
 
 import asyncio
-import hashlib
+import base64
 import logging
-from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -18,51 +16,41 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-# Directory for cached images (relative to backend/)
-STATIC_DIR = Path(__file__).parent.parent.parent / "static"
-NEWS_IMAGES_DIR = STATIC_DIR / "news_images"
-
-# Ensure directory exists
-NEWS_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-
 # Image download settings
 IMAGE_DOWNLOAD_TIMEOUT = 10  # seconds
-MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB max
+MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2MB max (smaller for base64 storage)
 
 
-def get_image_filename(url: str) -> str:
-    """Generate a unique filename from URL using hash."""
-    url_hash = hashlib.md5(url.encode()).hexdigest()
-    # Try to preserve extension from URL
+def get_mime_type_from_url(url: str) -> str:
+    """Determine MIME type from URL extension."""
     parsed = urlparse(url)
     path = parsed.path.lower()
-    if path.endswith('.jpg') or path.endswith('.jpeg'):
-        ext = '.jpg'
-    elif path.endswith('.png'):
-        ext = '.png'
+    if path.endswith('.png'):
+        return 'image/png'
     elif path.endswith('.gif'):
-        ext = '.gif'
+        return 'image/gif'
     elif path.endswith('.webp'):
-        ext = '.webp'
+        return 'image/webp'
     else:
-        ext = '.jpg'  # Default to jpg
-    return f"{url_hash}{ext}"
+        return 'image/jpeg'  # Default to jpeg
 
 
-def get_cached_image_path(url: str) -> Path:
-    """Get the full filesystem path for a cached image."""
-    filename = get_image_filename(url)
-    return NEWS_IMAGES_DIR / filename
+def get_mime_type_from_content_type(content_type: str) -> str:
+    """Extract MIME type from Content-Type header."""
+    # Content-Type might be "image/jpeg; charset=utf-8" etc.
+    mime = content_type.split(';')[0].strip().lower()
+    if mime in ('image/jpeg', 'image/png', 'image/gif', 'image/webp'):
+        return mime
+    return 'image/jpeg'  # Default
 
 
-def get_cached_image_url_path(url: str) -> str:
-    """Get the URL path for serving a cached image (relative to static mount)."""
-    filename = get_image_filename(url)
-    return f"/static/news_images/{filename}"
+async def download_image(session: aiohttp.ClientSession, url: str) -> Optional[tuple[bytes, str]]:
+    """
+    Download an image from URL with timeout and size limits.
 
-
-async def download_image(session: aiohttp.ClientSession, url: str) -> Optional[bytes]:
-    """Download an image from URL with timeout and size limits."""
+    Returns:
+        Tuple of (image_bytes, mime_type) or None if download failed.
+    """
     try:
         async with session.get(
             url,
@@ -82,6 +70,9 @@ async def download_image(session: aiohttp.ClientSession, url: str) -> Optional[b
                 logger.debug(f"Not an image (content-type: {content_type}): {url}")
                 return None
 
+            # Get MIME type from header, fallback to URL extension
+            mime_type = get_mime_type_from_content_type(content_type)
+
             # Check content length if available
             content_length = response.headers.get('Content-Length')
             if content_length and int(content_length) > MAX_IMAGE_SIZE:
@@ -96,7 +87,7 @@ async def download_image(session: aiohttp.ClientSession, url: str) -> Optional[b
                     logger.debug(f"Image exceeded size limit during download: {url}")
                     return None
 
-            return data
+            return (data, mime_type)
 
     except asyncio.TimeoutError:
         logger.debug(f"Timeout downloading image: {url}")
@@ -106,47 +97,40 @@ async def download_image(session: aiohttp.ClientSession, url: str) -> Optional[b
         return None
 
 
-async def cache_image(session: aiohttp.ClientSession, url: str) -> Optional[str]:
+async def download_image_as_base64(session: aiohttp.ClientSession, url: str) -> Optional[str]:
     """
-    Download and cache an image, returning the cached URL path.
+    Download an image and return it as a base64 data URI.
 
     Returns:
-        The URL path for the cached image (e.g., "/static/news_images/abc123.jpg")
+        Base64 data URI (e.g., "data:image/jpeg;base64,/9j/4AAQ...")
         or None if download failed.
     """
     if not url:
         return None
 
-    # Check if already cached
-    cached_path = get_cached_image_path(url)
-    if cached_path.exists():
-        return get_cached_image_url_path(url)
-
-    # Download the image
-    image_data = await download_image(session, url)
-    if not image_data:
+    result = await download_image(session, url)
+    if not result:
         return None
 
-    # Save to disk
-    try:
-        with open(cached_path, 'wb') as f:
-            f.write(image_data)
-        logger.debug(f"Cached image: {url} -> {cached_path.name}")
-        return get_cached_image_url_path(url)
-    except Exception as e:
-        logger.error(f"Failed to save image {url}: {e}")
-        return None
+    image_data, mime_type = result
+
+    # Convert to base64 data URI
+    b64_data = base64.b64encode(image_data).decode('ascii')
+    data_uri = f"data:{mime_type};base64,{b64_data}"
+
+    logger.debug(f"Converted image to base64 ({len(b64_data)} chars): {url[:50]}...")
+    return data_uri
 
 
-async def cache_images_batch(urls: list[str]) -> dict[str, Optional[str]]:
+async def download_images_batch(urls: list[str]) -> dict[str, Optional[str]]:
     """
-    Cache multiple images concurrently.
+    Download multiple images concurrently and convert to base64 data URIs.
 
     Args:
-        urls: List of image URLs to cache
+        urls: List of image URLs to download
 
     Returns:
-        Dict mapping original URL to cached URL path (or None if failed)
+        Dict mapping original URL to base64 data URI (or None if failed)
     """
     if not urls:
         return {}
@@ -156,71 +140,16 @@ async def cache_images_batch(urls: list[str]) -> dict[str, Optional[str]]:
         tasks = []
         for url in urls:
             if url:
-                tasks.append((url, cache_image(session, url)))
+                tasks.append((url, download_image_as_base64(session, url)))
             else:
                 results[url] = None
 
         for url, task in tasks:
             try:
-                cached_path = await task
-                results[url] = cached_path
+                data_uri = await task
+                results[url] = data_uri
             except Exception as e:
-                logger.error(f"Error caching image {url}: {e}")
+                logger.error(f"Error downloading image {url}: {e}")
                 results[url] = None
 
     return results
-
-
-def cleanup_old_images(max_age_days: int = 7) -> int:
-    """
-    Remove cached images older than max_age_days.
-
-    Returns:
-        Number of images removed
-    """
-    cutoff = datetime.now() - timedelta(days=max_age_days)
-    removed_count = 0
-
-    try:
-        for image_file in NEWS_IMAGES_DIR.iterdir():
-            if image_file.name == '.gitkeep':
-                continue
-
-            try:
-                # Check file modification time
-                mtime = datetime.fromtimestamp(image_file.stat().st_mtime)
-                if mtime < cutoff:
-                    image_file.unlink()
-                    removed_count += 1
-            except Exception as e:
-                logger.warning(f"Failed to check/remove image {image_file}: {e}")
-
-    except Exception as e:
-        logger.error(f"Error during image cleanup: {e}")
-
-    if removed_count > 0:
-        logger.info(f"Cleaned up {removed_count} old news images")
-
-    return removed_count
-
-
-def get_disk_usage() -> dict:
-    """Get disk usage stats for the news images cache."""
-    total_size = 0
-    file_count = 0
-
-    try:
-        for image_file in NEWS_IMAGES_DIR.iterdir():
-            if image_file.name == '.gitkeep':
-                continue
-            if image_file.is_file():
-                total_size += image_file.stat().st_size
-                file_count += 1
-    except Exception as e:
-        logger.error(f"Error calculating disk usage: {e}")
-
-    return {
-        "file_count": file_count,
-        "total_size_bytes": total_size,
-        "total_size_mb": round(total_size / (1024 * 1024), 2)
-    }
