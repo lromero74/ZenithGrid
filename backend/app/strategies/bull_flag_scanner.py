@@ -290,36 +290,60 @@ def detect_bull_flag_pattern(
     confirmation_candle = candles[confirmation_idx]
     _, _, _, entry_price = get_ohlc(confirmation_candle)
 
-    # Step 2: Find FLAG (pullback) - consecutive red candles before confirmation
-    pullback_start = confirmation_idx - 1
+    # Step 2: Find FLAG (pullback) - red candles within a window before confirmation
+    # More flexible: allows for dojis or small green bounces within the pullback zone
+    pullback_window_start = confirmation_idx - 1
+    pullback_window_end = max(0, confirmation_idx - max_pullback_candles - 2)  # Extra buffer for flexibility
+
     red_count = 0
     pullback_low = float("inf")
     pullback_high = 0.0
     pullback_total_volume = 0.0  # Track sell/red volume during pullback
+    candles_in_pullback = 0
+    first_red_idx = None
+    last_red_idx = None
 
-    for i in range(pullback_start, -1, -1):
+    # Scan backwards through the pullback window
+    for i in range(pullback_window_start, pullback_window_end - 1, -1):
         candle = candles[i]
         o, h, l, c = get_ohlc(candle)
 
-        # Track pullback range
-        pullback_low = min(pullback_low, l)
-        pullback_high = max(pullback_high, h)
-
         if is_red(candle):
             red_count += 1
-            pullback_total_volume += get_volume(candle)  # Accumulate sell volume
+            pullback_total_volume += get_volume(candle)
+            pullback_low = min(pullback_low, l)
+            pullback_high = max(pullback_high, h)
+            if first_red_idx is None:
+                first_red_idx = i
+            last_red_idx = i
         else:
-            # First non-red candle marks end of pullback
-            break
+            # Allow non-red candles within the pullback if we've found red ones
+            # But also track their range as part of pullback zone
+            if first_red_idx is not None:
+                pullback_low = min(pullback_low, l)
+                pullback_high = max(pullback_high, h)
 
-        # Check max pullback length
-        if (pullback_start - i + 1) > max_pullback_candles:
-            return (None, f"Pullback too long: {pullback_start - i + 1} > {max_pullback_candles} max")
+        candles_in_pullback += 1
+
+        # Stop if we've found enough red candles and hit a clearly bullish candle
+        # (strong green that's not just a small bounce)
+        if red_count >= min_pullback_candles:
+            # Check if this is a strong reversal (pole-like) candle
+            if is_green(candle):
+                gain_pct = ((c - o) / o * 100) if o > 0 else 0
+                if gain_pct > 1.0:  # Strong green candle, likely start of pole
+                    break
 
     if red_count < min_pullback_candles:
         return (None, f"Insufficient pullback: {red_count} red candles < {min_pullback_candles} min")
 
-    pullback_end_idx = pullback_start - red_count
+    # Check total pullback window isn't too long
+    if first_red_idx is not None and last_red_idx is not None:
+        pullback_span = first_red_idx - last_red_idx + 1
+        if pullback_span > max_pullback_candles:
+            return (None, f"Pullback too spread out: {pullback_span} candle span > {max_pullback_candles} max")
+
+    pullback_end_idx = last_red_idx - 1 if last_red_idx is not None else pullback_window_start - red_count
     pullback_avg_volume = pullback_total_volume / red_count if red_count > 0 else 0
 
     # Step 3: Find POLE before pullback
