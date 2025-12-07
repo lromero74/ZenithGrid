@@ -374,7 +374,9 @@ class MultiBotMonitor:
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis
             # Individual positions will still use frozen config in process_bot_pair
             print(f"🔍 Getting strategy instance for {bot.strategy_type}...")
-            strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
+            # Inject user_id into strategy config for per-user AI API key lookup
+            strategy_config_with_user = {**bot.strategy_config, "user_id": bot.user_id}
+            strategy = StrategyRegistry.get_strategy(bot.strategy_type, strategy_config_with_user)
             print("🔍 Strategy instance created")
             supports_batch = hasattr(strategy, "analyze_multiple_pairs_batch") and len(trading_pairs) > 1
             print(f"🔍 Supports batch: {supports_batch}")
@@ -952,6 +954,8 @@ class MultiBotMonitor:
                                 f"      Max usage: {original}% → {strategy_config['max_btc_usage_percentage']:.2f}%"
                             )
 
+                # Inject user_id into strategy config for per-user AI API key lookup
+                strategy_config["user_id"] = bot.user_id
                 strategy = StrategyRegistry.get_strategy(bot.strategy_type, strategy_config)
             except ValueError as e:
                 logger.error(f"Unknown strategy: {bot.strategy_type}")

@@ -12,13 +12,16 @@ import logging
 import traceback
 from typing import Any, Dict
 
-from app.config import settings
+from .credential_helper import get_api_key_for_provider_sync
 
 logger = logging.getLogger(__name__)
 
 
 async def get_groq_analysis(
-    market_context: Dict[str, Any], build_prompt_func, total_tokens_tracker: Dict[str, int]
+    market_context: Dict[str, Any],
+    build_prompt_func,
+    total_tokens_tracker: Dict[str, int],
+    user_id: int = None,
 ) -> Dict[str, Any]:
     """
     Call Groq API for market analysis (uses OpenAI-compatible API)
@@ -45,9 +48,10 @@ async def get_groq_analysis(
             "expected_profit_pct": 0,
         }
 
-    api_key = settings.groq_api_key
+    # Initialize Groq client - check database first, then .env
+    api_key = get_api_key_for_provider_sync(user_id, "groq")
     if not api_key:
-        logger.error("GROQ_API_KEY not set in .env file")
+        logger.error("Groq API key not configured (checked database and .env)")
         return {
             "signal_type": "hold",
             "confidence": 0,
@@ -112,7 +116,10 @@ async def get_groq_analysis(
 
 
 async def get_groq_batch_analysis(
-    pairs_data: Dict[str, Dict[str, Any]], build_batch_prompt_func, total_tokens_tracker: Dict[str, int]
+    pairs_data: Dict[str, Dict[str, Any]],
+    build_batch_prompt_func,
+    total_tokens_tracker: Dict[str, int],
+    user_id: int = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Analyze multiple pairs in a single Groq API call
@@ -136,9 +143,9 @@ async def get_groq_batch_analysis(
             for pid in pairs_data.keys()
         }
 
-    api_key = settings.groq_api_key
+    api_key = get_api_key_for_provider_sync(user_id, "groq")
     if not api_key:
-        logger.error("GROQ_API_KEY not set")
+        logger.error("Groq API key not configured (checked database and .env)")
         return {
             pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
             for pid in pairs_data.keys()

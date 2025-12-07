@@ -358,16 +358,19 @@ class AIAutonomousStrategy(TradingStrategy):
             # TODO: Consider converting lambda to def function for better debugging
             build_prompt = lambda ctx: prompts.build_standard_analysis_prompt(ctx, self.config, self._format_price)
 
+            # Get user_id from config for per-user API key lookup
+            user_id = self.config.get("user_id")
+
             if provider == "claude":
                 analysis = await claude.get_claude_analysis(
                     self.client, market_context, build_prompt, self._token_tracker
                 )
             elif provider == "gemini":
-                analysis = await gemini.get_gemini_analysis(market_context, build_prompt, self._token_tracker)
+                analysis = await gemini.get_gemini_analysis(market_context, build_prompt, self._token_tracker, user_id)
             elif provider == "grok":
-                analysis = await grok.get_grok_analysis(market_context, build_prompt, self._token_tracker)
+                analysis = await grok.get_grok_analysis(market_context, build_prompt, self._token_tracker, user_id)
             elif provider == "groq":
-                analysis = await groq.get_groq_analysis(market_context, build_prompt, self._token_tracker)
+                analysis = await groq.get_groq_analysis(market_context, build_prompt, self._token_tracker, user_id)
             else:
                 raise ValueError(f"Unknown AI provider: {provider}")
 
@@ -407,14 +410,17 @@ class AIAutonomousStrategy(TradingStrategy):
             data, self.config, self._format_price, per_position_budget
         )
 
+        # Get user_id from config for per-user API key lookup
+        user_id = self.config.get("user_id")
+
         if provider == "gemini":
-            return await gemini.get_gemini_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
+            return await gemini.get_gemini_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker, user_id)
         elif provider == "grok":
-            return await grok.get_grok_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
+            return await grok.get_grok_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker, user_id)
         elif provider == "groq":
-            return await groq.get_groq_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
+            return await groq.get_groq_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker, user_id)
         elif provider == "claude":
-            return await claude.get_claude_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker)
+            return await claude.get_claude_batch_analysis(pairs_data, build_batch_prompt, self._token_tracker, user_id)
         else:
             # Fallback to individual calls if batch not supported
             logger.warning(f"Batch analysis not supported for {provider}, falling back to individual calls")
@@ -430,15 +436,15 @@ class AIAutonomousStrategy(TradingStrategy):
                     )
                 elif provider == "gemini":
                     results[product_id] = await gemini.get_gemini_analysis(
-                        market_context, build_prompt, self._token_tracker
+                        market_context, build_prompt, self._token_tracker, user_id
                     )
                 elif provider == "grok":
                     results[product_id] = await grok.get_grok_analysis(
-                        market_context, build_prompt, self._token_tracker
+                        market_context, build_prompt, self._token_tracker, user_id
                     )
                 elif provider == "groq":
                     results[product_id] = await groq.get_groq_analysis(
-                        market_context, build_prompt, self._token_tracker
+                        market_context, build_prompt, self._token_tracker, user_id
                     )
             return results
 

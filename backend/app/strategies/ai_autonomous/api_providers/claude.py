@@ -7,6 +7,7 @@ import logging
 from typing import Any, Dict
 
 from app.config import settings
+from .credential_helper import get_api_key_for_provider_sync
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,10 @@ async def get_claude_analysis(
 
 
 async def get_claude_batch_analysis(
-    pairs_data: Dict[str, Dict[str, Any]], build_batch_prompt_func, total_tokens_tracker: Dict[str, int]
+    pairs_data: Dict[str, Dict[str, Any]],
+    build_batch_prompt_func,
+    total_tokens_tracker: Dict[str, int],
+    user_id: int = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Analyze multiple pairs in a single Claude API call
@@ -120,9 +124,9 @@ async def get_claude_batch_analysis(
             for pid in pairs_data.keys()
         }
 
-    api_key = settings.anthropic_api_key
+    api_key = get_api_key_for_provider_sync(user_id, "claude")
     if not api_key:
-        logger.error("ANTHROPIC_API_KEY not set")
+        logger.error("Claude API key not configured (checked database and .env)")
         return {
             pid: {"signal_type": "hold", "confidence": 0, "reasoning": "API key not configured"}
             for pid in pairs_data.keys()
