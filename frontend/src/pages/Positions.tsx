@@ -3,8 +3,6 @@ import { positionsApi, botsApi } from '../services/api'
 import { useState, useEffect, useRef } from 'react'
 import { formatDateTime, formatDateTimeCompact } from '../utils/dateFormat'
 import {
-  TrendingUp,
-  TrendingDown,
   X,
   AlertCircle,
   BarChart3,
@@ -12,7 +10,6 @@ import {
   Settings,
   Search,
   BarChart2,
-  Minus,
   Building2,
   Wallet
 } from 'lucide-react'
@@ -37,78 +34,20 @@ import {
   type CandleData
 } from '../utils/indicators'
 import { API_BASE_URL } from '../config/api'
-
-// Fee adjustment for profit targets
-// Coinbase Advanced Trade taker fee is ~0.6% (0.006)
-// To achieve X% NET profit after sell fees: gross_target = (1 + X%) / (1 - sell_fee)
-const SELL_FEE_RATE = 0.006 // 0.6% Coinbase taker fee
-
-// Helper to calculate fee-adjusted profit target multiplier
-const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
-  const netMultiplier = 1 + (desiredNetProfitPercent / 100)
-  return netMultiplier / (1 - SELL_FEE_RATE)
-}
-
-// Get take profit percentage from position config (frozen at position open) or bot config
-const getTakeProfitPercent = (
-  position: Position,
-  bot: { strategy_config?: Record<string, any> } | null | undefined
-): number => {
-  return position.strategy_config_snapshot?.take_profit_percentage
-    ?? position.strategy_config_snapshot?.min_profit_percentage
-    ?? bot?.strategy_config?.take_profit_percentage
-    ?? bot?.strategy_config?.min_profit_percentage
-    ?? 2.0 // Default 2% if not configured
-}
-
-interface IndicatorConfig {
-  id: string
-  name: string
-  type: string
-  enabled: boolean
-  settings: Record<string, any>
-  color?: string
-  series?: ISeriesApi<any>[]
-}
+import {
+  getFeeAdjustedProfitMultiplier,
+  getTakeProfitPercent,
+  getQuoteCurrency,
+  formatPrice,
+  formatBaseAmount,
+  formatQuoteAmount,
+  type IndicatorConfig,
+  AISentimentIcon,
+} from '../components/positions'
 
 type LineData = {
   time: Time
   value: number
-}
-
-// Utility functions for price formatting
-const getQuoteCurrency = (productId: string) => {
-  const quote = productId?.split('-')[1] || 'BTC'
-  return {
-    symbol: quote,
-    decimals: quote === 'USD' ? 2 : 8
-  }
-}
-
-const getBaseCurrency = (productId: string) => {
-  const base = productId?.split('-')[0] || 'ETH'
-  return {
-    symbol: base,
-    decimals: 6  // Most altcoins use 6 decimals for display
-  }
-}
-
-const formatPrice = (price: number, productId: string = 'ETH-BTC') => {
-  const { symbol, decimals } = getQuoteCurrency(productId)
-  if (symbol === 'USD') {
-    return `$${price.toFixed(decimals)}`
-  }
-  return `${price.toFixed(decimals)} ${symbol}`
-}
-
-const formatBaseAmount = (amount: number, productId: string = 'ETH-BTC') => {
-  const { symbol, decimals } = getBaseCurrency(productId)
-  return `${amount.toFixed(decimals)} ${symbol}`
-}
-
-const formatQuoteAmount = (amount: number, productId: string) => {
-  const { symbol, decimals } = getQuoteCurrency(productId)
-  return `${amount.toFixed(decimals)} ${symbol}`
 }
 
 // Deal Chart Component with full Charts page functionality
@@ -1198,54 +1137,6 @@ function DealChart({ position, productId: initialProductId, currentPrice, trades
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-// AI Sentiment Icon Component
-function AISentimentIcon({ botId, productId }: { botId: number, productId: string }) {
-  const { data: aiLog } = useQuery({
-    queryKey: ['ai-sentiment', botId, productId],
-    queryFn: async () => {
-      const response = await axios.get(`/api/bots/${botId}/logs`, {
-        params: { product_id: productId, limit: 1 }
-      })
-      return response.data[0] || null
-    },
-    refetchInterval: 30000, // Refresh every 30 seconds
-    enabled: !!botId && !!productId,
-  })
-
-  if (!aiLog || !aiLog.decision) return null
-
-  const decision = aiLog.decision.toLowerCase()
-  const confidence = aiLog.confidence || 0
-
-  // Map decision to icon and color
-  const getIcon = () => {
-    switch (decision) {
-      case 'buy':
-        return <TrendingUp size={14} className="text-green-400" />
-      case 'sell':
-        return <TrendingDown size={14} className="text-red-400" />
-      case 'hold':
-        return <Minus size={14} className="text-yellow-400" />
-      default:
-        return null
-    }
-  }
-
-  const getTooltip = () => {
-    return `AI: ${decision.toUpperCase()} (${confidence.toFixed(0)}%)\n${aiLog.thinking || ''}`
-  }
-
-  return (
-    <div
-      className="flex items-center gap-1 cursor-help"
-      title={getTooltip()}
-    >
-      {getIcon()}
-      <span className="text-[10px] text-slate-400">{confidence.toFixed(0)}%</span>
     </div>
   )
 }
