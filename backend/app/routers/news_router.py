@@ -30,21 +30,49 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 import feedparser
 import trafilatura
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
 
 from app.database import async_session_maker
 from app.models import NewsArticle
-from app.routers.news.debt_ceiling_data import DEBT_CEILING_HISTORY
+from app.routers.news import (
+    CACHE_FILE,
+    DEBT_CEILING_HISTORY,
+    FEAR_GREED_CACHE_MINUTES,
+    NEWS_CACHE_CHECK_MINUTES,
+    NEWS_ITEM_MAX_AGE_DAYS,
+    NEWS_SOURCES,
+    US_DEBT_CACHE_HOURS,
+    VIDEO_CACHE_FILE,
+    VIDEO_SOURCES,
+    ArticleContentResponse,
+    BlockHeightResponse,
+    DebtCeilingEvent,
+    DebtCeilingHistoryResponse,
+    FearGreedResponse,
+    NewsItem,
+    NewsResponse,
+    USDebtResponse,
+    VideoItem,
+    VideoResponse,
+    load_block_height_cache,
+    load_fear_greed_cache,
+    load_us_debt_cache,
+    load_video_cache,
+    merge_news_items,
+    prune_old_items,
+    save_block_height_cache,
+    save_fear_greed_cache,
+    save_us_debt_cache,
+    save_video_cache,
+)
 from app.services.news_image_cache import download_image_as_base64
 
 logger = logging.getLogger(__name__)
@@ -53,311 +81,6 @@ logger = logging.getLogger(__name__)
 _last_news_refresh: Optional[datetime] = None
 
 router = APIRouter(prefix="/api/news", tags=["news"])
-
-# Cache configuration
-CACHE_FILE = Path(__file__).parent.parent.parent / "news_cache.json"
-VIDEO_CACHE_FILE = Path(__file__).parent.parent.parent / "video_cache.json"
-FEAR_GREED_CACHE_FILE = Path(__file__).parent.parent.parent / "fear_greed_cache.json"
-BLOCK_HEIGHT_CACHE_FILE = Path(__file__).parent.parent.parent / "block_height_cache.json"
-US_DEBT_CACHE_FILE = Path(__file__).parent.parent.parent / "us_debt_cache.json"
-# News/video: check for new content every 15 mins, keep items for 7 days
-NEWS_CACHE_CHECK_MINUTES = 15  # How often to check for new articles/videos
-NEWS_ITEM_MAX_AGE_DAYS = 7  # Prune items older than this
-FEAR_GREED_CACHE_MINUTES = 15  # Update fear/greed every 15 minutes
-BLOCK_HEIGHT_CACHE_MINUTES = 10  # Update block height every 10 minutes
-US_DEBT_CACHE_HOURS = 24  # Update US debt once per day
-
-# News sources configuration
-NEWS_SOURCES = {
-    "reddit_crypto": {
-        "name": "Reddit r/CryptoCurrency",
-        "url": "https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15",
-        "type": "reddit",
-        "website": "https://www.reddit.com/r/CryptoCurrency",
-    },
-    "reddit_bitcoin": {
-        "name": "Reddit r/Bitcoin",
-        "url": "https://www.reddit.com/r/Bitcoin/hot.json?limit=10",
-        "type": "reddit",
-        "website": "https://www.reddit.com/r/Bitcoin",
-    },
-    "coindesk": {
-        "name": "CoinDesk",
-        "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
-        "type": "rss",
-        "website": "https://www.coindesk.com",
-    },
-    "cointelegraph": {
-        "name": "CoinTelegraph",
-        "url": "https://cointelegraph.com/rss",
-        "type": "rss",
-        "website": "https://cointelegraph.com",
-    },
-    "decrypt": {
-        "name": "Decrypt",
-        "url": "https://decrypt.co/feed",
-        "type": "rss",
-        "website": "https://decrypt.co",
-    },
-    "theblock": {
-        "name": "The Block",
-        "url": "https://www.theblock.co/rss.xml",
-        "type": "rss",
-        "website": "https://www.theblock.co",
-    },
-    "cryptoslate": {
-        "name": "CryptoSlate",
-        "url": "https://cryptoslate.com/feed/",
-        "type": "rss",
-        "website": "https://cryptoslate.com",
-    },
-}
-
-# YouTube video sources - most reputable crypto channels
-VIDEO_SOURCES = {
-    "coin_bureau": {
-        "name": "Coin Bureau",
-        "channel_id": "UCqK_GSMbpiV8spgD3ZGloSw",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw",
-        "website": "https://www.youtube.com/@CoinBureau",
-        "description": "Educational crypto content & analysis",
-    },
-    "benjamin_cowen": {
-        "name": "Benjamin Cowen",
-        "channel_id": "UCRvqjQPSeaWn-uEx-w0XOIg",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCRvqjQPSeaWn-uEx-w0XOIg",
-        "website": "https://www.youtube.com/@intothecryptoverse",
-        "description": "Technical analysis & market cycles",
-    },
-    "altcoin_daily": {
-        "name": "Altcoin Daily",
-        "channel_id": "UCbLhGKVY-bJPcawebgtNfbw",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCbLhGKVY-bJPcawebgtNfbw",
-        "website": "https://www.youtube.com/@AltcoinDaily",
-        "description": "Daily crypto news & updates",
-    },
-    "bankless": {
-        "name": "Bankless",
-        "channel_id": "UCAl9Ld79qaZxp9JzEOwd3aA",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCAl9Ld79qaZxp9JzEOwd3aA",
-        "website": "https://www.youtube.com/@Bankless",
-        "description": "Ethereum & DeFi ecosystem",
-    },
-    "the_defiant": {
-        "name": "The Defiant",
-        "channel_id": "UCL0J4MLEdLP0-UyLu0hCktg",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCL0J4MLEdLP0-UyLu0hCktg",
-        "website": "https://www.youtube.com/@TheDefiant",
-        "description": "DeFi news & interviews",
-    },
-    "crypto_banter": {
-        "name": "Crypto Banter",
-        "channel_id": "UCN9Nj4tjXbVTLYWN0EKly_Q",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCN9Nj4tjXbVTLYWN0EKly_Q",
-        "website": "https://www.youtube.com/@CryptoBanter",
-        "description": "Live crypto shows & trading",
-    },
-}
-
-
-class NewsItem(BaseModel):
-    """Individual news item"""
-    title: str
-    url: str
-    source: str
-    source_name: str
-    published: Optional[str] = None
-    summary: Optional[str] = None
-    thumbnail: Optional[str] = None
-
-
-class VideoItem(BaseModel):
-    """Individual video item from YouTube"""
-    title: str
-    url: str
-    video_id: str
-    source: str
-    source_name: str
-    channel_name: str
-    published: Optional[str] = None
-    thumbnail: Optional[str] = None
-    description: Optional[str] = None
-
-
-class NewsResponse(BaseModel):
-    """News API response"""
-    news: List[NewsItem]
-    sources: List[Dict[str, str]]
-    cached_at: str
-    cache_expires_at: str
-    total_items: int
-
-
-class VideoResponse(BaseModel):
-    """Video API response"""
-    videos: List[VideoItem]
-    sources: List[Dict[str, str]]
-    cached_at: str
-    cache_expires_at: str
-    total_items: int
-
-
-class FearGreedData(BaseModel):
-    """Fear & Greed Index data"""
-    value: int  # 0-100
-    value_classification: str  # "Extreme Fear", "Fear", "Neutral", "Greed", "Extreme Greed"
-    timestamp: str
-    time_until_update: Optional[str] = None
-
-
-class FearGreedResponse(BaseModel):
-    """Fear & Greed API response"""
-    data: FearGreedData
-    cached_at: str
-    cache_expires_at: str
-
-
-class BlockHeightResponse(BaseModel):
-    """BTC block height API response"""
-    height: int
-    timestamp: str
-
-
-class USDebtResponse(BaseModel):
-    """US National Debt API response"""
-    total_debt: float  # Total public debt in dollars
-    debt_per_second: float  # Rate of change per second (for animation)
-    gdp: float  # US GDP in dollars
-    debt_to_gdp_ratio: float  # Debt as percentage of GDP
-    record_date: str  # Date of the debt record
-    cached_at: str
-    cache_expires_at: str
-
-
-class ArticleContentResponse(BaseModel):
-    """Article content extraction response"""
-    url: str
-    title: Optional[str] = None
-    content: Optional[str] = None
-    author: Optional[str] = None
-    date: Optional[str] = None
-    success: bool
-    error: Optional[str] = None
-
-
-class DebtCeilingEvent(BaseModel):
-    """Individual debt ceiling event"""
-    date: str  # ISO format date
-    amount_trillion: Optional[float]  # Amount in trillions (None if suspended)
-    suspended: bool  # True if ceiling was suspended
-    suspension_end: Optional[str]  # When suspension ends (if applicable)
-    note: str  # Description of the event
-    legislation: Optional[str]  # Name of the bill/act
-    political_context: Optional[str]  # Political circumstances and key facts
-    source_url: Optional[str]  # URL to source/reference for this event
-
-
-class DebtCeilingHistoryResponse(BaseModel):
-    """Debt ceiling history API response"""
-    events: List[DebtCeilingEvent]
-    total_events: int
-    last_updated: str  # When this data was last verified
-
-
-def load_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
-    """Load news cache from file.
-
-    Args:
-        for_merge: If True, return cache even if expired (for merging new items)
-    """
-    if not CACHE_FILE.exists():
-        return None
-
-    try:
-        with open(CACHE_FILE, "r") as f:
-            cache = json.load(f)
-
-        # Check if cache needs refresh (15 minutes)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        cache_age = datetime.now() - cached_at
-
-        if for_merge:
-            # For merging, return cache regardless of age
-            return cache
-
-        if cache_age > timedelta(minutes=NEWS_CACHE_CHECK_MINUTES):
-            logger.info(f"News cache needs refresh (age: {cache_age})")
-            return None
-
-        return cache
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.warning(f"Failed to load news cache: {e}")
-        return None
-
-
-def prune_old_items(items: List[Dict], max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS) -> List[Dict]:
-    """Remove items older than max_age_days based on published date."""
-    cutoff = datetime.now() - timedelta(days=max_age_days)
-    pruned = []
-    removed_count = 0
-
-    for item in items:
-        published = item.get("published")
-        if not published:
-            # Keep items without published date (rare edge case)
-            pruned.append(item)
-            continue
-
-        try:
-            # Handle both with and without Z suffix
-            pub_str = published.rstrip("Z")
-            pub_date = datetime.fromisoformat(pub_str)
-
-            if pub_date >= cutoff:
-                pruned.append(item)
-            else:
-                removed_count += 1
-        except (ValueError, TypeError):
-            # If we can't parse date, keep the item
-            pruned.append(item)
-
-    if removed_count > 0:
-        logger.info(f"Pruned {removed_count} items older than {max_age_days} days")
-
-    return pruned
-
-
-def merge_news_items(existing: List[Dict], new_items: List[Dict]) -> List[Dict]:
-    """Merge new items with existing cache. New items go to top, deduped by URL."""
-    # Create set of existing URLs for fast lookup
-    existing_urls = {item.get("url") for item in existing if item.get("url")}
-
-    # Find truly new items
-    truly_new = [item for item in new_items if item.get("url") not in existing_urls]
-
-    if truly_new:
-        logger.info(f"Found {len(truly_new)} new news items to add")
-
-    # New items at top, then existing (already sorted by date)
-    merged = truly_new + existing
-
-    # Sort by published date (most recent first)
-    merged.sort(
-        key=lambda x: x.get("published") or "1970-01-01",
-        reverse=True
-    )
-
-    return merged
-
-
-def save_cache(data: Dict[str, Any]) -> None:
-    """Save news cache to file"""
-    try:
-        with open(CACHE_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-        logger.info("News cache saved")
-    except Exception as e:
-        logger.error(f"Failed to save news cache: {e}")
 
 
 # =============================================================================
@@ -443,109 +166,6 @@ def article_to_news_item(article: NewsArticle) -> Dict[str, Any]:
     }
 
 
-def load_video_cache(for_merge: bool = False) -> Optional[Dict[str, Any]]:
-    """Load video cache from file.
-
-    Args:
-        for_merge: If True, return cache even if expired (for merging new items)
-    """
-    if not VIDEO_CACHE_FILE.exists():
-        return None
-
-    try:
-        with open(VIDEO_CACHE_FILE, "r") as f:
-            cache = json.load(f)
-
-        # Check if cache needs refresh (15 minutes)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        cache_age = datetime.now() - cached_at
-
-        if for_merge:
-            # For merging, return cache regardless of age
-            return cache
-
-        if cache_age > timedelta(minutes=NEWS_CACHE_CHECK_MINUTES):
-            logger.info(f"Video cache needs refresh (age: {cache_age})")
-            return None
-
-        return cache
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.warning(f"Failed to load video cache: {e}")
-        return None
-
-
-def save_video_cache(data: Dict[str, Any]) -> None:
-    """Save video cache to file"""
-    try:
-        with open(VIDEO_CACHE_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-        logger.info("Video cache saved")
-    except Exception as e:
-        logger.error(f"Failed to save video cache: {e}")
-
-
-def load_fear_greed_cache() -> Optional[Dict[str, Any]]:
-    """Load fear/greed cache from file (15 minute cache)"""
-    if not FEAR_GREED_CACHE_FILE.exists():
-        return None
-
-    try:
-        with open(FEAR_GREED_CACHE_FILE, "r") as f:
-            cache = json.load(f)
-
-        # Check if cache is expired (15 minutes)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(minutes=FEAR_GREED_CACHE_MINUTES):
-            logger.info("Fear/Greed cache expired")
-            return None
-
-        return cache
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.warning(f"Failed to load fear/greed cache: {e}")
-        return None
-
-
-def save_fear_greed_cache(data: Dict[str, Any]) -> None:
-    """Save fear/greed cache to file"""
-    try:
-        with open(FEAR_GREED_CACHE_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-        logger.info("Fear/Greed cache saved")
-    except Exception as e:
-        logger.error(f"Failed to save fear/greed cache: {e}")
-
-
-def load_block_height_cache() -> Optional[Dict[str, Any]]:
-    """Load block height cache from file (10 minute cache)"""
-    if not BLOCK_HEIGHT_CACHE_FILE.exists():
-        return None
-
-    try:
-        with open(BLOCK_HEIGHT_CACHE_FILE, "r") as f:
-            cache = json.load(f)
-
-        # Check if cache is expired (10 minutes)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(minutes=BLOCK_HEIGHT_CACHE_MINUTES):
-            logger.info("Block height cache expired")
-            return None
-
-        return cache
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.warning(f"Failed to load block height cache: {e}")
-        return None
-
-
-def save_block_height_cache(data: Dict[str, Any]) -> None:
-    """Save block height cache to file"""
-    try:
-        with open(BLOCK_HEIGHT_CACHE_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-        logger.info("Block height cache saved")
-    except Exception as e:
-        logger.error(f"Failed to save block height cache: {e}")
-
-
 async def fetch_btc_block_height() -> Dict[str, Any]:
     """Fetch current BTC block height from blockchain.info API"""
     try:
@@ -583,37 +203,6 @@ async def fetch_btc_block_height() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error fetching BTC block height: {e}")
         raise HTTPException(status_code=503, detail=f"Block height API error: {str(e)}")
-
-
-def load_us_debt_cache() -> Optional[Dict[str, Any]]:
-    """Load US debt cache from file (24-hour cache)"""
-    if not US_DEBT_CACHE_FILE.exists():
-        return None
-
-    try:
-        with open(US_DEBT_CACHE_FILE, "r") as f:
-            cache = json.load(f)
-
-        # Check if cache is expired (24 hours)
-        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
-        if datetime.now() - cached_at > timedelta(hours=US_DEBT_CACHE_HOURS):
-            logger.info("US debt cache expired")
-            return None
-
-        return cache
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.warning(f"Failed to load US debt cache: {e}")
-        return None
-
-
-def save_us_debt_cache(data: Dict[str, Any]) -> None:
-    """Save US debt cache to file"""
-    try:
-        with open(US_DEBT_CACHE_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-        logger.info("US debt cache saved")
-    except Exception as e:
-        logger.error(f"Failed to save US debt cache: {e}")
 
 
 async def fetch_us_debt() -> Dict[str, Any]:
