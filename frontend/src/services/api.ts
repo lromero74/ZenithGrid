@@ -252,3 +252,25 @@ export const blacklistApi = {
   triggerAIReview: () =>
     api.post<{ status: string; categories: Record<string, number> }>('/blacklist/ai-review', {}, { timeout: 180000 }).then((res) => res.data),
 };
+
+// AI Provider Credentials
+export interface AIProviderStatus {
+  provider: string;
+  has_user_key: boolean;
+  has_system_key: boolean;
+  key_preview: string | null;
+}
+
+export interface AICredentialCreate {
+  provider: string;
+  api_key: string;
+}
+
+export const aiCredentialsApi = {
+  getStatus: () =>
+    api.get<AIProviderStatus[]>('/ai-credentials/status').then((res) => res.data),
+  save: (provider: string, apiKey: string) =>
+    api.post<{ message: string; provider: string }>('/ai-credentials', { provider, api_key: apiKey }).then((res) => res.data),
+  delete: (provider: string) =>
+    api.delete<{ message: string }>(`/ai-credentials/${provider}`).then((res) => res.data),
+};

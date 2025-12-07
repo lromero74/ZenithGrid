@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react'
 import { User, Lock, CheckCircle, AlertCircle } from 'lucide-react'
 import { AccountsManagement } from '../components/AccountsManagement'
 import { AddAccountModal } from '../components/AddAccountModal'
+import { AIProvidersManager } from '../components/AIProvidersManager'
 import { BlacklistManager } from '../components/BlacklistManager'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -178,6 +179,9 @@ export default function Settings() {
 
       {/* Accounts Management Section */}
       <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
+
+      {/* AI Providers Section */}
+      <AIProvidersManager />
 
       {/* Coin Blacklist Section */}
       <BlacklistManager />
