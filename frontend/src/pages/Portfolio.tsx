@@ -6,15 +6,7 @@ import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { useAccount, getChainName } from '../contexts/AccountContext'
-
-interface CandleData {
-  time: number
-  open: number
-  high: number
-  low: number
-  close: number
-  volume: number
-}
+import type { CandleData } from '../utils/indicators/types'
 
 interface Holding {
   asset: string
