@@ -225,3 +225,58 @@ export interface OrderHistory {
   order_id: string | null;
   error_message: string | null;
 }
+
+// Market Sentiment Types
+export interface FearGreedData {
+  value: number
+  value_classification: string
+  timestamp: string
+  time_until_update: string | null
+}
+
+export interface FearGreedResponse {
+  data: FearGreedData
+  cached_at: string
+  cache_expires_at: string
+}
+
+export interface BlockHeightResponse {
+  height: number
+  timestamp: string
+}
+
+export interface USDebtResponse {
+  total_debt: number
+  debt_per_second: number
+  gdp: number
+  debt_to_gdp_ratio: number
+  record_date: string
+  cached_at: string
+  cache_expires_at: string
+}
+
+export interface HalvingCountdown {
+  blocksRemaining: number
+  estimatedDate: Date
+  daysRemaining: number
+  hoursRemaining: number
+  minutesRemaining: number
+  percentComplete: number
+}
+
+export interface DebtCeilingEvent {
+  date: string
+  amount_trillion: number | null
+  suspended: boolean
+  suspension_end: string | null
+  note: string
+  legislation: string | null
+  political_context: string | null
+  source_url: string | null
+}
+
+export interface DebtCeilingHistoryResponse {
+  events: DebtCeilingEvent[]
+  total_events: number
+  last_updated: string
+}
