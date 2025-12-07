@@ -33,6 +33,29 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
 
   return (
     <div className="space-y-6">
+      {/* Deal Management Settings */}
+      <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+        <h3 className="text-lg font-semibold text-white mb-4">Deal Management</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Max Concurrent Deals
+            </label>
+            <input
+              type="number"
+              value={config.max_concurrent_deals || 1}
+              onChange={(e) => updateConfig('max_concurrent_deals', parseInt(e.target.value))}
+              min="1"
+              max="20"
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Maximum positions that can be open at the same time
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Base Order Settings */}
       <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
         <h3 className="text-lg font-semibold text-white mb-4">Base Order</h3>
@@ -347,6 +370,9 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
       <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
         <h4 className="text-sm font-semibold text-slate-300 mb-2">Strategy Summary</h4>
         <div className="text-xs text-slate-400 space-y-1">
+          <p>
+            🎯 <strong>Max Positions:</strong> {config.max_concurrent_deals || 1}
+          </p>
           <p>
             📥 <strong>Base Order:</strong>{' '}
             {baseOrderConditions.length > 0
