@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import PhaseConditionSelector, { PhaseCondition, ConditionType } from './PhaseConditionSelector'
 
 interface ThreeCommasStyleFormProps {
@@ -19,8 +18,6 @@ function normalizeConditions(conditions: any[]): PhaseCondition[] {
 }
 
 function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false)
-
   const updateConfig = (key: string, value: any) => {
     onChange({ ...config, [key]: value })
   }
@@ -197,17 +194,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
           onLogicChange={(logic) => updateConfig('safety_order_logic', logic)}
         />
 
-        {/* Advanced Settings Toggle */}
-        <button
-          type="button"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="mt-4 text-blue-400 hover:text-blue-300 text-sm transition-colors"
-        >
-          {showAdvanced ? '− Hide' : '+ Show'} Advanced Settings (Volume/Step Scaling)
-        </button>
-
-        {showAdvanced && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-600">
+        {/* Volume/Step Scaling - always visible like 3Commas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-600">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
                 Safety Order Volume Scale
@@ -246,7 +234,6 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               </p>
             </div>
           </div>
-        )}
       </div>
 
       {/* Take Profit Settings */}
