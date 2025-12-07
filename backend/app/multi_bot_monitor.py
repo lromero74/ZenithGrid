@@ -1082,6 +1082,8 @@ class MultiBotMonitor:
             max_concurrent = bot.strategy_config.get("max_concurrent_positions", 5)
             if len(open_positions) >= max_concurrent:
                 logger.info(f"  At max positions ({len(open_positions)}/{max_concurrent}), skipping scan")
+                # Commit any exit signal logs before returning
+                await db.commit()
                 return results
 
             # Step 4: Scan for new opportunities
@@ -1094,6 +1096,9 @@ class MultiBotMonitor:
                 max_coins=max_scan_coins,
                 bot_id=bot.id  # Pass bot_id for scanner logging
             )
+
+            # Commit scanner logs immediately after scan completes
+            await db.commit()
 
             results["scanned"] = len(opportunities)
             results["opportunities"] = len([o for o in opportunities if o.get("pattern")])
