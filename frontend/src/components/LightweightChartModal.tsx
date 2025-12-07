@@ -10,21 +10,12 @@ import {
   calculateMACD,
   calculateBollingerBands,
   calculateStochastic,
+  calculateHeikinAshi,
 } from '../utils/indicators/calculations'
 import type { CandleData, IndicatorConfig } from '../utils/indicators/types'
 import { AVAILABLE_INDICATORS } from '../utils/indicators/definitions'
 import { API_BASE_URL } from '../config/api'
-
-// Fee adjustment for profit targets
-// Coinbase Advanced Trade taker fee is ~0.6% (0.006)
-// To achieve X% NET profit after sell fees: gross_target = (1 + X%) / (1 - sell_fee)
-const SELL_FEE_RATE = 0.006 // 0.6% Coinbase taker fee
-
-// Helper to calculate fee-adjusted profit target multiplier
-const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
-  const netMultiplier = 1 + (desiredNetProfitPercent / 100)
-  return netMultiplier / (1 - SELL_FEE_RATE)
-}
+import { getFeeAdjustedProfitMultiplier } from './positions/positionUtils'
 
 interface LightweightChartModalProps {
   isOpen: boolean
@@ -841,34 +832,6 @@ export default function LightweightChartModal({
     }
 
     mainSeriesRef.current.setMarkers(markers)
-  }
-
-  // Calculate Heikin-Ashi candles
-  const calculateHeikinAshi = (candles: CandleData[]): CandleData[] => {
-    if (candles.length === 0) return []
-
-    const haCandles: CandleData[] = []
-    let prevHA = { ...candles[0] }
-
-    for (const candle of candles) {
-      const haClose = (candle.open + candle.high + candle.low + candle.close) / 4
-      const haOpen = (prevHA.open + prevHA.close) / 2
-      const haHigh = Math.max(candle.high, haOpen, haClose)
-      const haLow = Math.min(candle.low, haOpen, haClose)
-
-      const haCandle = {
-        time: candle.time,
-        open: haOpen,
-        high: haHigh,
-        low: haLow,
-        close: haClose,
-      }
-
-      haCandles.push(haCandle)
-      prevHA = haCandle
-    }
-
-    return haCandles
   }
 
   // Filter indicators by search
