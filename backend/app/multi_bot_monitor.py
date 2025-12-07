@@ -844,6 +844,10 @@ class MultiBotMonitor:
                 # Use candles_by_timeframe from pair_data if available (supports multiple timeframes for BB%)
                 candles_by_timeframe = pair_data.get("candles_by_timeframe", {"FIVE_MINUTE": candles})
             else:
+                # Initialize candles variables for later use
+                candles = None
+                candles_by_timeframe = {}
+
                 # Fetch candles first to get reliable price
                 temp_candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
                 if temp_candles and len(temp_candles) > 0:
