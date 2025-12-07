@@ -211,6 +211,16 @@ class MultiBotMonitor:
             # Coinbase returns newest first, reverse to get oldest first
             candles = list(reversed(candles))
 
+            # Gap-fill sparse candles (BTC pairs often have low volume)
+            # This ensures indicators have continuous data like charting platforms
+            if candles and len(candles) > 0:
+                original_count = len(candles)
+                candles = fill_candle_gaps(candles, granularity_seconds, lookback_candles)
+                if len(candles) > original_count:
+                    logger.info(
+                        f"  📊 Gap-filled {product_id} {granularity}: {original_count}→{len(candles)} candles"
+                    )
+
             # Cache the result
             self._candle_cache[cache_key] = (now, candles)
 
