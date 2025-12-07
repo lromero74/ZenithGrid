@@ -638,7 +638,7 @@ class IndicatorBasedStrategy(TradingStrategy):
             return True, safety_size, f"Safety order #{next_order_number}"
 
     async def should_sell(
-        self, signal_data: Dict[str, Any], position: Any, current_price: float
+        self, signal_data: Dict[str, Any], position: Any, current_price: float, market_context: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str]:
         """Determine if we should sell based on signal data and TP/SL settings."""
         take_profit_signal = signal_data.get("take_profit_signal", False)
