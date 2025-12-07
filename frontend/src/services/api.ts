@@ -7,6 +7,7 @@ import type {
   DashboardStats,
   Settings,
   Balances,
+  AggregateValue,
   Bot,
   BotCreate,
   BotStats,
@@ -112,6 +113,7 @@ export const monitorApi = {
 
 export const accountApi = {
   getBalances: () => api.get<Balances>('/account/balances').then((res) => res.data),
+  getAggregateValue: () => api.get<AggregateValue>('/account/aggregate-value').then((res) => res.data),
 };
 
 export const statusApi = {

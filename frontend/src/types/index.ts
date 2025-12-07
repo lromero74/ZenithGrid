@@ -140,6 +140,12 @@ export interface Balances {
   total_usd_value: number;
 }
 
+export interface AggregateValue {
+  aggregate_btc_value: number;
+  aggregate_usd_value: number;
+  btc_usd_price: number;
+}
+
 export interface StrategyParameter {
   name: string;
   display_name?: string;

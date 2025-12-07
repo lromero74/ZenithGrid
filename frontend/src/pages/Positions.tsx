@@ -21,6 +21,7 @@ import LightweightChartModal from '../components/LightweightChartModal'
 import { LimitCloseModal } from '../components/LimitCloseModal'
 import { SlippageWarningModal } from '../components/SlippageWarningModal'
 import { EditPositionSettingsModal } from '../components/EditPositionSettingsModal'
+import { AddFundsModal } from '../components/AddFundsModal'
 import CoinIcon from '../components/CoinIcon'
 import {
   getQuoteCurrency,
@@ -36,8 +37,7 @@ export default function Positions() {
   const { selectedAccount } = useAccount()
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null)
   const [showAddFundsModal, setShowAddFundsModal] = useState(false)
-  const [addFundsAmount, setAddFundsAmount] = useState('')
-  const [addFundsPositionId, setAddFundsPositionId] = useState<number | null>(null)
+  const [addFundsPosition, setAddFundsPosition] = useState<Position | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
   const [showLogsModal, setShowLogsModal] = useState(false)
@@ -299,35 +299,15 @@ export default function Positions() {
     }
   }
 
-  const openAddFundsModal = (positionId: number, position: Position) => {
-    const remaining = position.max_quote_allowed - position.total_quote_spent
-    setAddFundsPositionId(positionId)
-    setAddFundsAmount(remaining.toFixed(8))
+  const openAddFundsModal = (position: Position) => {
+    setAddFundsPosition(position)
     setShowAddFundsModal(true)
   }
 
-  const handleAddFunds = async () => {
-    if (!addFundsPositionId) return
-
-    const amount = parseFloat(addFundsAmount)
-    if (isNaN(amount) || amount <= 0) {
-      alert('Please enter a valid amount')
-      return
-    }
-
-    setIsProcessing(true)
-    try {
-      const result = await positionsApi.addFunds(addFundsPositionId, amount)
-      setShowAddFundsModal(false)
-      setAddFundsAmount('')
-      // Refetch positions instead of full page reload
-      refetchPositions()
-      alert(`Funds added successfully!\nAcquired: ${result.eth_acquired.toFixed(6)} ETH at price ${result.price.toFixed(8)}`)
-    } catch (err: any) {
-      alert(`Error adding funds: ${err.response?.data?.detail || err.message}`)
-    } finally {
-      setIsProcessing(false)
-    }
+  const handleAddFundsSuccess = () => {
+    refetchPositions()
+    setShowAddFundsModal(false)
+    setAddFundsPosition(null)
   }
 
   const openNotesModal = (position: Position) => {
@@ -1098,7 +1078,7 @@ export default function Positions() {
                         className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
                         onClick={(e) => {
                           e.stopPropagation()
-                          openAddFundsModal(position.id, position)
+                          openAddFundsModal(position)
                         }}
                       >
                         <span>💰</span> Add funds
@@ -1201,59 +1181,16 @@ export default function Positions() {
       )}
 
       {/* Add Funds Modal */}
-      {showAddFundsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg w-full max-w-md">
-            <div className="p-6 border-b border-slate-700">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white">Add Funds to Position</h3>
-                <button
-                  onClick={() => setShowAddFundsModal(false)}
-                  className="text-slate-400 hover:text-white transition-colors"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Amount (BTC)
-                </label>
-                <input
-                  type="number"
-                  step="0.00000001"
-                  value={addFundsAmount}
-                  onChange={(e) => setAddFundsAmount(e.target.value)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.00000000"
-                  disabled={isProcessing}
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  This will execute a manual safety order at current market price
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowAddFundsModal(false)}
-                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-2 sm:px-4 py-2 sm:py-3 rounded-lg font-medium transition-colors"
-                  disabled={isProcessing}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddFunds}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-2 sm:px-4 py-2 sm:py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? 'Adding...' : 'Add Funds'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {addFundsPosition && (
+        <AddFundsModal
+          position={addFundsPosition}
+          isOpen={showAddFundsModal}
+          onClose={() => {
+            setShowAddFundsModal(false)
+            setAddFundsPosition(null)
+          }}
+          onSuccess={handleAddFundsSuccess}
+        />
       )}
 
       {/* Position AI Logs Modal */}
