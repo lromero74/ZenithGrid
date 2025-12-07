@@ -115,8 +115,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     const quoteSymbol = event.product_id.split('-')[1]
     const amount = `${event.base_amount.toFixed(8)} ${baseSymbol}`
     const price = `${event.price.toFixed(8)} ${quoteSymbol}`
-    const profit = event.profit !== undefined
-      ? `${event.profit >= 0 ? '+' : ''}${event.profit.toFixed(8)} ${quoteSymbol} (${event.profit_percentage?.toFixed(2) || 0}%)`
+    const profit = event.profit != null
+      ? `${event.profit >= 0 ? '+' : ''}${event.profit.toFixed(8)} ${quoteSymbol} (${event.profit_percentage?.toFixed(2) ?? 0}%)`
       : undefined
 
     // Add visual toast
