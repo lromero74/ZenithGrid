@@ -5,6 +5,25 @@ interface ThreeCommasStyleFormProps {
   onChange: (config: Record<string, any>) => void
 }
 
+// Safe number parsing that returns undefined for invalid input (instead of NaN)
+const safeParseFloat = (value: string): number | undefined => {
+  const parsed = parseFloat(value)
+  return isNaN(parsed) ? undefined : parsed
+}
+
+const safeParseInt = (value: string): number | undefined => {
+  const parsed = parseInt(value, 10)
+  return isNaN(parsed) ? undefined : parsed
+}
+
+// Get a number value with fallback, handling NaN properly
+const getNumericValue = (value: any, fallback: number): number => {
+  if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
+    return fallback
+  }
+  return Number(value)
+}
+
 // Normalize conditions from DB format (indicator) to frontend format (type)
 // DB stores: { indicator: "ai_buy", ... }
 // Frontend expects: { type: "ai_buy", ... }
@@ -43,8 +62,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
             </label>
             <input
               type="number"
-              value={config.max_concurrent_deals || 1}
-              onChange={(e) => updateConfig('max_concurrent_deals', parseInt(e.target.value))}
+              value={getNumericValue(config.max_concurrent_deals, 1)}
+              onChange={(e) => updateConfig('max_concurrent_deals', safeParseInt(e.target.value) ?? 1)}
               min="1"
               max="20"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
@@ -82,8 +101,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               </label>
               <input
                 type="number"
-                value={config.base_order_percentage || 10}
-                onChange={(e) => updateConfig('base_order_percentage', parseFloat(e.target.value))}
+                value={getNumericValue(config.base_order_percentage, 10)}
+                onChange={(e) => updateConfig('base_order_percentage', safeParseFloat(e.target.value) ?? 10)}
                 min="1"
                 max="100"
                 step="0.1"
@@ -97,8 +116,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               </label>
               <input
                 type="number"
-                value={config.base_order_btc || 0.001}
-                onChange={(e) => updateConfig('base_order_btc', parseFloat(e.target.value))}
+                value={getNumericValue(config.base_order_btc, 0.001)}
+                onChange={(e) => updateConfig('base_order_btc', safeParseFloat(e.target.value) ?? 0.001)}
                 min="0.0001"
                 max="10"
                 step="0.0001"
@@ -131,8 +150,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
             </label>
             <input
               type="number"
-              value={config.max_safety_orders || 5}
-              onChange={(e) => updateConfig('max_safety_orders', parseInt(e.target.value))}
+              value={getNumericValue(config.max_safety_orders, 5)}
+              onChange={(e) => updateConfig('max_safety_orders', safeParseInt(e.target.value) ?? 5)}
               min="0"
               max="20"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
@@ -160,9 +179,9 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               </label>
               <input
                 type="number"
-                value={config.safety_order_percentage || 50}
+                value={getNumericValue(config.safety_order_percentage, 50)}
                 onChange={(e) =>
-                  updateConfig('safety_order_percentage', parseFloat(e.target.value))
+                  updateConfig('safety_order_percentage', safeParseFloat(e.target.value) ?? 50)
                 }
                 min="10"
                 max="500"
@@ -177,8 +196,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               </label>
               <input
                 type="number"
-                value={config.safety_order_btc || 0.0005}
-                onChange={(e) => updateConfig('safety_order_btc', parseFloat(e.target.value))}
+                value={getNumericValue(config.safety_order_btc, 0.0005)}
+                onChange={(e) => updateConfig('safety_order_btc', safeParseFloat(e.target.value) ?? 0.0005)}
                 min="0.0001"
                 max="10"
                 step="0.0001"
@@ -193,8 +212,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
             </label>
             <input
               type="number"
-              value={config.price_deviation || 2.0}
-              onChange={(e) => updateConfig('price_deviation', parseFloat(e.target.value))}
+              value={getNumericValue(config.price_deviation, 2.0)}
+              onChange={(e) => updateConfig('price_deviation', safeParseFloat(e.target.value) ?? 2.0)}
               min="0.1"
               max="20"
               step="0.1"
@@ -225,9 +244,9 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               </label>
               <input
                 type="number"
-                value={config.safety_order_volume_scale || 1.0}
+                value={getNumericValue(config.safety_order_volume_scale, 1.0)}
                 onChange={(e) =>
-                  updateConfig('safety_order_volume_scale', parseFloat(e.target.value))
+                  updateConfig('safety_order_volume_scale', safeParseFloat(e.target.value) ?? 1.0)
                 }
                 min="1.0"
                 max="5.0"
@@ -243,9 +262,9 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               </label>
               <input
                 type="number"
-                value={config.safety_order_step_scale || 1.0}
+                value={getNumericValue(config.safety_order_step_scale, 1.0)}
                 onChange={(e) =>
-                  updateConfig('safety_order_step_scale', parseFloat(e.target.value))
+                  updateConfig('safety_order_step_scale', safeParseFloat(e.target.value) ?? 1.0)
                 }
                 min="1.0"
                 max="5.0"
@@ -270,8 +289,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
             </label>
             <input
               type="number"
-              value={config.take_profit_percentage || 3.0}
-              onChange={(e) => updateConfig('take_profit_percentage', parseFloat(e.target.value))}
+              value={getNumericValue(config.take_profit_percentage, 3.0)}
+              onChange={(e) => updateConfig('take_profit_percentage', safeParseFloat(e.target.value) ?? 3.0)}
               min="0.1"
               max="50"
               step="0.1"
@@ -288,8 +307,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
             </label>
             <input
               type="number"
-              value={config.min_profit_for_conditions ?? 0.0}
-              onChange={(e) => updateConfig('min_profit_for_conditions', parseFloat(e.target.value))}
+              value={getNumericValue(config.min_profit_for_conditions, 0.0)}
+              onChange={(e) => updateConfig('min_profit_for_conditions', safeParseFloat(e.target.value) ?? 0.0)}
               min="-50"
               max="50"
               step="0.1"
@@ -313,9 +332,9 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
             {config.stop_loss_enabled && (
               <input
                 type="number"
-                value={config.stop_loss_percentage || -10}
+                value={getNumericValue(config.stop_loss_percentage, -10)}
                 onChange={(e) =>
-                  updateConfig('stop_loss_percentage', parseFloat(e.target.value))
+                  updateConfig('stop_loss_percentage', safeParseFloat(e.target.value) ?? -10)
                 }
                 min="-50"
                 max="-0.1"
@@ -340,9 +359,9 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
                 <label className="block text-sm text-slate-400 mb-1">Trailing Deviation %</label>
                 <input
                   type="number"
-                  value={config.trailing_deviation || 1.0}
+                  value={getNumericValue(config.trailing_deviation, 1.0)}
                   onChange={(e) =>
-                    updateConfig('trailing_deviation', parseFloat(e.target.value))
+                    updateConfig('trailing_deviation', safeParseFloat(e.target.value) ?? 1.0)
                   }
                   min="0.1"
                   max="10"
