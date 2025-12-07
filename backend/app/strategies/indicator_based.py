@@ -589,7 +589,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         return entry_price * (1.0 - total_deviation / 100.0)
 
     async def should_buy(
-        self, signal_data: Dict[str, Any], position: Optional[Any], balance: float
+        self, signal_data: Dict[str, Any], position: Optional[Any], balance: float, **kwargs
     ) -> Tuple[bool, float, str]:
         """Determine if we should buy based on signal data."""
         current_price = signal_data.get("price", 0)
