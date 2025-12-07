@@ -55,8 +55,12 @@ def generate_jwt(key_name: str, private_key: str, request_method: str, request_p
         private_key.encode("utf-8"), password=None, backend=default_backend()
     )
 
+    # Strip query parameters from path for JWT signing
+    # Per Coinbase CDP spec, query params should NOT be in the signed URI
+    path_without_query = request_path.split("?")[0]
+
     # Create JWT payload - URI must include hostname per Coinbase spec
-    uri = f"{request_method} api.coinbase.com{request_path}"
+    uri = f"{request_method} api.coinbase.com{path_without_query}"
     current_time = int(time.time())
 
     payload = {
