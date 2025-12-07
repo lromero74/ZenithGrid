@@ -612,9 +612,12 @@ class IndicatorBasedStrategy(TradingStrategy):
             if max_safety == 0:
                 return False, 0.0, "Safety orders disabled"
 
-            safety_orders_count = position.trade_count - 1 if hasattr(position, "trade_count") else 0
+            # Count buy trades to determine safety orders completed
+            # DCA orders = total buys - 1 (excluding the initial base order)
+            buy_trades = [t for t in position.trades if t.side == "buy"]
+            safety_orders_count = max(0, len(buy_trades) - 1)  # -1 for base order, min 0
             if safety_orders_count >= max_safety:
-                return False, 0.0, f"Max safety orders reached ({max_safety})"
+                return False, 0.0, f"Max safety orders reached ({safety_orders_count}/{max_safety})"
 
             next_order_number = safety_orders_count + 1
             entry_price = position.average_buy_price
