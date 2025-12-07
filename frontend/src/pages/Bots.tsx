@@ -23,6 +23,62 @@ import {
   isParameterVisible,
 } from '../components/bots'
 
+// Helper function to check if a bot uses AI indicators in its conditions
+function botUsesAIIndicators(bot: Bot): boolean {
+  // Check legacy ai_autonomous strategy type
+  if (bot.strategy_type === 'ai_autonomous') return true
+
+  // Check for AI indicators in strategy_config conditions
+  const config = bot.strategy_config
+  if (!config) return false
+
+  // Check all condition arrays for ai_buy or ai_sell
+  const conditionArrays = [
+    config.base_order_conditions,
+    config.safety_order_conditions,
+    config.take_profit_conditions,
+  ]
+
+  for (const conditions of conditionArrays) {
+    if (Array.isArray(conditions)) {
+      for (const cond of conditions) {
+        if (cond.type === 'ai_buy' || cond.type === 'ai_sell' ||
+            cond.indicator === 'ai_buy' || cond.indicator === 'ai_sell') {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+// Helper function to check if a bot uses Bull Flag indicator in its conditions
+function botUsesBullFlagIndicator(bot: Bot): boolean {
+  // Check legacy bull_flag strategy type
+  if (bot.strategy_type === 'bull_flag') return true
+
+  // Check for bull_flag indicator in strategy_config conditions
+  const config = bot.strategy_config
+  if (!config) return false
+
+  const conditionArrays = [
+    config.base_order_conditions,
+    config.safety_order_conditions,
+    config.take_profit_conditions,
+  ]
+
+  for (const conditions of conditionArrays) {
+    if (Array.isArray(conditions)) {
+      for (const cond of conditions) {
+        if (cond.type === 'bull_flag' || cond.indicator === 'bull_flag') {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
 function Bots() {
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -912,7 +968,7 @@ function Bots() {
                       {/* Actions */}
                       <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <div className="flex items-center justify-center gap-2">
-                          {bot.strategy_type === 'ai_autonomous' && (
+                          {botUsesAIIndicators(bot) && (
                             <button
                               onClick={() => setAiLogsBotId(bot.id)}
                               className="p-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded transition-colors"
@@ -921,7 +977,7 @@ function Bots() {
                               <Brain className="w-4 h-4" />
                             </button>
                           )}
-                          {bot.strategy_type === 'bull_flag' && (
+                          {botUsesBullFlagIndicator(bot) && (
                             <button
                               onClick={() => setScannerLogsBotId(bot.id)}
                               className="p-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded transition-colors"

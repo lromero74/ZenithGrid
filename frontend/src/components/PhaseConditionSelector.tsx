@@ -10,6 +10,10 @@ export type ConditionType =
   | 'price_change'
   | 'stochastic'
   | 'volume'
+  // Aggregate indicators (return 0 or 1)
+  | 'ai_buy'
+  | 'ai_sell'
+  | 'bull_flag'
 
 export type Operator = 'greater_than' | 'less_than' | 'crossing_above' | 'crossing_below'
 
@@ -48,7 +52,7 @@ interface PhaseConditionSelectorProps {
 }
 
 // Available condition types for each phase
-const CONDITION_TYPES: Record<ConditionType, { label: string; description: string }> = {
+const CONDITION_TYPES: Record<ConditionType, { label: string; description: string; isAggregate?: boolean }> = {
   rsi: {
     label: 'RSI (Relative Strength Index)',
     description: 'Momentum oscillator (0-100). Oversold < 30, Overbought > 70',
@@ -80,6 +84,22 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
   volume: {
     label: 'Volume',
     description: 'Trading volume threshold',
+  },
+  // Aggregate indicators (return 0 or 1)
+  ai_buy: {
+    label: 'AI Buy Signal',
+    description: 'Multi-timeframe confluence analysis. Returns 1 when buy conditions align.',
+    isAggregate: true,
+  },
+  ai_sell: {
+    label: 'AI Sell Signal',
+    description: 'Multi-timeframe confluence analysis. Returns 1 when sell conditions align.',
+    isAggregate: true,
+  },
+  bull_flag: {
+    label: 'Bull Flag Pattern',
+    description: 'Technical pattern detection. Returns 1 when bull flag is identified.',
+    isAggregate: true,
   },
 }
 
@@ -178,6 +198,13 @@ function PhaseConditionSelector({
             case 'volume':
               newCondition.operator = 'greater_than'
               newCondition.value = 1000000
+              break
+            // Aggregate indicators (return 0 or 1, compare to 1 for "is active")
+            case 'ai_buy':
+            case 'ai_sell':
+            case 'bull_flag':
+              newCondition.operator = 'greater_than'
+              newCondition.value = 0  // > 0 means signal is active (equals 1)
               break
           }
 
@@ -471,6 +498,24 @@ function PhaseConditionSelector({
             />
           </div>
         )
+
+      // Aggregate indicators (return 0 or 1)
+      case 'ai_buy':
+      case 'ai_sell':
+      case 'bull_flag':
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-300">
+              {condition.type === 'ai_buy' ? 'AI Buy Signal' :
+               condition.type === 'ai_sell' ? 'AI Sell Signal' :
+               'Bull Flag Pattern'}
+            </span>
+            <span className="text-sm text-green-400 font-medium">= Active (1)</span>
+            <span className="text-xs text-slate-500 ml-2">
+              (Triggers when multi-timeframe analysis signals {condition.type === 'ai_sell' ? 'sell' : 'buy'})
+            </span>
+          </div>
+        )
     }
   }
 
@@ -495,6 +540,13 @@ function PhaseConditionSelector({
         return `[${tf}] Price Change ${op} ${condition.value}%`
       case 'volume':
         return `[${tf}] Volume ${op} ${condition.value}`
+      // Aggregate indicators
+      case 'ai_buy':
+        return `[${tf}] AI Buy Signal = Active`
+      case 'ai_sell':
+        return `[${tf}] AI Sell Signal = Active`
+      case 'bull_flag':
+        return `[${tf}] Bull Flag Pattern = Active`
       default:
         return 'Unknown condition'
     }

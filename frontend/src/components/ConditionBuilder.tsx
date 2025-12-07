@@ -24,6 +24,10 @@ export type IndicatorType =
   | 'stochastic_k'
   | 'stochastic_d'
   | 'volume'
+  // Aggregate indicators (return 0 or 1)
+  | 'ai_buy'
+  | 'ai_sell'
+  | 'bull_flag'
 
 export type LogicOperator = 'and' | 'or'
 
@@ -52,7 +56,7 @@ interface ConditionBuilderProps {
 }
 
 // Indicator metadata
-const INDICATORS: Record<IndicatorType, { label: string; params: string[] }> = {
+const INDICATORS: Record<IndicatorType, { label: string; params: string[]; isAggregate?: boolean; description?: string }> = {
   price: { label: 'Price', params: [] },
   volume: { label: 'Volume', params: [] },
   rsi: { label: 'RSI', params: ['period'] },
@@ -66,6 +70,25 @@ const INDICATORS: Record<IndicatorType, { label: string; params: string[] }> = {
   bollinger_lower: { label: 'Bollinger Lower', params: ['period', 'std_dev'] },
   stochastic_k: { label: 'Stochastic %K', params: ['k_period', 'd_period'] },
   stochastic_d: { label: 'Stochastic %D', params: ['k_period', 'd_period'] },
+  // Aggregate indicators (return 0 or 1)
+  ai_buy: {
+    label: 'AI Buy Signal',
+    params: [],
+    isAggregate: true,
+    description: 'Multi-timeframe confluence buy signal (returns 0 or 1)'
+  },
+  ai_sell: {
+    label: 'AI Sell Signal',
+    params: [],
+    isAggregate: true,
+    description: 'Multi-timeframe confluence sell signal (returns 0 or 1)'
+  },
+  bull_flag: {
+    label: 'Bull Flag Pattern',
+    params: [],
+    isAggregate: true,
+    description: 'Bull flag pattern detection (returns 0 or 1)'
+  },
 }
 
 const OPERATORS: Record<ComparisonOperator, string> = {

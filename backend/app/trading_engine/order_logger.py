@@ -17,6 +17,33 @@ from app.models import AIBotLog, Bot, OrderHistory, Position
 logger = logging.getLogger(__name__)
 
 
+def _bot_uses_ai_indicators(bot: Bot) -> bool:
+    """Check if bot uses AI indicators in its conditions."""
+    # Legacy support for ai_autonomous strategy type
+    if bot.strategy_type == "ai_autonomous":
+        return True
+
+    # Check for AI indicators in strategy_config conditions
+    config = bot.strategy_config
+    if not config:
+        return False
+
+    # Check all condition arrays for ai_buy or ai_sell
+    condition_arrays = [
+        config.get("base_order_conditions", []),
+        config.get("safety_order_conditions", []),
+        config.get("take_profit_conditions", []),
+    ]
+
+    for conditions in condition_arrays:
+        if isinstance(conditions, list):
+            for cond in conditions:
+                indicator = cond.get("type") or cond.get("indicator")
+                if indicator in ("ai_buy", "ai_sell"):
+                    return True
+    return False
+
+
 async def save_ai_log(
     db: AsyncSession,
     bot: Bot,
@@ -26,9 +53,9 @@ async def save_ai_log(
     current_price: float,
     position: Optional[Position],
 ):
-    """Save AI bot reasoning log if this is an AI autonomous bot"""
-    # Only save logs for AI autonomous strategy
-    if bot.strategy_type != "ai_autonomous":
+    """Save AI bot reasoning log if this bot uses AI indicators"""
+    # Only save logs for bots using AI indicators
+    if not _bot_uses_ai_indicators(bot):
         return
 
     # Extract AI thinking/reasoning from signal_data

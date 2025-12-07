@@ -160,14 +160,7 @@ class StrategyRegistry:
 # Import all strategy implementations to trigger registration
 # Must be after StrategyRegistry class definition for decorators to work
 from app.strategies import (  # noqa: E402
-    advanced_dca,
-    ai_autonomous,
-    bollinger,
-    bull_flag,
-    conditional_dca,
-    macd_dca,
-    rsi,
-    simple_dca,
+    indicator_based,  # Unified strategy - replaces all legacy strategies
     # Arbitrage strategies
     spatial_arbitrage,
     triangular_arbitrage,
@@ -180,14 +173,7 @@ __all__ = [
     "StrategyParameter",
     "StrategyRegistry",
     # Strategy implementations (imported for registration)
-    "advanced_dca",
-    "ai_autonomous",
-    "bollinger",
-    "bull_flag",
-    "conditional_dca",
-    "macd_dca",
-    "rsi",
-    "simple_dca",
+    "indicator_based",  # Unified strategy
     # Arbitrage strategies
     "spatial_arbitrage",
     "triangular_arbitrage",

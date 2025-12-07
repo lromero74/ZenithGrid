@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Layers, Wallet, History, Newspaper, LogOut, AlertTriangle, X } from 'lucide-react'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X } from 'lucide-react'
 import { positionsApi } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
 import { AddAccountModal } from './components/AddAccountModal'
@@ -22,7 +22,6 @@ const Positions = lazy(() => import('./pages/Positions'))
 const ClosedPositions = lazy(() => import('./pages/ClosedPositions'))
 const Bots = lazy(() => import('./pages/Bots'))
 const Charts = lazy(() => import('./pages/Charts'))
-const Strategies = lazy(() => import('./pages/Strategies'))
 const Portfolio = lazy(() => import('./pages/Portfolio'))
 const News = lazy(() => import('./pages/News'))
 
@@ -343,19 +342,6 @@ function AppContent() {
               </div>
             </Link>
             <Link
-              to="/strategies"
-              className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
-                location.pathname === '/strategies'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <Layers className="w-4 h-4" />
-                <span className="hidden sm:inline">Strategies</span>
-              </div>
-            </Link>
-            <Link
               to="/settings"
               className={`px-3 sm:px-4 py-3 font-medium transition-colors text-sm sm:text-base ${
                 location.pathname === '/settings'
@@ -387,7 +373,6 @@ function AppContent() {
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/news" element={<News />} />
             <Route path="/charts" element={<Charts />} />
-            <Route path="/strategies" element={<Strategies />} />
             <Route path="/settings" element={<Settings />} />
             {/* Redirect unknown routes to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />

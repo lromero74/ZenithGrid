@@ -34,6 +34,7 @@ class ComparisonOperator(str, Enum):
 class IndicatorType(str, Enum):
     """Available indicators for conditions"""
 
+    # Traditional indicators
     RSI = "rsi"
     MACD = "macd"
     MACD_SIGNAL = "macd_signal"
@@ -47,6 +48,11 @@ class IndicatorType(str, Enum):
     STOCHASTIC_K = "stochastic_k"
     STOCHASTIC_D = "stochastic_d"
     VOLUME = "volume"
+
+    # Aggregate indicators (return 0 or 1)
+    AI_BUY = "ai_buy"  # Multi-timeframe confluence buy signal
+    AI_SELL = "ai_sell"  # Multi-timeframe confluence sell signal
+    BULL_FLAG = "bull_flag"  # Bull flag pattern detection
 
 
 class LogicOperator(str, Enum):
@@ -309,5 +315,18 @@ class ConditionEvaluator:
 
         if indicator_type == IndicatorType.VOLUME:
             return indicators.get("volume")
+
+        # Aggregate indicators (return 0 or 1)
+        if indicator_type == IndicatorType.AI_BUY:
+            # AI_BUY is pre-calculated and stored in indicators dict
+            return indicators.get("ai_buy")
+
+        if indicator_type == IndicatorType.AI_SELL:
+            # AI_SELL is pre-calculated and stored in indicators dict
+            return indicators.get("ai_sell")
+
+        if indicator_type == IndicatorType.BULL_FLAG:
+            # BULL_FLAG is pre-calculated and stored in indicators dict
+            return indicators.get("bull_flag")
 
         return None
