@@ -1,9 +1,21 @@
 import { useState } from 'react'
-import PhaseConditionSelector, { PhaseCondition } from './PhaseConditionSelector'
+import PhaseConditionSelector, { PhaseCondition, ConditionType } from './PhaseConditionSelector'
 
 interface ThreeCommasStyleFormProps {
   config: Record<string, any>
   onChange: (config: Record<string, any>) => void
+}
+
+// Normalize conditions from DB format (indicator) to frontend format (type)
+// DB stores: { indicator: "ai_buy", ... }
+// Frontend expects: { type: "ai_buy", ... }
+function normalizeConditions(conditions: any[]): PhaseCondition[] {
+  if (!conditions || !Array.isArray(conditions)) return []
+  return conditions.map((c) => ({
+    ...c,
+    // Use 'type' if present, otherwise fallback to 'indicator'
+    type: (c.type || c.indicator) as ConditionType,
+  }))
 }
 
 function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
@@ -13,9 +25,10 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
     onChange({ ...config, [key]: value })
   }
 
-  const baseOrderConditions: PhaseCondition[] = config.base_order_conditions || []
-  const safetyOrderConditions: PhaseCondition[] = config.safety_order_conditions || []
-  const takeProfitConditions: PhaseCondition[] = config.take_profit_conditions || []
+  // Normalize conditions to handle both 'type' and 'indicator' keys from DB
+  const baseOrderConditions: PhaseCondition[] = normalizeConditions(config.base_order_conditions)
+  const safetyOrderConditions: PhaseCondition[] = normalizeConditions(config.safety_order_conditions)
+  const takeProfitConditions: PhaseCondition[] = normalizeConditions(config.take_profit_conditions)
 
   const baseOrderLogic = config.base_order_logic || 'and'
   const safetyOrderLogic = config.safety_order_logic || 'and'
