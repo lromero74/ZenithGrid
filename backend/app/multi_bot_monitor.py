@@ -963,6 +963,17 @@ class MultiBotMonitor:
             signal_type = signal_data.get("signal_type")
             logger.info(f"  🔔 Signal detected: {signal_type}")
 
+            # Log AI decision to database (only for actual AI analysis, not technical-only checks)
+            if signal_data.get("reasoning") and signal_data.get("reasoning") != "Technical-only check (no AI)":
+                pair_info = {"current_price": current_price}
+                # Get open positions for this bot to link logs to positions
+                from app.models import Position
+                open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
+                open_pos_result = await db.execute(open_pos_query)
+                open_positions_list = list(open_pos_result.scalars().all())
+                await self.log_ai_decision(db, bot, product_id, signal_data, pair_info, open_positions_list)
+                logger.info(f"  📝 Logged AI decision for {product_id}")
+
             # Create trading engine for this bot/pair combination
             engine = StrategyTradingEngine(
                 db=db,
