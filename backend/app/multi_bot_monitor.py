@@ -979,19 +979,40 @@ class MultiBotMonitor:
             elif ai_buy_explanation or ai_sell_explanation:
                 # indicator_based strategy with AI conditions
                 should_log_ai = True
-                # Construct signal_data with reasoning for the log
-                combined_reasoning = []
-                if ai_buy_explanation:
-                    combined_reasoning.append(f"AI Buy: {ai_buy_explanation}")
-                if ai_sell_explanation:
-                    combined_reasoning.append(f"AI Sell: {ai_sell_explanation}")
+
+                # Determine clear BUY/SELL/HOLD decision from signals
+                base_order = signal_data.get("base_order_signal", False)
+                safety_order = signal_data.get("safety_order_signal", False)
+                take_profit = signal_data.get("take_profit_signal", False)
+
+                ai_buy_score = indicators.get("ai_buy_score", 0) or 0
+                ai_sell_score = indicators.get("ai_sell_score", 0) or 0
+
+                # Determine decision and confidence based on which signal triggered
+                if take_profit:
+                    decision = "sell"
+                    confidence = ai_sell_score
+                    reasoning = ai_sell_explanation or "Take profit conditions met"
+                elif base_order or safety_order:
+                    decision = "buy"
+                    confidence = ai_buy_score
+                    reasoning = ai_buy_explanation or "Buy conditions met"
+                else:
+                    decision = "hold"
+                    confidence = max(ai_buy_score, ai_sell_score)
+                    # Construct combined reasoning showing why we're holding
+                    combined_parts = []
+                    if ai_buy_explanation:
+                        combined_parts.append(f"AI Buy: {ai_buy_explanation}")
+                    if ai_sell_explanation:
+                        combined_parts.append(f"AI Sell: {ai_sell_explanation}")
+                    reasoning = " | ".join(combined_parts) if combined_parts else "Conditions not met"
+
                 log_signal_data = {
                     **signal_data,
-                    "reasoning": " | ".join(combined_reasoning),
-                    "confidence": max(
-                        indicators.get("ai_buy_score", 0) or 0,
-                        indicators.get("ai_sell_score", 0) or 0
-                    ),
+                    "signal_type": decision,
+                    "reasoning": reasoning,
+                    "confidence": confidence,
                 }
 
             if should_log_ai:
