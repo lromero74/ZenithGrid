@@ -1563,14 +1563,14 @@ function Bots() {
               {/* SECTION 6: STRATEGY CONFIGURATION */}
               {/* Section number is 6 for AI strategies (Budget section hidden), 7 for others */}
               {/* ============================================ */}
-              {selectedStrategy && (selectedStrategy.id === 'conditional_dca' || selectedStrategy.parameters.length > 0) && (
+              {selectedStrategy && (selectedStrategy.id === 'conditional_dca' || selectedStrategy.id === 'indicator_based' || selectedStrategy.parameters.length > 0) && (
               <div className="border-b border-slate-700 pb-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                   <span className="text-blue-400">{formData.strategy_type === 'ai_autonomous' ? '6' : '7'}.</span> Strategy Parameters
                 </h3>
 
               {/* Dynamic Strategy Parameters */}
-              {formData.strategy_type === 'conditional_dca' ? (
+              {(formData.strategy_type === 'conditional_dca' || formData.strategy_type === 'indicator_based') ? (
                 <ThreeCommasStyleForm
                   config={formData.strategy_config}
                   onChange={(newConfig) =>
