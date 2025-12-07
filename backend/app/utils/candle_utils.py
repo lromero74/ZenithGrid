@@ -79,6 +79,91 @@ def aggregate_candles(
     return aggregated
 
 
+def prepare_market_context(
+    candles: List[Dict[str, Any]], current_price: float
+) -> Dict[str, Any]:
+    """
+    Prepare summarized market context data (token-efficient format for AI analysis).
+
+    Takes raw candle data and extracts key metrics like price changes, volatility,
+    and recent price history for AI decision-making.
+
+    Args:
+        candles: List of candles (sorted by time ascending)
+        current_price: Current market price
+
+    Returns:
+        Dict with market context including price changes, volatility, etc.
+    """
+    if not candles:
+        return {
+            "current_price": current_price,
+            "price_24h_ago": current_price,
+            "price_change_24h_pct": 0.0,
+            "period_high": current_price,
+            "period_low": current_price,
+            "recent_prices": [current_price],
+            "data_points": 0,
+            "volatility": 0.0,
+        }
+
+    # Extract close prices
+    closes = []
+    for c in candles:
+        close = c.get("close")
+        if close is not None:
+            try:
+                closes.append(float(close))
+            except (ValueError, TypeError):
+                continue
+
+    if not closes:
+        return {
+            "current_price": current_price,
+            "price_24h_ago": current_price,
+            "price_change_24h_pct": 0.0,
+            "period_high": current_price,
+            "period_low": current_price,
+            "recent_prices": [current_price],
+            "data_points": 0,
+            "volatility": 0.0,
+        }
+
+    # Calculate metrics
+    price_24h_ago = closes[0] if closes else current_price
+    price_change_24h_pct = ((current_price - price_24h_ago) / price_24h_ago * 100) if price_24h_ago else 0
+
+    # Get highs and lows
+    highs = [float(c.get("high", 0)) for c in candles if c.get("high") is not None]
+    lows = [float(c.get("low", float("inf"))) for c in candles if c.get("low") is not None]
+
+    period_high = max(highs) if highs else current_price
+    period_low = min(lows) if lows else current_price
+
+    # Calculate volatility (standard deviation of returns)
+    volatility = 0.0
+    if len(closes) > 1:
+        returns = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] != 0]
+        if returns:
+            mean_return = sum(returns) / len(returns)
+            variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
+            volatility = variance ** 0.5 * 100  # Convert to percentage
+
+    # Recent prices (last 10 for AI context)
+    recent_prices = closes[-10:] if len(closes) >= 10 else closes
+
+    return {
+        "current_price": current_price,
+        "price_24h_ago": price_24h_ago,
+        "price_change_24h_pct": round(price_change_24h_pct, 2),
+        "period_high": period_high,
+        "period_low": period_low,
+        "recent_prices": recent_prices,
+        "data_points": len(candles),
+        "volatility": round(volatility, 4),
+    }
+
+
 def fill_candle_gaps(
     candles: List[Dict[str, Any]], interval_seconds: int, max_candles: int = 300
 ) -> List[Dict[str, Any]]:

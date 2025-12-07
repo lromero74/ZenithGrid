@@ -16,7 +16,6 @@ from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
 from app.models import Bot
 from app.strategies import StrategyRegistry
-from app.strategies.ai_autonomous import market_analysis
 from app.strategies.bull_flag_scanner import log_scanner_decision, scan_for_bull_flag_opportunities
 from app.trading_engine.trailing_stops import (
     check_bull_flag_exit_conditions,
@@ -26,6 +25,7 @@ from app.trading_engine_v2 import StrategyTradingEngine
 from app.utils.candle_utils import (
     aggregate_candles,
     fill_candle_gaps,
+    prepare_market_context,
     timeframe_to_seconds,
 )
 
@@ -542,7 +542,7 @@ class MultiBotMonitor:
                             )
 
                         # Prepare market context (for AI batch analysis)
-                        market_context = market_analysis.prepare_market_context(candles, current_price)
+                        market_context = prepare_market_context(candles, current_price)
 
                         pairs_data[product_id] = {
                             "current_price": current_price,
