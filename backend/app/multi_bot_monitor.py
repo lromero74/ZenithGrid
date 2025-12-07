@@ -964,14 +964,44 @@ class MultiBotMonitor:
             logger.info(f"  🔔 Signal detected: {signal_type}")
 
             # Log AI decision to database (only for actual AI analysis, not technical-only checks)
-            if signal_data.get("reasoning") and signal_data.get("reasoning") != "Technical-only check (no AI)":
+            # Handle both direct reasoning field (AI strategies) and indicator-based AI explanations
+            reasoning = signal_data.get("reasoning")
+            indicators = signal_data.get("indicators", {})
+            ai_buy_explanation = indicators.get("ai_buy_explanation") if indicators else None
+            ai_sell_explanation = indicators.get("ai_sell_explanation") if indicators else None
+
+            should_log_ai = False
+            log_signal_data = signal_data
+
+            if reasoning and reasoning != "Technical-only check (no AI)":
+                # Direct AI strategy with reasoning field
+                should_log_ai = True
+            elif ai_buy_explanation or ai_sell_explanation:
+                # indicator_based strategy with AI conditions
+                should_log_ai = True
+                # Construct signal_data with reasoning for the log
+                combined_reasoning = []
+                if ai_buy_explanation:
+                    combined_reasoning.append(f"AI Buy: {ai_buy_explanation}")
+                if ai_sell_explanation:
+                    combined_reasoning.append(f"AI Sell: {ai_sell_explanation}")
+                log_signal_data = {
+                    **signal_data,
+                    "reasoning": " | ".join(combined_reasoning),
+                    "confidence": max(
+                        indicators.get("ai_buy_score", 0) or 0,
+                        indicators.get("ai_sell_score", 0) or 0
+                    ),
+                }
+
+            if should_log_ai:
                 pair_info = {"current_price": current_price}
                 # Get open positions for this bot to link logs to positions
                 from app.models import Position
                 open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
                 open_pos_result = await db.execute(open_pos_query)
                 open_positions_list = list(open_pos_result.scalars().all())
-                await self.log_ai_decision(db, bot, product_id, signal_data, pair_info, open_positions_list)
+                await self.log_ai_decision(db, bot, product_id, log_signal_data, pair_info, open_positions_list)
                 logger.info(f"  📝 Logged AI decision for {product_id}")
 
             # Create trading engine for this bot/pair combination
