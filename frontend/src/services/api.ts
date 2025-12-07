@@ -256,9 +256,13 @@ export const blacklistApi = {
 // AI Provider Credentials
 export interface AIProviderStatus {
   provider: string;
+  name: string;
+  billing_url: string | null;
   has_user_key: boolean;
   has_system_key: boolean;
-  key_preview: string | null;
+  is_active: boolean;
+  free_tier: string | null;
+  key_preview?: string | null;
 }
 
 export interface AICredentialCreate {
