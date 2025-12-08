@@ -244,7 +244,7 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Price Deviation % (Fallback)
+              Price Deviation %
             </label>
             <input
               type="number"
@@ -256,7 +256,25 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">
-              Used if no indicator conditions are set
+              Minimum price drop for first DCA
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              DCA Target Reference
+            </label>
+            <select
+              value={config.dca_target_reference || 'average_price'}
+              onChange={(e) => updateConfig('dca_target_reference', e.target.value)}
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            >
+              <option value="base_order">Base Order Price (first buy)</option>
+              <option value="average_price">Average Entry Price</option>
+              <option value="last_buy">Last Buy Price</option>
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Calculate DCA deviation from this reference
             </p>
           </div>
         </div>
@@ -264,7 +282,7 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
         {/* Safety Order Entry Conditions */}
         <AdvancedConditionBuilder
           title="Safety Order Entry Conditions (Optional)"
-          description="When to add safety orders. If empty, uses price deviation only. Use groups for complex logic."
+          description="Additional conditions for DCA. Price target must ALWAYS be met first, then these conditions are checked."
           expression={safetyOrderExpression}
           onChange={(expression) => updateConfig('safety_order_conditions', expression)}
         />

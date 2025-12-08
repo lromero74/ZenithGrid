@@ -171,6 +171,15 @@ class IndicatorBasedStrategy(TradingStrategy):
                     max_value=5.0,
                     group="Safety Orders",
                 ),
+                StrategyParameter(
+                    name="dca_target_reference",
+                    display_name="DCA Target Reference",
+                    description="Price to calculate DCA target deviation from",
+                    type="string",
+                    default="average_price",
+                    options=["base_order", "average_price", "last_buy"],
+                    group="Safety Orders",
+                ),
                 # ========================================
                 # TAKE PROFIT SETTINGS
                 # ========================================
@@ -707,16 +716,34 @@ class IndicatorBasedStrategy(TradingStrategy):
                 return False, 0.0, f"Max safety orders reached ({safety_orders_count}/{max_safety})"
 
             next_order_number = safety_orders_count + 1
-            entry_price = position.average_buy_price
 
-            # Check safety order conditions or price deviation
+            # Determine reference price for DCA target calculation
+            dca_reference = self.config.get("dca_target_reference", "average_price")
+            sorted_buys = sorted(buy_trades, key=lambda t: t.timestamp if t.timestamp else 0) if buy_trades else []
+
+            if dca_reference == "base_order" and sorted_buys:
+                # Use the price of the first buy (base order)
+                first_buy = sorted_buys[0]
+                reference_price = first_buy.price if first_buy.price else position.average_buy_price
+            elif dca_reference == "last_buy" and sorted_buys:
+                # Use the price of the last buy trade
+                last_buy = sorted_buys[-1]
+                reference_price = last_buy.price if last_buy.price else position.average_buy_price
+            else:
+                # "average_price" or fallback - use average buy price
+                reference_price = position.average_buy_price
+
+            # Always check price target as minimum threshold
+            # DCA targets set the MINIMUM drop required before a DCA can trigger
+            trigger_price = self.calculate_safety_order_price(reference_price, next_order_number)
+            if current_price > trigger_price:
+                return False, 0.0, f"Price not low enough for SO #{next_order_number} (need ≤{trigger_price:.8f})"
+
+            # If safety order conditions exist (like AI_BUY), also check them
+            # Price target must be met AND conditions must be satisfied
             if self.safety_order_conditions:
                 if not safety_order_signal:
-                    return False, 0.0, "Safety order conditions not met"
-            else:
-                trigger_price = self.calculate_safety_order_price(entry_price, next_order_number)
-                if current_price > trigger_price:
-                    return False, 0.0, f"Price not low enough for SO #{next_order_number}"
+                    return False, 0.0, f"SO #{next_order_number} price target met but conditions not met"
 
             # Calculate safety order size
             base_order_size = position.total_quote_spent / (1 + safety_orders_count)
