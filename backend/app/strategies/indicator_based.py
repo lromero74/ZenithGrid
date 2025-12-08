@@ -433,10 +433,17 @@ class IndicatorBasedStrategy(TradingStrategy):
         current_indicators = {}
 
         # Extract required traditional indicators from conditions
+        # Uses get_required_indicators_from_expression which handles both formats
         required_indicators = set()
-        required_indicators.update(self.phase_evaluator.get_required_indicators(self.base_order_conditions))
-        required_indicators.update(self.phase_evaluator.get_required_indicators(self.safety_order_conditions))
-        required_indicators.update(self.phase_evaluator.get_required_indicators(self.take_profit_conditions))
+        required_indicators.update(
+            self.phase_evaluator.get_required_indicators_from_expression(self.base_order_conditions)
+        )
+        required_indicators.update(
+            self.phase_evaluator.get_required_indicators_from_expression(self.safety_order_conditions)
+        )
+        required_indicators.update(
+            self.phase_evaluator.get_required_indicators_from_expression(self.take_profit_conditions)
+        )
 
         # Extract timeframes needed
         timeframes_needed = set()
@@ -518,22 +525,25 @@ class IndicatorBasedStrategy(TradingStrategy):
         current_indicators["price"] = current_price
 
         # Evaluate conditions for each phase
+        # Uses evaluate_expression which handles both:
+        # - New grouped format: { groups: [...], groupLogic: 'and'|'or' }
+        # - Legacy flat format: [ condition1, condition2, ... ]
         base_order_signal = False
         if self.base_order_conditions:
-            base_order_signal = self.phase_evaluator.evaluate_phase_conditions(
-                self.base_order_conditions, self.base_order_logic, current_indicators, self.previous_indicators
+            base_order_signal = self.phase_evaluator.evaluate_expression(
+                self.base_order_conditions, current_indicators, self.previous_indicators, self.base_order_logic
             )
 
         safety_order_signal = False
         if self.safety_order_conditions:
-            safety_order_signal = self.phase_evaluator.evaluate_phase_conditions(
-                self.safety_order_conditions, self.safety_order_logic, current_indicators, self.previous_indicators
+            safety_order_signal = self.phase_evaluator.evaluate_expression(
+                self.safety_order_conditions, current_indicators, self.previous_indicators, self.safety_order_logic
             )
 
         take_profit_signal = False
         if self.take_profit_conditions:
-            take_profit_signal = self.phase_evaluator.evaluate_phase_conditions(
-                self.take_profit_conditions, self.take_profit_logic, current_indicators, self.previous_indicators
+            take_profit_signal = self.phase_evaluator.evaluate_expression(
+                self.take_profit_conditions, current_indicators, self.previous_indicators, self.take_profit_logic
             )
 
         # Store current as previous for next iteration

@@ -1,29 +1,133 @@
 """
 Phase-Based Conditions (3Commas Style)
 
-Simpler condition system with three phases:
-1. Base Order Entry - when to open initial position
-2. Safety Order Entry - when to add to position
-3. Take Profit - when to close position
+Supports advanced condition grouping with AND/OR/NOT logic:
+- Groups can contain multiple conditions with internal AND/OR logic
+- Groups are combined with AND/OR logic between them
+- Individual conditions can be negated (NOT)
 
-Each phase has simple conditions without deep nesting.
+Example: (RSI < 30 AND MACD > 0) OR (BB% < 20) AND NOT (price_change > 5)
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from app.indicator_calculator import IndicatorCalculator
 
 
 class PhaseConditionEvaluator:
     """
-    Evaluates phase-based conditions (3Commas style)
+    Evaluates phase-based conditions with advanced grouping support.
 
-    Much simpler than nested ConditionGroups - just a list of conditions
-    with AND/OR logic at the phase level.
+    Supports two formats:
+    1. Legacy flat format: { conditions: [...], logic: 'and'|'or' }
+    2. New grouped format: { groups: [...], groupLogic: 'and'|'or' }
     """
 
     def __init__(self, indicator_calculator: IndicatorCalculator):
         self.indicator_calculator = indicator_calculator
+
+    def evaluate_expression(
+        self,
+        expression: Union[Dict[str, Any], List[Dict[str, Any]]],
+        current_indicators: Dict[str, Any],
+        previous_indicators: Optional[Dict[str, Any]] = None,
+        legacy_logic: str = "and",
+    ) -> bool:
+        """
+        Evaluate a condition expression (supports both legacy and new format)
+
+        Args:
+            expression: Either:
+                - New format: { groups: [...], groupLogic: 'and'|'or' }
+                - Legacy format: List of condition dicts
+            current_indicators: Current indicator values
+            previous_indicators: Previous indicator values (for crossing)
+            legacy_logic: Logic to use for legacy flat list format
+
+        Returns:
+            True if expression is satisfied, False otherwise
+        """
+        # Handle empty/None
+        if not expression:
+            return False
+
+        # Check if new grouped format (dict with 'groups' key)
+        if isinstance(expression, dict) and "groups" in expression:
+            return self._evaluate_grouped_expression(expression, current_indicators, previous_indicators)
+
+        # Legacy flat list format
+        if isinstance(expression, list):
+            return self.evaluate_phase_conditions(expression, legacy_logic, current_indicators, previous_indicators)
+
+        # Unknown format
+        print(f"[WARNING] Unknown expression format: {type(expression)}")
+        return False
+
+    def _evaluate_grouped_expression(
+        self,
+        expression: Dict[str, Any],
+        current_indicators: Dict[str, Any],
+        previous_indicators: Optional[Dict[str, Any]],
+    ) -> bool:
+        """
+        Evaluate a grouped expression: { groups: [...], groupLogic: 'and'|'or' }
+
+        Each group has: { id, conditions: [...], logic: 'and'|'or' }
+        Groups are combined using groupLogic.
+        """
+        groups = expression.get("groups", [])
+        group_logic = expression.get("groupLogic", "and")
+
+        if not groups:
+            return False
+
+        group_results = []
+        for group in groups:
+            group_result = self._evaluate_group(group, current_indicators, previous_indicators)
+            group_results.append(group_result)
+            print(f"[DEBUG] Group {group.get('id', '?')} result: {group_result}")
+
+        # Combine groups
+        if group_logic == "and":
+            final_result = all(group_results)
+        else:  # 'or'
+            final_result = any(group_results)
+
+        print(f"[DEBUG] Final expression result ({group_logic.upper()} of {len(groups)} groups): {final_result}")
+        return final_result
+
+    def _evaluate_group(
+        self,
+        group: Dict[str, Any],
+        current_indicators: Dict[str, Any],
+        previous_indicators: Optional[Dict[str, Any]],
+    ) -> bool:
+        """
+        Evaluate a single group of conditions
+
+        Group format: { id, conditions: [...], logic: 'and'|'or' }
+        """
+        conditions = group.get("conditions", [])
+        logic = group.get("logic", "and")
+
+        if not conditions:
+            return False
+
+        results = []
+        for condition in conditions:
+            result = self._evaluate_single_condition(condition, current_indicators, previous_indicators)
+
+            # Handle NOT (negate) modifier
+            if condition.get("negate", False):
+                print(f"[DEBUG] Negating condition result: {result} -> {not result}")
+                result = not result
+
+            results.append(result)
+
+        if logic == "and":
+            return all(results)
+        else:  # 'or'
+            return any(results)
 
     def evaluate_phase_conditions(
         self,
@@ -33,7 +137,7 @@ class PhaseConditionEvaluator:
         previous_indicators: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
-        Evaluate a list of phase conditions
+        Evaluate a flat list of phase conditions (legacy format)
 
         Args:
             conditions: List of phase condition dicts
@@ -50,6 +154,11 @@ class PhaseConditionEvaluator:
         results = []
         for condition in conditions:
             result = self._evaluate_single_condition(condition, current_indicators, previous_indicators)
+
+            # Handle NOT (negate) modifier
+            if condition.get("negate", False):
+                result = not result
+
             results.append(result)
 
         if logic == "and":
@@ -188,12 +297,42 @@ class PhaseConditionEvaluator:
 
         return None
 
+    def get_required_indicators_from_expression(
+        self, expression: Union[Dict[str, Any], List[Dict[str, Any]]]
+    ) -> set:
+        """
+        Extract required indicators from an expression (supports both formats)
+
+        Args:
+            expression: Either grouped format { groups: [...] } or flat list [...]
+
+        Returns:
+            Set of required indicator keys
+        """
+        # Handle empty/None
+        if not expression:
+            return set()
+
+        # New grouped format
+        if isinstance(expression, dict) and "groups" in expression:
+            required = set()
+            for group in expression.get("groups", []):
+                conditions = group.get("conditions", [])
+                required.update(self.get_required_indicators(conditions))
+            return required
+
+        # Legacy flat list format
+        if isinstance(expression, list):
+            return self.get_required_indicators(expression)
+
+        return set()
+
     def get_required_indicators(self, conditions: List[Dict[str, Any]]) -> set:
         """Extract which indicators are needed from conditions, with timeframe"""
         required = set()
 
         for condition in conditions:
-            condition_type = condition.get("type")
+            condition_type = condition.get("type") or condition.get("indicator")
             timeframe = condition.get("timeframe", "FIVE_MINUTE")
 
             if condition_type == "rsi":
@@ -228,5 +367,8 @@ class PhaseConditionEvaluator:
 
             elif condition_type == "volume":
                 required.add(f"{timeframe}_volume")
+
+            # Aggregate indicators (ai_buy, ai_sell, bull_flag) don't need
+            # specific indicator values - they're evaluated separately
 
         return required

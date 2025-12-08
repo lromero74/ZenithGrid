@@ -1,4 +1,9 @@
-import PhaseConditionSelector, { PhaseCondition, ConditionType } from './PhaseConditionSelector'
+import AdvancedConditionBuilder, {
+  ConditionExpression,
+  createEmptyExpression,
+  Condition,
+} from './AdvancedConditionBuilder'
+import { ConditionType } from './PhaseConditionSelector'
 
 interface ThreeCommasStyleFormProps {
   config: Record<string, any>
@@ -27,13 +32,42 @@ const getNumericValue = (value: any, fallback: number): number => {
 // Normalize conditions from DB format (indicator) to frontend format (type)
 // DB stores: { indicator: "ai_buy", ... }
 // Frontend expects: { type: "ai_buy", ... }
-function normalizeConditions(conditions: any[]): PhaseCondition[] {
-  if (!conditions || !Array.isArray(conditions)) return []
-  return conditions.map((c) => ({
+function normalizeCondition(c: any): Condition {
+  return {
     ...c,
     // Use 'type' if present, otherwise fallback to 'indicator'
     type: (c.type || c.indicator) as ConditionType,
-  }))
+    negate: c.negate || false,
+  }
+}
+
+// Convert stored conditions (which might be flat array or expression) to ConditionExpression
+function toConditionExpression(stored: any, logic: 'and' | 'or' = 'and'): ConditionExpression {
+  // Already in new format (has 'groups' array)
+  if (stored && stored.groups && Array.isArray(stored.groups)) {
+    return {
+      groups: stored.groups.map((g: any) => ({
+        ...g,
+        conditions: (g.conditions || []).map(normalizeCondition),
+      })),
+      groupLogic: stored.groupLogic || 'and',
+    }
+  }
+
+  // Old flat array format - convert to single group
+  if (Array.isArray(stored) && stored.length > 0) {
+    return {
+      groups: [{
+        id: `grp_legacy_${Date.now()}`,
+        conditions: stored.map(normalizeCondition),
+        logic,
+      }],
+      groupLogic: 'and',
+    }
+  }
+
+  // Empty or invalid - return empty expression
+  return createEmptyExpression()
 }
 
 function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
@@ -41,14 +75,19 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
     onChange({ ...config, [key]: value })
   }
 
-  // Normalize conditions to handle both 'type' and 'indicator' keys from DB
-  const baseOrderConditions: PhaseCondition[] = normalizeConditions(config.base_order_conditions)
-  const safetyOrderConditions: PhaseCondition[] = normalizeConditions(config.safety_order_conditions)
-  const takeProfitConditions: PhaseCondition[] = normalizeConditions(config.take_profit_conditions)
-
-  const baseOrderLogic = config.base_order_logic || 'and'
-  const safetyOrderLogic = config.safety_order_logic || 'and'
-  const takeProfitLogic = config.take_profit_logic || 'and'
+  // Convert conditions to ConditionExpression format (handles legacy flat arrays)
+  const baseOrderExpression = toConditionExpression(
+    config.base_order_conditions,
+    config.base_order_logic || 'and'
+  )
+  const safetyOrderExpression = toConditionExpression(
+    config.safety_order_conditions,
+    config.safety_order_logic || 'and'
+  )
+  const takeProfitExpression = toConditionExpression(
+    config.take_profit_conditions,
+    config.take_profit_logic || 'and'
+  )
 
   return (
     <div className="space-y-6">
@@ -128,14 +167,11 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
         </div>
 
         {/* Base Order Entry Conditions */}
-        <PhaseConditionSelector
+        <AdvancedConditionBuilder
           title="Base Order Entry Conditions"
-          description="When to open a new position (base order)"
-          conditions={baseOrderConditions}
-          onChange={(conditions) => updateConfig('base_order_conditions', conditions)}
-          allowMultiple={true}
-          logic={baseOrderLogic}
-          onLogicChange={(logic) => updateConfig('base_order_logic', logic)}
+          description="When to open a new position (base order). Use groups for complex logic like (A AND B) OR (C AND D)."
+          expression={baseOrderExpression}
+          onChange={(expression) => updateConfig('base_order_conditions', expression)}
         />
       </div>
 
@@ -226,14 +262,11 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
         </div>
 
         {/* Safety Order Entry Conditions */}
-        <PhaseConditionSelector
+        <AdvancedConditionBuilder
           title="Safety Order Entry Conditions (Optional)"
-          description="When to add safety orders (if empty, uses price deviation only)"
-          conditions={safetyOrderConditions}
-          onChange={(conditions) => updateConfig('safety_order_conditions', conditions)}
-          allowMultiple={true}
-          logic={safetyOrderLogic}
-          onLogicChange={(logic) => updateConfig('safety_order_logic', logic)}
+          description="When to add safety orders. If empty, uses price deviation only. Use groups for complex logic."
+          expression={safetyOrderExpression}
+          onChange={(expression) => updateConfig('safety_order_conditions', expression)}
         />
 
         {/* Volume/Step Scaling - always visible like 3Commas */}
@@ -374,14 +407,11 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
         </div>
 
         {/* Take Profit Conditions */}
-        <PhaseConditionSelector
+        <AdvancedConditionBuilder
           title="Additional Exit Conditions (Optional)"
-          description="Extra conditions to trigger sell (TP% always applies)"
-          conditions={takeProfitConditions}
-          onChange={(conditions) => updateConfig('take_profit_conditions', conditions)}
-          allowMultiple={true}
-          logic={takeProfitLogic}
-          onLogicChange={(logic) => updateConfig('take_profit_logic', logic)}
+          description="Extra conditions to trigger sell (TP% always applies). Use groups for complex exit logic."
+          expression={takeProfitExpression}
+          onChange={(expression) => updateConfig('take_profit_conditions', expression)}
         />
       </div>
 
@@ -394,20 +424,20 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
           </p>
           <p>
             📥 <strong>Base Order:</strong>{' '}
-            {baseOrderConditions.length > 0
-              ? `${baseOrderConditions.length} condition(s) with ${baseOrderLogic.toUpperCase()} logic`
+            {baseOrderExpression.groups.length > 0
+              ? `${baseOrderExpression.groups.length} group(s), ${baseOrderExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`
               : 'Manual start only'}
           </p>
           <p>
             🔁 <strong>Safety Orders:</strong>{' '}
-            {safetyOrderConditions.length > 0
-              ? `${safetyOrderConditions.length} condition(s) with ${safetyOrderLogic.toUpperCase()} logic`
+            {safetyOrderExpression.groups.length > 0
+              ? `${safetyOrderExpression.groups.length} group(s), ${safetyOrderExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`
               : `Price deviation (${config.price_deviation || 2}%)`}
           </p>
           <p>
             📤 <strong>Exit:</strong> Take Profit {config.take_profit_percentage || 3}%
-            {takeProfitConditions.length > 0 &&
-              ` + ${takeProfitConditions.length} condition(s) with ${takeProfitLogic.toUpperCase()} logic`}
+            {takeProfitExpression.groups.length > 0 &&
+              ` + ${takeProfitExpression.groups.length} group(s), ${takeProfitExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`}
           </p>
         </div>
       </div>
