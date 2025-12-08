@@ -130,10 +130,10 @@ def run_migration():
         templates_updated = cursor.rowcount
         print(f"  - Updated {templates_updated} bot_templates")
 
-        # Update blacklisted_coins
-        cursor.execute("UPDATE blacklisted_coins SET user_id = ? WHERE user_id IS NULL", (user_id,))
-        coins_updated = cursor.rowcount
-        print(f"  - Updated {coins_updated} blacklisted_coins")
+        # NOTE: blacklisted_coins intentionally NOT migrated
+        # Global coin categories should have user_id=NULL (shared across all users)
+        # Only user-specific blacklist entries (future feature) would have a user_id
+        print(f"  - Skipping blacklisted_coins (global entries should remain user_id=NULL)")
 
         conn.commit()
         print("\nMigration completed successfully!")
