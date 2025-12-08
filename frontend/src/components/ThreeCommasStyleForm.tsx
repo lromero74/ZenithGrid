@@ -120,7 +120,7 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
                 onChange={(e) => updateConfig('base_order_btc', safeParseFloat(e.target.value) ?? 0.001)}
                 min="0.0001"
                 max="10"
-                step="0.0001"
+                step="0.00000001"
                 className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
               />
             </div>
@@ -200,7 +200,7 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
                 onChange={(e) => updateConfig('safety_order_btc', safeParseFloat(e.target.value) ?? 0.0005)}
                 min="0.0001"
                 max="10"
-                step="0.0001"
+                step="0.00000001"
                 className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
               />
             </div>
