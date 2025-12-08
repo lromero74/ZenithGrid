@@ -33,6 +33,9 @@ export type Timeframe =
   | 'SIX_HOUR'
   | 'ONE_DAY'
 
+export type RiskPreset = 'aggressive' | 'moderate' | 'conservative'
+export type AIProvider = 'claude' | 'gemini' | 'grok'
+
 export interface Condition {
   id: string
   type: ConditionType
@@ -45,6 +48,42 @@ export interface Condition {
   signal_period?: number
   std_dev?: number
   negate?: boolean  // NOT this condition
+  // AI indicator specific params
+  risk_preset?: RiskPreset
+  ai_provider?: AIProvider
+}
+
+// Risk preset defaults for AI indicators
+export const RISK_PRESETS: Record<RiskPreset, {
+  label: string
+  description: string
+  min_confluence_score: number
+  ai_confidence_threshold: number
+}> = {
+  aggressive: {
+    label: 'Aggressive',
+    description: 'Lower thresholds, more signals',
+    min_confluence_score: 50,
+    ai_confidence_threshold: 60,
+  },
+  moderate: {
+    label: 'Moderate',
+    description: 'Balanced risk/reward',
+    min_confluence_score: 65,
+    ai_confidence_threshold: 70,
+  },
+  conservative: {
+    label: 'Conservative',
+    description: 'Higher thresholds, fewer but stronger signals',
+    min_confluence_score: 80,
+    ai_confidence_threshold: 80,
+  },
+}
+
+const AI_PROVIDERS: Record<AIProvider, string> = {
+  claude: 'Claude',
+  gemini: 'Gemini',
+  grok: 'Grok',
 }
 
 export interface ConditionGroup {
@@ -261,6 +300,11 @@ function AdvancedConditionBuilder({
                       break
                     case 'ai_buy':
                     case 'ai_sell':
+                      newCond.operator = 'equal'
+                      newCond.value = 1
+                      newCond.risk_preset = 'moderate'
+                      newCond.ai_provider = 'claude'
+                      break
                     case 'bull_flag':
                       newCond.operator = 'equal'
                       newCond.value = 1
@@ -386,6 +430,32 @@ function AdvancedConditionBuilder({
             <span className="text-green-400 text-sm font-medium">= Active</span>
           )}
 
+          {/* AI indicator specific params */}
+          {(condition.type === 'ai_buy' || condition.type === 'ai_sell') && (
+            <>
+              <select
+                value={condition.risk_preset || 'moderate'}
+                onChange={(e) => updateCondition(group.id, condition.id, { risk_preset: e.target.value as RiskPreset })}
+                className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                title="Risk preset"
+              >
+                {Object.entries(RISK_PRESETS).map(([value, { label }]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+              <select
+                value={condition.ai_provider || 'claude'}
+                onChange={(e) => updateCondition(group.id, condition.id, { ai_provider: e.target.value as AIProvider })}
+                className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                title="AI Provider"
+              >
+                {Object.entries(AI_PROVIDERS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </>
+          )}
+
           {/* Period (for indicators that use it) */}
           {['rsi', 'bb_percent', 'stochastic', 'ema_cross', 'sma_cross'].includes(condition.type) && (
             <div className="flex items-center gap-1">
@@ -489,9 +559,17 @@ function AdvancedConditionBuilder({
       const groupStr = group.conditions.map((c, ci) => {
         const negateStr = c.negate ? 'NOT ' : ''
         const tf = TIMEFRAMES[c.timeframe]
-        const condStr = CONDITION_TYPES[c.type]?.isAggregate
-          ? `${c.type.toUpperCase()}=1`
-          : `${c.type}${c.operator === 'greater_than' ? '>' : c.operator === 'less_than' ? '<' : c.operator === 'equal' ? '=' : c.operator}${c.value}`
+        let condStr: string
+        if (c.type === 'ai_buy' || c.type === 'ai_sell') {
+          // Include risk preset for AI indicators
+          const preset = c.risk_preset || 'moderate'
+          const provider = c.ai_provider || 'claude'
+          condStr = `${c.type.toUpperCase()}[${preset}/${provider}]=1`
+        } else if (CONDITION_TYPES[c.type]?.isAggregate) {
+          condStr = `${c.type.toUpperCase()}=1`
+        } else {
+          condStr = `${c.type}${c.operator === 'greater_than' ? '>' : c.operator === 'less_than' ? '<' : c.operator === 'equal' ? '=' : c.operator}${c.value}`
+        }
         const connector = ci > 0 ? ` ${group.logic.toUpperCase()} ` : ''
         return `${connector}${negateStr}[${tf}]${condStr}`
       }).join('')
