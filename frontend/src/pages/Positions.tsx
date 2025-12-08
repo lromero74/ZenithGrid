@@ -773,23 +773,40 @@ export default function Positions() {
                                   const minProfitPercent = strategyConfig.min_profit_percentage || 1.5
                                   const targetPrice = entryPrice * (1 + minProfitPercent / 100)
 
-                                  // Calculate next DCA level if manual DCA targets are configured
-                                  // This extends the bar range to show where the next DCA would trigger
-                                  const minPriceDropForDCA = strategyConfig.min_price_drop_for_dca
+                                  // Calculate DCA levels using price_deviation and step_scale
+                                  const priceDeviation = strategyConfig.price_deviation || 2.0
+                                  const stepScale = strategyConfig.safety_order_step_scale || 1.0
                                   const maxDCAOrders = strategyConfig.max_safety_orders || 3
                                   const completedDCAs = Math.max(0, (position.trade_count || 0) - 1)
-                                  const nextDCA = completedDCAs + 1
-                                  let nextDCAPrice: number | null = null
-                                  if (minPriceDropForDCA && position.status === 'open' && nextDCA <= maxDCAOrders) {
-                                    const dropPercentage = minPriceDropForDCA * nextDCA
-                                    nextDCAPrice = entryPrice * (1 - dropPercentage / 100)
+
+                                  // UI uses average entry price as reference for visualization
+                                  // Backend honors the actual dca_target_reference setting
+                                  const referencePrice = entryPrice
+
+                                  // Calculate all remaining DCA prices
+                                  const dcaPrices: { level: number; price: number }[] = []
+                                  for (let dcaNum = completedDCAs + 1; dcaNum <= maxDCAOrders; dcaNum++) {
+                                    // Same formula as backend: calculate_safety_order_price
+                                    let totalDeviation = 0
+                                    for (let i = 0; i < dcaNum; i++) {
+                                      if (i === 0) {
+                                        totalDeviation += priceDeviation
+                                      } else {
+                                        totalDeviation += priceDeviation * Math.pow(stepScale, i)
+                                      }
+                                    }
+                                    const dcaPrice = referencePrice * (1 - totalDeviation / 100)
+                                    dcaPrices.push({ level: dcaNum, price: dcaPrice })
                                   }
+
+                                  // Get lowest DCA price for range calculation
+                                  const lowestDCAPrice = dcaPrices.length > 0 ? dcaPrices[dcaPrices.length - 1].price : null
 
                                   const defaultMin = entryPrice * 0.95
                                   const defaultMax = entryPrice * 1.05
-                                  // Include next DCA price in range calculation so it's always visible
-                                  const minPrice = nextDCAPrice
-                                    ? Math.min(defaultMin, currentPriceValue * 0.98, nextDCAPrice * 0.98)
+                                  // Include lowest DCA price in range calculation so all DCAs are visible
+                                  const minPrice = lowestDCAPrice
+                                    ? Math.min(defaultMin, currentPriceValue * 0.98, lowestDCAPrice * 0.98)
                                     : Math.min(defaultMin, currentPriceValue * 0.98)
                                   const maxPrice = Math.max(defaultMax, targetPrice * 1.01, currentPriceValue * 1.02)
                                   const priceRange = maxPrice - minPrice
@@ -890,12 +907,14 @@ export default function Positions() {
                                         {targetPos === 'top' && <div className="w-px h-3 bg-emerald-400" />}
                                       </div>
 
-                                      {/* DCA Level Tick Mark (for bots with fixed DCA targets configured) */}
-                                      {nextDCAPrice && (() => {
-                                        const dcaBarPosition = ((nextDCAPrice - minPrice) / priceRange) * 100
+                                      {/* DCA Level Tick Marks - show all remaining DCA targets */}
+                                      {dcaPrices.map((dca, idx) => {
+                                        const dcaBarPosition = ((dca.price - minPrice) / priceRange) * 100
+                                        // Alternate label positions to avoid overlap
+                                        const showLabel = idx === 0 || idx === dcaPrices.length - 1 || dcaPrices.length <= 3
                                         return (
                                           <div
-                                            key={`dca-${nextDCA}`}
+                                            key={`dca-${dca.level}`}
                                             className="absolute flex flex-col items-center"
                                             style={{
                                               left: `${Math.max(0, Math.min(100, dcaBarPosition))}%`,
@@ -903,13 +922,15 @@ export default function Positions() {
                                               top: '100%'
                                             }}
                                           >
-                                            <div className="w-px h-2 bg-purple-400" />
-                                            <div className="text-[8px] text-purple-400 whitespace-nowrap mt-0.5">
-                                              DCA{nextDCA}
-                                            </div>
+                                            <div className={`w-px ${idx === 0 ? 'h-3' : 'h-2'} bg-purple-400`} />
+                                            {showLabel && (
+                                              <div className="text-[8px] text-purple-400 whitespace-nowrap mt-0.5">
+                                                SO{dca.level}
+                                              </div>
+                                            )}
                                           </div>
                                         )
-                                      })()}
+                                      })}
                                     </>
                                   )
                                 })()}
