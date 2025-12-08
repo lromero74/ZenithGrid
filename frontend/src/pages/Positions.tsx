@@ -779,9 +779,16 @@ export default function Positions() {
                                   const maxDCAOrders = strategyConfig.max_safety_orders || 3
                                   const completedDCAs = Math.max(0, (position.trade_count || 0) - 1)
 
-                                  // UI uses average entry price as reference for visualization
-                                  // Backend honors the actual dca_target_reference setting
-                                  const referencePrice = entryPrice
+                                  // Use the correct reference price based on config
+                                  // base_order: first buy price, average_price: average entry, last_buy: last buy price
+                                  const dcaTargetRef = strategyConfig.dca_target_reference || 'average_price'
+                                  let referencePrice = entryPrice // default: average_price
+                                  if (dcaTargetRef === 'base_order' && position.first_buy_price) {
+                                    referencePrice = position.first_buy_price
+                                  } else if (dcaTargetRef === 'last_buy' && position.last_buy_price) {
+                                    referencePrice = position.last_buy_price
+                                  }
+                                  // For average_price or if first/last prices not available, use entryPrice (average)
 
                                   // Calculate all remaining DCA prices
                                   const dcaPrices: { level: number; price: number }[] = []

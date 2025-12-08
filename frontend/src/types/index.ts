@@ -19,6 +19,8 @@ export interface Position {
   profit_quote: number | null;    // BTC or USD
   profit_percentage: number | null;
   trade_count: number;
+  first_buy_price?: number | null;  // Price of first (base order) buy trade
+  last_buy_price?: number | null;   // Price of most recent buy trade
   btc_usd_price_at_open?: number;
   btc_usd_price_at_close?: number;
   profit_usd?: number;

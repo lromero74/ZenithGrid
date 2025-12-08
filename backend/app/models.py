@@ -343,6 +343,29 @@ class Position(Base):
             return self.product_id.split("-")[0]
         return "ETH"  # Default fallback
 
+    @property
+    def first_buy_price(self) -> Optional[float]:
+        """Get the price of the first (base order) buy trade"""
+        buy_trades = [t for t in self.trades if t.side == "buy"]
+        if buy_trades:
+            sorted_buys = sorted(buy_trades, key=lambda t: t.timestamp if t.timestamp else 0)
+            return sorted_buys[0].price
+        return None
+
+    @property
+    def last_buy_price(self) -> Optional[float]:
+        """Get the price of the most recent buy trade"""
+        buy_trades = [t for t in self.trades if t.side == "buy"]
+        if buy_trades:
+            sorted_buys = sorted(buy_trades, key=lambda t: t.timestamp if t.timestamp else 0)
+            return sorted_buys[-1].price
+        return None
+
+    @property
+    def trade_count(self) -> int:
+        """Get the number of buy trades (base order + DCAs)"""
+        return len([t for t in self.trades if t.side == "buy"])
+
     def update_averages(self):
         """Recalculate average buy price and totals from trades"""
         buy_trades = [t for t in self.trades if t.side == "buy"]

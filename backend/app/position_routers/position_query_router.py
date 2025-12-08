@@ -82,9 +82,23 @@ async def get_positions(
         pending_count_result = await db.execute(pending_count_query)
         pending_count = pending_count_result.scalar()
 
+        # Get buy trades for first/last buy prices (needed for DCA tick marks)
+        buy_trades_query = (
+            select(Trade)
+            .where(Trade.position_id == pos.id, Trade.side == "buy")
+            .order_by(Trade.timestamp)
+        )
+        buy_trades_result = await db.execute(buy_trades_query)
+        buy_trades = buy_trades_result.scalars().all()
+
         pos_response = PositionResponse.model_validate(pos)
         pos_response.trade_count = trade_count
         pos_response.pending_orders_count = pending_count
+
+        # Set first/last buy prices for DCA reference
+        if buy_trades:
+            pos_response.first_buy_price = buy_trades[0].price
+            pos_response.last_buy_price = buy_trades[-1].price
 
         # Check if position's coin is blacklisted
         base_symbol = pos.product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
@@ -295,9 +309,23 @@ async def get_position(
     pending_count_result = await db.execute(pending_count_query)
     pending_count = pending_count_result.scalar()
 
+    # Get buy trades for first/last buy prices (needed for DCA tick marks)
+    buy_trades_query = (
+        select(Trade)
+        .where(Trade.position_id == position.id, Trade.side == "buy")
+        .order_by(Trade.timestamp)
+    )
+    buy_trades_result = await db.execute(buy_trades_query)
+    buy_trades = buy_trades_result.scalars().all()
+
     pos_response = PositionResponse.model_validate(position)
     pos_response.trade_count = trade_count
     pos_response.pending_orders_count = pending_count
+
+    # Set first/last buy prices for DCA reference
+    if buy_trades:
+        pos_response.first_buy_price = buy_trades[0].price
+        pos_response.last_buy_price = buy_trades[-1].price
 
     # Check if position's coin is blacklisted
     base_symbol = position.product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
