@@ -349,6 +349,7 @@ class PhaseConditionEvaluator:
                 period = condition.get("period", 20)
                 std_dev = condition.get("std_dev", 2)
                 required.add(f"{timeframe}_bb_upper_{period}_{std_dev}")
+                required.add(f"{timeframe}_bb_lower_{period}_{std_dev}")
                 required.add(f"{timeframe}_price")
 
             elif condition_type in ["ema_cross", "ema"]:

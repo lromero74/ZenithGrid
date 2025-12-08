@@ -526,7 +526,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         timeframes_needed = set()
         for indicator_key in required_indicators:
             parts = indicator_key.split("_", 2)
-            if len(parts) >= 2 and parts[0] in ["ONE", "FIVE", "FIFTEEN", "THIRTY", "TWO", "SIX"]:
+            if len(parts) >= 2 and parts[0] in ["ONE", "TWO", "THREE", "FIVE", "SIX", "FIFTEEN", "THIRTY", "FOUR"]:
                 timeframe = f"{parts[0]}_{parts[1]}"
                 timeframes_needed.add(timeframe)
 
