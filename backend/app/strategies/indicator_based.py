@@ -787,8 +787,8 @@ class IndicatorBasedStrategy(TradingStrategy):
                 return True, f"Stop loss triggered at {profit_pct:.2f}%"
 
         # Check take profit %
-        tp_pct = self.config.get("take_profit_percentage", 3.0)
-        if profit_pct >= tp_pct:
+        tp_pct = self.config.get("take_profit_percentage")
+        if tp_pct is not None and profit_pct >= tp_pct:
             if self.config.get("trailing_take_profit", False):
                 trailing_dev = self.config.get("trailing_deviation", 1.0)
                 if not hasattr(position, "trailing_tp_active"):
@@ -815,4 +815,5 @@ class IndicatorBasedStrategy(TradingStrategy):
                 return True, f"Take profit conditions met (profit: {profit_pct:.2f}%)"
             return False, f"Conditions met but profit too low ({profit_pct:.2f}% < {min_profit}%)"
 
-        return False, f"Holding (profit: {profit_pct:.2f}%, target: {tp_pct}%)"
+        target_str = f"{tp_pct}%" if tp_pct is not None else "conditions"
+        return False, f"Holding (profit: {profit_pct:.2f}%, target: {target_str})"
