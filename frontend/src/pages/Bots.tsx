@@ -23,6 +23,12 @@ import {
   isParameterVisible,
 } from '../components/bots'
 
+// Helper function to check if a condition uses AI indicators
+function conditionUsesAI(cond: any): boolean {
+  return cond.type === 'ai_buy' || cond.type === 'ai_sell' ||
+         cond.indicator === 'ai_buy' || cond.indicator === 'ai_sell'
+}
+
 // Helper function to check if a bot uses AI indicators in its conditions
 function botUsesAIIndicators(bot: Bot): boolean {
   // Check legacy ai_autonomous strategy type
@@ -32,19 +38,27 @@ function botUsesAIIndicators(bot: Bot): boolean {
   const config = bot.strategy_config
   if (!config) return false
 
-  // Check all condition arrays for ai_buy or ai_sell
-  const conditionArrays = [
+  // Check all condition arrays/objects for ai_buy or ai_sell
+  const conditionSources = [
     config.base_order_conditions,
     config.safety_order_conditions,
     config.take_profit_conditions,
   ]
 
-  for (const conditions of conditionArrays) {
+  for (const conditions of conditionSources) {
+    // Handle flat array format: [{indicator: "ai_buy"...}]
     if (Array.isArray(conditions)) {
       for (const cond of conditions) {
-        if (cond.type === 'ai_buy' || cond.type === 'ai_sell' ||
-            cond.indicator === 'ai_buy' || cond.indicator === 'ai_sell') {
-          return true
+        if (conditionUsesAI(cond)) return true
+      }
+    }
+    // Handle grouped format: {groups: [{conditions: [...]}]}
+    else if (conditions && typeof conditions === 'object' && conditions.groups) {
+      for (const group of conditions.groups) {
+        if (Array.isArray(group.conditions)) {
+          for (const cond of group.conditions) {
+            if (conditionUsesAI(cond)) return true
+          }
         }
       }
     }
