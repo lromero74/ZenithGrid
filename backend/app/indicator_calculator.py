@@ -100,12 +100,13 @@ class IndicatorCalculator:
                 if len(parts) >= 4:
                     _band_type = parts[1]  # upper, middle, lower (parsed but not used - returns all bands)
                     period = int(parts[2])
-                    std_dev = float(parts[3])
+                    std_dev_str = parts[3]  # Keep original format for key (avoids 2.0 vs 2 mismatch)
+                    std_dev = float(std_dev_str)
                     upper, middle, lower = self.calculate_bollinger_bands(closes, period, std_dev)
                     if upper is not None:
-                        indicators[f"bb_upper_{period}_{std_dev}"] = upper
-                        indicators[f"bb_middle_{period}_{std_dev}"] = middle
-                        indicators[f"bb_lower_{period}_{std_dev}"] = lower
+                        indicators[f"bb_upper_{period}_{std_dev_str}"] = upper
+                        indicators[f"bb_middle_{period}_{std_dev_str}"] = middle
+                        indicators[f"bb_lower_{period}_{std_dev_str}"] = lower
 
             elif indicator_key.startswith("stoch_"):
                 # stoch_k_14_3, stoch_d_14_3
