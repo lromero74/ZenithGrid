@@ -34,7 +34,7 @@ try:
 except ImportError:
     from web3.middleware import geth_poa_middleware as poa_middleware
 from eth_account import Account
-from eth_typing import Address, ChecksumAddress
+from eth_typing import ChecksumAddress
 
 from app.exchange_clients.base import ExchangeClient
 from app.exchange_clients.dex_constants import (

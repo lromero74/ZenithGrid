@@ -10,7 +10,6 @@ Handles account-related endpoints:
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select

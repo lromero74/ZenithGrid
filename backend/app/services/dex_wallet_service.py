@@ -14,7 +14,6 @@ from typing import Dict, List, Optional
 
 import aiohttp
 from web3 import Web3
-from web3.exceptions import Web3Exception
 
 logger = logging.getLogger(__name__)
 

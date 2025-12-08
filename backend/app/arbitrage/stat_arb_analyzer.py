@@ -15,7 +15,6 @@ import logging
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from decimal import Decimal
 from typing import Deque, Dict, List, Optional, Tuple
 
 import numpy as np

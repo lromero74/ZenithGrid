@@ -16,7 +16,7 @@ from app.models import Account, Bot, Position
 from app.services.dex_wallet_service import dex_wallet_service
 
 if TYPE_CHECKING:
-    from app.coinbase_unified_client import CoinbaseClient
+    pass
 
 logger = logging.getLogger(__name__)
 

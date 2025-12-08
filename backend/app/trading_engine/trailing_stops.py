@@ -7,7 +7,7 @@ Handles the TSL/TTP logic for bull flag positions:
 """
 
 import logging
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 

@@ -9,9 +9,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session_maker, init_db

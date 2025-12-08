@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from app.precision import format_quote_amount, format_base_amount
+from app.precision import format_base_amount
 from app.product_precision import format_quote_amount_for_product, format_base_amount_for_product
 
 logger = logging.getLogger(__name__)

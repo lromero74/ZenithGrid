@@ -16,7 +16,6 @@ Key concepts:
 - Z-score: Standard deviations from mean spread
 """
 
-from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.strategies import StrategyDefinition, StrategyParameter, StrategyRegistry, TradingStrategy

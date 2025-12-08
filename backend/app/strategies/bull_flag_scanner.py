@@ -6,7 +6,6 @@ Used by the BullFlagStrategy to find entry opportunities.
 """
 
 import asyncio
-import json
 import logging
 import random
 from datetime import datetime, timedelta
@@ -15,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import BlacklistedCoin, ScannerLog, Settings
+from app.models import BlacklistedCoin, ScannerLog
 
 logger = logging.getLogger(__name__)
 
