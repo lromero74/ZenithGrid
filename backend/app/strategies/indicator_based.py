@@ -638,7 +638,11 @@ class IndicatorBasedStrategy(TradingStrategy):
                 per_deal_percentage = percentage / max_deals
                 return balance * (per_deal_percentage / 100.0)
             return balance * (percentage / 100.0)
+        elif order_type == "fixed_btc":
+            # UI uses base_order_btc for fixed BTC amount
+            return self.config.get("base_order_btc", 0.0001)
         else:
+            # Fallback for legacy configs
             return self.config.get("base_order_fixed", 0.001)
 
     def calculate_safety_order_size(self, base_order_size: float, order_number: int) -> float:
@@ -647,7 +651,11 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         if order_type == "percentage_of_base":
             base_safety_size = base_order_size * (self.config.get("safety_order_percentage", 50.0) / 100.0)
+        elif order_type == "fixed_btc":
+            # UI uses safety_order_btc for fixed BTC amount
+            base_safety_size = self.config.get("safety_order_btc", 0.0001)
         else:
+            # Fallback for legacy configs using safety_order_fixed
             base_safety_size = self.config.get("safety_order_fixed", 0.0005)
 
         volume_scale = self.config.get("safety_order_volume_scale", 1.0)

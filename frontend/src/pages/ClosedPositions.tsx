@@ -545,7 +545,7 @@ function ClosedPositions() {
                 <div className="space-y-3">
                   {failedOrders.map((order: any) => (
                     <div key={order.id} className="bg-slate-800 rounded-lg border border-red-900/30 p-4">
-                      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                         <div>
                           <p className="text-slate-400 text-xs mb-1">Bot</p>
                           <div className="flex items-center gap-2 flex-wrap">
@@ -556,6 +556,12 @@ function ClosedPositions() {
                               {order.product_id}
                             </span>
                           </div>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 text-xs mb-1">Position</p>
+                          <p className="font-semibold text-white">
+                            {order.position_id ? `#${order.position_id}` : '-'}
+                          </p>
                         </div>
                         <div>
                           <p className="text-slate-400 text-xs mb-1">Time</p>
