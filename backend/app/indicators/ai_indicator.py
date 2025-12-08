@@ -33,8 +33,8 @@ class AIIndicatorParams:
     # Risk preset (aggressive, moderate, conservative) - sets defaults
     risk_preset: str = "moderate"
 
-    # Confluence thresholds
-    min_confluence_score: int = 65  # Minimum score (0-100) to trigger
+    # Confluence thresholds (max scores are ~50-65, so thresholds calibrated accordingly)
+    min_confluence_score: int = 40  # Minimum score (0-100) to trigger (moderate default)
     ai_confidence_threshold: int = 70  # Legacy - now uses confluence score
 
     # Timeframe settings
