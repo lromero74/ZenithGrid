@@ -362,10 +362,28 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Track previous indicators for crossing detection
         self.previous_indicators = None
 
-    def _get_ai_params(self) -> AIIndicatorParams:
-        """Get AI indicator parameters from config."""
-        preset_name = self.config.get("ai_risk_preset", "moderate")
+    def _get_ai_params(self, condition_params: Optional[Dict[str, Any]] = None) -> AIIndicatorParams:
+        """
+        Get AI indicator parameters from condition or config.
+
+        Priority:
+        1. Condition-level params (risk_preset, ai_provider)
+        2. Bot-level config (ai_risk_preset)
+        3. Default (moderate preset)
+        """
+        # Use condition-level preset if provided
+        if condition_params and condition_params.get("risk_preset"):
+            preset_name = condition_params["risk_preset"]
+        else:
+            preset_name = self.config.get("ai_risk_preset", "moderate")
+
         preset = RISK_PRESETS.get(preset_name, RISK_PRESETS["moderate"])
+
+        # Log the AI provider being used (for debugging)
+        ai_provider = "claude"
+        if condition_params and condition_params.get("ai_provider"):
+            ai_provider = condition_params["ai_provider"]
+        logger.debug(f"AI indicator using preset={preset_name}, provider={ai_provider}")
 
         return AIIndicatorParams(
             risk_preset=preset_name,
@@ -383,22 +401,72 @@ class IndicatorBasedStrategy(TradingStrategy):
             min_pole_gain_pct=self.config.get("bull_flag_min_pole_gain", 3.0),
         )
 
-    def _needs_aggregate_indicators(self) -> Dict[str, bool]:
-        """Check which aggregate indicators are needed based on conditions."""
-        needs = {"ai_buy": False, "ai_sell": False, "bull_flag": False}
+    def _flatten_conditions(self, expression) -> List[Dict[str, Any]]:
+        """
+        Flatten conditions from either grouped or flat format.
 
+        Handles both:
+        - New grouped format: { groups: [{ conditions: [...] }], groupLogic }
+        - Old flat format: [condition1, condition2, ...]
+        """
+        if not expression:
+            return []
+
+        # New grouped format
+        if isinstance(expression, dict) and "groups" in expression:
+            conditions = []
+            for group in expression.get("groups", []):
+                conditions.extend(group.get("conditions", []))
+            return conditions
+
+        # Old flat list format
+        if isinstance(expression, list):
+            return expression
+
+        return []
+
+    def _needs_aggregate_indicators(self) -> Dict[str, Any]:
+        """
+        Check which aggregate indicators are needed based on conditions.
+
+        Returns:
+            Dict with keys: ai_buy, ai_sell, bull_flag (bool)
+            and ai_params: first found AI condition params (or None)
+        """
+        needs = {
+            "ai_buy": False,
+            "ai_sell": False,
+            "bull_flag": False,
+            "ai_params": None,  # First AI condition's params
+        }
+
+        # Flatten all conditions from potentially grouped format
         all_conditions = (
-            self.base_order_conditions +
-            self.safety_order_conditions +
-            self.take_profit_conditions
+            self._flatten_conditions(self.base_order_conditions) +
+            self._flatten_conditions(self.safety_order_conditions) +
+            self._flatten_conditions(self.take_profit_conditions)
         )
 
         for condition in all_conditions:
-            indicator = condition.get("indicator", "").lower()
+            # Check both 'indicator' (legacy) and 'type' (new) keys
+            indicator = (condition.get("type") or condition.get("indicator") or "").lower()
+
             if indicator == "ai_buy":
                 needs["ai_buy"] = True
+                # Extract params from the first AI_BUY condition
+                if needs["ai_params"] is None:
+                    needs["ai_params"] = {
+                        "risk_preset": condition.get("risk_preset", "moderate"),
+                        "ai_provider": condition.get("ai_provider", "claude"),
+                    }
             elif indicator == "ai_sell":
                 needs["ai_sell"] = True
+                # Extract params from AI_SELL if no params yet
+                if needs["ai_params"] is None:
+                    needs["ai_params"] = {
+                        "risk_preset": condition.get("risk_preset", "moderate"),
+                        "ai_provider": condition.get("ai_provider", "claude"),
+                    }
             elif indicator == "bull_flag":
                 needs["bull_flag"] = True
 
@@ -472,7 +540,8 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         # Calculate aggregate indicators if needed
         if needs["ai_buy"] or needs["ai_sell"]:
-            ai_params = self._get_ai_params()
+            # Pass condition-level params (risk_preset, ai_provider) if found
+            ai_params = self._get_ai_params(needs.get("ai_params"))
             entry_candles = candles_by_timeframe.get(ai_params.entry_timeframe, candles)
             trend_candles = candles_by_timeframe.get(ai_params.trend_timeframe, candles)
 
