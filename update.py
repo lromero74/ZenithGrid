@@ -341,7 +341,8 @@ def show_changelog(project_root, changelog_arg):
             capture_output=True,
             check=False
         )
-        tag_date = date_result.stdout.strip()[:10] if date_result.stdout else ''
+        # Format: YYYY-MM-DD HH:MM (first 16 chars of ISO 8601)
+        tag_date = date_result.stdout.strip()[:16] if date_result.stdout else ''
 
         # Mark installed version in the list
         is_installed = (curr_tag == current_version)
