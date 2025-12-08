@@ -163,8 +163,8 @@ async def execute_sell(
             logger.info(f"  📊 Placing LIMIT close order @ {limit_price:.8f} (mark price)")
 
             # Place limit order and return - position stays open until filled
-            # TODO: pending_order is currently unused but reserved for future limit order tracking/monitoring
-            pending_order = await execute_limit_sell(
+            # TODO: _pending_order is currently unused but reserved for future limit order tracking/monitoring
+            _pending_order = await execute_limit_sell(
                 db=db,
                 exchange=exchange,
                 trading_client=trading_client,

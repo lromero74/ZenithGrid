@@ -234,7 +234,7 @@ class SpatialArbitrageStrategy(TradingStrategy):
 
         # Calculate position size based on available liquidity and config
         max_size_usd = Decimal(str(self.config["max_position_size_usd"]))
-        min_size_usd = Decimal(str(self.config["min_position_size_usd"]))
+        _min_size_usd = Decimal(str(self.config["min_position_size_usd"]))  # noqa: F841 - reserved for future validation
 
         # Use position_size_pct of max to be conservative
         target_size_usd = max_size_usd * Decimal(str(self.config["position_size_pct"])) / 100

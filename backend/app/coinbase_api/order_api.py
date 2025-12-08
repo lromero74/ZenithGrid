@@ -78,12 +78,6 @@ async def create_limit_order(
 
     Note: Use either size OR funds, not both
     """
-    # Extract currencies from product_id for proper precision formatting
-    if "-" in product_id:
-        base_currency, quote_currency = product_id.split("-")
-    else:
-        base_currency, quote_currency = "ETH", "BTC"  # fallback
-
     # Format limit price with PRODUCT-SPECIFIC precision (uses product_precision.json)
     # This ensures correct decimal places for each trading pair (e.g., SOL-BTC needs 7 decimals)
     formatted_limit_price = format_quote_amount_for_product(limit_price, product_id)

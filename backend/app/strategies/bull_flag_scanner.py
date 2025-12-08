@@ -264,12 +264,12 @@ def detect_bull_flag_pattern(
             return float(candle[5]) if len(candle) > 5 else 0
 
     def is_green(candle):
-        o, h, l, c = get_ohlc(candle)
-        return c > o
+        open_price, _, _, close_price = get_ohlc(candle)
+        return close_price > open_price
 
     def is_red(candle):
-        o, h, l, c = get_ohlc(candle)
-        return c < o
+        open_price, _, _, close_price = get_ohlc(candle)
+        return close_price < open_price
 
     # Start from most recent candle and work backwards
     n = len(candles)
@@ -305,13 +305,13 @@ def detect_bull_flag_pattern(
     # Scan backwards through the pullback window
     for i in range(pullback_window_start, pullback_window_end - 1, -1):
         candle = candles[i]
-        o, h, l, c = get_ohlc(candle)
+        open_price, high, low, close_price = get_ohlc(candle)
 
         if is_red(candle):
             red_count += 1
             pullback_total_volume += get_volume(candle)
-            pullback_low = min(pullback_low, l)
-            pullback_high = max(pullback_high, h)
+            pullback_low = min(pullback_low, low)
+            pullback_high = max(pullback_high, high)
             if first_red_idx is None:
                 first_red_idx = i
             last_red_idx = i
@@ -319,8 +319,8 @@ def detect_bull_flag_pattern(
             # Allow non-red candles within the pullback if we've found red ones
             # But also track their range as part of pullback zone
             if first_red_idx is not None:
-                pullback_low = min(pullback_low, l)
-                pullback_high = max(pullback_high, h)
+                pullback_low = min(pullback_low, low)
+                pullback_high = max(pullback_high, high)
 
         candles_in_pullback += 1
 
@@ -329,7 +329,7 @@ def detect_bull_flag_pattern(
         if red_count >= min_pullback_candles:
             # Check if this is a strong reversal (pole-like) candle
             if is_green(candle):
-                gain_pct = ((c - o) / o * 100) if o > 0 else 0
+                gain_pct = ((close_price - open_price) / open_price * 100) if open_price > 0 else 0
                 if gain_pct > 1.0:  # Strong green candle, likely start of pole
                     break
 
@@ -347,7 +347,7 @@ def detect_bull_flag_pattern(
 
     # Step 3: Find POLE before pullback
     pole_end_idx = pullback_end_idx
-    pole_start_idx = None
+    _pole_start_idx = None  # noqa: F841 - kept for debugging visibility
     pole_high = 0.0
     pole_low = float("inf")
     pole_candle_count = 0
@@ -355,14 +355,14 @@ def detect_bull_flag_pattern(
 
     for i in range(pole_end_idx, -1, -1):
         candle = candles[i]
-        o, h, l, c = get_ohlc(candle)
+        _, high, low, close_price = get_ohlc(candle)
 
         # Pole should be upward trending
-        if is_green(candle) or (i > 0 and c > get_ohlc(candles[i-1])[3]):
-            pole_high = max(pole_high, h)
-            pole_low = min(pole_low, l)
+        if is_green(candle) or (i > 0 and close_price > get_ohlc(candles[i-1])[3]):
+            pole_high = max(pole_high, high)
+            pole_low = min(pole_low, low)
             pole_candle_count += 1
-            pole_start_idx = i
+            _pole_start_idx = i  # noqa: F841 - kept for debugging visibility
             pole_total_volume += get_volume(candle)  # Accumulate buy volume
         else:
             # End of pole trend

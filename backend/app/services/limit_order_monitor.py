@@ -242,7 +242,7 @@ class LimitOrderMonitor:
             trading_client = TradingClient(self.coinbase)
 
             try:
-                cancel_result = await trading_client.cancel_order(pending_order.order_id)
+                await trading_client.cancel_order(pending_order.order_id)
                 logger.info(f"✅ Position {position.id}: Old order cancelled successfully")
             except Exception as e:
                 logger.error(f"❌ Position {position.id}: Failed to cancel old order: {e}")

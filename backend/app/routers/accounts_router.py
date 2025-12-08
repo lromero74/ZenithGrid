@@ -179,7 +179,7 @@ async def list_accounts(
         if current_user:
             query = query.where(Account.user_id == current_user.id)
         if not include_inactive:
-            query = query.where(Account.is_active == True)
+            query = query.where(Account.is_active)
         query = query.order_by(Account.is_default.desc(), Account.created_at.asc())
 
         result = await db.execute(query)
@@ -298,9 +298,9 @@ async def create_account(
 
         # If this is set as default, unset other defaults (for this user if authenticated)
         if account_data.is_default:
-            default_filter = Account.is_default == True
+            default_filter = Account.is_default
             if current_user:
-                default_filter = (Account.is_default == True) & (Account.user_id == current_user.id)
+                default_filter = Account.is_default & (Account.user_id == current_user.id)
             await db.execute(
                 update(Account).where(default_filter).values(is_default=False)
             )
@@ -484,7 +484,7 @@ async def set_default_account(
 
         # Unset all other defaults
         await db.execute(
-            update(Account).where(Account.is_default == True).values(is_default=False)
+            update(Account).where(Account.is_default).values(is_default=False)
         )
 
         # Set this one as default
@@ -554,13 +554,13 @@ async def get_default_account(
 ):
     """Get the default account."""
     try:
-        query = select(Account).where(Account.is_default == True)
+        query = select(Account).where(Account.is_default)
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
         if not account:
             # If no default, return the first active account
-            query = select(Account).where(Account.is_active == True).order_by(Account.created_at.asc())
+            query = select(Account).where(Account.is_active).order_by(Account.created_at.asc())
             result = await db.execute(query)
             account = result.scalar_one_or_none()
 

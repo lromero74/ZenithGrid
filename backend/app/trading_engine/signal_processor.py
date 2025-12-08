@@ -469,7 +469,7 @@ async def process_signal(
             # Raising would abort the entire bot cycle and prevent sells on other positions!
             # Instead, log the error on the position and continue processing
             logger.error(f"  ❌ DCA buy failed for existing position: {e}")
-            logger.warning(f"  ⚠️ Continuing bot cycle to check for sells on other positions")
+            logger.warning("  ⚠️ Continuing bot cycle to check for sells on other positions")
 
             # The error is already recorded on the position by execute_buy() if commit_on_error=True
             # Just return and let the bot continue to check for sells
