@@ -269,9 +269,13 @@ function AdvancedConditionBuilder({
 
                 // Handle type changes - reset to defaults
                 if (updates.type && updates.type !== c.type) {
+                  // Start fresh with only essential fields - removes stale 'indicator' field
                   const newCond: Condition = {
-                    ...c,
+                    id: c.id,
                     type: updates.type,
+                    operator: c.operator,
+                    value: c.value,
+                    timeframe: c.timeframe,
                     negate: c.negate,
                   }
                   switch (updates.type) {

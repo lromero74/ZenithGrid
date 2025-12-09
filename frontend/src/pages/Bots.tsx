@@ -24,9 +24,10 @@ import {
 } from '../components/bots'
 
 // Helper function to check if a condition uses AI indicators
+// Prioritize 'type' over legacy 'indicator' field (matches backend logic)
 function conditionUsesAI(cond: any): boolean {
-  return cond.type === 'ai_buy' || cond.type === 'ai_sell' ||
-         cond.indicator === 'ai_buy' || cond.indicator === 'ai_sell'
+  const indicatorType = cond.type || cond.indicator
+  return indicatorType === 'ai_buy' || indicatorType === 'ai_sell'
 }
 
 // Helper function to check if a bot uses AI indicators in its conditions
