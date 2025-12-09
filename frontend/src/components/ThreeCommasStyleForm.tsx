@@ -70,6 +70,14 @@ function toConditionExpression(stored: any, logic: 'and' | 'or' = 'and'): Condit
   return createEmptyExpression()
 }
 
+// Check if entry conditions use bull_flag indicator (pattern-based entry)
+function hasBullFlagEntry(expression: ConditionExpression): boolean {
+  if (!expression?.groups) return false
+  return expression.groups.some(group =>
+    group.conditions?.some(c => c.type === 'bull_flag')
+  )
+}
+
 function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
   const updateConfig = (key: string, value: any) => {
     onChange({ ...config, [key]: value })
@@ -88,6 +96,9 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
     config.take_profit_conditions,
     config.take_profit_logic || 'and'
   )
+
+  // Bull flag entry uses pattern-calculated TSL/TTP, not percentage-based config
+  const isPatternBasedEntry = hasBullFlagEntry(baseOrderExpression)
 
   return (
     <div className="space-y-6">
@@ -175,7 +186,23 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
         />
       </div>
 
-      {/* Safety Order Settings */}
+      {/* Pattern-Based Entry Info (Bull Flag) */}
+      {isPatternBasedEntry && (
+        <div className="bg-emerald-900/30 rounded-lg p-4 border border-emerald-700">
+          <h3 className="text-lg font-semibold text-emerald-400 mb-2">Pattern-Based Exit Strategy</h3>
+          <p className="text-sm text-emerald-300/80">
+            Bull Flag entry uses <strong>pattern-calculated targets</strong> instead of percentage-based settings:
+          </p>
+          <ul className="text-sm text-emerald-300/80 mt-2 ml-4 list-disc space-y-1">
+            <li><strong>Stop Loss</strong>: Trailing stop at pullback low (moves up as price rises)</li>
+            <li><strong>Take Profit</strong>: Trailing TP at 2x risk (activates when target reached, then trails 1%)</li>
+            <li><strong>No DCA</strong>: Bull flag is a momentum trade - uses TSL/TTP exit strategy</li>
+          </ul>
+        </div>
+      )}
+
+      {/* Safety Order Settings - hidden for pattern-based entries */}
+      {!isPatternBasedEntry && (
       <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">Safety Orders (DCA)</h3>
@@ -354,8 +381,10 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
           </>
         )}
       </div>
+      )}
 
-      {/* Take Profit Settings */}
+      {/* Take Profit Settings - hidden for pattern-based entries */}
+      {!isPatternBasedEntry && (
       <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
         <h3 className="text-lg font-semibold text-white mb-4">Take Profit / Exit</h3>
 
@@ -465,6 +494,7 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
           onChange={(expression) => updateConfig('take_profit_conditions', expression)}
         />
       </div>
+      )}
 
       {/* Summary */}
       <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
@@ -479,19 +509,32 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               ? `${baseOrderExpression.groups.length} group(s), ${baseOrderExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`
               : 'Manual start only'}
           </p>
-          <p>
-            🔁 <strong>Safety Orders:</strong>{' '}
-            {(config.max_safety_orders ?? 5) === 0
-              ? 'Disabled'
-              : safetyOrderExpression.groups.length > 0
-                ? `${safetyOrderExpression.groups.length} group(s), ${safetyOrderExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`
-                : `Price deviation (${config.price_deviation || 2}%)`}
-          </p>
-          <p>
-            📤 <strong>Exit:</strong> Take Profit {config.take_profit_percentage || 3}%
-            {takeProfitExpression.groups.length > 0 &&
-              ` + ${takeProfitExpression.groups.length} group(s), ${takeProfitExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`}
-          </p>
+          {isPatternBasedEntry ? (
+            <>
+              <p>
+                🛡️ <strong>Stop Loss:</strong> Trailing (at pullback low)
+              </p>
+              <p>
+                📤 <strong>Exit:</strong> Trailing TP (2x risk target, trails 1%)
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                🔁 <strong>Safety Orders:</strong>{' '}
+                {(config.max_safety_orders ?? 5) === 0
+                  ? 'Disabled'
+                  : safetyOrderExpression.groups.length > 0
+                    ? `${safetyOrderExpression.groups.length} group(s), ${safetyOrderExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`
+                    : `Price deviation (${config.price_deviation || 2}%)`}
+              </p>
+              <p>
+                📤 <strong>Exit:</strong> Take Profit {config.take_profit_percentage || 3}%
+                {takeProfitExpression.groups.length > 0 &&
+                  ` + ${takeProfitExpression.groups.length} group(s), ${takeProfitExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>
