@@ -999,7 +999,9 @@ class MultiBotMonitor:
                 ai_sell_score = indicators.get("ai_sell_score", 0) or 0
 
                 # Determine decision and confidence based on which signal triggered
-                if take_profit:
+                # IMPORTANT: Only show SELL if there's actually a position to sell
+                has_position = existing_position is not None
+                if take_profit and has_position:
                     decision = "sell"
                     confidence = ai_sell_score
                     reasoning = ai_sell_explanation or "Take profit conditions met"
@@ -1008,15 +1010,21 @@ class MultiBotMonitor:
                     confidence = ai_buy_score
                     reasoning = ai_buy_explanation or "Buy conditions met"
                 else:
+                    # For pairs without positions, show AI_BUY analysis
+                    # For pairs with positions, show combined analysis
                     decision = "hold"
-                    confidence = max(ai_buy_score, ai_sell_score)
-                    # Construct combined reasoning showing why we're holding
-                    combined_parts = []
-                    if ai_buy_explanation:
-                        combined_parts.append(f"AI Buy: {ai_buy_explanation}")
-                    if ai_sell_explanation:
-                        combined_parts.append(f"AI Sell: {ai_sell_explanation}")
-                    reasoning = " | ".join(combined_parts) if combined_parts else "Conditions not met"
+                    if has_position:
+                        confidence = max(ai_buy_score, ai_sell_score)
+                        combined_parts = []
+                        if ai_buy_explanation:
+                            combined_parts.append(f"AI Buy: {ai_buy_explanation}")
+                        if ai_sell_explanation:
+                            combined_parts.append(f"AI Sell: {ai_sell_explanation}")
+                        reasoning = " | ".join(combined_parts) if combined_parts else "Conditions not met"
+                    else:
+                        # No position - show only BUY analysis (what we need to enter)
+                        confidence = ai_buy_score
+                        reasoning = ai_buy_explanation or "Waiting for buy conditions"
 
                 log_signal_data = {
                     **signal_data,
