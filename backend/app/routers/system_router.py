@@ -33,6 +33,7 @@ from app.schemas import (
     SignalResponse,
     TradeResponse,
 )
+from app.services.shutdown_manager import shutdown_manager
 
 logger = logging.getLogger(__name__)
 
@@ -323,3 +324,49 @@ async def get_market_data(hours: int = 24, db: AsyncSession = Depends(get_db)):
     data = result.scalars().all()
 
     return [MarketDataResponse.model_validate(d) for d in data]
+
+
+# === Graceful Shutdown Endpoints ===
+
+@router.get("/api/system/shutdown-status")
+async def get_shutdown_status():
+    """Get current shutdown manager status"""
+    return shutdown_manager.get_status()
+
+
+@router.post("/api/system/prepare-shutdown")
+async def prepare_shutdown(timeout: int = 60):
+    """
+    Prepare for graceful shutdown.
+
+    This endpoint:
+    1. Prevents new orders from being placed
+    2. Waits for any in-flight orders to complete (up to timeout seconds)
+    3. Returns when safe to stop the service
+
+    Args:
+        timeout: Maximum seconds to wait for in-flight orders (default: 60)
+
+    Returns:
+        - ready: True if safe to shutdown
+        - in_flight_count: Orders still executing (if not ready)
+        - waited_seconds: How long we waited
+        - message: Human-readable status
+
+    Usage from shell:
+        curl -X POST http://localhost:8100/api/system/prepare-shutdown?timeout=60
+    """
+    logger.info(f"Prepare-shutdown requested with timeout={timeout}s")
+    result = await shutdown_manager.prepare_shutdown(timeout=float(timeout))
+    return result
+
+
+@router.post("/api/system/cancel-shutdown")
+async def cancel_shutdown():
+    """
+    Cancel a pending shutdown request.
+
+    This allows new orders to be placed again.
+    """
+    await shutdown_manager.cancel_shutdown()
+    return {"message": "Shutdown cancelled", "status": shutdown_manager.get_status()}

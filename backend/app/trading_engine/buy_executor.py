@@ -16,6 +16,7 @@ from app.order_validation import validate_order_size
 from app.currency_utils import get_quote_currency
 from app.trading_engine.order_logger import log_order_to_history
 from app.services.websocket_manager import ws_manager
+from app.services.shutdown_manager import shutdown_manager
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,11 @@ async def execute_buy(
         Trade record (for market orders only; limit orders return None)
     """
     quote_currency = get_quote_currency(product_id)
+
+    # Check if shutdown is in progress - reject new orders
+    if shutdown_manager.is_shutting_down:
+        logger.warning(f"Rejecting order for {product_id} - shutdown in progress")
+        raise RuntimeError("Cannot place orders - shutdown in progress")
 
     # Check if this is a safety order that should use limit orders
     is_safety_order = trade_type.startswith("safety_order")
@@ -120,7 +126,9 @@ async def execute_buy(
 
     # Execute order via TradingClient (currency-agnostic)
     # Actual fill amounts will be fetched from Coinbase after order executes
+    # Track this as an in-flight order for graceful shutdown
     order_id = None
+    await shutdown_manager.increment_in_flight()
     try:
         order_response = await trading_client.buy(product_id=product_id, quote_amount=quote_amount)
         success_response = order_response.get("success_response", {})
@@ -297,6 +305,9 @@ async def execute_buy(
             position.last_error_timestamp = datetime.utcnow()
             await db.commit()
         raise
+
+    finally:
+        await shutdown_manager.decrement_in_flight()
 
     # Record trade with ACTUAL filled amounts from Coinbase
     trade = Trade(

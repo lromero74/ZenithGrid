@@ -15,6 +15,7 @@ from app.models import Bot, PendingOrder, Position, Trade
 from app.trading_client import TradingClient
 from app.currency_utils import get_quote_currency
 from app.product_precision import get_base_precision
+from app.services.shutdown_manager import shutdown_manager
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,11 @@ async def execute_sell(
     """
     quote_currency = get_quote_currency(product_id)
 
+    # Check if shutdown is in progress - reject new orders
+    if shutdown_manager.is_shutting_down:
+        logger.warning(f"Rejecting sell order for {product_id} - shutdown in progress")
+        raise RuntimeError("Cannot place orders - shutdown in progress")
+
     # Check if we should use a limit order for closing
     config: Dict = position.strategy_config_snapshot or {}
     take_profit_order_type = config.get("take_profit_order_type", "limit")
@@ -199,7 +205,9 @@ async def execute_sell(
     )
 
     # Execute order via TradingClient (currency-agnostic)
+    # Track this as an in-flight order for graceful shutdown
     order_id = None
+    await shutdown_manager.increment_in_flight()
     try:
         order_response = await trading_client.sell(product_id=product_id, base_amount=base_amount)
 
@@ -236,6 +244,9 @@ async def execute_sell(
     except Exception as e:
         logger.error(f"Error executing sell order: {e}")
         raise
+
+    finally:
+        await shutdown_manager.decrement_in_flight()
 
     # Calculate profit
     profit_quote = quote_received - position.total_quote_spent

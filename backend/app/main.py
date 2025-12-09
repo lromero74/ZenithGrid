@@ -21,6 +21,7 @@ from app.routers import news_router
 from app.routers import auth_router  # User authentication
 from app.routers import ai_credentials_router  # Per-user AI provider keys
 from app.services.websocket_manager import ws_manager
+from app.services.shutdown_manager import shutdown_manager
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -215,7 +216,16 @@ async def startup_event():
 async def shutdown_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task
 
-    logger.info("🛑 Shutting down - stopping monitors...")
+    logger.info("🛑 Shutting down - waiting for in-flight orders...")
+
+    # Wait for any in-flight orders to complete (up to 60 seconds)
+    shutdown_result = await shutdown_manager.prepare_shutdown(timeout=60.0)
+    if shutdown_result["ready"]:
+        logger.info(f"✅ {shutdown_result['message']}")
+    else:
+        logger.warning(f"⚠️ {shutdown_result['message']}")
+
+    logger.info("🛑 Stopping monitors...")
     if price_monitor:
         await price_monitor.stop()
 

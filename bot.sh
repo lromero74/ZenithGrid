@@ -32,6 +32,35 @@ FRONTEND_SERVICE="trading-bot-frontend"
 BACKEND_PORT=8100
 FRONTEND_PORT=5173
 
+# Graceful shutdown timeout (seconds)
+SHUTDOWN_TIMEOUT=60
+
+# Function to prepare for graceful shutdown
+prepare_graceful_shutdown() {
+    echo -e "${BLUE}Preparing graceful shutdown (waiting for in-flight orders)...${NC}"
+
+    # Call the shutdown endpoint and wait for completion
+    local result
+    result=$(curl -s -X POST "http://localhost:$BACKEND_PORT/api/system/prepare-shutdown?timeout=$SHUTDOWN_TIMEOUT" 2>/dev/null) || {
+        echo -e "${YELLOW}Backend not responding - proceeding with stop${NC}"
+        return 0
+    }
+
+    # Check if shutdown is ready
+    local ready=$(echo "$result" | grep -o '"ready": *true' || true)
+    local in_flight=$(echo "$result" | grep -o '"in_flight_count": *[0-9]*' | grep -o '[0-9]*' || echo "0")
+    local message=$(echo "$result" | grep -o '"message": *"[^"]*"' | sed 's/"message": *"\([^"]*\)"/\1/' || true)
+
+    if [ -n "$ready" ]; then
+        echo -e "${GREEN}✅ $message${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Shutdown timeout: $in_flight orders still in-flight${NC}"
+        echo -e "${YELLOW}   Proceeding anyway (orders will be reconciled on restart)${NC}"
+    fi
+
+    return 0
+}
+
 # Function to check if process is running (macOS/Linux)
 is_process_running() {
     local pid_file=$1
@@ -148,6 +177,9 @@ stop_backend() {
         echo -e "${YELLOW}Backend is not running${NC}"
         return 0
     fi
+
+    # Graceful shutdown - wait for in-flight orders to complete
+    prepare_graceful_shutdown
 
     sudo systemctl stop "$BACKEND_SERVICE"
     sleep 1
@@ -290,6 +322,12 @@ case "${1:-}" in
 
         # Clear bytecode cache before restarting
         clear_python_cache
+        echo ""
+
+        # Graceful shutdown - wait for in-flight orders to complete
+        if is_service_running "$BACKEND_SERVICE"; then
+            prepare_graceful_shutdown
+        fi
         echo ""
 
         echo -e "${BLUE}Restarting backend...${NC}"
