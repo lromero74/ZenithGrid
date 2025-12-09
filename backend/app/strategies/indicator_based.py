@@ -406,9 +406,34 @@ class IndicatorBasedStrategy(TradingStrategy):
 
     def _get_bull_flag_params(self) -> BullFlagParams:
         """Get Bull Flag indicator parameters from config."""
+        # Read all bull flag params from config, including migrated values
+        # Priority: explicit config > migrated config > defaults
         return BullFlagParams(
             timeframe=self.config.get("bull_flag_timeframe", "FIFTEEN_MINUTE"),
-            min_pole_gain_pct=self.config.get("bull_flag_min_pole_gain", 3.0),
+            min_pole_gain_pct=self.config.get(
+                "bull_flag_min_pole_gain",
+                self.config.get("_migrated_min_pole_gain_pct", 3.0)
+            ),
+            min_pole_candles=self.config.get(
+                "bull_flag_min_pole_candles",
+                self.config.get("_migrated_min_pole_candles", 3)
+            ),
+            min_pullback_candles=self.config.get(
+                "bull_flag_min_pullback_candles",
+                self.config.get("_migrated_min_pullback_candles", 2)
+            ),
+            max_pullback_candles=self.config.get(
+                "bull_flag_max_pullback_candles",
+                self.config.get("_migrated_max_pullback_candles", 8)
+            ),
+            pullback_retracement_max=self.config.get(
+                "bull_flag_pullback_retracement_max",
+                self.config.get("_migrated_pullback_retracement_max", 50.0)
+            ),
+            reward_risk_ratio=self.config.get(
+                "bull_flag_reward_risk_ratio",
+                self.config.get("_migrated_reward_risk_ratio", 2.0)
+            ),
         )
 
     def _flatten_conditions(self, expression) -> List[Dict[str, Any]]:
