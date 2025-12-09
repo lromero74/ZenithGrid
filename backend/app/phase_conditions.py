@@ -295,6 +295,10 @@ class PhaseConditionEvaluator:
         elif condition_type == "volume":
             return indicators.get(f"{timeframe}_volume")
 
+        elif condition_type in ["ai_buy", "ai_sell", "bull_flag"]:
+            # Aggregate indicators don't use timeframe prefix
+            return indicators.get(condition_type)
+
         return None
 
     def get_required_indicators_from_expression(
