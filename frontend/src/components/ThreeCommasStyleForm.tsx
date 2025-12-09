@@ -354,19 +354,26 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Min Profit % for Condition Exit
+              Condition Exit Override %
+              <span className="text-slate-500 font-normal ml-1">(optional)</span>
             </label>
             <input
               type="number"
-              value={getNumericValue(config.min_profit_for_conditions, 0.0)}
-              onChange={(e) => updateConfig('min_profit_for_conditions', safeParseFloat(e.target.value) ?? 0.0)}
+              value={config.min_profit_for_conditions !== undefined && config.min_profit_for_conditions !== null
+                ? config.min_profit_for_conditions
+                : ''}
+              onChange={(e) => {
+                const val = e.target.value === '' ? undefined : safeParseFloat(e.target.value)
+                updateConfig('min_profit_for_conditions', val)
+              }}
               min="-50"
               max="50"
               step="0.1"
+              placeholder={`${config.take_profit_percentage || 3}%`}
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">
-              Min profit to exit on conditions below (0 = breakeven)
+              Uses Take Profit % by default. Set only to allow condition exits at different profit.
             </p>
           </div>
 

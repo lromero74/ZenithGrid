@@ -204,13 +204,14 @@ class IndicatorBasedStrategy(TradingStrategy):
                 ),
                 StrategyParameter(
                     name="min_profit_for_conditions",
-                    display_name="Min Profit for Condition Exit",
-                    description="Min profit % required to exit on take profit conditions",
+                    display_name="Min Profit for Condition Exit (Override)",
+                    description="Override: Min profit % for condition exits. If not set, uses Take Profit %",
                     type="float",
-                    default=0.0,
+                    default=None,  # None = use take_profit_percentage
                     min_value=-50.0,
                     max_value=50.0,
                     group="Take Profit",
+                    optional=True,  # Only show if user wants to override
                 ),
                 StrategyParameter(
                     name="trailing_take_profit",
@@ -809,8 +810,17 @@ class IndicatorBasedStrategy(TradingStrategy):
                 return True, f"Take profit target reached: {profit_pct:.2f}%"
 
         # Check take profit conditions
+        # CRITICAL: Use take_profit_percentage as default min profit for condition exits
+        # This prevents selling at low profits just because conditions triggered
         if take_profit_signal and self.take_profit_conditions:
-            min_profit = self.config.get("min_profit_for_conditions", 0.0)
+            # If min_profit_for_conditions is explicitly set to a non-None value, use it
+            # Otherwise fall back to take_profit_percentage
+            # NOTE: We check for None explicitly because dict.get() returns 0.0 if that's the stored value
+            min_profit_override = self.config.get("min_profit_for_conditions")
+            if min_profit_override is not None:
+                min_profit = min_profit_override
+            else:
+                min_profit = self.config.get("take_profit_percentage", 3.0)
             if profit_pct >= min_profit:
                 return True, f"Take profit conditions met (profit: {profit_pct:.2f}%)"
             return False, f"Conditions met but profit too low ({profit_pct:.2f}% < {min_profit}%)"
