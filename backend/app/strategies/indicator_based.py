@@ -285,10 +285,10 @@ class IndicatorBasedStrategy(TradingStrategy):
                 StrategyParameter(
                     name="ai_min_confluence_score",
                     display_name="AI Min Confluence Score",
-                    description="Minimum confluence score (0-100) for AI signals",
+                    description="Minimum confluence score (0-100) for AI signals. Presets: aggressive=30, moderate=40, conservative=50",
                     type="int",
-                    default=65,
-                    min_value=30,
+                    default=40,  # Match moderate preset
+                    min_value=20,
                     max_value=95,
                     group="AI Indicators",
                 ),
