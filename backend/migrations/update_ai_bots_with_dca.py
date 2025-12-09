@@ -37,6 +37,20 @@ async def update_bots_and_snapshots():
 
         print(f"Found {len(ai_bots)} AI autonomous bots")
 
+        # Check if migration already applied (all bots have all DCA keys)
+        needs_update = False
+        for bot in ai_bots:
+            for key in DEFAULT_DCA_CONFIG.keys():
+                if key not in bot.strategy_config:
+                    needs_update = True
+                    break
+            if needs_update:
+                break
+
+        if not needs_update and len(ai_bots) > 0:
+            print("⚠️  All AI bots already have DCA config - migration already applied")
+            return
+
         for bot in ai_bots:
             print(f"\n📝 Updating bot #{bot.id}: {bot.name}")
 
