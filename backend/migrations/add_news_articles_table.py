@@ -19,6 +19,12 @@ def run_migration():
     cursor = conn.cursor()
 
     try:
+        # Check if table already exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='news_articles'")
+        if cursor.fetchone():
+            print("⚠️  Table news_articles already exists - migration already applied")
+            return
+
         # Create news_articles table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS news_articles (
