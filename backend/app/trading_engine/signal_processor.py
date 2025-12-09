@@ -528,6 +528,58 @@ async def process_signal(
         should_sell, sell_reason = await strategy.should_sell(signal_data, position, current_price, market_context)
 
         if should_sell:
+            # CRITICAL FIX: For limit orders, verify profit at MARK PRICE meets threshold
+            # should_sell checked profit at current_price (candle close), but limit orders
+            # are placed at mark price (bid/ask midpoint) which can be significantly lower
+            config = position.strategy_config_snapshot or {}
+            take_profit_order_type = config.get("take_profit_order_type", "limit")
+            min_profit_for_conditions = config.get("min_profit_for_conditions")
+
+            if take_profit_order_type == "limit" and min_profit_for_conditions is not None:
+                # Get actual mark price to verify profit
+                try:
+                    ticker = await exchange.get_ticker(product_id)
+                    best_bid = float(ticker.get("best_bid", 0))
+                    best_ask = float(ticker.get("best_ask", 0))
+                    mark_price = (best_bid + best_ask) / 2 if best_bid > 0 and best_ask > 0 else current_price
+
+                    # Calculate profit at mark price
+                    mark_value = position.total_base_acquired * mark_price
+                    mark_profit = mark_value - position.total_quote_spent
+                    mark_profit_pct = (mark_profit / position.total_quote_spent) * 100
+
+                    if mark_profit_pct < min_profit_for_conditions:
+                        logger.info(
+                            f"  ⚠️ Sell conditions met BUT mark price profit ({mark_profit_pct:.2f}%) "
+                            f"< min_profit_for_conditions ({min_profit_for_conditions}%) - HOLDING"
+                        )
+                        # Record as hold - wait for better price
+                        signal = Signal(
+                            position_id=position.id,
+                            timestamp=datetime.utcnow(),
+                            signal_type="hold",
+                            macd_value=signal_data.get("macd_value", 0),
+                            macd_signal=signal_data.get("macd_signal", 0),
+                            macd_histogram=signal_data.get("macd_histogram", 0),
+                            price=current_price,
+                            action_taken="hold",
+                            reason=f"Conditions met but mark profit {mark_profit_pct:.2f}% < {min_profit_for_conditions}%",
+                        )
+                        db.add(signal)
+                        await db.commit()
+                        return {
+                            "action": "hold",
+                            "reason": f"Sell blocked: mark profit {mark_profit_pct:.2f}% < {min_profit_for_conditions}%",
+                            "signal": signal_data,
+                            "position": position,
+                        }
+                    else:
+                        logger.info(
+                            f"  ✓ Mark price profit ({mark_profit_pct:.2f}%) >= min_profit ({min_profit_for_conditions}%) - proceeding"
+                        )
+                except Exception as e:
+                    logger.warning(f"Could not verify mark price profit, proceeding with sell: {e}")
+
             # Execute sell (market or limit based on config)
             trade, profit_quote, profit_pct = await execute_sell(
                 db=db,
