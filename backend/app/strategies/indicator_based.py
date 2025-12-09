@@ -730,6 +730,12 @@ class IndicatorBasedStrategy(TradingStrategy):
             return True, amount, f"Base order (conditions met): {amount:.8f}"
         else:
             # Safety order logic
+
+            # Skip safety orders for pattern-based positions (e.g., bull flag)
+            # These use TSL/TTP exit strategy, not DCA
+            if hasattr(position, "entry_stop_loss") and position.entry_stop_loss is not None:
+                return False, 0.0, "Pattern position - DCA disabled (using TSL/TTP)"
+
             max_safety = self.config.get("max_safety_orders", 5)
             if max_safety == 0:
                 return False, 0.0, "Safety orders disabled"
@@ -797,6 +803,70 @@ class IndicatorBasedStrategy(TradingStrategy):
             position.highest_price_since_entry = current_price
         elif current_price > position.highest_price_since_entry:
             position.highest_price_since_entry = current_price
+
+        # =============================================================
+        # PATTERN-BASED TSL/TTP (e.g., Bull Flag positions)
+        # If position has pattern targets, use those instead of percentage-based
+        # =============================================================
+        if hasattr(position, "entry_stop_loss") and position.entry_stop_loss is not None:
+            entry_price = avg_price
+            entry_sl = position.entry_stop_loss
+            entry_tp = getattr(position, "entry_take_profit_target", None)
+
+            # Calculate risk distance for trailing stop
+            risk_distance = entry_price - entry_sl
+
+            # Track highest price since entry for TSL
+            highest = position.highest_price_since_entry or entry_price
+
+            # Update trailing stop loss (moves up as price rises, never down)
+            current_tsl = getattr(position, "trailing_stop_loss_price", entry_sl) or entry_sl
+
+            # TSL moves up when price creates new highs (locks in profits)
+            # Simple approach: TSL = highest - risk_distance (maintains original risk)
+            if highest > entry_price:
+                new_tsl = highest - risk_distance
+                if new_tsl > current_tsl:
+                    position.trailing_stop_loss_price = new_tsl
+                    current_tsl = new_tsl
+
+            # Check TSL hit
+            if current_price <= current_tsl:
+                return True, f"Pattern TSL triggered: ${current_price:.4f} <= TSL ${current_tsl:.4f} (profit: {profit_pct:.2f}%)"
+
+            # Check TTP (Trailing Take Profit)
+            if entry_tp is not None:
+                # TTP activates when price reaches target
+                tp_active = getattr(position, "trailing_tp_active", False)
+
+                if current_price >= entry_tp:
+                    if not tp_active:
+                        position.trailing_tp_active = True
+                        position.highest_price_since_tp = current_price
+                        tp_active = True
+
+                if tp_active:
+                    # Track peak since TTP activation
+                    highest_since_tp = getattr(position, "highest_price_since_tp", current_price) or current_price
+                    if current_price > highest_since_tp:
+                        position.highest_price_since_tp = current_price
+                        highest_since_tp = current_price
+
+                    # TTP triggers when price drops 1% from peak (after reaching target)
+                    ttp_deviation = 1.0  # 1% trailing deviation after TTP activation
+                    ttp_trigger = highest_since_tp * (1.0 - ttp_deviation / 100.0)
+
+                    if current_price <= ttp_trigger:
+                        return True, f"Pattern TTP triggered: ${current_price:.4f} (peak ${highest_since_tp:.4f}, profit: {profit_pct:.2f}%)"
+
+                    return False, f"Pattern TTP active: holding for more (profit: {profit_pct:.2f}%, peak ${highest_since_tp:.4f})"
+
+            # Pattern position still open
+            return False, f"Pattern position: TSL ${current_tsl:.4f}, TP ${entry_tp:.4f}, profit: {profit_pct:.2f}%"
+
+        # =============================================================
+        # PERCENTAGE-BASED TP/SL (standard positions without pattern targets)
+        # =============================================================
 
         # Check trailing stop loss
         if self.config.get("trailing_stop_loss", False):

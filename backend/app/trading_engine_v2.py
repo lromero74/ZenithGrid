@@ -80,10 +80,11 @@ class StrategyTradingEngine:
         """Delegate to position_manager module"""
         return await position_manager.get_open_positions_count(self.db, self.bot)
 
-    async def create_position(self, quote_balance: float, quote_amount: float) -> Position:
+    async def create_position(self, quote_balance: float, quote_amount: float, pattern_data: dict = None) -> Position:
         """Delegate to position_manager module"""
         return await position_manager.create_position(
-            self.db, self.exchange, self.bot, self.product_id, quote_balance, quote_amount
+            self.db, self.exchange, self.bot, self.product_id, quote_balance, quote_amount,
+            pattern_data=pattern_data
         )
 
     async def log_order_to_history(

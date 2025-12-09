@@ -102,6 +102,7 @@ async def create_position(
     quote_balance: float,
     quote_amount: float,
     aggregate_value: float = None,
+    pattern_data: dict = None,
 ) -> Position:
     """
     Create a new position for this bot
@@ -114,6 +115,7 @@ async def create_position(
         quote_balance: Current per-position budget (BTC or USD)
         quote_amount: Amount of quote currency being spent on initial buy
         aggregate_value: Total account liquidation value (for manual sizing budget calc)
+        pattern_data: Optional pattern data (bull_flag targets: entry, stop_loss, take_profit_target)
     """
     # Get BTC/USD price for USD tracking
     try:
@@ -151,6 +153,16 @@ async def create_position(
         btc_usd_price_at_open=btc_usd_price,
         strategy_config_snapshot=bot.strategy_config,  # Freeze config at position creation (like 3Commas)
     )
+
+    # If pattern data provided (e.g., bull_flag), set up trailing stops
+    if pattern_data:
+        import json
+        position.entry_stop_loss = pattern_data.get("stop_loss")
+        position.entry_take_profit_target = pattern_data.get("take_profit_target")
+        position.trailing_stop_loss_price = position.entry_stop_loss
+        position.trailing_stop_loss_active = True
+        position.trailing_tp_active = False
+        position.pattern_data = json.dumps(pattern_data)
 
     db.add(position)
     # Don't commit here - let caller commit after trade succeeds

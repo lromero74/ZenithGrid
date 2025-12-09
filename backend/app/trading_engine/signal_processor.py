@@ -424,8 +424,22 @@ async def process_signal(
             # BUT we do it in a transaction that will rollback if trade fails
             if is_new_position:
                 logger.info("  📝 Creating position (will commit only if trade succeeds)...")
+
+                # Extract bull_flag pattern data if present (for pattern-based TP/SL)
+                pattern_data = None
+                indicators = signal_data.get("indicators", {}) if signal_data else {}
+                if indicators.get("bull_flag") == 1:
+                    pattern_data = {
+                        "entry_price": indicators.get("bull_flag_entry"),
+                        "stop_loss": indicators.get("bull_flag_stop"),
+                        "take_profit_target": indicators.get("bull_flag_target"),
+                        "pattern_type": "bull_flag",
+                    }
+                    logger.info(f"  🎯 Bull flag pattern detected - using pattern targets: SL={pattern_data['stop_loss']:.4f}, TP={pattern_data['take_profit_target']:.4f}")
+
                 position = await create_position(
-                    db, exchange, bot, product_id, quote_balance, quote_amount, aggregate_value
+                    db, exchange, bot, product_id, quote_balance, quote_amount, aggregate_value,
+                    pattern_data=pattern_data
                 )
                 logger.info(f"  ✅ Position created: ID={position.id} (pending trade execution)")
 
