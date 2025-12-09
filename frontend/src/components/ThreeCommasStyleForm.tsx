@@ -177,8 +177,32 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
 
       {/* Safety Order Settings */}
       <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-        <h3 className="text-lg font-semibold text-white mb-4">Safety Orders</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Safety Orders (DCA)</h3>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <span className="text-sm text-slate-400">
+              {(config.max_safety_orders ?? 5) > 0 ? 'Enabled' : 'Disabled'}
+            </span>
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={(config.max_safety_orders ?? 5) > 0}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    updateConfig('max_safety_orders', 5)
+                  } else {
+                    updateConfig('max_safety_orders', 0)
+                  }
+                }}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+            </div>
+          </label>
+        </div>
 
+        {(config.max_safety_orders ?? 5) > 0 && (
+          <>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
@@ -188,7 +212,7 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               type="number"
               value={getNumericValue(config.max_safety_orders, 5)}
               onChange={(e) => updateConfig('max_safety_orders', safeParseInt(e.target.value) ?? 5)}
-              min="0"
+              min="1"
               max="20"
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
@@ -327,6 +351,8 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               </p>
             </div>
           </div>
+          </>
+        )}
       </div>
 
       {/* Take Profit Settings */}
@@ -455,9 +481,11 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
           </p>
           <p>
             🔁 <strong>Safety Orders:</strong>{' '}
-            {safetyOrderExpression.groups.length > 0
-              ? `${safetyOrderExpression.groups.length} group(s), ${safetyOrderExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`
-              : `Price deviation (${config.price_deviation || 2}%)`}
+            {(config.max_safety_orders ?? 5) === 0
+              ? 'Disabled'
+              : safetyOrderExpression.groups.length > 0
+                ? `${safetyOrderExpression.groups.length} group(s), ${safetyOrderExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`
+                : `Price deviation (${config.price_deviation || 2}%)`}
           </p>
           <p>
             📤 <strong>Exit:</strong> Take Profit {config.take_profit_percentage || 3}%
