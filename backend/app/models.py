@@ -477,6 +477,39 @@ class ScannerLog(Base):
     bot = relationship("Bot", foreign_keys=[bot_id])
 
 
+class IndicatorLog(Base):
+    """
+    Indicator condition evaluation logs for non-AI indicator-based bots.
+    Captures which conditions were checked, their values, and results.
+    """
+    __tablename__ = "indicator_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # What was evaluated
+    product_id = Column(String, nullable=False)  # Trading pair (e.g., "ETH-BTC")
+    phase = Column(String, nullable=False)  # "base_order", "safety_order", "take_profit"
+
+    # Overall result
+    conditions_met = Column(Boolean, nullable=False)  # Did all conditions pass?
+
+    # Detailed condition results (JSON array)
+    # Each entry: { type, timeframe, operator, threshold, actual_value, result }
+    conditions_detail = Column(JSON, nullable=False)
+
+    # Indicator snapshot at evaluation time (JSON dict)
+    # All indicator values that were available
+    indicators_snapshot = Column(JSON, nullable=True)
+
+    # Current price at evaluation
+    current_price = Column(Float, nullable=True)
+
+    # Relationships
+    bot = relationship("Bot", foreign_keys=[bot_id])
+
+
 class PendingOrder(Base):
     """
     Pending limit orders that haven't been filled yet.

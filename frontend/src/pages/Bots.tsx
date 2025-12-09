@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { botsApi, templatesApi } from '../services/api'
 import { Bot, BotCreate, StrategyParameter } from '../types'
-import { Plus, Edit, Trash2, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet, ScanLine } from 'lucide-react'
+import { Plus, Edit, Trash2, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet, ScanLine, BarChart2 } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 import PhaseConditionSelector from '../components/PhaseConditionSelector'
 import AIBotLogs from '../components/AIBotLogs'
+import IndicatorLogs from '../components/IndicatorLogs'
 import ScannerLogs from '../components/ScannerLogs'
 import { PnLChart } from '../components/PnLChart'
 import DexConfigSection from '../components/DexConfigSection'
@@ -94,6 +95,42 @@ function botUsesBullFlagIndicator(bot: Bot): boolean {
   return false
 }
 
+// Helper function to check if a bot uses non-AI indicator conditions
+// Shows the chart icon for bots that have conditions but NOT AI indicators
+function botUsesNonAIIndicators(bot: Bot): boolean {
+  // Skip if it uses AI indicators (they have their own Brain icon)
+  if (botUsesAIIndicators(bot)) return false
+
+  // Check if it's indicator_based strategy type
+  if (bot.strategy_type !== 'indicator_based') return false
+
+  // Check if it has any conditions configured
+  const config = bot.strategy_config
+  if (!config) return false
+
+  const conditionSources = [
+    config.base_order_conditions,
+    config.safety_order_conditions,
+    config.take_profit_conditions,
+  ]
+
+  for (const conditions of conditionSources) {
+    // Handle flat array format
+    if (Array.isArray(conditions) && conditions.length > 0) {
+      return true
+    }
+    // Handle grouped format: {groups: [{conditions: [...]}]}
+    else if (conditions && typeof conditions === 'object' && conditions.groups) {
+      for (const group of conditions.groups) {
+        if (Array.isArray(group.conditions) && group.conditions.length > 0) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
 function Bots() {
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -101,6 +138,7 @@ function Bots() {
   const [showModal, setShowModal] = useState(false)
   const [editingBot, setEditingBot] = useState<Bot | null>(null)
   const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
+  const [indicatorLogsBotId, setIndicatorLogsBotId] = useState<number | null>(null)
   const [scannerLogsBotId, setScannerLogsBotId] = useState<number | null>(null)
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
@@ -990,6 +1028,15 @@ function Bots() {
                               title="View AI Reasoning Logs"
                             >
                               <Brain className="w-4 h-4" />
+                            </button>
+                          )}
+                          {botUsesNonAIIndicators(bot) && (
+                            <button
+                              onClick={() => setIndicatorLogsBotId(bot.id)}
+                              className="p-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded transition-colors"
+                              title="View Indicator Logs"
+                            >
+                              <BarChart2 className="w-4 h-4" />
                             </button>
                           )}
                           {botUsesBullFlagIndicator(bot) && (
@@ -1966,6 +2013,15 @@ function Bots() {
           botId={aiLogsBotId}
           isOpen={aiLogsBotId !== null}
           onClose={() => setAiLogsBotId(null)}
+        />
+      )}
+
+      {/* Indicator Logs Modal */}
+      {indicatorLogsBotId !== null && (
+        <IndicatorLogs
+          botId={indicatorLogsBotId}
+          isOpen={indicatorLogsBotId !== null}
+          onClose={() => setIndicatorLogsBotId(null)}
         />
       )}
 

@@ -16,6 +16,7 @@ from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
 from app.models import Bot
 from app.strategies import StrategyRegistry
+from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies.bull_flag_scanner import log_scanner_decision, scan_for_bull_flag_opportunities
 from app.trading_engine.trailing_stops import (
     check_bull_flag_exit_conditions,
@@ -1042,6 +1043,27 @@ class MultiBotMonitor:
                 open_positions_list = list(open_pos_result.scalars().all())
                 await self.log_ai_decision(db, bot, product_id, log_signal_data, pair_info, open_positions_list)
                 logger.info(f"  📝 Logged AI decision for {product_id}")
+
+            # Log indicator condition evaluations for non-AI indicator-based bots
+            # This provides visibility into which conditions matched and at what values
+            condition_details = signal_data.get("condition_details")
+            if condition_details and not should_log_ai:
+                # Log each phase that has conditions
+                for phase, details in condition_details.items():
+                    if details:  # Only log if there are conditions for this phase
+                        phase_signal_key = f"{phase}_signal"
+                        conditions_met = signal_data.get(phase_signal_key, False)
+                        await log_indicator_evaluation(
+                            db=db,
+                            bot_id=bot.id,
+                            product_id=product_id,
+                            phase=phase,
+                            conditions_met=conditions_met,
+                            conditions_detail=details,
+                            indicators_snapshot=indicators,
+                            current_price=current_price,
+                        )
+                logger.info(f"  📊 Logged indicator evaluation for {product_id}")
 
             # Create trading engine for this bot/pair combination
             engine = StrategyTradingEngine(

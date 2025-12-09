@@ -130,6 +130,22 @@ class ScannerLogResponse(BaseModel):
         from_attributes = True
 
 
+class IndicatorLogResponse(BaseModel):
+    """Response schema for indicator condition evaluation logs."""
+    id: int
+    bot_id: int
+    timestamp: datetime
+    product_id: str
+    phase: str  # "base_order", "safety_order", "take_profit"
+    conditions_met: bool
+    conditions_detail: List[dict]
+    indicators_snapshot: Optional[dict]
+    current_price: Optional[float]
+
+    class Config:
+        from_attributes = True
+
+
 class ValidateBotConfigRequest(BaseModel):
     product_ids: List[str]
     strategy_config: dict

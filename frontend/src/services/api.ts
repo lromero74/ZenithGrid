@@ -167,6 +167,17 @@ export const botsApi = {
     if (since) params.append('since', since);
     return api.get<any[]>(`/bots/${id}/scanner-logs?${params}`).then((res) => res.data);
   },
+  getIndicatorLogs: (id: number, limit = 50, offset = 0, productId?: string, phase?: string, conditionsMet?: boolean, since?: string) => {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+    });
+    if (productId) params.append('product_id', productId);
+    if (phase) params.append('phase', phase);
+    if (conditionsMet !== undefined) params.append('conditions_met', conditionsMet.toString());
+    if (since) params.append('since', since);
+    return api.get<any[]>(`/bots/${id}/indicator-logs?${params}`).then((res) => res.data);
+  },
 };
 
 export const templatesApi = {

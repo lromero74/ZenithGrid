@@ -32,7 +32,8 @@ class PhaseConditionEvaluator:
         current_indicators: Dict[str, Any],
         previous_indicators: Optional[Dict[str, Any]] = None,
         legacy_logic: str = "and",
-    ) -> bool:
+        capture_details: bool = False,
+    ) -> Union[bool, tuple]:
         """
         Evaluate a condition expression (supports both legacy and new format)
 
@@ -43,32 +44,35 @@ class PhaseConditionEvaluator:
             current_indicators: Current indicator values
             previous_indicators: Previous indicator values (for crossing)
             legacy_logic: Logic to use for legacy flat list format
+            capture_details: If True, returns (result, details_list) tuple
 
         Returns:
-            True if expression is satisfied, False otherwise
+            If capture_details=False: True if expression is satisfied, False otherwise
+            If capture_details=True: (bool, List[Dict]) tuple with result and condition details
         """
         # Handle empty/None
         if not expression:
-            return False
+            return (False, []) if capture_details else False
 
         # Check if new grouped format (dict with 'groups' key)
         if isinstance(expression, dict) and "groups" in expression:
-            return self._evaluate_grouped_expression(expression, current_indicators, previous_indicators)
+            return self._evaluate_grouped_expression(expression, current_indicators, previous_indicators, capture_details)
 
         # Legacy flat list format
         if isinstance(expression, list):
-            return self.evaluate_phase_conditions(expression, legacy_logic, current_indicators, previous_indicators)
+            return self.evaluate_phase_conditions(expression, legacy_logic, current_indicators, previous_indicators, capture_details)
 
         # Unknown format
         print(f"[WARNING] Unknown expression format: {type(expression)}")
-        return False
+        return (False, []) if capture_details else False
 
     def _evaluate_grouped_expression(
         self,
         expression: Dict[str, Any],
         current_indicators: Dict[str, Any],
         previous_indicators: Optional[Dict[str, Any]],
-    ) -> bool:
+        capture_details: bool = False,
+    ) -> Union[bool, tuple]:
         """
         Evaluate a grouped expression: { groups: [...], groupLogic: 'and'|'or' }
 
@@ -79,11 +83,16 @@ class PhaseConditionEvaluator:
         group_logic = expression.get("groupLogic", "and")
 
         if not groups:
-            return False
+            return (False, []) if capture_details else False
 
         group_results = []
+        all_details = []
         for group in groups:
-            group_result = self._evaluate_group(group, current_indicators, previous_indicators)
+            if capture_details:
+                group_result, group_details = self._evaluate_group(group, current_indicators, previous_indicators, capture_details=True)
+                all_details.extend(group_details)
+            else:
+                group_result = self._evaluate_group(group, current_indicators, previous_indicators)
             group_results.append(group_result)
             print(f"[DEBUG] Group {group.get('id', '?')} result: {group_result}")
 
@@ -94,14 +103,15 @@ class PhaseConditionEvaluator:
             final_result = any(group_results)
 
         print(f"[DEBUG] Final expression result ({group_logic.upper()} of {len(groups)} groups): {final_result}")
-        return final_result
+        return (final_result, all_details) if capture_details else final_result
 
     def _evaluate_group(
         self,
         group: Dict[str, Any],
         current_indicators: Dict[str, Any],
         previous_indicators: Optional[Dict[str, Any]],
-    ) -> bool:
+        capture_details: bool = False,
+    ) -> Union[bool, tuple]:
         """
         Evaluate a single group of conditions
 
@@ -111,23 +121,33 @@ class PhaseConditionEvaluator:
         logic = group.get("logic", "and")
 
         if not conditions:
-            return False
+            return (False, []) if capture_details else False
 
         results = []
+        details = []
         for condition in conditions:
-            result = self._evaluate_single_condition(condition, current_indicators, previous_indicators)
+            if capture_details:
+                result, detail = self._evaluate_single_condition(condition, current_indicators, previous_indicators, capture_details=True)
+                details.append(detail)
+            else:
+                result = self._evaluate_single_condition(condition, current_indicators, previous_indicators)
 
             # Handle NOT (negate) modifier
             if condition.get("negate", False):
                 print(f"[DEBUG] Negating condition result: {result} -> {not result}")
                 result = not result
+                if capture_details and details:
+                    details[-1]["negated"] = True
+                    details[-1]["result"] = result
 
             results.append(result)
 
         if logic == "and":
-            return all(results)
+            final_result = all(results)
         else:  # 'or'
-            return any(results)
+            final_result = any(results)
+
+        return (final_result, details) if capture_details else final_result
 
     def evaluate_phase_conditions(
         self,
@@ -135,7 +155,8 @@ class PhaseConditionEvaluator:
         logic: str,
         current_indicators: Dict[str, Any],
         previous_indicators: Optional[Dict[str, Any]] = None,
-    ) -> bool:
+        capture_details: bool = False,
+    ) -> Union[bool, tuple]:
         """
         Evaluate a flat list of phase conditions (legacy format)
 
@@ -144,45 +165,75 @@ class PhaseConditionEvaluator:
             logic: 'and' or 'or'
             current_indicators: Current indicator values
             previous_indicators: Previous indicator values (for crossing)
+            capture_details: If True, returns (result, details_list) tuple
 
         Returns:
-            True if conditions are met, False otherwise
+            If capture_details=False: True if conditions are met, False otherwise
+            If capture_details=True: (bool, List[Dict]) tuple
         """
         if not conditions:
-            return False
+            return (False, []) if capture_details else False
 
         results = []
+        details = []
         for condition in conditions:
-            result = self._evaluate_single_condition(condition, current_indicators, previous_indicators)
+            if capture_details:
+                result, detail = self._evaluate_single_condition(condition, current_indicators, previous_indicators, capture_details=True)
+                details.append(detail)
+            else:
+                result = self._evaluate_single_condition(condition, current_indicators, previous_indicators)
 
             # Handle NOT (negate) modifier
             if condition.get("negate", False):
                 result = not result
+                if capture_details and details:
+                    details[-1]["negated"] = True
+                    details[-1]["result"] = result
 
             results.append(result)
 
         if logic == "and":
-            return all(results)
+            final_result = all(results)
         else:  # 'or'
-            return any(results)
+            final_result = any(results)
+
+        return (final_result, details) if capture_details else final_result
 
     def _evaluate_single_condition(
         self,
         condition: Dict[str, Any],
         current_indicators: Dict[str, Any],
         previous_indicators: Optional[Dict[str, Any]],
-    ) -> bool:
+        capture_details: bool = False,
+    ) -> Union[bool, tuple]:
         """Evaluate a single phase condition"""
         condition_type = condition.get("type")
         operator = condition.get("operator")
         value = condition.get("value", 0)
         timeframe = condition.get("timeframe", "FIVE_MINUTE")
 
+        # Build detail dict if capturing
+        detail = {
+            "type": condition_type,
+            "timeframe": timeframe,
+            "operator": operator,
+            "threshold": value,
+            "actual_value": None,
+            "result": False,
+        } if capture_details else None
+
         # Get current indicator value
         current_val = self._get_indicator_value(condition_type, condition, current_indicators)
         if current_val is None:
             print(f"[DEBUG] Condition {condition_type} on {timeframe}: indicator value is None")
+            if capture_details:
+                detail["error"] = "indicator value is None"
+                return False, detail
             return False
+
+        if capture_details:
+            # Round for cleaner display
+            detail["actual_value"] = round(current_val, 4) if isinstance(current_val, float) else current_val
 
         print(f"[DEBUG] Evaluating: {condition_type} on {timeframe}: {current_val} {operator} {value}")
 
@@ -190,12 +241,21 @@ class PhaseConditionEvaluator:
         if operator in ["crossing_above", "crossing_below"]:
             if previous_indicators is None:
                 print("[DEBUG] Crossing check: no previous indicators available")
+                if capture_details:
+                    detail["error"] = "no previous indicators for crossing"
+                    return False, detail
                 return False
 
             previous_val = self._get_indicator_value(condition_type, condition, previous_indicators)
             if previous_val is None:
                 print("[DEBUG] Crossing check: previous indicator value is None")
+                if capture_details:
+                    detail["error"] = "previous indicator value is None"
+                    return False, detail
                 return False
+
+            if capture_details:
+                detail["previous_value"] = round(previous_val, 4) if isinstance(previous_val, float) else previous_val
 
             print(f"[DEBUG] Crossing check: previous={previous_val}, current={current_val}, threshold={value}")
 
@@ -204,13 +264,16 @@ class PhaseConditionEvaluator:
                 print(
                     f"[DEBUG] Crossing above result: {result} (was {previous_val} <= {value} and now {current_val} > {value})"
                 )
-                return result
             else:  # crossing_below
                 result = previous_val >= value and current_val < value
                 print(
                     f"[DEBUG] Crossing below result: {result} (was {previous_val} >= {value} and now {current_val} < {value})"
                 )
-                return result
+
+            if capture_details:
+                detail["result"] = result
+                return result, detail
+            return result
 
         # Handle simple comparisons
         result = False
@@ -228,6 +291,10 @@ class PhaseConditionEvaluator:
             result = current_val != value
 
         print(f"[DEBUG] Result: {result}")
+
+        if capture_details:
+            detail["result"] = result
+            return result, detail
         return result
 
     def _get_indicator_value(

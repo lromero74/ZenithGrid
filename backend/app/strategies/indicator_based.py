@@ -628,26 +628,32 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Add current price
         current_indicators["price"] = current_price
 
-        # Evaluate conditions for each phase
+        # Evaluate conditions for each phase with detail capture
         # Uses evaluate_expression which handles both:
         # - New grouped format: { groups: [...], groupLogic: 'and'|'or' }
         # - Legacy flat format: [ condition1, condition2, ... ]
         base_order_signal = False
+        base_order_details = []
         if self.base_order_conditions:
-            base_order_signal = self.phase_evaluator.evaluate_expression(
-                self.base_order_conditions, current_indicators, self.previous_indicators, self.base_order_logic
+            base_order_signal, base_order_details = self.phase_evaluator.evaluate_expression(
+                self.base_order_conditions, current_indicators, self.previous_indicators, self.base_order_logic,
+                capture_details=True
             )
 
         safety_order_signal = False
+        safety_order_details = []
         if self.safety_order_conditions:
-            safety_order_signal = self.phase_evaluator.evaluate_expression(
-                self.safety_order_conditions, current_indicators, self.previous_indicators, self.safety_order_logic
+            safety_order_signal, safety_order_details = self.phase_evaluator.evaluate_expression(
+                self.safety_order_conditions, current_indicators, self.previous_indicators, self.safety_order_logic,
+                capture_details=True
             )
 
         take_profit_signal = False
+        take_profit_details = []
         if self.take_profit_conditions:
-            take_profit_signal = self.phase_evaluator.evaluate_expression(
-                self.take_profit_conditions, current_indicators, self.previous_indicators, self.take_profit_logic
+            take_profit_signal, take_profit_details = self.phase_evaluator.evaluate_expression(
+                self.take_profit_conditions, current_indicators, self.previous_indicators, self.take_profit_logic,
+                capture_details=True
             )
 
         # Store current as previous for next iteration
@@ -660,6 +666,12 @@ class IndicatorBasedStrategy(TradingStrategy):
             "take_profit_signal": take_profit_signal,
             "indicators": current_indicators,
             "price": current_price,
+            # Condition evaluation details for logging
+            "condition_details": {
+                "base_order": base_order_details,
+                "safety_order": safety_order_details,
+                "take_profit": take_profit_details,
+            },
         }
 
     def calculate_base_order_size(self, balance: float) -> float:
