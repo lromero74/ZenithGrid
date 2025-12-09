@@ -222,6 +222,10 @@ class PhaseConditionEvaluator:
             result = current_val >= value
         elif operator == "less_equal":
             result = current_val <= value
+        elif operator == "equal":
+            result = current_val == value
+        elif operator == "not_equal":
+            result = current_val != value
 
         print(f"[DEBUG] Result: {result}")
         return result
