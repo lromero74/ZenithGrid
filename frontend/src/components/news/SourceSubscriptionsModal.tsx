@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Newspaper, Video, Check, Loader2, ExternalLink } from 'lucide-react'
 import { sourceColors, videoSourceColors } from './newsUtils'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface ContentSource {
   id: number
@@ -22,6 +23,7 @@ interface SourceSubscriptionsModalProps {
 }
 
 export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscriptionsModalProps) {
+  const { getAccessToken } = useAuth()
   const [sources, setSources] = useState<ContentSource[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +41,10 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/sources/')
+      const token = getAccessToken()
+      const response = await fetch('/api/sources/', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
       if (!response.ok) throw new Error('Failed to fetch sources')
       const data = await response.json()
       setSources(data.sources)
@@ -53,11 +58,15 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
   const toggleSubscription = async (source: ContentSource) => {
     setTogglingId(source.id)
     try {
+      const token = getAccessToken()
       const endpoint = source.is_subscribed
         ? `/api/sources/${source.id}/unsubscribe`
         : `/api/sources/${source.id}/subscribe`
 
-      const response = await fetch(endpoint, { method: 'POST' })
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
       if (!response.ok) throw new Error('Failed to update subscription')
 
       // Update local state
