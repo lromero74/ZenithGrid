@@ -64,30 +64,21 @@ export function MiniPlayer() {
         <div className="container mx-auto px-4 h-full flex flex-col">
           {/* Main bar content */}
           <div className="flex items-center h-20 gap-4">
-            {/* Video thumbnail / mini player */}
+            {/* Video thumbnail */}
             <div className="relative flex-shrink-0 w-28 h-16 bg-black rounded overflow-hidden">
-              {isExpanded ? (
-                <iframe
-                  src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
-                  title={currentVideo.title}
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              {currentVideo.thumbnail && (
+                <img
+                  src={currentVideo.thumbnail}
+                  alt=""
+                  className="w-full h-full object-cover"
                 />
-              ) : (
-                <>
-                  {currentVideo.thumbnail && (
-                    <img
-                      src={currentVideo.thumbnail}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                    <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
-                      <Play className="w-4 h-4 text-white ml-0.5" fill="white" />
-                    </div>
+              )}
+              {!isExpanded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
+                    <Play className="w-4 h-4 text-white ml-0.5" fill="white" />
                   </div>
-                </>
+                </div>
               )}
             </div>
 
