@@ -25,6 +25,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -70,6 +71,7 @@ class User(Base):
     bot_templates = relationship("BotTemplate", back_populates="user", cascade="all, delete-orphan")
     blacklisted_coins = relationship("BlacklistedCoin", back_populates="user", cascade="all, delete-orphan")
     ai_provider_credentials = relationship("AIProviderCredential", back_populates="user", cascade="all, delete-orphan")
+    source_subscriptions = relationship("UserSourceSubscription", back_populates="user", cascade="all, delete-orphan")
 
 
 class Account(Base):
@@ -673,3 +675,53 @@ class NewsArticle(Base):
     # Metadata
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ContentSource(Base):
+    """
+    News and video content sources that users can subscribe to.
+
+    System sources (is_system=True) are provided by default and cannot be deleted.
+    Users can add custom sources (is_system=False) which they can delete.
+    """
+
+    __tablename__ = "content_sources"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_key = Column(String, unique=True, nullable=False)  # e.g., "coin_bureau", "coindesk"
+    name = Column(String, nullable=False)  # Display name
+    type = Column(String, nullable=False, index=True)  # "news" or "video"
+    url = Column(String, nullable=False)  # RSS/YouTube feed URL
+    website = Column(String, nullable=True)  # Main website URL
+    description = Column(String, nullable=True)
+    channel_id = Column(String, nullable=True)  # YouTube channel ID (null for news)
+    is_system = Column(Boolean, default=True)  # System sources can't be deleted
+    is_enabled = Column(Boolean, default=True, index=True)  # Globally enabled
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    subscriptions = relationship("UserSourceSubscription", back_populates="source", cascade="all, delete-orphan")
+
+
+class UserSourceSubscription(Base):
+    """
+    Per-user subscription preferences for content sources.
+
+    Users can subscribe/unsubscribe from any source without deleting it.
+    By default, users are subscribed to all enabled system sources.
+    """
+
+    __tablename__ = "user_source_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_id = Column(Integer, ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False)
+    is_subscribed = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Unique constraint
+    __table_args__ = (UniqueConstraint("user_id", "source_id", name="uq_user_source"),)
+
+    # Relationships
+    user = relationship("User", back_populates="source_subscriptions")
+    source = relationship("ContentSource", back_populates="subscriptions")

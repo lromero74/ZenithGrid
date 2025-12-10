@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
 
 from app.database import async_session_maker
-from app.models import NewsArticle
+from app.models import ContentSource, NewsArticle
 from app.routers.news import (
     CACHE_FILE,
     DEBT_CEILING_HISTORY,
@@ -81,6 +81,84 @@ logger = logging.getLogger(__name__)
 _last_news_refresh: Optional[datetime] = None
 
 router = APIRouter(prefix="/api/news", tags=["news"])
+
+
+# =============================================================================
+# Database Functions for Content Sources
+# =============================================================================
+
+
+async def get_news_sources_from_db() -> Dict[str, Dict]:
+    """Get news sources from database, formatted like NEWS_SOURCES dict."""
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(ContentSource)
+            .where(ContentSource.type == "news")
+            .where(ContentSource.is_enabled.is_(True))
+        )
+        sources = result.scalars().all()
+
+    return {
+        s.source_key: {
+            "name": s.name,
+            "url": s.url,
+            "type": "reddit" if "reddit" in s.source_key else "rss",
+            "website": s.website,
+        }
+        for s in sources
+    }
+
+
+async def get_video_sources_from_db() -> Dict[str, Dict]:
+    """Get video sources from database, formatted like VIDEO_SOURCES dict."""
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(ContentSource)
+            .where(ContentSource.type == "video")
+            .where(ContentSource.is_enabled.is_(True))
+        )
+        sources = result.scalars().all()
+
+    return {
+        s.source_key: {
+            "name": s.name,
+            "channel_id": s.channel_id,
+            "url": s.url,
+            "website": s.website,
+            "description": s.description or "",
+        }
+        for s in sources
+    }
+
+
+async def get_all_sources_from_db() -> Dict[str, List[Dict]]:
+    """Get all sources from database for API responses."""
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(ContentSource).where(ContentSource.is_enabled.is_(True))
+        )
+        sources = result.scalars().all()
+
+    news_sources = []
+    video_sources = []
+
+    for s in sources:
+        if s.type == "news":
+            news_sources.append({
+                "id": s.source_key,
+                "name": s.name,
+                "website": s.website,
+                "type": "reddit" if "reddit" in s.source_key else "rss",
+            })
+        elif s.type == "video":
+            video_sources.append({
+                "id": s.source_key,
+                "name": s.name,
+                "website": s.website,
+                "description": s.description,
+            })
+
+    return {"news": news_sources, "video": video_sources}
 
 
 # =============================================================================
@@ -151,15 +229,17 @@ async def cleanup_old_articles(db: AsyncSession, max_age_days: int = NEWS_ITEM_M
     return deleted_count
 
 
-def article_to_news_item(article: NewsArticle) -> Dict[str, Any]:
+def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
     """Convert a NewsArticle database object to a NewsItem dict for API response."""
+    # Use provided sources for name mapping, fall back to hardcoded
+    source_map = sources if sources else NEWS_SOURCES
     # Use base64 image data if available, otherwise fall back to original URL
     thumbnail = article.image_data or article.original_thumbnail_url
     return {
         "title": article.title,
         "url": article.url,
         "source": article.source,
-        "source_name": NEWS_SOURCES.get(article.source, {}).get("name", article.source),
+        "source_name": source_map.get(article.source, {}).get("name", article.source),
         "published": article.published_at.isoformat() + "Z" if article.published_at else None,
         "summary": article.summary,
         "thumbnail": thumbnail,
@@ -417,16 +497,20 @@ async def fetch_all_videos() -> Dict[str, Any]:
     """Fetch videos from all YouTube sources and merge with existing cache.
 
     Strategy:
-    - Fetch fresh videos from all sources
+    - Fetch fresh videos from all sources (from database)
     - Merge with existing cached videos (new items at top, dedupe by URL)
     - Prune videos older than 7 days
     - Save merged cache
     """
     fresh_items: List[VideoItem] = []
 
+    # Get sources from database (fall back to hardcoded if DB is empty)
+    db_sources = await get_video_sources_from_db()
+    sources_to_use = db_sources if db_sources else VIDEO_SOURCES
+
     async with aiohttp.ClientSession() as session:
         tasks = []
-        for source_id, config in VIDEO_SOURCES.items():
+        for source_id, config in sources_to_use.items():
             tasks.append(fetch_youtube_videos(session, source_id, config))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -450,10 +534,10 @@ async def fetch_all_videos() -> Dict[str, Any]:
     # Prune videos older than 7 days
     merged_items = prune_old_items(merged_items)
 
-    # Build sources list for UI
+    # Build sources list for UI from sources used
     sources_list = [
-        {"id": sid, "name": cfg["name"], "website": cfg["website"], "description": cfg["description"]}
-        for sid, cfg in VIDEO_SOURCES.items()
+        {"id": sid, "name": cfg["name"], "website": cfg["website"], "description": cfg.get("description", "")}
+        for sid, cfg in sources_to_use.items()
     ]
 
     now = datetime.now()
@@ -577,7 +661,7 @@ async def fetch_all_news() -> None:
     """Fetch news from all sources, cache images, and store in database.
 
     Strategy:
-    - Fetch fresh items from all sources
+    - Fetch fresh items from all sources (from database)
     - Download and cache thumbnail images locally
     - Store new articles in database (deduped by URL)
     - Skip articles that already exist
@@ -585,10 +669,14 @@ async def fetch_all_news() -> None:
     global _last_news_refresh
     fresh_items: List[NewsItem] = []
 
+    # Get sources from database (fall back to hardcoded if DB is empty)
+    db_sources = await get_news_sources_from_db()
+    sources_to_use = db_sources if db_sources else NEWS_SOURCES
+
     async with aiohttp.ClientSession() as session:
         # Fetch news from all sources
         tasks = []
-        for source_id, config in NEWS_SOURCES.items():
+        for source_id, config in sources_to_use.items():
             if config["type"] == "reddit":
                 tasks.append(fetch_reddit_news(session, source_id, config))
             elif config["type"] == "rss":
@@ -626,16 +714,20 @@ async def fetch_all_news() -> None:
 
 async def get_news_from_db() -> Dict[str, Any]:
     """Get news articles from database and format for API response."""
+    # Get sources from database for name mapping
+    db_sources = await get_news_sources_from_db()
+    sources_to_use = db_sources if db_sources else NEWS_SOURCES
+
     async with async_session_maker() as db:
         articles = await get_articles_from_db(db, limit=100)
 
-    # Convert to API response format
-    news_items = [article_to_news_item(article) for article in articles]
+    # Convert to API response format (pass sources for name mapping)
+    news_items = [article_to_news_item(article, sources_to_use) for article in articles]
 
     # Build sources list for UI
     sources_list = [
         {"id": sid, "name": cfg["name"], "website": cfg["website"]}
-        for sid, cfg in NEWS_SOURCES.items()
+        for sid, cfg in sources_to_use.items()
     ]
 
     now = datetime.utcnow()
@@ -703,11 +795,14 @@ async def get_news(force_refresh: bool = False):
 
 @router.get("/sources")
 async def get_sources():
-    """Get list of news sources with links"""
+    """Get list of news sources with links (from database)"""
+    # Get sources from database (fall back to hardcoded if DB is empty)
+    db_sources = await get_news_sources_from_db()
+    sources_to_use = db_sources if db_sources else NEWS_SOURCES
     return {
         "sources": [
             {"id": sid, "name": cfg["name"], "website": cfg["website"], "type": cfg["type"]}
-            for sid, cfg in NEWS_SOURCES.items()
+            for sid, cfg in sources_to_use.items()
         ],
         "note": "TikTok is not included as it lacks a public API for content. "
                 "These sources provide reliable crypto news via RSS feeds or public APIs."
@@ -791,16 +886,19 @@ async def get_videos(force_refresh: bool = False):
 
 @router.get("/video-sources")
 async def get_video_sources():
-    """Get list of video sources (YouTube channels) with links"""
+    """Get list of video sources (YouTube channels) with links (from database)"""
+    # Get sources from database (fall back to hardcoded if DB is empty)
+    db_sources = await get_video_sources_from_db()
+    sources_to_use = db_sources if db_sources else VIDEO_SOURCES
     return {
         "sources": [
             {
                 "id": sid,
                 "name": cfg["name"],
                 "website": cfg["website"],
-                "description": cfg["description"],
+                "description": cfg.get("description", ""),
             }
-            for sid, cfg in VIDEO_SOURCES.items()
+            for sid, cfg in sources_to_use.items()
         ],
         "note": "These are reputable crypto YouTube channels providing educational content, "
                 "market analysis, and news coverage."

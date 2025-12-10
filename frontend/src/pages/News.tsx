@@ -8,10 +8,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
 import { useVideoPlayer, VideoItem as ContextVideoItem } from '../contexts/VideoPlayerContext'
+import { SourceSubscriptionsModal } from '../components/news/SourceSubscriptionsModal'
 import {
   renderMarkdown,
   formatRelativeTime,
@@ -86,6 +87,7 @@ export default function News() {
   const [selectedSource, setSelectedSource] = useState<string>('all')
   const [selectedVideoSource, setSelectedVideoSource] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<TabType>('articles')
+  const [showSourceSettings, setShowSourceSettings] = useState(false)
   // Track which article is being previewed (null means none)
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
 
@@ -290,6 +292,16 @@ export default function News() {
               </span>
             </div>
           )}
+
+          {/* Settings button */}
+          <button
+            onClick={() => setShowSourceSettings(true)}
+            className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+            title="Manage news sources"
+          >
+            <Settings className="w-4 h-4" />
+            <span className="text-sm hidden sm:inline">Sources</span>
+          </button>
 
           {/* Refresh button */}
           <button
@@ -898,6 +910,12 @@ export default function News() {
           </div>
         </div>
       )}
+
+      {/* Source Subscriptions Modal */}
+      <SourceSubscriptionsModal
+        isOpen={showSourceSettings}
+        onClose={() => setShowSourceSettings(false)}
+      />
 
     </div>
   )
