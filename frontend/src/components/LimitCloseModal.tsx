@@ -267,6 +267,14 @@ export function LimitCloseModal({
           {ticker && (() => {
             const { isLoss } = calculateProfitLoss()
             const sliderColor = isLoss ? '#ef4444' : '#22c55e'  // Red when at loss, green when profit
+
+            // Calculate breakeven position on slider
+            const breakevenPrice = totalAmount > 0 ? totalQuoteSpent / totalAmount : 0
+            const { best_bid, best_ask } = ticker
+            const range = best_ask - best_bid
+            const breakevenPercent = range > 0 ? ((breakevenPrice - best_bid) / range) * 100 : -1
+            const showBreakevenTick = breakevenPercent >= 0 && breakevenPercent <= 100
+
             return (
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-slate-300">
@@ -285,6 +293,18 @@ export function LimitCloseModal({
                       background: `linear-gradient(to right, ${sliderColor} ${sliderValue}%, #475569 ${sliderValue}%)`
                     }}
                   />
+                  {/* Breakeven tick mark */}
+                  {showBreakevenTick && (
+                    <div
+                      className="absolute top-0 w-0.5 h-4 bg-yellow-400 -translate-x-1/2 pointer-events-none"
+                      style={{ left: `${breakevenPercent}%`, marginTop: '-3px' }}
+                      title={`Breakeven: ${formatPrice(breakevenPrice)}`}
+                    >
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-yellow-400 whitespace-nowrap">
+                        BE
+                      </div>
+                    </div>
+                  )}
                   <div className="flex justify-between text-xs text-slate-400 mt-1">
                     <span>Bid</span>
                     <span>Mark</span>
