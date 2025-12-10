@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
@@ -47,6 +47,7 @@ export function LimitCloseModal({
   const [error, setError] = useState<string | null>(null)
   const [btcUsdPrice, setBtcUsdPrice] = useState<number>(0)
   const [showLossConfirmation, setShowLossConfirmation] = useState(false)
+  const hasInitializedSlider = useRef(false)
 
   // Fetch product precision data
   useEffect(() => {
@@ -128,31 +129,46 @@ export function LimitCloseModal({
     return { numSteps: Math.max(1, numSteps), increment }
   }
 
-  // Update limit price when slider step changes
+  // Initialize price to mark price ONCE when ticker/precision first loads
   useEffect(() => {
     if (!ticker || !productPrecision) return
+    if (hasInitializedSlider.current) return  // Only initialize once
 
-    // Reset loss confirmation when slider changes
+    // Start at mark price (middle of bid/ask)
+    const initialPrice = roundToIncrement(ticker.mark_price)
+    setLimitPrice(initialPrice)
+    hasInitializedSlider.current = true
+  }, [ticker, productPrecision])
+
+  // Update slider step to match current price (for visual display)
+  // This runs on ticker updates to keep slider position accurate
+  useEffect(() => {
+    if (!ticker || !productPrecision || limitPrice === 0) return
+
+    const { best_bid } = ticker
+    const increment = parseFloat(productPrecision.quote_increment)
+    const { numSteps } = getSliderParams()
+
+    // Calculate step from current price
+    const step = Math.round((limitPrice - best_bid) / increment)
+    // Clamp to valid range
+    setSliderStep(Math.max(0, Math.min(numSteps, step)))
+  }, [ticker, productPrecision, limitPrice])
+
+  // Handle slider change - update price from new step
+  const handleSliderChange = (newStep: number) => {
+    if (!ticker || !productPrecision) return
+
     setShowLossConfirmation(false)
 
     const { best_bid } = ticker
     const increment = parseFloat(productPrecision.quote_increment)
     const decimals = productPrecision.quote_decimals
 
-    // Calculate price directly from step index
-    const rawPrice = best_bid + (sliderStep * increment)
+    const rawPrice = best_bid + (newStep * increment)
     const roundedPrice = parseFloat(rawPrice.toFixed(decimals))
     setLimitPrice(roundedPrice)
-  }, [sliderStep, ticker, productPrecision])
-
-  // Initialize slider to middle position when ticker/precision loads
-  useEffect(() => {
-    if (!ticker || !productPrecision) return
-
-    const { numSteps } = getSliderParams()
-    // Start at middle of range
-    setSliderStep(Math.round(numSteps / 2))
-  }, [ticker?.best_bid, ticker?.best_ask, productPrecision])
+  }
 
   // Calculate profit/loss at current limit price
   const calculateProfitLoss = () => {
@@ -350,7 +366,7 @@ export function LimitCloseModal({
                     max={numSteps}
                     step="1"
                     value={sliderStep}
-                    onChange={(e) => setSliderStep(parseInt(e.target.value))}
+                    onChange={(e) => handleSliderChange(parseInt(e.target.value))}
                     className="w-full h-2 bg-transparent rounded-lg appearance-none cursor-pointer relative z-10"
                     style={{
                       background: `linear-gradient(to right, ${sliderColor} ${sliderPercent}%, #475569 ${sliderPercent}%)`
