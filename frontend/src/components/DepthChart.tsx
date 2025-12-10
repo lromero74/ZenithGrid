@@ -7,6 +7,8 @@ interface DepthChartProps {
   limitPrice?: number
   breakevenPrice?: number
   quoteCurrency: string
+  onPriceClick?: (price: number) => void
+  onOrderBookUpdate?: (lowestBid: number, highestAsk: number, bestBid: number, bestAsk: number) => void
 }
 
 interface OrderBookLevel {
@@ -15,7 +17,7 @@ interface OrderBookLevel {
   cumulative: number
 }
 
-export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrency }: DepthChartProps) {
+export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrency, onPriceClick, onOrderBookUpdate }: DepthChartProps) {
   const [bids, setBids] = useState<OrderBookLevel[]>([])
   const [asks, setAsks] = useState<OrderBookLevel[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,6 +47,15 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
         setBids(processedBids)
         setAsks(processedAsks)
         setLoading(false)
+
+        // Notify parent of order book range for slider extension
+        if (onOrderBookUpdate && processedBids.length > 0 && processedAsks.length > 0) {
+          const lowestBid = processedBids[processedBids.length - 1].price  // Last bid is lowest
+          const highestAsk = processedAsks[processedAsks.length - 1].price  // Last ask is highest
+          const bestBid = processedBids[0].price  // First bid is best (highest)
+          const bestAsk = processedAsks[0].price  // First ask is best (lowest)
+          onOrderBookUpdate(lowestBid, highestAsk, bestBid, bestAsk)
+        }
       } catch (err: any) {
         console.error('Failed to fetch orderbook:', err)
         setError('Failed to load')
@@ -94,23 +105,34 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
 
       {/* Asks (sell orders) - displayed top to bottom, lowest ask at bottom */}
       <div className="flex-1 flex flex-col justify-end overflow-hidden">
-        {[...asks].reverse().slice(0, 8).map((ask, idx) => {
+        {[...asks].reverse().slice(0, 8).map((ask, idx, arr) => {
           const widthPercent = maxCumulative > 0 ? (ask.cumulative / maxCumulative) * 100 : 0
           const isAtLimit = isNearLimitPrice(ask.price)
+          // Check if this ask is above breakeven and the next one (below it in price) is at or below breakeven
+          const nextAsk = arr[idx + 1]
+          const showBreakevenLine = breakevenPrice && breakevenPrice > 0 &&
+            ask.price > breakevenPrice &&
+            (!nextAsk || nextAsk.price <= breakevenPrice)
           return (
-            <div
-              key={`ask-${idx}`}
-              className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''}`}
-            >
-              {/* Background bar */}
+            <div key={`ask-${idx}`}>
               <div
-                className="absolute right-0 h-full bg-red-500/30"
-                style={{ width: `${widthPercent}%` }}
-              />
-              {/* Price text */}
-              <span className="relative z-10 text-red-400 truncate w-full text-right pr-1">
-                {formatPrice(ask.price)}
-              </span>
+                onClick={() => onPriceClick?.(ask.price)}
+                className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''} ${onPriceClick ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
+              >
+                {/* Background bar */}
+                <div
+                  className="absolute right-0 h-full bg-red-500/30"
+                  style={{ width: `${widthPercent}%` }}
+                />
+                {/* Price text */}
+                <span className="relative z-10 text-red-400 truncate w-full text-right pr-1">
+                  {formatPrice(ask.price)}
+                </span>
+              </div>
+              {/* Red line below this ask to mark breakeven boundary */}
+              {showBreakevenLine && (
+                <div className="h-px bg-red-500 w-full" title={`Breakeven: ${formatPrice(breakevenPrice)}`} />
+              )}
             </div>
           )
         })}
@@ -127,23 +149,34 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
 
       {/* Bids (buy orders) - displayed top to bottom, highest bid at top */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {bids.slice(0, 8).map((bid, idx) => {
+        {bids.slice(0, 8).map((bid, idx, arr) => {
           const widthPercent = maxCumulative > 0 ? (bid.cumulative / maxCumulative) * 100 : 0
           const isAtLimit = isNearLimitPrice(bid.price)
+          // Check if this bid is at or above breakeven and the next one (below it) is below breakeven
+          const nextBid = arr[idx + 1]
+          const showBreakevenLine = breakevenPrice && breakevenPrice > 0 &&
+            bid.price >= breakevenPrice &&
+            nextBid && nextBid.price < breakevenPrice
           return (
-            <div
-              key={`bid-${idx}`}
-              className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''}`}
-            >
-              {/* Background bar */}
+            <div key={`bid-${idx}`}>
               <div
-                className="absolute right-0 h-full bg-green-500/30"
-                style={{ width: `${widthPercent}%` }}
-              />
-              {/* Price text */}
-              <span className="relative z-10 text-green-400 truncate w-full text-right pr-1">
-                {formatPrice(bid.price)}
-              </span>
+                onClick={() => onPriceClick?.(bid.price)}
+                className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''} ${onPriceClick ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
+              >
+                {/* Background bar */}
+                <div
+                  className="absolute right-0 h-full bg-green-500/30"
+                  style={{ width: `${widthPercent}%` }}
+                />
+                {/* Price text */}
+                <span className="relative z-10 text-green-400 truncate w-full text-right pr-1">
+                  {formatPrice(bid.price)}
+                </span>
+              </div>
+              {/* Red line below this bid to mark breakeven boundary (selling below this is a loss) */}
+              {showBreakevenLine && (
+                <div className="h-px bg-red-500 w-full" title={`Breakeven: ${formatPrice(breakevenPrice)}`} />
+              )}
             </div>
           )
         })}

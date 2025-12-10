@@ -49,6 +49,13 @@ export function LimitCloseModal({
   const [btcUsdPrice, setBtcUsdPrice] = useState<number>(0)
   const [showLossConfirmation, setShowLossConfirmation] = useState(false)
   const hasInitializedSlider = useRef(false)
+  // Order book range from DepthChart for extended slider
+  const [orderBookRange, setOrderBookRange] = useState<{
+    lowestBid: number
+    highestAsk: number
+    bestBid: number
+    bestAsk: number
+  } | null>(null)
 
   // Handle ESC key to close modal (same as Cancel button)
   useEffect(() => {
@@ -132,7 +139,7 @@ export function LimitCloseModal({
   }
 
   // Calculate slider parameters based on precision
-  // Extends range beyond bid-ask if current limit price is outside
+  // Uses full order book depth range when available
   const getSliderParams = () => {
     if (!ticker || !productPrecision) return {
       numSteps: 100,
@@ -141,30 +148,48 @@ export function LimitCloseModal({
       rangeEnd: 0,
       bidPercent: 0,
       askPercent: 100,
-      isExtendedLeft: false,
-      isExtendedRight: false
+      isExtendedRange: false
     }
 
     const increment = parseFloat(productPrecision.quote_increment)
     const { best_bid, best_ask } = ticker
 
-    // Determine actual range, extending if needed to include current limit price
-    let rangeStart = best_bid
-    let rangeEnd = best_ask
-    const isExtendedLeft = limitPrice > 0 && limitPrice < best_bid
-    const isExtendedRight = limitPrice > best_ask
+    // Use order book range if available (full depth), otherwise fall back to bid-ask spread
+    let rangeStart: number
+    let rangeEnd: number
+    let isExtendedRange = false
 
-    if (isExtendedLeft) {
-      rangeStart = limitPrice
-    }
-    if (isExtendedRight) {
-      rangeEnd = limitPrice
+    if (orderBookRange) {
+      // Use full order book depth
+      rangeStart = orderBookRange.lowestBid
+      rangeEnd = orderBookRange.highestAsk
+      isExtendedRange = true
+
+      // Extend further if current limit price is outside order book range
+      if (limitPrice > 0 && limitPrice < rangeStart) {
+        rangeStart = limitPrice
+      }
+      if (limitPrice > rangeEnd) {
+        rangeEnd = limitPrice
+      }
+    } else {
+      // Fall back to simple bid-ask spread
+      rangeStart = best_bid
+      rangeEnd = best_ask
+
+      // Extend if limit price is outside
+      if (limitPrice > 0 && limitPrice < rangeStart) {
+        rangeStart = limitPrice
+      }
+      if (limitPrice > rangeEnd) {
+        rangeEnd = limitPrice
+      }
     }
 
     const range = rangeEnd - rangeStart
     const numSteps = Math.round(range / increment)
 
-    // Calculate where bid and ask fall on the extended slider (as percentages)
+    // Calculate where best bid and ask fall on the slider (as percentages)
     const bidPercent = range > 0 ? ((best_bid - rangeStart) / range) * 100 : 0
     const askPercent = range > 0 ? ((best_ask - rangeStart) / range) * 100 : 100
 
@@ -175,8 +200,7 @@ export function LimitCloseModal({
       rangeEnd,
       bidPercent,
       askPercent,
-      isExtendedLeft,
-      isExtendedRight
+      isExtendedRange
     }
   }
 
@@ -351,7 +375,7 @@ export function LimitCloseModal({
           {ticker && productPrecision && (() => {
             const { isLoss } = calculateProfitLoss()
             const sliderColor = isLoss ? '#ef4444' : '#22c55e'  // Red when at loss, green when profit
-            const { numSteps, rangeStart, rangeEnd, bidPercent, askPercent, isExtendedLeft, isExtendedRight } = getSliderParams()
+            const { numSteps, rangeStart, rangeEnd, bidPercent, askPercent, isExtendedRange } = getSliderParams()
 
             // Calculate slider position as percentage for visual display
             const sliderPercent = numSteps > 0 ? (sliderStep / numSteps) * 100 : 50
@@ -379,8 +403,8 @@ export function LimitCloseModal({
                 <label className="block text-sm font-medium text-slate-300">
                   Select Limit Price {isLoss && <span className="text-red-400 text-xs ml-2">(below breakeven)</span>}
                   <span className="text-slate-500 text-xs ml-2">({numSteps} price levels)</span>
-                  {(isExtendedLeft || isExtendedRight) && (
-                    <span className="text-blue-400 text-xs ml-2">(extended range)</span>
+                  {isExtendedRange && (
+                    <span className="text-blue-400 text-xs ml-2">(full order book depth)</span>
                   )}
                 </label>
                 <div className="relative">
@@ -419,8 +443,8 @@ export function LimitCloseModal({
                       background: `linear-gradient(to right, ${sliderColor} ${sliderPercent}%, #475569 ${sliderPercent}%)`
                     }}
                   />
-                  {/* Best Bid marker when extended left */}
-                  {isExtendedLeft && (
+                  {/* Best Bid marker - show when using extended order book range */}
+                  {isExtendedRange && (
                     <div
                       className="absolute top-0 w-0.5 h-4 bg-green-400 -translate-x-1/2 pointer-events-none z-20"
                       style={{ left: `${bidPercent}%`, marginTop: '-3px' }}
@@ -431,8 +455,8 @@ export function LimitCloseModal({
                       </div>
                     </div>
                   )}
-                  {/* Best Ask marker when extended right */}
-                  {isExtendedRight && (
+                  {/* Best Ask marker - show when using extended order book range */}
+                  {isExtendedRange && (
                     <div
                       className="absolute top-0 w-0.5 h-4 bg-red-400 -translate-x-1/2 pointer-events-none z-20"
                       style={{ left: `${askPercent}%`, marginTop: '-3px' }}
@@ -455,16 +479,16 @@ export function LimitCloseModal({
                       </div>
                     </div>
                   )}
-                  {/* Range labels - show different labels based on extension */}
+                  {/* Range labels - show Low/High when using full order book */}
                   <div className="flex justify-between text-xs text-slate-400 mt-1">
-                    {isExtendedLeft ? (
-                      <span className="text-blue-400">Price</span>
+                    {isExtendedRange ? (
+                      <span className="text-slate-500">Low</span>
                     ) : (
                       <span>Bid</span>
                     )}
                     <span>Mark</span>
-                    {isExtendedRight ? (
-                      <span className="text-blue-400">Price</span>
+                    {isExtendedRange ? (
+                      <span className="text-slate-500">High</span>
                     ) : (
                       <span>Ask</span>
                     )}
@@ -613,6 +637,15 @@ export function LimitCloseModal({
             limitPrice={limitPrice}
             breakevenPrice={breakevenPrice}
             quoteCurrency={quoteCurrency}
+            onPriceClick={(price) => {
+              // Round to correct increment and set as limit price
+              const roundedPrice = roundToIncrement(price)
+              setLimitPrice(roundedPrice)
+              setShowLossConfirmation(false)
+            }}
+            onOrderBookUpdate={(lowestBid, highestAsk, bestBid, bestAsk) => {
+              setOrderBookRange({ lowestBid, highestAsk, bestBid, bestAsk })
+            }}
           />
         </div>
       </div>
