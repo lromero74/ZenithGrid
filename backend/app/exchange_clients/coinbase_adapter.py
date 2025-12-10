@@ -116,6 +116,10 @@ class CoinbaseAdapter(ExchangeClient):
             granularity=granularity,
         )
 
+    async def get_product_book(self, product_id: str, limit: int = 50) -> Dict[str, Any]:
+        """Get order book (Level 2) for a product."""
+        return await self._client.get_product_book(product_id, limit=limit)
+
     # ========================================
     # ORDER EXECUTION METHODS
     # ========================================
