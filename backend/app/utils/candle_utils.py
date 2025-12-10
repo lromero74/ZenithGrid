@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # Timeframe mapping from string identifiers to seconds
 TIMEFRAME_MAP = {
     "ONE_MINUTE": 60,
-    "THREE_MINUTE": 180,  # Synthetic - aggregated from 1-minute candles
+    "THREE_MINUTE": 180,    # Synthetic - aggregated from 1-minute candles
     "FIVE_MINUTE": 300,
     "FIFTEEN_MINUTE": 900,
     "THIRTY_MINUTE": 1800,
@@ -21,6 +21,22 @@ TIMEFRAME_MAP = {
     "TWO_HOUR": 7200,
     "SIX_HOUR": 21600,
     "ONE_DAY": 86400,
+    "TWO_DAY": 172800,      # Synthetic - aggregated from 1-day candles (2 days)
+    "THREE_DAY": 259200,    # Synthetic - aggregated from 1-day candles (3 days)
+    "ONE_WEEK": 604800,     # Synthetic - aggregated from 1-day candles (7 days)
+    "TWO_WEEK": 1209600,    # Synthetic - aggregated from 1-day candles (14 days)
+    "ONE_MONTH": 2592000,   # Synthetic - aggregated from 1-day candles (30 days)
+}
+
+# Synthetic timeframes that need aggregation from base candles
+# Maps synthetic timeframe -> (base_timeframe, aggregation_factor)
+SYNTHETIC_TIMEFRAMES = {
+    "THREE_MINUTE": ("ONE_MINUTE", 3),
+    "TWO_DAY": ("ONE_DAY", 2),
+    "THREE_DAY": ("ONE_DAY", 3),
+    "ONE_WEEK": ("ONE_DAY", 7),
+    "TWO_WEEK": ("ONE_DAY", 14),
+    "ONE_MONTH": ("ONE_DAY", 30),
 }
 
 

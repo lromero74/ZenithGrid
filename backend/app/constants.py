@@ -51,8 +51,14 @@ TRADING_PAIR_INFO: Dict[str, Dict[str, str]] = {
 }
 
 # Candle intervals
+# Coinbase natively supports: ONE_MINUTE, FIVE_MINUTE, FIFTEEN_MINUTE, THIRTY_MINUTE,
+# ONE_HOUR, TWO_HOUR, SIX_HOUR, ONE_DAY
+# Additional synthetic intervals are aggregated from base candles:
+# - THREE_MINUTE: aggregated from ONE_MINUTE
+# - TWO_DAY, THREE_DAY, ONE_WEEK, TWO_WEEK, ONE_MONTH: aggregated from ONE_DAY
 CANDLE_INTERVALS = [
     "ONE_MINUTE",
+    "THREE_MINUTE",   # Synthetic - aggregated from 1-minute candles
     "FIVE_MINUTE",
     "FIFTEEN_MINUTE",
     "THIRTY_MINUTE",
@@ -60,6 +66,11 @@ CANDLE_INTERVALS = [
     "TWO_HOUR",
     "SIX_HOUR",
     "ONE_DAY",
+    "TWO_DAY",        # Synthetic - aggregated from 1-day candles
+    "THREE_DAY",      # Synthetic - aggregated from 1-day candles
+    "ONE_WEEK",       # Synthetic - aggregated from 1-day candles
+    "TWO_WEEK",       # Synthetic - aggregated from 1-day candles
+    "ONE_MONTH",      # Synthetic - aggregated from 1-day candles (30 days)
 ]
 
 # Cache TTL (seconds)

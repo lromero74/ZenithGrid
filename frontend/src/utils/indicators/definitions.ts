@@ -73,5 +73,10 @@ export const TIME_INTERVALS = [
   { value: 'ONE_HOUR', label: '1h' },
   { value: 'TWO_HOUR', label: '2h' },
   { value: 'SIX_HOUR', label: '6h' },
-  { value: 'ONE_DAY', label: '1d' }
+  { value: 'ONE_DAY', label: '1d' },
+  { value: 'TWO_DAY', label: '2d*' },       // * = synthetic, aggregated from 1-day candles
+  { value: 'THREE_DAY', label: '3d*' },     // * = synthetic, aggregated from 1-day candles
+  { value: 'ONE_WEEK', label: '1w*' },      // * = synthetic, aggregated from 1-day candles
+  { value: 'TWO_WEEK', label: '2w*' },      // * = synthetic, aggregated from 1-day candles
+  { value: 'ONE_MONTH', label: '1M*' },     // * = synthetic, aggregated from 1-day candles (30 days)
 ]

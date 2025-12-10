@@ -28,6 +28,7 @@ from app.utils.candle_utils import (
     fill_candle_gaps,
     prepare_market_context,
     timeframe_to_seconds,
+    SYNTHETIC_TIMEFRAMES,
 )
 
 logger = logging.getLogger(__name__)
@@ -169,35 +170,38 @@ class MultiBotMonitor:
         try:
             import time
 
-            # THREE_MINUTE is synthetic - fetch 1-minute candles and aggregate
-            if granularity == "THREE_MINUTE":
-                # Need 3x as many 1-minute candles to create the requested number of 3-minute candles
-                # Coinbase API limit is 300 candles max per request, so we cap at 300
-                one_min_candles_needed = min(lookback_candles * 3, 300)
-                one_min_candles = await self.get_candles_cached(
-                    product_id, "ONE_MINUTE", one_min_candles_needed
-                )
-                if one_min_candles:
-                    # Gap-fill the ONE_MINUTE candles first (for sparse BTC pairs)
-                    # This ensures continuous data like charting platforms show
-                    original_count = len(one_min_candles)
-                    one_min_candles = fill_candle_gaps(one_min_candles, 60, one_min_candles_needed)
-                    filled_count = len(one_min_candles)
+            # Check if this is a synthetic timeframe that needs aggregation
+            if granularity in SYNTHETIC_TIMEFRAMES:
+                base_timeframe, aggregation_factor = SYNTHETIC_TIMEFRAMES[granularity]
 
-                    candles = aggregate_candles(one_min_candles, 3)
+                # Need N x base candles to create the requested number of synthetic candles
+                # Coinbase API limit is 300 candles max per request, so we cap accordingly
+                base_candles_needed = min(lookback_candles * aggregation_factor, 300)
+                base_candles = await self.get_candles_cached(
+                    product_id, base_timeframe, base_candles_needed
+                )
+                if base_candles:
+                    # Gap-fill the base candles first (for sparse BTC pairs)
+                    # This ensures continuous data like charting platforms show
+                    base_interval_seconds = timeframe_to_seconds(base_timeframe)
+                    original_count = len(base_candles)
+                    base_candles = fill_candle_gaps(base_candles, base_interval_seconds, base_candles_needed)
+                    filled_count = len(base_candles)
+
+                    candles = aggregate_candles(base_candles, aggregation_factor)
                     if filled_count > original_count:
                         logger.info(
-                            f"  📊 Gap-filled {product_id}: {original_count}→{filled_count} ONE_MINUTE, "
-                            f"aggregated to {len(candles)} THREE_MINUTE"
+                            f"  📊 Gap-filled {product_id}: {original_count}→{filled_count} {base_timeframe}, "
+                            f"aggregated to {len(candles)} {granularity}"
                         )
                     else:
                         logger.debug(
-                            f"Aggregated {len(one_min_candles)} ONE_MINUTE into {len(candles)} THREE_MINUTE for {product_id}"
+                            f"Aggregated {len(base_candles)} {base_timeframe} into {len(candles)} {granularity} for {product_id}"
                         )
                     # Cache the aggregated result
                     self._candle_cache[cache_key] = (now, candles)
                     return candles
-                logger.debug(f"No ONE_MINUTE candles for {product_id}, THREE_MINUTE empty")
+                logger.debug(f"No {base_timeframe} candles for {product_id}, {granularity} empty")
                 return []
 
             # Calculate time range based on granularity

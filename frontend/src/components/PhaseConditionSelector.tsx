@@ -27,6 +27,11 @@ export type Timeframe =
   | 'TWO_HOUR'
   | 'SIX_HOUR'
   | 'ONE_DAY'
+  | 'TWO_DAY'
+  | 'THREE_DAY'
+  | 'ONE_WEEK'
+  | 'TWO_WEEK'
+  | 'ONE_MONTH'
 
 export interface PhaseCondition {
   id: string
@@ -120,6 +125,11 @@ const TIMEFRAMES: Record<Timeframe, string> = {
   TWO_HOUR: '2h',
   SIX_HOUR: '6h',
   ONE_DAY: '1d',
+  TWO_DAY: '2d*',      // * = synthetic, aggregated from 1-day candles
+  THREE_DAY: '3d*',    // * = synthetic, aggregated from 1-day candles
+  ONE_WEEK: '1w*',     // * = synthetic, aggregated from 1-day candles
+  TWO_WEEK: '2w*',     // * = synthetic, aggregated from 1-day candles
+  ONE_MONTH: '1M*',    // * = synthetic, aggregated from 1-day candles (30 days)
 }
 
 function PhaseConditionSelector({
