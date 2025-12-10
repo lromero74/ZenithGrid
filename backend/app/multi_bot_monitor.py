@@ -954,7 +954,7 @@ class MultiBotMonitor:
                 # For AI strategies: Skip entirely and only check existing positions
                 if bot.strategy_type == "conditional_dca":
                     logger.info("  ⏭️  Technical check: Analyzing conditional_dca signals without AI")
-                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe)
+                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position)
                 else:
                     logger.info("  ⏭️  SKIPPING AI: Technical-only check (existing positions only)")
                     signal_data = {"signal_type": "hold", "confidence": 0, "reasoning": "Technical-only check (no AI)"}
@@ -963,9 +963,13 @@ class MultiBotMonitor:
                 # For conditional_dca, pass the candles_by_timeframe dict
                 if bot.strategy_type == "conditional_dca":
                     logger.info("  Analyzing conditional_dca signals...")
-                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe)
+                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position)
                 else:
-                    signal_data = await strategy.analyze_signal(candles, current_price)
+                    signal_data = await strategy.analyze_signal(candles, current_price, position=existing_position)
+
+            # Commit any position changes (e.g., previous_indicators for crossing detection)
+            if existing_position is not None:
+                await db.commit()
 
             if not signal_data:
                 logger.warning("  No signal from strategy (returned None)")

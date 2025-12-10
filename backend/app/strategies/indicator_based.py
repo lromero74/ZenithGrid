@@ -529,6 +529,12 @@ class IndicatorBasedStrategy(TradingStrategy):
         if candles_by_timeframe is None:
             candles_by_timeframe = {"FIVE_MINUTE": candles}
 
+        # Load previous_indicators from position for crossing detection
+        # This persists across check cycles (strategy instances are recreated each cycle)
+        if position is not None and hasattr(position, 'previous_indicators') and position.previous_indicators:
+            self.previous_indicators = position.previous_indicators
+            logger.debug(f"Loaded previous_indicators from position {position.id}")
+
         # Determine which aggregate indicators are needed
         needs = self._needs_aggregate_indicators()
 
@@ -658,6 +664,12 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         # Store current as previous for next iteration
         self.previous_indicators = current_indicators.copy()
+
+        # Save current_indicators to position for persistence across check cycles
+        # This enables crossing_above/crossing_below operators to work
+        if position is not None and hasattr(position, 'previous_indicators'):
+            position.previous_indicators = current_indicators.copy()
+            logger.debug(f"Saved previous_indicators to position {position.id}")
 
         return {
             "signal_type": "indicator_based_check",

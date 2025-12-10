@@ -327,6 +327,9 @@ class Position(Base):
     # Exit reason tracking
     exit_reason = Column(String, nullable=True)  # "trailing_stop_loss", "trailing_take_profit", "manual", etc.
 
+    # Crossing detection - store previous indicators for crossing_above/crossing_below operators
+    previous_indicators = Column(JSON, nullable=True)  # JSON: Previous check's indicator values
+
     # Relationships
     bot = relationship("Bot", back_populates="positions")
     trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")
