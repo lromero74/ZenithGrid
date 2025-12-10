@@ -1310,6 +1310,7 @@ export default function Positions() {
           productId={limitClosePosition.product_id || 'ETH-BTC'}
           totalAmount={limitClosePosition.total_base_acquired}
           quoteCurrency={limitClosePosition.product_id?.split('-')[1] || 'BTC'}
+          totalQuoteSpent={limitClosePosition.total_quote_spent}
           isEditing={limitClosePosition.closing_via_limit}
           currentLimitPrice={limitClosePosition.limit_order_details?.limit_price}
           onClose={() => {

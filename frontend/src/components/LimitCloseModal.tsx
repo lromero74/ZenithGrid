@@ -8,6 +8,7 @@ interface LimitCloseModalProps {
   productId: string
   totalAmount: number
   quoteCurrency: string
+  totalQuoteSpent: number  // Cost basis for P/L calculation
   isEditing?: boolean  // Whether we're editing an existing order
   currentLimitPrice?: number  // Current limit price if editing
   onClose: () => void
@@ -32,6 +33,7 @@ export function LimitCloseModal({
   productId,
   totalAmount,
   quoteCurrency,
+  totalQuoteSpent,
   isEditing = false,
   currentLimitPrice,
   onClose,
@@ -43,6 +45,8 @@ export function LimitCloseModal({
   const [sliderValue, setSliderValue] = useState<number>(50) // 0-100 range
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [btcUsdPrice, setBtcUsdPrice] = useState<number>(0)
+  const [showLossConfirmation, setShowLossConfirmation] = useState(false)
 
   // Fetch product precision data
   useEffect(() => {
@@ -62,6 +66,21 @@ export function LimitCloseModal({
     }
     fetchPrecision()
   }, [productId, quoteCurrency])
+
+  // Fetch BTC/USD price for USD conversion (only for BTC pairs)
+  useEffect(() => {
+    if (quoteCurrency !== 'BTC') return
+
+    const fetchBtcPrice = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/market/btc-usd-price`)
+        setBtcUsdPrice(response.data.price || 0)
+      } catch (err: any) {
+        console.error('Failed to fetch BTC/USD price:', err)
+      }
+    }
+    fetchBtcPrice()
+  }, [quoteCurrency])
 
   // Fetch ticker data
   useEffect(() => {
@@ -102,6 +121,9 @@ export function LimitCloseModal({
   useEffect(() => {
     if (!ticker || !productPrecision) return
 
+    // Reset loss confirmation when slider changes
+    setShowLossConfirmation(false)
+
     const { best_bid, best_ask } = ticker
     const range = best_ask - best_bid
     const rawPrice = best_bid + (range * sliderValue / 100)
@@ -110,6 +132,27 @@ export function LimitCloseModal({
     const roundedPrice = roundToIncrement(rawPrice)
     setLimitPrice(roundedPrice)
   }, [sliderValue, ticker, productPrecision])
+
+  // Calculate profit/loss at current limit price
+  const calculateProfitLoss = () => {
+    const expectedProceeds = limitPrice * totalAmount
+    const profitLossBtc = expectedProceeds - totalQuoteSpent
+    const profitLossUsd = quoteCurrency === 'BTC' ? profitLossBtc * btcUsdPrice : profitLossBtc
+    const profitLossPercent = totalQuoteSpent > 0 ? (profitLossBtc / totalQuoteSpent) * 100 : 0
+    const isLoss = profitLossBtc < 0
+    return { profitLossBtc, profitLossUsd, profitLossPercent, isLoss }
+  }
+
+  const handleSubmitClick = () => {
+    const { isLoss } = calculateProfitLoss()
+    if (isLoss && !showLossConfirmation) {
+      // Show loss confirmation first
+      setShowLossConfirmation(true)
+      return
+    }
+    // Proceed with actual submission
+    handleSubmit()
+  }
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
@@ -133,12 +176,16 @@ export function LimitCloseModal({
       setError(err.response?.data?.detail || `Failed to ${isEditing ? 'update' : 'place'} limit order`)
     } finally {
       setIsSubmitting(false)
+      setShowLossConfirmation(false)
     }
   }
 
   const handlePriceInput = (value: string) => {
     const price = parseFloat(value)
     if (isNaN(price) || !ticker) return
+
+    // Reset loss confirmation when price changes
+    setShowLossConfirmation(false)
 
     // Round to correct increment before setting
     const roundedPrice = roundToIncrement(price)
@@ -274,27 +321,76 @@ export function LimitCloseModal({
             </div>
           </div>
 
-          {/* Warning */}
-          <div className="bg-yellow-500/10 border border-yellow-500 rounded p-4 text-yellow-400 text-sm">
-            <strong>Note:</strong> Your limit order may fill partially or not at all if the market price doesn't reach your limit price. You can edit or cancel the order from the positions page.
-          </div>
+          {/* Loss Warning (shown when selling at a loss and confirmed) */}
+          {showLossConfirmation && (() => {
+            const { profitLossBtc, profitLossUsd, profitLossPercent } = calculateProfitLoss()
+            return (
+              <div className="bg-red-500/20 border-2 border-red-500 rounded p-4 text-red-300 text-sm space-y-2">
+                <div className="flex items-center gap-2 font-bold text-red-400">
+                  <span className="text-xl">⚠️</span>
+                  <span>This order will result in a LOSS</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-slate-400">Loss ({quoteCurrency}):</span>
+                    <span className="ml-2 font-mono text-red-400">
+                      {quoteCurrency === 'BTC' ? profitLossBtc.toFixed(8) : profitLossBtc.toFixed(2)} {quoteCurrency}
+                    </span>
+                  </div>
+                  {quoteCurrency === 'BTC' && btcUsdPrice > 0 && (
+                    <div>
+                      <span className="text-slate-400">Loss (USD):</span>
+                      <span className="ml-2 font-mono text-red-400">${Math.abs(profitLossUsd).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-slate-400">Loss %:</span>
+                    <span className="ml-2 font-mono text-red-400">{profitLossPercent.toFixed(2)}%</span>
+                  </div>
+                </div>
+                <p className="mt-2 text-yellow-400 font-semibold">Are you sure you want to sell at a loss?</p>
+              </div>
+            )
+          })()}
+
+          {/* Standard Warning (shown when not confirming loss) */}
+          {!showLossConfirmation && (
+            <div className="bg-yellow-500/10 border border-yellow-500 rounded p-4 text-yellow-400 text-sm">
+              <strong>Note:</strong> Your limit order may fill partially or not at all if the market price doesn't reach your limit price. You can edit or cancel the order from the positions page.
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="p-6 border-t border-slate-700 flex gap-3">
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (showLossConfirmation) {
+                setShowLossConfirmation(false)
+              } else {
+                onClose()
+              }
+            }}
             className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
             disabled={isSubmitting}
           >
-            Cancel
+            {showLossConfirmation ? 'Go Back' : 'Cancel'}
           </button>
           <button
-            onClick={handleSubmit}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors"
+            onClick={handleSubmitClick}
+            className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors ${
+              showLossConfirmation
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
             disabled={isSubmitting || !ticker}
           >
-            {isSubmitting ? (isEditing ? 'Updating...' : 'Placing Order...') : (isEditing ? 'Update Limit Price' : 'Place Limit Order')}
+            {isSubmitting
+              ? (isEditing ? 'Updating...' : 'Placing Order...')
+              : showLossConfirmation
+                ? 'Yes, Sell at Loss'
+                : (isEditing ? 'Update Limit Price' : 'Place Limit Order')
+            }
           </button>
         </div>
       </div>
