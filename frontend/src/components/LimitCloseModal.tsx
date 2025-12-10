@@ -400,13 +400,47 @@ export function LimitCloseModal({
 
             return (
               <div className="space-y-3">
-                <label className="block text-sm font-medium text-slate-300">
-                  Select Limit Price {isLoss && <span className="text-red-400 text-xs ml-2">(below breakeven)</span>}
-                  <span className="text-slate-500 text-xs ml-2">({numSteps} price levels)</span>
-                  {isExtendedRange && (
-                    <span className="text-blue-400 text-xs ml-2">(full order book depth)</span>
-                  )}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-slate-300">
+                    Select Limit Price {isLoss && <span className="text-red-400 text-xs ml-2">(below breakeven)</span>}
+                  </label>
+                  {/* Quick-select buttons */}
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLimitPrice(roundToIncrement(ticker.best_bid))
+                        setShowLossConfirmation(false)
+                      }}
+                      className="px-2 py-0.5 text-xs bg-green-600/30 hover:bg-green-600/50 text-green-400 rounded border border-green-600/50 transition-colors"
+                      title={`Best Bid: ${formatPrice(ticker.best_bid)}`}
+                    >
+                      Bid
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLimitPrice(roundToIncrement(ticker.mark_price))
+                        setShowLossConfirmation(false)
+                      }}
+                      className="px-2 py-0.5 text-xs bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 rounded border border-blue-600/50 transition-colors"
+                      title={`Mark Price: ${formatPrice(ticker.mark_price)}`}
+                    >
+                      Mark
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLimitPrice(roundToIncrement(ticker.best_ask))
+                        setShowLossConfirmation(false)
+                      }}
+                      className="px-2 py-0.5 text-xs bg-red-600/30 hover:bg-red-600/50 text-red-400 rounded border border-red-600/50 transition-colors"
+                      title={`Best Ask: ${formatPrice(ticker.best_ask)}`}
+                    >
+                      Ask
+                    </button>
+                  </div>
+                </div>
                 <div className="relative">
                   {/* Tick marks container - positioned behind slider */}
                   <div className="absolute inset-0 flex items-center pointer-events-none" style={{ height: '8px' }}>
