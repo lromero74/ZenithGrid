@@ -94,8 +94,11 @@ export default function News() {
   const [autoPlayActive, setAutoPlayActive] = useState(false)
   const [autoPlayIndex, setAutoPlayIndex] = useState<number>(0)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
+  const [showVideoModal, setShowVideoModal] = useState(false)
   const playerRef = useRef<HTMLIFrameElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const modalDropdownRef = useRef<HTMLDivElement>(null)
+  const [showModalPlaylistDropdown, setShowModalPlaylistDropdown] = useState(false)
   // Track article reader mode content
   const [articleContent, setArticleContent] = useState<ArticleContentResponse | null>(null)
   const [articleContentLoading, setArticleContentLoading] = useState(false)
@@ -134,28 +137,37 @@ export default function News() {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowPlaylistDropdown(false)
       }
+      if (modalDropdownRef.current && !modalDropdownRef.current.contains(e.target as Node)) {
+        setShowModalPlaylistDropdown(false)
+      }
     }
-    if (showPlaylistDropdown) {
+    if (showPlaylistDropdown || showModalPlaylistDropdown) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showPlaylistDropdown])
+  }, [showPlaylistDropdown, showModalPlaylistDropdown])
 
-  // Start auto-play from a specific index
-  const startAutoPlay = useCallback((startIndex: number = 0, videos: VideoItem[]) => {
+  // Start auto-play from a specific index (opens modal)
+  const startAutoPlay = useCallback((startIndex: number = 0, videos: VideoItem[], openModal: boolean = true) => {
     if (videos.length === 0) return
     const clampedIndex = Math.min(Math.max(0, startIndex), videos.length - 1)
     setAutoPlayIndex(clampedIndex)
     setAutoPlayActive(true)
-    const video = videos[clampedIndex]
-    const uniqueKey = `${video.source}-${video.video_id}`
-    setPlayingVideoId(uniqueKey)
+    if (openModal) {
+      setShowVideoModal(true)
+    } else {
+      const video = videos[clampedIndex]
+      const uniqueKey = `${video.source}-${video.video_id}`
+      setPlayingVideoId(uniqueKey)
+    }
   }, [])
 
-  // Stop auto-play
+  // Stop auto-play and close modal
   const stopAutoPlay = useCallback(() => {
     setAutoPlayActive(false)
     setPlayingVideoId(null)
+    setShowVideoModal(false)
+    setShowModalPlaylistDropdown(false)
   }, [])
 
   // Advance to next video in playlist
@@ -164,17 +176,21 @@ export default function News() {
 
     const nextIndex = autoPlayIndex + 1
     if (nextIndex >= videos.length) {
-      // End of playlist
+      // End of playlist - close modal
       setAutoPlayActive(false)
       setPlayingVideoId(null)
+      setShowVideoModal(false)
       return
     }
 
     setAutoPlayIndex(nextIndex)
-    const video = videos[nextIndex]
-    const uniqueKey = `${video.source}-${video.video_id}`
-    setPlayingVideoId(uniqueKey)
-  }, [autoPlayActive, autoPlayIndex])
+    // Only update playingVideoId if not in modal mode (for inline playback)
+    if (!showVideoModal) {
+      const video = videos[nextIndex]
+      const uniqueKey = `${video.source}-${video.video_id}`
+      setPlayingVideoId(uniqueKey)
+    }
+  }, [autoPlayActive, autoPlayIndex, showVideoModal])
 
   // Skip to next video manually
   const skipToNextVideo = useCallback((videos: VideoItem[]) => {
@@ -228,16 +244,20 @@ export default function News() {
     setArticleContent(null)
   }
 
-  // Close modal on ESC key press
+  // Close modals on ESC key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && previewArticle) {
-        handleCloseModal()
+      if (e.key === 'Escape') {
+        if (showVideoModal) {
+          stopAutoPlay()
+        } else if (previewArticle) {
+          handleCloseModal()
+        }
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [previewArticle])
+  }, [previewArticle, showVideoModal, stopAutoPlay])
 
   // Force re-render every minute to update relative timestamps
   const [, setTimeTick] = useState(0)
@@ -1097,6 +1117,139 @@ export default function News() {
                 <ExternalLink className="w-4 h-4" />
                 <span>Read on Website</span>
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Player Modal for Play All */}
+      {showVideoModal && autoPlayActive && filteredVideos.length > 0 && (
+        <div
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+          onClick={stopAutoPlay}
+        >
+          <div
+            className="bg-slate-800 rounded-lg w-full max-w-5xl max-h-[95vh] overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 px-3 py-1.5 bg-red-600 rounded-lg">
+                  <ListVideo className="w-4 h-4 text-white" />
+                  <span className="text-white font-medium text-sm">
+                    {autoPlayIndex + 1} / {filteredVideos.length}
+                  </span>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-medium border ${
+                    videoSourceColors[filteredVideos[autoPlayIndex]?.source] || 'bg-slate-600 text-slate-300'
+                  }`}
+                >
+                  {filteredVideos[autoPlayIndex]?.channel_name}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                {/* Skip to next */}
+                <button
+                  onClick={() => skipToNextVideo(filteredVideos)}
+                  disabled={autoPlayIndex >= filteredVideos.length - 1}
+                  className="flex items-center space-x-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700/50 disabled:cursor-not-allowed rounded-lg text-white text-sm transition-colors"
+                >
+                  <SkipForward className="w-4 h-4" />
+                  <span className="hidden sm:inline">Skip</span>
+                </button>
+                {/* Close button */}
+                <button
+                  onClick={stopAutoPlay}
+                  className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+            </div>
+
+            {/* Video player area */}
+            <div className="aspect-video w-full bg-black">
+              <iframe
+                key={`modal-player-${filteredVideos[autoPlayIndex]?.video_id}`}
+                src={`https://www.youtube.com/embed/${filteredVideos[autoPlayIndex]?.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
+                title={filteredVideos[autoPlayIndex]?.title}
+                className="w-full h-full"
+                id={`modal-youtube-player-${filteredVideos[autoPlayIndex]?.video_id}`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                onLoad={() => {
+                  const iframe = document.getElementById(`modal-youtube-player-${filteredVideos[autoPlayIndex]?.video_id}`) as HTMLIFrameElement
+                  if (iframe?.contentWindow) {
+                    iframe.contentWindow.postMessage('{"event":"listening","id":"1","channel":"widget"}', '*')
+                  }
+                }}
+              />
+            </div>
+
+            {/* Video info and controls */}
+            <div className="p-4 space-y-3 border-t border-slate-700">
+              {/* Title */}
+              <h3 className="font-medium text-white text-lg line-clamp-2">
+                {filteredVideos[autoPlayIndex]?.title}
+              </h3>
+
+              {/* Time and external link */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 text-sm text-slate-400">
+                  {filteredVideos[autoPlayIndex]?.published && (
+                    <span>{formatRelativeTime(filteredVideos[autoPlayIndex].published!)}</span>
+                  )}
+                </div>
+                <a
+                  href={filteredVideos[autoPlayIndex]?.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-1 text-sm text-slate-400 hover:text-red-400 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Open on YouTube</span>
+                </a>
+              </div>
+
+              {/* Playlist selector */}
+              <div className="relative" ref={modalDropdownRef}>
+                <button
+                  onClick={() => setShowModalPlaylistDropdown(!showModalPlaylistDropdown)}
+                  className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors w-full justify-between"
+                >
+                  <span>Jump to video...</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showModalPlaylistDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showModalPlaylistDropdown && (
+                  <div className="absolute bottom-full left-0 right-0 mb-2 max-h-64 overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-20">
+                    {filteredVideos.map((video, idx) => (
+                      <button
+                        key={`modal-${video.source}-${video.video_id}`}
+                        onClick={() => {
+                          setAutoPlayIndex(idx)
+                          setShowModalPlaylistDropdown(false)
+                        }}
+                        className={`w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left ${
+                          idx === autoPlayIndex ? 'bg-red-500/10 border-l-2 border-red-500' : ''
+                        }`}
+                      >
+                        <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                          idx === autoPlayIndex ? 'bg-red-500 text-white' : 'bg-slate-600 text-slate-300'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">{video.title}</p>
+                          <p className="text-xs text-slate-500">{video.channel_name}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
