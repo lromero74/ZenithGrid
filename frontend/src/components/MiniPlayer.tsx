@@ -52,6 +52,13 @@ export function MiniPlayer() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [showModal, setShowModal])
 
+  // Collapse mini-player when modal opens (so only one video plays)
+  useEffect(() => {
+    if (showModal) {
+      setIsExpanded(false)
+    }
+  }, [showModal])
+
   // Don't render if not playing or mini-player is hidden
   if (!isPlaying || !showMiniPlayer || !currentVideo) {
     return null
