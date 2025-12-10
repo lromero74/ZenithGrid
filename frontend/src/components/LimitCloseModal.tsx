@@ -90,10 +90,7 @@ export function LimitCloseModal({
         const response = await axios.get(`${API_BASE_URL}/api/positions/${positionId}/ticker`)
         const data = response.data
         setTicker(data)
-        // Default to mark price if not editing, otherwise keep current limit price
-        if (!isEditing) {
-          setLimitPrice(data.mark_price)
-        }
+        // Price initialization is handled by separate useEffect with hasInitializedSlider
       } catch (err: any) {
         setError(err.response?.data?.detail || 'Failed to fetch ticker data')
       }
