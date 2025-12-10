@@ -100,7 +100,7 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
           return (
             <div
               key={`ask-${idx}`}
-              className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-yellow-400' : ''}`}
+              className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''}`}
             >
               {/* Background bar */}
               <div
@@ -133,7 +133,7 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
           return (
             <div
               key={`bid-${idx}`}
-              className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-yellow-400' : ''}`}
+              className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''}`}
             >
               {/* Background bar */}
               <div
