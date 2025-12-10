@@ -302,6 +302,18 @@ export function LimitCloseModal({
             const breakevenPercent = range > 0 ? ((breakevenPrice - best_bid) / range) * 100 : -1
             const showBreakevenTick = breakevenPercent >= 0 && breakevenPercent <= 100
 
+            // Calculate tick marks - show max ~40 ticks for readability
+            const maxTicks = 40
+            const tickInterval = numSteps <= maxTicks ? 1 : Math.ceil(numSteps / maxTicks)
+            const ticks: number[] = []
+            for (let i = 0; i <= numSteps; i += tickInterval) {
+              ticks.push(i)
+            }
+            // Always include the last tick
+            if (ticks[ticks.length - 1] !== numSteps) {
+              ticks.push(numSteps)
+            }
+
             return (
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-slate-300">
@@ -309,6 +321,29 @@ export function LimitCloseModal({
                   <span className="text-slate-500 text-xs ml-2">({numSteps} price levels)</span>
                 </label>
                 <div className="relative">
+                  {/* Tick marks container - positioned behind slider */}
+                  <div className="absolute inset-0 flex items-center pointer-events-none" style={{ height: '8px' }}>
+                    <div className="relative w-full h-full">
+                      {ticks.map((tick) => {
+                        const tickPercent = numSteps > 0 ? (tick / numSteps) * 100 : 0
+                        const isInFilledRegion = tickPercent <= sliderPercent
+                        return (
+                          <div
+                            key={tick}
+                            className="absolute top-0 h-full"
+                            style={{
+                              left: `${tickPercent}%`,
+                              width: '1px',
+                              backgroundColor: isInFilledRegion
+                                ? (isLoss ? 'rgba(185, 28, 28, 0.6)' : 'rgba(21, 128, 61, 0.6)')  // Darker shade of slider color
+                                : 'rgba(100, 116, 139, 0.5)',  // slate-500 with opacity
+                              transform: 'translateX(-50%)'
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
                   <input
                     type="range"
                     min="0"
@@ -316,7 +351,7 @@ export function LimitCloseModal({
                     step="1"
                     value={sliderStep}
                     onChange={(e) => setSliderStep(parseInt(e.target.value))}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                    className="w-full h-2 bg-transparent rounded-lg appearance-none cursor-pointer relative z-10"
                     style={{
                       background: `linear-gradient(to right, ${sliderColor} ${sliderPercent}%, #475569 ${sliderPercent}%)`
                     }}
@@ -324,7 +359,7 @@ export function LimitCloseModal({
                   {/* Breakeven tick mark */}
                   {showBreakevenTick && (
                     <div
-                      className="absolute top-0 w-0.5 h-4 bg-yellow-400 -translate-x-1/2 pointer-events-none"
+                      className="absolute top-0 w-0.5 h-4 bg-yellow-400 -translate-x-1/2 pointer-events-none z-20"
                       style={{ left: `${breakevenPercent}%`, marginTop: '-3px' }}
                       title={`Breakeven: ${formatPrice(breakevenPrice)}`}
                     >
