@@ -264,62 +264,94 @@ export function LimitCloseModal({
           )}
 
           {/* Slider */}
-          {ticker && (
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-slate-300">
-                Select Limit Price
-              </label>
-              <div className="relative">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value={sliderValue}
-                  onChange={(e) => setSliderValue(parseFloat(e.target.value))}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  style={{
-                    background: `linear-gradient(to right, #22c55e ${sliderValue}%, #475569 ${sliderValue}%)`
-                  }}
-                />
-                <div className="flex justify-between text-xs text-slate-400 mt-1">
-                  <span>Bid</span>
-                  <span>Mark</span>
-                  <span>Ask</span>
+          {ticker && (() => {
+            const { isLoss } = calculateProfitLoss()
+            const sliderColor = isLoss ? '#ef4444' : '#22c55e'  // Red when at loss, green when profit
+            return (
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-300">
+                  Select Limit Price {isLoss && <span className="text-red-400 text-xs ml-2">(below breakeven)</span>}
+                </label>
+                <div className="relative">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={sliderValue}
+                    onChange={(e) => setSliderValue(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, ${sliderColor} ${sliderValue}%, #475569 ${sliderValue}%)`
+                    }}
+                  />
+                  <div className="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>Bid</span>
+                    <span>Mark</span>
+                    <span>Ask</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Manual Price Input */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-300">
-              Limit Price ({quoteCurrency})
-            </label>
-            <input
-              type="number"
-              value={limitPrice}
-              onChange={(e) => handlePriceInput(e.target.value)}
-              step={getStepSize()}
-              className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          {(() => {
+            const { isLoss } = calculateProfitLoss()
+            return (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-300">
+                  Limit Price ({quoteCurrency})
+                </label>
+                <input
+                  type="number"
+                  value={limitPrice}
+                  onChange={(e) => handlePriceInput(e.target.value)}
+                  step={getStepSize()}
+                  className={`w-full px-4 py-2 bg-slate-900 border rounded-lg text-white font-mono focus:outline-none focus:ring-2 ${
+                    isLoss
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-slate-700 focus:ring-blue-500'
+                  }`}
+                />
+              </div>
+            )
+          })()}
 
           {/* Order Details */}
-          <div className="bg-slate-900 rounded-lg p-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Order Type:</span>
-              <span className="text-white">Limit (Good-Til-Cancelled)</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Amount to Sell:</span>
-              <span className="text-white font-mono">{totalAmount.toFixed(8)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Estimated Proceeds:</span>
-              <span className="text-green-400 font-mono">{formatPrice(estimatedProceeds)} {quoteCurrency}</span>
-            </div>
-          </div>
+          {(() => {
+            const { profitLossBtc, profitLossUsd, profitLossPercent, isLoss } = calculateProfitLoss()
+            return (
+              <div className="bg-slate-900 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Order Type:</span>
+                  <span className="text-white">Limit (Good-Til-Cancelled)</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Amount to Sell:</span>
+                  <span className="text-white font-mono">{totalAmount.toFixed(8)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Estimated Proceeds:</span>
+                  <span className={`font-mono ${isLoss ? 'text-red-400' : 'text-green-400'}`}>
+                    {formatPrice(estimatedProceeds)} {quoteCurrency}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Est. P/L:</span>
+                  <span className={`font-mono ${isLoss ? 'text-red-400' : 'text-green-400'}`}>
+                    {isLoss ? '' : '+'}{quoteCurrency === 'BTC' ? profitLossBtc.toFixed(8) : profitLossBtc.toFixed(2)} {quoteCurrency}
+                    {quoteCurrency === 'BTC' && btcUsdPrice > 0 && (
+                      <span className="ml-2 text-slate-400">
+                        (${isLoss ? '-' : '+'}${Math.abs(profitLossUsd).toFixed(2)})
+                      </span>
+                    )}
+                    <span className="ml-2">({profitLossPercent >= 0 ? '+' : ''}{profitLossPercent.toFixed(2)}%)</span>
+                  </span>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Loss Warning (shown when selling at a loss and confirmed) */}
           {showLossConfirmation && (() => {
