@@ -1,10 +1,11 @@
 /**
  * Mini Video Player Component
- * Persistent bottom bar for video playback while navigating the app
+ * Persistent player that morphs between mini-bar and full modal
+ * Single iframe that transforms - no video restart when expanding/collapsing
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { Play, Pause, SkipBack, SkipForward, X, Maximize2, ChevronDown, ChevronUp, ListVideo, ExternalLink } from 'lucide-react'
+import { SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink } from 'lucide-react'
 import { useVideoPlayer } from '../contexts/VideoPlayerContext'
 import { videoSourceColors, formatRelativeTime } from './news'
 
@@ -18,10 +19,7 @@ export function MiniPlayer() {
     nextVideo,
     previousVideo,
     closeMiniPlayer,
-    expandToModal,
     playVideo,
-    showModal,
-    setShowModal,
   } = useVideoPlayer()
 
   const [isExpanded, setIsExpanded] = useState(false)
@@ -41,23 +39,16 @@ export function MiniPlayer() {
     }
   }, [showPlaylistDropdown])
 
-  // ESC key to close modal
+  // ESC key to collapse (not close)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showModal) {
-        setShowModal(false)
+      if (e.key === 'Escape' && isExpanded) {
+        setIsExpanded(false)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [showModal, setShowModal])
-
-  // Collapse mini-player when modal opens (so only one video plays)
-  useEffect(() => {
-    if (showModal) {
-      setIsExpanded(false)
-    }
-  }, [showModal])
+  }, [isExpanded])
 
   // Don't render if not playing or mini-player is hidden
   if (!isPlaying || !showMiniPlayer || !currentVideo) {
@@ -66,28 +57,62 @@ export function MiniPlayer() {
 
   return (
     <>
-      {/* Mini Player Bar - fixed at bottom */}
-      <div className={`fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40 transition-all duration-300 ${isExpanded ? 'h-80' : 'h-20'}`}>
-        <div className="container mx-auto px-4 h-full flex flex-col">
-          {/* Main bar content */}
-          <div className="flex items-center h-20 gap-4">
-            {/* Video thumbnail */}
-            <div className="relative flex-shrink-0 w-28 h-16 bg-black rounded overflow-hidden">
-              {currentVideo.thumbnail && (
-                <img
-                  src={currentVideo.thumbnail}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              )}
-              {!isExpanded && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                  <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
-                    <Play className="w-4 h-4 text-white ml-0.5" fill="white" />
-                  </div>
-                </div>
-              )}
-            </div>
+      {/* Dark overlay when expanded */}
+      {isExpanded && (
+        <div
+          className="fixed inset-0 bg-black/80 z-40 transition-opacity"
+          onClick={() => setIsExpanded(false)}
+        />
+      )}
+
+      {/* Player container - morphs between mini-bar and modal */}
+      <div
+        className={`fixed z-50 transition-all duration-300 ease-in-out ${
+          isExpanded
+            ? 'inset-4 sm:inset-8 md:inset-12 lg:inset-x-[10%] lg:inset-y-8'
+            : 'bottom-0 left-0 right-0 h-20'
+        }`}
+      >
+        <div className={`h-full bg-slate-800 shadow-2xl flex transition-all duration-300 ${
+          isExpanded
+            ? 'flex-col rounded-lg border border-slate-700'
+            : 'flex-row border-t border-slate-700'
+        }`}>
+
+          {/* Video iframe container */}
+          <div className={`bg-black flex-shrink-0 overflow-hidden transition-all duration-300 ${
+            isExpanded
+              ? 'flex-1 rounded-t-lg'
+              : 'w-28 h-16 my-auto ml-4 rounded'
+          }`}>
+            <iframe
+              key={`player-${currentVideo.video_id}`}
+              src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
+              title={currentVideo.title}
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+
+          {/* Controls bar */}
+          <div className={`flex items-center gap-4 transition-all duration-300 ${
+            isExpanded
+              ? 'p-4 border-t border-slate-700'
+              : 'flex-1 px-4'
+          }`}>
+            {/* Video thumbnail (only in expanded) */}
+            {isExpanded && (
+              <div className="relative flex-shrink-0 w-20 h-12 bg-black rounded overflow-hidden">
+                {currentVideo.thumbnail && (
+                  <img
+                    src={currentVideo.thumbnail}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                )}
+              </div>
+            )}
 
             {/* Video info */}
             <div className="flex-1 min-w-0">
@@ -123,19 +148,6 @@ export function MiniPlayer() {
                 title="Previous"
               >
                 <SkipBack className="w-5 h-5" />
-              </button>
-
-              {/* Play/Pause - toggles expanded view */}
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="w-12 h-12 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-500 text-white transition-colors"
-                title={isExpanded ? "Collapse" : "Expand"}
-              >
-                {isExpanded ? (
-                  <Pause className="w-6 h-6" />
-                ) : (
-                  <Play className="w-6 h-6 ml-0.5" fill="white" />
-                )}
               </button>
 
               {/* Next */}
@@ -192,22 +204,26 @@ export function MiniPlayer() {
                 )}
               </div>
 
-              {/* Expand to modal */}
-              <button
-                onClick={expandToModal}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
-                title="Expand to full view"
-              >
-                <Maximize2 className="w-5 h-5" />
-              </button>
+              {/* Open on YouTube (only in expanded) */}
+              {isExpanded && (
+                <a
+                  href={currentVideo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+                  title="Open on YouTube"
+                >
+                  <ExternalLink className="w-5 h-5" />
+                </a>
+              )}
 
-              {/* Toggle expand bar */}
+              {/* Expand/Minimize toggle */}
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
-                title={isExpanded ? "Collapse" : "Expand player"}
+                title={isExpanded ? "Minimize" : "Expand"}
               >
-                {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                {isExpanded ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
               </button>
 
               {/* Close */}
@@ -220,120 +236,11 @@ export function MiniPlayer() {
               </button>
             </div>
           </div>
-
-          {/* Expanded content - larger video player */}
-          {isExpanded && (
-            <div className="flex-1 pb-4">
-              <div className="h-full bg-black rounded-lg overflow-hidden">
-                <iframe
-                  key={`expanded-${currentVideo.video_id}`}
-                  src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
-                  title={currentVideo.title}
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Full Modal View */}
-      {showModal && currentVideo && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg w-full max-w-5xl max-h-[95vh] overflow-hidden shadow-2xl">
-            {/* Modal header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-700">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-600 rounded-lg">
-                  <ListVideo className="w-4 h-4 text-white" />
-                  <span className="text-white font-medium text-sm">
-                    {currentIndex + 1} / {playlist.length}
-                  </span>
-                </div>
-                <span
-                  className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                    videoSourceColors[currentVideo.source] || 'bg-slate-600 text-slate-300'
-                  }`}
-                >
-                  {currentVideo.channel_name}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Skip controls */}
-                <button
-                  onClick={previousVideo}
-                  disabled={currentIndex === 0}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700/50 disabled:cursor-not-allowed rounded-lg text-white text-sm transition-colors"
-                >
-                  <SkipBack className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={nextVideo}
-                  disabled={currentIndex >= playlist.length - 1}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700/50 disabled:cursor-not-allowed rounded-lg text-white text-sm transition-colors"
-                >
-                  <SkipForward className="w-4 h-4" />
-                  <span className="hidden sm:inline">Skip</span>
-                </button>
-                {/* Minimize to mini-player */}
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-sm transition-colors"
-                >
-                  Minimize
-                </button>
-                {/* Close */}
-                <button
-                  onClick={closeMiniPlayer}
-                  className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
-                >
-                  <X className="w-5 h-5 text-slate-400" />
-                </button>
-              </div>
-            </div>
-
-            {/* Video player */}
-            <div className="aspect-video w-full bg-black">
-              <iframe
-                key={`modal-${currentVideo.video_id}`}
-                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
-                title={currentVideo.title}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-
-            {/* Video info */}
-            <div className="p-4 space-y-3 border-t border-slate-700">
-              <h3 className="font-medium text-white text-lg line-clamp-2">
-                {currentVideo.title}
-              </h3>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 text-sm text-slate-400">
-                  {currentVideo.published && (
-                    <span>{formatRelativeTime(currentVideo.published)}</span>
-                  )}
-                </div>
-                <a
-                  href={currentVideo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-sm text-slate-400 hover:text-red-400 transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Open on YouTube</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Spacer to prevent content from being hidden behind mini-player */}
-      <div className={`${isExpanded ? 'h-80' : 'h-20'}`} />
+      <div className="h-20" />
     </>
   )
 }

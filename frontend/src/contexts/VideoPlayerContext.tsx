@@ -32,11 +32,6 @@ interface VideoPlayerContextType {
   previousVideo: () => void
   toggleMiniPlayer: () => void
   closeMiniPlayer: () => void
-  expandToModal: () => void
-
-  // Modal state (for full-screen view)
-  showModal: boolean
-  setShowModal: (show: boolean) => void
 
   // Current video helper
   currentVideo: VideoItem | null
@@ -64,7 +59,6 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
   const [currentIndex, setCurrentIndex] = useState<number>(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showMiniPlayer, setShowMiniPlayer] = useState(false)
-  const [showModal, setShowModal] = useState(false)
 
   // Ref to hold playlist for use in event handlers
   const playlistRef = useRef<VideoItem[]>([])
@@ -108,14 +102,12 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
     setCurrentIndex(clampedIndex)
     setIsPlaying(true)
     setShowMiniPlayer(true)
-    setShowModal(false) // Start in mini-player mode
   }, [])
 
   // Stop playlist and close mini-player
   const stopPlaylist = useCallback(() => {
     setIsPlaying(false)
     setShowMiniPlayer(false)
-    setShowModal(false)
   }, [])
 
   // Play specific video in playlist
@@ -134,7 +126,6 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
       // End of playlist
       setIsPlaying(false)
       setShowMiniPlayer(false)
-      setShowModal(false)
     }
   }, [currentIndex])
 
@@ -154,11 +145,6 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
   const closeMiniPlayer = useCallback(() => {
     stopPlaylist()
   }, [stopPlaylist])
-
-  // Expand mini-player to modal
-  const expandToModal = useCallback(() => {
-    setShowModal(true)
-  }, [])
 
   // Get current video
   const currentVideo = playlist.length > 0 && currentIndex < playlist.length
@@ -201,9 +187,6 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
     previousVideo,
     toggleMiniPlayer,
     closeMiniPlayer,
-    expandToModal,
-    showModal,
-    setShowModal,
     currentVideo,
   }
 
