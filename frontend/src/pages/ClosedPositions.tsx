@@ -365,6 +365,12 @@ function ClosedPositions() {
                           <p className={`text-xs ${position.profit_quote >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
                             {formatQuoteAmount(position.profit_quote, position.product_id || 'ETH-BTC')}
                           </p>
+                          {/* Show USD value for BTC pairs */}
+                          {position.product_id?.endsWith('-BTC') && position.profit_usd !== undefined && position.profit_usd !== null && (
+                            <p className={`text-xs ${position.profit_quote >= 0 ? 'text-green-400/50' : 'text-red-400/50'}`}>
+                              ${Math.abs(position.profit_usd).toFixed(2)} USD
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <p className="font-semibold text-slate-400">-</p>
