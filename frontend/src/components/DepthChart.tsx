@@ -104,8 +104,8 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
       <div className="text-slate-400 text-center mb-1 font-medium">Depth</div>
 
       {/* Asks (sell orders) - displayed top to bottom, lowest ask at bottom */}
-      <div className="flex-1 flex flex-col justify-end overflow-hidden">
-        {[...asks].reverse().slice(0, 8).map((ask, idx, arr) => {
+      <div className="flex-1 flex flex-col justify-end overflow-hidden min-h-0">
+        {[...asks].reverse().slice(0, 10).map((ask, idx, arr) => {
           const widthPercent = maxCumulative > 0 ? (ask.cumulative / maxCumulative) * 100 : 0
           const isAtLimit = isNearLimitPrice(ask.price)
           // Check if this ask is above breakeven and the next one (below it in price) is at or below breakeven
@@ -114,10 +114,10 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
             ask.price > breakevenPrice &&
             (!nextAsk || nextAsk.price <= breakevenPrice)
           return (
-            <div key={`ask-${idx}`}>
+            <div key={`ask-${idx}`} className="flex-1 min-h-[14px] max-h-[24px] flex flex-col justify-center">
               <div
                 onClick={() => onPriceClick?.(ask.price)}
-                className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''} ${onPriceClick ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
+                className={`relative flex-1 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''} ${onPriceClick ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
               >
                 {/* Background bar */}
                 <div
@@ -131,7 +131,7 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
               </div>
               {/* Red line below this ask to mark breakeven boundary */}
               {showBreakevenLine && (
-                <div className="h-px bg-red-500 w-full" title={`Breakeven: ${formatPrice(breakevenPrice)}`} />
+                <div className="h-px bg-red-500 w-full flex-shrink-0" title={`Breakeven: ${formatPrice(breakevenPrice)}`} />
               )}
             </div>
           )
@@ -148,8 +148,8 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
       </div>
 
       {/* Bids (buy orders) - displayed top to bottom, highest bid at top */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {bids.slice(0, 8).map((bid, idx, arr) => {
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+        {bids.slice(0, 10).map((bid, idx, arr) => {
           const widthPercent = maxCumulative > 0 ? (bid.cumulative / maxCumulative) * 100 : 0
           const isAtLimit = isNearLimitPrice(bid.price)
           // Check if this bid is at or above breakeven and the next one (below it) is below breakeven
@@ -158,10 +158,10 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
             bid.price >= breakevenPrice &&
             nextBid && nextBid.price < breakevenPrice
           return (
-            <div key={`bid-${idx}`}>
+            <div key={`bid-${idx}`} className="flex-1 min-h-[14px] max-h-[24px] flex flex-col justify-center">
               <div
                 onClick={() => onPriceClick?.(bid.price)}
-                className={`relative h-3 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''} ${onPriceClick ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
+                className={`relative flex-1 flex items-center ${isAtLimit ? 'ring-1 ring-slate-400 bg-slate-700/50' : ''} ${onPriceClick ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
               >
                 {/* Background bar */}
                 <div
@@ -175,7 +175,7 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
               </div>
               {/* Red line below this bid to mark breakeven boundary (selling below this is a loss) */}
               {showBreakevenLine && (
-                <div className="h-px bg-red-500 w-full" title={`Breakeven: ${formatPrice(breakevenPrice)}`} />
+                <div className="h-px bg-red-500 w-full flex-shrink-0" title={`Breakeven: ${formatPrice(breakevenPrice)}`} />
               )}
             </div>
           )
