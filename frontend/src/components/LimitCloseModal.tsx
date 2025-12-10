@@ -125,13 +125,26 @@ export function LimitCloseModal({
     return () => clearInterval(interval)
   }, [positionId])
 
-  // Helper function to round price to correct increment
+  // Helper function to round price to correct increment (nearest)
   const roundToIncrement = (price: number): number => {
     if (!productPrecision) return price
 
     const increment = parseFloat(productPrecision.quote_increment)
-    // Round to nearest increment (not floor, to avoid always rounding down)
+    // Round to nearest increment
     const rounded = Math.round(price / increment) * increment
+
+    // Return with proper decimal precision
+    const decimals = productPrecision.quote_decimals
+    return parseFloat(rounded.toFixed(decimals))
+  }
+
+  // Helper function to round price UP to correct increment (for mark price on sells)
+  const roundUpToIncrement = (price: number): number => {
+    if (!productPrecision) return price
+
+    const increment = parseFloat(productPrecision.quote_increment)
+    // Round UP to next valid increment
+    const rounded = Math.ceil(price / increment) * increment
 
     // Return with proper decimal precision
     const decimals = productPrecision.quote_decimals
@@ -209,8 +222,8 @@ export function LimitCloseModal({
     if (!ticker || !productPrecision) return
     if (hasInitializedSlider.current) return  // Only initialize once
 
-    // Start at mark price (middle of bid/ask)
-    const initialPrice = roundToIncrement(ticker.mark_price)
+    // Start at mark price (middle of bid/ask), rounded UP to valid precision
+    const initialPrice = roundUpToIncrement(ticker.mark_price)
     setLimitPrice(initialPrice)
     hasInitializedSlider.current = true
   }, [ticker, productPrecision])
@@ -362,7 +375,7 @@ export function LimitCloseModal({
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Mark Price:</span>
-                <span className="text-blue-400 font-mono">{formatPrice(ticker.mark_price)} {quoteCurrency}</span>
+                <span className="text-blue-400 font-mono">{formatPrice(roundUpToIncrement(ticker.mark_price))} {quoteCurrency}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Best Ask:</span>
@@ -420,11 +433,11 @@ export function LimitCloseModal({
                     <button
                       type="button"
                       onClick={() => {
-                        setLimitPrice(roundToIncrement(ticker.mark_price))
+                        setLimitPrice(roundUpToIncrement(ticker.mark_price))
                         setShowLossConfirmation(false)
                       }}
                       className="px-2 py-0.5 text-xs bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 rounded border border-blue-600/50 transition-colors"
-                      title={`Mark Price: ${formatPrice(ticker.mark_price)}`}
+                      title={`Mark Price: ${formatPrice(roundUpToIncrement(ticker.mark_price))}`}
                     >
                       Mark
                     </button>
