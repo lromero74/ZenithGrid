@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_async_db
+from app.database import get_db
 from app.models import ContentSource, User, UserSourceSubscription
 from app.routers.auth_dependencies import get_current_user
 
@@ -125,7 +125,7 @@ async def set_user_subscription(
 async def list_sources(
     type: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     List all available content sources with user's subscription status.
@@ -175,7 +175,7 @@ async def list_sources(
 async def list_subscribed_sources(
     type: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     List sources the user is subscribed to (for fetching content).
@@ -226,7 +226,7 @@ async def list_subscribed_sources(
 async def subscribe_to_source(
     source_id: int,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Subscribe to a content source."""
     # Verify source exists
@@ -251,7 +251,7 @@ async def subscribe_to_source(
 async def unsubscribe_from_source(
     source_id: int,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Unsubscribe from a content source."""
     # Verify source exists
@@ -276,7 +276,7 @@ async def unsubscribe_from_source(
 async def add_custom_source(
     request: AddSourceRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Add a custom content source.
@@ -338,7 +338,7 @@ async def add_custom_source(
 async def delete_custom_source(
     source_id: int,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Delete a custom content source.
