@@ -670,6 +670,24 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
                     thumbnail = entry.media_thumbnail[0].get("url")
                 elif hasattr(entry, "media_content") and entry.media_content:
                     thumbnail = entry.media_content[0].get("url")
+                elif hasattr(entry, "enclosures") and entry.enclosures:
+                    # Some feeds use enclosures for images
+                    for enc in entry.enclosures:
+                        if enc.get("type", "").startswith("image/"):
+                            thumbnail = enc.get("url")
+                            break
+
+                # Fallback: extract first img src from description/content HTML
+                if not thumbnail:
+                    import re
+                    content_html = entry.get("content", [{}])[0].get("value", "") if entry.get("content") else ""
+                    description_html = entry.get("description", "") or entry.get("summary", "")
+                    for html in [content_html, description_html]:
+                        if html:
+                            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html, re.IGNORECASE)
+                            if img_match:
+                                thumbnail = img_match.group(1)
+                                break
 
                 items.append(NewsItem(
                     title=entry.get("title", ""),
