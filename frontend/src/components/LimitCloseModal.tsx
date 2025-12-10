@@ -349,6 +349,9 @@ export function LimitCloseModal({
           <div className="p-6 border-b border-slate-700 flex items-center justify-between">
             <h2 className="text-xl font-bold text-white">
               {isEditing ? 'Update Limit Close Price' : 'Close Position at Limit Price'}
+              <span className="ml-3 text-base font-normal text-slate-400">
+                Deal #{positionId} · {productId}
+              </span>
             </h2>
             <button
               onClick={onClose}
