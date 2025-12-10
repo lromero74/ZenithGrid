@@ -32,6 +32,7 @@ _update_py_completions() {
 complete -F _update_py_completions update.py
 complete -F _update_py_completions ./update.py
 complete -F _update_py_completions python3\ update.py
+complete -F _update_py_completions update  # alias support
 
 # Also support "python3 update.py" pattern
 _python3_update_completions() {
