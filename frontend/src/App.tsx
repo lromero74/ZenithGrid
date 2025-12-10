@@ -7,8 +7,10 @@ import { AccountSwitcher } from './components/AccountSwitcher'
 import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { VideoPlayerProvider } from './contexts/VideoPlayerContext'
 import { useAccount } from './contexts/AccountContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { MiniPlayer } from './components/MiniPlayer'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
 import Login from './pages/Login'
 
@@ -165,6 +167,7 @@ function AppContent() {
 
   return (
     <NotificationProvider>
+    <VideoPlayerProvider>
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700">
@@ -441,7 +444,11 @@ function AppContent() {
           </div>
         </div>
       )}
+
+      {/* Persistent Mini Video Player */}
+      <MiniPlayer />
     </div>
+    </VideoPlayerProvider>
     </NotificationProvider>
   )
 }
