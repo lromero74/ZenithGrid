@@ -88,6 +88,37 @@ router = APIRouter(prefix="/api/news", tags=["news"])
 # =============================================================================
 
 
+async def get_allowed_article_domains() -> set[str]:
+    """
+    Get allowed domains for article content extraction from database.
+    Extracts domains from website URLs of all enabled content sources.
+    """
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(ContentSource.website)
+            .where(ContentSource.is_enabled.is_(True))
+            .where(ContentSource.website.isnot(None))
+        )
+        websites = result.scalars().all()
+
+    allowed = set()
+    for website in websites:
+        try:
+            parsed = urlparse(website)
+            domain = parsed.netloc.lower()
+            if domain:
+                allowed.add(domain)
+                # Also add www. variant if not present, or non-www if www present
+                if domain.startswith("www."):
+                    allowed.add(domain[4:])
+                else:
+                    allowed.add(f"www.{domain}")
+        except Exception:
+            pass
+
+    return allowed
+
+
 async def get_news_sources_from_db() -> Dict[str, Dict]:
     """Get news sources from database, formatted like NEWS_SOURCES dict."""
     async with async_session_maker() as db:
@@ -999,32 +1030,13 @@ async def get_debt_ceiling_history(limit: int = 100):
     )
 
 
-# Allowed domains for article content extraction (security measure)
-ALLOWED_ARTICLE_DOMAINS = {
-    "coindesk.com",
-    "www.coindesk.com",
-    "cointelegraph.com",
-    "www.cointelegraph.com",
-    "decrypt.co",
-    "www.decrypt.co",
-    "theblock.co",
-    "www.theblock.co",
-    "cryptoslate.com",
-    "www.cryptoslate.com",
-    "bitcoinmagazine.com",
-    "www.bitcoinmagazine.com",
-    "beincrypto.com",
-    "www.beincrypto.com",
-}
-
-
 @router.get("/article-content", response_model=ArticleContentResponse)
 async def get_article_content(url: str):
     """
     Extract article content from a news URL.
 
     Uses trafilatura to extract the main article text, title, and metadata.
-    Only allows fetching from trusted crypto news domains for security.
+    Only allows fetching from domains in the content_sources database table.
 
     Returns clean, readable article content like browser reader mode.
     """
@@ -1038,14 +1050,15 @@ async def get_article_content(url: str):
                 error="Invalid URL format"
             )
 
-        # Security check: only allow known news domains
+        # Security check: only allow domains from database sources
         domain = parsed.netloc.lower()
-        if domain not in ALLOWED_ARTICLE_DOMAINS:
+        allowed_domains = await get_allowed_article_domains()
+        if domain not in allowed_domains:
             logger.warning(f"Attempted to fetch article from non-allowed domain: {domain}")
             return ArticleContentResponse(
                 url=url,
                 success=False,
-                error=f"Domain not allowed. Supported: {', '.join(sorted(ALLOWED_ARTICLE_DOMAINS))}"
+                error=f"Domain not allowed. Supported: {', '.join(sorted(allowed_domains))}"
             )
     except Exception as e:
         return ArticleContentResponse(
