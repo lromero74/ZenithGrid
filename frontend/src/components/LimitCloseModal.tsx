@@ -42,7 +42,7 @@ export function LimitCloseModal({
   const [ticker, setTicker] = useState<TickerData | null>(null)
   const [productPrecision, setProductPrecision] = useState<ProductPrecision | null>(null)
   const [limitPrice, setLimitPrice] = useState<number>(currentLimitPrice || 0)
-  const [sliderValue, setSliderValue] = useState<number>(50) // 0-100 range
+  const [sliderStep, setSliderStep] = useState<number>(0) // Step index (0 to numSteps)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [btcUsdPrice, setBtcUsdPrice] = useState<number>(0)
@@ -117,21 +117,42 @@ export function LimitCloseModal({
     return parseFloat(rounded.toFixed(decimals))
   }
 
-  // Update limit price when slider changes
+  // Calculate slider parameters based on precision
+  const getSliderParams = () => {
+    if (!ticker || !productPrecision) return { numSteps: 100, increment: 0 }
+
+    const increment = parseFloat(productPrecision.quote_increment)
+    const range = ticker.best_ask - ticker.best_bid
+    const numSteps = Math.round(range / increment)
+
+    return { numSteps: Math.max(1, numSteps), increment }
+  }
+
+  // Update limit price when slider step changes
   useEffect(() => {
     if (!ticker || !productPrecision) return
 
     // Reset loss confirmation when slider changes
     setShowLossConfirmation(false)
 
-    const { best_bid, best_ask } = ticker
-    const range = best_ask - best_bid
-    const rawPrice = best_bid + (range * sliderValue / 100)
+    const { best_bid } = ticker
+    const increment = parseFloat(productPrecision.quote_increment)
+    const decimals = productPrecision.quote_decimals
 
-    // Round to correct increment for this product
-    const roundedPrice = roundToIncrement(rawPrice)
+    // Calculate price directly from step index
+    const rawPrice = best_bid + (sliderStep * increment)
+    const roundedPrice = parseFloat(rawPrice.toFixed(decimals))
     setLimitPrice(roundedPrice)
-  }, [sliderValue, ticker, productPrecision])
+  }, [sliderStep, ticker, productPrecision])
+
+  // Initialize slider to middle position when ticker/precision loads
+  useEffect(() => {
+    if (!ticker || !productPrecision) return
+
+    const { numSteps } = getSliderParams()
+    // Start at middle of range
+    setSliderStep(Math.round(numSteps / 2))
+  }, [ticker?.best_bid, ticker?.best_ask, productPrecision])
 
   // Calculate profit/loss at current limit price
   const calculateProfitLoss = () => {
@@ -182,7 +203,7 @@ export function LimitCloseModal({
 
   const handlePriceInput = (value: string) => {
     const price = parseFloat(value)
-    if (isNaN(price) || !ticker) return
+    if (isNaN(price) || !ticker || !productPrecision) return
 
     // Reset loss confirmation when price changes
     setShowLossConfirmation(false)
@@ -191,12 +212,14 @@ export function LimitCloseModal({
     const roundedPrice = roundToIncrement(price)
     setLimitPrice(roundedPrice)
 
-    // Update slider to match manual input
-    const { best_bid, best_ask } = ticker
-    const range = best_ask - best_bid
-    if (range > 0) {
-      const percentage = ((roundedPrice - best_bid) / range) * 100
-      setSliderValue(Math.max(0, Math.min(100, percentage)))
+    // Update slider step to match manual input
+    const { best_bid } = ticker
+    const increment = parseFloat(productPrecision.quote_increment)
+    const { numSteps } = getSliderParams()
+
+    if (increment > 0) {
+      const step = Math.round((roundedPrice - best_bid) / increment)
+      setSliderStep(Math.max(0, Math.min(numSteps, step)))
     }
   }
 
@@ -264,9 +287,13 @@ export function LimitCloseModal({
           )}
 
           {/* Slider */}
-          {ticker && (() => {
+          {ticker && productPrecision && (() => {
             const { isLoss } = calculateProfitLoss()
             const sliderColor = isLoss ? '#ef4444' : '#22c55e'  // Red when at loss, green when profit
+            const { numSteps } = getSliderParams()
+
+            // Calculate slider position as percentage for visual display
+            const sliderPercent = numSteps > 0 ? (sliderStep / numSteps) * 100 : 50
 
             // Calculate breakeven position on slider
             const breakevenPrice = totalAmount > 0 ? totalQuoteSpent / totalAmount : 0
@@ -279,18 +306,19 @@ export function LimitCloseModal({
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-slate-300">
                   Select Limit Price {isLoss && <span className="text-red-400 text-xs ml-2">(below breakeven)</span>}
+                  <span className="text-slate-500 text-xs ml-2">({numSteps} price levels)</span>
                 </label>
                 <div className="relative">
                   <input
                     type="range"
                     min="0"
-                    max="100"
-                    step="0.1"
-                    value={sliderValue}
-                    onChange={(e) => setSliderValue(parseFloat(e.target.value))}
+                    max={numSteps}
+                    step="1"
+                    value={sliderStep}
+                    onChange={(e) => setSliderStep(parseInt(e.target.value))}
                     className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, ${sliderColor} ${sliderValue}%, #475569 ${sliderValue}%)`
+                      background: `linear-gradient(to right, ${sliderColor} ${sliderPercent}%, #475569 ${sliderPercent}%)`
                     }}
                   />
                   {/* Breakeven tick mark */}
