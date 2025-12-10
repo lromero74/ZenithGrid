@@ -136,17 +136,18 @@ async def get_product_book(
         limit: Number of price levels to retrieve (default 50)
 
     Returns:
-        Dict with 'bids' and 'asks' arrays, each containing [price, size] tuples
+        Dict with 'pricebook' containing bids and asks arrays
     """
     cache_key = f"orderbook_{product_id}_{limit}"
     cached = await api_cache.get(cache_key)
     if cached is not None:
         return cached
 
+    # Coinbase uses /product_book with product_id as query param
     result = await request_func(
         "GET",
-        f"/api/v3/brokerage/products/{product_id}/book",
-        params={"limit": str(limit)}
+        "/api/v3/brokerage/product_book",
+        params={"product_id": product_id, "limit": str(limit)}
     )
 
     # Cache for 2 seconds (order book changes rapidly)
