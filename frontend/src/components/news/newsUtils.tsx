@@ -245,4 +245,10 @@ export const videoSourceColors: Record<string, string> = {
   bankless: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   the_defiant: 'bg-green-500/20 text-green-400 border-green-500/30',
   crypto_banter: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  datadash: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  cryptosrus: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  the_moon: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
+  digital_asset_news: 'bg-lime-500/20 text-lime-400 border-lime-500/30',
+  paul_barron: 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30',
+  lark_davis: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
 }
