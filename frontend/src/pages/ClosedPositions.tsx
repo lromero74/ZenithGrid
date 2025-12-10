@@ -24,6 +24,7 @@ function ClosedPositions() {
   // Track last seen counts separately for closed and failed (server-synced)
   const [lastSeenClosedCount, setLastSeenClosedCount] = useState<number>(0)
   const [lastSeenFailedCount, setLastSeenFailedCount] = useState<number>(0)
+  const [currentBtcUsdPrice, setCurrentBtcUsdPrice] = useState<number>(0)
 
   // Fetch initial counts from server on mount
   useEffect(() => {
@@ -47,6 +48,26 @@ function ClosedPositions() {
 
     fetchLastSeenCounts()
   }, [getAccessToken])
+
+  // Fetch current BTC/USD price for "today's USD" calculation
+  useEffect(() => {
+    const fetchBtcPrice = async () => {
+      try {
+        const response = await fetch('/api/market/btc-usd-price')
+        if (response.ok) {
+          const data = await response.json()
+          setCurrentBtcUsdPrice(data.price || 0)
+        }
+      } catch (error) {
+        console.error('Failed to fetch BTC/USD price:', error)
+      }
+    }
+
+    fetchBtcPrice()
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchBtcPrice, 60000)
+    return () => clearInterval(interval)
+  }, [])
 
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccount?.id],
@@ -365,11 +386,22 @@ function ClosedPositions() {
                           <p className={`text-xs ${position.profit_quote >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
                             {formatQuoteAmount(position.profit_quote, position.product_id || 'ETH-BTC')}
                           </p>
-                          {/* Show USD value for BTC pairs */}
-                          {position.product_id?.endsWith('-BTC') && position.profit_usd !== undefined && position.profit_usd !== null && (
-                            <p className={`text-xs ${position.profit_quote >= 0 ? 'text-green-400/50' : 'text-red-400/50'}`}>
-                              ${Math.abs(position.profit_usd).toFixed(2)} USD
-                            </p>
+                          {/* Show USD values for BTC pairs */}
+                          {position.product_id?.endsWith('-BTC') && position.profit_quote !== null && (
+                            <>
+                              {/* Historical USD at time of close */}
+                              {position.profit_usd !== undefined && position.profit_usd !== null && (
+                                <p className={`text-xs ${position.profit_quote >= 0 ? 'text-green-400/50' : 'text-red-400/50'}`}>
+                                  ${Math.abs(position.profit_usd).toFixed(2)} at close
+                                </p>
+                              )}
+                              {/* Today's USD value */}
+                              {currentBtcUsdPrice > 0 && (
+                                <p className={`text-xs ${position.profit_quote >= 0 ? 'text-blue-400/70' : 'text-orange-400/70'}`}>
+                                  ${Math.abs(position.profit_quote * currentBtcUsdPrice).toFixed(2)} today
+                                </p>
+                              )}
+                            </>
                           )}
                         </div>
                       ) : (
