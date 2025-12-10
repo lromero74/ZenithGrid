@@ -393,3 +393,21 @@ async def get_orderbook(
     except Exception as e:
         logger.error(f"Error fetching orderbook for {product_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/market/btc-usd-price")
+async def get_btc_usd_price(coinbase: CoinbaseClient = Depends(get_coinbase)):
+    """
+    Get current BTC/USD price.
+
+    Used for converting BTC values to USD for display purposes.
+    """
+    try:
+        price = await coinbase.get_btc_usd_price()
+        return {
+            "price": price,
+            "time": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching BTC/USD price: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
