@@ -117,14 +117,52 @@ export function LimitCloseModal({
   }
 
   // Calculate slider parameters based on precision
+  // Extends range beyond bid-ask if current limit price is outside
   const getSliderParams = () => {
-    if (!ticker || !productPrecision) return { numSteps: 100, increment: 0 }
+    if (!ticker || !productPrecision) return {
+      numSteps: 100,
+      increment: 0,
+      rangeStart: 0,
+      rangeEnd: 0,
+      bidPercent: 0,
+      askPercent: 100,
+      isExtendedLeft: false,
+      isExtendedRight: false
+    }
 
     const increment = parseFloat(productPrecision.quote_increment)
-    const range = ticker.best_ask - ticker.best_bid
+    const { best_bid, best_ask } = ticker
+
+    // Determine actual range, extending if needed to include current limit price
+    let rangeStart = best_bid
+    let rangeEnd = best_ask
+    const isExtendedLeft = limitPrice > 0 && limitPrice < best_bid
+    const isExtendedRight = limitPrice > best_ask
+
+    if (isExtendedLeft) {
+      rangeStart = limitPrice
+    }
+    if (isExtendedRight) {
+      rangeEnd = limitPrice
+    }
+
+    const range = rangeEnd - rangeStart
     const numSteps = Math.round(range / increment)
 
-    return { numSteps: Math.max(1, numSteps), increment }
+    // Calculate where bid and ask fall on the extended slider (as percentages)
+    const bidPercent = range > 0 ? ((best_bid - rangeStart) / range) * 100 : 0
+    const askPercent = range > 0 ? ((best_ask - rangeStart) / range) * 100 : 100
+
+    return {
+      numSteps: Math.max(1, numSteps),
+      increment,
+      rangeStart,
+      rangeEnd,
+      bidPercent,
+      askPercent,
+      isExtendedLeft,
+      isExtendedRight
+    }
   }
 
   // Initialize price to mark price ONCE when ticker/precision first loads
@@ -143,12 +181,10 @@ export function LimitCloseModal({
   useEffect(() => {
     if (!ticker || !productPrecision || limitPrice === 0) return
 
-    const { best_bid } = ticker
-    const increment = parseFloat(productPrecision.quote_increment)
-    const { numSteps } = getSliderParams()
+    const { numSteps, rangeStart, increment } = getSliderParams()
 
-    // Calculate step from current price
-    const step = Math.round((limitPrice - best_bid) / increment)
+    // Calculate step from current price relative to rangeStart
+    const step = Math.round((limitPrice - rangeStart) / increment)
     // Clamp to valid range
     setSliderStep(Math.max(0, Math.min(numSteps, step)))
   }, [ticker, productPrecision, limitPrice])
@@ -159,11 +195,10 @@ export function LimitCloseModal({
 
     setShowLossConfirmation(false)
 
-    const { best_bid } = ticker
-    const increment = parseFloat(productPrecision.quote_increment)
+    const { rangeStart, increment } = getSliderParams()
     const decimals = productPrecision.quote_decimals
 
-    const rawPrice = best_bid + (newStep * increment)
+    const rawPrice = rangeStart + (newStep * increment)
     const roundedPrice = parseFloat(rawPrice.toFixed(decimals))
     setLimitPrice(roundedPrice)
   }
@@ -226,15 +261,7 @@ export function LimitCloseModal({
     const roundedPrice = roundToIncrement(price)
     setLimitPrice(roundedPrice)
 
-    // Update slider step to match manual input
-    const { best_bid } = ticker
-    const increment = parseFloat(productPrecision.quote_increment)
-    const { numSteps } = getSliderParams()
-
-    if (increment > 0) {
-      const step = Math.round((roundedPrice - best_bid) / increment)
-      setSliderStep(Math.max(0, Math.min(numSteps, step)))
-    }
+    // Slider step will be recalculated in the useEffect based on new price
   }
 
   // Get precision for the quote currency
@@ -309,16 +336,15 @@ export function LimitCloseModal({
           {ticker && productPrecision && (() => {
             const { isLoss } = calculateProfitLoss()
             const sliderColor = isLoss ? '#ef4444' : '#22c55e'  // Red when at loss, green when profit
-            const { numSteps } = getSliderParams()
+            const { numSteps, rangeStart, rangeEnd, bidPercent, askPercent, isExtendedLeft, isExtendedRight } = getSliderParams()
 
             // Calculate slider position as percentage for visual display
             const sliderPercent = numSteps > 0 ? (sliderStep / numSteps) * 100 : 50
 
-            // Calculate breakeven position on slider
+            // Calculate breakeven position on slider (using extended range)
             const breakevenPrice = totalAmount > 0 ? totalQuoteSpent / totalAmount : 0
-            const { best_bid, best_ask } = ticker
-            const range = best_ask - best_bid
-            const breakevenPercent = range > 0 ? ((breakevenPrice - best_bid) / range) * 100 : -1
+            const range = rangeEnd - rangeStart
+            const breakevenPercent = range > 0 ? ((breakevenPrice - rangeStart) / range) * 100 : -1
             const showBreakevenTick = breakevenPercent >= 0 && breakevenPercent <= 100
 
             // Calculate tick marks - show max ~40 ticks for readability
@@ -338,6 +364,9 @@ export function LimitCloseModal({
                 <label className="block text-sm font-medium text-slate-300">
                   Select Limit Price {isLoss && <span className="text-red-400 text-xs ml-2">(below breakeven)</span>}
                   <span className="text-slate-500 text-xs ml-2">({numSteps} price levels)</span>
+                  {(isExtendedLeft || isExtendedRight) && (
+                    <span className="text-blue-400 text-xs ml-2">(extended range)</span>
+                  )}
                 </label>
                 <div className="relative">
                   {/* Tick marks container - positioned behind slider */}
@@ -375,6 +404,30 @@ export function LimitCloseModal({
                       background: `linear-gradient(to right, ${sliderColor} ${sliderPercent}%, #475569 ${sliderPercent}%)`
                     }}
                   />
+                  {/* Best Bid marker when extended left */}
+                  {isExtendedLeft && (
+                    <div
+                      className="absolute top-0 w-0.5 h-4 bg-green-400 -translate-x-1/2 pointer-events-none z-20"
+                      style={{ left: `${bidPercent}%`, marginTop: '-3px' }}
+                      title={`Best Bid: ${formatPrice(ticker.best_bid)}`}
+                    >
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-green-400 whitespace-nowrap">
+                        Bid
+                      </div>
+                    </div>
+                  )}
+                  {/* Best Ask marker when extended right */}
+                  {isExtendedRight && (
+                    <div
+                      className="absolute top-0 w-0.5 h-4 bg-red-400 -translate-x-1/2 pointer-events-none z-20"
+                      style={{ left: `${askPercent}%`, marginTop: '-3px' }}
+                      title={`Best Ask: ${formatPrice(ticker.best_ask)}`}
+                    >
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-red-400 whitespace-nowrap">
+                        Ask
+                      </div>
+                    </div>
+                  )}
                   {/* Breakeven tick mark */}
                   {showBreakevenTick && (
                     <div
@@ -387,10 +440,19 @@ export function LimitCloseModal({
                       </div>
                     </div>
                   )}
+                  {/* Range labels - show different labels based on extension */}
                   <div className="flex justify-between text-xs text-slate-400 mt-1">
-                    <span>Bid</span>
+                    {isExtendedLeft ? (
+                      <span className="text-blue-400">Price</span>
+                    ) : (
+                      <span>Bid</span>
+                    )}
                     <span>Mark</span>
-                    <span>Ask</span>
+                    {isExtendedRight ? (
+                      <span className="text-blue-400">Price</span>
+                    ) : (
+                      <span>Ask</span>
+                    )}
                   </div>
                 </div>
               </div>
