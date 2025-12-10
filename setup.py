@@ -966,6 +966,7 @@ def initialize_database(project_root):
                 author TEXT,
                 original_thumbnail_url TEXT,
                 cached_thumbnail_path TEXT,
+                image_data TEXT,
                 fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -973,6 +974,43 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_url ON news_articles(url)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_published_at ON news_articles(published_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_fetched_at ON news_articles(fetched_at)")
+
+        # AI provider credentials table (per-user AI API keys)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_provider_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                api_key TEXT NOT NULL,
+                is_active BOOLEAN DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_used_at DATETIME,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_provider_credentials_user_id ON ai_provider_credentials(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_provider_credentials_provider ON ai_provider_credentials(provider)")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_ai_provider_credentials_user_provider ON ai_provider_credentials(user_id, provider)")
+
+        # Indicator logs table (for indicator-based condition evaluation logging)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS indicator_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bot_id INTEGER NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                product_id VARCHAR NOT NULL,
+                phase VARCHAR NOT NULL,
+                conditions_met BOOLEAN NOT NULL,
+                conditions_detail JSON NOT NULL,
+                indicators_snapshot JSON,
+                current_price FLOAT,
+                FOREIGN KEY (bot_id) REFERENCES bots(id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_indicator_logs_bot_id ON indicator_logs(bot_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_indicator_logs_timestamp ON indicator_logs(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_indicator_logs_product_id ON indicator_logs(product_id)")
 
         conn.commit()
         print_success("Database tables created")
