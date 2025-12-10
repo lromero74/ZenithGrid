@@ -50,6 +50,21 @@ export function LimitCloseModal({
   const [showLossConfirmation, setShowLossConfirmation] = useState(false)
   const hasInitializedSlider = useRef(false)
 
+  // Handle ESC key to close modal (same as Cancel button)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showLossConfirmation) {
+          setShowLossConfirmation(false)
+        } else {
+          onClose()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showLossConfirmation, onClose])
+
   // Fetch product precision data
   useEffect(() => {
     const fetchPrecision = async () => {
