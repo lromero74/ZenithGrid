@@ -15,14 +15,14 @@ export function MiniPlayer() {
     currentIndex,
     isPlaying,
     showMiniPlayer,
+    isExpanded,
+    setExpanded,
     currentVideo,
     nextVideo,
     previousVideo,
     closeMiniPlayer,
     playVideo,
   } = useVideoPlayer()
-
-  const [isExpanded, setIsExpanded] = useState(false)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -57,12 +57,12 @@ export function MiniPlayer() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isExpanded) {
-        setIsExpanded(false)
+        setExpanded(false)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isExpanded])
+  }, [isExpanded, setExpanded])
 
   // Reset pause state when video changes
   useEffect(() => {
@@ -80,7 +80,7 @@ export function MiniPlayer() {
       {isExpanded && (
         <div
           className="fixed inset-0 bg-black/80 z-40 transition-opacity"
-          onClick={() => setIsExpanded(false)}
+          onClick={() => setExpanded(false)}
         />
       )}
 
@@ -252,7 +252,7 @@ export function MiniPlayer() {
 
               {/* Expand/Minimize toggle */}
               <button
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => setExpanded(!isExpanded)}
                 className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
                 title={isExpanded ? "Minimize" : "Expand"}
               >

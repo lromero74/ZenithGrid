@@ -23,15 +23,17 @@ interface VideoPlayerContextType {
   currentIndex: number
   isPlaying: boolean
   showMiniPlayer: boolean
+  isExpanded: boolean
 
   // Actions
-  startPlaylist: (videos: VideoItem[], startIndex?: number) => void
+  startPlaylist: (videos: VideoItem[], startIndex?: number, startExpanded?: boolean) => void
   stopPlaylist: () => void
   playVideo: (index: number) => void
   nextVideo: () => void
   previousVideo: () => void
   toggleMiniPlayer: () => void
   closeMiniPlayer: () => void
+  setExpanded: (expanded: boolean) => void
 
   // Current video helper
   currentVideo: VideoItem | null
@@ -59,6 +61,7 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
   const [currentIndex, setCurrentIndex] = useState<number>(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showMiniPlayer, setShowMiniPlayer] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   // Ref to hold playlist for use in event handlers
   const playlistRef = useRef<VideoItem[]>([])
@@ -95,13 +98,14 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
   }, [currentIndex, isPlaying])
 
   // Start a new playlist
-  const startPlaylist = useCallback((videos: VideoItem[], startIndex: number = 0) => {
+  const startPlaylist = useCallback((videos: VideoItem[], startIndex: number = 0, startExpanded: boolean = false) => {
     if (videos.length === 0) return
     const clampedIndex = Math.min(Math.max(0, startIndex), videos.length - 1)
     setPlaylist(videos)
     setCurrentIndex(clampedIndex)
     setIsPlaying(true)
     setShowMiniPlayer(true)
+    setIsExpanded(startExpanded)
   }, [])
 
   // Stop playlist and close mini-player
@@ -180,6 +184,7 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
     currentIndex,
     isPlaying,
     showMiniPlayer,
+    isExpanded,
     startPlaylist,
     stopPlaylist,
     playVideo,
@@ -187,6 +192,7 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
     previousVideo,
     toggleMiniPlayer,
     closeMiniPlayer,
+    setExpanded: setIsExpanded,
     currentVideo,
   }
 

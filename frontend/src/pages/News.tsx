@@ -86,8 +86,6 @@ export default function News() {
   const [selectedSource, setSelectedSource] = useState<string>('all')
   const [selectedVideoSource, setSelectedVideoSource] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<TabType>('articles')
-  // Track which video is playing inline (null means none)
-  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null)
   // Track which article is being previewed (null means none)
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
 
@@ -558,7 +556,7 @@ export default function News() {
                     <button
                       key={`${video.source}-${video.video_id}`}
                       onClick={() => {
-                        startPlaylist(filteredVideos as ContextVideoItem[], idx)
+                        startPlaylist(filteredVideos as ContextVideoItem[], idx, true) // Start expanded
                         setShowPlaylistDropdown(false)
                       }}
                       className="w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left"
@@ -579,72 +577,52 @@ export default function News() {
 
           {/* Videos grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredVideos.map((video) => {
+            {filteredVideos.map((video, idx) => {
               // Use unique key combining source and video_id to avoid collisions
               const uniqueKey = `${video.source}-${video.video_id}`
-              const isPlaying = playingVideoId === uniqueKey
+
+              // Handler to play this specific video in expanded modal
+              const handlePlayVideo = () => {
+                startPlaylist(filteredVideos as ContextVideoItem[], idx, true) // true = start expanded
+              }
 
               return (
                 <div
                   key={uniqueKey}
                   className="group bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-slate-900/50"
                 >
-                  {/* Video area - either thumbnail or embedded player */}
+                  {/* Video thumbnail with play button */}
                   <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
-                    {isPlaying ? (
-                      // Embedded YouTube player for inline playback
-                      <>
-                        <iframe
-                          src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1&rel=0`}
-                          title={video.title}
-                          className="w-full h-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                        {/* Close button */}
-                        <button
-                          onClick={() => setPlayingVideoId(null)}
-                          className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
-                          title="Close video"
-                        >
-                          <X className="w-5 h-5 text-white" />
-                        </button>
-                      </>
-                    ) : (
-                      // Thumbnail with play button
-                      <>
-                        {video.thumbnail && (
-                          <img
-                            src={video.thumbnail}
-                            alt=""
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none'
-                            }}
-                          />
-                        )}
-                        {/* Play button overlay - click to play inline */}
-                        <button
-                          onClick={() => setPlayingVideoId(uniqueKey)}
-                          className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors cursor-pointer"
-                        >
-                          <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Play className="w-7 h-7 text-white ml-1" fill="white" />
-                          </div>
-                        </button>
-                        {/* Open in new tab button */}
-                        <a
-                          href={video.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
-                          title="Open on YouTube"
-                        >
-                          <ExternalLink className="w-4 h-4 text-white" />
-                        </a>
-                      </>
+                    {video.thumbnail && (
+                      <img
+                        src={video.thumbnail}
+                        alt=""
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                        }}
+                      />
                     )}
+                    {/* Play button overlay - click to open in expanded modal */}
+                    <button
+                      onClick={handlePlayVideo}
+                      className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors cursor-pointer"
+                    >
+                      <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Play className="w-7 h-7 text-white ml-1" fill="white" />
+                      </div>
+                    </button>
+                    {/* Open in new tab button */}
+                    <a
+                      href={video.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
+                      title="Open on YouTube"
+                    >
+                      <ExternalLink className="w-4 h-4 text-white" />
+                    </a>
                   </div>
 
                   <div className="p-4 space-y-3">
