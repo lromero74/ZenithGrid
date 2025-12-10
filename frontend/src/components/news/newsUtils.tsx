@@ -228,8 +228,8 @@ export function formatRelativeTime(isoString: string | null): string {
 
 // Source colors for visual distinction
 export const sourceColors: Record<string, string> = {
-  reddit_crypto: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  reddit_bitcoin: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  bitcoin_magazine: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  beincrypto: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
   coindesk: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   cointelegraph: 'bg-green-500/20 text-green-400 border-green-500/30',
   decrypt: 'bg-purple-500/20 text-purple-400 border-purple-500/30',

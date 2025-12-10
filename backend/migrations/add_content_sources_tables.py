@@ -69,8 +69,8 @@ def run_migration():
         # Seed default sources (INSERT OR IGNORE to avoid duplicates)
         default_sources = [
             # News sources
-            ('reddit_crypto', 'r/CryptoCurrency', 'news', 'https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15', 'https://www.reddit.com/r/CryptoCurrency', 'Crypto community discussions', None),
-            ('reddit_bitcoin', 'r/Bitcoin', 'news', 'https://www.reddit.com/r/Bitcoin/hot.json?limit=10', 'https://www.reddit.com/r/Bitcoin', 'Bitcoin community discussions', None),
+            ('bitcoin_magazine', 'Bitcoin Magazine', 'news', 'https://bitcoinmagazine.com/feed', 'https://bitcoinmagazine.com', 'Bitcoin news, analysis & culture', None),
+            ('beincrypto', 'BeInCrypto', 'news', 'https://beincrypto.com/feed/', 'https://beincrypto.com', 'Crypto news, guides & price analysis', None),
             ('coindesk', 'CoinDesk', 'news', 'https://www.coindesk.com/arc/outboundfeeds/rss/', 'https://www.coindesk.com', 'Crypto news & analysis', None),
             ('cointelegraph', 'CoinTelegraph', 'news', 'https://cointelegraph.com/rss', 'https://cointelegraph.com', 'Blockchain & crypto news', None),
             ('decrypt', 'Decrypt', 'news', 'https://decrypt.co/feed', 'https://decrypt.co', 'Web3 news & guides', None),
