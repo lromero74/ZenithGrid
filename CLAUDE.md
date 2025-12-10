@@ -186,3 +186,5 @@ See **COMMERCIALIZATION.md** for the full roadmap to make Zenith Grid sale-ready
 - be sure not to hardcode migrations paths (use os.path.dirname pattern we currently use).  Otherwise the update.py script will fail when other folk try to update and run.
 - you can tell the update.py script to answer "yes" automatically with "-y"
 - don't forget to use systemctl to restart our app on testbot
+- if we are just fixing things that should already work, bump tag patch number when I tell you it's time (major.minor.patch)
+- if we are adding a new feature, bump tag minor number when I tell you it's time (major.minor.patch)

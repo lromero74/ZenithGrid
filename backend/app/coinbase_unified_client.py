@@ -186,6 +186,10 @@ class CoinbaseClient:
         """Get historical candles/OHLCV data"""
         return await market_data_api.get_candles(self._request, product_id, start, end, granularity)
 
+    async def get_product_book(self, product_id: str, limit: int = 50) -> Dict[str, Any]:
+        """Get order book (Level 2) for a product"""
+        return await market_data_api.get_product_book(self._request, product_id, limit)
+
     # ===== Order Methods =====
 
     async def create_market_order(

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
+import { DepthChart } from './DepthChart'
 
 interface LimitCloseModalProps {
   positionId: number
@@ -257,35 +258,40 @@ export function LimitCloseModal({
 
   const estimatedProceeds = limitPrice * totalAmount
 
+  // Calculate breakeven price for depth chart
+  const breakevenPrice = totalAmount > 0 ? totalQuoteSpent / totalAmount : 0
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-lg w-full max-w-lg">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-700 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">
-            {isEditing ? 'Update Limit Close Price' : 'Close Position at Limit Price'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
-          >
-            <X size={24} />
-          </button>
-        </div>
+      <div className="bg-slate-800 rounded-lg w-full max-w-2xl flex">
+        {/* Main Content */}
+        <div className="flex-1">
+          {/* Header */}
+          <div className="p-6 border-b border-slate-700 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">
+              {isEditing ? 'Update Limit Close Price' : 'Close Position at Limit Price'}
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              <X size={24} />
+            </button>
+          </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-6">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500 rounded p-4 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
+          {/* Body */}
+          <div className="p-6 space-y-6">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500 rounded p-4 text-red-400 text-sm">
+                {error}
+              </div>
+            )}
 
-          {/* Ticker Info */}
-          {ticker && (
-            <div className="bg-slate-900 rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Best Bid:</span>
+            {/* Ticker Info */}
+            {ticker && (
+              <div className="bg-slate-900 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Best Bid:</span>
                 <span className="text-green-400 font-mono">{formatPrice(ticker.best_bid)} {quoteCurrency}</span>
               </div>
               <div className="flex justify-between text-sm">
@@ -520,6 +526,17 @@ export function LimitCloseModal({
                 : (isEditing ? 'Update Limit Price' : 'Place Limit Order')
             }
           </button>
+        </div>
+        </div>
+
+        {/* Depth Chart - Right Side */}
+        <div className="w-32 border-l border-slate-700 p-2">
+          <DepthChart
+            productId={productId}
+            limitPrice={limitPrice}
+            breakevenPrice={breakevenPrice}
+            quoteCurrency={quoteCurrency}
+          />
         </div>
       </div>
     </div>

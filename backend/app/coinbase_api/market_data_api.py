@@ -124,6 +124,36 @@ async def get_candles(
     return result.get("candles", [])
 
 
+async def get_product_book(
+    request_func: Callable, product_id: str, limit: int = 50
+) -> Dict[str, Any]:
+    """
+    Get order book (Level 2) for a product.
+
+    Args:
+        request_func: The authenticated request function
+        product_id: Trading pair (e.g., "ETH-BTC")
+        limit: Number of price levels to retrieve (default 50)
+
+    Returns:
+        Dict with 'bids' and 'asks' arrays, each containing [price, size] tuples
+    """
+    cache_key = f"orderbook_{product_id}_{limit}"
+    cached = await api_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await request_func(
+        "GET",
+        f"/api/v3/brokerage/products/{product_id}/book",
+        params={"limit": str(limit)}
+    )
+
+    # Cache for 2 seconds (order book changes rapidly)
+    await api_cache.set(cache_key, result, 2)
+    return result
+
+
 async def test_connection(request_func: Callable) -> bool:
     """Test if API connection works"""
     try:

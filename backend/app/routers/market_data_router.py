@@ -339,3 +339,57 @@ async def get_product_precision(product_id: str):
     except Exception as e:
         logger.error(f"Error fetching product precision for {product_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orderbook/{product_id}")
+async def get_orderbook(
+    product_id: str,
+    limit: int = 25,
+    coinbase: CoinbaseClient = Depends(get_coinbase),
+):
+    """
+    Get order book (Level 2) depth data for a product.
+
+    Args:
+        product_id: Trading pair (e.g., "ETH-BTC")
+        limit: Number of price levels on each side (default: 25, max: 100)
+
+    Returns:
+        bids: Array of [price, size] sorted by price descending (best bid first)
+        asks: Array of [price, size] sorted by price ascending (best ask first)
+    """
+    try:
+        if limit > 100:
+            limit = 100
+
+        book = await coinbase.get_product_book(product_id, limit=limit)
+
+        # Coinbase returns nested pricebook structure
+        pricebook = book.get("pricebook", {})
+        bids_raw = pricebook.get("bids", [])
+        asks_raw = pricebook.get("asks", [])
+
+        # Format bids and asks as [price, size] arrays
+        bids = []
+        for bid in bids_raw:
+            price = float(bid.get("price", 0))
+            size = float(bid.get("size", 0))
+            if price > 0 and size > 0:
+                bids.append([price, size])
+
+        asks = []
+        for ask in asks_raw:
+            price = float(ask.get("price", 0))
+            size = float(ask.get("size", 0))
+            if price > 0 and size > 0:
+                asks.append([price, size])
+
+        return {
+            "product_id": product_id,
+            "bids": bids,
+            "asks": asks,
+            "time": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching orderbook for {product_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
