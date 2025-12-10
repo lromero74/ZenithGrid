@@ -1011,9 +1011,10 @@ ALLOWED_ARTICLE_DOMAINS = {
     "www.theblock.co",
     "cryptoslate.com",
     "www.cryptoslate.com",
-    "reddit.com",
-    "www.reddit.com",
-    "old.reddit.com",
+    "bitcoinmagazine.com",
+    "www.bitcoinmagazine.com",
+    "beincrypto.com",
+    "www.beincrypto.com",
 }
 
 
