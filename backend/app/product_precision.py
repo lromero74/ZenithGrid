@@ -81,13 +81,23 @@ def get_base_precision(product_id: str) -> int:
 
     Returns:
         Number of decimal places required for base amounts
+
+    Examples:
+        >>> get_base_precision("XLM-BTC")
+        0  # base_increment="1" means whole numbers only
+        >>> get_base_precision("DASH-BTC")
+        3  # base_increment="0.001"
     """
     precision_data = get_precision_data()
 
     if product_id in precision_data:
         base_inc = precision_data[product_id].get("base_increment", "")
-        if base_inc and "." in base_inc:
-            return len(base_inc.split(".")[1].rstrip("0"))
+        if base_inc:
+            if "." in base_inc:
+                return len(base_inc.split(".")[1].rstrip("0"))
+            else:
+                # No decimal point (e.g., "1") means 0 decimal places (whole numbers only)
+                return 0
 
     # Default: 8 decimals for crypto
     return 8
