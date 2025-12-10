@@ -4,8 +4,8 @@
  * Single iframe that transforms - no video restart when expanding/collapsing
  */
 
-import { useState, useRef, useEffect } from 'react'
-import { SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink } from 'lucide-react'
 import { useVideoPlayer } from '../contexts/VideoPlayerContext'
 import { videoSourceColors, formatRelativeTime } from './news'
 
@@ -24,7 +24,21 @@ export function MiniPlayer() {
 
   const [isExpanded, setIsExpanded] = useState(false)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  // Toggle play/pause via YouTube iframe API
+  const togglePlayPause = useCallback(() => {
+    if (iframeRef.current?.contentWindow) {
+      const command = isPaused ? 'playVideo' : 'pauseVideo'
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: command, args: '' }),
+        '*'
+      )
+      setIsPaused(!isPaused)
+    }
+  }, [isPaused])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -49,6 +63,11 @@ export function MiniPlayer() {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isExpanded])
+
+  // Reset pause state when video changes
+  useEffect(() => {
+    setIsPaused(false)
+  }, [currentVideo?.video_id])
 
   // Don't render if not playing or mini-player is hidden
   if (!isPlaying || !showMiniPlayer || !currentVideo) {
@@ -86,6 +105,7 @@ export function MiniPlayer() {
               : 'w-28 h-16 my-auto ml-4 rounded'
           }`}>
             <iframe
+              ref={iframeRef}
               key={`player-${currentVideo.video_id}`}
               src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
               title={currentVideo.title}
@@ -148,6 +168,19 @@ export function MiniPlayer() {
                 title="Previous"
               >
                 <SkipBack className="w-5 h-5" />
+              </button>
+
+              {/* Play/Pause */}
+              <button
+                onClick={togglePlayPause}
+                className="w-12 h-12 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-500 text-white transition-colors"
+                title={isPaused ? "Play" : "Pause"}
+              >
+                {isPaused ? (
+                  <Play className="w-6 h-6 ml-0.5" fill="white" />
+                ) : (
+                  <Pause className="w-6 h-6" />
+                )}
               </button>
 
               {/* Next */}
