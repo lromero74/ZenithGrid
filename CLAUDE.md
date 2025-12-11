@@ -4,6 +4,19 @@
 - always do git diff check before new git add to make sure we didn't lose functionality we want to keep
 - we are now running from EC2.  Restarts should be done with "sudo systemctl restart trading-bot-backend"
 
+## Current Environment Detection
+
+**If hostname contains `ec2.internal`**: You are ON the EC2 production instance.
+- Services run LOCALLY - no SSH needed
+- Restart backend: `sudo systemctl restart trading-bot-backend`
+- Database is local: `backend/trading.db`
+- This IS production - be careful with changes
+
+**If hostname is something else (e.g., MacBook)**: You are on the development machine.
+- Services run REMOTELY on testbot
+- SSH required: `ssh testbot`
+- Push changes to git, then pull on testbot
+
 ## EC2 Test Instance (testbot)
 
 **Instance Details:**
@@ -31,9 +44,7 @@ cd GetRidOf3CommasBecauseTheyGoDownTooOften
 ```
 
 **Important Notes:**
-- ❌ **DO NOT install Claude Code on testbot** - t2.micro only has 1GB RAM and already runs backend + frontend
-- Trading bot services consume most available memory
-- If Claude Code needed, upgrade to t3.small (2GB RAM) first
+- Claude Code can now run on testbot (memory managed carefully)
 - Database synced from local, stop local services before copying DB to avoid corruption
 
 ## Required Python Libraries for AI Strategies
