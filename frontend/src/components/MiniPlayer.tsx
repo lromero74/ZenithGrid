@@ -115,6 +115,28 @@ export function MiniPlayer() {
     return () => clearTimeout(timer)
   }, [currentVideo?.video_id])
 
+  // Keep video playing when tab loses focus
+  useEffect(() => {
+    const iframe = iframeRef.current
+    if (!iframe || !currentVideo || isPaused) return
+
+    const handleVisibilityChange = () => {
+      // When tab becomes hidden, YouTube pauses. Send play command to resume.
+      if (document.hidden && iframe.contentWindow) {
+        // Small delay to let YouTube's pause happen first, then override it
+        setTimeout(() => {
+          iframe.contentWindow?.postMessage(
+            JSON.stringify({ event: 'command', func: 'playVideo', args: '' }),
+            '*'
+          )
+        }, 100)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [currentVideo?.video_id, isPaused])
+
   // Don't render if not playing or mini-player is hidden
   if (!isPlaying || !showMiniPlayer || !currentVideo) {
     return null
