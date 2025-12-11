@@ -69,6 +69,52 @@ export function MiniPlayer() {
     setIsPaused(false)
   }, [currentVideo?.video_id])
 
+  // Listen for YouTube video end events to auto-advance playlist
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== 'https://www.youtube.com') return
+
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+
+        // YouTube Player API: playerState 0 = ended
+        if (data.event === 'onStateChange' && data.info === 0) {
+          nextVideo()
+        } else if (data.info?.playerState === 0) {
+          nextVideo()
+        }
+      } catch {
+        // Not JSON, ignore
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [nextVideo])
+
+  // Subscribe to YouTube iframe events when iframe loads
+  useEffect(() => {
+    const iframe = iframeRef.current
+    if (!iframe || !currentVideo) return
+
+    // Give iframe time to load, then request event subscription
+    const timer = setTimeout(() => {
+      if (iframe.contentWindow) {
+        // Request YouTube to send us state change events
+        iframe.contentWindow.postMessage(
+          JSON.stringify({
+            event: 'listening',
+            id: 1,
+            channel: 'widget'
+          }),
+          '*'
+        )
+      }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [currentVideo?.video_id])
+
   // Don't render if not playing or mini-player is hidden
   if (!isPlaying || !showMiniPlayer || !currentVideo) {
     return null
