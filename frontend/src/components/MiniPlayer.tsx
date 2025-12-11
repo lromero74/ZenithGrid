@@ -104,10 +104,10 @@ export function MiniPlayer() {
               ? 'flex-1 rounded-t-lg overflow-hidden'
               : 'w-28 h-16 my-auto ml-4 rounded relative group overflow-visible'
           }`}>
-            {/* Video wrapper - scales up on hover in mini mode, positioned absolutely to break out of container */}
+            {/* Video wrapper - scales up 6x on hover in mini mode, positioned absolutely to break out of container */}
             <div className={`bg-black rounded ${
               !isExpanded
-                ? 'absolute bottom-0 left-0 w-28 h-16 transition-all duration-200 ease-out group-hover:w-56 group-hover:h-32 group-hover:z-[100] group-hover:shadow-2xl'
+                ? 'absolute bottom-0 left-0 w-28 h-16 transition-all duration-200 ease-out group-hover:w-[672px] group-hover:h-96 group-hover:z-[100] group-hover:shadow-2xl'
                 : 'w-full h-full'
             }`}>
               <iframe
