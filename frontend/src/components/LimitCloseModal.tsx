@@ -220,16 +220,23 @@ export function LimitCloseModal({
     }
   }
 
-  // Initialize price to mark price ONCE when ticker/precision first loads
+  // Initialize price ONCE when ticker/precision first loads
+  // When editing: use the current limit price from the existing order
+  // When creating new: default to mark price
   useEffect(() => {
     if (!ticker || !productPrecision) return
     if (hasInitializedSlider.current) return  // Only initialize once
 
-    // Start at mark price (middle of bid/ask), rounded UP to valid precision
-    const initialPrice = roundUpToIncrement(ticker.mark_price)
-    setLimitPrice(initialPrice)
+    if (isEditing && currentLimitPrice) {
+      // Keep the existing limit price when editing
+      setLimitPrice(currentLimitPrice)
+    } else {
+      // Start at mark price (middle of bid/ask), rounded UP to valid precision
+      const initialPrice = roundUpToIncrement(ticker.mark_price)
+      setLimitPrice(initialPrice)
+    }
     hasInitializedSlider.current = true
-  }, [ticker, productPrecision])
+  }, [ticker, productPrecision, isEditing, currentLimitPrice])
 
   // Update slider step to match current price (for visual display)
   // This runs on ticker updates to keep slider position accurate
@@ -368,7 +375,7 @@ export function LimitCloseModal({
           {/* Header */}
           <div className="p-6 border-b border-slate-700 flex items-center justify-between">
             <h2 className="text-xl font-bold text-white">
-              {isEditing ? 'Update Limit Close Price' : 'Close Position at Limit Price'}
+              {isEditing ? 'Update Limit Order' : 'Close Position at Limit Price'}
               <span className="ml-3 text-base font-normal text-slate-400">
                 Deal #{positionId} · {productId}
               </span>
@@ -777,7 +784,7 @@ export function LimitCloseModal({
               ? (isEditing ? 'Updating...' : 'Placing Order...')
               : showLossConfirmation
                 ? 'Yes, Sell at Loss'
-                : (isEditing ? 'Update Limit Price' : 'Place Limit Order')
+                : (isEditing ? 'Update Limit Order' : 'Place Limit Order')
             }
           </button>
         </div>
