@@ -123,6 +123,7 @@ async def create_bot(
     bot = Bot(
         name=bot_data.name,
         description=bot_data.description,
+        account_id=bot_data.account_id,
         strategy_type=bot_data.strategy_type,
         strategy_config=bot_data.strategy_config,
         product_id=bot_data.product_id,

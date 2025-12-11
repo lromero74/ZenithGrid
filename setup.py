@@ -788,7 +788,8 @@ def initialize_database(project_root):
                 entry_stop_loss REAL,
                 entry_take_profit_target REAL,
                 pattern_data TEXT,
-                exit_reason TEXT
+                exit_reason TEXT,
+                previous_indicators TEXT
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_id ON positions(user_id)")

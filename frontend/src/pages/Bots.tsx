@@ -384,6 +384,19 @@ function Bots() {
       setShowModal(false)
       resetForm()
     },
+    onError: (error: Error & { response?: { data?: { detail?: string | Array<{ msg: string; loc: string[] }> } } }) => {
+      const detail = error.response?.data?.detail
+      let message = 'Failed to create bot'
+      if (typeof detail === 'string') {
+        message = detail
+      } else if (Array.isArray(detail)) {
+        message = detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ')
+      } else if (error.message) {
+        message = error.message
+      }
+      alert(`Error: ${message}`)
+      console.error('Create bot error:', error)
+    },
   })
 
   // Update bot mutation
@@ -395,6 +408,19 @@ function Bots() {
       setShowModal(false)
       resetForm()
     },
+    onError: (error: Error & { response?: { data?: { detail?: string | Array<{ msg: string; loc: string[] }> } } }) => {
+      const detail = error.response?.data?.detail
+      let message = 'Failed to update bot'
+      if (typeof detail === 'string') {
+        message = detail
+      } else if (Array.isArray(detail)) {
+        message = detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ')
+      } else if (error.message) {
+        message = error.message
+      }
+      alert(`Error: ${message}`)
+      console.error('Update bot error:', error)
+    },
   })
 
   // Delete bot mutation
@@ -405,18 +431,46 @@ function Bots() {
     },
   })
 
-  // Start bot mutation
+  // Start bot mutation with optimistic update
   const startBot = useMutation({
     mutationFn: (id: number) => botsApi.start(id),
-    onSuccess: () => {
+    onMutate: async (id) => {
+      const queryKey = ['bots', selectedAccount?.id]
+      await queryClient.cancelQueries({ queryKey })
+      const previousBots = queryClient.getQueryData(queryKey)
+      queryClient.setQueryData(queryKey, (old: Bot[] | undefined) =>
+        old?.map(bot => bot.id === id ? { ...bot, is_active: true } : bot)
+      )
+      return { previousBots, queryKey }
+    },
+    onError: (_err, _id, context) => {
+      if (context?.queryKey) {
+        queryClient.setQueryData(context.queryKey, context.previousBots)
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['bots'] })
     },
   })
 
-  // Stop bot mutation
+  // Stop bot mutation with optimistic update
   const stopBot = useMutation({
     mutationFn: (id: number) => botsApi.stop(id),
-    onSuccess: () => {
+    onMutate: async (id) => {
+      const queryKey = ['bots', selectedAccount?.id]
+      await queryClient.cancelQueries({ queryKey })
+      const previousBots = queryClient.getQueryData(queryKey)
+      queryClient.setQueryData(queryKey, (old: Bot[] | undefined) =>
+        old?.map(bot => bot.id === id ? { ...bot, is_active: false } : bot)
+      )
+      return { previousBots, queryKey }
+    },
+    onError: (_err, _id, context) => {
+      if (context?.queryKey) {
+        queryClient.setQueryData(context.queryKey, context.previousBots)
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['bots'] })
     },
   })
@@ -550,6 +604,7 @@ function Bots() {
     const botData: any = {
       name: formData.name,
       description: formData.description || undefined,
+      account_id: selectedAccount?.id,  // Link bot to selected account
       strategy_type: formData.strategy_type,
       product_id: formData.product_ids[0],  // Legacy - use first pair
       product_ids: formData.product_ids,  // Multi-pair support
@@ -567,9 +622,12 @@ function Bots() {
       rpc_url: formData.rpc_url,
     }
 
+    console.log('Submitting bot data:', botData)
     if (editingBot) {
+      console.log('Updating bot:', editingBot.id)
       updateBot.mutate({ id: editingBot.id, data: botData })
     } else {
+      console.log('Creating new bot')
       createBot.mutate(botData)
     }
   }

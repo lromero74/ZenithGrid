@@ -13,6 +13,7 @@ from pydantic import BaseModel
 class BotCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    account_id: Optional[int] = None  # Link bot to an account
     strategy_type: str
     strategy_config: dict
     product_id: str = "ETH-BTC"  # Legacy - kept for backward compatibility
@@ -26,6 +27,7 @@ class BotCreate(BaseModel):
 class BotUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    account_id: Optional[int] = None
     strategy_config: Optional[dict] = None
     product_id: Optional[str] = None
     product_ids: Optional[List[str]] = None
