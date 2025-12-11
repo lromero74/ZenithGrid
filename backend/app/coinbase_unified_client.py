@@ -6,6 +6,7 @@ Maintains backward compatibility with existing code.
 """
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from app.coinbase_api import auth
@@ -199,10 +200,19 @@ class CoinbaseClient:
         return await order_api.create_market_order(self._request, product_id, side, size, funds)
 
     async def create_limit_order(
-        self, product_id: str, side: str, limit_price: float, size: Optional[str] = None, funds: Optional[str] = None
+        self,
+        product_id: str,
+        side: str,
+        limit_price: float,
+        size: Optional[str] = None,
+        funds: Optional[str] = None,
+        time_in_force: str = "gtc",
+        end_time: Optional[datetime] = None,
     ) -> Dict[str, Any]:
-        """Create a limit order (Good-Til-Cancelled)"""
-        return await order_api.create_limit_order(self._request, product_id, side, limit_price, size, funds)
+        """Create a limit order with configurable time-in-force (GTC or GTD)"""
+        return await order_api.create_limit_order(
+            self._request, product_id, side, limit_price, size, funds, time_in_force, end_time
+        )
 
     async def get_order(self, order_id: str) -> Dict[str, Any]:
         """Get order details"""

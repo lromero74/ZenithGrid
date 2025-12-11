@@ -558,6 +558,11 @@ class PendingOrder(Base):
     fills = Column(JSON, nullable=True)  # Array of fill records: [{price, base_amount, quote_amount, timestamp}, ...]
     remaining_base_amount = Column(Float, nullable=True)  # Unfilled base amount for partial fills
 
+    # Time-in-force settings (for honoring GTC/GTD on manual orders)
+    time_in_force = Column(String, nullable=False, default="gtc")  # "gtc" or "gtd"
+    end_time = Column(DateTime, nullable=True)  # For GTD orders - when order expires
+    is_manual = Column(Boolean, nullable=False, default=False)  # True for manual limit close, False for automated
+
     # Relationships
     position = relationship("Position", back_populates="pending_orders")
     bot = relationship("Bot", back_populates="pending_orders")

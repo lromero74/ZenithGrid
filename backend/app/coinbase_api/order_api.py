@@ -5,6 +5,7 @@ Handles order creation, management, and trading helpers
 
 import logging
 import time
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from app.precision import format_base_amount
@@ -64,9 +65,11 @@ async def create_limit_order(
     limit_price: float,  # Target price
     size: Optional[str] = None,  # Amount of base currency (e.g., ETH)
     funds: Optional[str] = None,  # Amount of quote currency (e.g., BTC) to spend
+    time_in_force: str = "gtc",  # "gtc" (Good 'til Cancelled) or "gtd" (Good 'til Date)
+    end_time: Optional[datetime] = None,  # Required for GTD orders
 ) -> Dict[str, Any]:
     """
-    Create a limit order (Good-Til-Cancelled)
+    Create a limit order with configurable time-in-force
 
     Args:
         request_func: Authenticated request function
@@ -75,6 +78,8 @@ async def create_limit_order(
         limit_price: Target price for the order
         size: Amount of base currency to buy/sell
         funds: Amount of quote currency to spend (for buy orders)
+        time_in_force: "gtc" (Good 'til Cancelled) or "gtd" (Good 'til Date)
+        end_time: DateTime when GTD order expires (required if time_in_force="gtd")
 
     Note: Use either size OR funds, not both
     """
@@ -82,20 +87,40 @@ async def create_limit_order(
     # This ensures correct decimal places for each trading pair (e.g., SOL-BTC needs 7 decimals)
     formatted_limit_price = format_quote_amount_for_product(limit_price, product_id)
 
-    order_config = {
-        "limit_limit_gtc": {"limit_price": formatted_limit_price, "post_only": False}  # Allow immediate partial fills
-    }
+    # Build order configuration based on time_in_force
+    if time_in_force == "gtd":
+        if not end_time:
+            raise ValueError("end_time is required for GTD orders")
+        # Format end_time as ISO 8601 UTC timestamp
+        end_time_str = end_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        order_config = {
+            "limit_limit_gtd": {
+                "limit_price": formatted_limit_price,
+                "end_time": end_time_str,
+                "post_only": False  # Allow immediate partial fills
+            }
+        }
+        config_key = "limit_limit_gtd"
+    else:
+        # Default to GTC
+        order_config = {
+            "limit_limit_gtc": {
+                "limit_price": formatted_limit_price,
+                "post_only": False  # Allow immediate partial fills
+            }
+        }
+        config_key = "limit_limit_gtc"
 
     if size:
         # Format base amount with PRODUCT-SPECIFIC precision
         formatted_size = format_base_amount_for_product(float(size), product_id)
-        order_config["limit_limit_gtc"]["base_size"] = formatted_size
+        order_config[config_key]["base_size"] = formatted_size
     elif funds:
         # For limit orders with funds, we calculate base size from limit price
         base_size = float(funds) / limit_price
         # Format with PRODUCT-SPECIFIC precision
         formatted_base_size = format_base_amount_for_product(base_size, product_id)
-        order_config["limit_limit_gtc"]["base_size"] = formatted_base_size
+        order_config[config_key]["base_size"] = formatted_base_size
     else:
         raise ValueError("Must specify either size or funds")
 

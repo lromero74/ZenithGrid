@@ -168,8 +168,19 @@ class LimitOrderMonitor:
 
         If order has been open for > 60 seconds without filling, cancel and replace
         at bid price (more aggressive) if bid still meets profit threshold.
+
+        IMPORTANT: Manual orders (is_manual=True) are NEVER auto-adjusted.
+        User's GTC/GTD preference must be honored.
         """
         try:
+            # CRITICAL: Skip bid fallback for manual orders
+            # Manual orders are placed by user through UI - respect their time_in_force choice
+            if pending_order.is_manual:
+                logger.debug(
+                    f"Position {position.id}: Skipping bid fallback for manual order "
+                    f"(time_in_force={pending_order.time_in_force})"
+                )
+                return
             # Get bot configuration for timeout and profit threshold
             from app.models import Bot
             from sqlalchemy import select

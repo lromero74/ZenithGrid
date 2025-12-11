@@ -188,3 +188,4 @@ See **COMMERCIALIZATION.md** for the full roadmap to make Zenith Grid sale-ready
 - don't forget to use systemctl to restart our app on testbot
 - if we are just fixing things that should already work, bump tag patch number when I tell you it's time (major.minor.patch)
 - if we are adding a new feature, bump tag minor number when I tell you it's time (major.minor.patch)
+- use systemctl scripts on testbot to restart services.

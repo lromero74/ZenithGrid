@@ -67,12 +67,18 @@ async def limit_close_position(
             f"rounded size={size_to_sell}"
         )
 
+        # Validate GTD orders have end_time
+        if request.time_in_force == "gtd" and not request.end_time:
+            raise HTTPException(status_code=400, detail="end_time is required for GTD orders")
+
         # Create limit sell order via Coinbase
         order_result = await coinbase.create_limit_order(
             product_id=position.product_id,
             side="SELL",
             limit_price=request.limit_price,
             size=size_to_sell,  # Sell entire position (rounded to valid precision)
+            time_in_force=request.time_in_force,
+            end_time=request.end_time,
         )
 
         # Log the full response for debugging
@@ -96,6 +102,7 @@ async def limit_close_position(
             )
 
         # Create PendingOrder record to track this limit sell
+        # Manual limit close orders should not be auto-adjusted by the system
         pending_order = PendingOrder(
             position_id=position.id,
             bot_id=position.bot_id,
@@ -110,6 +117,9 @@ async def limit_close_position(
             status="pending",
             remaining_base_amount=position.total_base_acquired,
             fills=[],
+            time_in_force=request.time_in_force,
+            end_time=request.end_time,
+            is_manual=True,  # Manual orders are NOT auto-adjusted to bid
         )
         db.add(pending_order)
 

@@ -49,6 +49,9 @@ export function LimitCloseModal({
   const [btcUsdPrice, setBtcUsdPrice] = useState<number>(0)
   const [showLossConfirmation, setShowLossConfirmation] = useState(false)
   const hasInitializedSlider = useRef(false)
+  // Order type: GTC (Good 'til Cancelled) or GTD (Good 'til Date)
+  const [timeInForce, setTimeInForce] = useState<'gtc' | 'gtd'>('gtc')
+  const [endTime, setEndTime] = useState<string>('') // ISO datetime string for GTD orders
   // Order book range from DepthChart for extended slider
   const [orderBookRange, setOrderBookRange] = useState<{
     lowestBid: number
@@ -280,16 +283,33 @@ export function LimitCloseModal({
     setIsSubmitting(true)
     setError(null)
 
+    // Validate GTD orders have end_time
+    if (timeInForce === 'gtd' && !endTime) {
+      setError('Please select an expiration date for Good \'til Date orders')
+      setIsSubmitting(false)
+      return
+    }
+
     try {
+      // Convert local datetime to ISO 8601 UTC format for API
+      // endTime is stored as YYYY-MM-DDTHH:MM (local time from datetime-local input)
+      const endTimeIso = timeInForce === 'gtd' && endTime
+        ? new Date(endTime).toISOString()  // Converts local time to UTC
+        : null
+
       if (isEditing) {
         // Update existing limit order
         await axios.post(`${API_BASE_URL}/api/positions/${positionId}/update-limit-close`, {
-          new_limit_price: limitPrice
+          new_limit_price: limitPrice,
+          time_in_force: timeInForce,
+          end_time: endTimeIso
         })
       } else {
         // Create new limit order
         await axios.post(`${API_BASE_URL}/api/positions/${positionId}/limit-close`, {
-          limit_price: limitPrice
+          limit_price: limitPrice,
+          time_in_force: timeInForce,
+          end_time: endTimeIso
         })
       }
       onSuccess()
@@ -571,6 +591,72 @@ export function LimitCloseModal({
             )
           })()}
 
+          {/* Order Type Selector */}
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-slate-300">
+              Order Type
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTimeInForce('gtc')
+                  setEndTime('')
+                }}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  timeInForce === 'gtc'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                Good 'til Cancelled
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimeInForce('gtd')}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  timeInForce === 'gtd'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                Good 'til Date
+              </button>
+            </div>
+
+            {/* Date/Time picker for GTD orders */}
+            {timeInForce === 'gtd' && (
+              <div className="space-y-2">
+                <label className="block text-sm text-slate-400">
+                  Expires at (your local time):
+                </label>
+                <input
+                  type="datetime-local"
+                  value={endTime}
+                  onChange={(e) => {
+                    // Store as local datetime-local format (YYYY-MM-DDTHH:MM)
+                    // Will convert to ISO 8601 UTC when submitting
+                    setEndTime(e.target.value)
+                  }}
+                  min={(() => {
+                    // Get current local time as datetime-local format
+                    const now = new Date()
+                    const year = now.getFullYear()
+                    const month = String(now.getMonth() + 1).padStart(2, '0')
+                    const day = String(now.getDate()).padStart(2, '0')
+                    const hours = String(now.getHours()).padStart(2, '0')
+                    const minutes = String(now.getMinutes()).padStart(2, '0')
+                    return `${year}-${month}-${day}T${hours}:${minutes}`
+                  })()}
+                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {!endTime && (
+                  <p className="text-xs text-yellow-400">Please select an expiration date</p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Order Details */}
           {(() => {
             const { profitLossBtc, profitLossUsd, profitLossPercent, isLoss } = calculateProfitLoss()
@@ -578,8 +664,25 @@ export function LimitCloseModal({
               <div className="bg-slate-900 rounded-lg p-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Order Type:</span>
-                  <span className="text-white">Limit (Good-Til-Cancelled)</span>
+                  <span className="text-white">
+                    Limit ({timeInForce === 'gtc' ? 'Good-Til-Cancelled' : 'Good-Til-Date'})
+                  </span>
                 </div>
+                {timeInForce === 'gtd' && endTime && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Expires:</span>
+                    <span className="text-yellow-400">
+                      {new Date(endTime).toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Amount to Sell:</span>
                   <span className="text-white font-mono">{totalAmount.toFixed(8)}</span>
