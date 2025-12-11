@@ -120,16 +120,17 @@ export function MiniPlayer() {
     const iframe = iframeRef.current
     if (!iframe || !currentVideo || isPaused) return
 
+    const sendPlayCommand = () => {
+      iframe.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func: 'playVideo', args: '' }),
+        '*'
+      )
+    }
+
     const handleVisibilityChange = () => {
-      // When tab becomes hidden, YouTube pauses. Send play command to resume.
-      if (document.hidden && iframe.contentWindow) {
-        // Small delay to let YouTube's pause happen first, then override it
-        setTimeout(() => {
-          iframe.contentWindow?.postMessage(
-            JSON.stringify({ event: 'command', func: 'playVideo', args: '' }),
-            '*'
-          )
-        }, 100)
+      if (document.hidden) {
+        // YouTube pauses when tab hidden - send play command after a brief delay
+        setTimeout(sendPlayCommand, 50)
       }
     }
 
@@ -181,7 +182,7 @@ export function MiniPlayer() {
               <iframe
                 ref={iframeRef}
                 key={`player-${currentVideo.video_id}`}
-                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
+                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&controls=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
                 title={currentVideo.title}
                 className="w-full h-full rounded"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
