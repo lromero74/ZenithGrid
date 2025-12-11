@@ -102,17 +102,24 @@ export function MiniPlayer() {
           <div className={`bg-black flex-shrink-0 overflow-hidden transition-all duration-300 ${
             isExpanded
               ? 'flex-1 rounded-t-lg'
-              : 'w-28 h-16 my-auto ml-4 rounded'
+              : 'w-28 h-16 my-auto ml-4 rounded relative group'
           }`}>
-            <iframe
-              ref={iframeRef}
-              key={`player-${currentVideo.video_id}`}
-              src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
-              title={currentVideo.title}
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
+            {/* Video wrapper - scales up on hover in mini mode */}
+            <div className={`w-full h-full ${
+              !isExpanded
+                ? 'transition-transform duration-200 ease-out origin-bottom-left group-hover:scale-[2] group-hover:z-[100] group-hover:shadow-2xl group-hover:rounded'
+                : ''
+            }`}>
+              <iframe
+                ref={iframeRef}
+                key={`player-${currentVideo.video_id}`}
+                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
+                title={currentVideo.title}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
           </div>
 
           {/* Controls bar */}
