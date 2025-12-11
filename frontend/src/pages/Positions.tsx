@@ -832,7 +832,7 @@ export default function Positions() {
                                   const buyTargetGap = Math.abs(targetPosition - entryPosition)
 
                                   // Determine positioning: top or bottom
-                                  let buyPos = 'top'
+                                  let buyPos: 'top' | 'bottom' = 'top'
                                   let currentPos = 'top'
                                   let targetPos = 'top'
 
@@ -875,7 +875,7 @@ export default function Positions() {
                                           ...(buyPos === 'top' ? { bottom: '100%' } : { top: '100%' })
                                         }}
                                       >
-                                        {buyPos === 'bottom' && <div className="w-px h-3 bg-slate-400" />}
+                                        {/* Buy label line - only shown when buyPos would be 'bottom' (currently always 'top') */}
                                         <div className={`text-[9px] text-slate-400 whitespace-nowrap ${buyPos === 'top' ? 'mb-0.5' : 'mt-0.5'}`}>
                                           Buy {formatPrice(entryPrice, position.product_id || 'ETH-BTC')}
                                         </div>
