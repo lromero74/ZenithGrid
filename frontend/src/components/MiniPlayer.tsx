@@ -98,24 +98,24 @@ export function MiniPlayer() {
             : 'flex-row border-t border-slate-700'
         }`}>
 
-          {/* Video iframe container */}
-          <div className={`bg-black flex-shrink-0 overflow-hidden transition-all duration-300 ${
+          {/* Video iframe container - overflow-visible in mini mode to allow hover expansion */}
+          <div className={`bg-black flex-shrink-0 transition-all duration-300 ${
             isExpanded
-              ? 'flex-1 rounded-t-lg'
-              : 'w-28 h-16 my-auto ml-4 rounded relative group'
+              ? 'flex-1 rounded-t-lg overflow-hidden'
+              : 'w-28 h-16 my-auto ml-4 rounded relative group overflow-visible'
           }`}>
-            {/* Video wrapper - scales up on hover in mini mode */}
-            <div className={`w-full h-full ${
+            {/* Video wrapper - scales up on hover in mini mode, positioned absolutely to break out of container */}
+            <div className={`bg-black rounded ${
               !isExpanded
-                ? 'transition-transform duration-200 ease-out origin-bottom-left group-hover:scale-[2] group-hover:z-[100] group-hover:shadow-2xl group-hover:rounded'
-                : ''
+                ? 'absolute bottom-0 left-0 w-28 h-16 transition-all duration-200 ease-out group-hover:w-56 group-hover:h-32 group-hover:z-[100] group-hover:shadow-2xl'
+                : 'w-full h-full'
             }`}>
               <iframe
                 ref={iframeRef}
                 key={`player-${currentVideo.video_id}`}
                 src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
                 title={currentVideo.title}
-                className="w-full h-full"
+                className="w-full h-full rounded"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
