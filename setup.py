@@ -914,7 +914,10 @@ def initialize_database(project_root):
                 filled_quote_amount REAL,
                 filled_base_amount REAL,
                 fills TEXT,
-                remaining_base_amount REAL
+                remaining_base_amount REAL,
+                time_in_force TEXT NOT NULL DEFAULT 'gtc',
+                end_time DATETIME,
+                is_manual BOOLEAN NOT NULL DEFAULT 0
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_pending_orders_order_id ON pending_orders(order_id)")
