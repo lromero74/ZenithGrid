@@ -9,6 +9,7 @@ Handles:
 - Service shutdown (backend and frontend)
 - Database backup
 - Running all migrations
+- npm install (when package.json/package-lock.json changes)
 - Service restart (backend and frontend)
 
 Usage:
@@ -454,6 +455,63 @@ def preview_incoming_changes(project_root, show_diff=False):
         return False
 
 
+def check_npm_changes(changed_files):
+    """Check if npm dependencies need to be reinstalled.
+
+    Args:
+        changed_files: List of file paths that changed
+
+    Returns:
+        bool: True if package.json or package-lock.json changed
+    """
+    npm_files = {'frontend/package.json', 'frontend/package-lock.json'}
+    for filepath in changed_files:
+        filepath = filepath.replace('\\', '/')
+        if filepath in npm_files:
+            return True
+    return False
+
+
+def install_npm_dependencies(project_root, dry_run=False):
+    """Install npm dependencies in the frontend directory.
+
+    Args:
+        project_root: Path to project root
+        dry_run: If True, only show what would be done
+
+    Returns:
+        bool: True if successful
+    """
+    frontend_dir = project_root / 'frontend'
+    if not frontend_dir.exists():
+        print_warning("Frontend directory not found - skipping npm install")
+        return True
+
+    package_json = frontend_dir / 'package.json'
+    if not package_json.exists():
+        print_warning("package.json not found - skipping npm install")
+        return True
+
+    if dry_run:
+        print_info("DRY RUN: Would run 'npm install' in frontend/")
+        return True
+
+    try:
+        print_info("Running npm install...")
+        result = run_command('npm install', cwd=frontend_dir, capture_output=True)
+        if result.stdout:
+            # Show summary line (last line usually has the summary)
+            lines = result.stdout.strip().split('\n')
+            for line in lines[-3:]:  # Show last 3 lines
+                if line.strip():
+                    print_info(f"  {line.strip()}")
+        print_success("npm dependencies installed")
+        return True
+    except subprocess.CalledProcessError as e:
+        print_error(f"npm install failed: {e.stderr if e.stderr else str(e)}")
+        return False
+
+
 def determine_services_to_restart(changed_files):
     """Determine which services need restart based on changed files.
 
@@ -518,13 +576,13 @@ def git_pull(project_root, dry_run=False):
     """Pull latest changes from git.
 
     Returns:
-        tuple: (success: bool, has_changes: bool, services_to_restart: set)
+        tuple: (success: bool, has_changes: bool, services_to_restart: set, npm_changed: bool)
     """
     print_step(1, "Pulling latest changes from git...")
 
     if dry_run:
         print_info("DRY RUN: Would run 'git pull origin main'")
-        return True, True, {'backend', 'frontend'}  # Assume both in dry run
+        return True, True, {'backend', 'frontend'}, True  # Assume all in dry run
 
     try:
         # First fetch to see what's available
@@ -539,36 +597,42 @@ def git_pull(project_root, dry_run=False):
 
         if 'Already up to date' in result.stdout:
             print_success("Already up to date - no changes pulled")
-            return True, False, set()  # Success but no changes, no services to restart
+            return True, False, set(), False  # Success but no changes, no services to restart
+
+        print_success("Successfully pulled latest changes")
+        if result.stdout:
+            # Show summary of changes
+            lines = result.stdout.strip().split('\n')
+            for line in lines[:10]:  # Show first 10 lines
+                print_info(line)
+
+        # Get list of changed files since previous HEAD
+        diff_result = run_command(
+            f'git diff --name-only {current_hash}..HEAD',
+            cwd=project_root,
+            capture_output=True
+        )
+        changed_files = [f.strip() for f in diff_result.stdout.strip().split('\n') if f.strip()]
+
+        # Determine which services need restart
+        services = determine_services_to_restart(changed_files)
+
+        # Check if npm dependencies changed
+        npm_changed = check_npm_changes(changed_files)
+
+        if services:
+            print_info(f"Services requiring restart: {', '.join(sorted(services))}")
         else:
-            print_success("Successfully pulled latest changes")
-            if result.stdout:
-                # Show summary of changes
-                lines = result.stdout.strip().split('\n')
-                for line in lines[:10]:  # Show first 10 lines
-                    print_info(line)
+            print_info("No service restarts required (config/docs only)")
 
-            # Get list of changed files since previous HEAD
-            diff_result = run_command(
-                f'git diff --name-only {current_hash}..HEAD',
-                cwd=project_root,
-                capture_output=True
-            )
-            changed_files = [f.strip() for f in diff_result.stdout.strip().split('\n') if f.strip()]
+        if npm_changed:
+            print_info("npm dependencies changed - will run npm install")
 
-            # Determine which services need restart
-            services = determine_services_to_restart(changed_files)
-
-            if services:
-                print_info(f"Services requiring restart: {', '.join(sorted(services))}")
-            else:
-                print_info("No service restarts required (config/docs only)")
-
-            return True, True, services
+        return True, True, services, npm_changed
 
     except subprocess.CalledProcessError as e:
         print_error(f"Git pull failed: {e.stderr if e.stderr else str(e)}")
-        return False, False, set()
+        return False, False, set(), False
 
 
 def stop_services(os_type, project_root, dry_run=False, services_to_stop=None):
@@ -874,12 +938,13 @@ Examples:
 
     # Step 1: Git pull (unless --skip-pull)
     services_to_restart = {'backend', 'frontend'}  # Default to both
+    npm_changed = True  # Default to True if skipping pull
     if args.skip_pull:
         print_step(1, "Skipping git pull (--skip-pull)")
         print_info("Assuming changes were already pulled manually - will restart all services")
         has_changes = True  # Assume there are changes to process
     else:
-        success, has_changes, services_to_restart = git_pull(project_root, args.dry_run)
+        success, has_changes, services_to_restart, npm_changed = git_pull(project_root, args.dry_run)
         if not success:
             print_error("Update failed at git pull step")
             sys.exit(1)
@@ -918,6 +983,17 @@ Examples:
             sys.exit(1)
     else:
         print_step(4, "Skipping migrations (no backend changes)")
+
+    # Step 4.5: Install npm dependencies (only if package.json/lock changed)
+    if npm_changed and 'frontend' in services_to_restart:
+        print_step("4.5", "Installing npm dependencies...")
+        if not install_npm_dependencies(project_root, args.dry_run):
+            print_error("Update failed at npm install step")
+            # Try to restart services before exiting
+            start_services(os_type, project_root, args.dry_run, services_to_restart)
+            sys.exit(1)
+    elif 'frontend' in services_to_restart:
+        print_step("4.5", "Skipping npm install (no package changes)")
 
     # Step 5: Start services (only those that need restart)
     if not start_services(os_type, project_root, args.dry_run, services_to_restart):
