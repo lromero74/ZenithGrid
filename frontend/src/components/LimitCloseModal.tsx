@@ -350,8 +350,12 @@ export function LimitCloseModal({
     return 8
   }
 
-  // Get step size for slider based on quote currency
+  // Get step size for price input (use product precision quote_increment)
   const getStepSize = () => {
+    if (productPrecision) {
+      return parseFloat(productPrecision.quote_increment)
+    }
+    // Fallback defaults
     if (quoteCurrency === 'USD') return 0.01
     if (quoteCurrency === 'BTC') return 0.00000001
     return 0.00000001

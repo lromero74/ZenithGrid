@@ -8,6 +8,7 @@ without modification while providing the standard interface expected by trading 
 All methods simply delegate to the underlying CoinbaseClient instance.
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from app.coinbase_unified_client import CoinbaseClient
@@ -146,6 +147,8 @@ class CoinbaseAdapter(ExchangeClient):
         limit_price: float,
         size: Optional[str] = None,
         funds: Optional[str] = None,
+        time_in_force: str = "gtc",
+        end_time: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """Create a limit order."""
         return await self._client.create_limit_order(
@@ -154,6 +157,8 @@ class CoinbaseAdapter(ExchangeClient):
             limit_price=limit_price,
             size=size,
             funds=funds,
+            time_in_force=time_in_force,
+            end_time=end_time,
         )
 
     async def get_order(self, order_id: str) -> Dict[str, Any]:
