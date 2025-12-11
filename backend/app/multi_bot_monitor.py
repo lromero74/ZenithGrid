@@ -655,6 +655,10 @@ class MultiBotMonitor:
                     print(f"✅ Trading logic complete for {product_id}")
                     results[product_id] = result
 
+                    # Rate limit between order attempts to avoid Coinbase 403 throttling
+                    # Coinbase returns 403 (not 429) when requests are too rapid
+                    await asyncio.sleep(0.5)
+
                     # Update AI log with position_id if a NEW position was created (not existing)
                     if ai_log_entry and result.get("position") and not ai_log_entry.position_id:
                         position = result["position"]
