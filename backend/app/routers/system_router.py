@@ -370,3 +370,50 @@ async def cancel_shutdown():
     """
     await shutdown_manager.cancel_shutdown()
     return {"message": "Shutdown cancelled", "status": shutdown_manager.get_status()}
+
+
+# === Trading Pair Monitor Endpoints ===
+
+# Reference to the trading pair monitor (set from main.py)
+_trading_pair_monitor = None
+
+
+def set_trading_pair_monitor(monitor):
+    """Called from main.py to inject the trading pair monitor instance"""
+    global _trading_pair_monitor
+    _trading_pair_monitor = monitor
+
+
+@router.get("/api/system/pair-monitor/status")
+async def get_pair_monitor_status():
+    """Get status of the trading pair monitor"""
+    if not _trading_pair_monitor:
+        raise HTTPException(status_code=503, detail="Trading pair monitor not initialized")
+    return _trading_pair_monitor.get_status()
+
+
+@router.post("/api/system/pair-monitor/sync")
+async def trigger_pair_sync():
+    """
+    Manually trigger a trading pair sync.
+
+    This will:
+    1. Fetch all available products from Coinbase
+    2. Remove delisted pairs from all bots
+    3. Add newly listed pairs to bots with auto_add_new_pairs enabled
+
+    Returns:
+        - checked_at: Timestamp of the check
+        - bots_checked: Number of bots checked
+        - pairs_removed: Total pairs removed
+        - pairs_added: Total pairs added
+        - affected_bots: List of bots that were modified
+        - new_pairs_available: New pairs that exist but aren't in any bot
+        - errors: Any errors encountered
+    """
+    if not _trading_pair_monitor:
+        raise HTTPException(status_code=503, detail="Trading pair monitor not initialized")
+
+    logger.info("Manual pair sync triggered via API")
+    result = await _trading_pair_monitor.run_once()
+    return result

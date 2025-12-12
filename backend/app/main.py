@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import init_db
 from app.multi_bot_monitor import MultiBotMonitor
 from app.services.limit_order_monitor import LimitOrderMonitor
+from app.services.delisted_pair_monitor import TradingPairMonitor
 from app.routers import bots_router, order_history_router, templates_router
 from app.routers import positions_router
 from app.routers import account_router
@@ -16,6 +17,7 @@ from app.routers import accounts_router  # Multi-account management (CEX + DEX)
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
+from app.routers.system_router import set_trading_pair_monitor
 from app.routers import blacklist_router
 from app.routers import news_router
 from app.routers import sources_router  # Content source subscriptions
@@ -42,6 +44,10 @@ app.add_middleware(
 # Each bot gets its exchange client from its associated account in the database
 # Monitor loop runs every 10s to check if any bots need processing
 price_monitor = MultiBotMonitor(interval_seconds=10)
+
+# Trading pair monitor - daily job to remove delisted pairs, add new ones
+trading_pair_monitor = TradingPairMonitor(check_interval_seconds=86400)  # 24 hours
+set_trading_pair_monitor(trading_pair_monitor)  # Make accessible via API
 
 # Background task handles
 limit_order_monitor_task = None
@@ -210,6 +216,10 @@ async def startup_event():
     missing_order_detector_task = asyncio.create_task(run_missing_order_detector())
     print("🚀 Missing order detector started - checking for unrecorded orders every 5 minutes")
 
+    print("🚀 Starting trading pair monitor...")
+    await trading_pair_monitor.start()
+    print("🚀 Trading pair monitor started - syncing pairs daily (first check in 5 minutes)")
+
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
@@ -251,6 +261,9 @@ async def shutdown_event():
             await missing_order_detector_task
         except asyncio.CancelledError:
             pass
+
+    if trading_pair_monitor:
+        await trading_pair_monitor.stop()
 
     logger.info("🛑 Monitors stopped - shutdown complete")
 
