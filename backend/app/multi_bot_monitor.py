@@ -1078,21 +1078,26 @@ class MultiBotMonitor:
             # This provides visibility into which conditions matched and at what values
             condition_details = signal_data.get("condition_details")
             if condition_details and not should_log_ai:
+                has_position = existing_position is not None
                 # Log each phase that has conditions
                 for phase, details in condition_details.items():
-                    if details:  # Only log if there are conditions for this phase
-                        phase_signal_key = f"{phase}_signal"
-                        conditions_met = signal_data.get(phase_signal_key, False)
-                        await log_indicator_evaluation(
-                            db=db,
-                            bot_id=bot.id,
-                            product_id=product_id,
-                            phase=phase,
-                            conditions_met=conditions_met,
-                            conditions_detail=details,
-                            indicators_snapshot=indicators,
-                            current_price=current_price,
-                        )
+                    if not details:  # Skip if no conditions for this phase
+                        continue
+                    # Skip DCA/Exit phases when there's no position (irrelevant)
+                    if not has_position and phase in ("safety_order", "take_profit"):
+                        continue
+                    phase_signal_key = f"{phase}_signal"
+                    conditions_met = signal_data.get(phase_signal_key, False)
+                    await log_indicator_evaluation(
+                        db=db,
+                        bot_id=bot.id,
+                        product_id=product_id,
+                        phase=phase,
+                        conditions_met=conditions_met,
+                        conditions_detail=details,
+                        indicators_snapshot=indicators,
+                        current_price=current_price,
+                    )
                 logger.info(f"  📊 Logged indicator evaluation for {product_id}")
 
             # Create trading engine for this bot/pair combination
