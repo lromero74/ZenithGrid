@@ -580,7 +580,11 @@ class IndicatorBasedStrategy(TradingStrategy):
                     indicator_name = indicator_key[len(timeframe) + 1:]
                     tf_required.add(indicator_name)
 
-            indicators_for_tf = self.indicator_calculator.calculate_all_indicators(tf_candles, tf_required)
+            # calculate_previous=True enables crossing detection by calculating
+            # indicators for both current candle and previous candle (prev_ prefix)
+            indicators_for_tf = self.indicator_calculator.calculate_all_indicators(
+                tf_candles, tf_required, calculate_previous=True
+            )
 
             for key, value in indicators_for_tf.items():
                 current_indicators[f"{timeframe}_{key}"] = value

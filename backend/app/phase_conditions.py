@@ -239,18 +239,19 @@ class PhaseConditionEvaluator:
 
         # Handle crossing operators
         if operator in ["crossing_above", "crossing_below"]:
-            if previous_indicators is None:
-                print("[DEBUG] Crossing check: no previous indicators available")
-                if capture_details:
-                    detail["error"] = "no previous indicators for crossing"
-                    return False, detail
-                return False
+            # For crossing detection, get the previous candle's indicator value
+            # This is now calculated directly from candle data (prev_ prefix in current_indicators)
+            # rather than requiring state from previous check cycles
+            previous_val = self._get_previous_indicator_value(condition_type, condition, current_indicators)
 
-            previous_val = self._get_indicator_value(condition_type, condition, previous_indicators)
+            # Fallback to previous_indicators parameter if prev_ values not available
+            if previous_val is None and previous_indicators is not None:
+                previous_val = self._get_indicator_value(condition_type, condition, previous_indicators)
+
             if previous_val is None:
-                print("[DEBUG] Crossing check: previous indicator value is None")
+                print("[DEBUG] Crossing check: no previous indicator value available (need prev_ values or previous_indicators)")
                 if capture_details:
-                    detail["error"] = "previous indicator value is None"
+                    detail["error"] = "no previous indicator for crossing"
                     return False, detail
                 return False
 
@@ -369,6 +370,77 @@ class PhaseConditionEvaluator:
         elif condition_type in ["ai_buy", "ai_sell", "bull_flag"]:
             # Aggregate indicators don't use timeframe prefix
             return indicators.get(condition_type)
+
+        return None
+
+    def _get_previous_indicator_value(
+        self, condition_type: str, condition: Dict[str, Any], indicators: Dict[str, Any]
+    ) -> Optional[float]:
+        """
+        Get previous candle's indicator value from indicators dict.
+
+        This looks up prev_* prefixed keys in current_indicators dict.
+        These values are calculated from candles[:-1] (excluding latest candle)
+        to enable crossing detection without needing state from previous check cycles.
+        """
+        timeframe = condition.get("timeframe", "FIVE_MINUTE")
+
+        if condition_type == "rsi":
+            period = condition.get("period", 14)
+            return indicators.get(f"prev_{timeframe}_rsi_{period}")
+
+        elif condition_type == "macd":
+            fast = condition.get("fast_period", 12)
+            slow = condition.get("slow_period", 26)
+            signal = condition.get("signal_period", 9)
+            return indicators.get(f"prev_{timeframe}_macd_histogram_{fast}_{slow}_{signal}")
+
+        elif condition_type == "bb_percent":
+            period = condition.get("period", 20)
+            std_dev = condition.get("std_dev", 2)
+            # Calculate BB% from previous candle's price and bands
+            price = indicators.get(f"prev_{timeframe}_price")
+            upper = indicators.get(f"prev_{timeframe}_bb_upper_{period}_{std_dev}")
+            lower = indicators.get(f"prev_{timeframe}_bb_lower_{period}_{std_dev}")
+
+            if price is None or upper is None or lower is None:
+                return None
+
+            if upper == lower:
+                return 50.0
+
+            return ((price - lower) / (upper - lower)) * 100
+
+        elif condition_type == "ema_cross":
+            period = condition.get("period", 50)
+            price = indicators.get(f"prev_{timeframe}_price")
+            ema = indicators.get(f"prev_{timeframe}_ema_{period}")
+
+            if price is None or ema is None:
+                return None
+
+            return price - ema
+
+        elif condition_type == "sma_cross":
+            period = condition.get("period", 50)
+            price = indicators.get(f"prev_{timeframe}_price")
+            sma = indicators.get(f"prev_{timeframe}_sma_{period}")
+
+            if price is None or sma is None:
+                return None
+
+            return price - sma
+
+        elif condition_type == "stochastic":
+            period = condition.get("period", 14)
+            return indicators.get(f"prev_{timeframe}_stoch_k_{period}_3")
+
+        elif condition_type == "volume":
+            return indicators.get(f"prev_{timeframe}_volume")
+
+        elif condition_type in ["ai_buy", "ai_sell", "bull_flag"]:
+            # Aggregate indicators - prev values not typically needed for crossing
+            return indicators.get(f"prev_{condition_type}")
 
         return None
 

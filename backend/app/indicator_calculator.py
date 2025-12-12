@@ -35,7 +35,7 @@ class IndicatorCalculator:
         pass
 
     def calculate_all_indicators(
-        self, candles: List[Dict[str, Any]], required_indicators: Set[str]
+        self, candles: List[Dict[str, Any]], required_indicators: Set[str], calculate_previous: bool = False
     ) -> Dict[str, float]:
         """
         Calculate all required indicators from candle data
@@ -43,9 +43,11 @@ class IndicatorCalculator:
         Args:
             candles: List of candle dictionaries with OHLCV data
             required_indicators: Set of indicator keys needed (e.g., {"rsi_14", "macd_12_26_9"})
+            calculate_previous: If True, also calculate indicators for previous candle
+                               (for crossing detection - prev_ prefix added to keys)
 
         Returns:
-            Dictionary of indicator values
+            Dictionary of indicator values (includes prev_* keys if calculate_previous=True)
         """
         if not candles:
             return {}
@@ -119,6 +121,15 @@ class IndicatorCalculator:
                     if k_value is not None:
                         indicators[f"stoch_k_{k_period}_{d_period}"] = k_value
                         indicators[f"stoch_d_{k_period}_{d_period}"] = d_value
+
+        # Calculate indicators for the previous candle if needed (for crossing detection)
+        if calculate_previous and len(candles) > 2:
+            # Recursively calculate indicators using candles[:-1] (excluding latest candle)
+            prev_indicators = self.calculate_all_indicators(candles[:-1], required_indicators, calculate_previous=False)
+            # Add prev_ prefix to all keys except price/volume
+            for key, value in prev_indicators.items():
+                if key not in ("price", "volume"):
+                    indicators[f"prev_{key}"] = value
 
         return indicators
 
