@@ -68,6 +68,12 @@ class MultiBotMonitor:
         # Cache for exchange clients per account
         self._exchange_cache: Dict[int, ExchangeClient] = {}
 
+        # Cache for previous indicators (for crossing detection)
+        # Key: (bot_id, product_id) -> Dict of indicator values
+        # This enables crossing_above/crossing_below operators for ENTRY conditions
+        # (Position-based storage only works for open positions)
+        self._previous_indicators_cache: Dict[tuple, Dict] = {}
+
     async def get_exchange_for_bot(self, db: AsyncSession, bot: Bot) -> Optional[ExchangeClient]:
         """
         Get the exchange client for a specific bot based on its account.
@@ -969,7 +975,19 @@ class MultiBotMonitor:
                     logger.info("  Analyzing conditional_dca signals...")
                     signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position)
                 else:
-                    signal_data = await strategy.analyze_signal(candles, current_price, position=existing_position)
+                    # For indicator_based strategy, pass the previous_indicators_cache for crossing detection
+                    # This enables crossing_above/crossing_below operators for ENTRY conditions (no position yet)
+                    cache_key = (bot.id, product_id)
+                    previous_indicators_from_cache = self._previous_indicators_cache.get(cache_key)
+                    signal_data = await strategy.analyze_signal(
+                        candles, current_price,
+                        position=existing_position,
+                        previous_indicators_cache=previous_indicators_from_cache
+                    )
+                    # Update cache with current indicators for next check cycle
+                    if signal_data and "indicators" in signal_data:
+                        self._previous_indicators_cache[cache_key] = signal_data["indicators"].copy()
+                        logger.debug(f"    Updated previous_indicators cache for {cache_key}")
 
             # Commit any position changes (e.g., previous_indicators for crossing detection)
             if existing_position is not None:

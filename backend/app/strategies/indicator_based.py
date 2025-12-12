@@ -529,11 +529,17 @@ class IndicatorBasedStrategy(TradingStrategy):
         if candles_by_timeframe is None:
             candles_by_timeframe = {"FIVE_MINUTE": candles}
 
-        # Load previous_indicators from position for crossing detection
+        # Load previous_indicators for crossing detection
         # This persists across check cycles (strategy instances are recreated each cycle)
+        # Priority: 1) Position-based storage (for open positions)
+        #           2) Monitor-level cache (for entry conditions, passed via kwargs)
         if position is not None and hasattr(position, 'previous_indicators') and position.previous_indicators:
             self.previous_indicators = position.previous_indicators
             logger.debug(f"Loaded previous_indicators from position {position.id}")
+        elif kwargs.get('previous_indicators_cache'):
+            # For entry conditions (no position yet), use monitor-level cache
+            self.previous_indicators = kwargs['previous_indicators_cache']
+            logger.debug("Loaded previous_indicators from monitor cache (entry conditions)")
 
         # Determine which aggregate indicators are needed
         needs = self._needs_aggregate_indicators()
