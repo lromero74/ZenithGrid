@@ -57,6 +57,52 @@ export function formatTime(date: Date | string | number): string {
 }
 
 /**
+ * Format a duration from a start date to now (or to an end date)
+ * Shows "Xd Yh Zm" format (e.g., "17d 4h 32m" or "2h 15m")
+ */
+export function formatDuration(startDate: Date | string | number, endDate?: Date | string | number): string {
+  let start: Date
+  let end: Date
+
+  if (typeof startDate === 'string') {
+    const dateStr = startDate.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(startDate) ? startDate : startDate + 'Z'
+    start = new Date(dateStr)
+  } else if (typeof startDate === 'number') {
+    start = new Date(startDate)
+  } else {
+    start = startDate
+  }
+
+  if (endDate) {
+    if (typeof endDate === 'string') {
+      const dateStr = endDate.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(endDate) ? endDate : endDate + 'Z'
+      end = new Date(dateStr)
+    } else if (typeof endDate === 'number') {
+      end = new Date(endDate)
+    } else {
+      end = endDate
+    }
+  } else {
+    end = new Date()
+  }
+
+  const diffMs = end.getTime() - start.getTime()
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays > 0) {
+    const remainingHours = diffHours % 24
+    return `${diffDays}d ${remainingHours}h`
+  } else if (diffHours > 0) {
+    const remainingMinutes = diffMinutes % 60
+    return `${diffHours}h ${remainingMinutes}m`
+  } else {
+    return `${diffMinutes}m`
+  }
+}
+
+/**
  * Format a date for compact display (shorter timezone)
  * (e.g., "11/16/25 3:45 PM EST")
  */

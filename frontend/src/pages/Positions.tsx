@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi } from '../services/api'
 import { useState, useEffect } from 'react'
-import { formatDateTime, formatDateTimeCompact } from '../utils/dateFormat'
+import { formatDateTime, formatDateTimeCompact, formatDuration } from '../utils/dateFormat'
 import {
   X,
   AlertCircle,
@@ -1006,6 +1006,7 @@ export default function Positions() {
                         <div className="text-[10px] space-y-0.5">
                           <div className="text-slate-400">Deal #{position.user_deal_number ?? position.id}</div>
                           <div className="text-slate-400">Start: {formatDateTimeCompact(position.opened_at)}</div>
+                          <div className="text-slate-400">Age: {formatDuration(position.opened_at)}</div>
                         </div>
                       </div>
                     </div>
