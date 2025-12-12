@@ -115,29 +115,6 @@ export function MiniPlayer() {
     return () => clearTimeout(timer)
   }, [currentVideo?.video_id])
 
-  // Keep video playing when tab loses focus
-  useEffect(() => {
-    const iframe = iframeRef.current
-    if (!iframe || !currentVideo || isPaused) return
-
-    const sendPlayCommand = () => {
-      iframe.contentWindow?.postMessage(
-        JSON.stringify({ event: 'command', func: 'playVideo', args: '' }),
-        '*'
-      )
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // YouTube pauses when tab hidden - send play command after a brief delay
-        setTimeout(sendPlayCommand, 50)
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [currentVideo?.video_id, isPaused])
-
   // Don't render if not playing or mini-player is hidden
   if (!isPlaying || !showMiniPlayer || !currentVideo) {
     return null
@@ -182,7 +159,7 @@ export function MiniPlayer() {
               <iframe
                 ref={iframeRef}
                 key={`player-${currentVideo.video_id}`}
-                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&controls=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
+                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
                 title={currentVideo.title}
                 className="w-full h-full rounded"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
