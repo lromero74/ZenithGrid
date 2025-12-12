@@ -78,9 +78,9 @@ export function MiniPlayer() {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
 
         // YouTube Player API: playerState 0 = ended
-        if (data.event === 'onStateChange' && data.info === 0) {
-          nextVideo()
-        } else if (data.info?.playerState === 0) {
+        // Extract playerState from either message format (only once to prevent double-advance)
+        const playerState = data.info?.playerState ?? (data.event === 'onStateChange' ? data.info : null)
+        if (playerState === 0) {
           nextVideo()
         }
       } catch {
