@@ -135,10 +135,10 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
     if (type === 'volume') return value.toLocaleString()
     // MACD values can be very small (e.g., 0.00000123), use scientific notation for tiny values
     if (type === 'macd') {
-      if (Math.abs(value) < 0.0001 && value !== 0) {
-        return value.toExponential(2)  // e.g., 1.23e-6
+      if (Math.abs(value) < 0.000001 && value !== 0) {
+        return value.toExponential(2)  // e.g., 1.23e-8
       }
-      return value.toFixed(6)  // Show more precision for MACD
+      return value.toFixed(8)  // Show 8 decimal precision for MACD
     }
     // RSI and Stochastic are 0-100, show 1 decimal
     if (type === 'rsi' || type === 'stochastic') return value.toFixed(1)
