@@ -21,7 +21,7 @@ US_DEBT_CACHE_FILE = CACHE_DIR / "us_debt_cache.json"
 # Cache timing constants (background refresh service handles actual refresh timing)
 NEWS_CACHE_CHECK_MINUTES = 30  # Fallback: check every 30 minutes if no background refresh
 VIDEO_CACHE_CHECK_MINUTES = 60  # Videos refresh hourly (less frequent than news)
-NEWS_ITEM_MAX_AGE_DAYS = 7  # Prune items older than this
+NEWS_ITEM_MAX_AGE_DAYS = 14  # Prune items older than this
 FEAR_GREED_CACHE_MINUTES = 60  # Fear/greed updates daily, no need for frequent checks
 BLOCK_HEIGHT_CACHE_MINUTES = 10  # Keep for halving countdown accuracy
 US_DEBT_CACHE_HOURS = 24  # Update US debt once per day
