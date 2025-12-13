@@ -1475,6 +1475,109 @@ def create_launchd_plist(project_root, user):
         print_error(f"Failed to create launchd plist files: {e}")
         return False
 
+
+def create_db_cleanup_systemd(project_root, user):
+    """Create systemd service and timer for daily database cleanup (Linux)"""
+    services_dir = project_root / 'deployment'
+    services_dir.mkdir(exist_ok=True)
+
+    cleanup_service = f"""[Unit]
+Description=Zenith Grid Database Cleanup
+After=network.target
+
+[Service]
+Type=oneshot
+User={user}
+WorkingDirectory={project_root}/backend
+ExecStart={project_root}/backend/venv/bin/python {project_root}/backend/maintenance/cleanup_database.py
+"""
+
+    cleanup_timer = """[Unit]
+Description=Run Zenith Grid database cleanup daily at 3 AM
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+"""
+
+    try:
+        service_path = services_dir / 'zenith-db-cleanup.service'
+        timer_path = services_dir / 'zenith-db-cleanup.timer'
+
+        with open(service_path, 'w') as f:
+            f.write(cleanup_service)
+
+        with open(timer_path, 'w') as f:
+            f.write(cleanup_timer)
+
+        print_success("Database cleanup systemd files created in deployment/")
+        print_info("To install, run:")
+        print(f"  sudo cp {service_path} /etc/systemd/system/")
+        print(f"  sudo cp {timer_path} /etc/systemd/system/")
+        print("  sudo systemctl daemon-reload")
+        print("  sudo systemctl enable zenith-db-cleanup.timer")
+        print("  sudo systemctl start zenith-db-cleanup.timer")
+        return True
+
+    except Exception as e:
+        print_error(f"Failed to create database cleanup systemd files: {e}")
+        return False
+
+
+def create_db_cleanup_launchd(project_root, user):
+    """Create launchd plist for daily database cleanup (macOS)"""
+    plist_dir = project_root / 'deployment'
+    plist_dir.mkdir(exist_ok=True)
+
+    # Run daily at 3 AM
+    cleanup_plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.zenithgrid.db-cleanup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{project_root}/backend/venv/bin/python</string>
+        <string>{project_root}/backend/maintenance/cleanup_database.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>{project_root}/backend</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/zenith-db-cleanup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/zenith-db-cleanup.error.log</string>
+</dict>
+</plist>
+"""
+
+    try:
+        cleanup_path = plist_dir / 'com.zenithgrid.db-cleanup.plist'
+
+        with open(cleanup_path, 'w') as f:
+            f.write(cleanup_plist)
+
+        print_success("Database cleanup launchd plist created in deployment/")
+        print_info("To install, run:")
+        print(f"  cp {cleanup_path} ~/Library/LaunchAgents/")
+        print("  launchctl load ~/Library/LaunchAgents/com.zenithgrid.db-cleanup.plist")
+        return True
+
+    except Exception as e:
+        print_error(f"Failed to create database cleanup launchd plist: {e}")
+        return False
+
+
 def start_services_manually(project_root):
     """Start backend and frontend services manually"""
     print_info("Starting services...")
@@ -1744,10 +1847,23 @@ def run_setup():
         if prompt_yes_no("Create systemd service files for auto-start?", default='no'):
             service_user = prompt_input("User to run services as", default=current_user)
             create_systemd_service(project_root, service_user)
+
+        print()
+        print_info("Database cleanup prevents log tables from bloating the database.")
+        if prompt_yes_no("Create database cleanup timer (runs daily at 3 AM)?", default='yes'):
+            service_user = prompt_input("User to run cleanup as", default=current_user)
+            create_db_cleanup_systemd(project_root, service_user)
+
     elif os_type == 'mac':
         print_info("macOS detected - can create launchd plist files")
         if prompt_yes_no("Create launchd plist files for auto-start?", default='no'):
             create_launchd_plist(project_root, current_user)
+
+        print()
+        print_info("Database cleanup prevents log tables from bloating the database.")
+        if prompt_yes_no("Create database cleanup job (runs daily at 3 AM)?", default='yes'):
+            create_db_cleanup_launchd(project_root, current_user)
+
     else:
         print_warning("Unknown OS - skipping service installation")
 
@@ -1813,6 +1929,13 @@ def run_services_only():
         if not create_systemd_service(project_root, service_user):
             return False
 
+        # Database cleanup service
+        print()
+        print_info("Database cleanup prevents log tables from bloating the database.")
+        install_db_cleanup = prompt_yes_no("Create database cleanup timer (runs daily at 3 AM)?", default='yes')
+        if install_db_cleanup:
+            create_db_cleanup_systemd(project_root, service_user)
+
         print()
         if prompt_yes_no("Install services now (requires sudo)?"):
             services_dir = project_root / 'deployment'
@@ -1823,15 +1946,27 @@ def run_services_only():
             try:
                 subprocess.run(['sudo', 'cp', str(backend_path), '/etc/systemd/system/'], check=True)
                 subprocess.run(['sudo', 'cp', str(frontend_path), '/etc/systemd/system/'], check=True)
+
+                # Install db cleanup if created
+                if install_db_cleanup:
+                    cleanup_service_path = services_dir / 'zenith-db-cleanup.service'
+                    cleanup_timer_path = services_dir / 'zenith-db-cleanup.timer'
+                    subprocess.run(['sudo', 'cp', str(cleanup_service_path), '/etc/systemd/system/'], check=True)
+                    subprocess.run(['sudo', 'cp', str(cleanup_timer_path), '/etc/systemd/system/'], check=True)
+
                 subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
                 print_success("Service files installed")
 
                 if prompt_yes_no("Enable services to start on boot?"):
                     subprocess.run(['sudo', 'systemctl', 'enable', 'zenith-backend', 'zenith-frontend'], check=True)
+                    if install_db_cleanup:
+                        subprocess.run(['sudo', 'systemctl', 'enable', 'zenith-db-cleanup.timer'], check=True)
                     print_success("Services enabled")
 
                 if prompt_yes_no("Start services now?"):
                     subprocess.run(['sudo', 'systemctl', 'start', 'zenith-backend', 'zenith-frontend'], check=True)
+                    if install_db_cleanup:
+                        subprocess.run(['sudo', 'systemctl', 'start', 'zenith-db-cleanup.timer'], check=True)
                     print_success("Services started")
                     print()
                     print(f"Access the application at: {Colors.CYAN}http://localhost:5173{Colors.ENDC}")
@@ -1844,6 +1979,13 @@ def run_services_only():
         print_info("macOS detected - creating launchd plist files")
         if not create_launchd_plist(project_root, current_user):
             return False
+
+        # Database cleanup service
+        print()
+        print_info("Database cleanup prevents log tables from bloating the database.")
+        install_db_cleanup = prompt_yes_no("Create database cleanup job (runs daily at 3 AM)?", default='yes')
+        if install_db_cleanup:
+            create_db_cleanup_launchd(project_root, current_user)
 
         print()
         if prompt_yes_no("Install LaunchAgents now?"):
@@ -1860,6 +2002,9 @@ def run_services_only():
                 # Copy plist files
                 shutil.copy(backend_plist, launch_agents_dir / 'com.zenithgrid.backend.plist')
                 shutil.copy(frontend_plist, launch_agents_dir / 'com.zenithgrid.frontend.plist')
+                if install_db_cleanup:
+                    cleanup_plist = plist_dir / 'com.zenithgrid.db-cleanup.plist'
+                    shutil.copy(cleanup_plist, launch_agents_dir / 'com.zenithgrid.db-cleanup.plist')
                 print_success("Plist files copied to ~/Library/LaunchAgents/")
 
                 if prompt_yes_no("Load services now (start on boot)?"):
@@ -1868,10 +2013,15 @@ def run_services_only():
                                   capture_output=True)
                     subprocess.run(['launchctl', 'unload', str(launch_agents_dir / 'com.zenithgrid.frontend.plist')],
                                   capture_output=True)
+                    if install_db_cleanup:
+                        subprocess.run(['launchctl', 'unload', str(launch_agents_dir / 'com.zenithgrid.db-cleanup.plist')],
+                                      capture_output=True)
 
                     # Load services
                     subprocess.run(['launchctl', 'load', str(launch_agents_dir / 'com.zenithgrid.backend.plist')], check=True)
                     subprocess.run(['launchctl', 'load', str(launch_agents_dir / 'com.zenithgrid.frontend.plist')], check=True)
+                    if install_db_cleanup:
+                        subprocess.run(['launchctl', 'load', str(launch_agents_dir / 'com.zenithgrid.db-cleanup.plist')], check=True)
                     print_success("Services loaded and will start on boot")
                     print()
                     print_info("Services are starting... wait a few seconds then access:")
@@ -1883,6 +2033,8 @@ def run_services_only():
                     print("To view logs:")
                     print("  tail -f /tmp/zenith-backend.log")
                     print("  tail -f /tmp/zenith-frontend.log")
+                    if install_db_cleanup:
+                        print("  tail -f /tmp/zenith-db-cleanup.log")
 
             except Exception as e:
                 print_error(f"Failed to install services: {e}")
@@ -1912,12 +2064,16 @@ def run_uninstall_services():
 
         backend_service = Path('/etc/systemd/system/zenith-backend.service')
         frontend_service = Path('/etc/systemd/system/zenith-frontend.service')
+        cleanup_service = Path('/etc/systemd/system/zenith-db-cleanup.service')
+        cleanup_timer = Path('/etc/systemd/system/zenith-db-cleanup.timer')
 
         # Check if services exist
         backend_exists = backend_service.exists()
         frontend_exists = frontend_service.exists()
+        cleanup_service_exists = cleanup_service.exists()
+        cleanup_timer_exists = cleanup_timer.exists()
 
-        if not backend_exists and not frontend_exists:
+        if not backend_exists and not frontend_exists and not cleanup_timer_exists:
             print_warning("No Zenith Grid services found installed")
             return True
 
@@ -1926,12 +2082,14 @@ def run_uninstall_services():
             print_info("Stopping services...")
             subprocess.run(['sudo', 'systemctl', 'stop', 'zenith-backend'], capture_output=True)
             subprocess.run(['sudo', 'systemctl', 'stop', 'zenith-frontend'], capture_output=True)
+            subprocess.run(['sudo', 'systemctl', 'stop', 'zenith-db-cleanup.timer'], capture_output=True)
             print_success("Services stopped")
 
             # Disable services
             print_info("Disabling services...")
             subprocess.run(['sudo', 'systemctl', 'disable', 'zenith-backend'], capture_output=True)
             subprocess.run(['sudo', 'systemctl', 'disable', 'zenith-frontend'], capture_output=True)
+            subprocess.run(['sudo', 'systemctl', 'disable', 'zenith-db-cleanup.timer'], capture_output=True)
             print_success("Services disabled")
 
             # Remove service files
@@ -1942,6 +2100,12 @@ def run_uninstall_services():
             if frontend_exists:
                 subprocess.run(['sudo', 'rm', str(frontend_service)], check=True)
                 print_success(f"Removed {frontend_service}")
+            if cleanup_service_exists:
+                subprocess.run(['sudo', 'rm', str(cleanup_service)], check=True)
+                print_success(f"Removed {cleanup_service}")
+            if cleanup_timer_exists:
+                subprocess.run(['sudo', 'rm', str(cleanup_timer)], check=True)
+                print_success(f"Removed {cleanup_timer}")
 
             # Reload systemd
             subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
@@ -1957,12 +2121,14 @@ def run_uninstall_services():
         launch_agents_dir = Path.home() / 'Library' / 'LaunchAgents'
         backend_plist = launch_agents_dir / 'com.zenithgrid.backend.plist'
         frontend_plist = launch_agents_dir / 'com.zenithgrid.frontend.plist'
+        cleanup_plist = launch_agents_dir / 'com.zenithgrid.db-cleanup.plist'
 
         # Check if services exist
         backend_exists = backend_plist.exists()
         frontend_exists = frontend_plist.exists()
+        cleanup_exists = cleanup_plist.exists()
 
-        if not backend_exists and not frontend_exists:
+        if not backend_exists and not frontend_exists and not cleanup_exists:
             print_warning("No Zenith Grid services found installed")
             return True
 
@@ -1973,6 +2139,8 @@ def run_uninstall_services():
                 subprocess.run(['launchctl', 'unload', str(backend_plist)], capture_output=True)
             if frontend_exists:
                 subprocess.run(['launchctl', 'unload', str(frontend_plist)], capture_output=True)
+            if cleanup_exists:
+                subprocess.run(['launchctl', 'unload', str(cleanup_plist)], capture_output=True)
             print_success("Services unloaded (stopped)")
 
             # Remove plist files
@@ -1983,6 +2151,9 @@ def run_uninstall_services():
             if frontend_exists:
                 frontend_plist.unlink()
                 print_success(f"Removed {frontend_plist}")
+            if cleanup_exists:
+                cleanup_plist.unlink()
+                print_success(f"Removed {cleanup_plist}")
 
         except Exception as e:
             print_error(f"Failed to remove services: {e}")
@@ -2131,8 +2302,6 @@ def run_cleanup():
     if deployment_path.exists():
         # Check for generated (non-git-tracked) files like plist files
         generated_files = list(deployment_path.glob('*.plist'))
-        git_tracked = ['auto-deploy.sh', 'deploy-from-git.sh', 'deploy.sh',
-                       'manage-auto-deploy.sh', 'nginx-trading-bot.conf', 'trading-bot.service']
 
         if generated_files:
             print()
