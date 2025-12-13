@@ -66,6 +66,9 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
   // Ref to hold playlist for use in event handlers
   const playlistRef = useRef<VideoItem[]>([])
 
+  // Ref to debounce nextVideo calls (YouTube sends duplicate end events)
+  const lastNextVideoTime = useRef<number>(0)
+
   // Keep ref in sync
   useEffect(() => {
     playlistRef.current = playlist
@@ -122,8 +125,15 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
     }
   }, [])
 
-  // Go to next video
+  // Go to next video (with debouncing to prevent YouTube's duplicate end events)
   const nextVideo = useCallback(() => {
+    const now = Date.now()
+    // Debounce: ignore if called within 500ms of last call
+    if (now - lastNextVideoTime.current < 500) {
+      return
+    }
+    lastNextVideoTime.current = now
+
     if (currentIndex < playlistRef.current.length - 1) {
       setCurrentIndex(prev => prev + 1)
     } else {
