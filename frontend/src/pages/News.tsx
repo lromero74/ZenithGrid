@@ -600,7 +600,7 @@ export default function News() {
               </button>
 
               {showPlaylistDropdown && (
-                <div className="fixed top-32 right-8 w-80 max-h-[70vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50">
+                <div className="absolute top-full right-0 mt-2 w-80 max-h-[60vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50">
                   <div className="p-2 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
                     <p className="text-xs text-slate-400">Hover to preview - Click to play</p>
                   </div>
