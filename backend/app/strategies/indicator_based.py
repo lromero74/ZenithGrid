@@ -587,7 +587,14 @@ class IndicatorBasedStrategy(TradingStrategy):
             )
 
             for key, value in indicators_for_tf.items():
-                current_indicators[f"{timeframe}_{key}"] = value
+                # Handle prev_ prefix correctly: prev_rsi_14 -> prev_{timeframe}_rsi_14
+                # This ensures crossing detection works properly
+                if key.startswith("prev_"):
+                    # Extract indicator name after prev_ and add timeframe in the middle
+                    indicator_name = key[5:]  # Remove "prev_" prefix
+                    current_indicators[f"prev_{timeframe}_{indicator_name}"] = value
+                else:
+                    current_indicators[f"{timeframe}_{key}"] = value
 
         # Calculate aggregate indicators if needed
         if needs["ai_buy"] or needs["ai_sell"]:

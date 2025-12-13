@@ -126,10 +126,9 @@ class IndicatorCalculator:
         if calculate_previous and len(candles) > 2:
             # Recursively calculate indicators using candles[:-1] (excluding latest candle)
             prev_indicators = self.calculate_all_indicators(candles[:-1], required_indicators, calculate_previous=False)
-            # Add prev_ prefix to all keys except price/volume
+            # Add prev_ prefix to all keys (including price for BB% crossing detection)
             for key, value in prev_indicators.items():
-                if key not in ("price", "volume"):
-                    indicators[f"prev_{key}"] = value
+                indicators[f"prev_{key}"] = value
 
         return indicators
 
