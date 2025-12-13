@@ -14,17 +14,19 @@ export default {
         warning: '#f59e0b',
       },
       animation: {
-        'pulse-ring': 'pulse-ring 0.5s ease-in-out 6',
+        'pulse-ring': 'pulse-ring 0.4s ease-in-out 8',
       },
       keyframes: {
         'pulse-ring': {
           '0%, 100%': {
-            boxShadow: '0 0 0 4px rgba(239, 68, 68, 0.8), 0 0 30px 10px rgba(239, 68, 68, 0.5)',
-            transform: 'scale(1)',
+            outline: '4px solid rgba(239, 68, 68, 1)',
+            outlineOffset: '0px',
+            filter: 'brightness(1)',
           },
           '50%': {
-            boxShadow: '0 0 0 12px rgba(239, 68, 68, 0.4), 0 0 50px 25px rgba(239, 68, 68, 0.3)',
-            transform: 'scale(1.02)',
+            outline: '8px solid rgba(239, 68, 68, 0.6)',
+            outlineOffset: '4px',
+            filter: 'brightness(1.1)',
           },
         },
       },
