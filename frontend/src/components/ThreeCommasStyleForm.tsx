@@ -1,3 +1,4 @@
+import { useState, useCallback, useRef, useEffect } from 'react'
 import AdvancedConditionBuilder, {
   ConditionExpression,
   createEmptyExpression,
@@ -9,6 +10,17 @@ interface ThreeCommasStyleFormProps {
   config: Record<string, any>
   onChange: (config: Record<string, any>) => void
   quoteCurrency?: string  // 'BTC', 'USD', 'USDC', etc. - defaults to 'BTC'
+  aggregateBtcValue?: number  // Total BTC value for min percentage calculation
+  aggregateUsdValue?: number  // Total USD value for min percentage calculation
+}
+
+// Exchange minimum order sizes
+const EXCHANGE_MINIMUMS = {
+  BTC: 0.0001,  // 0.0001 BTC minimum for BTC pairs
+  USD: 1.0,     // $1 minimum for USD pairs
+  USDC: 1.0,    // $1 minimum for USDC pairs
+  USDT: 1.0,    // $1 minimum for USDT pairs
+  EUR: 1.0,     // 1 EUR minimum for EUR pairs
 }
 
 // Safe number parsing that returns undefined for invalid input (instead of NaN)
@@ -79,13 +91,73 @@ function hasBullFlagEntry(expression: ConditionExpression): boolean {
   )
 }
 
-function ThreeCommasStyleForm({ config, onChange, quoteCurrency = 'BTC' }: ThreeCommasStyleFormProps) {
+function ThreeCommasStyleForm({ config, onChange, quoteCurrency = 'BTC', aggregateBtcValue, aggregateUsdValue }: ThreeCommasStyleFormProps) {
+  // Track which fields have validation error (red flash)
+  const [errorFields, setErrorFields] = useState<Set<string>>(new Set())
+  const errorTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(errorTimeoutRef.current).forEach(clearTimeout)
+    }
+  }, [])
+
   const updateConfig = (key: string, value: any) => {
     onChange({ ...config, [key]: value })
   }
 
   // Determine if this is a fiat (USD-based) or crypto (BTC-based) bot
   const isFiatQuote = ['USD', 'USDC', 'USDT', 'EUR'].includes(quoteCurrency)
+
+  // Get the aggregate value for the quote currency
+  const aggregateValue = isFiatQuote ? aggregateUsdValue : aggregateBtcValue
+
+  // Get exchange minimum for this quote currency
+  const exchangeMinimum = EXCHANGE_MINIMUMS[quoteCurrency as keyof typeof EXCHANGE_MINIMUMS] || 0.0001
+
+  // Calculate minimum percentage needed to meet exchange minimum
+  const calculateMinPercentage = useCallback(() => {
+    if (!aggregateValue || aggregateValue <= 0) return 1 // Default 1% if no balance info
+    const minPct = (exchangeMinimum / aggregateValue) * 100
+    // Round up to nearest 0.1%
+    return Math.ceil(minPct * 10) / 10
+  }, [aggregateValue, exchangeMinimum])
+
+  // Flash error and auto-correct percentage field
+  const validateAndCorrectPercentage = useCallback((fieldKey: string, currentValue: number, minValue: number) => {
+    if (currentValue < minValue) {
+      // Add error state (red flash)
+      setErrorFields(prev => new Set(prev).add(fieldKey))
+
+      // Clear any existing timeout for this field
+      if (errorTimeoutRef.current[fieldKey]) {
+        clearTimeout(errorTimeoutRef.current[fieldKey])
+      }
+
+      // After 1 second, remove error state and auto-correct to minimum
+      errorTimeoutRef.current[fieldKey] = setTimeout(() => {
+        setErrorFields(prev => {
+          const next = new Set(prev)
+          next.delete(fieldKey)
+          return next
+        })
+        updateConfig(fieldKey, minValue)
+      }, 1000)
+    }
+  }, [updateConfig])
+
+  // Calculate minimum safety order percentage (as % of base order)
+  // Safety order = (base_order_percentage / 100) * aggregate * (safety_order_percentage / 100)
+  // For SO to meet minimum: (base_pct / 100) * agg * (so_pct / 100) >= min
+  // so_pct >= (min * 100 * 100) / (base_pct * agg)
+  const calculateMinSafetyOrderPercentage = useCallback(() => {
+    if (!aggregateValue || aggregateValue <= 0) return 10 // Default 10%
+    const basePct = config.base_order_percentage || 10
+    const minSoPct = (exchangeMinimum * 10000) / (basePct * aggregateValue)
+    // Round up to nearest 1%
+    return Math.max(10, Math.ceil(minSoPct))
+  }, [aggregateValue, exchangeMinimum, config.base_order_percentage])
 
   // Use generic key names that work for both BTC and USD
   // Backend will store as base_order_size/safety_order_size with quote_currency
@@ -170,16 +242,31 @@ function ThreeCommasStyleForm({ config, onChange, quoteCurrency = 'BTC' }: Three
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
                 Base Order % of {quoteCurrency} Balance
+                {aggregateValue && (
+                  <span className="text-xs text-slate-400 ml-2">
+                    (min: {calculateMinPercentage().toFixed(1)}%)
+                  </span>
+                )}
               </label>
               <input
                 type="number"
                 value={getNumericValue(config.base_order_percentage, 10)}
                 onChange={(e) => updateConfig('base_order_percentage', safeParseFloat(e.target.value) ?? 10)}
-                min="1"
+                onBlur={() => validateAndCorrectPercentage('base_order_percentage', config.base_order_percentage ?? 10, calculateMinPercentage())}
+                min={calculateMinPercentage()}
                 max="100"
                 step="0.1"
-                className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+                className={`w-full bg-slate-700 text-white px-3 py-2 rounded border transition-colors duration-200 ${
+                  errorFields.has('base_order_percentage')
+                    ? 'border-red-500 bg-red-900/30'
+                    : 'border-slate-600'
+                }`}
               />
+              {errorFields.has('base_order_percentage') && (
+                <p className="text-xs text-red-400 mt-1">
+                  Below exchange minimum. Adjusting to {calculateMinPercentage().toFixed(1)}%...
+                </p>
+              )}
             </div>
           ) : (
             <div>
@@ -290,6 +377,11 @@ function ThreeCommasStyleForm({ config, onChange, quoteCurrency = 'BTC' }: Three
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
                 Safety Order % of Base
+                {aggregateValue && (
+                  <span className="text-xs text-slate-400 ml-2">
+                    (min: {calculateMinSafetyOrderPercentage()}%)
+                  </span>
+                )}
               </label>
               <input
                 type="number"
@@ -297,11 +389,21 @@ function ThreeCommasStyleForm({ config, onChange, quoteCurrency = 'BTC' }: Three
                 onChange={(e) =>
                   updateConfig('safety_order_percentage', safeParseFloat(e.target.value) ?? 50)
                 }
-                min="10"
+                onBlur={() => validateAndCorrectPercentage('safety_order_percentage', config.safety_order_percentage ?? 50, calculateMinSafetyOrderPercentage())}
+                min={calculateMinSafetyOrderPercentage()}
                 max="500"
                 step="1"
-                className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+                className={`w-full bg-slate-700 text-white px-3 py-2 rounded border transition-colors duration-200 ${
+                  errorFields.has('safety_order_percentage')
+                    ? 'border-red-500 bg-red-900/30'
+                    : 'border-slate-600'
+                }`}
               />
+              {errorFields.has('safety_order_percentage') && (
+                <p className="text-xs text-red-400 mt-1">
+                  Below exchange minimum. Adjusting to {calculateMinSafetyOrderPercentage()}%...
+                </p>
+              )}
             </div>
           ) : (
             <div>

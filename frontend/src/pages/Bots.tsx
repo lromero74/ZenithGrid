@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
-import { botsApi, templatesApi } from '../services/api'
+import { botsApi, templatesApi, accountApi } from '../services/api'
 import { Bot, BotCreate, StrategyParameter } from '../types'
 import { Plus, Edit, Trash2, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet, ScanLine, BarChart2 } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
@@ -176,6 +176,13 @@ function Bots() {
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
+    refetchInterval: 60000, // Update every 60 seconds
+  })
+
+  // Fetch aggregate BTC/USD values for minimum percentage validation
+  const { data: aggregateData } = useQuery({
+    queryKey: ['aggregate-value'],
+    queryFn: accountApi.getAggregateValue,
     refetchInterval: 60000, // Update every 60 seconds
   })
 
@@ -1693,6 +1700,8 @@ function Bots() {
                     setFormData({ ...formData, strategy_config: newConfig })
                   }
                   quoteCurrency={formData.product_ids.length > 0 ? formData.product_ids[0].split('-')[1] : 'BTC'}
+                  aggregateBtcValue={aggregateData?.aggregate_btc_value}
+                  aggregateUsdValue={aggregateData?.aggregate_usd_value}
                 />
               ) : selectedStrategy.parameters.length > 0 ? (
 (() => {
