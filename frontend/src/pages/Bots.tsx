@@ -996,7 +996,7 @@ function Bots() {
                           const portfolioUsd = portfolio?.total_usd_value || 0
 
                           // Calculate bot's allocated value based on its budget percentage
-                          const botBudgetPct = bot.budget_percentage || 100
+                          const botBudgetPct = bot.budget_percentage
                           const botAllocatedValue = portfolioUsd * (botBudgetPct / 100)
 
                           // Calculate daily rate for this bot
@@ -1039,13 +1039,9 @@ function Bots() {
                       {/* Budget */}
                       <td className="px-2 sm:px-4 py-2 sm:py-3">
                         <div className="flex flex-col gap-1">
-                          {bot.budget_percentage > 0 ? (
-                            <span className="text-sm text-emerald-400 font-medium">
-                              {bot.budget_percentage}%
-                            </span>
-                          ) : (
-                            <span className="text-sm text-slate-500">All</span>
-                          )}
+                          <span className="text-sm text-emerald-400 font-medium">
+                            {bot.budget_percentage}%
+                          </span>
                           {/* Budget Utilization */}
                           {bot.budget_utilization_percentage !== undefined && (
                             <div className="text-[10px] text-slate-400">
