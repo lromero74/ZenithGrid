@@ -1154,6 +1154,9 @@ class MultiBotMonitor:
                     # Skip DCA/Exit phases when there's no position (irrelevant)
                     if not has_position and phase in ("safety_order", "take_profit"):
                         continue
+                    # Skip Entry phase when we already have a position (can't enter twice)
+                    if has_position and phase == "base_order":
+                        continue
                     await log_indicator_evaluation(
                         db=db,
                         bot_id=bot.id,
