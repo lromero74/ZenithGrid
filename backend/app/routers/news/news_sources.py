@@ -46,6 +46,18 @@ NEWS_SOURCES = {
         "type": "rss",
         "website": "https://cryptoslate.com",
     },
+    "bitcoin_magazine": {
+        "name": "Bitcoin Magazine",
+        "url": "https://bitcoinmagazine.com/feed",
+        "type": "rss",
+        "website": "https://bitcoinmagazine.com",
+    },
+    "blockworks": {
+        "name": "Blockworks",
+        "url": "https://blockworks.co/feed",
+        "type": "rss",
+        "website": "https://blockworks.co",
+    },
 }
 
 # YouTube video sources - most reputable crypto channels
@@ -133,5 +145,19 @@ VIDEO_SOURCES = {
         "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCl2oCaw8hdR_kbqyqd2klIA",
         "website": "https://www.youtube.com/@TheCryptoLark",
         "description": "Altcoin analysis & opportunities",
+    },
+    "pompliano": {
+        "name": "Anthony Pompliano",
+        "channel_id": "UCevXpeL8cNyAnww-NqJ4m2w",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCevXpeL8cNyAnww-NqJ4m2w",
+        "website": "https://www.youtube.com/@AnthonyPompliano",
+        "description": "Bitcoin advocate & market commentary",
+    },
+    "whiteboard_crypto": {
+        "name": "Whiteboard Crypto",
+        "channel_id": "UCsYYksPHiGqXHPoHI-fm5sg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCsYYksPHiGqXHPoHI-fm5sg",
+        "website": "https://www.youtube.com/@WhiteboardCrypto",
+        "description": "Educational crypto explainers",
     },
 }
