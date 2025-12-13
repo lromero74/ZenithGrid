@@ -7,7 +7,7 @@ import logging
 from typing import Any, Callable, Dict, List
 
 from app.cache import api_cache
-from app.constants import PRICE_CACHE_TTL
+from app.constants import PRICE_CACHE_TTL, PRODUCT_STATS_CACHE_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +110,8 @@ async def get_product_stats(request_func: Callable, product_id: str = "ETH-BTC")
         "price_percentage_change_24h": float(result.get("price_percentage_change_24h", 0)),
     }
 
-    # Cache for 5 minutes (volume doesn't change that quickly)
-    await api_cache.set(cache_key, stats, 300)
+    # Cache for 10 minutes (volume doesn't change that quickly)
+    await api_cache.set(cache_key, stats, PRODUCT_STATS_CACHE_TTL)
     return stats
 
 

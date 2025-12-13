@@ -30,6 +30,7 @@ from app.utils.candle_utils import (
     timeframe_to_seconds,
     SYNTHETIC_TIMEFRAMES,
 )
+from app.constants import CANDLE_CACHE_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +63,9 @@ class MultiBotMonitor:
         self.order_monitor = None  # Initialized lazily when needed
 
         # Cache for candle data (to avoid fetching same data multiple times)
-        self._candle_cache: Dict[str, tuple] = {}  # product_id -> (timestamp, candles)
-        self._cache_ttl = 30  # Cache candles for 30 seconds
+        # Shared across all bots monitoring the same product_id:granularity
+        self._candle_cache: Dict[str, tuple] = {}  # product_id:granularity -> (timestamp, candles)
+        self._cache_ttl = CANDLE_CACHE_TTL  # Configurable via constants.py (60s default)
 
         # Cache for exchange clients per account
         self._exchange_cache: Dict[int, ExchangeClient] = {}
