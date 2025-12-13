@@ -80,3 +80,7 @@ AGGREGATE_VALUE_CACHE_TTL = 300  # Cache aggregate portfolio values for 5 minute
 PRODUCT_STATS_CACHE_TTL = 600  # Cache product stats (24h volume, etc.) for 10 minutes
 CANDLE_CACHE_TTL = 60  # Cache candle data for 60 seconds (shared across bots, was 30s)
 MIN_USD_BALANCE_FOR_AGGREGATE = 1.0  # Skip dust balances below $1 in aggregate calculations
+
+# Throttling for low-resource environments (t2.micro)
+PAIR_PROCESSING_DELAY_SECONDS = 0.5  # Delay between processing each pair (reduces CPU burst)
+BOT_PROCESSING_DELAY_SECONDS = 1.0  # Delay between processing each bot
