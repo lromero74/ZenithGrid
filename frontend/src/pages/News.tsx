@@ -97,7 +97,9 @@ export default function News() {
   // Playlist dropdown state (for starting from specific video)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
   const [hoveredPlaylistIndex, setHoveredPlaylistIndex] = useState<number | null>(null)
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const dropdownButtonRef = useRef<HTMLButtonElement>(null)
 
   // Clean up hover highlights when dropdown closes
   const cleanupHoverHighlights = () => {
@@ -587,11 +589,22 @@ export default function News() {
             {/* Position selector dropdown - start from specific video */}
             <div className="relative ml-auto" ref={dropdownRef}>
               <button
+                ref={dropdownButtonRef}
                 onClick={() => {
                   if (showPlaylistDropdown) {
                     cleanupHoverHighlights()
+                    setShowPlaylistDropdown(false)
+                  } else {
+                    // Calculate position based on button location
+                    if (dropdownButtonRef.current) {
+                      const rect = dropdownButtonRef.current.getBoundingClientRect()
+                      setDropdownPosition({
+                        top: rect.bottom + 8, // 8px gap below button
+                        right: window.innerWidth - rect.right, // Align right edges
+                      })
+                    }
+                    setShowPlaylistDropdown(true)
                   }
-                  setShowPlaylistDropdown(!showPlaylistDropdown)
                 }}
                 className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
               >
@@ -599,8 +612,11 @@ export default function News() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${showPlaylistDropdown ? 'rotate-180' : ''}`} />
               </button>
 
-              {showPlaylistDropdown && (
-                <div className="absolute top-full right-0 mt-2 w-80 max-h-[60vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50">
+              {showPlaylistDropdown && dropdownPosition && (
+                <div
+                  className="fixed w-80 max-h-[60vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50"
+                  style={{ top: dropdownPosition.top, right: dropdownPosition.right }}
+                >
                   <div className="p-2 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
                     <p className="text-xs text-slate-400">Hover to preview - Click to play</p>
                   </div>
