@@ -82,5 +82,8 @@ CANDLE_CACHE_TTL = 60  # Cache candle data for 60 seconds (shared across bots, w
 MIN_USD_BALANCE_FOR_AGGREGATE = 1.0  # Skip dust balances below $1 in aggregate calculations
 
 # Throttling for low-resource environments (t2.micro)
-PAIR_PROCESSING_DELAY_SECONDS = 0.5  # Delay between processing each pair (reduces CPU burst)
-BOT_PROCESSING_DELAY_SECONDS = 1.0  # Delay between processing each bot
+# These delays are critical for allowing HTTP API requests to be processed
+# during bot monitoring (single uvicorn worker shares event loop with monitor)
+PAIR_PROCESSING_DELAY_SECONDS = 1.5  # Delay between processing each pair (was 0.5 - increased to allow API requests)
+BOT_PROCESSING_DELAY_SECONDS = 2.0  # Delay between processing each bot (was 1.0)
+API_YIELD_INTERVAL = 0.1  # Yield to event loop every N seconds during heavy processing
