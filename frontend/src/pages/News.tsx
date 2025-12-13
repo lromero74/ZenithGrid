@@ -107,12 +107,17 @@ export default function News() {
     })
   }
 
-  // Scroll to currently playing video (centered in viewport)
+  // Scroll to currently playing video (centered in viewport) with pulse effect
   const scrollToPlayingVideo = () => {
     if (!currentVideo) return
     const playingElement = document.querySelector(`[data-video-id="${currentVideo.video_id}"]`)
     if (playingElement) {
       playingElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // Add pulsing effect for 3 seconds
+      playingElement.classList.add('animate-pulse-ring')
+      setTimeout(() => {
+        playingElement.classList.remove('animate-pulse-ring')
+      }, 3000)
     }
   }
 
