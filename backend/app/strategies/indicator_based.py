@@ -666,10 +666,54 @@ class IndicatorBasedStrategy(TradingStrategy):
         safety_order_signal = False
         safety_order_details = []
         if self.safety_order_conditions:
-            safety_order_signal, safety_order_details = self.phase_evaluator.evaluate_expression(
+            # First evaluate the indicator conditions
+            indicator_signal, indicator_details = self.phase_evaluator.evaluate_expression(
                 self.safety_order_conditions, current_indicators, self.previous_indicators, self.safety_order_logic,
                 capture_details=True
             )
+            safety_order_details = indicator_details
+
+            # For DCA, also require price drop below target (this is a mandatory condition)
+            # The price drop condition is ALWAYS required for DCA, regardless of other conditions
+            if position is not None and hasattr(position, "average_buy_price") and position.average_buy_price:
+                # Calculate the next safety order price target
+                buy_trades = [t for t in position.trades if t.side == "buy"] if hasattr(position, "trades") else []
+                safety_orders_count = max(0, len(buy_trades) - 1)  # -1 for base order, min 0
+                next_order_number = safety_orders_count + 1
+
+                # Determine reference price for DCA target calculation
+                dca_reference = self.config.get("dca_target_reference", "average_price")
+                sorted_buys = sorted(buy_trades, key=lambda t: t.timestamp if t.timestamp else 0) if buy_trades else []
+
+                if dca_reference == "base_order" and sorted_buys:
+                    first_buy = sorted_buys[0]
+                    reference_price = first_buy.price if first_buy.price else position.average_buy_price
+                elif dca_reference == "last_buy" and sorted_buys:
+                    last_buy = sorted_buys[-1]
+                    reference_price = last_buy.price if last_buy.price else position.average_buy_price
+                else:
+                    reference_price = position.average_buy_price
+
+                # Calculate trigger price using the existing method
+                trigger_price = self.calculate_safety_order_price(reference_price, next_order_number)
+                price_drop_met = current_price <= trigger_price
+
+                # Add price_drop as a condition detail
+                price_drop_detail = {
+                    "type": "price_drop",
+                    "timeframe": "required",  # Indicates this is a mandatory condition
+                    "operator": "less_equal",
+                    "threshold": trigger_price,
+                    "actual_value": current_price,
+                    "result": price_drop_met,
+                }
+                safety_order_details.append(price_drop_detail)
+
+                # Both indicator conditions AND price drop must be met
+                safety_order_signal = indicator_signal and price_drop_met
+            else:
+                # No position means DCA not applicable
+                safety_order_signal = indicator_signal
 
         take_profit_signal = False
         take_profit_details = []

@@ -111,6 +111,7 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
       ai_buy: 'AI Buy',
       ai_sell: 'AI Sell',
       bull_flag: 'Bull Flag',
+      price_drop: 'Price Drop',
     }
     return labels[type] || type
   }
@@ -142,6 +143,8 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
     }
     // RSI and Stochastic are 0-100, show 1 decimal
     if (type === 'rsi' || type === 'stochastic') return value.toFixed(1)
+    // Price drop values are BTC prices, show 8 decimals
+    if (type === 'price_drop') return value.toFixed(8)
     return value.toFixed(4)  // Default: 4 decimals for other indicators
   }
 
