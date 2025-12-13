@@ -138,9 +138,10 @@ export function MiniPlayer() {
 
   // Poll for current time and duration from YouTube iframe
   useEffect(() => {
-    if (!isPlaying || !iframeRef.current?.contentWindow) return
+    if (!isPlaying) return
 
-    const pollInterval = setInterval(() => {
+    // Function to poll YouTube for time info
+    const pollYouTube = () => {
       if (iframeRef.current?.contentWindow) {
         // Request current time
         iframeRef.current.contentWindow.postMessage(
@@ -153,9 +154,20 @@ export function MiniPlayer() {
           '*'
         )
       }
-    }, 1000) // Poll every second
+    }
 
-    return () => clearInterval(pollInterval)
+    // Wait a bit for iframe to load before starting to poll
+    const startDelay = setTimeout(() => {
+      pollYouTube() // Poll immediately after delay
+    }, 1500)
+
+    // Then poll every second
+    const pollInterval = setInterval(pollYouTube, 1000)
+
+    return () => {
+      clearTimeout(startDelay)
+      clearInterval(pollInterval)
+    }
   }, [isPlaying, currentVideo?.video_id])
 
   // Handle YouTube API responses for time/duration
@@ -233,14 +245,13 @@ export function MiniPlayer() {
 
   // Subscribe to YouTube iframe events when iframe loads
   useEffect(() => {
-    const iframe = iframeRef.current
-    if (!iframe || !currentVideo) return
+    if (!currentVideo) return
 
-    // Give iframe time to load, then request event subscription
-    const timer = setTimeout(() => {
-      if (iframe.contentWindow) {
-        // Request YouTube to send us state change events
-        iframe.contentWindow.postMessage(
+    // Function to subscribe to YouTube events
+    const subscribeToYouTube = () => {
+      if (iframeRef.current?.contentWindow) {
+        // Request YouTube to send us state change events and info
+        iframeRef.current.contentWindow.postMessage(
           JSON.stringify({
             event: 'listening',
             id: 1,
@@ -249,9 +260,18 @@ export function MiniPlayer() {
           '*'
         )
       }
-    }, 1000)
+    }
 
-    return () => clearTimeout(timer)
+    // Subscribe after initial delay, then retry a few times to ensure it catches
+    const timer1 = setTimeout(subscribeToYouTube, 1000)
+    const timer2 = setTimeout(subscribeToYouTube, 2000)
+    const timer3 = setTimeout(subscribeToYouTube, 3000)
+
+    return () => {
+      clearTimeout(timer1)
+      clearTimeout(timer2)
+      clearTimeout(timer3)
+    }
   }, [currentVideo?.video_id])
 
   // Don't render if not playing or mini-player is hidden
