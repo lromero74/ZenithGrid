@@ -526,6 +526,9 @@ class MultiBotMonitor:
                         three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
                         # ONE_HOUR candles for hourly MACD/RSI conditions
                         one_hour_candles = await self.get_candles_cached(product_id, "ONE_HOUR", 100)
+                        # Higher timeframes for multi-timeframe indicator conditions
+                        fifteen_min_candles = await self.get_candles_cached(product_id, "FIFTEEN_MINUTE", 100)
+                        four_hour_candles = await self.get_candles_cached(product_id, "FOUR_HOUR", 100)
 
                         # Get current price from most recent candle (more reliable than ticker!)
                         if not candles or len(candles) == 0:
@@ -569,6 +572,18 @@ class MultiBotMonitor:
                             candles_by_timeframe["ONE_HOUR"] = one_hour_candles
                             logger.debug(
                                 f"  ✅ ONE_HOUR OK for {product_id}: {len(one_hour_candles)} candles"
+                            )
+                        # Add FIFTEEN_MINUTE candles for multi-timeframe conditions
+                        if fifteen_min_candles and len(fifteen_min_candles) >= 36:
+                            candles_by_timeframe["FIFTEEN_MINUTE"] = fifteen_min_candles
+                            logger.debug(
+                                f"  ✅ FIFTEEN_MINUTE OK for {product_id}: {len(fifteen_min_candles)} candles"
+                            )
+                        # Add FOUR_HOUR candles for longer timeframe conditions
+                        if four_hour_candles and len(four_hour_candles) >= 36:
+                            candles_by_timeframe["FOUR_HOUR"] = four_hour_candles
+                            logger.debug(
+                                f"  ✅ FOUR_HOUR OK for {product_id}: {len(four_hour_candles)} candles"
                             )
 
                         # Prepare market context (for AI batch analysis)
@@ -1084,19 +1099,26 @@ class MultiBotMonitor:
                 logger.info(f"  📝 Logged AI decision for {product_id}")
 
             # Log indicator condition evaluations for non-AI indicator-based bots
-            # This provides visibility into which conditions matched and at what values
+            # Only log when conditions MATCH to reduce noise:
+            # - Entry (base_order): log only when entry conditions are met
+            # - DCA (safety_order): log only when we have a position AND DCA conditions are met
+            # - Exit (take_profit): log only when we have a position AND exit conditions are met
             condition_details = signal_data.get("condition_details")
             if condition_details and not should_log_ai:
                 has_position = existing_position is not None
+                logged_any = False
                 # Log each phase that has conditions
                 for phase, details in condition_details.items():
                     if not details:  # Skip if no conditions for this phase
                         continue
+                    phase_signal_key = f"{phase}_signal"
+                    conditions_met = signal_data.get(phase_signal_key, False)
+                    # Only log when conditions match (reduces noise significantly)
+                    if not conditions_met:
+                        continue
                     # Skip DCA/Exit phases when there's no position (irrelevant)
                     if not has_position and phase in ("safety_order", "take_profit"):
                         continue
-                    phase_signal_key = f"{phase}_signal"
-                    conditions_met = signal_data.get(phase_signal_key, False)
                     await log_indicator_evaluation(
                         db=db,
                         bot_id=bot.id,
@@ -1107,7 +1129,9 @@ class MultiBotMonitor:
                         indicators_snapshot=indicators,
                         current_price=current_price,
                     )
-                logger.info(f"  📊 Logged indicator evaluation for {product_id}")
+                    logged_any = True
+                if logged_any:
+                    logger.info(f"  📊 Logged indicator match for {product_id}")
 
             # Create trading engine for this bot/pair combination
             engine = StrategyTradingEngine(
