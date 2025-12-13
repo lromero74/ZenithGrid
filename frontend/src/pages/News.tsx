@@ -96,7 +96,16 @@ export default function News() {
 
   // Playlist dropdown state (for starting from specific video)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
+  const [hoveredPlaylistIndex, setHoveredPlaylistIndex] = useState<number | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Clean up hover highlights when dropdown closes
+  const cleanupHoverHighlights = () => {
+    setHoveredPlaylistIndex(null)
+    document.querySelectorAll('[data-video-id]').forEach(el => {
+      el.classList.remove('ring-4', 'ring-blue-500/50', 'border-blue-500')
+    })
+  }
 
   // Scroll to currently playing video (centered in viewport)
   const scrollToPlayingVideo = () => {
@@ -117,6 +126,7 @@ export default function News() {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowPlaylistDropdown(false)
+        cleanupHoverHighlights()
       }
     }
     if (showPlaylistDropdown) {
@@ -572,7 +582,12 @@ export default function News() {
             {/* Position selector dropdown - start from specific video */}
             <div className="relative ml-auto" ref={dropdownRef}>
               <button
-                onClick={() => setShowPlaylistDropdown(!showPlaylistDropdown)}
+                onClick={() => {
+                  if (showPlaylistDropdown) {
+                    cleanupHoverHighlights()
+                  }
+                  setShowPlaylistDropdown(!showPlaylistDropdown)
+                }}
                 className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
               >
                 <span>Start from video...</span>
@@ -580,9 +595,9 @@ export default function News() {
               </button>
 
               {showPlaylistDropdown && (
-                <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-20">
-                  <div className="p-2 border-b border-slate-700">
-                    <p className="text-xs text-slate-400">Select starting video</p>
+                <div className="fixed top-32 right-8 w-80 max-h-[70vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50">
+                  <div className="p-2 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
+                    <p className="text-xs text-slate-400">Hover to preview - Click to play</p>
                   </div>
                   {filteredVideos.map((video, idx) => (
                     <button
@@ -590,10 +605,33 @@ export default function News() {
                       onClick={() => {
                         startPlaylist(filteredVideos as ContextVideoItem[], idx, true) // Start expanded
                         setShowPlaylistDropdown(false)
+                        cleanupHoverHighlights()
                       }}
-                      className="w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left"
+                      onMouseEnter={() => {
+                        setHoveredPlaylistIndex(idx)
+                        // Scroll to and highlight the video in the grid
+                        const videoElement = document.querySelector(`[data-video-id="${video.video_id}"]`)
+                        if (videoElement) {
+                          videoElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          // Add blue halo effect
+                          videoElement.classList.add('ring-4', 'ring-blue-500/50', 'border-blue-500')
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredPlaylistIndex(null)
+                        // Remove blue halo effect
+                        const videoElement = document.querySelector(`[data-video-id="${video.video_id}"]`)
+                        if (videoElement) {
+                          videoElement.classList.remove('ring-4', 'ring-blue-500/50', 'border-blue-500')
+                        }
+                      }}
+                      className={`w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left ${
+                        hoveredPlaylistIndex === idx ? 'bg-blue-500/10' : ''
+                      }`}
                     >
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium bg-slate-600 text-slate-300">
+                      <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                        hoveredPlaylistIndex === idx ? 'bg-blue-500 text-white' : 'bg-slate-600 text-slate-300'
+                      }`}>
                         {idx + 1}
                       </span>
                       <div className="flex-1 min-w-0">
