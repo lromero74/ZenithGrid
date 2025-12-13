@@ -92,7 +92,7 @@ export default function News() {
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
 
   // Global video player context for "Play All" feature
-  const { startPlaylist, isPlaying: isPlaylistPlaying, currentIndex: playlistIndex, playlist } = useVideoPlayer()
+  const { startPlaylist, isPlaying: isPlaylistPlaying, currentIndex: playlistIndex, playlist, currentVideo } = useVideoPlayer()
 
   // Playlist dropdown state (for starting from specific video)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
@@ -593,6 +593,9 @@ export default function News() {
               // Use unique key combining source and video_id to avoid collisions
               const uniqueKey = `${video.source}-${video.video_id}`
 
+              // Check if this video is currently playing in the mini player
+              const isCurrentlyPlaying = isPlaylistPlaying && currentVideo?.video_id === video.video_id
+
               // Handler to play this specific video in expanded modal
               const handlePlayVideo = () => {
                 startPlaylist(filteredVideos as ContextVideoItem[], idx, true) // true = start expanded
@@ -601,7 +604,11 @@ export default function News() {
               return (
                 <div
                   key={uniqueKey}
-                  className="group bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-slate-900/50"
+                  className={`group bg-slate-800 rounded-lg overflow-hidden transition-all hover:shadow-lg ${
+                    isCurrentlyPlaying
+                      ? 'border-2 border-red-500 ring-4 ring-red-500/30 shadow-lg shadow-red-500/20'
+                      : 'border border-slate-700 hover:border-slate-600 hover:shadow-slate-900/50'
+                  }`}
                 >
                   {/* Video thumbnail with play button */}
                   <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
@@ -614,6 +621,13 @@ export default function News() {
                           (e.target as HTMLImageElement).style.display = 'none'
                         }}
                       />
+                    )}
+                    {/* Now Playing badge */}
+                    {isCurrentlyPlaying && (
+                      <div className="absolute top-2 left-2 flex items-center space-x-1.5 px-2 py-1 bg-red-600 rounded-full z-10 animate-pulse">
+                        <div className="w-2 h-2 bg-white rounded-full" />
+                        <span className="text-xs font-medium text-white">Playing</span>
+                      </div>
                     )}
                     {/* Play button overlay - click to open in expanded modal */}
                     <button
