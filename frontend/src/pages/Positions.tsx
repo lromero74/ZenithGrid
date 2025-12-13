@@ -69,8 +69,8 @@ export default function Positions() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const { data: allPositions, refetch: refetchPositions } = useQuery({
-    queryKey: ['positions', selectedAccount?.id],
-    queryFn: () => positionsApi.getAll(undefined, 100),
+    queryKey: ['positions', 'open', selectedAccount?.id],
+    queryFn: () => positionsApi.getAll('open', 100),
     refetchInterval: 5000, // Update every 5 seconds for active deals
     select: (data) => {
       if (!selectedAccount) return data
@@ -832,7 +832,7 @@ export default function Positions() {
                                   const buyTargetGap = Math.abs(targetPosition - entryPosition)
 
                                   // Determine positioning: top or bottom
-                                  let buyPos: 'top' | 'bottom' = 'top'
+                                  const buyPos: 'top' | 'bottom' = 'top'
                                   let currentPos = 'top'
                                   let targetPos = 'top'
 
