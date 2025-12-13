@@ -328,10 +328,10 @@ export function MiniPlayer() {
           </div>
 
           {/* Controls bar */}
-          <div className={`flex items-center gap-4 transition-all duration-300 ${
+          <div className={`flex transition-all duration-300 ${
             isExpanded
-              ? 'p-4 border-t border-slate-700'
-              : 'flex-1 px-4'
+              ? 'flex-row items-center gap-4 p-4 border-t border-slate-700'
+              : 'flex-col flex-1 px-4 py-2 justify-center gap-1'
           }`}>
             {/* Video thumbnail (only in expanded) */}
             {isExpanded && (
@@ -346,78 +346,73 @@ export function MiniPlayer() {
               </div>
             )}
 
-            {/* Video info */}
-            <div className={`min-w-0 ${isExpanded ? 'flex-shrink-0 w-48' : 'flex-shrink-0 w-36'}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <span
-                  className={`px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${
-                    videoSourceColors[currentVideo.source] || 'bg-slate-600 text-slate-300'
-                  }`}
-                >
-                  {currentVideo.channel_name}
-                </span>
-                <span className="text-xs text-slate-500">
-                  {currentIndex + 1} / {playlist.length}
-                </span>
-              </div>
-              <h4 className="text-sm font-medium text-white truncate">
+            {/* Top row in mini mode: Video info */}
+            <div className={`min-w-0 ${isExpanded ? 'flex-shrink-0 w-48' : 'flex items-center gap-2'}`}>
+              <span
+                className={`px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${
+                  videoSourceColors[currentVideo.source] || 'bg-slate-600 text-slate-300'
+                }`}
+              >
+                {currentVideo.channel_name}
+              </span>
+              <h4 className={`text-sm font-medium text-white truncate ${isExpanded ? 'mt-1' : 'flex-1'}`}>
                 {currentVideo.title}
               </h4>
-              {currentVideo.published && (
-                <p className="text-xs text-slate-500">
-                  {formatRelativeTime(currentVideo.published)}
-                </p>
-              )}
+              <span className="text-xs text-slate-500 flex-shrink-0">
+                {currentIndex + 1}/{playlist.length}
+              </span>
             </div>
 
-            {/* Progress bar and time */}
-            <div className="flex-1 flex items-center gap-3 min-w-0">
-              {/* Current time */}
-              <span className="text-xs text-slate-400 w-12 text-right flex-shrink-0 font-mono">
-                {formatTime(currentTime)}
-              </span>
+            {/* Bottom row in mini mode: Progress bar, time, and controls */}
+            <div className={`flex items-center gap-2 ${isExpanded ? 'flex-1' : ''}`}>
+              {/* Progress bar and time */}
+              <div className="flex-1 flex items-center gap-2 min-w-0">
+                {/* Current time */}
+                <span className="text-xs text-slate-400 w-10 text-right flex-shrink-0 font-mono">
+                  {formatTime(currentTime)}
+                </span>
 
-              {/* Progress bar */}
-              <div
-                ref={progressBarRef}
-                className="flex-1 h-2 bg-slate-700 rounded-full cursor-pointer group relative"
-                onClick={handleProgressClick}
-              >
-                {/* Progress fill */}
+                {/* Progress bar */}
                 <div
-                  className="h-full bg-red-500 rounded-full transition-all duration-100 relative"
-                  style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                  ref={progressBarRef}
+                  className="flex-1 h-2 bg-slate-700 rounded-full cursor-pointer group relative"
+                  onClick={handleProgressClick}
                 >
-                  {/* Scrubber handle */}
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                  {/* Progress fill */}
+                  <div
+                    className="h-full bg-red-500 rounded-full transition-all duration-100 relative"
+                    style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                  >
+                    {/* Scrubber handle */}
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+
+                  {/* Hover time tooltip - appears on hover */}
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    {formatTime(currentTime)} / {formatTime(duration)}
+                  </div>
                 </div>
 
-                {/* Hover time tooltip - appears on hover */}
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  {formatTime(currentTime)} / {formatTime(duration)}
-                </div>
+                {/* Remaining time */}
+                <span className="text-xs text-slate-400 w-12 flex-shrink-0 font-mono">
+                  -{formatTime(Math.max(0, duration - currentTime))}
+                </span>
               </div>
 
-              {/* Remaining time */}
-              <span className="text-xs text-slate-400 w-14 flex-shrink-0 font-mono">
-                -{formatTime(Math.max(0, duration - currentTime))}
-              </span>
-            </div>
-
-            {/* Volume control */}
-            <div className="relative flex-shrink-0" ref={volumeRef}>
-              <button
-                onClick={toggleMute}
-                onMouseEnter={() => setShowVolumeSlider(true)}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
-                title={isMuted ? "Unmute" : "Mute"}
-              >
-                {isMuted || volume === 0 ? (
-                  <VolumeX className="w-5 h-5" />
-                ) : (
-                  <Volume2 className="w-5 h-5" />
-                )}
-              </button>
+              {/* Volume control */}
+              <div className="relative flex-shrink-0" ref={volumeRef}>
+                <button
+                  onClick={toggleMute}
+                  onMouseEnter={() => setShowVolumeSlider(true)}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title={isMuted ? "Unmute" : "Mute"}
+                >
+                  {isMuted || volume === 0 ? (
+                    <VolumeX className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                  ) : (
+                    <Volume2 className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                  )}
+                </button>
 
               {/* Volume slider popup */}
               {showVolumeSlider && (
@@ -439,46 +434,46 @@ export function MiniPlayer() {
                   </div>
                 </div>
               )}
-            </div>
+              </div>
 
-            {/* Controls */}
-            <div className="flex items-center gap-2">
-              {/* Previous */}
-              <button
-                onClick={previousVideo}
-                disabled={currentIndex === 0}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors"
-                title="Previous"
-              >
-                <SkipBack className="w-5 h-5" />
-              </button>
+              {/* Controls */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {/* Previous */}
+                <button
+                  onClick={previousVideo}
+                  disabled={currentIndex === 0}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title="Previous"
+                >
+                  <SkipBack className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                </button>
 
-              {/* Play/Pause */}
-              <button
-                onClick={togglePlayPause}
-                className="w-12 h-12 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-500 text-white transition-colors"
-                title={isPaused ? "Play" : "Pause"}
-              >
-                {isPaused ? (
-                  <Play className="w-6 h-6 ml-0.5" fill="white" />
-                ) : (
-                  <Pause className="w-6 h-6" />
-                )}
-              </button>
+                {/* Play/Pause */}
+                <button
+                  onClick={togglePlayPause}
+                  className={`flex items-center justify-center rounded-full bg-red-600 hover:bg-red-500 text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
+                  title={isPaused ? "Play" : "Pause"}
+                >
+                  {isPaused ? (
+                    <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
+                  ) : (
+                    <Pause className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
+                  )}
+                </button>
 
-              {/* Next */}
-              <button
-                onClick={nextVideo}
-                disabled={currentIndex >= playlist.length - 1}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors"
-                title="Next"
-              >
-                <SkipForward className="w-5 h-5" />
-              </button>
-            </div>
+                {/* Next */}
+                <button
+                  onClick={nextVideo}
+                  disabled={currentIndex >= playlist.length - 1}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title="Next"
+                >
+                  <SkipForward className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                </button>
+              </div>
 
-            {/* Secondary controls */}
-            <div className="flex items-center gap-2">
+              {/* Secondary controls */}
+              <div className="flex items-center gap-1 flex-shrink-0">
               {/* Playlist dropdown */}
               <div className="relative" ref={dropdownRef}>
                 <button
@@ -488,10 +483,10 @@ export function MiniPlayer() {
                     }
                     setShowPlaylistDropdown(!showPlaylistDropdown)
                   }}
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
                   title="Playlist"
                 >
-                  <ListVideo className="w-5 h-5" />
+                  <ListVideo className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
                 </button>
 
                 {showPlaylistDropdown && (
@@ -564,20 +559,21 @@ export function MiniPlayer() {
               {/* Expand/Minimize toggle */}
               <button
                 onClick={() => setExpanded(!isExpanded)}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+                className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
                 title={isExpanded ? "Minimize" : "Expand"}
               >
-                {isExpanded ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                {isExpanded ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-4 h-4" />}
               </button>
 
               {/* Close */}
               <button
                 onClick={closeMiniPlayer}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-red-600 text-white transition-colors"
+                className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-red-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
                 title="Close"
               >
-                <X className="w-5 h-5" />
+                <X className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
               </button>
+              </div>
             </div>
           </div>
         </div>

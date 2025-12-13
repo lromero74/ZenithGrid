@@ -14,15 +14,17 @@ export default {
         warning: '#f59e0b',
       },
       animation: {
-        'pulse-ring': 'pulse-ring 0.75s ease-in-out 4',
+        'pulse-ring': 'pulse-ring 0.5s ease-in-out 6',
       },
       keyframes: {
         'pulse-ring': {
           '0%, 100%': {
-            boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7), 0 0 20px 5px rgba(239, 68, 68, 0.4)',
+            boxShadow: '0 0 0 4px rgba(239, 68, 68, 0.8), 0 0 30px 10px rgba(239, 68, 68, 0.5)',
+            transform: 'scale(1)',
           },
           '50%': {
-            boxShadow: '0 0 0 10px rgba(239, 68, 68, 0), 0 0 30px 15px rgba(239, 68, 68, 0.6)',
+            boxShadow: '0 0 0 12px rgba(239, 68, 68, 0.4), 0 0 50px 25px rgba(239, 68, 68, 0.3)',
+            transform: 'scale(1.02)',
           },
         },
       },
