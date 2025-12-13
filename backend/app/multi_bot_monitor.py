@@ -625,8 +625,14 @@ class MultiBotMonitor:
                 # USD bots - get balance directly (no aggregation needed)
                 total_bot_budget = bot.get_reserved_balance()
 
-            per_position_budget = total_bot_budget / max_concurrent_deals if max_concurrent_deals > 0 else 0
-            print(f"💰 Budget calculation: Total={total_bot_budget:.8f}, MaxDeals={max_concurrent_deals}, PerPosition={per_position_budget:.8f}")
+            # Only split budget if split_budget_across_pairs is enabled
+            # Otherwise each deal gets the full budget (3Commas style)
+            if bot.split_budget_across_pairs and max_concurrent_deals > 0:
+                per_position_budget = total_bot_budget / max_concurrent_deals
+                print(f"💰 Budget calculation (SPLIT): Total={total_bot_budget:.8f}, MaxDeals={max_concurrent_deals}, PerPosition={per_position_budget:.8f}")
+            else:
+                per_position_budget = total_bot_budget
+                print(f"💰 Budget calculation (FULL): Total={total_bot_budget:.8f}, MaxDeals={max_concurrent_deals}, PerPosition={per_position_budget:.8f} (each deal gets full budget)")
 
             # Call batch AI analysis (1 API call for ALL pairs!) - or skip if technical-only check
             if skip_ai_analysis:

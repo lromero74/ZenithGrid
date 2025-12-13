@@ -273,10 +273,14 @@ async def process_signal(
     reserved_balance = bot.get_reserved_balance(aggregate_value)
     print(f"🔍 Reserved balance (total bot budget): {reserved_balance:.8f}")
     if reserved_balance > 0:
-        # Bot has reserved balance - divide by max_concurrent_deals to get per-position budget
-        # This ensures each position gets its fair share (e.g., 33% ÷ 6 deals = 5.5% per deal)
+        # Check if budget should be split across concurrent deals
         max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
-        per_position_budget = reserved_balance / max_concurrent_deals
+
+        # Only split budget if split_budget_across_pairs is enabled (3Commas style: each deal gets full budget by default)
+        if bot.split_budget_across_pairs:
+            per_position_budget = reserved_balance / max_concurrent_deals
+        else:
+            per_position_budget = reserved_balance
 
         # Calculate how much is available for THIS position (per-position budget - already spent in this position)
         query = select(Position).where(
@@ -288,13 +292,14 @@ async def process_signal(
         total_in_positions = sum(p.total_quote_spent for p in open_positions)
         quote_balance = per_position_budget - total_in_positions
 
+        split_mode = "SPLIT" if bot.split_budget_across_pairs else "FULL"
         if bot.budget_percentage > 0:
             logger.info(
-                f"  💰 Bot budget: {bot.budget_percentage}% of aggregate ({reserved_balance:.8f}), Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions:.8f}, Available: {quote_balance:.8f}"
+                f"  💰 Bot budget ({split_mode}): {bot.budget_percentage}% of aggregate ({reserved_balance:.8f}), Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions:.8f}, Available: {quote_balance:.8f}"
             )
         else:
             logger.info(
-                f"  💰 Bot reserved balance: {reserved_balance}, Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions}, Available: {quote_balance}"
+                f"  💰 Bot reserved balance ({split_mode}): {reserved_balance}, Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions}, Available: {quote_balance}"
             )
     else:
         # No reserved balance - use total portfolio balance (backward compatibility)
