@@ -704,15 +704,18 @@ class IndicatorBasedStrategy(TradingStrategy):
         }
 
     def calculate_base_order_size(self, balance: float) -> float:
-        """Calculate base order size based on configuration."""
+        """Calculate base order size based on configuration.
+
+        Note: The 'balance' passed in is already the per-position budget (accounting for
+        split_budget_across_pairs if enabled). The strategy just applies the percentage
+        to whatever budget it receives - no need to divide by max_concurrent_deals here.
+        """
         order_type = self.config.get("base_order_type", "percentage")
 
         if order_type == "percentage":
             percentage = self.config.get("base_order_percentage", 10.0)
-            max_deals = self.config.get("max_concurrent_deals", 1)
-            if max_deals > 1:
-                per_deal_percentage = percentage / max_deals
-                return balance * (per_deal_percentage / 100.0)
+            # Simply apply the percentage to the per-position budget
+            # Budget splitting is handled upstream in multi_bot_monitor.py
             return balance * (percentage / 100.0)
         elif order_type == "fixed_btc":
             # UI uses base_order_btc for fixed BTC amount
