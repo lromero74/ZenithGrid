@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
 import { useVideoPlayer, VideoItem as ContextVideoItem } from '../contexts/VideoPlayerContext'
@@ -97,6 +97,16 @@ export default function News() {
   // Playlist dropdown state (for starting from specific video)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Scroll to currently playing video (centered in viewport)
+  const scrollToPlayingVideo = () => {
+    if (!currentVideo) return
+    const playingElement = document.querySelector(`[data-video-id="${currentVideo.video_id}"]`)
+    if (playingElement) {
+      playingElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+
   // Track article reader mode content
   const [articleContent, setArticleContent] = useState<ArticleContentResponse | null>(null)
   const [articleContentLoading, setArticleContentLoading] = useState(false)
@@ -541,11 +551,21 @@ export default function News() {
               <span>Play All</span>
             </button>
 
-            {/* Continue from saved position (if playlist is same as current filter) */}
-            {isPlaylistPlaying && playlistIndex > 0 && playlist.length === filteredVideos.length && (
-              <div className="flex items-center space-x-2 text-sm text-slate-300">
-                <span className="text-green-400 font-medium">Now playing:</span>
-                <span>{playlistIndex + 1} / {playlist.length}</span>
+            {/* Now playing indicator and scroll button */}
+            {isPlaylistPlaying && (
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 text-sm text-slate-300">
+                  <span className="text-green-400 font-medium">Now playing:</span>
+                  <span>{playlistIndex + 1} / {playlist.length}</span>
+                </div>
+                <button
+                  onClick={scrollToPlayingVideo}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-red-400 text-sm transition-colors"
+                  title="Scroll to currently playing video"
+                >
+                  <Crosshair className="w-4 h-4" />
+                  <span className="hidden sm:inline">Find Playing</span>
+                </button>
               </div>
             )}
 
@@ -604,6 +624,7 @@ export default function News() {
               return (
                 <div
                   key={uniqueKey}
+                  data-video-id={video.video_id}
                   className={`group bg-slate-800 rounded-lg overflow-hidden transition-all hover:shadow-lg ${
                     isCurrentlyPlaying
                       ? 'border-2 border-red-500 ring-4 ring-red-500/30 shadow-lg shadow-red-500/20'
