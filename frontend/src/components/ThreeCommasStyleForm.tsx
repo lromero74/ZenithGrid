@@ -8,6 +8,7 @@ import { ConditionType } from './PhaseConditionSelector'
 interface ThreeCommasStyleFormProps {
   config: Record<string, any>
   onChange: (config: Record<string, any>) => void
+  quoteCurrency?: string  // 'BTC', 'USD', 'USDC', etc. - defaults to 'BTC'
 }
 
 // Safe number parsing that returns undefined for invalid input (instead of NaN)
@@ -78,9 +79,30 @@ function hasBullFlagEntry(expression: ConditionExpression): boolean {
   )
 }
 
-function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
+function ThreeCommasStyleForm({ config, onChange, quoteCurrency = 'BTC' }: ThreeCommasStyleFormProps) {
   const updateConfig = (key: string, value: any) => {
     onChange({ ...config, [key]: value })
+  }
+
+  // Determine if this is a fiat (USD-based) or crypto (BTC-based) bot
+  const isFiatQuote = ['USD', 'USDC', 'USDT', 'EUR'].includes(quoteCurrency)
+
+  // Use generic key names that work for both BTC and USD
+  // Backend will store as base_order_size/safety_order_size with quote_currency
+  const baseOrderKey = 'base_order_size'
+  const safetyOrderKey = 'safety_order_size'
+
+  // For backward compatibility, read from legacy keys if new ones not set
+  const getBaseOrderSize = () => {
+    if (config.base_order_size !== undefined) return config.base_order_size
+    if (config.base_order_btc !== undefined) return config.base_order_btc
+    return isFiatQuote ? 10 : 0.001  // Default: $10 for USD, 0.001 for BTC
+  }
+
+  const getSafetyOrderSize = () => {
+    if (config.safety_order_size !== undefined) return config.safety_order_size
+    if (config.safety_order_btc !== undefined) return config.safety_order_btc
+    return isFiatQuote ? 5 : 0.0005  // Default: $5 for USD, 0.0005 for BTC
   }
 
   // Convert conditions to ConditionExpression format (handles legacy flat arrays)
@@ -139,15 +161,15 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               onChange={(e) => updateConfig('base_order_type', e.target.value)}
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             >
-              <option value="percentage">% of BTC Balance</option>
-              <option value="fixed_btc">Fixed BTC Amount</option>
+              <option value="percentage">% of {quoteCurrency} Balance</option>
+              <option value="fixed">Fixed {quoteCurrency} Amount</option>
             </select>
           </div>
 
           {config.base_order_type === 'percentage' ? (
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
-                Base Order % of BTC Balance
+                Base Order % of {quoteCurrency} Balance
               </label>
               <input
                 type="number"
@@ -162,15 +184,20 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
           ) : (
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
-                Base Order BTC Amount
+                Base Order {quoteCurrency} Amount
               </label>
               <input
                 type="number"
-                value={getNumericValue(config.base_order_btc, 0.001)}
-                onChange={(e) => updateConfig('base_order_btc', safeParseFloat(e.target.value) ?? 0.001)}
-                min="0.0001"
-                max="10"
-                step="0.00000001"
+                value={getNumericValue(getBaseOrderSize(), isFiatQuote ? 10 : 0.001)}
+                onChange={(e) => {
+                  const value = safeParseFloat(e.target.value) ?? (isFiatQuote ? 10 : 0.001)
+                  // Store both for backward compatibility and update quote_currency
+                  updateConfig(baseOrderKey, value)
+                  updateConfig('quote_currency', quoteCurrency)
+                }}
+                min={isFiatQuote ? 1 : 0.0001}
+                max={isFiatQuote ? 100000 : 10}
+                step={isFiatQuote ? 1 : 0.00000001}
                 className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
               />
             </div>
@@ -255,7 +282,7 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             >
               <option value="percentage_of_base">% of Base Order</option>
-              <option value="fixed_btc">Fixed BTC Amount</option>
+              <option value="fixed">Fixed {quoteCurrency} Amount</option>
             </select>
           </div>
 
@@ -279,15 +306,18 @@ function ThreeCommasStyleForm({ config, onChange }: ThreeCommasStyleFormProps) {
           ) : (
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
-                Safety Order BTC Amount
+                Safety Order {quoteCurrency} Amount
               </label>
               <input
                 type="number"
-                value={getNumericValue(config.safety_order_btc, 0.0005)}
-                onChange={(e) => updateConfig('safety_order_btc', safeParseFloat(e.target.value) ?? 0.0005)}
-                min="0.0001"
-                max="10"
-                step="0.00000001"
+                value={getNumericValue(getSafetyOrderSize(), isFiatQuote ? 5 : 0.0005)}
+                onChange={(e) => {
+                  const value = safeParseFloat(e.target.value) ?? (isFiatQuote ? 5 : 0.0005)
+                  updateConfig(safetyOrderKey, value)
+                }}
+                min={isFiatQuote ? 1 : 0.0001}
+                max={isFiatQuote ? 100000 : 10}
+                step={isFiatQuote ? 1 : 0.00000001}
                 className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
               />
             </div>

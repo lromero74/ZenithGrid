@@ -1696,6 +1696,7 @@ function Bots() {
                   onChange={(newConfig) =>
                     setFormData({ ...formData, strategy_config: newConfig })
                   }
+                  quoteCurrency={formData.product_ids.length > 0 ? formData.product_ids[0].split('-')[1] : 'BTC'}
                 />
               ) : selectedStrategy.parameters.length > 0 ? (
 (() => {
