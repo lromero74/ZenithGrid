@@ -232,8 +232,9 @@ class PhaseConditionEvaluator:
             return False
 
         if capture_details:
-            # Round for cleaner display
-            detail["actual_value"] = round(current_val, 4) if isinstance(current_val, float) else current_val
+            # Preserve precision for small values (like MACD histogram)
+            # Use 8 decimal places to capture tiny values that would round to 0 at 4 decimals
+            detail["actual_value"] = round(current_val, 8) if isinstance(current_val, float) else current_val
 
         print(f"[DEBUG] Evaluating: {condition_type} on {timeframe}: {current_val} {operator} {value}")
 
@@ -256,7 +257,8 @@ class PhaseConditionEvaluator:
                 return False
 
             if capture_details:
-                detail["previous_value"] = round(previous_val, 4) if isinstance(previous_val, float) else previous_val
+                # Preserve precision for small values (like MACD histogram)
+                detail["previous_value"] = round(previous_val, 8) if isinstance(previous_val, float) else previous_val
 
             print(f"[DEBUG] Crossing check: previous={previous_val}, current={current_val}, threshold={value}")
 
