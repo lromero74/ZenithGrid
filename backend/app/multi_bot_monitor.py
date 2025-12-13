@@ -30,7 +30,7 @@ from app.utils.candle_utils import (
     timeframe_to_seconds,
     SYNTHETIC_TIMEFRAMES,
 )
-from app.constants import CANDLE_CACHE_TTL
+from app.constants import CANDLE_CACHE_TTL, PAIR_PROCESSING_DELAY_SECONDS, BOT_PROCESSING_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -305,6 +305,8 @@ class MultiBotMonitor:
                         except Exception as e:
                             logger.error(f"  Error processing {product_id}: {e}")
                             batch_results.append({"error": str(e)})
+                        # Throttle between pairs to reduce CPU burst (t2.micro friendly)
+                        await asyncio.sleep(PAIR_PROCESSING_DELAY_SECONDS)
 
                     # Store results
                     for product_id, result in zip(batch, batch_results):
@@ -615,6 +617,9 @@ class MultiBotMonitor:
                     # Track successful fetches so we can clear any stale errors
                     successful_pairs.add(product_id)
 
+                # Throttle between pairs to reduce CPU burst (t2.micro friendly)
+                await asyncio.sleep(PAIR_PROCESSING_DELAY_SECONDS)
+
             # Calculate per-position budget (total budget / max concurrent deals)
             max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
             # Get total bot budget using Bot's get_reserved_balance method
@@ -695,7 +700,7 @@ class MultiBotMonitor:
 
                     # Rate limit between order attempts to avoid Coinbase 403 throttling
                     # Coinbase returns 403 (not 429) when requests are too rapid
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(PAIR_PROCESSING_DELAY_SECONDS)
 
                     # Update AI log with position_id if a NEW position was created (not existing)
                     if ai_log_entry and result.get("position") and not ai_log_entry.position_id:
@@ -1454,6 +1459,9 @@ class MultiBotMonitor:
                                 print(f"🔍 Calling process_bot for {bot.name} (AI: {needs_ai_analysis})...")
                                 await self.process_bot(db, bot, skip_ai_analysis=not needs_ai_analysis)
                                 print(f"✅ Finished processing {bot.name}")
+
+                                # Throttle between bots to reduce CPU burst (t2.micro friendly)
+                                await asyncio.sleep(BOT_PROCESSING_DELAY_SECONDS)
                             except Exception as e:
                                 logger.error(f"Error processing bot {bot.name}: {e}")
                                 # Continue with other bots even if one fails
