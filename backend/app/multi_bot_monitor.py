@@ -517,13 +517,15 @@ class MultiBotMonitor:
                             logger.info(f"  🔄 Retry {attempt}/{max_retries-1} for {product_id}")
                             await asyncio.sleep(0.5 * attempt)  # Brief backoff
 
-                        # Get candles for multiple timeframes (for BB% calculations)
+                        # Get candles for multiple timeframes (for BB%, MACD crossing, etc.)
                         candles = await self.get_candles_cached(product_id, "FIVE_MINUTE", 100)
                         # Fetch 300 ONE_MINUTE candles (max allowed by Coinbase API per request)
                         # This allows up to 100 THREE_MINUTE candles (300/3 = 100)
                         one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 300)
                         # THREE_MINUTE is synthetic (aggregated from 1-min) but now supported
                         three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
+                        # ONE_HOUR candles for hourly MACD/RSI conditions
+                        one_hour_candles = await self.get_candles_cached(product_id, "ONE_HOUR", 100)
 
                         # Get current price from most recent candle (more reliable than ticker!)
                         if not candles or len(candles) == 0:
@@ -560,6 +562,13 @@ class MultiBotMonitor:
                             logger.warning(
                                 f"  ⚠️ THREE_MINUTE insufficient for {product_id}: "
                                 f"have {three_min_count}/20 candles after gap-filling (very low volume pair)"
+                            )
+                        # Add ONE_HOUR candles for hourly MACD/RSI conditions
+                        if one_hour_candles and len(one_hour_candles) >= 36:
+                            # Need at least 36 candles for MACD (26 slow + 9 signal + buffer for crossing)
+                            candles_by_timeframe["ONE_HOUR"] = one_hour_candles
+                            logger.debug(
+                                f"  ✅ ONE_HOUR OK for {product_id}: {len(one_hour_candles)} candles"
                             )
 
                         # Prepare market context (for AI batch analysis)
