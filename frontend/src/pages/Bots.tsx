@@ -939,7 +939,7 @@ function Bots() {
                         {(bot.strategy_config?.max_concurrent_deals || bot.strategy_config?.max_concurrent_positions) ? (
                           <div className="text-sm">
                             <span className="text-blue-400 font-medium">
-                              {(bot as any).open_positions_count || 0}
+                              {bot.open_positions_count ?? 0}
                             </span>
                             <span className="text-slate-500"> / </span>
                             <span className="text-slate-400">
@@ -1110,13 +1110,17 @@ function Bots() {
                             </button>
                           )}
 
-                          {/* Force Run Button - only show for active bots */}
-                          {bot.is_active && (
+                          {/* Force Run Button - show for active bots OR stopped bots with open positions */}
+                          {(bot.is_active || (bot.open_positions_count ?? 0) > 0) && (
                             <button
                               onClick={() => forceRunBot.mutate(bot.id)}
                               disabled={forceRunBot.isPending}
-                              className="p-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Force Run Now"
+                              className={`p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                bot.is_active
+                                  ? 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400'
+                                  : 'bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400'
+                              }`}
+                              title={bot.is_active ? "Force Run Now" : "Force Run (check DCA/Exit for open positions)"}
                             >
                               <FastForward className="w-4 h-4" />
                             </button>

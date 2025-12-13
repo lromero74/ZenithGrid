@@ -398,11 +398,14 @@ async def process_signal(
             # Position already exists for this pair - check for DCA
             should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
     else:
-        # Bot is stopped - don't open new positions
+        # Bot is stopped - don't open new positions, but still check DCA for existing positions
         if position is None:
             buy_reason = "Bot is stopped - not opening new positions"
         else:
-            buy_reason = "Bot is stopped - managing existing position only"
+            # Still check DCA conditions for existing positions even when stopped
+            should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
+            if not should_buy:
+                buy_reason = f"Bot stopped, DCA check: {buy_reason}"
 
     if should_buy:
         # Get BTC/USD price for logging

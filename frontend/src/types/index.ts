@@ -189,6 +189,7 @@ export interface Bot {
   budget_utilization_percentage?: number;
   account_id?: number | null;  // For multi-account support
   exchange_type?: 'cex' | 'dex';  // Exchange type
+  open_positions_count?: number;  // Number of open positions for this bot
 }
 
 export interface BotCreate {

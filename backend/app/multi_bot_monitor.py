@@ -268,6 +268,19 @@ class MultiBotMonitor:
                 f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})"
             )
 
+            # If bot is stopped, filter to only pairs with open positions (for DCA/exit)
+            if not bot.is_active:
+                from app.models import Position
+                open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
+                open_pos_result = await db.execute(open_pos_query)
+                open_positions = list(open_pos_result.scalars().all())
+                pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+                trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
+                logger.info(f"  ⏸️  Bot is STOPPED - filtered to {len(trading_pairs)} pairs with open positions")
+                if len(trading_pairs) == 0:
+                    logger.info("  ℹ️  No open positions to manage - skipping analysis")
+                    return {"action": "skip", "reason": "Bot stopped with no open positions"}
+
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis
             # Individual positions will still use frozen config in process_bot_pair
@@ -434,7 +447,16 @@ class MultiBotMonitor:
             # Determine which pairs to analyze
             pairs_to_analyze = trading_pairs
 
-            if open_count >= max_concurrent_deals:
+            # If bot is stopped, only analyze pairs with open positions (for DCA/exit signals)
+            if not bot.is_active:
+                pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+                pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
+                logger.info(f"  ⏸️  Bot is STOPPED - analyzing only {len(pairs_to_analyze)} pairs with open positions for DCA/exit")
+                if len(pairs_to_analyze) == 0:
+                    logger.info("  ℹ️  No open positions to manage - skipping analysis")
+                    return {"action": "skip", "reason": "Bot stopped with no open positions"}
+
+            elif open_count >= max_concurrent_deals:
                 # At capacity - only analyze pairs with open positions (for sell signals)
                 pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
                 pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
