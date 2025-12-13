@@ -71,3 +71,7 @@ backend/scripts/*
 # Process IDs
 .pids/
 *.pid
+
+# Database backups
+backend/trading.db.local.backup*
+backend/trading.db.prod
