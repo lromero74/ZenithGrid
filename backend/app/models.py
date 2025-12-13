@@ -207,21 +207,22 @@ class Bot(Base):
             aggregate_value: Total value of portfolio in bot's quote currency.
                             For BTC bots: total BTC value (BTC + all pairs as BTC)
                             For USD bots: total USD value (USD + all pairs as USD)
-                            If provided and budget_percentage is set, calculates from percentage.
+                            If provided, calculates budget from percentage.
 
         Returns:
             Total reserved balance in quote currency (BTC or USD) for the entire bot, not per-deal
         """
         quote = self.get_quote_currency()
 
-        # If budget_percentage is set and aggregate_value provided, calculate from percentage
-        if self.budget_percentage > 0 and aggregate_value is not None:
-            # Bot gets budget_percentage of aggregate value
-            # This is the TOTAL budget for the bot, not divided by max_concurrent_deals
-            bot_budget = aggregate_value * (self.budget_percentage / 100.0)
+        # If aggregate_value provided, calculate from percentage
+        # budget_percentage = 0 means "All" (100% of aggregate value)
+        # budget_percentage > 0 means that specific percentage
+        if aggregate_value is not None:
+            effective_pct = self.budget_percentage if self.budget_percentage > 0 else 100.0
+            bot_budget = aggregate_value * (effective_pct / 100.0)
             return bot_budget
 
-        # Fallback to legacy reserved balances
+        # Fallback to legacy reserved balances (when aggregate_value not provided)
         if quote == "USD":
             return self.reserved_usd_balance
         else:

@@ -391,8 +391,9 @@ class MultiBotMonitor:
                 logger.warning("  ⚠️  Bot may be unable to open new positions due to insufficient calculated balance.")
 
             # Calculate bot's reserved balance (percentage of total account value from bot config)
+            # budget_percentage = 0 means "All" (100%), otherwise use the configured percentage
             reserved_balance = bot.get_reserved_balance(aggregate_value)
-            budget_pct = bot.budget_percentage or 0
+            budget_pct = bot.budget_percentage if bot.budget_percentage > 0 else 100.0
 
             # Calculate how much budget is already used by this bot's positions
             total_in_positions = sum(p.total_quote_spent for p in open_positions)
