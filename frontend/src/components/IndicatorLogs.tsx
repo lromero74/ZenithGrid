@@ -133,7 +133,16 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
     if (value === null || value === undefined) return 'N/A'
     if (type === 'bb_percent') return `${value.toFixed(1)}%`
     if (type === 'volume') return value.toLocaleString()
-    return value.toFixed(2)
+    // MACD values can be very small (e.g., 0.00000123), use scientific notation for tiny values
+    if (type === 'macd') {
+      if (Math.abs(value) < 0.0001 && value !== 0) {
+        return value.toExponential(2)  // e.g., 1.23e-6
+      }
+      return value.toFixed(6)  // Show more precision for MACD
+    }
+    // RSI and Stochastic are 0-100, show 1 decimal
+    if (type === 'rsi' || type === 'stochastic') return value.toFixed(1)
+    return value.toFixed(4)  // Default: 4 decimals for other indicators
   }
 
   return (
