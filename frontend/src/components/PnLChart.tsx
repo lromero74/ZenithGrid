@@ -311,6 +311,8 @@ export function PnLChart({ accountId }: PnLChartProps) {
         timeVisible: true,
         secondsVisible: false,
         borderColor: '#1e293b',
+        fixLeftEdge: true,
+        fixRightEdge: true,
       },
       rightPriceScale: {
         borderColor: '#1e293b',
