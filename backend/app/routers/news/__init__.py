@@ -15,6 +15,7 @@ from .news_cache import (
     NEWS_ITEM_MAX_AGE_DAYS,
     US_DEBT_CACHE_FILE,
     US_DEBT_CACHE_HOURS,
+    VIDEO_CACHE_CHECK_MINUTES,
     VIDEO_CACHE_FILE,
     load_block_height_cache,
     load_cache,
@@ -57,6 +58,7 @@ __all__ = [
     # Cache constants
     "NEWS_CACHE_CHECK_MINUTES",
     "NEWS_ITEM_MAX_AGE_DAYS",
+    "VIDEO_CACHE_CHECK_MINUTES",
     "FEAR_GREED_CACHE_MINUTES",
     "BLOCK_HEIGHT_CACHE_MINUTES",
     "US_DEBT_CACHE_HOURS",
