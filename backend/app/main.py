@@ -25,6 +25,7 @@ from app.routers import auth_router  # User authentication
 from app.routers import ai_credentials_router  # Per-user AI provider keys
 from app.services.websocket_manager import ws_manager
 from app.services.shutdown_manager import shutdown_manager
+from app.services.content_refresh_service import content_refresh_service
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -220,6 +221,10 @@ async def startup_event():
     await trading_pair_monitor.start()
     print("🚀 Trading pair monitor started - syncing pairs daily (first check in 5 minutes)")
 
+    print("🚀 Starting content refresh service...")
+    await content_refresh_service.start()
+    print("🚀 Content refresh service started - news every 30min, videos every 60min")
+
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
@@ -240,6 +245,9 @@ async def shutdown_event():
     logger.info("🛑 Stopping monitors...")
     if price_monitor:
         await price_monitor.stop()
+
+    if content_refresh_service:
+        await content_refresh_service.stop()
 
     if limit_order_monitor_task:
         limit_order_monitor_task.cancel()

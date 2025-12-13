@@ -685,6 +685,36 @@ class NewsArticle(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class VideoArticle(Base):
+    """
+    Cached video articles from YouTube crypto channels.
+
+    Videos are fetched periodically and cached in the database.
+    Thumbnail URLs point to YouTube CDN (no local caching needed).
+    Videos older than 7 days are automatically cleaned up.
+    """
+
+    __tablename__ = "video_articles"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Video content
+    title = Column(String, nullable=False)
+    url = Column(String, unique=True, index=True, nullable=False)  # YouTube URL for deduplication
+    video_id = Column(String, nullable=False, index=True)  # YouTube video ID
+    source = Column(String, nullable=False, index=True)  # e.g., "coin_bureau", "bankless"
+    channel_name = Column(String, nullable=False)  # Display name
+
+    # Optional fields
+    published_at = Column(DateTime, nullable=True, index=True)  # When the video was published
+    description = Column(Text, nullable=True)  # Video description/summary
+    thumbnail_url = Column(String, nullable=True)  # YouTube thumbnail URL (CDN)
+
+    # Metadata
+    fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ContentSource(Base):
     """
     News and video content sources that users can subscribe to.

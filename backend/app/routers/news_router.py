@@ -41,16 +41,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
 
 from app.database import async_session_maker
-from app.models import ContentSource, NewsArticle
+from app.models import ContentSource, NewsArticle, VideoArticle
 from app.routers.news import (
     CACHE_FILE,
     DEBT_CEILING_HISTORY,
     FEAR_GREED_CACHE_MINUTES,
     NEWS_CACHE_CHECK_MINUTES,
     NEWS_ITEM_MAX_AGE_DAYS,
+    VIDEO_CACHE_CHECK_MINUTES,
     NEWS_SOURCES,
     US_DEBT_CACHE_HOURS,
-    VIDEO_CACHE_FILE,
     VIDEO_SOURCES,
     ArticleContentResponse,
     BlockHeightResponse,
@@ -77,8 +77,9 @@ from app.services.news_image_cache import download_image_as_base64
 
 logger = logging.getLogger(__name__)
 
-# Track when we last refreshed news (in-memory for this process)
+# Track when we last refreshed news/videos (in-memory for this process)
 _last_news_refresh: Optional[datetime] = None
+_last_video_refresh: Optional[datetime] = None
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -274,6 +275,118 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
         "published": article.published_at.isoformat() + "Z" if article.published_at else None,
         "summary": article.summary,
         "thumbnail": thumbnail,
+    }
+
+
+# ============================================================================
+# VIDEO DATABASE FUNCTIONS
+# ============================================================================
+
+
+async def store_video_in_db(
+    db: AsyncSession,
+    item: VideoItem,
+) -> Optional[VideoArticle]:
+    """Store a video article in the database. Returns None if already exists."""
+    # Check if video already exists by URL
+    result = await db.execute(
+        select(VideoArticle).where(VideoArticle.url == item.url)
+    )
+    existing = result.scalars().first()
+    if existing:
+        return None  # Already exists
+
+    # Parse published date
+    published_at = None
+    if item.published:
+        try:
+            pub_str = item.published.rstrip("Z")
+            published_at = datetime.fromisoformat(pub_str)
+        except (ValueError, TypeError):
+            pass
+
+    video = VideoArticle(
+        title=item.title,
+        url=item.url,
+        video_id=item.video_id,
+        source=item.source,
+        channel_name=item.channel_name,
+        published_at=published_at,
+        description=item.description,
+        thumbnail_url=item.thumbnail,
+        fetched_at=datetime.utcnow(),
+    )
+    db.add(video)
+    return video
+
+
+async def get_videos_from_db_list(db: AsyncSession, limit: int = 100) -> List[VideoArticle]:
+    """Get recent videos from database, sorted by published date."""
+    cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    result = await db.execute(
+        select(VideoArticle)
+        .where(VideoArticle.published_at >= cutoff)
+        .order_by(desc(VideoArticle.published_at))
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def cleanup_old_videos(db: AsyncSession, max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS) -> int:
+    """Delete videos older than max_age_days. Returns count deleted."""
+    from sqlalchemy import delete
+    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+    result = await db.execute(
+        delete(VideoArticle).where(VideoArticle.fetched_at < cutoff)
+    )
+    await db.commit()
+    deleted_count = result.rowcount
+    if deleted_count > 0:
+        logger.info(f"Cleaned up {deleted_count} old videos from database")
+    return deleted_count
+
+
+def video_to_item(video: VideoArticle, sources: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
+    """Convert a VideoArticle database object to a VideoItem dict for API response."""
+    source_map = sources if sources else VIDEO_SOURCES
+    return {
+        "title": video.title,
+        "url": video.url,
+        "video_id": video.video_id,
+        "source": video.source,
+        "source_name": source_map.get(video.source, {}).get("name", video.source),
+        "channel_name": video.channel_name,
+        "published": video.published_at.isoformat() + "Z" if video.published_at else None,
+        "thumbnail": video.thumbnail_url,
+        "description": video.description,
+    }
+
+
+async def get_videos_from_db() -> Dict[str, Any]:
+    """Get videos from database and format for API response."""
+    # Get sources from database for name mapping
+    db_sources = await get_video_sources_from_db()
+    sources_to_use = db_sources if db_sources else VIDEO_SOURCES
+
+    async with async_session_maker() as db:
+        videos = await get_videos_from_db_list(db, limit=100)
+
+    # Convert to API response format
+    video_items = [video_to_item(video, sources_to_use) for video in videos]
+
+    # Build sources list for UI
+    sources_list = [
+        {"id": sid, "name": cfg["name"], "website": cfg["website"], "description": cfg.get("description", "")}
+        for sid, cfg in sources_to_use.items()
+    ]
+
+    now = datetime.utcnow()
+    return {
+        "videos": video_items,
+        "sources": sources_list,
+        "cached_at": now.isoformat() + "Z",
+        "cache_expires_at": (now + timedelta(minutes=VIDEO_CACHE_CHECK_MINUTES)).isoformat() + "Z",
+        "total_items": len(video_items),
     }
 
 
@@ -525,14 +638,15 @@ async def fetch_youtube_videos(session: aiohttp.ClientSession, source_id: str, c
 
 
 async def fetch_all_videos() -> Dict[str, Any]:
-    """Fetch videos from all YouTube sources and merge with existing cache.
+    """Fetch videos from all YouTube sources and store in database.
 
     Strategy:
-    - Fetch fresh videos from all sources (from database)
-    - Merge with existing cached videos (new items at top, dedupe by URL)
-    - Prune videos older than 7 days
-    - Save merged cache
+    - Fetch fresh videos from all sources (from database config)
+    - Store new videos in database (deduplication by URL)
+    - Clean up old videos (older than 7 days)
+    - Also save to JSON cache for backward compatibility
     """
+    global _last_video_refresh
     fresh_items: List[VideoItem] = []
 
     # Get sources from database (fall back to hardcoded if DB is empty)
@@ -552,37 +666,44 @@ async def fetch_all_videos() -> Dict[str, Any]:
             elif isinstance(result, Exception):
                 logger.error(f"Video fetch task failed: {result}")
 
-    # Convert to dicts for merge
-    fresh_dicts = [item.model_dump() for item in fresh_items]
+    # Store new videos in database
+    new_count = 0
+    async with async_session_maker() as db:
+        for item in fresh_items:
+            video = await store_video_in_db(db, item)
+            if video:
+                new_count += 1
+        await db.commit()
 
-    # Load existing cache for merge (even if "expired")
+        # Clean up old videos
+        await cleanup_old_videos(db)
+
+    if new_count > 0:
+        logger.info(f"Stored {new_count} new videos in database")
+
+    # Also save to JSON cache for backward compatibility during migration
+    fresh_dicts = [item.model_dump() for item in fresh_items]
     existing_cache = load_video_cache(for_merge=True)
     existing_items = existing_cache.get("videos", []) if existing_cache else []
-
-    # Merge: add new items to existing, dedupe by URL
     merged_items = merge_news_items(existing_items, fresh_dicts)
-
-    # Prune videos older than 7 days
     merged_items = prune_old_items(merged_items)
 
-    # Build sources list for UI from sources used
     sources_list = [
         {"id": sid, "name": cfg["name"], "website": cfg["website"], "description": cfg.get("description", "")}
         for sid, cfg in sources_to_use.items()
     ]
 
-    now = datetime.now()
+    now = datetime.utcnow()
     cache_data = {
         "videos": merged_items,
         "sources": sources_list,
         "cached_at": now.isoformat(),
-        "cache_expires_at": (now + timedelta(minutes=NEWS_CACHE_CHECK_MINUTES)).isoformat(),
+        "cache_expires_at": (now + timedelta(minutes=VIDEO_CACHE_CHECK_MINUTES)).isoformat(),
         "total_items": len(merged_items),
     }
-
-    # Save to cache
     save_video_cache(cache_data)
 
+    _last_video_refresh = datetime.utcnow()
     return cache_data
 
 
@@ -794,52 +915,42 @@ async def get_news(force_refresh: bool = False):
     """
     Get crypto news from database cache.
 
-    News is fetched from multiple sources and stored in the database.
-    Checks for new content every 15 minutes, keeps articles for 7 days.
-    Use force_refresh=true to bypass cache timing and fetch fresh data.
+    News is fetched from multiple sources by background service and stored in database.
+    Returns immediately from database. Background refresh runs every 30 minutes.
+    Use force_refresh=true to trigger immediate refresh (runs in background).
     """
     global _last_news_refresh
 
-    # Determine if we need to refresh from sources
-    needs_refresh = force_refresh
-    if not needs_refresh and _last_news_refresh:
-        cache_age = datetime.utcnow() - _last_news_refresh
-        if cache_age > timedelta(minutes=NEWS_CACHE_CHECK_MINUTES):
-            needs_refresh = True
-            logger.info(f"News cache needs refresh (age: {cache_age})")
-    elif not _last_news_refresh:
-        # First request since server start - check if we have recent data
-        needs_refresh = True
+    # If force refresh requested, trigger background fetch
+    if force_refresh:
+        logger.info("Force refresh requested - triggering news fetch...")
+        asyncio.create_task(fetch_all_news())
 
-    # Fetch fresh news if needed
-    if needs_refresh:
-        logger.info("Fetching fresh news from all sources...")
-        try:
-            await fetch_all_news()
-        except Exception as e:
-            logger.error(f"Failed to fetch news: {e}")
-            # Continue to serve from database even if fetch fails
-
-    # Get news from database
+    # Try to serve from database first (fast path)
     try:
         data = await get_news_from_db()
         if data["news"]:
-            logger.info(f"Serving {len(data['news'])} news articles from database")
+            logger.debug(f"Serving {len(data['news'])} news articles from database")
             return NewsResponse(**data)
     except Exception as e:
         logger.error(f"Failed to get news from database: {e}")
 
-    # Fall back to old JSON cache if database is empty or fails
+    # Fall back to JSON cache if database is empty
     if CACHE_FILE.exists():
         try:
             with open(CACHE_FILE, "r") as f:
                 stale_cache = json.load(f)
-            logger.warning("Serving from JSON cache (database empty or failed)")
+            logger.info("Serving from JSON cache (database empty)")
             return NewsResponse(**stale_cache)
         except Exception:
             pass
 
-    raise HTTPException(status_code=503, detail="No news available")
+    # No data available yet - trigger initial fetch if not already running
+    if not _last_news_refresh:
+        logger.info("No news cache available - triggering initial fetch...")
+        asyncio.create_task(fetch_all_news())
+
+    raise HTTPException(status_code=503, detail="News not yet available - please try again shortly")
 
 
 @router.get("/sources")
@@ -900,37 +1011,40 @@ async def cleanup_cache():
 @router.get("/videos", response_model=VideoResponse)
 async def get_videos(force_refresh: bool = False):
     """
-    Get cached crypto video news from YouTube channels.
+    Get crypto video news from database cache.
 
-    Videos are fetched from reputable crypto YouTube channels and cached for 24 hours.
-    Use force_refresh=true to bypass cache and fetch fresh data.
+    Videos are fetched from YouTube channels by background service and stored in database.
+    Returns immediately from database. Background refresh runs every 60 minutes.
+    Use force_refresh=true to trigger immediate refresh (runs in background).
     """
-    # Try to load from cache first
-    if not force_refresh:
-        cache = load_video_cache()
-        if cache:
-            logger.info("Serving videos from cache")
-            return VideoResponse(**cache)
+    global _last_video_refresh
 
-    # Fetch fresh videos
-    logger.info("Fetching fresh videos from YouTube channels...")
+    # If force refresh requested, trigger background fetch
+    if force_refresh:
+        logger.info("Force refresh requested - triggering video fetch...")
+        asyncio.create_task(fetch_all_videos())
+
+    # Try to serve from database first (fast path)
     try:
-        data = await fetch_all_videos()
-        return VideoResponse(**data)
+        data = await get_videos_from_db()
+        if data["videos"]:
+            logger.debug(f"Serving {len(data['videos'])} videos from database")
+            return VideoResponse(**data)
     except Exception as e:
-        logger.error(f"Failed to fetch videos: {e}")
+        logger.error(f"Failed to get videos from database: {e}")
 
-        # Try to serve stale cache if available
-        if VIDEO_CACHE_FILE.exists():
-            try:
-                with open(VIDEO_CACHE_FILE, "r") as f:
-                    stale_cache = json.load(f)
-                logger.warning("Serving stale video cache due to fetch failure")
-                return VideoResponse(**stale_cache)
-            except Exception:
-                pass
+    # Fall back to JSON cache if database is empty
+    cache = load_video_cache()
+    if cache and cache.get("videos"):
+        logger.info("Serving videos from JSON cache (database empty)")
+        return VideoResponse(**cache)
 
-        raise HTTPException(status_code=503, detail="Unable to fetch videos")
+    # No data available yet - trigger initial fetch if not already running
+    if not _last_video_refresh:
+        logger.info("No video cache available - triggering initial fetch...")
+        asyncio.create_task(fetch_all_videos())
+
+    raise HTTPException(status_code=503, detail="Videos not yet available - please try again shortly")
 
 
 @router.get("/video-sources")
