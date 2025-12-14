@@ -198,16 +198,35 @@ async def get_all_sources_from_db() -> Dict[str, List[Dict]]:
 # =============================================================================
 
 
-async def get_articles_from_db(db: AsyncSession, limit: int = 100) -> List[NewsArticle]:
-    """Get recent news articles from database, sorted by published date."""
+async def get_articles_from_db(
+    db: AsyncSession, page: int = 1, page_size: int = 50
+) -> tuple[List[NewsArticle], int]:
+    """Get paginated news articles from database, sorted by published date.
+
+    Returns:
+        Tuple of (articles list, total count)
+    """
+    from sqlalchemy import func
+
     cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+
+    # Get total count
+    count_result = await db.execute(
+        select(func.count(NewsArticle.id))
+        .where(NewsArticle.published_at >= cutoff)
+    )
+    total_count = count_result.scalar() or 0
+
+    # Get paginated results
+    offset = (page - 1) * page_size
     result = await db.execute(
         select(NewsArticle)
         .where(NewsArticle.published_at >= cutoff)
         .order_by(desc(NewsArticle.published_at))
-        .limit(limit)
+        .offset(offset)
+        .limit(page_size)
     )
-    return list(result.scalars().all())
+    return list(result.scalars().all()), total_count
 
 
 async def store_article_in_db(
@@ -320,14 +339,13 @@ async def store_video_in_db(
     return video
 
 
-async def get_videos_from_db_list(db: AsyncSession, limit: int = 100) -> List[VideoArticle]:
-    """Get recent videos from database, sorted by published date."""
+async def get_videos_from_db_list(db: AsyncSession) -> List[VideoArticle]:
+    """Get all recent videos from database within max age, sorted by published date."""
     cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
     result = await db.execute(
         select(VideoArticle)
         .where(VideoArticle.published_at >= cutoff)
         .order_by(desc(VideoArticle.published_at))
-        .limit(limit)
     )
     return list(result.scalars().all())
 
@@ -369,7 +387,7 @@ async def get_videos_from_db() -> Dict[str, Any]:
     sources_to_use = db_sources if db_sources else VIDEO_SOURCES
 
     async with async_session_maker() as db:
-        videos = await get_videos_from_db_list(db, limit=100)
+        videos = await get_videos_from_db_list(db)
 
     # Convert to API response format
     video_items = [video_to_item(video, sources_to_use) for video in videos]
@@ -882,14 +900,16 @@ async def fetch_all_news() -> None:
     _last_news_refresh = datetime.utcnow()
 
 
-async def get_news_from_db() -> Dict[str, Any]:
-    """Get news articles from database and format for API response."""
+async def get_news_from_db(page: int = 1, page_size: int = 50) -> Dict[str, Any]:
+    """Get paginated news articles from database and format for API response."""
+    import math
+
     # Get sources from database for name mapping
     db_sources = await get_news_sources_from_db()
     sources_to_use = db_sources if db_sources else NEWS_SOURCES
 
     async with async_session_maker() as db:
-        articles = await get_articles_from_db(db, limit=100)
+        articles, total_count = await get_articles_from_db(db, page=page, page_size=page_size)
 
     # Convert to API response format (pass sources for name mapping)
     news_items = [article_to_news_item(article, sources_to_use) for article in articles]
@@ -900,26 +920,39 @@ async def get_news_from_db() -> Dict[str, Any]:
         for sid, cfg in sources_to_use.items()
     ]
 
+    total_pages = math.ceil(total_count / page_size) if total_count > 0 else 1
+
     now = datetime.utcnow()
     return {
         "news": news_items,
         "sources": sources_list,
         "cached_at": now.isoformat() + "Z",
         "cache_expires_at": (now + timedelta(minutes=NEWS_CACHE_CHECK_MINUTES)).isoformat() + "Z",
-        "total_items": len(news_items),
+        "total_items": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
     }
 
 
 @router.get("/", response_model=NewsResponse)
-async def get_news(force_refresh: bool = False):
+async def get_news(force_refresh: bool = False, page: int = 1, page_size: int = 50):
     """
-    Get crypto news from database cache.
+    Get crypto news from database cache with pagination.
 
     News is fetched from multiple sources by background service and stored in database.
     Returns immediately from database. Background refresh runs every 30 minutes.
     Use force_refresh=true to trigger immediate refresh (runs in background).
+
+    Query params:
+    - page: Page number (default: 1)
+    - page_size: Items per page (default: 50, max: 100)
     """
     global _last_news_refresh
+
+    # Clamp page_size to reasonable range
+    page_size = max(10, min(page_size, 100))
+    page = max(1, page)
 
     # If force refresh requested, trigger background fetch
     if force_refresh:
@@ -928,9 +961,9 @@ async def get_news(force_refresh: bool = False):
 
     # Try to serve from database first (fast path)
     try:
-        data = await get_news_from_db()
-        if data["news"]:
-            logger.debug(f"Serving {len(data['news'])} news articles from database")
+        data = await get_news_from_db(page=page, page_size=page_size)
+        if data["news"] or data["total_items"] > 0:
+            logger.debug(f"Serving page {page} with {len(data['news'])} news articles from database")
             return NewsResponse(**data)
     except Exception as e:
         logger.error(f"Failed to get news from database: {e}")

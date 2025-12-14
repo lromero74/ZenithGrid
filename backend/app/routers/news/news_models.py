@@ -32,12 +32,16 @@ class VideoItem(BaseModel):
 
 
 class NewsResponse(BaseModel):
-    """News API response"""
+    """News API response with pagination"""
     news: List[NewsItem]
     sources: List[Dict[str, str]]
     cached_at: str
     cache_expires_at: str
     total_items: int
+    # Pagination fields
+    page: int = 1
+    page_size: int = 50
+    total_pages: int = 1
 
 
 class VideoResponse(BaseModel):

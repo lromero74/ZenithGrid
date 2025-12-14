@@ -61,6 +61,9 @@ interface NewsResponse {
   cached_at: string
   cache_expires_at: string
   total_items: number
+  page: number
+  page_size: number
+  total_pages: number
 }
 
 interface VideoResponse {
@@ -88,6 +91,8 @@ export default function News() {
   const [selectedVideoSource, setSelectedVideoSource] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<TabType>('articles')
   const [showSourceSettings, setShowSourceSettings] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 50
   // Track which article is being previewed (null means none)
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
 
@@ -204,7 +209,7 @@ export default function News() {
     return () => clearInterval(interval)
   }, [])
 
-  // Fetch news articles
+  // Fetch news articles with pagination
   const {
     data: newsData,
     isLoading: newsLoading,
@@ -212,9 +217,9 @@ export default function News() {
     refetch: refetchNews,
     isFetching: newsFetching,
   } = useQuery<NewsResponse>({
-    queryKey: ['crypto-news'],
+    queryKey: ['crypto-news', currentPage],
     queryFn: async () => {
-      const response = await fetch('/api/news/')
+      const response = await fetch(`/api/news/?page=${currentPage}&page_size=${PAGE_SIZE}`)
       if (!response.ok) throw new Error('Failed to fetch news')
       return response.json()
     },
@@ -398,7 +403,7 @@ export default function News() {
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
             <button
-              onClick={() => setSelectedSource('all')}
+              onClick={() => { setSelectedSource('all'); setCurrentPage(1) }}
               className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                 selectedSource === 'all'
                   ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
@@ -412,7 +417,7 @@ export default function News() {
               return (
                 <button
                   key={source.id}
-                  onClick={() => setSelectedSource(source.id)}
+                  onClick={() => { setSelectedSource(source.id); setCurrentPage(1) }}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                     selectedSource === source.id
                       ? sourceColors[source.id] || 'bg-slate-600 text-white'
@@ -501,6 +506,61 @@ export default function News() {
               </div>
             ))}
           </div>
+
+          {/* Pagination controls */}
+          {newsData && newsData.total_pages > 1 && (
+            <div className="flex items-center justify-center space-x-4 py-6">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                Previous
+              </button>
+              <div className="flex items-center space-x-2">
+                {/* Show page numbers with ellipsis for large page counts */}
+                {Array.from({ length: newsData.total_pages }, (_, i) => i + 1)
+                  .filter(pageNum => {
+                    // Always show first, last, current, and neighbors
+                    if (pageNum === 1 || pageNum === newsData.total_pages) return true
+                    if (Math.abs(pageNum - currentPage) <= 1) return true
+                    return false
+                  })
+                  .map((pageNum, idx, arr) => (
+                    <span key={pageNum} className="flex items-center">
+                      {/* Add ellipsis if there's a gap */}
+                      {idx > 0 && arr[idx - 1] !== pageNum - 1 && (
+                        <span className="px-2 text-slate-500">...</span>
+                      )}
+                      <button
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-10 h-10 rounded-lg transition-colors ${
+                          currentPage === pageNum
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    </span>
+                  ))}
+              </div>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(newsData.total_pages, p + 1))}
+                disabled={currentPage === newsData.total_pages}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
+
+          {/* Page info */}
+          {newsData && newsData.total_items > 0 && (
+            <div className="text-center text-sm text-slate-500">
+              Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, newsData.total_items)} of {newsData.total_items} articles
+            </div>
+          )}
 
           {/* Empty state */}
           {filteredNews.length === 0 && (
