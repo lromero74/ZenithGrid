@@ -40,6 +40,10 @@ class IndicatorCalculator:
         """
         Calculate all required indicators from candle data
 
+        IMPORTANT: Indicators are calculated using CLOSED candles only.
+        The last candle in the list is assumed to be incomplete (current candle)
+        and is excluded from indicator calculations to avoid false signals.
+
         Args:
             candles: List of candle dictionaries with OHLCV data
             required_indicators: Set of indicator keys needed (e.g., {"rsi_14", "macd_12_26_9"})
@@ -48,21 +52,31 @@ class IndicatorCalculator:
 
         Returns:
             Dictionary of indicator values (includes prev_* keys if calculate_previous=True)
+            - "current" values are from the last CLOSED candle (candles[-2])
+            - "prev_*" values are from the second-to-last CLOSED candle (candles[-3])
         """
         if not candles:
             return {}
 
         indicators = {}
 
-        # Always include current price
+        # Always include live price from current (incomplete) candle for position calculations
         indicators["price"] = float(candles[-1]["close"])
         indicators["volume"] = float(candles[-1]["volume"])
 
-        # Extract price arrays
-        closes = [float(c["close"]) for c in candles]
-        highs = [float(c["high"]) for c in candles]
-        lows = [float(c["low"]) for c in candles]
-        _volumes = [float(c["volume"]) for c in candles]  # Reserved for future volume-based indicators
+        # Use only CLOSED candles for indicator calculations
+        # The last candle (candles[-1]) is incomplete/current, so exclude it
+        closed_candles = candles[:-1] if len(candles) > 1 else candles
+
+        if len(closed_candles) < 2:
+            # Not enough closed candles for meaningful indicator calculation
+            return indicators
+
+        # Extract price arrays from CLOSED candles only
+        closes = [float(c["close"]) for c in closed_candles]
+        highs = [float(c["high"]) for c in closed_candles]
+        lows = [float(c["low"]) for c in closed_candles]
+        _volumes = [float(c["volume"]) for c in closed_candles]  # Reserved for future volume-based indicators
 
         # Calculate indicators based on what's required
         for indicator_key in required_indicators:
@@ -122,9 +136,13 @@ class IndicatorCalculator:
                         indicators[f"stoch_k_{k_period}_{d_period}"] = k_value
                         indicators[f"stoch_d_{k_period}_{d_period}"] = d_value
 
-        # Calculate indicators for the previous candle if needed (for crossing detection)
-        if calculate_previous and len(candles) > 2:
-            # Recursively calculate indicators using candles[:-1] (excluding latest candle)
+        # Calculate indicators for the previous CLOSED candle (for crossing detection)
+        # We need at least 4 candles total: 3 closed + 1 incomplete
+        # This gives us 2 closed candles to compare (current closed vs previous closed)
+        if calculate_previous and len(candles) > 3:
+            # Recursively calculate indicators using candles[:-1]
+            # The recursive call will then use candles[:-1][:-1] = candles[:-2] for its closed_candles
+            # This gives us indicators from the SECOND-to-last closed candle
             prev_indicators = self.calculate_all_indicators(candles[:-1], required_indicators, calculate_previous=False)
             # Add prev_ prefix to all keys (including price for BB% crossing detection)
             for key, value in prev_indicators.items():
