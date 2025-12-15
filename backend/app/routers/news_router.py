@@ -284,8 +284,8 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
     """Convert a NewsArticle database object to a NewsItem dict for API response."""
     # Use provided sources for name mapping, fall back to hardcoded
     source_map = sources if sources else NEWS_SOURCES
-    # Always use URL for list view (much smaller response - no embedded base64)
-    thumbnail = article.original_thumbnail_url
+    # Prefer URL for performance (smaller response), fall back to base64 if no URL
+    thumbnail = article.original_thumbnail_url or article.image_data
     return {
         "title": article.title,
         "url": article.url,
@@ -770,6 +770,36 @@ async def fetch_reddit_news(session: aiohttp.ClientSession, source_id: str, conf
     return items
 
 
+async def fetch_og_image(session: aiohttp.ClientSession, url: str) -> Optional[str]:
+    """Fetch og:image meta tag from an article URL."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; ZenithGrid/1.0)",
+            "Accept": "text/html",
+        }
+        async with session.get(url, headers=headers, timeout=10) as response:
+            if response.status != 200:
+                return None
+            html = await response.text()
+            # Extract og:image meta tag
+            import re
+            match = re.search(
+                r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+                html,
+                re.IGNORECASE
+            )
+            if not match:
+                # Try alternate format: content before property
+                match = re.search(
+                    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+                    html,
+                    re.IGNORECASE
+                )
+            return match.group(1) if match else None
+    except Exception:
+        return None
+
+
 async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config: Dict) -> List[NewsItem]:
     """Fetch news from RSS feed"""
     items = []
@@ -837,6 +867,25 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
                     summary=summary,
                     thumbnail=thumbnail,
                 ))
+
+            # Fetch og:image for items without thumbnails (e.g., Blockworks)
+            items_needing_og = [(i, item) for i, item in enumerate(items) if not item.thumbnail and item.url]
+            if items_needing_og:
+                logger.info(f"Fetching og:image for {len(items_needing_og)} {source_id} articles without thumbnails")
+                og_tasks = [fetch_og_image(session, item.url) for _, item in items_needing_og]
+                og_results = await asyncio.gather(*og_tasks, return_exceptions=True)
+                for (idx, item), og_url in zip(items_needing_og, og_results):
+                    if isinstance(og_url, str) and og_url:
+                        items[idx] = NewsItem(
+                            title=item.title,
+                            url=item.url,
+                            source=item.source,
+                            source_name=item.source_name,
+                            published=item.published,
+                            summary=item.summary,
+                            thumbnail=og_url,
+                        )
+
     except asyncio.TimeoutError:
         logger.warning(f"Timeout fetching {source_id}")
     except Exception as e:
