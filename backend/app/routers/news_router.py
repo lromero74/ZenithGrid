@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import feedparser
 import trafilatura
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
@@ -284,8 +284,12 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
     """Convert a NewsArticle database object to a NewsItem dict for API response."""
     # Use provided sources for name mapping, fall back to hardcoded
     source_map = sources if sources else NEWS_SOURCES
-    # Prefer URL for performance (smaller response), fall back to base64 if no URL
-    thumbnail = article.original_thumbnail_url or article.image_data
+    # Use image proxy URL if we have cached image, otherwise fall back to original URL
+    # This keeps response small while serving cached images with proper cache headers
+    if article.image_data:
+        thumbnail = f"/api/news/image/{article.id}"
+    else:
+        thumbnail = article.original_thumbnail_url
     return {
         "title": article.title,
         "url": article.url,
@@ -1049,6 +1053,53 @@ async def get_sources():
         "note": "TikTok is not included as it lacks a public API for content. "
                 "These sources provide reliable crypto news via RSS feeds or public APIs."
     }
+
+
+@router.get("/image/{article_id}")
+async def get_article_image(article_id: int):
+    """
+    Serve cached article thumbnail image.
+
+    Returns the base64-decoded image with proper cache headers (7 days).
+    This allows small JSON responses while still serving cached images efficiently.
+    """
+    import base64
+
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(NewsArticle.image_data).where(NewsArticle.id == article_id)
+        )
+        row = result.first()
+
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    image_data = row[0]
+
+    # Parse the data URI: data:image/jpeg;base64,/9j/4AAQSkZJRgAB...
+    if image_data.startswith("data:"):
+        # Extract mime type and base64 data
+        header, b64_data = image_data.split(",", 1)
+        mime_type = header.split(":")[1].split(";")[0]
+    else:
+        # Assume it's raw base64 JPEG
+        b64_data = image_data
+        mime_type = "image/jpeg"
+
+    try:
+        image_bytes = base64.b64decode(b64_data)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Invalid image data")
+
+    # Return with 7-day cache headers
+    return Response(
+        content=image_bytes,
+        media_type=mime_type,
+        headers={
+            "Cache-Control": "public, max-age=604800",  # 7 days
+            "ETag": f'"{article_id}"',
+        }
+    )
 
 
 @router.get("/cache-stats")
