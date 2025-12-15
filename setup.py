@@ -1490,6 +1490,9 @@ Type=oneshot
 User={user}
 WorkingDirectory={project_root}/backend
 ExecStart={project_root}/backend/venv/bin/python {project_root}/backend/maintenance/cleanup_database.py
+
+[Install]
+WantedBy=multi-user.target
 """
 
     cleanup_timer = """[Unit]
