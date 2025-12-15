@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-Daily database cleanup script - removes old logs and vacuums the database.
+Daily database cleanup script - removes old data and vacuums the database.
 
 This script is designed to run as a scheduled job (via systemd timer) to prevent
-database bloat from accumulated log entries.
+database bloat from accumulated log entries and old news articles.
 
-Tables cleaned:
-- indicator_logs: Entries older than 1 day are deleted
-- ai_bot_logs: Entries older than 7 days are deleted
+Retention policies:
+- news_articles: 14 days (we share articles up to 14 days old)
+- video_articles: 14 days
+- signals: 7 days
+- scanner_logs: 7 days
+- ai_bot_logs: 7 days
+- indicator_logs: 7 days
 
 After deletion, VACUUM is run to reclaim disk space.
 
@@ -27,6 +31,10 @@ from datetime import datetime
 DEFAULT_DB_PATH = "/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/trading.db"
 DEFAULT_LOG_PATH = "/home/ec2-user/cleanup-database.log"
 
+# Retention periods in days
+NEWS_RETENTION_DAYS = 14
+LOGS_RETENTION_DAYS = 7
+
 
 def log(message: str, log_file: str) -> None:
     """Log message to both stdout and log file."""
@@ -37,54 +45,73 @@ def log(message: str, log_file: str) -> None:
         f.write(formatted + '\n')
 
 
-def get_db_size_mb(cursor) -> float:
-    """Get current database size in MB."""
-    cursor.execute('SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()')
-    return cursor.fetchone()[0] / 1024 / 1024
+def get_db_size_mb(db_path: str) -> float:
+    """Get database file size in MB."""
+    if os.path.exists(db_path):
+        return os.path.getsize(db_path) / (1024 * 1024)
+    return 0
+
+
+def cleanup_table(cursor, table: str, timestamp_col: str, days: int, log_file: str) -> int:
+    """Delete rows older than specified days. Returns count deleted."""
+    try:
+        cursor.execute(f"SELECT COUNT(*) FROM {table} WHERE {timestamp_col} < datetime('now', '-{days} days')")
+        count = cursor.fetchone()[0]
+
+        if count > 0:
+            cursor.execute(f"DELETE FROM {table} WHERE {timestamp_col} < datetime('now', '-{days} days')")
+            log(f'  {table}: deleted {count:,} rows older than {days} days', log_file)
+        else:
+            log(f'  {table}: no rows to delete', log_file)
+
+        return count
+    except sqlite3.OperationalError as e:
+        # Table might not exist in all installations
+        log(f'  {table}: skipped ({e})', log_file)
+        return 0
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Clean up old database logs')
+    parser = argparse.ArgumentParser(description='Clean up old database logs and news')
     parser.add_argument('--db-path', default=DEFAULT_DB_PATH, help='Path to SQLite database')
     parser.add_argument('--log-path', default=DEFAULT_LOG_PATH, help='Path to log file')
     args = parser.parse_args()
 
+    log('=' * 60, args.log_path)
     log('Starting database cleanup...', args.log_path)
+    log('=' * 60, args.log_path)
 
     if not os.path.exists(args.db_path):
         log(f'Database not found: {args.db_path}', args.log_path)
         return 1
 
+    size_before = get_db_size_mb(args.db_path)
+    log(f'Database size before: {size_before:.1f} MB', args.log_path)
+
     conn = sqlite3.connect(args.db_path)
     cursor = conn.cursor()
+    total_deleted = 0
 
     try:
-        # Delete old indicator logs (older than 1 day)
-        cursor.execute("SELECT COUNT(*) FROM indicator_logs WHERE timestamp < datetime('now', '-1 day')")
-        indicator_count = cursor.fetchone()[0]
-        cursor.execute("DELETE FROM indicator_logs WHERE timestamp < datetime('now', '-1 day')")
+        # News and videos - 14 day retention
+        log(f'Cleaning news/videos (>{NEWS_RETENTION_DAYS} days old):', args.log_path)
+        total_deleted += cleanup_table(cursor, 'news_articles', 'published_at', NEWS_RETENTION_DAYS, args.log_path)
+        total_deleted += cleanup_table(cursor, 'video_articles', 'published_at', NEWS_RETENTION_DAYS, args.log_path)
 
-        # Delete old ai_bot_logs (older than 7 days)
-        cursor.execute("SELECT COUNT(*) FROM ai_bot_logs WHERE timestamp < datetime('now', '-7 days')")
-        ai_log_count = cursor.fetchone()[0]
-        cursor.execute("DELETE FROM ai_bot_logs WHERE timestamp < datetime('now', '-7 days')")
+        # Logs - 7 day retention
+        log(f'Cleaning logs (>{LOGS_RETENTION_DAYS} days old):', args.log_path)
+        total_deleted += cleanup_table(cursor, 'signals', 'timestamp', LOGS_RETENTION_DAYS, args.log_path)
+        total_deleted += cleanup_table(cursor, 'scanner_logs', 'timestamp', LOGS_RETENTION_DAYS, args.log_path)
+        total_deleted += cleanup_table(cursor, 'ai_bot_logs', 'timestamp', LOGS_RETENTION_DAYS, args.log_path)
+        total_deleted += cleanup_table(cursor, 'indicator_logs', 'timestamp', LOGS_RETENTION_DAYS, args.log_path)
 
         conn.commit()
 
-        # Get size before vacuum
-        size_before = get_db_size_mb(cursor)
-
         # Vacuum to reclaim space
-        cursor.execute('VACUUM')
-
-        # Get size after vacuum
-        size_after = get_db_size_mb(cursor)
-
-        log(f'Deleted {indicator_count} indicator_logs, {ai_log_count} ai_bot_logs', args.log_path)
-        log(f'Database size: {size_before:.1f}MB -> {size_after:.1f}MB', args.log_path)
-        log('Cleanup complete', args.log_path)
-
-        return 0
+        if total_deleted > 0:
+            log('Running VACUUM to reclaim disk space...', args.log_path)
+            cursor.execute('VACUUM')
+            log('VACUUM complete', args.log_path)
 
     except Exception as e:
         log(f'Error during cleanup: {e}', args.log_path)
@@ -92,6 +119,19 @@ def main():
 
     finally:
         conn.close()
+
+    size_after = get_db_size_mb(args.db_path)
+    saved = size_before - size_after
+
+    log('=' * 60, args.log_path)
+    log('Cleanup Summary:', args.log_path)
+    log(f'  Total rows deleted: {total_deleted:,}', args.log_path)
+    log(f'  Size before: {size_before:.1f} MB', args.log_path)
+    log(f'  Size after:  {size_after:.1f} MB', args.log_path)
+    log(f'  Space saved: {saved:.1f} MB ({(saved/size_before*100) if size_before > 0 else 0:.1f}%)', args.log_path)
+    log('=' * 60, args.log_path)
+
+    return 0
 
 
 if __name__ == '__main__':
