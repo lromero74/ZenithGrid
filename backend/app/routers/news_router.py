@@ -776,6 +776,7 @@ async def fetch_reddit_news(session: aiohttp.ClientSession, source_id: str, conf
 
 async def fetch_og_image(session: aiohttp.ClientSession, url: str) -> Optional[str]:
     """Fetch og:image meta tag from an article URL."""
+    import html as html_module
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (compatible; ZenithGrid/1.0)",
@@ -784,22 +785,25 @@ async def fetch_og_image(session: aiohttp.ClientSession, url: str) -> Optional[s
         async with session.get(url, headers=headers, timeout=10) as response:
             if response.status != 200:
                 return None
-            html = await response.text()
+            html_content = await response.text()
             # Extract og:image meta tag
             import re
             match = re.search(
                 r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
-                html,
+                html_content,
                 re.IGNORECASE
             )
             if not match:
                 # Try alternate format: content before property
                 match = re.search(
                     r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
-                    html,
+                    html_content,
                     re.IGNORECASE
                 )
-            return match.group(1) if match else None
+            if match:
+                # Decode HTML entities (e.g., &amp; -> &)
+                return html_module.unescape(match.group(1))
+            return None
     except Exception:
         return None
 
