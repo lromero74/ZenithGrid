@@ -393,9 +393,6 @@ export function PnLChart({ accountId }: PnLChartProps) {
         borderColor: '#1e293b',
         fixLeftEdge: true,
         fixRightEdge: true,
-        rightBarStaysOnScroll: true,
-        barSpacing: 12,
-        minBarSpacing: 8,
       },
       rightPriceScale: {
         borderColor: '#1e293b',
