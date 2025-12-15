@@ -223,9 +223,11 @@ export function PnLChart({ accountId }: PnLChartProps) {
 
     const firstDataDate = new Date(sortedDates[0])
     const firstDate = new Date(Math.max(firstDataDate.getTime(), cutoffDate.getTime()))
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const lastDate = new Date(Math.max(new Date(sortedDates[sortedDates.length - 1]).getTime(), today.getTime()))
+    // Use UTC date string for today to match database date format (YYYY-MM-DD parsed as UTC)
+    const now = new Date()
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const todayUTC = new Date(todayStr)
+    const lastDate = new Date(Math.max(new Date(sortedDates[sortedDates.length - 1]).getTime(), todayUTC.getTime()))
 
     // Fill in all dates from first to last
     const filledData: DailyPnL[] = []
@@ -433,9 +435,11 @@ export function PnLChart({ accountId }: PnLChartProps) {
     if (sortedDates.length === 0) return
 
     const firstDate = new Date(sortedDates[0])
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const lastDate = new Date(Math.max(new Date(sortedDates[sortedDates.length - 1]).getTime(), today.getTime()))
+    // Use UTC date string for today to match database date format (YYYY-MM-DD parsed as UTC)
+    const now = new Date()
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const todayUTC = new Date(todayStr)
+    const lastDate = new Date(Math.max(new Date(sortedDates[sortedDates.length - 1]).getTime(), todayUTC.getTime()))
 
     // Fill in all dates from first to last (including days with no trades)
     const allDates: string[] = []
