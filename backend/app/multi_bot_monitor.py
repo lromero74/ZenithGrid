@@ -887,11 +887,13 @@ class MultiBotMonitor:
                 # If yes, use frozen config snapshot (like 3Commas)
                 # If no, use current bot config (will be frozen when position is created)
                 from sqlalchemy import desc, select
+                from sqlalchemy.orm import selectinload
 
                 from app.models import Position
 
                 query = (
                     select(Position)
+                    .options(selectinload(Position.trades))
                     .where(Position.bot_id == bot.id, Position.product_id == product_id, Position.status == "open")
                     .order_by(desc(Position.opened_at))
                 )
