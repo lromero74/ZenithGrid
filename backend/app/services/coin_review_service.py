@@ -210,7 +210,7 @@ async def _call_gemini(prompt: str) -> str:
         raise ValueError("GEMINI_API_KEY not configured")
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-pro")
+    model = genai.GenerativeModel("gemini-2.0-flash")
     response = await asyncio.to_thread(
         model.generate_content,
         prompt,
@@ -236,7 +236,7 @@ async def _call_grok(prompt: str) -> str:
         base_url="https://api.x.ai/v1"
     )
     response = await client.chat.completions.create(
-        model="grok-2-latest",
+        model="grok-3",
         max_tokens=8192,
         temperature=0,
         messages=[{"role": "user", "content": prompt}]

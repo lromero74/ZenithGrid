@@ -39,6 +39,25 @@ DEFAULT_AI_PROVIDER = "claude"
 AI_REVIEW_PROVIDER_KEY = "ai_review_provider"
 
 
+def get_configured_ai_providers() -> List[str]:
+    """Return only AI providers that have API keys configured."""
+    from app.config import settings as app_settings
+
+    configured = []
+    provider_keys = {
+        "claude": app_settings.anthropic_api_key,
+        "openai": app_settings.openai_api_key,
+        "gemini": app_settings.gemini_api_key,
+        "grok": app_settings.grok_api_key,
+    }
+
+    for provider, key in provider_keys.items():
+        if key:
+            configured.append(provider)
+
+    return configured
+
+
 # Pydantic schemas for blacklist operations
 class BlacklistEntry(BaseModel):
     """Response model for a blacklisted coin"""
@@ -199,12 +218,18 @@ async def get_ai_provider_setting(db: AsyncSession = Depends(get_db)):
     Get current AI provider for coin review.
 
     Returns which AI provider will be used for the AI coin review feature.
+    Only returns providers that have API keys configured.
     """
+    configured_providers = get_configured_ai_providers()
     provider = await get_ai_review_provider(db)
+
+    # If current provider isn't configured, default to first configured one
+    if provider not in configured_providers and configured_providers:
+        provider = configured_providers[0]
 
     return AIProviderSettingsResponse(
         provider=provider,
-        available_providers=VALID_AI_PROVIDERS,
+        available_providers=configured_providers,
     )
 
 
@@ -217,19 +242,21 @@ async def update_ai_provider_setting(
     """
     Update which AI provider to use for coin review.
 
-    Providers: claude, openai, gemini, grok
+    Only providers with configured API keys are available.
     Admin only.
     """
     # Admin check
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Validate provider
+    configured_providers = get_configured_ai_providers()
+
+    # Validate provider is configured
     provider = request.provider.lower()
-    if provider not in VALID_AI_PROVIDERS:
+    if provider not in configured_providers:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid provider: {provider}. Valid: {VALID_AI_PROVIDERS}"
+            detail=f"Provider '{provider}' is not configured. Available: {configured_providers}"
         )
 
     # Update or create setting
@@ -255,7 +282,7 @@ async def update_ai_provider_setting(
 
     return AIProviderSettingsResponse(
         provider=provider,
-        available_providers=VALID_AI_PROVIDERS,
+        available_providers=configured_providers,
     )
 
 
