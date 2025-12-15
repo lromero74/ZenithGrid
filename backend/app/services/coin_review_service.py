@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session_maker, init_db
-from app.models import Account, BlacklistedCoin, Settings
+from app.models import Account, BlacklistedCoin
 from app.coinbase_unified_client import CoinbaseClient
 from app.exchange_clients.factory import create_exchange_client
 
@@ -28,14 +28,30 @@ AI_REVIEW_PROVIDER_KEY = "ai_review_provider"
 
 
 async def get_ai_review_provider_from_db() -> str:
-    """Get configured AI provider for coin review from database."""
-    async with async_session_maker() as db:
-        query = select(Settings).where(Settings.key == AI_REVIEW_PROVIDER_KEY)
-        result = await db.execute(query)
-        setting = result.scalars().first()
+    """Get configured AI provider for coin review from database.
 
-        if setting and setting.value and setting.value.lower() in VALID_AI_PROVIDERS:
-            return setting.value.lower()
+    Uses synchronous SQLite query to avoid async context conflicts.
+    """
+    import sqlite3
+    import os
+
+    # Use sync query to avoid greenlet conflicts with FastAPI
+    db_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "trading.db"
+    )
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (AI_REVIEW_PROVIDER_KEY,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row and row[0] and row[0].lower() in VALID_AI_PROVIDERS:
+            return row[0].lower()
+    except Exception:
+        pass  # Fall through to defaults
 
     # Fall back to config setting, then default
     config_provider = getattr(settings, 'system_ai_provider', '').lower()
