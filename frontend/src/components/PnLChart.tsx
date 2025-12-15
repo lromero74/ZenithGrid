@@ -454,7 +454,11 @@ export function PnLChart({ accountId }: PnLChartProps) {
     // Use string-based date comparison to avoid timezone issues
     const todayStr = toDateStr(new Date())
     const firstDateStr = sortedDates[0]
-    const lastDateStr = sortedDates[sortedDates.length - 1] > todayStr ? sortedDates[sortedDates.length - 1] : todayStr
+    // Always show at least up to today, or later if data exists in the future
+    const lastDataDate = sortedDates[sortedDates.length - 1]
+    const lastDateStr = lastDataDate > todayStr ? lastDataDate : todayStr
+
+    console.log(`[PnLChart ${timeRange}] todayStr=${todayStr}, firstDateStr=${firstDateStr}, lastDataDate=${lastDataDate}, lastDateStr=${lastDateStr}`)
 
     // Fill in all dates from first to last (including days with no trades)
     const allDates: string[] = []
@@ -463,6 +467,7 @@ export function PnLChart({ accountId }: PnLChartProps) {
       allDates.push(currentDateStr)
       currentDateStr = addDays(currentDateStr, 1)
     }
+    console.log(`[PnLChart ${timeRange}] allDates count=${allDates.length}, first=${allDates[0]}, last=${allDates[allDates.length-1]}`)
 
     // Build chart data with all dates, using 0 profit for missing days
     let cumulativePnL = 0
