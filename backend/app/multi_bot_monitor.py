@@ -301,6 +301,27 @@ class MultiBotMonitor:
             else:
                 logger.info("Using sequential analysis mode")
                 # Original sequential processing logic
+
+                # Check capacity: filter to only pairs with positions when at max capacity
+                from app.models import Position
+                open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
+                open_pos_result = await db.execute(open_pos_query)
+                open_positions = list(open_pos_result.scalars().all())
+                open_count = len(open_positions)
+                max_concurrent_deals = bot.strategy_config.get("max_concurrent_deals", 1)
+
+                if open_count >= max_concurrent_deals:
+                    # At max capacity - only analyze pairs with open positions (for DCA/exit signals)
+                    pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+                    original_count = len(trading_pairs)
+                    trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
+                    logger.info(f"  📊 Bot at max capacity ({open_count}/{max_concurrent_deals} positions)")
+                    logger.info(f"  🎯 Analyzing only {len(trading_pairs)} pairs with open positions")
+                    if original_count > len(trading_pairs):
+                        logger.info(f"  ⏭️  Skipping {original_count - len(trading_pairs)} pairs without positions (no room for new entries)")
+                else:
+                    logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
+
                 # Process trading pairs in batches to avoid Coinbase API throttling
                 results = {}
                 batch_size = 5
@@ -1135,13 +1156,25 @@ class MultiBotMonitor:
 
             # Log indicator condition evaluations for non-AI indicator-based bots
             # Only log when conditions MATCH to reduce noise:
-            # - Entry (base_order): log only when entry conditions are met
-            # - DCA (safety_order): log only when we have a position AND DCA conditions are met
+            # - Entry (base_order): log only when entry conditions are met AND bot has capacity
+            # - DCA (safety_order): log only when we have a position AND DCA slots available AND DCA conditions are met
             # - Exit (take_profit): log only when we have a position AND exit conditions are met
             condition_details = signal_data.get("condition_details")
             if condition_details and not should_log_ai:
                 has_position = existing_position is not None
                 logged_any = False
+
+                # Check if position has DCA slots available (for safety_order logging)
+                dca_slots_available = False
+                if has_position and existing_position:
+                    # Get max safety orders from frozen config or current bot config
+                    config = existing_position.strategy_config_snapshot or bot.strategy_config or {}
+                    max_safety_orders = config.get("max_safety_orders", 5)
+                    # Count completed safety orders (buy trades - 1 for base order)
+                    buy_trades = [t for t in existing_position.trades if t.side == "buy"] if existing_position.trades else []
+                    safety_orders_completed = max(0, len(buy_trades) - 1)
+                    dca_slots_available = safety_orders_completed < max_safety_orders
+
                 # Log each phase that has conditions
                 for phase, details in condition_details.items():
                     if not details:  # Skip if no conditions for this phase
@@ -1156,6 +1189,9 @@ class MultiBotMonitor:
                         continue
                     # Skip Entry phase when we already have a position (can't enter twice)
                     if has_position and phase == "base_order":
+                        continue
+                    # Skip DCA phase when no DCA slots available
+                    if phase == "safety_order" and not dca_slots_available:
                         continue
                     await log_indicator_evaluation(
                         db=db,
