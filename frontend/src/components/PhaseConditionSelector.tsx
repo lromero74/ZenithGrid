@@ -15,7 +15,7 @@ export type ConditionType =
   | 'ai_sell'
   | 'bull_flag'
 
-export type Operator = 'greater_than' | 'less_than' | 'crossing_above' | 'crossing_below'
+export type Operator = 'greater_than' | 'less_than' | 'greater_equal' | 'less_equal' | 'crossing_above' | 'crossing_below'
 
 export type Timeframe =
   | 'ONE_MINUTE'
@@ -111,6 +111,8 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
 const OPERATORS: Record<Operator, string> = {
   greater_than: '>',
   less_than: '<',
+  greater_equal: '≥',
+  less_equal: '≤',
   crossing_above: 'Crossing Above',
   crossing_below: 'Crossing Below',
 }
@@ -251,7 +253,9 @@ function PhaseConditionSelector({
                 className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
               >
                 <option value="greater_than">&gt;</option>
+                <option value="greater_equal">≥</option>
                 <option value="less_than">&lt;</option>
+                <option value="less_equal">≤</option>
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
               </select>
@@ -322,7 +326,9 @@ function PhaseConditionSelector({
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
                 <option value="greater_than">&gt;</option>
+                <option value="greater_equal">≥</option>
                 <option value="less_than">&lt;</option>
+                <option value="less_equal">≤</option>
               </select>
               <input
                 type="number"
@@ -370,7 +376,9 @@ function PhaseConditionSelector({
                 className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
               >
                 <option value="greater_than">&gt;</option>
+                <option value="greater_equal">≥</option>
                 <option value="less_than">&lt;</option>
+                <option value="less_equal">≤</option>
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
               </select>
@@ -443,7 +451,9 @@ function PhaseConditionSelector({
                 className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
               >
                 <option value="greater_than">&gt;</option>
+                <option value="greater_equal">≥</option>
                 <option value="less_than">&lt;</option>
+                <option value="less_equal">≤</option>
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
               </select>
@@ -470,7 +480,9 @@ function PhaseConditionSelector({
               className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
             >
               <option value="greater_than">&gt;</option>
+              <option value="greater_equal">≥</option>
               <option value="less_than">&lt;</option>
+              <option value="less_equal">≤</option>
               <option value="crossing_above">Crossing Above</option>
               <option value="crossing_below">Crossing Below</option>
             </select>
@@ -495,7 +507,9 @@ function PhaseConditionSelector({
               className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
             >
               <option value="greater_than">&gt;</option>
+              <option value="greater_equal">≥</option>
               <option value="less_than">&lt;</option>
+              <option value="less_equal">≤</option>
               <option value="crossing_above">Crossing Above</option>
               <option value="crossing_below">Crossing Below</option>
             </select>
