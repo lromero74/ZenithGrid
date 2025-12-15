@@ -33,6 +33,11 @@ DEFAULT_ALLOWED_CATEGORIES = ["APPROVED"]
 # Settings key for storing allowed categories
 ALLOWED_CATEGORIES_KEY = "allowed_coin_categories"
 
+# AI Provider settings
+VALID_AI_PROVIDERS = ["claude", "openai", "gemini", "grok"]
+DEFAULT_AI_PROVIDER = "claude"
+AI_REVIEW_PROVIDER_KEY = "ai_review_provider"
+
 
 # Pydantic schemas for blacklist operations
 class BlacklistEntry(BaseModel):
@@ -98,6 +103,18 @@ async def get_allowed_categories(db: AsyncSession) -> List[str]:
     return DEFAULT_ALLOWED_CATEGORIES
 
 
+async def get_ai_review_provider(db: AsyncSession) -> str:
+    """Get configured AI provider for coin review from database."""
+    query = select(Settings).where(Settings.key == AI_REVIEW_PROVIDER_KEY)
+    result = await db.execute(query)
+    setting = result.scalars().first()
+
+    if setting and setting.value and setting.value.lower() in VALID_AI_PROVIDERS:
+        return setting.value.lower()
+
+    return DEFAULT_AI_PROVIDER
+
+
 @router.get("/categories", response_model=CategorySettingsResponse)
 async def get_category_settings(db: AsyncSession = Depends(get_db)):
     """
@@ -158,6 +175,87 @@ async def update_category_settings(
     return CategorySettingsResponse(
         allowed_categories=allowed,
         all_categories=VALID_CATEGORIES,
+    )
+
+
+# ============================================================================
+# AI Provider Settings for Coin Review
+# ============================================================================
+
+class AIProviderSettingsRequest(BaseModel):
+    """Request model for updating AI review provider"""
+    provider: str
+
+
+class AIProviderSettingsResponse(BaseModel):
+    """Response model for AI provider settings"""
+    provider: str
+    available_providers: List[str] = VALID_AI_PROVIDERS
+
+
+@router.get("/ai-provider", response_model=AIProviderSettingsResponse)
+async def get_ai_provider_setting(db: AsyncSession = Depends(get_db)):
+    """
+    Get current AI provider for coin review.
+
+    Returns which AI provider will be used for the AI coin review feature.
+    """
+    provider = await get_ai_review_provider(db)
+
+    return AIProviderSettingsResponse(
+        provider=provider,
+        available_providers=VALID_AI_PROVIDERS,
+    )
+
+
+@router.put("/ai-provider", response_model=AIProviderSettingsResponse)
+async def update_ai_provider_setting(
+    request: AIProviderSettingsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update which AI provider to use for coin review.
+
+    Providers: claude, openai, gemini, grok
+    Admin only.
+    """
+    # Admin check
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Validate provider
+    provider = request.provider.lower()
+    if provider not in VALID_AI_PROVIDERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid provider: {provider}. Valid: {VALID_AI_PROVIDERS}"
+        )
+
+    # Update or create setting
+    query = select(Settings).where(Settings.key == AI_REVIEW_PROVIDER_KEY)
+    result = await db.execute(query)
+    setting = result.scalars().first()
+
+    if setting:
+        setting.value = provider
+        setting.value_type = "string"
+    else:
+        setting = Settings(
+            key=AI_REVIEW_PROVIDER_KEY,
+            value=provider,
+            value_type="string",
+            description="AI provider for coin review (claude, openai, gemini, grok)"
+        )
+        db.add(setting)
+
+    await db.commit()
+
+    logger.info(f"Updated AI review provider: {provider}")
+
+    return AIProviderSettingsResponse(
+        provider=provider,
+        available_providers=VALID_AI_PROVIDERS,
     )
 
 

@@ -264,7 +264,17 @@ export const blacklistApi = {
   // AI review (uses longer timeout as it processes 300+ coins in batches)
   triggerAIReview: () =>
     api.post<{ status: string; categories: Record<string, number> }>('/blacklist/ai-review', {}, { timeout: 180000 }).then((res) => res.data),
+  // AI provider settings for coin review
+  getAIProvider: () =>
+    api.get<AIProviderSettings>('/blacklist/ai-provider').then((res) => res.data),
+  updateAIProvider: (provider: string) =>
+    api.put<AIProviderSettings>('/blacklist/ai-provider', { provider }).then((res) => res.data),
 };
+
+export interface AIProviderSettings {
+  provider: string;
+  available_providers: string[];
+}
 
 // AI Provider Credentials
 export interface AIProviderStatus {

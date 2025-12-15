@@ -15,11 +15,35 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session_maker, init_db
-from app.models import Account, BlacklistedCoin
+from app.models import Account, BlacklistedCoin, Settings
 from app.coinbase_unified_client import CoinbaseClient
 from app.exchange_clients.factory import create_exchange_client
 
 logger = logging.getLogger(__name__)
+
+# AI Provider constants
+VALID_AI_PROVIDERS = ["claude", "openai", "gemini", "grok"]
+DEFAULT_AI_PROVIDER = "claude"
+AI_REVIEW_PROVIDER_KEY = "ai_review_provider"
+
+
+async def get_ai_review_provider_from_db() -> str:
+    """Get configured AI provider for coin review from database."""
+    async with async_session_maker() as db:
+        query = select(Settings).where(Settings.key == AI_REVIEW_PROVIDER_KEY)
+        result = await db.execute(query)
+        setting = result.scalars().first()
+
+        if setting and setting.value and setting.value.lower() in VALID_AI_PROVIDERS:
+            return setting.value.lower()
+
+    # Fall back to config setting, then default
+    config_provider = getattr(settings, 'system_ai_provider', '').lower()
+    if config_provider in VALID_AI_PROVIDERS:
+        return config_provider
+
+    return DEFAULT_AI_PROVIDER
+
 
 # Review history table would be nice but for now we'll just log
 COIN_REVIEW_PROMPT = """You are a cryptocurrency analyst evaluating coins for a trading bot.
@@ -210,7 +234,7 @@ async def _call_grok(prompt: str) -> str:
 
 async def call_ai_for_review(coins: List[str], batch_size: int = 50) -> Dict[str, Dict[str, str]]:
     """Call configured AI provider to analyze coins in batches."""
-    provider = settings.system_ai_provider.lower()
+    provider = await get_ai_review_provider_from_db()
 
     # Map provider to call function
     provider_funcs = {

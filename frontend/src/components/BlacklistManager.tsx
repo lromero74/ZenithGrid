@@ -24,7 +24,7 @@ import {
   ChevronDown,
   Coins,
 } from 'lucide-react'
-import { blacklistApi, BlacklistEntry, marketDataApi, CategorySettings } from '../services/api'
+import { blacklistApi, BlacklistEntry, marketDataApi, CategorySettings, AIProviderSettings } from '../services/api'
 import CoinIcon from './CoinIcon'
 
 // Category display config
@@ -57,6 +57,8 @@ export function BlacklistManager() {
 
   // AI Review
   const [runningAIReview, setRunningAIReview] = useState(false)
+  const [aiProviderSettings, setAIProviderSettings] = useState<AIProviderSettings | null>(null)
+  const [savingAIProvider, setSavingAIProvider] = useState(false)
 
   // Filter
   const [searchFilter, setSearchFilter] = useState('')
@@ -75,15 +77,17 @@ export function BlacklistManager() {
     setError(null)
 
     try {
-      const [blacklist, coinsData, categories] = await Promise.all([
+      const [blacklist, coinsData, categories, aiProvider] = await Promise.all([
         blacklistApi.getAll(),
         marketDataApi.getCoins(),
         blacklistApi.getCategories(),
+        blacklistApi.getAIProvider(),
       ])
 
       setBlacklistedCoins(blacklist)
       setCategorySettings(categories)
       setAllCoins(coinsData.coins)
+      setAIProviderSettings(aiProvider)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
     } finally {
@@ -261,6 +265,23 @@ export function BlacklistManager() {
     }
   }
 
+  // Update AI provider
+  const updateAIProvider = async (provider: string) => {
+    if (savingAIProvider) return
+
+    setSavingAIProvider(true)
+    setError(null)
+
+    try {
+      const updated = await blacklistApi.updateAIProvider(provider)
+      setAIProviderSettings(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update AI provider')
+    } finally {
+      setSavingAIProvider(false)
+    }
+  }
+
   // Trigger AI review
   const triggerAIReview = async () => {
     if (runningAIReview) return
@@ -319,15 +340,33 @@ export function BlacklistManager() {
               <h4 className="font-medium text-white text-sm">Category Trading Permissions</h4>
               <p className="text-xs text-slate-400">Select which categories are allowed to open new positions</p>
             </div>
-            <button
-              onClick={triggerAIReview}
-              disabled={runningAIReview}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
-              title="Run AI to re-categorize all coins"
-            >
-              <Sparkles className={`w-4 h-4 ${runningAIReview ? 'animate-pulse' : ''}`} />
-              {runningAIReview ? 'Reviewing...' : 'AI Review'}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* AI Provider Selector */}
+              {aiProviderSettings && (
+                <select
+                  value={aiProviderSettings.provider}
+                  onChange={(e) => updateAIProvider(e.target.value)}
+                  disabled={savingAIProvider || runningAIReview}
+                  className="px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                  title="Select AI provider for coin review"
+                >
+                  {aiProviderSettings.available_providers.map((provider) => (
+                    <option key={provider} value={provider}>
+                      {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                onClick={triggerAIReview}
+                disabled={runningAIReview}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
+                title="Run AI to re-categorize all coins"
+              >
+                <Sparkles className={`w-4 h-4 ${runningAIReview ? 'animate-pulse' : ''}`} />
+                {runningAIReview ? 'Reviewing...' : 'AI Review'}
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
