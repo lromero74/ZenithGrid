@@ -120,9 +120,9 @@ export default function CoinIcon({ symbol, size = 'sm', className = '' }: CoinIc
   // Normalize symbol (remove any whitespace, convert to uppercase)
   const normalizedSymbol = symbol?.trim().toUpperCase() || ''
 
-  // CoinCap API endpoint for coin images (free, no API key needed)
-  // Note: COIN_ID_MAP is kept for potential future CoinGecko API integration
-  const imageUrl = `https://assets.coincap.io/assets/icons/${normalizedSymbol.toLowerCase()}@2x.png`
+  // Use our backend proxy to avoid CORS issues with external coin icon APIs
+  // Icons are cached on the backend for fast subsequent requests
+  const imageUrl = `/api/coin-icons/${normalizedSymbol.toLowerCase()}`
 
   const sizeClass = SIZE_CLASSES[size]
 
