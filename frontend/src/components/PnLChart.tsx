@@ -104,7 +104,7 @@ export function PnLChart({ accountId }: PnLChartProps) {
     const now = new Date()
     const dataSpanDays = Math.ceil((now.getTime() - earliestDate.getTime()) / (1000 * 60 * 60 * 24))
 
-    // Time range thresholds in days
+    // Time range thresholds in days (ordered smallest to largest)
     const thresholds: { range: TimeRange; days: number }[] = [
       { range: '7d', days: 7 },
       { range: '30d', days: 30 },
@@ -113,10 +113,19 @@ export function PnLChart({ accountId }: PnLChartProps) {
       { range: '1y', days: 365 },
     ]
 
-    // Enable buttons only if the time range would show less than the full data
-    // (i.e., clicking it would actually filter something)
+    // Find the first threshold that covers all data
+    let firstCoveringDays = Infinity
+    for (const { days } of thresholds) {
+      if (days >= dataSpanDays) {
+        firstCoveringDays = days
+        break
+      }
+    }
+
+    // Enable all buttons up to and including the first one that shows all data
+    // Disable buttons beyond that (they'd show the same as the covering one)
     for (const { range, days } of thresholds) {
-      if (dataSpanDays > days) {
+      if (days <= firstCoveringDays) {
         enabled.add(range)
       }
     }
