@@ -284,8 +284,8 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
     """Convert a NewsArticle database object to a NewsItem dict for API response."""
     # Use provided sources for name mapping, fall back to hardcoded
     source_map = sources if sources else NEWS_SOURCES
-    # Use base64 image data if available, otherwise fall back to original URL
-    thumbnail = article.image_data or article.original_thumbnail_url
+    # Always use URL for list view (much smaller response - no embedded base64)
+    thumbnail = article.original_thumbnail_url
     return {
         "title": article.title,
         "url": article.url,
