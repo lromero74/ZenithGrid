@@ -680,7 +680,7 @@ export function PnLChart({ accountId }: PnLChartProps) {
           </div>
 
           {/* Chart Container */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-[300px]">
         {activeTab === 'by_day' ? (
           // Daily P&L bar chart - uses filled data to show all dates including days with no trades
           <ResponsiveContainer width="100%" height="100%">
