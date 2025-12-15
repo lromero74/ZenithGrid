@@ -40,7 +40,7 @@ interface PnLTimeSeriesData {
   most_profitable_bot: MostProfitableBot | null
 }
 
-type TimeRange = '7d' | '30d' | '3m' | '6m' | 'all'
+type TimeRange = '7d' | '30d' | '3m' | '6m' | '1y' | 'all'
 type TabType = 'summary' | 'by_day' | 'by_pair'
 
 interface PnLChartProps {
@@ -110,6 +110,9 @@ export function PnLChart({ accountId }: PnLChartProps) {
       case '6m':
         cutoffDate.setMonth(now.getMonth() - 6)
         break
+      case '1y':
+        cutoffDate.setFullYear(now.getFullYear() - 1)
+        break
       case 'all':
         return activeTab === 'summary' ? data.summary : activeTab === 'by_day' ? data.by_day : []
     }
@@ -147,6 +150,9 @@ export function PnLChart({ accountId }: PnLChartProps) {
         break
       case '6m':
         cutoffDate.setMonth(now.getMonth() - 6)
+        break
+      case '1y':
+        cutoffDate.setFullYear(now.getFullYear() - 1)
         break
       case 'all':
         cutoffDate.setTime(0)
@@ -489,6 +495,16 @@ export function PnLChart({ accountId }: PnLChartProps) {
             }`}
           >
             6 months
+          </button>
+          <button
+            onClick={() => setTimeRange('1y')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              timeRange === '1y'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            1 year
           </button>
         </div>
       </div>
