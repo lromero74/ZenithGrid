@@ -90,6 +90,42 @@ export function PnLChart({ accountId }: PnLChartProps) {
     refetchInterval: 60000, // Refresh every minute
   })
 
+  // Calculate which time range buttons should be enabled based on data span
+  const getEnabledTimeRanges = (): Set<TimeRange> => {
+    const enabled = new Set<TimeRange>(['all']) // 'all' is always enabled
+
+    if (!data || data.summary.length === 0) {
+      return enabled
+    }
+
+    // Find the earliest date in the data
+    const dates = data.summary.map(d => new Date(d.date).getTime())
+    const earliestDate = new Date(Math.min(...dates))
+    const now = new Date()
+    const dataSpanDays = Math.ceil((now.getTime() - earliestDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    // Time range thresholds in days
+    const thresholds: { range: TimeRange; days: number }[] = [
+      { range: '7d', days: 7 },
+      { range: '30d', days: 30 },
+      { range: '3m', days: 90 },
+      { range: '6m', days: 180 },
+      { range: '1y', days: 365 },
+    ]
+
+    // Enable buttons only if the time range would show less than the full data
+    // (i.e., clicking it would actually filter something)
+    for (const { range, days } of thresholds) {
+      if (dataSpanDays > days) {
+        enabled.add(range)
+      }
+    }
+
+    return enabled
+  }
+
+  const enabledTimeRanges = getEnabledTimeRanges()
+
   // Filter data by time range
   const getFilteredData = () => {
     if (!data) return []
@@ -458,50 +494,65 @@ export function PnLChart({ accountId }: PnLChartProps) {
           </button>
           <button
             onClick={() => setTimeRange('7d')}
+            disabled={!enabledTimeRanges.has('7d')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              timeRange === '7d'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              !enabledTimeRanges.has('7d')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '7d'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
             }`}
           >
             7 days
           </button>
           <button
             onClick={() => setTimeRange('30d')}
+            disabled={!enabledTimeRanges.has('30d')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              timeRange === '30d'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              !enabledTimeRanges.has('30d')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '30d'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
             }`}
           >
             30 days
           </button>
           <button
             onClick={() => setTimeRange('3m')}
+            disabled={!enabledTimeRanges.has('3m')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              timeRange === '3m'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              !enabledTimeRanges.has('3m')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '3m'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
             }`}
           >
             3 months
           </button>
           <button
             onClick={() => setTimeRange('6m')}
+            disabled={!enabledTimeRanges.has('6m')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              timeRange === '6m'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              !enabledTimeRanges.has('6m')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '6m'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
             }`}
           >
             6 months
           </button>
           <button
             onClick={() => setTimeRange('1y')}
+            disabled={!enabledTimeRanges.has('1y')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              timeRange === '1y'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              !enabledTimeRanges.has('1y')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '1y'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
             }`}
           >
             1 year
