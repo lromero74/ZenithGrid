@@ -180,34 +180,56 @@ export function PnLChart({ accountId }: PnLChartProps) {
     return []
   }
 
+  // Helper to get YYYY-MM-DD string from a Date (using local date)
+  const toDateStr = (d: Date): string => {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  // Helper to add days to a YYYY-MM-DD string
+  const addDays = (dateStr: string, days: number): string => {
+    const d = new Date(dateStr + 'T12:00:00Z') // Use noon UTC to avoid DST issues
+    d.setUTCDate(d.getUTCDate() + days)
+    return d.toISOString().split('T')[0]
+  }
+
   // Get by_day data with all dates filled in (no gaps)
   const getFilledByDayData = (): DailyPnL[] => {
     if (!data || data.by_day.length === 0) return []
 
-    // First apply time range filter
+    // Get today's date as YYYY-MM-DD string (local date)
+    const todayStr = toDateStr(new Date())
+
+    // Calculate cutoff date string based on time range
+    let cutoffStr: string
     const now = new Date()
-    const cutoffDate = new Date()
     switch (timeRange) {
       case '7d':
-        cutoffDate.setDate(now.getDate() - 7)
+        now.setDate(now.getDate() - 7)
+        cutoffStr = toDateStr(now)
         break
       case '14d':
-        cutoffDate.setDate(now.getDate() - 14)
+        now.setDate(now.getDate() - 14)
+        cutoffStr = toDateStr(now)
         break
       case '30d':
-        cutoffDate.setDate(now.getDate() - 30)
+        now.setDate(now.getDate() - 30)
+        cutoffStr = toDateStr(now)
         break
       case '3m':
-        cutoffDate.setMonth(now.getMonth() - 3)
+        now.setMonth(now.getMonth() - 3)
+        cutoffStr = toDateStr(now)
         break
       case '6m':
-        cutoffDate.setMonth(now.getMonth() - 6)
+        now.setMonth(now.getMonth() - 6)
+        cutoffStr = toDateStr(now)
         break
       case '1y':
-        cutoffDate.setFullYear(now.getFullYear() - 1)
+        now.setFullYear(now.getFullYear() - 1)
+        cutoffStr = toDateStr(now)
         break
       case 'all':
-        cutoffDate.setTime(0)
+      default:
+        cutoffStr = '1970-01-01'
         break
     }
 
@@ -221,44 +243,39 @@ export function PnLChart({ accountId }: PnLChartProps) {
     const sortedDates = data.by_day.map(d => d.date).sort()
     if (sortedDates.length === 0) return []
 
-    const firstDataDate = new Date(sortedDates[0])
-    const firstDate = new Date(Math.max(firstDataDate.getTime(), cutoffDate.getTime()))
-    // Use UTC date string for today to match database date format (YYYY-MM-DD parsed as UTC)
-    const now = new Date()
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    const todayUTC = new Date(todayStr)
-    const lastDate = new Date(Math.max(new Date(sortedDates[sortedDates.length - 1]).getTime(), todayUTC.getTime()))
+    // Use string comparison for dates (YYYY-MM-DD format sorts correctly)
+    const firstDateStr = sortedDates[0] > cutoffStr ? sortedDates[0] : cutoffStr
+    const lastDateStr = sortedDates[sortedDates.length - 1] > todayStr ? sortedDates[sortedDates.length - 1] : todayStr
 
     // Fill in all dates from first to last
     const filledData: DailyPnL[] = []
-    const currentDate = new Date(firstDate)
+    let currentDateStr = firstDateStr
     let runningCumulativePnL = 0
 
     // Find cumulative PnL up to cutoff if not starting from beginning
     if (timeRange !== 'all') {
       for (const day of data.by_day) {
-        if (new Date(day.date) < cutoffDate) {
+        if (day.date < cutoffStr) {
           runningCumulativePnL = day.cumulative_pnl
         }
       }
     }
 
-    while (currentDate <= lastDate) {
-      const dateStr = currentDate.toISOString().split('T')[0]
-      const existingData = dailyMap.get(dateStr)
+    while (currentDateStr <= lastDateStr) {
+      const existingData = dailyMap.get(currentDateStr)
 
-      if (existingData && new Date(existingData.date) >= cutoffDate) {
+      if (existingData && existingData.date >= cutoffStr) {
         runningCumulativePnL = existingData.cumulative_pnl
         filledData.push(existingData)
       } else {
         // No trade on this day - show 0 daily PnL, maintain cumulative
         filledData.push({
-          date: dateStr,
+          date: currentDateStr,
           daily_pnl: 0,
           cumulative_pnl: runningCumulativePnL
         })
       }
-      currentDate.setDate(currentDate.getDate() + 1)
+      currentDateStr = addDays(currentDateStr, 1)
     }
 
     return filledData
@@ -434,19 +451,17 @@ export function PnLChart({ accountId }: PnLChartProps) {
     const sortedDates = Array.from(dailyProfits.keys()).sort()
     if (sortedDates.length === 0) return
 
-    const firstDate = new Date(sortedDates[0])
-    // Use UTC date string for today to match database date format (YYYY-MM-DD parsed as UTC)
-    const now = new Date()
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    const todayUTC = new Date(todayStr)
-    const lastDate = new Date(Math.max(new Date(sortedDates[sortedDates.length - 1]).getTime(), todayUTC.getTime()))
+    // Use string-based date comparison to avoid timezone issues
+    const todayStr = toDateStr(new Date())
+    const firstDateStr = sortedDates[0]
+    const lastDateStr = sortedDates[sortedDates.length - 1] > todayStr ? sortedDates[sortedDates.length - 1] : todayStr
 
     // Fill in all dates from first to last (including days with no trades)
     const allDates: string[] = []
-    const currentDate = new Date(firstDate)
-    while (currentDate <= lastDate) {
-      allDates.push(currentDate.toISOString().split('T')[0])
-      currentDate.setDate(currentDate.getDate() + 1)
+    let currentDateStr = firstDateStr
+    while (currentDateStr <= lastDateStr) {
+      allDates.push(currentDateStr)
+      currentDateStr = addDays(currentDateStr, 1)
     }
 
     // Build chart data with all dates, using 0 profit for missing days
