@@ -209,7 +209,7 @@ export default function News() {
     return () => clearInterval(interval)
   }, [])
 
-  // Fetch news articles with pagination
+  // Fetch ALL news articles once (client-side pagination for instant page changes)
   const {
     data: newsData,
     isLoading: newsLoading,
@@ -217,9 +217,10 @@ export default function News() {
     refetch: refetchNews,
     isFetching: newsFetching,
   } = useQuery<NewsResponse>({
-    queryKey: ['crypto-news', currentPage],
+    queryKey: ['crypto-news'],
     queryFn: async () => {
-      const response = await fetch(`/api/news/?page=${currentPage}&page_size=${PAGE_SIZE}`)
+      // Fetch all articles (large page_size), paginate client-side for instant transitions
+      const response = await fetch('/api/news/?page=1&page_size=1000')
       if (!response.ok) throw new Error('Failed to fetch news')
       return response.json()
     },
@@ -262,6 +263,21 @@ export default function News() {
     selectedSource === 'all'
       ? newsData?.news || []
       : newsData?.news.filter((item) => item.source === selectedSource) || []
+
+  // Client-side pagination - slice filtered news for current page (instant page changes)
+  const totalFilteredItems = filteredNews.length
+  const totalPages = Math.ceil(totalFilteredItems / PAGE_SIZE) || 1
+  const paginatedNews = filteredNews.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  )
+
+  // Reset to page 1 if current page is out of bounds (e.g., after filtering)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [currentPage, totalPages])
 
   // Filter videos by selected source
   const filteredVideos =
@@ -432,7 +448,7 @@ export default function News() {
 
           {/* News grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredNews.map((item, index) => (
+            {paginatedNews.map((item, index) => (
               <div
                 key={`${item.source}-${index}`}
                 className="group bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-slate-900/50"
@@ -507,8 +523,8 @@ export default function News() {
             ))}
           </div>
 
-          {/* Pagination controls */}
-          {newsData && newsData.total_pages > 1 && (
+          {/* Pagination controls (client-side - instant page changes) */}
+          {totalPages > 1 && (
             <div className="flex items-center justify-center space-x-4 py-6">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -519,10 +535,10 @@ export default function News() {
               </button>
               <div className="flex items-center space-x-2">
                 {/* Show page numbers with ellipsis for large page counts */}
-                {Array.from({ length: newsData.total_pages }, (_, i) => i + 1)
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
                   .filter(pageNum => {
                     // Always show first, last, current, and neighbors
-                    if (pageNum === 1 || pageNum === newsData.total_pages) return true
+                    if (pageNum === 1 || pageNum === totalPages) return true
                     if (Math.abs(pageNum - currentPage) <= 1) return true
                     return false
                   })
@@ -546,8 +562,8 @@ export default function News() {
                   ))}
               </div>
               <button
-                onClick={() => setCurrentPage(p => Math.min(newsData.total_pages, p + 1))}
-                disabled={currentPage === newsData.total_pages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 Next
@@ -556,9 +572,9 @@ export default function News() {
           )}
 
           {/* Page info */}
-          {newsData && newsData.total_items > 0 && (
+          {totalFilteredItems > 0 && (
             <div className="text-center text-sm text-slate-500">
-              Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, newsData.total_items)} of {newsData.total_items} articles
+              Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalFilteredItems)} of {totalFilteredItems} articles
             </div>
           )}
 
