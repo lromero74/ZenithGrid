@@ -40,7 +40,7 @@ interface PnLTimeSeriesData {
   most_profitable_bot: MostProfitableBot | null
 }
 
-type TimeRange = '7d' | '30d' | '3m' | '6m' | '1y' | 'all'
+type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
 type TabType = 'summary' | 'by_day' | 'by_pair'
 
 interface PnLChartProps {
@@ -107,6 +107,7 @@ export function PnLChart({ accountId }: PnLChartProps) {
     // Time range thresholds in days (ordered smallest to largest)
     const thresholds: { range: TimeRange; days: number }[] = [
       { range: '7d', days: 7 },
+      { range: '14d', days: 14 },
       { range: '30d', days: 30 },
       { range: '3m', days: 90 },
       { range: '6m', days: 180 },
@@ -145,6 +146,9 @@ export function PnLChart({ accountId }: PnLChartProps) {
     switch (timeRange) {
       case '7d':
         cutoffDate.setDate(now.getDate() - 7)
+        break
+      case '14d':
+        cutoffDate.setDate(now.getDate() - 14)
         break
       case '30d':
         cutoffDate.setDate(now.getDate() - 30)
@@ -186,6 +190,9 @@ export function PnLChart({ accountId }: PnLChartProps) {
     switch (timeRange) {
       case '7d':
         cutoffDate.setDate(now.getDate() - 7)
+        break
+      case '14d':
+        cutoffDate.setDate(now.getDate() - 14)
         break
       case '30d':
         cutoffDate.setDate(now.getDate() - 30)
@@ -274,6 +281,9 @@ export function PnLChart({ accountId }: PnLChartProps) {
     switch (timeRange) {
       case '7d':
         cutoffDate.setDate(now.getDate() - 7)
+        break
+      case '14d':
+        cutoffDate.setDate(now.getDate() - 14)
         break
       case '30d':
         cutoffDate.setDate(now.getDate() - 30)
@@ -513,6 +523,19 @@ export function PnLChart({ accountId }: PnLChartProps) {
             }`}
           >
             7 days
+          </button>
+          <button
+            onClick={() => setTimeRange('14d')}
+            disabled={!enabledTimeRanges.has('14d')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !enabledTimeRanges.has('14d')
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                : timeRange === '14d'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            14 days
           </button>
           <button
             onClick={() => setTimeRange('30d')}
