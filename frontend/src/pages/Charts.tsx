@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineData } from 'lightweight-charts'
+import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineData, Range } from 'lightweight-charts'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { BarChart2, X, Settings, Search, Activity } from 'lucide-react'
@@ -86,6 +86,42 @@ function Charts() {
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map())
   const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
+  const isSyncingRef = useRef<boolean>(false) // Prevent sync loops
+  const syncCallbacksRef = useRef<Map<string, (timeRange: Range<Time> | null) => void>>(new Map()) // Store sync callbacks for unsubscribe
+
+  // Sync all charts to a given time range (called when any chart is scrolled/zoomed)
+  const syncAllChartsToRange = (sourceChartId: string, timeRange: Range<Time> | null) => {
+    if (isSyncingRef.current || !timeRange) return
+
+    isSyncingRef.current = true
+
+    try {
+      // Sync main chart if it's not the source
+      if (sourceChartId !== 'main' && chartRef.current) {
+        try {
+          chartRef.current.timeScale().setVisibleRange(timeRange)
+        } catch (e) {
+          // Chart may not have data yet
+        }
+      }
+
+      // Sync all indicator charts except the source
+      indicatorChartsRef.current.forEach((chart, id) => {
+        if (id !== sourceChartId) {
+          try {
+            chart.timeScale().setVisibleRange(timeRange)
+          } catch (e) {
+            // Chart may not have data yet
+          }
+        }
+      })
+    } finally {
+      // Use setTimeout to allow the current sync operation to complete
+      setTimeout(() => {
+        isSyncingRef.current = false
+      }, 0)
+    }
+  }
 
   const [selectedPair, setSelectedPair] = useState(() => {
     const saved = localStorage.getItem('chart-selected-pair')
@@ -165,6 +201,13 @@ function Charts() {
 
     chartRef.current = chart
 
+    // Subscribe main chart to sync all charts when it's scrolled/zoomed
+    const mainSyncCallback = (timeRange: Range<Time> | null) => {
+      syncAllChartsToRange('main', timeRange)
+    }
+    chart.timeScale().subscribeVisibleTimeRangeChange(mainSyncCallback)
+    syncCallbacksRef.current.set('main', mainSyncCallback)
+
     const volumeSeries = chart.addHistogramSeries({
       priceFormat: {
         type: 'volume',
@@ -202,6 +245,16 @@ function Charts() {
     return () => {
       isCleanedUpRef.current = true
       window.removeEventListener('resize', handleResize)
+      // Unsubscribe main chart from time scale changes
+      const mainCallback = syncCallbacksRef.current.get('main')
+      if (mainCallback && chartRef.current) {
+        try {
+          chartRef.current.timeScale().unsubscribeVisibleTimeRangeChange(mainCallback)
+        } catch (e) {
+          // Already unsubscribed
+        }
+      }
+      syncCallbacksRef.current.delete('main')
       if (chartRef.current) {
         chartRef.current.remove()
       }
@@ -236,7 +289,22 @@ function Charts() {
   // Cleanup indicator charts when component unmounts
   useEffect(() => {
     return () => {
-      indicatorChartsRef.current.forEach(chart => {
+      indicatorChartsRef.current.forEach((chart, id) => {
+        // Unsubscribe from time scale changes
+        const callback = syncCallbacksRef.current.get(id)
+        if (callback) {
+          try {
+            chart.timeScale().unsubscribeVisibleTimeRangeChange(callback)
+          } catch (e) {
+            // Already unsubscribed
+          }
+          syncCallbacksRef.current.delete(id)
+        }
+        // Remove resize handler
+        const resizeHandler = (chart as any).__resizeHandler
+        if (resizeHandler) {
+          window.removeEventListener('resize', resizeHandler)
+        }
         try {
           chart.remove()
         } catch (e) {
@@ -769,18 +837,23 @@ function Charts() {
         },
       })
 
-      // Sync time scale with main chart (only after both charts have data)
-      if (chartRef.current) {
-        chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
-          if (timeRange) {
-            try {
-              chart.timeScale().setVisibleRange(timeRange)
-            } catch (e) {
-              // Chart may not have data yet, ignore
-            }
-          }
-        })
+      // Subscribe this indicator chart to sync all charts when it's scrolled/zoomed
+      const indicatorSyncCallback = (timeRange: Range<Time> | null) => {
+        syncAllChartsToRange(indicator.id, timeRange)
       }
+      chart.timeScale().subscribeVisibleTimeRangeChange(indicatorSyncCallback)
+      syncCallbacksRef.current.set(indicator.id, indicatorSyncCallback)
+
+      // Handle resize for this indicator chart
+      const handleIndicatorResize = () => {
+        const currentContainer = document.getElementById(`indicator-chart-${indicator.id}`)
+        if (currentContainer) {
+          chart.applyOptions({ width: currentContainer.clientWidth })
+        }
+      }
+      window.addEventListener('resize', handleIndicatorResize)
+      // Store the resize handler in a data attribute so we can remove it later
+      ;(chart as any).__resizeHandler = handleIndicatorResize
 
       indicatorChartsRef.current.set(indicator.id, chart)
     })
@@ -790,6 +863,21 @@ function Charts() {
     indicatorChartsRef.current.forEach((chart, id) => {
       if (!existingOscillatorIds.has(id)) {
         console.log(`Removing chart for indicator ${id}`)
+        // Unsubscribe from time scale changes
+        const callback = syncCallbacksRef.current.get(id)
+        if (callback) {
+          try {
+            chart.timeScale().unsubscribeVisibleTimeRangeChange(callback)
+          } catch (e) {
+            // Already unsubscribed
+          }
+          syncCallbacksRef.current.delete(id)
+        }
+        // Remove resize handler
+        const resizeHandler = (chart as any).__resizeHandler
+        if (resizeHandler) {
+          window.removeEventListener('resize', resizeHandler)
+        }
         try {
           chart.remove()
         } catch (e) {
