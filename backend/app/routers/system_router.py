@@ -119,6 +119,7 @@ def get_sorted_tags() -> list:
 _changelog_cache: dict = {
     "latest_tag": None,
     "versions": [],  # All versions with commits and dates
+    "current_version": None,
 }
 
 
@@ -126,13 +127,29 @@ def _build_changelog_cache() -> None:
     """Build the full changelog cache (called once when cache is invalid)"""
     global _changelog_cache
     repo_root = str(get_repo_root())
+
+    # Fetch latest tags from origin (only done when rebuilding cache)
+    try:
+        subprocess.run(
+            ["git", "fetch", "--tags", "--quiet"],
+            capture_output=True,
+            cwd=repo_root,
+            timeout=10
+        )
+    except Exception:
+        pass
+
     tags = get_sorted_tags()
+    current_version = get_git_version()
 
     if len(tags) < 2:
-        _changelog_cache = {"latest_tag": tags[0] if tags else None, "versions": []}
+        _changelog_cache = {
+            "latest_tag": tags[0] if tags else None,
+            "versions": [],
+            "current_version": current_version
+        }
         return
 
-    current_version = get_git_version()
     versions = []
 
     for i in range(len(tags) - 1):
@@ -176,34 +193,34 @@ def _build_changelog_cache() -> None:
 
     _changelog_cache = {
         "latest_tag": tags[0] if tags else None,
-        "versions": versions
+        "versions": versions,
+        "current_version": current_version
     }
 
 
 @router.get("/api/changelog")
-async def get_changelog(limit: int = 20, offset: int = 0):
+async def get_changelog(limit: int = 20, offset: int = 0, refresh: bool = False):
     """
     Get changelog showing commits between version tags.
     Similar to 'python3 update.py --changelog' output.
     Supports pagination with limit and offset.
-    Uses caching - rebuilds cache only when a new tag is detected.
+    Uses caching - rebuilds cache only on first call or when refresh=true.
     """
     global _changelog_cache
 
-    current_version = get_git_version()
-    latest_version = get_latest_git_tag()
-
-    # Check if cache needs rebuilding (new tag detected or empty cache)
-    if _changelog_cache["latest_tag"] != latest_version or not _changelog_cache["versions"]:
+    # Only rebuild cache if empty or explicitly requested
+    if not _changelog_cache["versions"] or refresh:
         _build_changelog_cache()
 
+    current_version = get_git_version()
+    latest_tag = _changelog_cache["latest_tag"]
     all_versions = _changelog_cache["versions"]
     total_versions = len(all_versions)
 
     if total_versions == 0:
         return {
             "current_version": current_version,
-            "latest_version": latest_version,
+            "latest_version": latest_tag or current_version,
             "versions": [],
             "total_versions": 0,
             "has_more": False
@@ -220,8 +237,8 @@ async def get_changelog(limit: int = 20, offset: int = 0):
 
     return {
         "current_version": current_version,
-        "latest_version": latest_version,
-        "update_available": latest_version != current_version and current_version != "dev",
+        "latest_version": latest_tag or current_version,
+        "update_available": latest_tag != current_version and current_version != "dev",
         "versions": paginated_versions,
         "total_versions": total_versions,
         "has_more": end_idx < total_versions
