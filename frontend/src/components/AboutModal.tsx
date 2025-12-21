@@ -104,9 +104,37 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="w-6 h-6 text-blue-400 animate-spin" />
-              <span className="ml-2 text-slate-400">Loading changelog...</span>
+            <div className="space-y-6 animate-pulse">
+              {/* Version info skeleton */}
+              <div className="p-4 bg-slate-900 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="h-3 w-24 bg-slate-700 rounded mb-2"></div>
+                    <div className="h-6 w-20 bg-slate-600 rounded"></div>
+                  </div>
+                  <div className="text-right">
+                    <div className="h-3 w-24 bg-slate-700 rounded mb-2"></div>
+                    <div className="h-6 w-20 bg-slate-600 rounded"></div>
+                  </div>
+                </div>
+              </div>
+              {/* Version history skeleton */}
+              <div className="flex items-center justify-between">
+                <div className="h-5 w-32 bg-slate-700 rounded"></div>
+                <div className="h-4 w-40 bg-slate-800 rounded"></div>
+              </div>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="p-4 bg-slate-900 rounded-lg border border-slate-700">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="h-5 w-24 bg-slate-700 rounded"></div>
+                    <div className="h-4 w-32 bg-slate-800 rounded"></div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-full bg-slate-800 rounded"></div>
+                    <div className="h-4 w-3/4 bg-slate-800 rounded"></div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : error ? (
             <div className="text-center py-8">

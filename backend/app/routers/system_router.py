@@ -115,36 +115,27 @@ def get_sorted_tags() -> list:
     return []
 
 
-@router.get("/api/changelog")
-async def get_changelog(limit: int = 20, offset: int = 0):
-    """
-    Get changelog showing commits between version tags.
-    Similar to 'python3 update.py --changelog' output.
-    Supports pagination with limit and offset.
-    """
+# Cache for changelog data - invalidated when latest tag changes
+_changelog_cache: dict = {
+    "latest_tag": None,
+    "versions": [],  # All versions with commits and dates
+}
+
+
+def _build_changelog_cache() -> None:
+    """Build the full changelog cache (called once when cache is invalid)"""
+    global _changelog_cache
     repo_root = str(get_repo_root())
-    current_version = get_git_version()
-    latest_version = get_latest_git_tag()
     tags = get_sorted_tags()
 
-    total_versions = len(tags) - 1 if len(tags) > 1 else 0
-
     if len(tags) < 2:
-        return {
-            "current_version": current_version,
-            "latest_version": latest_version,
-            "versions": [],
-            "total_versions": 0,
-            "has_more": False
-        }
+        _changelog_cache = {"latest_tag": tags[0] if tags else None, "versions": []}
+        return
 
-    # Apply pagination to tags
-    # We need pairs of tags, so offset applies to version index, not tag index
-    start_idx = offset
-    end_idx = min(offset + limit, len(tags) - 1)
-
+    current_version = get_git_version()
     versions = []
-    for i in range(start_idx, end_idx):
+
+    for i in range(len(tags) - 1):
         curr_tag = tags[i]
         prev_tag = tags[i + 1]
 
@@ -172,7 +163,6 @@ async def get_changelog(limit: int = 20, offset: int = 0):
                 cwd=repo_root,
                 timeout=5
             )
-            # Format: YYYY-MM-DD HH:MM
             tag_date = date_result.stdout.strip()[:16] if date_result.stdout else ""
         except Exception:
             tag_date = ""
@@ -184,11 +174,55 @@ async def get_changelog(limit: int = 20, offset: int = 0):
             "is_installed": curr_tag == current_version
         })
 
+    _changelog_cache = {
+        "latest_tag": tags[0] if tags else None,
+        "versions": versions
+    }
+
+
+@router.get("/api/changelog")
+async def get_changelog(limit: int = 20, offset: int = 0):
+    """
+    Get changelog showing commits between version tags.
+    Similar to 'python3 update.py --changelog' output.
+    Supports pagination with limit and offset.
+    Uses caching - rebuilds cache only when a new tag is detected.
+    """
+    global _changelog_cache
+
+    current_version = get_git_version()
+    latest_version = get_latest_git_tag()
+
+    # Check if cache needs rebuilding (new tag detected or empty cache)
+    if _changelog_cache["latest_tag"] != latest_version or not _changelog_cache["versions"]:
+        _build_changelog_cache()
+
+    all_versions = _changelog_cache["versions"]
+    total_versions = len(all_versions)
+
+    if total_versions == 0:
+        return {
+            "current_version": current_version,
+            "latest_version": latest_version,
+            "versions": [],
+            "total_versions": 0,
+            "has_more": False
+        }
+
+    # Apply pagination
+    start_idx = offset
+    end_idx = min(offset + limit, total_versions)
+    paginated_versions = all_versions[start_idx:end_idx]
+
+    # Update is_installed flag based on current version (might change after update)
+    for v in paginated_versions:
+        v["is_installed"] = v["version"] == current_version
+
     return {
         "current_version": current_version,
         "latest_version": latest_version,
         "update_available": latest_version != current_version and current_version != "dev",
-        "versions": versions,
+        "versions": paginated_versions,
         "total_versions": total_versions,
         "has_more": end_idx < total_versions
     }
