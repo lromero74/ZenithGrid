@@ -12,6 +12,7 @@ import { useAccount } from './contexts/AccountContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MiniPlayer } from './components/MiniPlayer'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
+import { AboutModal } from './components/AboutModal'
 import Login from './pages/Login'
 
 // App version - fetched from backend API at runtime (avoids Vite cache issues)
@@ -35,6 +36,7 @@ function AppContent() {
   const { user, logout, getAccessToken } = useAuth()
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [showAboutModal, setShowAboutModal] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('...')
   const [latestVersion, setLatestVersion] = useState<string | null>(null)
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -179,13 +181,21 @@ function AppContent() {
                 <h1 className="text-xl sm:text-2xl font-bold">Zenith Grid</h1>
                 <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
                   Multi-Strategy Trading Platform{' '}
-                  <span className={updateAvailable ? 'text-yellow-500' : 'text-slate-500'} title={updateAvailable ? `Update available: ${latestVersion}` : undefined}>
+                  <button
+                    onClick={() => setShowAboutModal(true)}
+                    className={`${updateAvailable ? 'text-yellow-500' : 'text-slate-500'} hover:text-blue-400 hover:underline transition-colors cursor-pointer`}
+                    title="Click to view changelog"
+                  >
                     {appVersion}
-                  </span>
+                  </button>
                   {updateAvailable && (
-                    <span className="ml-1 text-green-400" title={`Latest: ${latestVersion}`}>
+                    <button
+                      onClick={() => setShowAboutModal(true)}
+                      className="ml-1 text-green-400 hover:text-green-300 hover:underline transition-colors cursor-pointer"
+                      title={`Latest: ${latestVersion} - Click to view changelog`}
+                    >
                       ({latestVersion} available)
-                    </span>
+                    </button>
                   )}
                 </p>
               </div>
@@ -396,6 +406,12 @@ function AppContent() {
       <AddAccountModal
         isOpen={showAddAccountModal}
         onClose={() => setShowAddAccountModal(false)}
+      />
+
+      {/* About Modal */}
+      <AboutModal
+        isOpen={showAboutModal}
+        onClose={() => setShowAboutModal(false)}
       />
 
       {/* Logout Confirmation Modal */}

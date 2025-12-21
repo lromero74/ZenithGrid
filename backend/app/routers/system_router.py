@@ -98,6 +98,102 @@ async def get_version():
     return {"version": get_git_version()}
 
 
+def get_sorted_tags() -> list:
+    """Get all git tags sorted by version (newest first)"""
+    try:
+        result = subprocess.run(
+            ["git", "tag", "--sort=-version:refname"],
+            capture_output=True,
+            text=True,
+            cwd=str(get_repo_root()),
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip().split('\n')
+    except Exception:
+        pass
+    return []
+
+
+@router.get("/api/changelog")
+async def get_changelog(limit: int = 20, offset: int = 0):
+    """
+    Get changelog showing commits between version tags.
+    Similar to 'python3 update.py --changelog' output.
+    Supports pagination with limit and offset.
+    """
+    repo_root = str(get_repo_root())
+    current_version = get_git_version()
+    latest_version = get_latest_git_tag()
+    tags = get_sorted_tags()
+
+    total_versions = len(tags) - 1 if len(tags) > 1 else 0
+
+    if len(tags) < 2:
+        return {
+            "current_version": current_version,
+            "latest_version": latest_version,
+            "versions": [],
+            "total_versions": 0,
+            "has_more": False
+        }
+
+    # Apply pagination to tags
+    # We need pairs of tags, so offset applies to version index, not tag index
+    start_idx = offset
+    end_idx = min(offset + limit, len(tags) - 1)
+
+    versions = []
+    for i in range(start_idx, end_idx):
+        curr_tag = tags[i]
+        prev_tag = tags[i + 1]
+
+        # Get commits between these tags
+        try:
+            result = subprocess.run(
+                ["git", "log", "--format=%s", f"{prev_tag}..{curr_tag}"],
+                capture_output=True,
+                text=True,
+                cwd=repo_root,
+                timeout=5
+            )
+            commits = []
+            if result.returncode == 0 and result.stdout.strip():
+                commits = [line.strip() for line in result.stdout.strip().split('\n') if line.strip()]
+        except Exception:
+            commits = []
+
+        # Get tag date
+        try:
+            date_result = subprocess.run(
+                ["git", "log", "-1", "--format=%ai", curr_tag],
+                capture_output=True,
+                text=True,
+                cwd=repo_root,
+                timeout=5
+            )
+            # Format: YYYY-MM-DD HH:MM
+            tag_date = date_result.stdout.strip()[:16] if date_result.stdout else ""
+        except Exception:
+            tag_date = ""
+
+        versions.append({
+            "version": curr_tag,
+            "date": tag_date,
+            "commits": commits,
+            "is_installed": curr_tag == current_version
+        })
+
+    return {
+        "current_version": current_version,
+        "latest_version": latest_version,
+        "update_available": latest_version != current_version and current_version != "dev",
+        "versions": versions,
+        "total_versions": total_versions,
+        "has_more": end_idx < total_versions
+    }
+
+
 async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
     """
     Get Coinbase client from the first active CEX account in the database.

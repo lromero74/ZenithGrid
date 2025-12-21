@@ -132,10 +132,11 @@ class MultiBotMonitor:
         active_bots = list(active_result.scalars().all())
 
         # Get inactive bots that have open positions
+        # Note: Use Bot.is_active == False (not "not Bot.is_active") for SQLAlchemy
         inactive_with_positions_query = (
             select(Bot)
             .join(Position, Position.bot_id == Bot.id)
-            .where(not Bot.is_active, Position.status == "open")
+            .where(Bot.is_active == False, Position.status == "open")  # noqa: E712
             .distinct()
         )
         inactive_result = await db.execute(inactive_with_positions_query)
