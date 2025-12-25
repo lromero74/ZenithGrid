@@ -177,6 +177,7 @@ class MissingOrderDetector:
     """
     Detects orders that exist on Coinbase but are not recorded in our database.
     Runs periodically to catch any orders that were placed but not committed due to errors.
+    Enhanced to check both BUY and SELL orders, and recently closed positions.
     """
 
     def __init__(self, db: AsyncSession, coinbase_client: CoinbaseClient):
@@ -187,38 +188,55 @@ class MissingOrderDetector:
 
     async def check_for_missing_orders(self):
         """
-        Compare Coinbase orders with recorded trades for all open positions.
+        Compare Coinbase orders with recorded trades for both open and recently closed positions.
         Alert if any orders are found that weren't recorded.
+        Enhanced to check BOTH buy and sell orders.
         """
         try:
-            # Get all open positions
-            query = select(Position).where(Position.status == "open")
-            result = await self.db.execute(query)
-            open_positions = result.scalars().all()
+            from app.models import PendingOrder
 
-            if not open_positions:
+            # Get all open positions + recently closed positions (last 7 days)
+            seven_days_ago = datetime.utcnow() - timedelta(days=7)
+
+            query = select(Position).where(
+                (Position.status == "open") |
+                ((Position.status == "closed") & (Position.closed_at >= seven_days_ago))
+            )
+            result = await self.db.execute(query)
+            positions = result.scalars().all()
+
+            if not positions:
                 return
 
             # Group positions by product_id for efficient Coinbase queries
             positions_by_product = {}
-            for pos in open_positions:
+            for pos in positions:
                 if pos.product_id not in positions_by_product:
                     positions_by_product[pos.product_id] = []
                 positions_by_product[pos.product_id].append(pos)
 
-            missing_orders_found = []
+            missing_buys = []
+            missing_sells = []
+            stuck_pending_orders = []
 
-            for product_id, positions in positions_by_product.items():
+            for product_id, product_positions in positions_by_product.items():
                 # Find the earliest position open date
-                earliest_open = min(p.opened_at for p in positions)
+                earliest_open = min(p.opened_at for p in product_positions)
 
-                # Get all recorded order_ids for these positions
-                position_ids = [p.id for p in positions]
+                # Get all recorded order_ids for these positions from trades table
+                position_ids = [p.id for p in product_positions]
                 trade_query = select(Trade.order_id).where(
                     Trade.position_id.in_(position_ids)
                 )
                 trade_result = await self.db.execute(trade_query)
                 recorded_order_ids = set(t[0] for t in trade_result.fetchall() if t[0])
+
+                # Also get order_ids from pending_orders table
+                pending_query = select(PendingOrder.order_id, PendingOrder.status).where(
+                    PendingOrder.position_id.in_(position_ids)
+                )
+                pending_result = await self.db.execute(pending_query)
+                pending_orders = {row[0]: row[1] for row in pending_result.fetchall() if row[0]}
 
                 # Get orders from Coinbase since earliest position opened
                 start_date = earliest_open.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -233,42 +251,96 @@ class MissingOrderDetector:
                     logger.warning(f"Could not fetch orders for {product_id}: {e}")
                     continue
 
-                # Check for missing orders
+                # Check for missing orders (both BUY and SELL)
                 for order in coinbase_orders.get("orders", []):
                     order_id = order.get("order_id", "")
                     filled_size = float(order.get("filled_size", 0) or 0)
                     filled_value = float(order.get("filled_value", 0) or 0)
                     side = order.get("side", "")
 
-                    # Only check BUY orders (sells are handled differently)
-                    if side != "BUY" or filled_size == 0:
+                    # Skip orders with no fills
+                    if filled_size == 0:
                         continue
 
+                    # Check if order is recorded in trades table
                     if order_id and order_id not in recorded_order_ids:
-                        # Found a missing order!
-                        missing_orders_found.append({
-                            "product_id": product_id,
-                            "order_id": order_id,
-                            "base_amount": filled_size,
-                            "quote_amount": filled_value,
-                            "created_time": order.get("created_time", ""),
-                        })
+                        # Check if it's in pending_orders with status='pending' (stuck order)
+                        if order_id in pending_orders and pending_orders[order_id] == "pending":
+                            stuck_pending_orders.append({
+                                "product_id": product_id,
+                                "order_id": order_id,
+                                "side": side,
+                                "base_amount": filled_size,
+                                "quote_amount": filled_value,
+                                "created_time": order.get("created_time", ""),
+                            })
+                        else:
+                            # Found a missing order!
+                            order_info = {
+                                "product_id": product_id,
+                                "order_id": order_id,
+                                "base_amount": filled_size,
+                                "quote_amount": filled_value,
+                                "created_time": order.get("created_time", ""),
+                            }
 
-            if missing_orders_found:
-                # Log alert for missing orders
-                total_missing_quote = sum(o["quote_amount"] for o in missing_orders_found)
-                logger.warning(
-                    f"⚠️  MISSING ORDERS DETECTED: {len(missing_orders_found)} orders "
-                    f"totaling {total_missing_quote:.8f} BTC not recorded in database!"
-                )
-                for order in missing_orders_found:
+                            if side == "BUY":
+                                missing_buys.append(order_info)
+                            elif side == "SELL":
+                                missing_sells.append(order_info)
+
+            # Report findings
+            total_issues = len(missing_buys) + len(missing_sells) + len(stuck_pending_orders)
+
+            if total_issues > 0:
+                logger.warning(f"⚠️  ORDER DISCREPANCIES DETECTED: {total_issues} total issues found")
+
+                if missing_buys:
+                    total_buy_quote = sum(o["quote_amount"] for o in missing_buys)
                     logger.warning(
-                        f"  - {order['product_id']}: {order['base_amount']:.8f} "
-                        f"({order['quote_amount']:.8f} BTC) order_id={order['order_id'][:8]}... "
-                        f"created={order['created_time'][:19]}"
+                        f"\n  📥 MISSING BUY ORDERS: {len(missing_buys)} orders "
+                        f"totaling {total_buy_quote:.8f} BTC not in trades table"
                     )
+                    for order in missing_buys[:5]:  # Show first 5
+                        logger.warning(
+                            f"    - {order['product_id']}: {order['base_amount']:.8f} "
+                            f"({order['quote_amount']:.8f} BTC) order_id={order['order_id'][:12]}... "
+                            f"created={order['created_time'][:19]}"
+                        )
+                    if len(missing_buys) > 5:
+                        logger.warning(f"    ... and {len(missing_buys) - 5} more")
+
+                if missing_sells:
+                    total_sell_quote = sum(o["quote_amount"] for o in missing_sells)
+                    logger.warning(
+                        f"\n  📤 MISSING SELL ORDERS: {len(missing_sells)} orders "
+                        f"totaling {total_sell_quote:.8f} BTC not in trades table"
+                    )
+                    for order in missing_sells[:5]:  # Show first 5
+                        logger.warning(
+                            f"    - {order['product_id']}: {order['base_amount']:.8f} "
+                            f"({order['quote_amount']:.8f} BTC) order_id={order['order_id'][:12]}... "
+                            f"created={order['created_time'][:19]}"
+                        )
+                    if len(missing_sells) > 5:
+                        logger.warning(f"    ... and {len(missing_sells) - 5} more")
+
+                if stuck_pending_orders:
+                    logger.warning(
+                        f"\n  🔒 STUCK PENDING ORDERS: {len(stuck_pending_orders)} orders "
+                        f"filled on Coinbase but stuck with status='pending'"
+                    )
+                    for order in stuck_pending_orders[:5]:  # Show first 5
+                        logger.warning(
+                            f"    - {order['product_id']} {order['side']}: {order['base_amount']:.8f} "
+                            f"({order['quote_amount']:.8f} BTC) order_id={order['order_id'][:12]}... "
+                            f"created={order['created_time'][:19]}"
+                        )
+                    if len(stuck_pending_orders) > 5:
+                        logger.warning(f"    ... and {len(stuck_pending_orders) - 5} more")
+
                 logger.warning(
-                    "Run scripts/reconcile_positions.py to fix these discrepancies"
+                    "\n  💡 Run manual reconciliation to fix these discrepancies"
                 )
 
         except Exception as e:
