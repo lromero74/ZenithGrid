@@ -17,7 +17,7 @@ from app.routers import accounts_router  # Multi-account management (CEX + DEX)
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
-from app.routers.system_router import set_trading_pair_monitor
+from app.routers.system_router import set_trading_pair_monitor, build_changelog_cache
 from app.routers import blacklist_router
 from app.routers import news_router
 from app.routers import sources_router  # Content source subscriptions
@@ -226,6 +226,10 @@ async def startup_event():
     print("🚀 Starting content refresh service...")
     await content_refresh_service.start()
     print("🚀 Content refresh service started - news every 30min, videos every 60min")
+
+    print("🚀 Building changelog cache...")
+    build_changelog_cache()
+    print("🚀 Changelog cache built")
 
     print("🚀 Startup complete!")
     print("🚀 ========================================")

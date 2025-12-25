@@ -197,6 +197,17 @@ async def process_signal(
             if should_sell_failsafe:
                 logger.warning(f"  🛡️ FAILSAFE ACTIVATED: {failsafe_reason}")
 
+                # Check if limit close order already pending
+                if position.closing_via_limit:
+                    logger.warning(
+                        f"  ⚠️ Position #{position.id} already has a pending limit close order, skipping failsafe sell"
+                    )
+                    return {
+                        "action": "failsafe_limit_close_already_pending",
+                        "reason": f"Limit order already pending (order_id: {position.limit_close_order_id})",
+                        "position_id": position.id,
+                    }
+
                 # Execute sell with limit order (mark price → bid fallback after 60s)
                 # This uses the existing execute_sell function which handles limit orders
                 trade, profit_quote, profit_pct = await execute_sell(
@@ -587,6 +598,31 @@ async def process_signal(
                         )
                 except Exception as e:
                     logger.warning(f"Could not verify mark price profit, proceeding with sell: {e}")
+
+            # Check if limit close order already pending
+            if position.closing_via_limit:
+                logger.warning(
+                    f"  ⚠️ Position #{position.id} already has a pending limit close order, skipping sell signal"
+                )
+                signal = Signal(
+                    position_id=position.id,
+                    timestamp=datetime.utcnow(),
+                    signal_type="hold",
+                    macd_value=signal_data.get("macd_value", 0),
+                    macd_signal=signal_data.get("macd_signal", 0),
+                    macd_histogram=signal_data.get("macd_histogram", 0),
+                    price=current_price,
+                    action_taken="hold",
+                    reason=f"Limit close order already pending (order_id: {position.limit_close_order_id})",
+                )
+                db.add(signal)
+                await db.commit()
+                return {
+                    "action": "hold",
+                    "reason": f"Limit close order already pending",
+                    "signal": signal_data,
+                    "position": position,
+                }
 
             # Execute sell (market or limit based on config)
             trade, profit_quote, profit_pct = await execute_sell(

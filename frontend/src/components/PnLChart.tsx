@@ -71,7 +71,7 @@ const CustomTooltip = ({ active, payload, label, labelFormatter }: any) => {
 
 export function PnLChart({ accountId }: PnLChartProps) {
   const [activeTab, setActiveTab] = useState<TabType>('summary')
-  const [timeRange, setTimeRange] = useState<TimeRange>('30d')
+  const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const areaSeriesRef = useRef<ISeriesApi<'Area'> | null>(null)

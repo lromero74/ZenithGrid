@@ -144,6 +144,15 @@ async def execute_sell(
         logger.warning(f"Rejecting sell order for {product_id} - shutdown in progress")
         raise RuntimeError("Cannot place orders - shutdown in progress")
 
+    # CRITICAL: Prevent duplicate limit sell orders
+    # If position is already closing via limit order, don't place another one
+    if position.closing_via_limit:
+        logger.warning(
+            f"⚠️ Position #{position.id} already has a pending limit close order "
+            f"(order_id: {position.limit_close_order_id}). Skipping duplicate sell."
+        )
+        return None, 0.0, 0.0
+
     # Check if we should use a limit order for closing
     config: Dict = position.strategy_config_snapshot or {}
     take_profit_order_type = config.get("take_profit_order_type", "limit")

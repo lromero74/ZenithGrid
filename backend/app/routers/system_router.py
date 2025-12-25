@@ -123,8 +123,8 @@ _changelog_cache: dict = {
 }
 
 
-def _build_changelog_cache() -> None:
-    """Build the full changelog cache (called once when cache is invalid)"""
+def build_changelog_cache() -> None:
+    """Build the full changelog cache. Called at startup and when cache is invalid."""
     global _changelog_cache
     repo_root = str(get_repo_root())
 
@@ -210,7 +210,7 @@ async def get_changelog(limit: int = 20, offset: int = 0, refresh: bool = False)
 
     # Only rebuild cache if empty or explicitly requested
     if not _changelog_cache["versions"] or refresh:
-        _build_changelog_cache()
+        build_changelog_cache()
 
     current_version = get_git_version()
     latest_tag = _changelog_cache["latest_tag"]

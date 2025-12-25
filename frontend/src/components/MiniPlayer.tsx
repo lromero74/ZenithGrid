@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, Volume2, VolumeX } from 'lucide-react'
 import { useVideoPlayer } from '../contexts/VideoPlayerContext'
-import { videoSourceColors, formatRelativeTime } from './news'
+import { videoSourceColors } from './news'
 
 // Format seconds to MM:SS or HH:MM:SS
 function formatTime(seconds: number): string {
