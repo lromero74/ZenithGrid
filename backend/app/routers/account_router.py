@@ -11,14 +11,16 @@ import asyncio
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.models import Bot, Position, Account
+from app.models import Bot, Position, Account, User
 from app.exchange_clients.factory import create_exchange_client
+from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
 
@@ -446,3 +448,108 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sell-portfolio-to-base")
+async def sell_portfolio_to_base_currency(
+    target_currency: str = Query("BTC", description="Target currency: BTC or USD"),
+    confirm: bool = Query(False, description="Must be true to execute"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Sell entire portfolio to BTC or USD.
+
+    This sells actual account balances (ETH, ADA, etc.), NOT positions/deals.
+    Use this to consolidate your portfolio into a single base currency.
+    """
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
+
+    if target_currency not in ["BTC", "USD"]:
+        raise HTTPException(status_code=400, detail="target_currency must be BTC or USD")
+
+    # Get user's default account (or iterate through all accounts)
+    account_query = select(Account).where(
+        Account.user_id == current_user.id,
+        Account.is_default == True
+    )
+    account_result = await db.execute(account_query)
+    account = account_result.scalars().first()
+
+    if not account:
+        raise HTTPException(status_code=404, detail="No default account found")
+
+    # Get exchange client for this account
+    from app.services.exchange_service import get_exchange_client_for_account
+
+    exchange = await get_exchange_client_for_account(db, account.id)
+
+    # Get all account balances from Coinbase
+    all_accounts = await exchange.get_accounts(force_fresh=True)
+
+    # Filter to currencies we want to sell (exclude target currency)
+    # Only sell currencies with available balance > minimum threshold
+    currencies_to_sell = []
+    for acc in all_accounts:
+        currency = acc.get("currency")
+        available_str = acc.get("available_balance", {}).get("value", "0")
+        available = float(available_str)
+
+        # Skip target currency, skip zero balances
+        if currency == target_currency or available <= 0:
+            continue
+
+        # Skip if balance is below exchange minimum (0.0001 for BTC pairs)
+        # For simplicity, use a threshold based on USD value or BTC value
+        currencies_to_sell.append({
+            "currency": currency,
+            "available": available,
+        })
+
+    if not currencies_to_sell:
+        return {
+            "message": f"Portfolio already in {target_currency} (no other currencies to sell)",
+            "sold_count": 0,
+            "failed_count": 0,
+            "errors": []
+        }
+
+    # Sell each currency to target
+    sold_count = 0
+    failed_count = 0
+    errors = []
+
+    for item in currencies_to_sell:
+        currency = item["currency"]
+        available = item["available"]
+        product_id = f"{currency}-{target_currency}"
+
+        try:
+            # Place market sell order using the exchange client
+            result = await exchange.create_market_order(
+                product_id=product_id,
+                side="SELL",
+                size=str(available),
+            )
+
+            sold_count += 1
+            logger.info(f"Sold {available} {currency} to {target_currency}: {result.get('order_id')}")
+
+        except Exception as e:
+            failed_count += 1
+            error_msg = f"{currency} ({available:.8f}): {str(e)}"
+            errors.append(error_msg)
+            logger.error(f"Failed to sell {currency}: {e}")
+
+    logger.warning(
+        f"🚨 PORTFOLIO CONVERSION to {target_currency} by user {current_user.id}: "
+        f"{sold_count} currencies sold, {failed_count} failed"
+    )
+
+    return {
+        "message": f"Portfolio conversion complete: {sold_count} currencies sold to {target_currency}",
+        "sold_count": sold_count,
+        "failed_count": failed_count,
+        "errors": errors
+    }
