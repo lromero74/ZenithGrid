@@ -114,6 +114,30 @@ export const monitorApi = {
 export const accountApi = {
   getBalances: () => api.get<Balances>('/account/balances').then((res) => res.data),
   getAggregateValue: () => api.get<AggregateValue>('/account/aggregate-value').then((res) => res.data),
+  // Sell entire portfolio to BTC or USD (sells balances, not positions)
+  sellPortfolioToBase: (targetCurrency: 'BTC' | 'USD', confirm = true) =>
+    api.post<{
+      task_id: string;
+      message: string;
+      status_url: string;
+    }>('/account/sell-portfolio-to-base', null, {
+      params: { target_currency: targetCurrency, confirm }
+    }).then((res) => res.data),
+
+  getConversionStatus: (taskId: string) =>
+    api.get<{
+      task_id: string;
+      status: 'running' | 'completed' | 'failed';
+      total: number;
+      current: number;
+      progress_pct: number;
+      sold_count: number;
+      failed_count: number;
+      errors: string[];
+      message: string;
+      started_at: string;
+      completed_at?: string;
+    }>(`/account/conversion-status/${taskId}`).then((res) => res.data),
 };
 
 export const statusApi = {
@@ -178,6 +202,20 @@ export const botsApi = {
     if (since) params.append('since', since);
     return api.get<any[]>(`/bots/${id}/indicator-logs?${params}`).then((res) => res.data);
   },
+  // Cancel all positions for a bot
+  cancelAllPositions: (id: number, confirm = true) =>
+    api.post<{ cancelled_count: number; failed_count: number; errors: string[] }>(
+      `/bots/${id}/cancel-all-positions`,
+      null,
+      { params: { confirm } }
+    ).then((res) => res.data),
+  // Sell all positions for a bot at market price
+  sellAllPositions: (id: number, confirm = true) =>
+    api.post<{ sold_count: number; failed_count: number; total_profit_quote: number; errors: string[] }>(
+      `/bots/${id}/sell-all-positions`,
+      null,
+      { params: { confirm } }
+    ).then((res) => res.data),
 };
 
 export const templatesApi = {
