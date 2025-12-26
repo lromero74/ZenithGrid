@@ -9,9 +9,10 @@ Handles account-related endpoints:
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
@@ -21,6 +22,7 @@ from app.database import get_db
 from app.models import Bot, Position, Account, User
 from app.exchange_clients.factory import create_exchange_client
 from app.routers.auth_dependencies import get_current_user_optional
+from app.services import portfolio_conversion_service as pcs
 
 logger = logging.getLogger(__name__)
 
@@ -450,18 +452,255 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/conversion-status/{task_id}")
+async def get_conversion_status(task_id: str):
+    """
+    Get status of a portfolio conversion task
+    """
+    progress = pcs.get_task_progress(task_id)
+    if not progress:
+        raise HTTPException(status_code=404, detail="Conversion task not found")
+    return progress
+
+
+async def _run_portfolio_conversion(
+    task_id: str,
+    account_id: int,
+    target_currency: str,
+    user_id: int,
+):
+    """
+    Background task to convert portfolio to target currency
+    """
+    from app.database import get_async_session
+
+    try:
+        pcs.update_task_progress(task_id, status="running", message="Initializing conversion...")
+
+        # Get database session
+        async for db in get_async_session():
+            # Get exchange client
+            from app.services.exchange_service import get_exchange_client_for_account
+            exchange = await get_exchange_client_for_account(db, account_id)
+
+            # Get all account balances
+            pcs.update_task_progress(task_id, message="Fetching account balances...")
+            try:
+                all_accounts = await exchange.get_accounts(force_fresh=True)
+            except Exception as e:
+                pcs.update_task_progress(
+                    task_id,
+                    status="failed",
+                    message=f"Failed to fetch account balances: {str(e)}"
+                )
+                return
+
+            # Filter currencies to sell (excluding target and dust)
+            currencies_to_sell = []
+            for acc in all_accounts:
+                currency = acc.get("currency")
+                available_str = acc.get("available_balance", {}).get("value", "0")
+                available = float(available_str)
+
+                if currency == target_currency or available <= 0:
+                    continue
+
+                # Skip dust
+                if currency == "USD" and available < 0.50:
+                    continue
+                if currency == "BTC" and available < 0.00001:
+                    continue
+
+                currencies_to_sell.append({
+                    "currency": currency,
+                    "available": available,
+                })
+
+            if not currencies_to_sell:
+                pcs.update_task_progress(
+                    task_id,
+                    status="completed",
+                    message=f"Portfolio already in {target_currency}",
+                    total=0,
+                    current=0
+                )
+                return
+
+            # Start conversion
+            total_to_process = len(currencies_to_sell)
+            pcs.update_task_progress(
+                task_id,
+                total=total_to_process,
+                current=0,
+                message=f"Converting {total_to_process} currencies..."
+            )
+
+            sold_count = 0
+            failed_count = 0
+            errors = []
+            converted_via_usd = []
+            converted_via_btc = []
+
+            logger.info(f"🔄 Task {task_id}: Starting portfolio conversion: {total_to_process} currencies to process")
+
+            # Process each currency
+            for idx, item in enumerate(currencies_to_sell, 1):
+                currency = item["currency"]
+                available = item["available"]
+
+                try:
+                    if target_currency == "BTC":
+                        # Try BTC pair first, fallback to USD
+                        product_id = f"{currency}-BTC"
+                        try:
+                            result = await exchange.create_market_order(
+                                product_id=product_id,
+                                side="SELL",
+                                size=str(available),
+                            )
+                            sold_count += 1
+                            progress_pct = int((idx / total_to_process) * 100)
+                            logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to BTC directly")
+                            await asyncio.sleep(0.2)
+                        except Exception as direct_error:
+                            if "403" in str(direct_error) or "400" in str(direct_error):
+                                usd_product_id = f"{currency}-USD"
+                                sell_result = await exchange.create_market_order(
+                                    product_id=usd_product_id,
+                                    side="SELL",
+                                    size=str(available),
+                                )
+                                converted_via_usd.append(currency)
+                                sold_count += 1
+                                progress_pct = int((idx / total_to_process) * 100)
+                                logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to USD")
+                                await asyncio.sleep(0.2)
+                            else:
+                                raise direct_error
+                    else:
+                        # Try USD pair first, fallback to BTC
+                        product_id = f"{currency}-USD"
+                        try:
+                            result = await exchange.create_market_order(
+                                product_id=product_id,
+                                side="SELL",
+                                size=str(available),
+                            )
+                            sold_count += 1
+                            progress_pct = int((idx / total_to_process) * 100)
+                            logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to USD directly")
+                            await asyncio.sleep(0.2)
+                        except Exception as direct_error:
+                            if "403" in str(direct_error) or "400" in str(direct_error):
+                                btc_product_id = f"{currency}-BTC"
+                                sell_result = await exchange.create_market_order(
+                                    product_id=btc_product_id,
+                                    side="SELL",
+                                    size=str(available),
+                                )
+                                converted_via_btc.append(currency)
+                                sold_count += 1
+                                progress_pct = int((idx / total_to_process) * 100)
+                                logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to BTC")
+                                await asyncio.sleep(0.2)
+                            else:
+                                raise direct_error
+
+                except Exception as e:
+                    failed_count += 1
+                    progress_pct = int((idx / total_to_process) * 100)
+                    error_msg = f"{currency} ({available:.8f}): {str(e)}"
+                    errors.append(error_msg)
+                    logger.error(f"❌ [{idx}/{total_to_process}] ({progress_pct}%) Failed to sell {currency}: {e}")
+
+                # Update progress after each currency
+                pcs.update_task_progress(
+                    task_id,
+                    current=idx,
+                    sold_count=sold_count,
+                    failed_count=failed_count,
+                    errors=errors,
+                    message=f"Processing {idx}/{total_to_process} currencies..."
+                )
+
+            # Step 2: Convert intermediate currency
+            if target_currency == "BTC" and converted_via_usd:
+                pcs.update_task_progress(task_id, message="Converting USD to BTC...")
+                logger.info(f"🔄 Task {task_id}: Converting accumulated USD to BTC")
+                await asyncio.sleep(1.0)
+
+                try:
+                    accounts = await exchange.get_accounts(force_fresh=True)
+                    usd_account = next((acc for acc in accounts if acc.get("currency") == "USD"), None)
+                    if usd_account:
+                        usd_available = float(usd_account.get("available_balance", {}).get("value", "0"))
+                        if usd_available > 1.0:
+                            btc_result = await exchange.create_market_order(
+                                product_id="BTC-USD",
+                                side="BUY",
+                                funds=str(usd_available),
+                            )
+                            logger.info(f"✅ Converted ${usd_available} USD to BTC")
+                except Exception as e:
+                    logger.error(f"Failed to convert USD to BTC: {e}")
+                    errors.append(f"USD-to-BTC conversion: {str(e)}")
+
+            if target_currency == "USD" and converted_via_btc:
+                pcs.update_task_progress(task_id, message="Converting BTC to USD...")
+                logger.info(f"🔄 Task {task_id}: Converting accumulated BTC to USD")
+                await asyncio.sleep(1.0)
+
+                try:
+                    accounts = await exchange.get_accounts(force_fresh=True)
+                    btc_account = next((acc for acc in accounts if acc.get("currency") == "BTC"), None)
+                    if btc_account:
+                        btc_available = float(btc_account.get("available_balance", {}).get("value", "0"))
+                        if btc_available > 0.00001:
+                            usd_result = await exchange.create_market_order(
+                                product_id="BTC-USD",
+                                side="SELL",
+                                size=str(btc_available),
+                            )
+                            logger.info(f"✅ Converted {btc_available} BTC to USD")
+                except Exception as e:
+                    logger.error(f"Failed to convert BTC to USD: {e}")
+                    errors.append(f"BTC-to-USD conversion: {str(e)}")
+
+            # Mark as completed
+            success_rate = f"{int((sold_count / total_to_process) * 100)}%" if total_to_process > 0 else "0%"
+            pcs.update_task_progress(
+                task_id,
+                status="completed",
+                message=f"Conversion complete: {sold_count}/{total_to_process} sold ({success_rate})",
+                sold_count=sold_count,
+                failed_count=failed_count,
+                errors=errors
+            )
+
+            logger.warning(f"🚨 Task {task_id}: PORTFOLIO CONVERSION completed: {sold_count}/{total_to_process} sold, {failed_count} failed")
+            break  # Exit the async for loop
+
+    except Exception as e:
+        logger.error(f"Task {task_id} failed with error: {e}")
+        pcs.update_task_progress(
+            task_id,
+            status="failed",
+            message=f"Conversion failed: {str(e)}"
+        )
+
+
 @router.post("/sell-portfolio-to-base")
 async def sell_portfolio_to_base_currency(
+    background_tasks: BackgroundTasks,
     target_currency: str = Query("BTC", description="Target currency: BTC or USD"),
     confirm: bool = Query(False, description="Must be true to execute"),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
-    Sell entire portfolio to BTC or USD.
-
-    This sells actual account balances (ETH, ADA, etc.), NOT positions/deals.
-    Use this to consolidate your portfolio into a single base currency.
+    Start portfolio conversion to BTC or USD (runs in background).
+    
+    Returns immediately with a task_id to check progress via /conversion-status/{task_id}
     """
     if not confirm:
         raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
@@ -469,7 +708,7 @@ async def sell_portfolio_to_base_currency(
     if target_currency not in ["BTC", "USD"]:
         raise HTTPException(status_code=400, detail="target_currency must be BTC or USD")
 
-    # Get user's default account (or iterate through all accounts)
+    # Get user's default account
     account_query = select(Account).where(
         Account.user_id == current_user.id,
         Account.is_default == True
@@ -480,203 +719,20 @@ async def sell_portfolio_to_base_currency(
     if not account:
         raise HTTPException(status_code=404, detail="No default account found")
 
-    # Get exchange client for this account
-    from app.services.exchange_service import get_exchange_client_for_account
-
-    exchange = await get_exchange_client_for_account(db, account.id)
-
-    # Get all account balances from Coinbase
-    try:
-        all_accounts = await exchange.get_accounts(force_fresh=True)
-    except Exception as e:
-        logger.error(f"Failed to fetch accounts from Coinbase: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to fetch account balances from Coinbase: {str(e)}"
-        )
-
-    # Filter to currencies we want to sell (exclude target currency)
-    # Only sell currencies with available balance > minimum threshold
-    currencies_to_sell = []
-    for acc in all_accounts:
-        currency = acc.get("currency")
-        available_str = acc.get("available_balance", {}).get("value", "0")
-        available = float(available_str)
-
-        # Skip target currency, skip zero balances
-        if currency == target_currency or available <= 0:
-            continue
-
-        # Skip dust - amounts too small to trade (would fail Coinbase minimums)
-        # Rough heuristic: Skip if less than $0.50 equivalent
-        # (Most Coinbase minimums are $1-$5, so $0.50 catches real dust)
-        if currency == "USD" and available < 0.50:
-            continue
-        if currency == "BTC" and available < 0.00001:  # ~$0.50 worth
-            continue
-        # For altcoins, we'll let the exchange reject if too small
-        # (minimums vary widely by coin)
-
-        currencies_to_sell.append({
-            "currency": currency,
-            "available": available,
-        })
-
-    if not currencies_to_sell:
-        return {
-            "message": f"Portfolio already in {target_currency} (no other currencies to sell)",
-            "sold_count": 0,
-            "failed_count": 0,
-            "errors": []
-        }
-
-    # Sell each currency to target
-    total_to_process = len(currencies_to_sell)
-    sold_count = 0
-    failed_count = 0
-    errors = []
-    converted_via_usd = []  # Track currencies sold to USD (for BTC conversion later)
-    converted_via_btc = []  # Track currencies sold to BTC (for USD conversion later)
-
-    logger.info(f"🔄 Starting portfolio conversion: {total_to_process} currencies to process")
-
-    for idx, item in enumerate(currencies_to_sell, 1):
-        currency = item["currency"]
-        available = item["available"]
-
-        try:
-            # For BTC target: Try direct pair first, fall back to USD route if needed
-            if target_currency == "BTC":
-                product_id = f"{currency}-BTC"
-                try:
-                    # Try direct CURRENCY-BTC trade
-                    result = await exchange.create_market_order(
-                        product_id=product_id,
-                        side="SELL",
-                        size=str(available),
-                    )
-                    sold_count += 1
-                    progress_pct = int((idx / total_to_process) * 100)
-                    logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to BTC directly: {result.get('order_id')}")
-                    await asyncio.sleep(0.2)  # Rate limit delay
-                except Exception as direct_error:
-                    # If direct BTC pair fails (likely 403 = pair doesn't exist), try USD route
-                    if "403" in str(direct_error) or "400" in str(direct_error):
-                        # Sell to USD first (we'll convert all USD to BTC at the end)
-                        usd_product_id = f"{currency}-USD"
-                        sell_result = await exchange.create_market_order(
-                            product_id=usd_product_id,
-                            side="SELL",
-                            size=str(available),
-                        )
-                        converted_via_usd.append(currency)
-                        sold_count += 1
-                        progress_pct = int((idx / total_to_process) * 100)
-                        logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to USD (will convert to BTC later): {sell_result.get('order_id')}")
-                        await asyncio.sleep(0.2)  # Rate limit delay
-                    else:
-                        raise direct_error
-            else:
-                # For USD target: Try direct pair first, fall back to BTC route if needed
-                product_id = f"{currency}-USD"
-                try:
-                    # Try direct CURRENCY-USD trade
-                    result = await exchange.create_market_order(
-                        product_id=product_id,
-                        side="SELL",
-                        size=str(available),
-                    )
-                    sold_count += 1
-                    progress_pct = int((idx / total_to_process) * 100)
-                    logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to USD directly: {result.get('order_id')}")
-                    await asyncio.sleep(0.2)  # Rate limit delay
-                except Exception as direct_error:
-                    # If direct USD pair fails (likely 403 = pair doesn't exist), try BTC route
-                    if "403" in str(direct_error) or "400" in str(direct_error):
-                        # Sell to BTC first (we'll convert all BTC to USD at the end)
-                        btc_product_id = f"{currency}-BTC"
-                        sell_result = await exchange.create_market_order(
-                            product_id=btc_product_id,
-                            side="SELL",
-                            size=str(available),
-                        )
-                        converted_via_btc.append(currency)
-                        sold_count += 1
-                        progress_pct = int((idx / total_to_process) * 100)
-                        logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to BTC (will convert to USD later): {sell_result.get('order_id')}")
-                        await asyncio.sleep(0.2)  # Rate limit delay
-                    else:
-                        raise direct_error
-
-        except Exception as e:
-            failed_count += 1
-            progress_pct = int((idx / total_to_process) * 100)
-            error_msg = f"{currency} ({available:.8f}): {str(e)}"
-            errors.append(error_msg)
-            logger.error(f"❌ [{idx}/{total_to_process}] ({progress_pct}%) Failed to sell {currency}: {e}")
-
-    # If converting to BTC and we sold currencies to USD, now convert all USD to BTC
-    if target_currency == "BTC" and converted_via_usd:
-        logger.info(f"🔄 Step 2: Converting accumulated USD to BTC ({len(converted_via_usd)} currencies went via USD route)")
-        try:
-            # Wait a moment for orders to settle
-            await asyncio.sleep(1.0)
-
-            # Refresh account to get current USD balance
-            accounts = await exchange.get_accounts(force_fresh=True)
-            usd_account = next((acc for acc in accounts if acc.get("currency") == "USD"), None)
-            if usd_account:
-                usd_available = float(usd_account.get("available_balance", {}).get("value", "0"))
-                if usd_available > 1.0:  # Only convert if we have at least $1
-                    # Buy BTC with all available USD
-                    btc_result = await exchange.create_market_order(
-                        product_id="BTC-USD",
-                        side="BUY",
-                        funds=str(usd_available),
-                    )
-                    logger.info(f"✅ Converted ${usd_available} USD to BTC: {btc_result.get('order_id')}")
-                else:
-                    logger.warning(f"USD balance too small to convert to BTC: ${usd_available}")
-        except Exception as e:
-            logger.error(f"Failed to convert USD to BTC: {e}")
-            errors.append(f"USD-to-BTC conversion: {str(e)}")
-
-    # If converting to USD and we sold currencies to BTC, now convert all BTC to USD
-    if target_currency == "USD" and converted_via_btc:
-        logger.info(f"🔄 Step 2: Converting accumulated BTC to USD ({len(converted_via_btc)} currencies went via BTC route)")
-        try:
-            # Wait a moment for orders to settle
-            await asyncio.sleep(1.0)
-
-            # Refresh account to get current BTC balance
-            accounts = await exchange.get_accounts(force_fresh=True)
-            btc_account = next((acc for acc in accounts if acc.get("currency") == "BTC"), None)
-            if btc_account:
-                btc_available = float(btc_account.get("available_balance", {}).get("value", "0"))
-                if btc_available > 0.00001:  # Only convert if we have at least ~$0.50 worth
-                    # Sell BTC for USD
-                    usd_result = await exchange.create_market_order(
-                        product_id="BTC-USD",
-                        side="SELL",
-                        size=str(btc_available),
-                    )
-                    logger.info(f"✅ Converted {btc_available} BTC to USD: {usd_result.get('order_id')}")
-                else:
-                    logger.warning(f"BTC balance too small to convert to USD: {btc_available}")
-        except Exception as e:
-            logger.error(f"Failed to convert BTC to USD: {e}")
-            errors.append(f"BTC-to-USD conversion: {str(e)}")
-
-    logger.warning(
-        f"🚨 PORTFOLIO CONVERSION to {target_currency} by user {current_user.id}: "
-        f"{sold_count}/{total_to_process} currencies sold, {failed_count} failed"
+    # Generate task ID and start background task
+    task_id = str(uuid.uuid4())
+    
+    # Start the conversion in the background
+    background_tasks.add_task(
+        _run_portfolio_conversion,
+        task_id=task_id,
+        account_id=account.id,
+        target_currency=target_currency,
+        user_id=current_user.id
     )
 
     return {
-        "message": f"Portfolio conversion complete: {sold_count}/{total_to_process} currencies sold to {target_currency}",
-        "total": total_to_process,
-        "sold_count": sold_count,
-        "failed_count": failed_count,
-        "success_rate": f"{int((sold_count / total_to_process) * 100)}%" if total_to_process > 0 else "0%",
-        "errors": errors
+        "task_id": task_id,
+        "message": f"Portfolio conversion to {target_currency} started",
+        "status_url": f"/api/account/conversion-status/{task_id}"
     }
