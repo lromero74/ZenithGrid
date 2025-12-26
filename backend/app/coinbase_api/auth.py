@@ -187,7 +187,12 @@ async def authenticated_request(
                         logger.error(f"❌ Rate limit exceeded after {max_retries} attempts on {method} {endpoint}")
                         raise
                 else:
-                    # Non-429 error, raise immediately
+                    # Non-429 error, log detailed error and raise
+                    try:
+                        error_body = e.response.json()
+                        logger.error(f"❌ Coinbase API error {e.response.status_code} on {method} {endpoint}: {error_body}")
+                    except:
+                        logger.error(f"❌ Coinbase API error {e.response.status_code} on {method} {endpoint}: {e.response.text}")
                     raise
 
     # Should never reach here (all paths return or raise)
