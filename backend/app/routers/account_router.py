@@ -507,8 +507,16 @@ async def sell_portfolio_to_base_currency(
         if currency == target_currency or available <= 0:
             continue
 
-        # Skip if balance is below exchange minimum (0.0001 for BTC pairs)
-        # For simplicity, use a threshold based on USD value or BTC value
+        # Skip dust - amounts too small to trade (would fail Coinbase minimums)
+        # Rough heuristic: Skip if less than $0.50 equivalent
+        # (Most Coinbase minimums are $1-$5, so $0.50 catches real dust)
+        if currency == "USD" and available < 0.50:
+            continue
+        if currency == "BTC" and available < 0.00001:  # ~$0.50 worth
+            continue
+        # For altcoins, we'll let the exchange reject if too small
+        # (minimums vary widely by coin)
+
         currencies_to_sell.append({
             "currency": currency,
             "available": available,
@@ -526,7 +534,8 @@ async def sell_portfolio_to_base_currency(
     sold_count = 0
     failed_count = 0
     errors = []
-    converted_via_usd = []  # Track currencies that were sold to USD (for BTC conversion later)
+    converted_via_usd = []  # Track currencies sold to USD (for BTC conversion later)
+    converted_via_btc = []  # Track currencies sold to BTC (for USD conversion later)
 
     for item in currencies_to_sell:
         currency = item["currency"]
@@ -563,18 +572,34 @@ async def sell_portfolio_to_base_currency(
                     else:
                         raise direct_error
             else:
-                # For USD target: Direct conversion
-                product_id = f"{currency}-{target_currency}"
-                result = await exchange.create_market_order(
-                    product_id=product_id,
-                    side="SELL",
-                    size=str(available),
-                )
-                sold_count += 1
-                logger.info(f"Sold {available} {currency} to {target_currency}: {result.get('order_id')}")
-
-            # Small delay to avoid hitting Coinbase rate limits
-            await asyncio.sleep(0.2)
+                # For USD target: Try direct pair first, fall back to BTC route if needed
+                product_id = f"{currency}-USD"
+                try:
+                    # Try direct CURRENCY-USD trade
+                    result = await exchange.create_market_order(
+                        product_id=product_id,
+                        side="SELL",
+                        size=str(available),
+                    )
+                    sold_count += 1
+                    logger.info(f"Sold {available} {currency} to USD directly: {result.get('order_id')}")
+                    await asyncio.sleep(0.2)  # Rate limit delay
+                except Exception as direct_error:
+                    # If direct USD pair fails (likely 403 = pair doesn't exist), try BTC route
+                    if "403" in str(direct_error) or "400" in str(direct_error):
+                        # Sell to BTC first (we'll convert all BTC to USD at the end)
+                        btc_product_id = f"{currency}-BTC"
+                        sell_result = await exchange.create_market_order(
+                            product_id=btc_product_id,
+                            side="SELL",
+                            size=str(available),
+                        )
+                        logger.info(f"Sold {available} {currency} to BTC (will convert to USD later): {sell_result.get('order_id')}")
+                        converted_via_btc.append(currency)
+                        sold_count += 1
+                        await asyncio.sleep(0.2)  # Rate limit delay
+                    else:
+                        raise direct_error
 
         except Exception as e:
             failed_count += 1
@@ -606,6 +631,31 @@ async def sell_portfolio_to_base_currency(
         except Exception as e:
             logger.error(f"Failed to convert USD to BTC: {e}")
             errors.append(f"USD-to-BTC conversion: {str(e)}")
+
+    # If converting to USD and we sold currencies to BTC, now convert all BTC to USD
+    if target_currency == "USD" and converted_via_btc:
+        try:
+            # Wait a moment for orders to settle
+            await asyncio.sleep(1.0)
+
+            # Refresh account to get current BTC balance
+            accounts = await exchange.get_accounts(force_fresh=True)
+            btc_account = next((acc for acc in accounts if acc.get("currency") == "BTC"), None)
+            if btc_account:
+                btc_available = float(btc_account.get("available_balance", {}).get("value", "0"))
+                if btc_available > 0.00001:  # Only convert if we have at least ~$0.50 worth
+                    # Sell BTC for USD
+                    usd_result = await exchange.create_market_order(
+                        product_id="BTC-USD",
+                        side="SELL",
+                        size=str(btc_available),
+                    )
+                    logger.info(f"✅ Converted {btc_available} BTC to USD: {usd_result.get('order_id')}")
+                else:
+                    logger.warning(f"BTC balance too small to convert to USD: {btc_available}")
+        except Exception as e:
+            logger.error(f"Failed to convert BTC to USD: {e}")
+            errors.append(f"BTC-to-USD conversion: {str(e)}")
 
     logger.warning(
         f"🚨 PORTFOLIO CONVERSION to {target_currency} by user {current_user.id}: "
