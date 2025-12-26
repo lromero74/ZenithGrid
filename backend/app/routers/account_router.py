@@ -519,28 +519,81 @@ async def sell_portfolio_to_base_currency(
     sold_count = 0
     failed_count = 0
     errors = []
+    converted_via_usd = []  # Track currencies that were sold to USD (for BTC conversion later)
 
     for item in currencies_to_sell:
         currency = item["currency"]
         available = item["available"]
-        product_id = f"{currency}-{target_currency}"
 
         try:
-            # Place market sell order using the exchange client
-            result = await exchange.create_market_order(
-                product_id=product_id,
-                side="SELL",
-                size=str(available),
-            )
-
-            sold_count += 1
-            logger.info(f"Sold {available} {currency} to {target_currency}: {result.get('order_id')}")
+            # For BTC target: Try direct pair first, fall back to USD route if needed
+            if target_currency == "BTC":
+                product_id = f"{currency}-BTC"
+                try:
+                    # Try direct CURRENCY-BTC trade
+                    result = await exchange.create_market_order(
+                        product_id=product_id,
+                        side="SELL",
+                        size=str(available),
+                    )
+                    sold_count += 1
+                    logger.info(f"Sold {available} {currency} to BTC directly: {result.get('order_id')}")
+                except Exception as direct_error:
+                    # If direct BTC pair fails (likely 403 = pair doesn't exist), try USD route
+                    if "403" in str(direct_error) or "400" in str(direct_error):
+                        # Sell to USD first (we'll convert all USD to BTC at the end)
+                        usd_product_id = f"{currency}-USD"
+                        sell_result = await exchange.create_market_order(
+                            product_id=usd_product_id,
+                            side="SELL",
+                            size=str(available),
+                        )
+                        logger.info(f"Sold {available} {currency} to USD (will convert to BTC later): {sell_result.get('order_id')}")
+                        converted_via_usd.append(currency)
+                        sold_count += 1
+                    else:
+                        raise direct_error
+            else:
+                # For USD target: Direct conversion
+                product_id = f"{currency}-{target_currency}"
+                result = await exchange.create_market_order(
+                    product_id=product_id,
+                    side="SELL",
+                    size=str(available),
+                )
+                sold_count += 1
+                logger.info(f"Sold {available} {currency} to {target_currency}: {result.get('order_id')}")
 
         except Exception as e:
             failed_count += 1
             error_msg = f"{currency} ({available:.8f}): {str(e)}"
             errors.append(error_msg)
             logger.error(f"Failed to sell {currency}: {e}")
+
+    # If converting to BTC and we sold currencies to USD, now convert all USD to BTC
+    if target_currency == "BTC" and converted_via_usd:
+        try:
+            # Wait a moment for orders to settle
+            await asyncio.sleep(1.0)
+
+            # Refresh account to get current USD balance
+            accounts = await exchange.get_accounts(force_fresh=True)
+            usd_account = next((acc for acc in accounts if acc.get("currency") == "USD"), None)
+            if usd_account:
+                usd_available = float(usd_account.get("available_balance", {}).get("value", "0"))
+                if usd_available > 1.0:  # Only convert if we have at least $1
+                    # Buy BTC with all available USD
+                    btc_result = await exchange.create_market_order(
+                        product_id="BTC-USD",
+                        side="BUY",
+                        funds=str(usd_available),
+                    )
+                    logger.info(f"✅ Converted ${usd_available} USD to BTC: {btc_result.get('order_id')}")
+                else:
+                    logger.warning(f"USD balance too small to convert to BTC: ${usd_available}")
+        except Exception as e:
+            logger.error(f"Failed to convert USD to BTC: {e}")
+            errors.append(f"USD-to-BTC conversion: {str(e)}")
 
     logger.warning(
         f"🚨 PORTFOLIO CONVERSION to {target_currency} by user {current_user.id}: "
