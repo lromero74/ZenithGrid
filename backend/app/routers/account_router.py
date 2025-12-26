@@ -486,7 +486,14 @@ async def sell_portfolio_to_base_currency(
     exchange = await get_exchange_client_for_account(db, account.id)
 
     # Get all account balances from Coinbase
-    all_accounts = await exchange.get_accounts(force_fresh=True)
+    try:
+        all_accounts = await exchange.get_accounts(force_fresh=True)
+    except Exception as e:
+        logger.error(f"Failed to fetch accounts from Coinbase: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to fetch account balances from Coinbase: {str(e)}"
+        )
 
     # Filter to currencies we want to sell (exclude target currency)
     # Only sell currencies with available balance > minimum threshold
