@@ -545,6 +545,7 @@ async def sell_portfolio_to_base_currency(
                     )
                     sold_count += 1
                     logger.info(f"Sold {available} {currency} to BTC directly: {result.get('order_id')}")
+                    await asyncio.sleep(0.2)  # Rate limit delay
                 except Exception as direct_error:
                     # If direct BTC pair fails (likely 403 = pair doesn't exist), try USD route
                     if "403" in str(direct_error) or "400" in str(direct_error):
@@ -558,6 +559,7 @@ async def sell_portfolio_to_base_currency(
                         logger.info(f"Sold {available} {currency} to USD (will convert to BTC later): {sell_result.get('order_id')}")
                         converted_via_usd.append(currency)
                         sold_count += 1
+                        await asyncio.sleep(0.2)  # Rate limit delay
                     else:
                         raise direct_error
             else:
@@ -570,6 +572,9 @@ async def sell_portfolio_to_base_currency(
                 )
                 sold_count += 1
                 logger.info(f"Sold {available} {currency} to {target_currency}: {result.get('order_id')}")
+
+            # Small delay to avoid hitting Coinbase rate limits
+            await asyncio.sleep(0.2)
 
         except Exception as e:
             failed_count += 1
