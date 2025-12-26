@@ -531,13 +531,16 @@ async def sell_portfolio_to_base_currency(
         }
 
     # Sell each currency to target
+    total_to_process = len(currencies_to_sell)
     sold_count = 0
     failed_count = 0
     errors = []
     converted_via_usd = []  # Track currencies sold to USD (for BTC conversion later)
     converted_via_btc = []  # Track currencies sold to BTC (for USD conversion later)
 
-    for item in currencies_to_sell:
+    logger.info(f"🔄 Starting portfolio conversion: {total_to_process} currencies to process")
+
+    for idx, item in enumerate(currencies_to_sell, 1):
         currency = item["currency"]
         available = item["available"]
 
@@ -553,7 +556,8 @@ async def sell_portfolio_to_base_currency(
                         size=str(available),
                     )
                     sold_count += 1
-                    logger.info(f"Sold {available} {currency} to BTC directly: {result.get('order_id')}")
+                    progress_pct = int((idx / total_to_process) * 100)
+                    logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to BTC directly: {result.get('order_id')}")
                     await asyncio.sleep(0.2)  # Rate limit delay
                 except Exception as direct_error:
                     # If direct BTC pair fails (likely 403 = pair doesn't exist), try USD route
@@ -565,9 +569,10 @@ async def sell_portfolio_to_base_currency(
                             side="SELL",
                             size=str(available),
                         )
-                        logger.info(f"Sold {available} {currency} to USD (will convert to BTC later): {sell_result.get('order_id')}")
                         converted_via_usd.append(currency)
                         sold_count += 1
+                        progress_pct = int((idx / total_to_process) * 100)
+                        logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to USD (will convert to BTC later): {sell_result.get('order_id')}")
                         await asyncio.sleep(0.2)  # Rate limit delay
                     else:
                         raise direct_error
@@ -582,7 +587,8 @@ async def sell_portfolio_to_base_currency(
                         size=str(available),
                     )
                     sold_count += 1
-                    logger.info(f"Sold {available} {currency} to USD directly: {result.get('order_id')}")
+                    progress_pct = int((idx / total_to_process) * 100)
+                    logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to USD directly: {result.get('order_id')}")
                     await asyncio.sleep(0.2)  # Rate limit delay
                 except Exception as direct_error:
                     # If direct USD pair fails (likely 403 = pair doesn't exist), try BTC route
@@ -594,21 +600,24 @@ async def sell_portfolio_to_base_currency(
                             side="SELL",
                             size=str(available),
                         )
-                        logger.info(f"Sold {available} {currency} to BTC (will convert to USD later): {sell_result.get('order_id')}")
                         converted_via_btc.append(currency)
                         sold_count += 1
+                        progress_pct = int((idx / total_to_process) * 100)
+                        logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to BTC (will convert to USD later): {sell_result.get('order_id')}")
                         await asyncio.sleep(0.2)  # Rate limit delay
                     else:
                         raise direct_error
 
         except Exception as e:
             failed_count += 1
+            progress_pct = int((idx / total_to_process) * 100)
             error_msg = f"{currency} ({available:.8f}): {str(e)}"
             errors.append(error_msg)
-            logger.error(f"Failed to sell {currency}: {e}")
+            logger.error(f"❌ [{idx}/{total_to_process}] ({progress_pct}%) Failed to sell {currency}: {e}")
 
     # If converting to BTC and we sold currencies to USD, now convert all USD to BTC
     if target_currency == "BTC" and converted_via_usd:
+        logger.info(f"🔄 Step 2: Converting accumulated USD to BTC ({len(converted_via_usd)} currencies went via USD route)")
         try:
             # Wait a moment for orders to settle
             await asyncio.sleep(1.0)
@@ -634,6 +643,7 @@ async def sell_portfolio_to_base_currency(
 
     # If converting to USD and we sold currencies to BTC, now convert all BTC to USD
     if target_currency == "USD" and converted_via_btc:
+        logger.info(f"🔄 Step 2: Converting accumulated BTC to USD ({len(converted_via_btc)} currencies went via BTC route)")
         try:
             # Wait a moment for orders to settle
             await asyncio.sleep(1.0)
@@ -659,12 +669,14 @@ async def sell_portfolio_to_base_currency(
 
     logger.warning(
         f"🚨 PORTFOLIO CONVERSION to {target_currency} by user {current_user.id}: "
-        f"{sold_count} currencies sold, {failed_count} failed"
+        f"{sold_count}/{total_to_process} currencies sold, {failed_count} failed"
     )
 
     return {
-        "message": f"Portfolio conversion complete: {sold_count} currencies sold to {target_currency}",
+        "message": f"Portfolio conversion complete: {sold_count}/{total_to_process} currencies sold to {target_currency}",
+        "total": total_to_process,
         "sold_count": sold_count,
         "failed_count": failed_count,
+        "success_rate": f"{int((sold_count / total_to_process) * 100)}%" if total_to_process > 0 else "0%",
         "errors": errors
     }
