@@ -15,7 +15,6 @@ import {
   MoreVertical,
   AlertCircle,
   RefreshCw,
-  AlertTriangle,
 } from 'lucide-react'
 import { useAccount, Account, getChainName } from '../contexts/AccountContext'
 import { accountApi } from '../services/api'
@@ -37,8 +36,6 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [sellingToBTC, setSellingToBTC] = useState(false)
-  const [sellingToUSD, setSellingToUSD] = useState(false)
 
   const handleDelete = async (account: Account) => {
     if (!confirm(`Are you sure you want to delete "${account.name}"? This action cannot be undone.`)) {
@@ -151,11 +148,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
             failed: 0,
           })
 
-          if (conversionProgress.targetCurrency === 'BTC') {
-            setSellingToBTC(false)
-          } else {
-            setSellingToUSD(false)
-          }
+          // Conversion complete - state managed by conversionProgress
         }
       } catch (err) {
         console.error('Failed to fetch conversion status:', err)
@@ -164,47 +157,6 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
 
     return () => clearInterval(pollInterval)
   }, [conversionProgress.taskId, conversionProgress.status, conversionProgress.targetCurrency, refreshAccounts])
-
-  const handleSellPortfolioToBase = async (targetCurrency: 'BTC' | 'USD') => {
-    const currencySetter = targetCurrency === 'BTC' ? setSellingToBTC : setSellingToUSD
-
-    if (!confirm(
-      `🚨 CONVERT ENTIRE PORTFOLIO TO ${targetCurrency} 🚨\n\n` +
-      `This will sell ALL your portfolio holdings (ETH, ADA, etc.) to ${targetCurrency}.\n\n` +
-      `All balances will be converted at MARKET price.\n` +
-      `This action CANNOT be undone.\n\n` +
-      `Are you absolutely sure you want to proceed?`
-    )) {
-      return
-    }
-
-    currencySetter(true)
-    setActionError(null)
-
-    try {
-      // Start the conversion (returns task_id immediately)
-      const result = await accountApi.sellPortfolioToBase(targetCurrency, true)
-
-      // Set up progress tracking
-      setConversionProgress({
-        taskId: result.task_id,
-        targetCurrency,
-        status: 'running',
-        progress: 0,
-        message: 'Starting conversion...',
-        total: 0,
-        current: 0,
-        sold: 0,
-        failed: 0,
-      })
-
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-      setActionError(`Failed to start portfolio conversion: ${errorMsg}`)
-      alert(`❌ Error starting portfolio conversion: ${errorMsg}`)
-      currencySetter(false)
-    }
-  }
 
   const cexAccounts = accounts.filter((a) => a.type === 'cex')
   const dexAccounts = accounts.filter((a) => a.type === 'dex')
@@ -272,54 +224,6 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
           >
             Add Your First Account
           </button>
-        </div>
-      )}
-
-      {/* Portfolio Conversion Section */}
-      {accounts.length > 0 && (
-        <div className="bg-orange-900/20 border border-orange-700 rounded-lg p-4">
-          <div className="flex items-start gap-3 mb-3">
-            <AlertTriangle className="w-5 h-5 text-orange-400 mt-0.5" />
-            <div className="flex-1">
-              <h4 className="text-orange-400 font-semibold mb-1">
-                Portfolio Conversion
-              </h4>
-              <p className="text-sm text-orange-300">
-                Convert your entire portfolio to BTC or USD. This sells all your holdings (ETH, ADA, etc.)
-                at market price. Use after cancelling deals to consolidate into a single currency.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => handleSellPortfolioToBase('BTC')}
-              disabled={sellingToBTC}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {sellingToBTC ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Converting...
-                </>
-              ) : (
-                'Convert Portfolio to BTC'
-              )}
-            </button>
-            <button
-              onClick={() => handleSellPortfolioToBase('USD')}
-              disabled={sellingToUSD}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {sellingToUSD ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Converting...
-                </>
-              ) : (
-                'Convert Portfolio to USD'
-              )}
-            </button>
-          </div>
         </div>
       )}
 

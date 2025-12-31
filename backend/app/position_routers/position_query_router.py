@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import Account, AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
@@ -35,7 +36,11 @@ async def get_positions(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get positions with optional status filter"""
-    query = select(Position)
+    # Use eager loading to avoid N+1 queries
+    query = select(Position).options(
+        selectinload(Position.trades),
+        selectinload(Position.pending_orders)
+    )
 
     # Filter by user's accounts if authenticated
     if current_user:
@@ -70,26 +75,16 @@ async def get_positions(
 
     response = []
     for pos in positions:
-        # Count trades
-        trade_count_query = select(func.count(Trade.id)).where(Trade.position_id == pos.id)
-        trade_count_result = await db.execute(trade_count_query)
-        trade_count = trade_count_result.scalar()
+        # Use eager-loaded data instead of separate queries
+        # Count trades (already loaded via selectinload)
+        trade_count = len(pos.trades)
 
-        # Count pending orders
-        pending_count_query = select(func.count(PendingOrder.id)).where(
-            PendingOrder.position_id == pos.id, PendingOrder.status == "pending"
-        )
-        pending_count_result = await db.execute(pending_count_query)
-        pending_count = pending_count_result.scalar()
+        # Count pending orders (already loaded via selectinload)
+        pending_count = len([o for o in pos.pending_orders if o.status == "pending"])
 
-        # Get buy trades for first/last buy prices (needed for DCA tick marks)
-        buy_trades_query = (
-            select(Trade)
-            .where(Trade.position_id == pos.id, Trade.side == "buy")
-            .order_by(Trade.timestamp)
-        )
-        buy_trades_result = await db.execute(buy_trades_query)
-        buy_trades = buy_trades_result.scalars().all()
+        # Get buy trades for first/last buy prices (already loaded)
+        buy_trades = [t for t in pos.trades if t.side == "buy"]
+        buy_trades.sort(key=lambda t: t.timestamp)
 
         pos_response = PositionResponse.model_validate(pos)
         pos_response.trade_count = trade_count
@@ -106,11 +101,13 @@ async def get_positions(
             pos_response.is_blacklisted = True
             pos_response.blacklist_reason = blacklist_map[base_symbol]
 
-        # If position is closing via limit, fetch order details
+        # If position is closing via limit, fetch order details (already loaded)
         if pos.closing_via_limit and pos.limit_close_order_id:
-            limit_order_query = select(PendingOrder).where(PendingOrder.order_id == pos.limit_close_order_id)
-            limit_order_result = await db.execute(limit_order_query)
-            limit_order = limit_order_result.scalars().first()
+            # Find the limit order from already-loaded pending_orders
+            limit_order = next(
+                (o for o in pos.pending_orders if o.order_id == pos.limit_close_order_id),
+                None
+            )
 
             if limit_order:
                 fills_data: List = (

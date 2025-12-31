@@ -8,12 +8,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot, User
+from app.models import Bot, Position, User
 from app.routers.auth_dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
@@ -114,4 +114,141 @@ async def force_run_bot(
     return {
         "message": f"Bot '{bot.name}' will run on next monitor cycle",
         "note": "Bot will execute within ~10 seconds",
+    }
+
+
+@router.post("/{bot_id}/cancel-all-positions")
+async def cancel_all_positions(
+    bot_id: int,
+    confirm: bool = Query(False, description="Must be true to execute"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Cancel all open positions for a bot without selling"""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
+
+    # Get bot with user filtering
+    query = select(Bot).where(Bot.id == bot_id)
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
+    result = await db.execute(query)
+    bot = result.scalars().first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    # Get all open positions for this bot
+    positions_query = select(Position).where(
+        Position.bot_id == bot_id,
+        Position.status == "open"
+    )
+    positions_result = await db.execute(positions_query)
+    positions = positions_result.scalars().all()
+
+    if not positions:
+        raise HTTPException(status_code=400, detail="No open positions to cancel")
+
+    # Cancel each position
+    cancelled_count = 0
+    failed_count = 0
+    errors = []
+
+    for position in positions:
+        try:
+            position.status = "cancelled"
+            position.closed_at = datetime.utcnow()
+            cancelled_count += 1
+        except Exception as e:
+            failed_count += 1
+            errors.append(f"{position.product_id} (#{position.id}): {str(e)}")
+
+    await db.commit()
+
+    logger.info(f"Cancelled {cancelled_count} positions for bot '{bot.name}' (ID: {bot_id})")
+
+    return {
+        "message": f"Cancelled {cancelled_count} position(s)",
+        "cancelled_count": cancelled_count,
+        "failed_count": failed_count,
+        "errors": errors
+    }
+
+
+@router.post("/{bot_id}/sell-all-positions")
+async def sell_all_positions(
+    bot_id: int,
+    confirm: bool = Query(False, description="Must be true to execute"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Sell all open positions for a bot at market price (realize P&L)"""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
+
+    # Get bot with user filtering
+    query = select(Bot).where(Bot.id == bot_id)
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
+    result = await db.execute(query)
+    bot = result.scalars().first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    # Get exchange client for this bot's account
+    from app.services.exchange_service import get_exchange_client_for_account
+    from app.strategies import StrategyRegistry
+    from app.trading_engine_v2 import StrategyTradingEngine
+
+    exchange = await get_exchange_client_for_account(db, bot.account_id)
+    strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
+
+    # Get all open positions for this bot
+    positions_query = select(Position).where(
+        Position.bot_id == bot_id,
+        Position.status == "open"
+    )
+    positions_result = await db.execute(positions_query)
+    positions = positions_result.scalars().all()
+
+    if not positions:
+        raise HTTPException(status_code=400, detail="No open positions to sell")
+
+    # Sell each position
+    sold_count = 0
+    failed_count = 0
+    total_profit_quote = 0.0
+    errors = []
+
+    for position in positions:
+        try:
+            # Get current price
+            current_price = await exchange.get_current_price(position.product_id)
+
+            # Execute sell using trading engine
+            engine = StrategyTradingEngine(
+                db=db, exchange=exchange, bot=bot, strategy=strategy, product_id=position.product_id
+            )
+            trade, profit_quote, profit_pct = await engine.execute_sell(
+                position=position, current_price=current_price, signal_data=None
+            )
+
+            sold_count += 1
+            total_profit_quote += profit_quote
+
+        except Exception as e:
+            failed_count += 1
+            errors.append(f"{position.product_id} (#{position.id}): {str(e)}")
+
+    logger.warning(
+        f"🚨 SELL ALL executed for bot '{bot.name}': "
+        f"{sold_count} sold, {failed_count} failed, "
+        f"total profit: {total_profit_quote:.8f}"
+    )
+
+    return {
+        "message": f"Sold {sold_count} position(s)",
+        "sold_count": sold_count,
+        "failed_count": failed_count,
+        "total_profit_quote": total_profit_quote,
+        "errors": errors
     }

@@ -226,7 +226,9 @@ function ThreeCommasStyleForm({
   const aggregateValue = isFiatQuote ? aggregateUsdValue : aggregateBtcValue
 
   // Check if budget calculator is active
-  const useBudgetCalculator = !!(aggregateValue && budgetPercentage && budgetPercentage > 0)
+  // Only auto-calculate when user has enabled the toggle AND has a budget set
+  const useBudgetCalculator = config.auto_calculate_order_sizes === true &&
+                                !!(aggregateValue && budgetPercentage && budgetPercentage > 0)
 
   // Get exchange minimum for this quote currency
   const exchangeMinimum = EXCHANGE_MINIMUMS[quoteCurrency as keyof typeof EXCHANGE_MINIMUMS] || 0.0001
@@ -368,17 +370,61 @@ function ThreeCommasStyleForm({
 
       {/* Base Order Settings */}
       <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-        <h3 className="text-lg font-semibold text-white mb-4">Base Order</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Base Order</h3>
+          {budgetPercentage && budgetPercentage > 0 && aggregateValue && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-sm text-slate-400">
+                {config.auto_calculate_order_sizes ? 'Auto-calculated' : 'Manual'}
+              </span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={config.auto_calculate_order_sizes || false}
+                  onChange={(e) => {
+                    // Batch all updates into a single onChange call to avoid state issues
+                    const updates: Record<string, any> = {
+                      auto_calculate_order_sizes: e.target.checked
+                    }
+                    // When enabling auto-calc, force base/safety order types to fixed
+                    if (e.target.checked) {
+                      updates.base_order_type = 'fixed'
+                      updates.safety_order_type = 'fixed'
+                    }
+                    onChange({ ...config, ...updates })
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+              </div>
+            </label>
+          )}
+        </div>
+        {budgetPercentage && budgetPercentage > 0 && aggregateValue && (
+          <p className="text-xs text-slate-400 mb-4">
+            {config.auto_calculate_order_sizes
+              ? '📊 Order sizes are automatically calculated from your budget allocation. Disable to manually specify order sizes.'
+              : '✏️ Manually specify your order sizes below. Enable auto-calculate to have them computed from your budget.'}
+          </p>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               Base Order Type
+              {useBudgetCalculator && (
+                <span className="text-xs text-slate-400 ml-2">(Auto: Fixed)</span>
+              )}
             </label>
             <select
               value={config.base_order_type || 'percentage'}
               onChange={(e) => updateConfig('base_order_type', e.target.value)}
-              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+              disabled={useBudgetCalculator}
+              className={`w-full px-3 py-2 rounded border ${
+                useBudgetCalculator
+                  ? 'bg-slate-800 text-slate-400 border-slate-700 cursor-not-allowed'
+                  : 'bg-slate-700 text-white border-slate-600'
+              }`}
             >
               <option value="percentage">% of {quoteCurrency} Balance</option>
               <option value="fixed">Fixed {quoteCurrency} Amount</option>
@@ -389,7 +435,7 @@ function ThreeCommasStyleForm({
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
                 Base Order % of {quoteCurrency} Balance
-                {aggregateValue && (
+                {aggregateValue && !useBudgetCalculator && (
                   <span className="text-xs text-slate-400 ml-2">
                     (min: {calculateMinPercentage().toFixed(1)}%)
                   </span>
@@ -400,16 +446,20 @@ function ThreeCommasStyleForm({
                 value={getNumericValue(config.base_order_percentage, 10)}
                 onChange={(e) => updateConfig('base_order_percentage', safeParseFloat(e.target.value) ?? 10)}
                 onBlur={() => validateAndCorrectPercentage('base_order_percentage', config.base_order_percentage ?? 10, calculateMinPercentage())}
+                readOnly={useBudgetCalculator}
                 min={calculateMinPercentage()}
                 max="100"
                 step="0.1"
-                className={`w-full bg-slate-700 text-white px-3 py-2 rounded border transition-colors duration-200 ${
-                  errorFields.has('base_order_percentage')
-                    ? 'border-red-500 bg-red-900/30'
-                    : 'border-slate-600'
+                className={`w-full px-3 py-2 rounded border transition-colors duration-200 ${
+                  useBudgetCalculator
+                    ? 'bg-slate-800 text-slate-400 border-slate-700 cursor-not-allowed'
+                    : errorFields.has('base_order_percentage')
+                    ? 'border-red-500 bg-red-900/30 bg-slate-700 text-white'
+                    : 'bg-slate-700 text-white border-slate-600'
                 }`}
+                title={useBudgetCalculator ? 'Automatically calculated from budget settings' : ''}
               />
-              {errorFields.has('base_order_percentage') && (
+              {errorFields.has('base_order_percentage') && !useBudgetCalculator && (
                 <p className="text-xs text-red-400 mt-1">
                   Below exchange minimum. Adjusting to {calculateMinPercentage().toFixed(1)}%...
                 </p>
@@ -520,11 +570,19 @@ function ThreeCommasStyleForm({
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               Safety Order Type
+              {useBudgetCalculator && (
+                <span className="text-xs text-slate-400 ml-2">(Auto: Fixed)</span>
+              )}
             </label>
             <select
               value={config.safety_order_type || 'percentage_of_base'}
               onChange={(e) => updateConfig('safety_order_type', e.target.value)}
-              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+              disabled={useBudgetCalculator}
+              className={`w-full px-3 py-2 rounded border ${
+                useBudgetCalculator
+                  ? 'bg-slate-800 text-slate-400 border-slate-700 cursor-not-allowed'
+                  : 'bg-slate-700 text-white border-slate-600'
+              }`}
             >
               <option value="percentage_of_base">% of Base Order</option>
               <option value="fixed">Fixed {quoteCurrency} Amount</option>
@@ -535,7 +593,7 @@ function ThreeCommasStyleForm({
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
                 Safety Order % of Base
-                {aggregateValue && (
+                {aggregateValue && !useBudgetCalculator && (
                   <span className="text-xs text-slate-400 ml-2">
                     (min: {calculateMinSafetyOrderPercentage()}%)
                   </span>
@@ -548,16 +606,20 @@ function ThreeCommasStyleForm({
                   updateConfig('safety_order_percentage', safeParseFloat(e.target.value) ?? 50)
                 }
                 onBlur={() => validateAndCorrectPercentage('safety_order_percentage', config.safety_order_percentage ?? 50, calculateMinSafetyOrderPercentage())}
+                readOnly={useBudgetCalculator}
                 min={calculateMinSafetyOrderPercentage()}
                 max="500"
                 step="1"
-                className={`w-full bg-slate-700 text-white px-3 py-2 rounded border transition-colors duration-200 ${
-                  errorFields.has('safety_order_percentage')
-                    ? 'border-red-500 bg-red-900/30'
-                    : 'border-slate-600'
+                className={`w-full px-3 py-2 rounded border transition-colors duration-200 ${
+                  useBudgetCalculator
+                    ? 'bg-slate-800 text-slate-400 border-slate-700 cursor-not-allowed'
+                    : errorFields.has('safety_order_percentage')
+                    ? 'border-red-500 bg-red-900/30 bg-slate-700 text-white'
+                    : 'bg-slate-700 text-white border-slate-600'
                 }`}
+                title={useBudgetCalculator ? 'Automatically calculated from budget settings' : ''}
               />
-              {errorFields.has('safety_order_percentage') && (
+              {errorFields.has('safety_order_percentage') && !useBudgetCalculator && (
                 <p className="text-xs text-red-400 mt-1">
                   Below exchange minimum. Adjusting to {calculateMinSafetyOrderPercentage()}%...
                 </p>
@@ -838,8 +900,8 @@ function ThreeCommasStyleForm({
           )}
         </div>
 
-        {/* DCA Budget Breakdown */}
-        {aggregateValue && budgetPercentage && budgetPercentage > 0 && !isPatternBasedEntry && (config.max_safety_orders ?? 5) > 0 && (
+        {/* DCA Budget Breakdown - only show when auto-calculate is enabled */}
+        {useBudgetCalculator && !isPatternBasedEntry && (config.max_safety_orders ?? 5) > 0 && (
           <div className="mt-4 pt-4 border-t border-slate-700">
             <h4 className="text-sm font-semibold text-slate-300 mb-2">💰 DCA Budget Calculator</h4>
             {(() => {

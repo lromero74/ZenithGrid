@@ -30,7 +30,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   // Fetch all bots (filtered by account if selected)
   const { data: bots = [] } = useQuery({
     queryKey: ['bots', selectedAccount?.id],
-    queryFn: botsApi.getAll,
+    queryFn: () => botsApi.getAll(),
     refetchInterval: 30000, // 30 seconds - API takes time due to Coinbase calls
     staleTime: 15000, // Consider fresh for 15 seconds
     select: (data) => {

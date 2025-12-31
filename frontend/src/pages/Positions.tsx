@@ -82,7 +82,7 @@ export default function Positions() {
   // Fetch all bots to display bot names (filtered by account)
   const { data: bots } = useQuery({
     queryKey: ['bots', selectedAccount?.id],
-    queryFn: botsApi.getAll,
+    queryFn: () => botsApi.getAll(),
     refetchInterval: 10000,
     select: (data) => {
       if (!selectedAccount) return data
