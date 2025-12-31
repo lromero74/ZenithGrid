@@ -12,6 +12,11 @@ interface ThreeCommasStyleFormProps {
   quoteCurrency?: string  // 'BTC', 'USD', 'USDC', etc. - defaults to 'BTC'
   aggregateBtcValue?: number  // Total BTC value for min percentage calculation
   aggregateUsdValue?: number  // Total USD value for min percentage calculation
+  // Bot-level budget fields for DCA calculator
+  budgetPercentage?: number  // Bot's budget as % of total portfolio
+  numPairs?: number  // Number of trading pairs
+  splitBudget?: boolean  // Whether to split budget across pairs
+  maxConcurrentDeals?: number  // Max number of simultaneous positions
 }
 
 // Exchange minimum order sizes
@@ -40,6 +45,80 @@ const getNumericValue = (value: any, fallback: number): number => {
     return fallback
   }
   return Number(value)
+}
+
+// Calculate DCA budget breakdown
+interface DCABudgetBreakdown {
+  totalBudget: number
+  budgetPerPair: number
+  budgetPerDeal: number
+  baseOrderSize: number
+  safetyOrders: { order: number; size: number; total: number }[]
+  totalCapitalPerDeal: number
+  maxSimultaneousCapital: number
+  budgetUtilization: number  // %
+}
+
+function calculateDCABudget(
+  aggregateValue: number,
+  budgetPercentage: number,
+  numPairs: number,
+  splitBudget: boolean,
+  maxConcurrentDeals: number,
+  maxSafetyOrders: number,
+  safetyOrderVolumeScale: number
+): DCABudgetBreakdown {
+  // Calculate total bot budget
+  const totalBudget = (aggregateValue * budgetPercentage) / 100
+
+  // Budget per pair (if splitting)
+  const budgetPerPair = splitBudget && numPairs > 0 ? totalBudget / numPairs : totalBudget
+
+  // Budget per deal (divided by max concurrent deals)
+  const budgetPerDeal = budgetPerPair / Math.max(1, maxConcurrentDeals)
+
+  // Calculate total capital needed for full DCA ladder
+  // Base order + SO1 + SO2 + ... + SO_n
+  // Where SO_i = BaseOrder * SafetyOrderScale^(i-1)
+  // Assuming safety orders start at 100% of base (like 3Commas default)
+  const baseOrderSizeRatio = 1.0  // Base order is the unit
+  let totalRatio = baseOrderSizeRatio  // Start with base order
+
+  const safetyOrders: { order: number; size: number; total: number }[] = []
+  for (let i = 0; i < maxSafetyOrders; i++) {
+    const soRatio = Math.pow(safetyOrderVolumeScale, i)
+    totalRatio += soRatio
+  }
+
+  // Calculate base order size
+  const baseOrderSize = budgetPerDeal / totalRatio
+
+  // Calculate each safety order
+  let runningTotal = baseOrderSize
+  for (let i = 0; i < maxSafetyOrders; i++) {
+    const soSize = baseOrderSize * Math.pow(safetyOrderVolumeScale, i)
+    runningTotal += soSize
+    safetyOrders.push({
+      order: i + 1,
+      size: soSize,
+      total: runningTotal
+    })
+  }
+
+  const totalCapitalPerDeal = runningTotal
+  const maxSimultaneousCapital = totalCapitalPerDeal * maxConcurrentDeals
+  const budgetUtilization = (maxSimultaneousCapital / budgetPerPair) * 100
+
+  return {
+    totalBudget,
+    budgetPerPair,
+    budgetPerDeal,
+    baseOrderSize,
+    safetyOrders,
+    totalCapitalPerDeal,
+    maxSimultaneousCapital,
+    budgetUtilization
+  }
 }
 
 // Normalize conditions from DB format (indicator) to frontend format (type)
@@ -91,7 +170,17 @@ function hasBullFlagEntry(expression: ConditionExpression): boolean {
   )
 }
 
-function ThreeCommasStyleForm({ config, onChange, quoteCurrency = 'BTC', aggregateBtcValue, aggregateUsdValue }: ThreeCommasStyleFormProps) {
+function ThreeCommasStyleForm({
+  config,
+  onChange,
+  quoteCurrency = 'BTC',
+  aggregateBtcValue,
+  aggregateUsdValue,
+  budgetPercentage,
+  numPairs,
+  splitBudget,
+  maxConcurrentDeals
+}: ThreeCommasStyleFormProps) {
   // Track which fields have validation error (red flash)
   const [errorFields, setErrorFields] = useState<Set<string>>(new Set())
   const errorTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -668,6 +757,59 @@ function ThreeCommasStyleForm({ config, onChange, quoteCurrency = 'BTC', aggrega
             </>
           )}
         </div>
+
+        {/* DCA Budget Breakdown */}
+        {aggregateValue && budgetPercentage && budgetPercentage > 0 && !isPatternBasedEntry && (config.max_safety_orders ?? 5) > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <h4 className="text-sm font-semibold text-slate-300 mb-2">💰 DCA Budget Calculator</h4>
+            {(() => {
+              const breakdown = calculateDCABudget(
+                aggregateValue,
+                budgetPercentage,
+                numPairs || 1,
+                splitBudget || false,
+                maxConcurrentDeals || config.max_concurrent_deals || 1,
+                config.max_safety_orders ?? 5,
+                config.safety_order_volume_scale ?? 1.0
+              )
+
+              return (
+                <div className="text-xs text-slate-400 space-y-1">
+                  <p>
+                    📊 <strong>Total Bot Budget:</strong> {breakdown.totalBudget.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
+                  </p>
+                  {splitBudget && numPairs && numPairs > 1 && (
+                    <p>
+                      🔀 <strong>Per Pair:</strong> {breakdown.budgetPerPair.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency} ({numPairs} pairs)
+                    </p>
+                  )}
+                  <p>
+                    🎯 <strong>Per Position:</strong> {breakdown.budgetPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
+                  </p>
+                  <p>
+                    📥 <strong>Base Order:</strong> {breakdown.baseOrderSize.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
+                  </p>
+                  {breakdown.safetyOrders.slice(0, 3).map((so) => (
+                    <p key={so.order}>
+                      🔁 <strong>SO{so.order}:</strong> {so.size.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency} (total: {so.total.toFixed(quoteCurrency === 'BTC' ? 8 : 2)})
+                    </p>
+                  ))}
+                  {breakdown.safetyOrders.length > 3 && (
+                    <p className="text-slate-500 italic">
+                      ... {breakdown.safetyOrders.length - 3} more safety orders
+                    </p>
+                  )}
+                  <p className="pt-2 border-t border-slate-700">
+                    💵 <strong>Max Capital/Position:</strong> {breakdown.totalCapitalPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
+                  </p>
+                  <p>
+                    🔢 <strong>Max Simultaneous:</strong> {breakdown.maxSimultaneousCapital.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency} ({breakdown.budgetUtilization.toFixed(1)}% of allocated)
+                  </p>
+                </div>
+              )
+            })()}
+          </div>
+        )}
       </div>
     </div>
   )

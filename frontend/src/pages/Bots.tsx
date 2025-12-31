@@ -1803,6 +1803,10 @@ function Bots() {
                   quoteCurrency={formData.product_ids.length > 0 ? formData.product_ids[0].split('-')[1] : 'BTC'}
                   aggregateBtcValue={aggregateData?.aggregate_btc_value}
                   aggregateUsdValue={aggregateData?.aggregate_usd_value}
+                  budgetPercentage={formData.budget_percentage}
+                  numPairs={formData.product_ids.length}
+                  splitBudget={formData.split_budget_across_pairs}
+                  maxConcurrentDeals={formData.strategy_config.max_concurrent_deals}
                 />
               ) : selectedStrategy.parameters.length > 0 ? (
 (() => {
