@@ -204,12 +204,22 @@ async def get_changelog(limit: int = 20, offset: int = 0, refresh: bool = False)
     Get changelog showing commits between version tags.
     Similar to 'python3 update.py --changelog' output.
     Supports pagination with limit and offset.
-    Uses caching - rebuilds cache only on first call or when refresh=true.
+    Uses caching - rebuilds cache only on first call, when refresh=true, or when new tags detected.
     """
     global _changelog_cache
 
-    # Only rebuild cache if empty or explicitly requested
-    if not _changelog_cache["versions"] or refresh:
+    # Check if cache needs rebuilding
+    needs_rebuild = not _changelog_cache["versions"] or refresh
+
+    # Auto-invalidate cache if new tags are available
+    if not needs_rebuild:
+        actual_latest = get_latest_git_tag()
+        cached_latest = _changelog_cache["latest_tag"]
+        if actual_latest != cached_latest:
+            logger.info(f"New tag detected: {actual_latest} (cached: {cached_latest}), rebuilding changelog cache")
+            needs_rebuild = True
+
+    if needs_rebuild:
         build_changelog_cache()
 
     current_version = get_git_version()
