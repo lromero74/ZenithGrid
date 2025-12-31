@@ -40,10 +40,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
   })
 
-  // Fetch all positions for metrics (filtered by account)
-  const { data: allPositions = [] } = useQuery({
-    queryKey: ['all-positions', selectedAccount?.id],
-    queryFn: () => positionsApi.getAll(undefined, 100),
+  // Fetch open positions for active deals count
+  const { data: openPositions = [] } = useQuery({
+    queryKey: ['open-positions', selectedAccount?.id],
+    queryFn: () => positionsApi.getAll('open', 100),
     refetchInterval: 30000, // 30 seconds
     select: (data) => {
       if (!selectedAccount) return data
@@ -51,6 +51,21 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       return data.filter((p: any) => p.account_id === selectedAccount.id)
     },
   })
+
+  // Fetch closed positions for profit/win rate metrics (high limit to get all)
+  const { data: closedPositions = [] } = useQuery({
+    queryKey: ['closed-positions', selectedAccount?.id],
+    queryFn: () => positionsApi.getAll('closed', 1000),
+    refetchInterval: 30000, // 30 seconds
+    select: (data) => {
+      if (!selectedAccount) return data
+      // Filter by account_id
+      return data.filter((p: any) => p.account_id === selectedAccount.id)
+    },
+  })
+
+  // Combine for recent deals display
+  const allPositions = [...openPositions, ...closedPositions]
 
   // Fetch portfolio for account value - account-specific for CEX/DEX switching
   const { data: portfolio } = useQuery({
@@ -74,15 +89,17 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   })
 
   const activeBots = bots.filter(bot => bot.is_active)
-  const openPositions = allPositions.filter(p => p.status === 'open')
-  const closedPositions = allPositions.filter(p => p.status === 'closed')
 
-  // Calculate total profit
-  const totalProfitQuote = closedPositions.reduce((sum, p) => sum + (p.profit_quote || 0), 0)
+  // Calculate total profit (USD is normalized across all bots)
   const totalProfitUSD = closedPositions.reduce((sum, p) => sum + (p.profit_usd || 0), 0)
 
-  // Calculate win rate
-  const profitablePositions = closedPositions.filter(p => (p.profit_quote || 0) > 0)
+  // Calculate total BTC profit (only from BTC-based positions)
+  const totalProfitBTC = closedPositions
+    .filter(p => p.product_id && p.product_id.endsWith('-BTC'))
+    .reduce((sum, p) => sum + (p.profit_quote || 0), 0)
+
+  // Calculate win rate (use profit_usd as normalized metric)
+  const profitablePositions = closedPositions.filter(p => (p.profit_usd || 0) > 0)
   const winRate = closedPositions.length > 0
     ? (profitablePositions.length / closedPositions.length) * 100
     : 0
@@ -134,18 +151,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
           <div className="flex items-center justify-between mb-2">
             <p className="text-slate-400 text-sm font-medium">Total Profit</p>
-            {totalProfitQuote >= 0 ? (
+            {totalProfitUSD >= 0 ? (
               <TrendingUp className="w-5 h-5 text-green-500" />
             ) : (
               <TrendingDown className="w-5 h-5 text-red-500" />
             )}
           </div>
-          <p className={`text-2xl font-bold ${totalProfitQuote >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {totalProfitQuote >= 0 ? '+' : ''}{formatCrypto(totalProfitQuote, 8)}
-          </p>
-          <p className={`text-sm mt-1 ${totalProfitUSD >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+          <p className={`text-2xl font-bold ${totalProfitUSD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {totalProfitUSD >= 0 ? '+' : ''}{formatCurrency(totalProfitUSD)}
           </p>
+          {totalProfitBTC !== 0 && (
+            <p className={`text-sm mt-1 ${totalProfitBTC >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+              {totalProfitBTC >= 0 ? '+' : ''}{formatCrypto(totalProfitBTC, 8)} BTC
+            </p>
+          )}
         </div>
 
         {/* Win Rate */}
