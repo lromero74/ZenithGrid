@@ -111,6 +111,21 @@ class Account(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_used_at = Column(DateTime, nullable=True)
 
+    # Auto-buy BTC settings
+    auto_buy_enabled = Column(Boolean, default=False)  # Master toggle
+    auto_buy_check_interval_minutes = Column(Integer, default=5)  # Shared check interval
+    auto_buy_order_type = Column(String, default="market")  # "market" or "limit"
+
+    # Per-stablecoin auto-buy settings
+    auto_buy_usd_enabled = Column(Boolean, default=False)
+    auto_buy_usd_min = Column(Float, default=10.0)
+
+    auto_buy_usdc_enabled = Column(Boolean, default=False)
+    auto_buy_usdc_min = Column(Float, default=10.0)
+
+    auto_buy_usdt_enabled = Column(Boolean, default=False)
+    auto_buy_usdt_min = Column(Float, default=10.0)
+
     # Relationships
     user = relationship("User", back_populates="accounts")
     bots = relationship("Bot", back_populates="account")

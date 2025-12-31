@@ -156,6 +156,41 @@ class AccountWithBalance(AccountResponse):
     native_symbol: str = "BTC"
 
 
+# Auto-buy BTC Settings Schemas
+class AutoBuySettings(BaseModel):
+    """Auto-buy BTC settings for an account"""
+    enabled: bool
+    check_interval_minutes: int
+    order_type: str  # "market" or "limit"
+
+    # Per-stablecoin settings
+    usd_enabled: bool
+    usd_min: float
+
+    usdc_enabled: bool
+    usdc_min: float
+
+    usdt_enabled: bool
+    usdt_min: float
+
+
+class AutoBuySettingsUpdate(BaseModel):
+    """Update model for auto-buy settings (all fields optional)"""
+    enabled: Optional[bool] = None
+    check_interval_minutes: Optional[int] = None
+    order_type: Optional[str] = None
+
+    # Per-stablecoin settings
+    usd_enabled: Optional[bool] = None
+    usd_min: Optional[float] = None
+
+    usdc_enabled: Optional[bool] = None
+    usdc_min: Optional[float] = None
+
+    usdt_enabled: Optional[bool] = None
+    usdt_min: Optional[float] = None
+
+
 # =============================================================================
 # API Endpoints
 # =============================================================================
@@ -631,3 +666,99 @@ async def get_account_portfolio(
     except Exception as e:
         logger.error(f"Error getting portfolio for account {account_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Auto-Buy BTC Settings Endpoints
+# =============================================================================
+
+@router.get("/{account_id}/auto-buy-settings", response_model=AutoBuySettings)
+async def get_auto_buy_settings(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Get auto-buy BTC settings for an account"""
+    query = select(Account).where(Account.id == account_id)
+
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Account.user_id == current_user.id)
+
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    return AutoBuySettings(
+        enabled=account.auto_buy_enabled or False,
+        check_interval_minutes=account.auto_buy_check_interval_minutes or 5,
+        order_type=account.auto_buy_order_type or "market",
+        usd_enabled=account.auto_buy_usd_enabled or False,
+        usd_min=account.auto_buy_usd_min or 10.0,
+        usdc_enabled=account.auto_buy_usdc_enabled or False,
+        usdc_min=account.auto_buy_usdc_min or 10.0,
+        usdt_enabled=account.auto_buy_usdt_enabled or False,
+        usdt_min=account.auto_buy_usdt_min or 10.0,
+    )
+
+
+@router.put("/{account_id}/auto-buy-settings", response_model=AutoBuySettings)
+async def update_auto_buy_settings(
+    account_id: int,
+    settings: AutoBuySettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Update auto-buy BTC settings for an account"""
+    query = select(Account).where(Account.id == account_id)
+
+    # Filter by user if authenticated
+    if current_user:
+        query = query.where(Account.user_id == current_user.id)
+
+    result = await db.execute(query)
+    account = result.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+    # Update fields if provided
+    if settings.enabled is not None:
+        account.auto_buy_enabled = settings.enabled
+    if settings.check_interval_minutes is not None:
+        account.auto_buy_check_interval_minutes = settings.check_interval_minutes
+    if settings.order_type is not None:
+        account.auto_buy_order_type = settings.order_type
+
+    # Update per-stablecoin settings
+    if settings.usd_enabled is not None:
+        account.auto_buy_usd_enabled = settings.usd_enabled
+    if settings.usd_min is not None:
+        account.auto_buy_usd_min = settings.usd_min
+
+    if settings.usdc_enabled is not None:
+        account.auto_buy_usdc_enabled = settings.usdc_enabled
+    if settings.usdc_min is not None:
+        account.auto_buy_usdc_min = settings.usdc_min
+
+    if settings.usdt_enabled is not None:
+        account.auto_buy_usdt_enabled = settings.usdt_enabled
+    if settings.usdt_min is not None:
+        account.auto_buy_usdt_min = settings.usdt_min
+
+    await db.commit()
+    await db.refresh(account)
+
+    return AutoBuySettings(
+        enabled=account.auto_buy_enabled or False,
+        check_interval_minutes=account.auto_buy_check_interval_minutes or 5,
+        order_type=account.auto_buy_order_type or "market",
+        usd_enabled=account.auto_buy_usd_enabled or False,
+        usd_min=account.auto_buy_usd_min or 10.0,
+        usdc_enabled=account.auto_buy_usdc_enabled or False,
+        usdc_min=account.auto_buy_usdc_min or 10.0,
+        usdt_enabled=account.auto_buy_usdt_enabled or False,
+        usdt_min=account.auto_buy_usdt_min or 10.0,
+    )

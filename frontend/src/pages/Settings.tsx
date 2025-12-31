@@ -4,11 +4,14 @@ import { AccountsManagement } from '../components/AccountsManagement'
 import { AddAccountModal } from '../components/AddAccountModal'
 import { AIProvidersManager } from '../components/AIProvidersManager'
 import { BlacklistManager } from '../components/BlacklistManager'
+import { AutoBuySettings } from '../components/AutoBuySettings'
+import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const { user, changePassword } = useAuth()
+  const { accounts } = useAccount()
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -179,6 +182,9 @@ export default function Settings() {
 
       {/* Accounts Management Section */}
       <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
+
+      {/* Auto-Buy BTC Section */}
+      <AutoBuySettings accounts={accounts} />
 
       {/* AI Providers Section */}
       <AIProvidersManager />

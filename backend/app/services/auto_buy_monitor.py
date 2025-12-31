@@ -1,0 +1,304 @@
+"""
+Auto-Buy BTC Monitor Service
+
+Automatically converts stablecoins (USD, USDC, USDT) to BTC when balances
+exceed configured minimums. Supports both market and limit orders with
+automatic re-pricing for unfilled limit orders.
+"""
+import asyncio
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import async_session_maker
+from app.models import Account, PendingOrder
+from app.services.exchange_service import get_exchange_client_for_account
+
+logger = logging.getLogger(__name__)
+
+
+class AutoBuyMonitor:
+    """
+    Background service that monitors accounts and auto-buys BTC with stablecoins.
+
+    Features:
+    - Per-account check intervals
+    - Market or limit order placement
+    - Automatic limit order re-pricing after 2 minutes
+    - Tracks pending orders to avoid duplicates
+    """
+
+    def __init__(self):
+        self.running = False
+        self.task = None
+        self._account_timers: Dict[int, datetime] = {}  # account_id -> last_check_time
+        self._pending_orders: Dict[str, datetime] = {}  # order_id -> placement_time
+
+    async def start(self):
+        """Start the auto-buy monitor"""
+        if not self.running:
+            self.running = True
+            self.task = asyncio.create_task(self._monitor_loop())
+            logger.info("✅ Auto-Buy Monitor started")
+
+    async def stop(self):
+        """Stop the auto-buy monitor"""
+        self.running = False
+        if self.task:
+            await self.task
+        logger.info("🛑 Auto-Buy Monitor stopped")
+
+    async def _monitor_loop(self):
+        """Main monitoring loop - checks every 10 seconds"""
+        while self.running:
+            try:
+                await self._check_accounts()
+                await self._check_pending_orders()
+            except Exception as e:
+                logger.error(f"Error in auto-buy monitor loop: {e}", exc_info=True)
+
+            await asyncio.sleep(10)  # Check every 10 seconds
+
+    async def _check_accounts(self):
+        """Check which accounts need processing based on their intervals"""
+        async with async_session_maker() as db:
+            # Get all accounts with auto_buy_enabled=True
+            query = select(Account).where(Account.auto_buy_enabled == True)
+            result = await db.execute(query)
+            accounts = result.scalars().all()
+
+            for account in accounts:
+                if self._should_check_account(account):
+                    await self._process_account(account, db)
+
+    def _should_check_account(self, account: Account) -> bool:
+        """Check if enough time has passed to process this account"""
+        now = datetime.utcnow()
+        last_check = self._account_timers.get(account.id)
+
+        if not last_check:
+            return True  # Never checked before
+
+        interval_seconds = (account.auto_buy_check_interval_minutes or 5) * 60
+        elapsed_seconds = (now - last_check).total_seconds()
+
+        return elapsed_seconds >= interval_seconds
+
+    async def _process_account(self, account: Account, db: AsyncSession):
+        """Process one account - check balances and buy BTC if needed"""
+        try:
+            client = await get_exchange_client_for_account(account.id, db)
+            if not client:
+                logger.warning(f"No exchange client for account {account.id}")
+                return
+
+            # Check each enabled stablecoin
+            stablecoins = []
+            if account.auto_buy_usd_enabled:
+                stablecoins.append(("USD", account.auto_buy_usd_min, "BTC-USD"))
+            if account.auto_buy_usdc_enabled:
+                stablecoins.append(("USDC", account.auto_buy_usdc_min, "BTC-USDC"))
+            if account.auto_buy_usdt_enabled:
+                stablecoins.append(("USDT", account.auto_buy_usdt_min, "BTC-USDT"))
+
+            for currency, min_amount, product_id in stablecoins:
+                await self._check_and_buy(
+                    client,
+                    account,
+                    currency,
+                    min_amount,
+                    product_id,
+                    db
+                )
+
+            # Update timer for this account
+            self._account_timers[account.id] = datetime.utcnow()
+
+        except Exception as e:
+            logger.error(f"Auto-buy failed for account {account.id}: {e}", exc_info=True)
+
+    async def _check_and_buy(
+        self,
+        client,
+        account: Account,
+        currency: str,
+        min_amount: float,
+        product_id: str,
+        db: AsyncSession
+    ):
+        """Check balance and buy BTC if above minimum"""
+        try:
+            # Get available balance
+            balance_data = await client.get_balance(currency)
+            available = float(balance_data.get('available', 0))
+
+            if available < min_amount:
+                logger.debug(f"Account {account.name}: {currency} balance {available} below minimum {min_amount}")
+                return
+
+            logger.info(f"🎯 Auto-buy triggered for {account.name}: {available} {currency} → BTC")
+
+            # Determine order type
+            order_type = account.auto_buy_order_type or "market"
+
+            if order_type == "market":
+                # Place market order
+                result = await client.buy_with_usd(available, product_id)
+                order_id = result.get('order_id')
+
+                logger.info(
+                    f"✅ Auto-buy market order placed: {available} {currency} → BTC "
+                    f"(Account: {account.name}, Order: {order_id})"
+                )
+
+            else:  # limit order
+                # Get current market price for limit order
+                ticker = await client.get_product(product_id)
+                current_price = float(ticker.get('price', 0))
+
+                if current_price == 0:
+                    logger.error(f"Could not get price for {product_id}")
+                    return
+
+                # Calculate BTC size
+                btc_size = available / current_price
+
+                # Place limit order at current market price
+                result = await client.create_limit_order(
+                    product_id=product_id,
+                    side="BUY",
+                    size=str(btc_size),
+                    price=str(current_price)
+                )
+
+                order_id = result.get('order_id')
+
+                # Track pending order for re-pricing
+                self._pending_orders[order_id] = datetime.utcnow()
+
+                # Store in database
+                pending_order = PendingOrder(
+                    order_id=order_id,
+                    account_id=account.id,
+                    product_id=product_id,
+                    side="BUY",
+                    order_type="limit",
+                    price=current_price,
+                    size=btc_size,
+                    status="open",
+                    created_at=datetime.utcnow()
+                )
+                db.add(pending_order)
+                await db.commit()
+
+                logger.info(
+                    f"✅ Auto-buy limit order placed: {btc_size:.8f} BTC @ ${current_price:.2f} "
+                    f"(Account: {account.name}, Order: {order_id})"
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Error placing auto-buy order for {currency} on account {account.name}: {e}",
+                exc_info=True
+            )
+
+    async def _check_pending_orders(self):
+        """Check pending limit orders and re-price if needed (after 2 minutes)"""
+        if not self._pending_orders:
+            return
+
+        async with async_session_maker() as db:
+            now = datetime.utcnow()
+            orders_to_remove = []
+
+            for order_id, placed_time in list(self._pending_orders.items()):
+                elapsed = (now - placed_time).total_seconds()
+
+                # Re-price after 2 minutes
+                if elapsed >= 120:  # 2 minutes
+                    await self._reprice_order(order_id, db)
+                    orders_to_remove.append(order_id)
+
+            # Clean up processed orders
+            for order_id in orders_to_remove:
+                del self._pending_orders[order_id]
+
+    async def _reprice_order(self, order_id: str, db: AsyncSession):
+        """Cancel and replace a limit order at current market price"""
+        try:
+            # Get order from database
+            query = select(PendingOrder).where(PendingOrder.order_id == order_id)
+            result = await db.execute(query)
+            pending_order = result.scalar_one_or_none()
+
+            if not pending_order or pending_order.status != "open":
+                logger.debug(f"Order {order_id} already filled or cancelled")
+                return
+
+            # Get exchange client
+            client = await get_exchange_client_for_account(pending_order.account_id, db)
+            if not client:
+                return
+
+            # Check if order is still open
+            order_status = await client.get_order(order_id)
+            if order_status.get('status') in ['FILLED', 'CANCELLED']:
+                # Order already filled or cancelled
+                pending_order.status = order_status.get('status').lower()
+                await db.commit()
+                logger.debug(f"Order {order_id} already {pending_order.status}")
+                return
+
+            # Cancel old order
+            await client.cancel_order(order_id)
+            pending_order.status = "cancelled"
+            await db.commit()
+
+            logger.info(f"🔄 Re-pricing auto-buy order {order_id} (after 2 minutes)")
+
+            # Get current market price
+            ticker = await client.get_product(pending_order.product_id)
+            new_price = float(ticker.get('price', 0))
+
+            if new_price == 0:
+                logger.error(f"Could not get price for {pending_order.product_id}")
+                return
+
+            # Place new limit order at current price
+            result = await client.create_limit_order(
+                product_id=pending_order.product_id,
+                side=pending_order.side,
+                size=str(pending_order.size),
+                price=str(new_price)
+            )
+
+            new_order_id = result.get('order_id')
+
+            # Track new order
+            self._pending_orders[new_order_id] = datetime.utcnow()
+
+            # Update database
+            new_pending_order = PendingOrder(
+                order_id=new_order_id,
+                account_id=pending_order.account_id,
+                product_id=pending_order.product_id,
+                side=pending_order.side,
+                order_type="limit",
+                price=new_price,
+                size=pending_order.size,
+                status="open",
+                created_at=datetime.utcnow()
+            )
+            db.add(new_pending_order)
+            await db.commit()
+
+            logger.info(
+                f"✅ Re-priced order: {pending_order.size:.8f} BTC @ ${new_price:.2f} "
+                f"(Old: ${pending_order.price:.2f}, New Order: {new_order_id})"
+            )
+
+        except Exception as e:
+            logger.error(f"Error re-pricing order {order_id}: {e}", exc_info=True)

@@ -51,6 +51,10 @@ price_monitor = MultiBotMonitor(interval_seconds=10)
 trading_pair_monitor = TradingPairMonitor(check_interval_seconds=86400)  # 24 hours
 set_trading_pair_monitor(trading_pair_monitor)  # Make accessible via API
 
+# Auto-buy BTC monitor - converts stablecoins to BTC based on account settings
+from app.services.auto_buy_monitor import AutoBuyMonitor
+auto_buy_monitor = AutoBuyMonitor()
+
 # Background task handles
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
@@ -227,6 +231,10 @@ async def startup_event():
     await content_refresh_service.start()
     print("🚀 Content refresh service started - news every 30min, videos every 60min")
 
+    print("🚀 Starting auto-buy BTC monitor...")
+    await auto_buy_monitor.start()
+    print("🚀 Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
+
     print("🚀 Building changelog cache...")
     build_changelog_cache()
     print("🚀 Changelog cache built")
@@ -254,6 +262,9 @@ async def shutdown_event():
 
     if content_refresh_service:
         await content_refresh_service.stop()
+
+    if auto_buy_monitor:
+        await auto_buy_monitor.stop()
 
     if limit_order_monitor_task:
         limit_order_monitor_task.cancel()

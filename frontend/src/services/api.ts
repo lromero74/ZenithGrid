@@ -341,3 +341,35 @@ export const aiCredentialsApi = {
   delete: (provider: string) =>
     api.delete<{ message: string }>(`/ai-credentials/${provider}`).then((res) => res.data),
 };
+
+// Auto-Buy BTC Settings
+export interface AutoBuySettings {
+  enabled: boolean;
+  check_interval_minutes: number;
+  order_type: string;  // "market" or "limit"
+  usd_enabled: boolean;
+  usd_min: number;
+  usdc_enabled: boolean;
+  usdc_min: number;
+  usdt_enabled: boolean;
+  usdt_min: number;
+}
+
+export interface AutoBuySettingsUpdate {
+  enabled?: boolean;
+  check_interval_minutes?: number;
+  order_type?: string;
+  usd_enabled?: boolean;
+  usd_min?: number;
+  usdc_enabled?: boolean;
+  usdc_min?: number;
+  usdt_enabled?: boolean;
+  usdt_min?: number;
+}
+
+export const autoBuyApi = {
+  getSettings: (accountId: number) =>
+    api.get<AutoBuySettings>(`/accounts/${accountId}/auto-buy-settings`).then((res) => res.data),
+  updateSettings: (accountId: number, settings: AutoBuySettingsUpdate) =>
+    api.put<AutoBuySettings>(`/accounts/${accountId}/auto-buy-settings`, settings).then((res) => res.data),
+};
