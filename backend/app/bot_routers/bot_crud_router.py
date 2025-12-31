@@ -6,7 +6,7 @@ Also includes bot stats and clone operations.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -151,10 +151,11 @@ async def create_bot(
 @router.get("/", response_model=List[BotResponse])
 async def list_bots(
     active_only: bool = False,
+    projection_timeframe: Optional[str] = "all",
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get list of all bots"""
+    """Get list of all bots with projection stats based on selected timeframe"""
     import asyncio
 
     query = select(Bot).order_by(desc(Bot.created_at))
@@ -254,11 +255,53 @@ async def list_bots(
             if pos.profit_usd:
                 total_pnl_usd += pos.profit_usd
 
-        # Calculate avg daily PnL (total PnL / days since bot created)
-        days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
-        avg_daily_pnl_usd = total_pnl_usd / days_active if days_active > 0 else 0.0
+        # Calculate avg daily PnL based on selected projection timeframe
+        # This prevents wild projections when portfolio value changes due to withdrawals
+        # Timeframe mapping: '7d' -> 7 days, '14d' -> 14, '30d' -> 30, '3m' -> 90, '6m' -> 180, '1y' -> 365, 'all' -> all-time
+        timeframe_days_map = {
+            '7d': 7,
+            '14d': 14,
+            '30d': 30,
+            '3m': 90,
+            '6m': 180,
+            '1y': 365,
+            'all': None  # Use all closed positions
+        }
 
-        # Calculate trades per day (closed positions / days active)
+        timeframe_days = timeframe_days_map.get(projection_timeframe, None)  # Default to 'all' if unknown
+
+        if timeframe_days is None:
+            # Use all-time for 'all' or unknown timeframes
+            recent_closed_positions = closed_positions
+            max_days = timeframe_days  # None means no cap
+        else:
+            # Filter to positions closed within the timeframe
+            cutoff_date = datetime.utcnow() - timedelta(days=timeframe_days)
+            recent_closed_positions = [
+                p for p in closed_positions
+                if p.closed_at and p.closed_at >= cutoff_date
+            ]
+            max_days = timeframe_days
+
+        recent_pnl_usd = sum(p.profit_usd for p in recent_closed_positions if p.profit_usd)
+
+        # Calculate days in period: min of timeframe_days or actual time since first recent trade
+        if recent_closed_positions:
+            first_recent_close = min(p.closed_at for p in recent_closed_positions if p.closed_at)
+            days_in_recent_period = max(1, (datetime.utcnow() - first_recent_close).total_seconds() / 86400)
+            if max_days is not None:
+                days_in_recent_period = min(max_days, days_in_recent_period)  # Cap at timeframe
+        else:
+            # No trades in timeframe - use full timeframe or bot age for all-time
+            if max_days is not None:
+                days_in_recent_period = max_days
+            else:
+                days_in_recent_period = max(1, (datetime.utcnow() - bot.created_at).total_seconds() / 86400)
+
+        avg_daily_pnl_usd = recent_pnl_usd / days_in_recent_period
+
+        # Calculate trades per day (use all-time for this metric)
+        days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
         trades_per_day = len(closed_positions) / days_active if days_active > 0 else 0.0
 
         # Calculate win rate (percentage of profitable closed positions)

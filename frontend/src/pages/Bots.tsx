@@ -3,13 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { botsApi, templatesApi, accountApi } from '../services/api'
 import { Bot, BotCreate, StrategyParameter } from '../types'
-import { Plus, Edit, Trash2, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet, ScanLine, BarChart2 } from 'lucide-react'
+import { Plus, Edit, Trash2, Activity, Copy, Brain, MoreVertical, FastForward, Building2, Wallet, ScanLine, BarChart2, XCircle, DollarSign } from 'lucide-react'
 import ThreeCommasStyleForm from '../components/ThreeCommasStyleForm'
 import PhaseConditionSelector from '../components/PhaseConditionSelector'
 import AIBotLogs from '../components/AIBotLogs'
 import IndicatorLogs from '../components/IndicatorLogs'
 import ScannerLogs from '../components/ScannerLogs'
-import { PnLChart } from '../components/PnLChart'
+import { PnLChart, TimeRange } from '../components/PnLChart'
 import DexConfigSection from '../components/DexConfigSection'
 import axios from 'axios'
 import { useAccount, getChainName } from '../contexts/AccountContext'
@@ -144,11 +144,12 @@ function Bots() {
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [formData, setFormData] = useState<BotFormData>(getDefaultFormData())
+  const [projectionTimeframe, setProjectionTimeframe] = useState<TimeRange>('all')
 
   // Fetch all bots (filtered by selected account)
   const { data: bots = [], isLoading: botsLoading } = useQuery({
-    queryKey: ['bots', selectedAccount?.id],
-    queryFn: botsApi.getAll,
+    queryKey: ['bots', selectedAccount?.id, projectionTimeframe],
+    queryFn: () => botsApi.getAll(projectionTimeframe),
     refetchInterval: 5000,
     select: (data) => {
       if (!selectedAccount) return data
@@ -498,6 +499,52 @@ function Bots() {
     },
   })
 
+  // Cancel all positions mutation
+  const cancelAllPositions = useMutation({
+    mutationFn: (id: number) => botsApi.cancelAllPositions(id, true),
+    onSuccess: (data, botId) => {
+      queryClient.invalidateQueries({ queryKey: ['bots'] })
+      queryClient.invalidateQueries({ queryKey: ['positions'] })
+
+      const bot = bots?.find(b => b.id === botId)
+      const botName = bot?.name || `Bot #${botId}`
+
+      if (data.failed_count > 0) {
+        alert(
+          `Cancelled ${data.cancelled_count} of ${data.cancelled_count + data.failed_count} positions for ${botName}.\n\n` +
+          `Errors:\n${data.errors.join('\n')}`
+        )
+      } else {
+        alert(`✅ Successfully cancelled all ${data.cancelled_count} positions for ${botName}`)
+      }
+    },
+  })
+
+  // Sell all positions mutation
+  const sellAllPositions = useMutation({
+    mutationFn: (id: number) => botsApi.sellAllPositions(id, true),
+    onSuccess: (data, botId) => {
+      queryClient.invalidateQueries({ queryKey: ['bots'] })
+      queryClient.invalidateQueries({ queryKey: ['positions'] })
+
+      const bot = bots?.find(b => b.id === botId)
+      const botName = bot?.name || `Bot #${botId}`
+
+      if (data.failed_count > 0) {
+        alert(
+          `Sold ${data.sold_count} of ${data.sold_count + data.failed_count} positions for ${botName}.\n\n` +
+          `Total Profit: ${data.total_profit_quote.toFixed(8)}\n\n` +
+          `Errors:\n${data.errors.join('\n')}`
+        )
+      } else {
+        alert(
+          `✅ Successfully sold all ${data.sold_count} positions for ${botName}\n` +
+          `Total Profit: ${data.total_profit_quote.toFixed(8)}`
+        )
+      }
+    },
+  })
+
   // ESC key handler to close modal
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -822,7 +869,10 @@ function Bots() {
 
       {/* P&L Chart - 3Commas-style (filtered by account) */}
       <div className="mb-6">
-        <PnLChart accountId={selectedAccount?.id} />
+        <PnLChart
+          accountId={selectedAccount?.id}
+          onTimeRangeChange={setProjectionTimeframe}
+        />
       </div>
 
       {/* Bot List - 3Commas-style Table */}
@@ -1159,6 +1209,53 @@ function Bots() {
                                   <Copy className="w-4 h-4 text-blue-400" />
                                   <span>Clone Bot</span>
                                 </button>
+
+                                {/* Separator if bot has open positions */}
+                                {(bot.open_positions_count ?? 0) > 0 && (
+                                  <div className="border-t border-slate-600 my-1"></div>
+                                )}
+
+                                {/* Cancel All Positions */}
+                                {(bot.open_positions_count ?? 0) > 0 && (
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(
+                                        `⚠️ Cancel all ${bot.open_positions_count} open position(s) for "${bot.name}"?\n\n` +
+                                        `This will mark them as CANCELLED without selling.\n` +
+                                        `Your holdings will remain as-is (no P&L impact).\n\n` +
+                                        `This action cannot be undone.`
+                                      )) {
+                                        cancelAllPositions.mutate(bot.id)
+                                      }
+                                      setOpenMenuId(null)
+                                    }}
+                                    className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
+                                  >
+                                    <XCircle className="w-4 h-4 text-orange-400" />
+                                    <span>Cancel All Deals</span>
+                                  </button>
+                                )}
+
+                                {/* Sell All Positions at Market Price */}
+                                {(bot.open_positions_count ?? 0) > 0 && (
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(
+                                        `⚠️ Sell all ${bot.open_positions_count} position(s) for "${bot.name}" at MARKET price?\n\n` +
+                                        `This will immediately close all positions and realize gains/losses.\n\n` +
+                                        `This action cannot be undone.`
+                                      )) {
+                                        sellAllPositions.mutate(bot.id)
+                                      }
+                                      setOpenMenuId(null)
+                                    }}
+                                    className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
+                                  >
+                                    <DollarSign className="w-4 h-4 text-yellow-400" />
+                                    <span>Sell All at Market</span>
+                                  </button>
+                                )}
+
                                 <button
                                   onClick={() => {
                                     handleDelete(bot)

@@ -151,8 +151,10 @@ export const botsApi = {
     api.get<StrategyDefinition[]>('/bots/strategies').then((res) => res.data),
   getStrategy: (strategyId: string) =>
     api.get<StrategyDefinition>(`/bots/strategies/${strategyId}`).then((res) => res.data),
-  getAll: () =>
-    api.get<Bot[]>('/bots').then((res) => res.data),
+  getAll: (projectionTimeframe?: string) => {
+    const params = projectionTimeframe ? `?projection_timeframe=${projectionTimeframe}` : ''
+    return api.get<Bot[]>(`/bots${params}`).then((res) => res.data)
+  },
   getById: (id: number) =>
     api.get<Bot>(`/bots/${id}`).then((res) => res.data),
   create: (bot: BotCreate) =>

@@ -40,11 +40,12 @@ interface PnLTimeSeriesData {
   most_profitable_bot: MostProfitableBot | null
 }
 
-type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
+export type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
 type TabType = 'summary' | 'by_day' | 'by_pair'
 
 interface PnLChartProps {
   accountId?: number
+  onTimeRangeChange?: (timeRange: TimeRange) => void
 }
 
 // Custom tooltip component for 3Commas-style tooltips
@@ -69,12 +70,19 @@ const CustomTooltip = ({ active, payload, label, labelFormatter }: any) => {
   )
 }
 
-export function PnLChart({ accountId }: PnLChartProps) {
+export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
   const [activeTab, setActiveTab] = useState<TabType>('summary')
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const areaSeriesRef = useRef<ISeriesApi<'Area'> | null>(null)
+
+  // Notify parent when timeRange changes
+  useEffect(() => {
+    if (onTimeRangeChange) {
+      onTimeRangeChange(timeRange)
+    }
+  }, [timeRange, onTimeRangeChange])
 
   // Fetch P&L data (filtered by account)
   const { data, isLoading } = useQuery<PnLTimeSeriesData>({
