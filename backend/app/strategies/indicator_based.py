@@ -22,8 +22,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.indicator_calculator import IndicatorCalculator
-from app.indicators import AIIndicatorEvaluator, BullFlagIndicatorEvaluator, RISK_PRESETS
-from app.indicators.ai_indicator import AIIndicatorParams
+from app.indicators import AISpotOpinionEvaluator, AISpotOpinionParams, BullFlagIndicatorEvaluator, RISK_PRESETS
 from app.indicators.bull_flag_indicator import BullFlagParams
 from app.phase_conditions import PhaseConditionEvaluator
 from app.strategies import (
@@ -42,8 +41,8 @@ class IndicatorBasedStrategy(TradingStrategy):
     Unified indicator-based strategy.
 
     All trading decisions are made by evaluating user-configured conditions
-    against indicator values. This includes aggregate indicators like AI_BUY,
-    AI_SELL, and BULL_FLAG alongside traditional indicators.
+    against indicator values. This includes AI-powered indicators (ai_opinion, ai_confidence)
+    and pattern detection (BULL_FLAG) alongside traditional indicators.
     """
 
     def get_definition(self) -> StrategyDefinition:
@@ -51,7 +50,7 @@ class IndicatorBasedStrategy(TradingStrategy):
             id="indicator_based",
             name="Custom Bot (Indicator-Based)",
             description="Build your own bot by selecting indicators and conditions. "
-            "Mix traditional indicators (RSI, MACD, BB%) with AI-powered signals (AI_BUY, AI_SELL) "
+            "Mix traditional indicators (RSI, MACD, BB%) with AI-powered opinions (ai_opinion, ai_confidence) "
             "and pattern detection (BULL_FLAG). Configure entry, DCA, and exit conditions.",
             parameters=[
                 # ========================================
@@ -271,43 +270,42 @@ class IndicatorBasedStrategy(TradingStrategy):
                     group="Stop Loss",
                 ),
                 # ========================================
-                # AI INDICATOR SETTINGS
+                # AI SPOT OPINION SETTINGS
                 # ========================================
                 StrategyParameter(
-                    name="ai_risk_preset",
-                    display_name="AI Risk Preset",
-                    description="Risk preset for AI_BUY/AI_SELL indicators",
+                    name="ai_model",
+                    display_name="AI Model",
+                    description="Which LLM to use for AI spot opinions",
                     type="str",
-                    default="moderate",
-                    options=["aggressive", "moderate", "conservative"],
+                    default="claude",
+                    options=["claude", "gpt", "gemini"],
                     group="AI Indicators",
                 ),
                 StrategyParameter(
-                    name="ai_min_confluence_score",
-                    display_name="AI Min Confluence Score",
-                    description="Minimum confluence score (0-100) for AI signals. Presets: aggressive=30, moderate=40, conservative=50",
+                    name="ai_timeframe",
+                    display_name="AI Check Timeframe",
+                    description="How often to ask AI for opinion (once per candle close)",
+                    type="str",
+                    default="15m",
+                    options=["5m", "15m", "30m", "1h", "4h"],
+                    group="AI Indicators",
+                ),
+                StrategyParameter(
+                    name="ai_min_confidence",
+                    display_name="AI Min Confidence",
+                    description="Minimum confidence % (0-100) to act on AI signal",
                     type="int",
-                    default=40,  # Match moderate preset
-                    min_value=20,
-                    max_value=95,
+                    default=60,
+                    min_value=0,
+                    max_value=100,
                     group="AI Indicators",
                 ),
                 StrategyParameter(
-                    name="ai_entry_timeframe",
-                    display_name="AI Entry Timeframe",
-                    description="Timeframe for AI entry signal analysis",
-                    type="str",
-                    default="FIFTEEN_MINUTE",
-                    options=["FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE", "ONE_HOUR"],
-                    group="AI Indicators",
-                ),
-                StrategyParameter(
-                    name="ai_trend_timeframe",
-                    display_name="AI Trend Timeframe",
-                    description="Higher timeframe for trend confirmation",
-                    type="str",
-                    default="FOUR_HOUR",
-                    options=["ONE_HOUR", "TWO_HOUR", "FOUR_HOUR", "SIX_HOUR", "ONE_DAY"],
+                    name="enable_buy_prefilter",
+                    display_name="Enable Buy Pre-filter",
+                    description="Use technical pre-filter before asking AI (saves LLM costs)",
+                    type="bool",
+                    default=True,
                     group="AI Indicators",
                 ),
                 # ========================================
@@ -358,7 +356,7 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Initialize calculators and evaluators
         self.indicator_calculator = IndicatorCalculator()
         self.phase_evaluator = PhaseConditionEvaluator(self.indicator_calculator)
-        self.ai_evaluator = AIIndicatorEvaluator()
+        self.ai_evaluator = AISpotOpinionEvaluator()
         self.bull_flag_evaluator = BullFlagIndicatorEvaluator()
 
         # Get phase conditions from config
@@ -372,36 +370,13 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Track previous indicators for crossing detection
         self.previous_indicators = None
 
-    def _get_ai_params(self, condition_params: Optional[Dict[str, Any]] = None) -> AIIndicatorParams:
-        """
-        Get AI indicator parameters from condition or config.
-
-        Priority:
-        1. Condition-level params (risk_preset, ai_provider)
-        2. Bot-level config (ai_risk_preset)
-        3. Default (moderate preset)
-        """
-        # Use condition-level preset if provided
-        if condition_params and condition_params.get("risk_preset"):
-            preset_name = condition_params["risk_preset"]
-        else:
-            preset_name = self.config.get("ai_risk_preset", "moderate")
-
-        preset = RISK_PRESETS.get(preset_name, RISK_PRESETS["moderate"])
-
-        # Log the AI provider being used (for debugging)
-        ai_provider = "claude"
-        if condition_params and condition_params.get("ai_provider"):
-            ai_provider = condition_params["ai_provider"]
-        logger.debug(f"AI indicator using preset={preset_name}, provider={ai_provider}")
-
-        return AIIndicatorParams(
-            risk_preset=preset_name,
-            min_confluence_score=self.config.get("ai_min_confluence_score", preset["min_confluence_score"]),
-            entry_timeframe=self.config.get("ai_entry_timeframe", preset["entry_timeframe"]),
-            trend_timeframe=self.config.get("ai_trend_timeframe", preset["trend_timeframe"]),
-            require_trend_alignment=preset.get("require_trend_alignment", True),
-            max_volatility=preset.get("max_volatility"),
+    def _get_ai_params(self) -> AISpotOpinionParams:
+        """Get AI Spot Opinion parameters from config."""
+        return AISpotOpinionParams(
+            ai_model=self.config.get("ai_model", "claude"),
+            ai_timeframe=self.config.get("ai_timeframe", "15m"),
+            ai_min_confidence=self.config.get("ai_min_confidence", 60),
+            enable_buy_prefilter=self.config.get("enable_buy_prefilter", True),
         )
 
     def _get_bull_flag_params(self) -> BullFlagParams:
@@ -486,22 +461,20 @@ class IndicatorBasedStrategy(TradingStrategy):
             # Check both 'indicator' (legacy) and 'type' (new) keys
             indicator = (condition.get("type") or condition.get("indicator") or "").lower()
 
-            if indicator == "ai_buy":
+            # New AI opinion indicators
+            if indicator in ["ai_opinion", "ai_confidence", "ai_reasoning"]:
+                # Determine if this is used in entry or exit conditions
+                # If in base_order or safety_order -> buy signal needed
+                # If in take_profit -> sell signal needed
+                if condition in self._flatten_conditions(self.take_profit_conditions):
+                    needs["ai_sell"] = True
+                else:
+                    needs["ai_buy"] = True
+            # Legacy AI indicators (backward compatibility)
+            elif indicator == "ai_buy":
                 needs["ai_buy"] = True
-                # Extract params from the first AI_BUY condition
-                if needs["ai_params"] is None:
-                    needs["ai_params"] = {
-                        "risk_preset": condition.get("risk_preset", "moderate"),
-                        "ai_provider": condition.get("ai_provider", "claude"),
-                    }
             elif indicator == "ai_sell":
                 needs["ai_sell"] = True
-                # Extract params from AI_SELL if no params yet
-                if needs["ai_params"] is None:
-                    needs["ai_params"] = {
-                        "risk_preset": condition.get("risk_preset", "moderate"),
-                        "ai_provider": condition.get("ai_provider", "claude"),
-                    }
             elif indicator == "bull_flag":
                 needs["bull_flag"] = True
 
@@ -599,40 +572,37 @@ class IndicatorBasedStrategy(TradingStrategy):
         # Calculate aggregate indicators if needed
         if needs["ai_buy"] or needs["ai_sell"]:
             # Pass condition-level params (risk_preset, ai_provider) if found
-            ai_params = self._get_ai_params(needs.get("ai_params"))
-            entry_candles = candles_by_timeframe.get(ai_params.entry_timeframe, candles)
-            trend_candles = candles_by_timeframe.get(ai_params.trend_timeframe, candles)
+            ai_params = self._get_ai_params()
 
-            if needs["ai_buy"]:
-                ai_buy_result = self.ai_evaluator.evaluate_ai_buy(
-                    candles_entry=entry_candles,
-                    candles_trend=trend_candles,
+            # Evaluate AI opinion for buy or sell
+            # We call it once - for buy checks (no position) or sell checks (with position)
+            product_id = kwargs.get("product_id", "UNKNOWN")
+            is_sell_check = position is not None and (needs["ai_sell"] or "ai_opinion" in str(self.take_profit_conditions))
+
+            if needs["ai_buy"] or needs["ai_sell"]:
+                ai_result = await self.ai_evaluator.evaluate(
+                    candles=candles,  # Use primary candles
                     current_price=current_price,
+                    product_id=product_id,
                     params=ai_params,
+                    is_sell_check=is_sell_check
                 )
-                current_indicators["ai_buy"] = ai_buy_result["signal"]
-                current_indicators["ai_buy_score"] = ai_buy_result["confluence_score"]
-                current_indicators["ai_buy_explanation"] = ai_buy_result["explanation"]
+                # Store AI opinion results
+                current_indicators["ai_opinion"] = ai_result["signal"]  # "buy", "sell", or "hold"
+                current_indicators["ai_confidence"] = ai_result["confidence"]  # 0-100
+                current_indicators["ai_reasoning"] = ai_result["reasoning"]
 
-            if needs["ai_sell"]:
-                # For AI_SELL, we need position info
-                entry_price = getattr(position, "average_buy_price", current_price) if position else current_price
-                profit_pct = 0.0
-                if position and hasattr(position, "total_quote_spent") and position.total_quote_spent > 0:
-                    current_value = position.total_base_acquired * current_price
-                    profit_pct = ((current_value - position.total_quote_spent) / position.total_quote_spent) * 100
-
-                ai_sell_result = self.ai_evaluator.evaluate_ai_sell(
-                    candles_entry=entry_candles,
-                    candles_trend=trend_candles,
-                    current_price=current_price,
-                    entry_price=entry_price,
-                    profit_pct=profit_pct,
-                    params=ai_params,
-                )
-                current_indicators["ai_sell"] = ai_sell_result["signal"]
-                current_indicators["ai_sell_score"] = ai_sell_result["confluence_score"]
-                current_indicators["ai_sell_explanation"] = ai_sell_result["explanation"]
+                # For backward compatibility during migration (deprecated)
+                # Map to old indicator names temporarily
+                if ai_result["signal"] == "buy":
+                    current_indicators["ai_buy"] = 1
+                    current_indicators["ai_sell"] = 0
+                elif ai_result["signal"] == "sell":
+                    current_indicators["ai_buy"] = 0
+                    current_indicators["ai_sell"] = 1
+                else:  # hold
+                    current_indicators["ai_buy"] = 0
+                    current_indicators["ai_sell"] = 0
 
         if needs["bull_flag"]:
             bf_params = self._get_bull_flag_params()

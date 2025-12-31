@@ -5,25 +5,20 @@ Provides higher-level "aggregate indicators" that combine multiple signals
 for use in the condition-based bot building system.
 
 Available Aggregate Indicators:
-- AI_BUY: AI-powered buy signal with confluence analysis
-- AI_SELL: AI-powered sell signal
+- AI_OPINION: AI-powered buy/sell/hold signals with LLM reasoning and confidence scores
 - BULL_FLAG: Bull flag pattern detection
 
-These indicators return 0 or 1 (binary signals) and can be used
-in conditions like: AI_BUY == 1
+These indicators can be used in conditions like: ai_opinion == "buy" AND ai_confidence >= 70
 """
 
 from .risk_presets import RISK_PRESETS, get_risk_preset_defaults
-from .confluence_calculator import ConfluenceCalculator, ConfluenceResult, SetupType
-from .ai_indicator import AIIndicatorEvaluator
+from .ai_spot_opinion import AISpotOpinionEvaluator, AISpotOpinionParams
 from .bull_flag_indicator import BullFlagIndicatorEvaluator
 
 
 __all__ = [
-    "ConfluenceCalculator",
-    "ConfluenceResult",
-    "SetupType",
-    "AIIndicatorEvaluator",
+    "AISpotOpinionEvaluator",
+    "AISpotOpinionParams",
     "BullFlagIndicatorEvaluator",
     "RISK_PRESETS",
     "get_risk_preset_defaults",
