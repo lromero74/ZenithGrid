@@ -202,6 +202,40 @@ function ThreeCommasStyleForm({
   // Get the aggregate value for the quote currency
   const aggregateValue = isFiatQuote ? aggregateUsdValue : aggregateBtcValue
 
+  // Check if budget calculator is active
+  const useBudgetCalculator = !!(aggregateValue && budgetPercentage && budgetPercentage > 0)
+
+  // Auto-calculate order sizes when budget calculator is active
+  useEffect(() => {
+    if (useBudgetCalculator && (config.max_safety_orders ?? 5) > 0) {
+      const breakdown = calculateDCABudget(
+        aggregateValue!,
+        budgetPercentage!,
+        numPairs || 1,
+        splitBudget || false,
+        maxConcurrentDeals || config.max_concurrent_deals || 1,
+        config.max_safety_orders ?? 5,
+        config.safety_order_volume_scale ?? 1.0
+      )
+
+      // Only update if values have changed to avoid infinite loop
+      const baseOrderKey = 'base_order_size'
+      const safetyOrderKey = 'safety_order_size'
+
+      if (config[baseOrderKey] !== breakdown.baseOrderSize ||
+          config[safetyOrderKey] !== breakdown.safetyOrders[0]?.size) {
+        onChange({
+          ...config,
+          [baseOrderKey]: breakdown.baseOrderSize,
+          [safetyOrderKey]: breakdown.safetyOrders[0]?.size || breakdown.baseOrderSize,
+          base_order_type: 'fixed'  // Force to fixed when using calculator
+        })
+      }
+    }
+  }, [useBudgetCalculator, budgetPercentage, numPairs, splitBudget, maxConcurrentDeals,
+      config.max_concurrent_deals, config.max_safety_orders, config.safety_order_volume_scale,
+      aggregateValue])
+
   // Get exchange minimum for this quote currency
   const exchangeMinimum = EXCHANGE_MINIMUMS[quoteCurrency as keyof typeof EXCHANGE_MINIMUMS] || 0.0001
 
@@ -361,6 +395,11 @@ function ThreeCommasStyleForm({
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
                 Base Order {quoteCurrency} Amount
+                {useBudgetCalculator && (
+                  <span className="text-xs text-emerald-400 ml-2">
+                    (Auto-calculated from budget)
+                  </span>
+                )}
               </label>
               <input
                 type="number"
@@ -371,10 +410,16 @@ function ThreeCommasStyleForm({
                   updateConfig(baseOrderKey, value)
                   updateConfig('quote_currency', quoteCurrency)
                 }}
+                readOnly={useBudgetCalculator}
                 min={isFiatQuote ? 1 : 0.0001}
                 max={isFiatQuote ? 100000 : 10}
                 step={isFiatQuote ? 1 : 0.00000001}
-                className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+                className={`w-full px-3 py-2 rounded border ${
+                  useBudgetCalculator
+                    ? 'bg-slate-800 text-slate-400 border-slate-700 cursor-not-allowed'
+                    : 'bg-slate-700 text-white border-slate-600'
+                }`}
+                title={useBudgetCalculator ? 'Automatically calculated from budget settings' : ''}
               />
             </div>
           )}
@@ -498,6 +543,11 @@ function ThreeCommasStyleForm({
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
                 Safety Order {quoteCurrency} Amount
+                {useBudgetCalculator && (
+                  <span className="text-xs text-emerald-400 ml-2">
+                    (Auto-calculated from budget)
+                  </span>
+                )}
               </label>
               <input
                 type="number"
@@ -506,10 +556,16 @@ function ThreeCommasStyleForm({
                   const value = safeParseFloat(e.target.value) ?? (isFiatQuote ? 5 : 0.0005)
                   updateConfig(safetyOrderKey, value)
                 }}
+                readOnly={useBudgetCalculator}
                 min={isFiatQuote ? 1 : 0.0001}
                 max={isFiatQuote ? 100000 : 10}
                 step={isFiatQuote ? 1 : 0.00000001}
-                className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+                className={`w-full px-3 py-2 rounded border ${
+                  useBudgetCalculator
+                    ? 'bg-slate-800 text-slate-400 border-slate-700 cursor-not-allowed'
+                    : 'bg-slate-700 text-white border-slate-600'
+                }`}
+                title={useBudgetCalculator ? 'Automatically calculated from budget settings' : ''}
               />
             </div>
           )}
