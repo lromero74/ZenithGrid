@@ -339,6 +339,13 @@ async def execute_buy(
     else:
         position.average_buy_price = 0.0
 
+    # Assign deal number on FIRST successful trade (base order success)
+    # This ensures only successfully opened positions get deal numbers (like 3Commas)
+    if position.user_deal_number is None and position.user_id:
+        from app.trading_engine.position_manager import get_next_user_deal_number
+        position.user_deal_number = await get_next_user_deal_number(db, position.user_id)
+        logger.info(f"  📊 Assigned deal #{position.user_deal_number} (attempt #{position.user_attempt_number})")
+
     # CRITICAL: Commit trade and position update IMMEDIATELY
     # This ensures we never lose a trade record even if subsequent operations fail
     await db.commit()

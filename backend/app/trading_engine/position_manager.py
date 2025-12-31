@@ -86,8 +86,20 @@ async def get_open_positions_count(db: AsyncSession, bot: Bot) -> int:
     return result.scalar() or 0
 
 
+async def get_next_user_attempt_number(db: AsyncSession, user_id: int) -> int:
+    """Get the next attempt number for a user (max + 1, or 1 if no positions exist)"""
+    query = select(func.max(Position.user_attempt_number)).where(Position.user_id == user_id)
+    result = await db.execute(query)
+    max_attempt_number = result.scalar()
+    return (max_attempt_number or 0) + 1
+
+
 async def get_next_user_deal_number(db: AsyncSession, user_id: int) -> int:
-    """Get the next deal number for a user (max + 1, or 1 if no positions exist)"""
+    """Get the next deal number for a user (max + 1, or 1 if no positions exist)
+
+    Note: Deal numbers are only for SUCCESSFUL deals (where base order executed).
+    Failed position attempts get an attempt_number but not a deal_number.
+    """
     query = select(func.max(Position.user_deal_number)).where(Position.user_id == user_id)
     result = await db.execute(query)
     max_deal_number = result.scalar()
@@ -123,9 +135,10 @@ async def create_position(
     except Exception:
         btc_usd_price = None
 
-    # Get next user-specific deal number
+    # Get next user-specific attempt number (assigned BEFORE base order attempt)
+    # Deal number will be assigned AFTER successful base order execution
     user_id = bot.user_id
-    user_deal_number = await get_next_user_deal_number(db, user_id) if user_id else None
+    user_attempt_number = await get_next_user_attempt_number(db, user_id) if user_id else None
 
     # Calculate max_quote_allowed based on sizing mode
     # For manual sizing with percentage orders, use expected order totals
@@ -140,8 +153,9 @@ async def create_position(
     position = Position(
         bot_id=bot.id,
         account_id=bot.account_id,  # Copy account_id from bot for filtering
-        user_id=user_id,  # Owner (for user-specific deal numbers)
-        user_deal_number=user_deal_number,  # User-specific sequential deal number
+        user_id=user_id,  # Owner (for user-specific numbers)
+        user_attempt_number=user_attempt_number,  # Sequential attempt number (ALL attempts: success + failed)
+        user_deal_number=None,  # Will be assigned AFTER successful base order execution
         product_id=product_id,  # Use the engine's product_id (specific pair being traded)
         status="open",
         opened_at=datetime.utcnow(),

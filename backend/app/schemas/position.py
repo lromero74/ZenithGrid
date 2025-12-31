@@ -3,13 +3,15 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 
 class PositionResponse(BaseModel):
     id: int
     bot_id: Optional[int] = None
     account_id: Optional[int] = None  # For multi-account support
+    user_attempt_number: Optional[int] = None  # Sequential attempt number (ALL attempts: success + failed)
+    user_deal_number: Optional[int] = None  # Deal number (SUCCESSFUL deals only, like 3Commas)
     product_id: str = "ETH-BTC"
     status: str
     opened_at: datetime
@@ -68,11 +70,32 @@ class TradeResponse(BaseModel):
     quote_amount: float  # BTC or USD
     base_amount: float  # ETH, ADA, etc.
     price: float
-    trade_type: str
+    trade_type: str  # "initial", "dca", "safety_order_1", etc.
     order_id: Optional[str]
 
     class Config:
         from_attributes = True
+
+    @computed_field
+    @property
+    def trade_type_display(self) -> str:
+        """Convert trade_type to 3Commas-style display name"""
+        if self.side.upper() == "SELL":
+            if "limit" in self.trade_type.lower():
+                return "Take Profit (Limit)"
+            return "Take Profit"
+
+        # Buy side
+        if self.trade_type == "initial":
+            return "Base Order"
+        elif self.trade_type == "dca":
+            return "Safety Order"  # Generic DCA
+        elif self.trade_type.startswith("safety_order_"):
+            # Extract number: "safety_order_1" -> "Safety Order 1"
+            num = self.trade_type.split("_")[-1]
+            return f"Safety Order {num}"
+        else:
+            return self.trade_type.replace("_", " ").title()
 
 
 class AIBotLogResponse(BaseModel):
