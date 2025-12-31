@@ -57,6 +57,8 @@ interface DCABudgetBreakdown {
   totalCapitalPerDeal: number
   maxSimultaneousCapital: number
   budgetUtilization: number  // %
+  isOverAllocated: boolean  // True if minimum enforcement causes over-budget
+  minimumEnforced: boolean  // True if any order was bumped to minimum
 }
 
 function calculateDCABudget(
@@ -66,7 +68,8 @@ function calculateDCABudget(
   splitBudget: boolean,
   maxConcurrentDeals: number,
   maxSafetyOrders: number,
-  safetyOrderVolumeScale: number
+  safetyOrderVolumeScale: number,
+  exchangeMinimum: number
 ): DCABudgetBreakdown {
   // Calculate total bot budget
   const totalBudget = (aggregateValue * budgetPercentage) / 100
@@ -84,19 +87,34 @@ function calculateDCABudget(
   const baseOrderSizeRatio = 1.0  // Base order is the unit
   let totalRatio = baseOrderSizeRatio  // Start with base order
 
-  const safetyOrders: { order: number; size: number; total: number }[] = []
   for (let i = 0; i < maxSafetyOrders; i++) {
     const soRatio = Math.pow(safetyOrderVolumeScale, i)
     totalRatio += soRatio
   }
 
-  // Calculate base order size
-  const baseOrderSize = budgetPerDeal / totalRatio
+  // Calculate ideal base order size
+  let baseOrderSize = budgetPerDeal / totalRatio
+  let minimumEnforced = false
 
-  // Calculate each safety order
+  // Enforce exchange minimum on base order
+  if (baseOrderSize < exchangeMinimum) {
+    baseOrderSize = exchangeMinimum
+    minimumEnforced = true
+  }
+
+  // Calculate each safety order and enforce minimums
+  const safetyOrders: { order: number; size: number; total: number }[] = []
   let runningTotal = baseOrderSize
+
   for (let i = 0; i < maxSafetyOrders; i++) {
-    const soSize = baseOrderSize * Math.pow(safetyOrderVolumeScale, i)
+    let soSize = baseOrderSize * Math.pow(safetyOrderVolumeScale, i)
+
+    // Enforce exchange minimum on each safety order
+    if (soSize < exchangeMinimum) {
+      soSize = exchangeMinimum
+      minimumEnforced = true
+    }
+
     runningTotal += soSize
     safetyOrders.push({
       order: i + 1,
@@ -109,6 +127,9 @@ function calculateDCABudget(
   const maxSimultaneousCapital = totalCapitalPerDeal * maxConcurrentDeals
   const budgetUtilization = (maxSimultaneousCapital / budgetPerPair) * 100
 
+  // Check if minimum enforcement caused over-allocation
+  const isOverAllocated = minimumEnforced && budgetUtilization > 100
+
   return {
     totalBudget,
     budgetPerPair,
@@ -117,7 +138,9 @@ function calculateDCABudget(
     safetyOrders,
     totalCapitalPerDeal,
     maxSimultaneousCapital,
-    budgetUtilization
+    budgetUtilization,
+    isOverAllocated,
+    minimumEnforced
   }
 }
 
@@ -205,6 +228,9 @@ function ThreeCommasStyleForm({
   // Check if budget calculator is active
   const useBudgetCalculator = !!(aggregateValue && budgetPercentage && budgetPercentage > 0)
 
+  // Get exchange minimum for this quote currency
+  const exchangeMinimum = EXCHANGE_MINIMUMS[quoteCurrency as keyof typeof EXCHANGE_MINIMUMS] || 0.0001
+
   // Auto-calculate order sizes when budget calculator is active
   useEffect(() => {
     if (useBudgetCalculator && (config.max_safety_orders ?? 5) > 0) {
@@ -215,7 +241,8 @@ function ThreeCommasStyleForm({
         splitBudget || false,
         maxConcurrentDeals || config.max_concurrent_deals || 1,
         config.max_safety_orders ?? 5,
-        config.safety_order_volume_scale ?? 1.0
+        config.safety_order_volume_scale ?? 1.0,
+        exchangeMinimum
       )
 
       // Only update if values have changed to avoid infinite loop
@@ -234,10 +261,7 @@ function ThreeCommasStyleForm({
     }
   }, [useBudgetCalculator, budgetPercentage, numPairs, splitBudget, maxConcurrentDeals,
       config.max_concurrent_deals, config.max_safety_orders, config.safety_order_volume_scale,
-      aggregateValue])
-
-  // Get exchange minimum for this quote currency
-  const exchangeMinimum = EXCHANGE_MINIMUMS[quoteCurrency as keyof typeof EXCHANGE_MINIMUMS] || 0.0001
+      aggregateValue, exchangeMinimum])
 
   // Calculate minimum percentage needed to meet exchange minimum
   const calculateMinPercentage = useCallback(() => {
@@ -826,11 +850,29 @@ function ThreeCommasStyleForm({
                 splitBudget || false,
                 maxConcurrentDeals || config.max_concurrent_deals || 1,
                 config.max_safety_orders ?? 5,
-                config.safety_order_volume_scale ?? 1.0
+                config.safety_order_volume_scale ?? 1.0,
+                exchangeMinimum
               )
 
               return (
                 <div className="text-xs text-slate-400 space-y-1">
+                  {breakdown.isOverAllocated && (
+                    <div className="bg-yellow-900/30 border border-yellow-700 rounded p-2 mb-2">
+                      <p className="text-yellow-400 font-semibold">⚠️ Over-Allocation Warning</p>
+                      <p className="text-yellow-300 text-xs mt-1">
+                        Order sizes enforced to exchange minimum ({exchangeMinimum.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}).
+                        Required capital ({breakdown.budgetUtilization.toFixed(1)}%) exceeds allocated budget.
+                        {splitBudget ? ' Consider reducing pairs, max deals, or safety orders.' : ' Consider reducing max deals or safety orders.'}
+                      </p>
+                    </div>
+                  )}
+                  {breakdown.minimumEnforced && !breakdown.isOverAllocated && (
+                    <div className="bg-blue-900/30 border border-blue-700 rounded p-2 mb-2">
+                      <p className="text-blue-400 text-xs">
+                        ℹ️ Some order sizes bumped to exchange minimum ({exchangeMinimum.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency})
+                      </p>
+                    </div>
+                  )}
                   <p>
                     📊 <strong>Total Bot Budget:</strong> {breakdown.totalBudget.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
                   </p>
