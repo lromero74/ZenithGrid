@@ -60,6 +60,8 @@ export default function Positions() {
   const [notesText, setNotesText] = useState('')
   const [showEditSettingsModal, setShowEditSettingsModal] = useState(false)
   const [editSettingsPosition, setEditSettingsPosition] = useState<Position | null>(null)
+  const [showTradeHistoryModal, setShowTradeHistoryModal] = useState(false)
+  const [tradeHistoryPosition, setTradeHistoryPosition] = useState<Position | null>(null)
 
   // Filtering and sorting state (like 3Commas)
   const [filterBot, setFilterBot] = useState<number | 'all'>('all')
@@ -173,6 +175,13 @@ export default function Positions() {
     queryKey: ['position-trades', selectedPosition],
     queryFn: () => positionsApi.getTrades(selectedPosition!),
     enabled: selectedPosition !== null,
+  })
+
+  // Fetch trade history for modal (separate from expanded details trades)
+  const { data: tradeHistory, isLoading: isLoadingTradeHistory } = useQuery({
+    queryKey: ['trade-history-modal', tradeHistoryPosition?.id],
+    queryFn: () => positionsApi.getTrades(tradeHistoryPosition!.id),
+    enabled: tradeHistoryPosition !== null && showTradeHistoryModal,
   })
 
   // Calculate unrealized P&L for open position (needed for sorting)
@@ -832,7 +841,17 @@ export default function Positions() {
                       {/* Column 6: Created (1 col) */}
                       <div className="col-span-1">
                         <div className="text-[10px] space-y-0.5">
-                          <div className="text-slate-400">Deal #{position.user_deal_number ?? position.id}</div>
+                          <div
+                            className="text-blue-400 hover:text-blue-300 cursor-pointer underline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setTradeHistoryPosition(position)
+                              setShowTradeHistoryModal(true)
+                            }}
+                            title="Click to view trade history"
+                          >
+                            Deal #{position.user_deal_number ?? position.id}
+                          </div>
                           <div className="text-slate-400">Start: {formatDateTimeCompact(position.opened_at)}</div>
                           <div className="text-slate-400">Age: {formatDuration(position.opened_at)}</div>
                         </div>
@@ -1193,6 +1212,99 @@ export default function Positions() {
             refetchPositions()
           }}
         />
+      )}
+
+      {/* Trade History Modal */}
+      {showTradeHistoryModal && tradeHistoryPosition && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg w-full max-w-3xl p-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-white">Trade History</h3>
+                <p className="text-sm text-slate-400 mt-1">
+                  Deal #{tradeHistoryPosition.user_deal_number ?? tradeHistoryPosition.id} • {tradeHistoryPosition.product_id || 'ETH-BTC'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowTradeHistoryModal(false)
+                  setTradeHistoryPosition(null)
+                }}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {isLoadingTradeHistory ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <p className="text-slate-400 mt-4">Loading trade history...</p>
+              </div>
+            ) : tradeHistory && tradeHistory.length > 0 ? (
+              <div className="space-y-3">
+                {tradeHistory
+                  .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                  .map((trade: any) => (
+                    <div
+                      key={trade.id}
+                      className="bg-slate-700/50 rounded-lg p-4 border border-slate-600"
+                    >
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <div className="text-xs text-slate-400 mb-1">Type</div>
+                          <div className={`text-sm font-semibold ${
+                            trade.side.toUpperCase() === 'BUY' ? 'text-green-400' : 'text-blue-400'
+                          }`}>
+                            {trade.trade_type_display || trade.trade_type}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400 mb-1">Price</div>
+                          <div className="text-sm text-white font-mono">
+                            {trade.price.toFixed(8)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400 mb-1">Amount</div>
+                          <div className="text-sm text-white">
+                            {trade.base_amount.toFixed(8)} {(tradeHistoryPosition.product_id || 'ETH-BTC').split('-')[0]}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400 mb-1">Total</div>
+                          <div className="text-sm text-white">
+                            {trade.quote_amount.toFixed(8)} {(tradeHistoryPosition.product_id || 'ETH-BTC').split('-')[1]}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-slate-600">
+                        <div className="text-xs text-slate-400">
+                          {formatDateTime(trade.timestamp)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-slate-400">No trades found for this position</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowTradeHistoryModal(false)
+                  setTradeHistoryPosition(null)
+                }}
+                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
