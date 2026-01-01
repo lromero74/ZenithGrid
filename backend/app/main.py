@@ -27,6 +27,7 @@ from app.routers import coin_icons_router  # Proxied coin icons to avoid CORS
 from app.services.websocket_manager import ws_manager
 from app.services.shutdown_manager import shutdown_manager
 from app.services.content_refresh_service import content_refresh_service
+from app.cleanup_jobs import cleanup_old_decision_logs
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ auto_buy_monitor = AutoBuyMonitor()
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
 missing_order_detector_task = None
+decision_log_cleanup_task = None
 
 
 def override_get_price_monitor():
@@ -198,7 +200,7 @@ async def run_missing_order_detector():
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -239,13 +241,17 @@ async def startup_event():
     build_changelog_cache()
     print("🚀 Changelog cache built")
 
+    print("🚀 Starting decision log cleanup job...")
+    decision_log_cleanup_task = asyncio.create_task(cleanup_old_decision_logs())
+    print("🚀 Decision log cleanup job started - cleaning old logs daily")
+
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task
 
     logger.info("🛑 Shutting down - waiting for in-flight orders...")
 
@@ -289,6 +295,13 @@ async def shutdown_event():
 
     if trading_pair_monitor:
         await trading_pair_monitor.stop()
+
+    if decision_log_cleanup_task:
+        decision_log_cleanup_task.cancel()
+        try:
+            await decision_log_cleanup_task
+        except asyncio.CancelledError:
+            pass
 
     logger.info("🛑 Monitors stopped - shutdown complete")
 

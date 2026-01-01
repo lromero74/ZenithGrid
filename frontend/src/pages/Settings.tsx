@@ -1,5 +1,5 @@
-import { useState, FormEvent } from 'react'
-import { User, Lock, CheckCircle, AlertCircle } from 'lucide-react'
+import { useState, FormEvent, useEffect } from 'react'
+import { User, Lock, CheckCircle, AlertCircle, Database, Trash2 } from 'lucide-react'
 import { AccountsManagement } from '../components/AccountsManagement'
 import { AddAccountModal } from '../components/AddAccountModal'
 import { AIProvidersManager } from '../components/AIProvidersManager'
@@ -7,6 +7,7 @@ import { BlacklistManager } from '../components/BlacklistManager'
 import { AutoBuySettings } from '../components/AutoBuySettings'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
+import { settingsApi } from '../services/api'
 
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
@@ -20,6 +21,50 @@ export default function Settings() {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+
+  // Log retention settings
+  const [logRetentionDays, setLogRetentionDays] = useState<number>(14)
+  const [isSavingRetention, setIsSavingRetention] = useState(false)
+  const [retentionSuccess, setRetentionSuccess] = useState(false)
+  const [retentionError, setRetentionError] = useState<string | null>(null)
+
+  // Load log retention setting on mount
+  useEffect(() => {
+    const loadRetentionSetting = async () => {
+      try {
+        const setting = await settingsApi.get('decision_log_retention_days') as { key: string; value: string; value_type: string; description: string; updated_at: string }
+        if (setting && setting.value) {
+          setLogRetentionDays(parseInt(setting.value))
+        }
+      } catch (err) {
+        console.error('Failed to load log retention setting:', err)
+      }
+    }
+    loadRetentionSetting()
+  }, [])
+
+  const handleLogRetentionChange = async (e: FormEvent) => {
+    e.preventDefault()
+    setRetentionError(null)
+    setRetentionSuccess(false)
+
+    if (logRetentionDays < 1 || logRetentionDays > 365) {
+      setRetentionError('Retention period must be between 1 and 365 days')
+      return
+    }
+
+    setIsSavingRetention(true)
+
+    try {
+      await settingsApi.update('decision_log_retention_days', logRetentionDays.toString())
+      setRetentionSuccess(true)
+      setTimeout(() => setRetentionSuccess(false), 5000)
+    } catch (err) {
+      setRetentionError(err instanceof Error ? err.message : 'Failed to save setting')
+    } finally {
+      setIsSavingRetention(false)
+    }
+  }
 
   const handlePasswordChange = async (e: FormEvent) => {
     e.preventDefault()
@@ -188,6 +233,70 @@ export default function Settings() {
 
       {/* AI Providers Section */}
       <AIProvidersManager />
+
+      {/* Database Maintenance Section */}
+      <div className="card p-6">
+        <div className="flex items-center space-x-3 mb-6">
+          <Database className="w-6 h-6 text-orange-400" />
+          <h3 className="text-xl font-semibold">Database Maintenance</h3>
+        </div>
+
+        <form onSubmit={handleLogRetentionChange} className="space-y-4">
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <Trash2 className="w-5 h-5 text-slate-400" />
+              <label htmlFor="logRetentionDays" className="block text-sm font-medium text-slate-300">
+                Decision Log Retention Period
+              </label>
+            </div>
+            <div className="flex items-center space-x-4">
+              <input
+                id="logRetentionDays"
+                type="number"
+                min="1"
+                max="365"
+                value={logRetentionDays}
+                onChange={(e) => setLogRetentionDays(parseInt(e.target.value) || 1)}
+                onBlur={() => {
+                  if (logRetentionDays === '' as any || isNaN(logRetentionDays)) {
+                    setLogRetentionDays(14)
+                  }
+                }}
+                className="w-32 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+              <span className="text-slate-400">days</span>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              Automatically clean up AI and indicator decision logs for closed positions older than this many days.
+              Logs for open positions are never deleted. (Default: 14 days / 2 weeks)
+            </p>
+          </div>
+
+          {/* Success Message */}
+          {retentionSuccess && (
+            <div className="p-4 bg-green-500/10 border border-green-500/50 rounded-lg flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+              <p className="text-green-400 text-sm">Log retention period saved successfully!</p>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {retentionError && (
+            <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <p className="text-red-400 text-sm">{retentionError}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isSavingRetention}
+            className="px-6 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+          >
+            {isSavingRetention ? 'Saving...' : 'Save Retention Setting'}
+          </button>
+        </form>
+      </div>
 
       {/* Coin Blacklist Section */}
       <BlacklistManager />

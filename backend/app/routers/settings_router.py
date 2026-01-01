@@ -9,6 +9,7 @@ Handles settings-related endpoints:
 
 import logging
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -17,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
-from app.models import Account
+from app.models import Account, Settings
 from app.exchange_clients.factory import create_exchange_client
 from app.schemas import SettingsUpdate, TestConnectionRequest
 
@@ -196,3 +197,47 @@ async def test_connection(request: TestConnectionRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+@router.get("/settings/{key}")
+async def get_setting_by_key(key: str, db: AsyncSession = Depends(get_db)):
+    """Get a single database setting by key"""
+    query = select(Settings).where(Settings.key == key)
+    result = await db.execute(query)
+    setting = result.scalars().first()
+
+    if not setting:
+        raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
+
+    return {
+        "key": setting.key,
+        "value": setting.value,
+        "value_type": setting.value_type,
+        "description": setting.description,
+        "updated_at": setting.updated_at.isoformat() if setting.updated_at else None
+    }
+
+
+@router.put("/settings/{key}")
+async def update_setting_by_key(key: str, value: str, db: AsyncSession = Depends(get_db)):
+    """Update a single database setting by key"""
+    query = select(Settings).where(Settings.key == key)
+    result = await db.execute(query)
+    setting = result.scalars().first()
+
+    if not setting:
+        raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
+
+    # Update the value
+    setting.value = value
+    setting.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(setting)
+
+    return {
+        "message": f"Setting '{key}' updated successfully",
+        "key": setting.key,
+        "value": setting.value,
+        "updated_at": setting.updated_at.isoformat() if setting.updated_at else None
+    }

@@ -101,9 +101,22 @@ export const marketDataApi = {
 };
 
 export const settingsApi = {
-  get: () => api.get<Settings>('/settings').then((res) => res.data),
-  update: (settings: Partial<Settings>) =>
-    api.post<{ message: string }>('/settings', settings).then((res) => res.data),
+  get: (key?: string) => {
+    if (key) {
+      // Get individual setting by key
+      return api.get<{ key: string; value: string; value_type: string; description: string; updated_at: string }>(`/settings/${key}`).then((res) => res.data);
+    }
+    // Get all app settings (legacy)
+    return api.get<Settings>('/settings').then((res) => res.data);
+  },
+  update: (keyOrSettings: string | Partial<Settings>, value?: string) => {
+    if (typeof keyOrSettings === 'string' && value !== undefined) {
+      // Update individual setting by key
+      return api.put<{ message: string; key: string; value: string; updated_at: string }>(`/settings/${keyOrSettings}?value=${encodeURIComponent(value)}`).then((res) => res.data);
+    }
+    // Update app settings (legacy)
+    return api.post<{ message: string }>('/settings', keyOrSettings).then((res) => res.data);
+  },
 };
 
 export const monitorApi = {
