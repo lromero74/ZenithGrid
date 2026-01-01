@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { botsApi } from '../services/api'
-import { Brain, TrendingUp, TrendingDown, CircleDot, Clock, Target, X } from 'lucide-react'
+import { Brain, TrendingUp, TrendingDown, CircleDot, Clock, Target, X, BarChart3, CheckCircle, XCircle } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact } from '../utils/dateFormat'
 
 interface PositionLogsModalProps {
@@ -16,31 +16,37 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
   const [filterDecision, setFilterDecision] = useState<string>('all')
 
   const { data: logs = [], isLoading, refetch } = useQuery({
-    queryKey: ['position-logs', botId, productId, positionOpenedAt],
+    queryKey: ['position-decision-logs', botId, productId, positionOpenedAt],
     queryFn: async () => {
-      // Fetch AI logs for this bot/product combination
+      // Fetch unified decision logs (AI + Indicator) for this bot/product combination
       // Look back far enough to catch the buy decision that triggered this position
-      // We'll filter client-side to show logs from the most recent "buy" decision onwards
       const openedDate = new Date(positionOpenedAt)
       const lookbackDate = new Date(openedDate.getTime() - 300000) // 5 minutes before to be safe
       const since = lookbackDate.toISOString()
 
-      const allLogs = await botsApi.getLogs(botId, 200, 0, productId, since)
+      const allLogs = await botsApi.getDecisionLogs(botId, 200, 0, productId, since)
 
       // Find the most recent "buy" decision near the position opened time
-      // The buy log may be slightly AFTER the position opened_at (by ~5-10ms) because
-      // the log is updated with position_id after the position is created in the database.
-      // We use a 1-second tolerance window after position opened time to catch this.
+      // For AI logs, look for decision === 'buy'
+      // For indicator logs, look for phase === 'base_order' with conditions_met === true
       const positionTime = openedDate.getTime()
       const toleranceMs = 1000 // 1 second tolerance for log timing
       let buyIndex = -1
 
       for (let i = allLogs.length - 1; i >= 0; i--) {
         const logTime = new Date(allLogs[i].timestamp).getTime()
-        // Accept buy logs from 5 minutes before to 1 second after position opened time
-        if (logTime <= positionTime + toleranceMs && allLogs[i].decision === 'buy') {
-          buyIndex = i
-          break
+        const log = allLogs[i]
+
+        // Accept buy signals from 5 minutes before to 1 second after position opened time
+        if (logTime <= positionTime + toleranceMs) {
+          const isBuySignal =
+            (log.log_type === 'ai' && log.decision === 'buy') ||
+            (log.log_type === 'indicator' && log.phase === 'base_order' && log.conditions_met)
+
+          if (isBuySignal) {
+            buyIndex = i
+            break
+          }
         }
       }
 
@@ -75,7 +81,10 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
 
   const filteredLogs = logs.filter((log: any) => {
     if (filterDecision === 'all') return true
-    return log.decision === filterDecision
+    if (filterDecision === 'ai') return log.log_type === 'ai'
+    if (filterDecision === 'indicator') return log.log_type === 'indicator'
+    // Filter by AI decision type
+    return log.log_type === 'ai' && log.decision === filterDecision
   })
 
   const getDecisionIcon = (decision: string) => {
@@ -117,9 +126,12 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
         {/* Header */}
         <div className="p-6 border-b border-slate-700 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <Brain className="w-6 h-6 text-purple-400" />
+            <div className="flex items-center space-x-2">
+              <Brain className="w-6 h-6 text-purple-400" />
+              <BarChart3 className="w-6 h-6 text-blue-400" />
+            </div>
             <div>
-              <h3 className="text-xl font-bold">AI Reasoning for Position</h3>
+              <h3 className="text-xl font-bold">Decision History for Position</h3>
               <p className="text-sm text-slate-400">
                 {productId} - Since {formatDateTimeCompact(positionOpenedAt)}
               </p>
@@ -142,10 +154,12 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
               onChange={(e) => setFilterDecision(e.target.value)}
               className="bg-slate-700 text-white px-3 py-1.5 rounded border border-slate-600 text-sm"
             >
-              <option value="all">All Decisions</option>
-              <option value="buy">Buy Only</option>
-              <option value="sell">Sell Only</option>
-              <option value="hold">Hold Only</option>
+              <option value="all">All Logs</option>
+              <option value="ai">AI Reasoning Only</option>
+              <option value="indicator">Indicator Checks Only</option>
+              <option value="buy">AI Buy Only</option>
+              <option value="sell">AI Sell Only</option>
+              <option value="hold">AI Hold Only</option>
             </select>
             <span className="text-sm text-slate-400">
               ({filteredLogs.length} {filteredLogs.length === 1 ? 'entry' : 'entries'})
@@ -156,60 +170,152 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
         {/* Logs List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {isLoading ? (
-            <div className="text-center text-slate-400 py-8">Loading AI logs...</div>
+            <div className="text-center text-slate-400 py-8">Loading decision logs...</div>
           ) : filteredLogs.length === 0 ? (
             <div className="text-center text-slate-400 py-8">
               {filterDecision === 'all'
-                ? 'No AI reasoning logs for this position yet.'
-                : `No "${filterDecision}" decisions logged for this position.`}
+                ? 'No decision logs for this position yet.'
+                : `No "${filterDecision}" logs found for this position.`}
             </div>
           ) : (
             filteredLogs.map((log: any) => (
               <div
-                key={log.id}
+                key={`${log.log_type}-${log.id}`}
                 className="bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors"
               >
-                {/* Header Row */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center space-x-3">
-                    {getDecisionIcon(log.decision)}
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-1 rounded text-xs font-medium border ${getDecisionColor(log.decision)}`}>
-                          {log.decision.toUpperCase()}
-                        </span>
-                        {log.confidence !== null && (
-                          <span className={`text-sm font-medium ${getConfidenceColor(log.confidence)}`}>
-                            {log.confidence}% confidence
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-3 mt-1 text-xs text-slate-400">
-                        <span className="flex items-center space-x-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{formatDateTime(log.timestamp)}</span>
-                        </span>
-                        {log.current_price && (
-                          <span className="flex items-center space-x-1">
-                            <Target className="w-3 h-3" />
-                            <span>{log.current_price.toFixed(8)} BTC</span>
-                          </span>
-                        )}
-                        {log.position_status && (
-                          <span className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">
-                            Position: {log.position_status}
-                          </span>
-                        )}
+                {log.log_type === 'ai' ? (
+                  /* AI Log */
+                  <>
+                    {/* Header Row */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        {getDecisionIcon(log.decision)}
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <span className="px-1.5 py-0.5 bg-purple-600/20 border border-purple-600/50 text-purple-300 rounded text-xs font-medium">
+                              AI
+                            </span>
+                            <span className={`px-2 py-1 rounded text-xs font-medium border ${getDecisionColor(log.decision)}`}>
+                              {log.decision.toUpperCase()}
+                            </span>
+                            {log.confidence !== null && (
+                              <span className={`text-sm font-medium ${getConfidenceColor(log.confidence)}`}>
+                                {log.confidence}% confidence
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-3 mt-1 text-xs text-slate-400">
+                            <span className="flex items-center space-x-1">
+                              <Clock className="w-3 h-3" />
+                              <span>{formatDateTime(log.timestamp)}</span>
+                            </span>
+                            {log.current_price && (
+                              <span className="flex items-center space-x-1">
+                                <Target className="w-3 h-3" />
+                                <span>{log.current_price.toFixed(8)} BTC</span>
+                              </span>
+                            )}
+                            {log.position_status && (
+                              <span className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">
+                                Position: {log.position_status}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* AI Thinking */}
-                <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
-                  <p className="text-sm font-medium text-purple-300 mb-1">🧠 AI Reasoning:</p>
-                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{log.thinking}</p>
-                </div>
+                    {/* AI Thinking */}
+                    <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
+                      <p className="text-sm font-medium text-purple-300 mb-1">🧠 AI Reasoning:</p>
+                      <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{log.thinking}</p>
+                    </div>
+                  </>
+                ) : (
+                  /* Indicator Log */
+                  <>
+                    {/* Header Row */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <BarChart3 className="w-5 h-5 text-blue-400" />
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <span className="px-1.5 py-0.5 bg-blue-600/20 border border-blue-600/50 text-blue-300 rounded text-xs font-medium">
+                              INDICATOR
+                            </span>
+                            <span className="px-2 py-1 rounded text-xs font-medium border bg-slate-700 border-slate-600 text-slate-300">
+                              {log.phase.replace('_', ' ').toUpperCase()}
+                            </span>
+                            {log.conditions_met ? (
+                              <CheckCircle className="w-4 h-4 text-green-400" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-red-400" />
+                            )}
+                            <span className={`text-sm font-medium ${log.conditions_met ? 'text-green-400' : 'text-red-400'}`}>
+                              {log.conditions_met ? 'Conditions Met' : 'Conditions Not Met'}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-3 mt-1 text-xs text-slate-400">
+                            <span className="flex items-center space-x-1">
+                              <Clock className="w-3 h-3" />
+                              <span>{formatDateTime(log.timestamp)}</span>
+                            </span>
+                            {log.current_price && (
+                              <span className="flex items-center space-x-1">
+                                <Target className="w-3 h-3" />
+                                <span>{log.current_price.toFixed(8)} BTC</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Indicator Conditions */}
+                    <div className="bg-slate-900/50 rounded p-3 border border-slate-700 space-y-2">
+                      <p className="text-sm font-medium text-blue-300 mb-2">📊 Indicator Conditions:</p>
+                      {log.conditions_detail && log.conditions_detail.map((condition: any, idx: number) => (
+                        <div key={idx} className="flex items-start space-x-2 text-xs">
+                          {condition.result ? (
+                            <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1">
+                            <span className="text-slate-300 font-medium">
+                              {condition.type.toUpperCase()} ({condition.timeframe})
+                            </span>
+                            <span className="text-slate-400">
+                              {' '}{condition.operator.replace('_', ' ')} {condition.threshold}
+                            </span>
+                            <span className={condition.result ? 'text-green-400' : 'text-red-400'}>
+                              {' '}→ {typeof condition.actual_value === 'number' ? condition.actual_value.toFixed(2) : condition.actual_value}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Indicator Snapshot (collapsible) */}
+                    {log.indicators_snapshot && Object.keys(log.indicators_snapshot).length > 0 && (
+                      <details className="mt-3">
+                        <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-300">
+                          View all indicator values ({Object.keys(log.indicators_snapshot).length} indicators)
+                        </summary>
+                        <div className="mt-2 bg-slate-900/50 rounded p-3 border border-slate-700 text-xs space-y-1 max-h-40 overflow-y-auto">
+                          {Object.entries(log.indicators_snapshot).map(([key, value]: [string, any]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="text-slate-400">{key}:</span>
+                              <span className="text-slate-300 font-mono">
+                                {typeof value === 'number' ? value.toFixed(4) : String(value)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </>
+                )}
               </div>
             ))
           )}
@@ -218,7 +324,7 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
         {/* Footer */}
         <div className="p-4 border-t border-slate-700 bg-slate-800/50">
           <p className="text-xs text-slate-400 text-center">
-            AI reasoning logs refresh automatically every 10 seconds
+            Decision logs (AI + Indicators) refresh automatically every 10 seconds
           </p>
         </div>
       </div>
