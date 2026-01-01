@@ -9,7 +9,7 @@ from sqlalchemy import select, and_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import AIBotLog, IndicatorLog, Position, Setting
+from app.models import AIBotLog, IndicatorLog, Position, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ async def cleanup_old_decision_logs():
 async def get_log_retention_days(db: AsyncSession) -> int:
     """Get the configured log retention period from settings"""
     try:
-        query = select(Setting).where(Setting.key == 'decision_log_retention_days')
+        query = select(Settings).where(Settings.key == 'decision_log_retention_days')
         result = await db.execute(query)
         setting = result.scalars().first()
 
