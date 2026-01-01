@@ -1659,7 +1659,15 @@ function Bots() {
                       min="60"
                       max="3600"
                       value={formData.check_interval_seconds}
-                      onChange={(e) => setFormData({ ...formData, check_interval_seconds: parseInt(e.target.value) || 300 })}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setFormData({ ...formData, check_interval_seconds: val === '' ? ('' as any) : (parseInt(val) || 300) })
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value === '' || isNaN(parseInt(e.target.value))) {
+                          setFormData({ ...formData, check_interval_seconds: 300 })
+                        }
+                      }}
                       className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
                       placeholder="300"
                     />
@@ -1702,7 +1710,16 @@ function Bots() {
                         min="0"
                         max="100"
                         value={formData.budget_percentage}
-                        onChange={(e) => setFormData({ ...formData, budget_percentage: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setFormData({ ...formData, budget_percentage: val === '' ? ('' as any) : (parseFloat(val) || 0) })
+                        }}
+                        onBlur={(e) => {
+                          // Ensure valid number on blur
+                          if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
+                            setFormData({ ...formData, budget_percentage: 0 })
+                          }
+                        }}
                         className="flex-1 rounded border border-emerald-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
                         placeholder="0.0"
                       />
@@ -1724,7 +1741,15 @@ function Bots() {
                           step="0.00000001"
                           min="0"
                           value={formData.reserved_btc_balance}
-                          onChange={(e) => setFormData({ ...formData, reserved_btc_balance: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setFormData({ ...formData, reserved_btc_balance: val === '' ? ('' as any) : (parseFloat(val) || 0) })
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
+                              setFormData({ ...formData, reserved_btc_balance: 0 })
+                            }
+                          }}
                           className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
                           placeholder="0.0"
                         />
@@ -1736,7 +1761,15 @@ function Bots() {
                           step="0.01"
                           min="0"
                           value={formData.reserved_usd_balance}
-                          onChange={(e) => setFormData({ ...formData, reserved_usd_balance: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setFormData({ ...formData, reserved_usd_balance: val === '' ? ('' as any) : (parseFloat(val) || 0) })
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
+                              setFormData({ ...formData, reserved_usd_balance: 0 })
+                            }
+                          }}
                           className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
                           placeholder="0.00"
                         />
@@ -2012,7 +2045,15 @@ function Bots() {
                                   min="0"
                                   max="100"
                                   value={formData.budget_percentage}
-                                  onChange={(e) => setFormData({ ...formData, budget_percentage: parseFloat(e.target.value) || 0 })}
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    setFormData({ ...formData, budget_percentage: val === '' ? ('' as any) : (parseFloat(val) || 0) })
+                                  }}
+                                  onBlur={(e) => {
+                                    if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
+                                      setFormData({ ...formData, budget_percentage: 0 })
+                                    }
+                                  }}
                                   className="flex-1 rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
                                   placeholder="0.0"
                                 />
