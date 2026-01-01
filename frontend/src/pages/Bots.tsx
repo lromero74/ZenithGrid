@@ -697,7 +697,9 @@ function Bots() {
   }
 
   const renderParameterInput = (param: StrategyParameter) => {
-    const value = formData.strategy_config[param.name] ?? param.default
+    // Don't immediately apply default - let user clear the field while editing
+    // Default will be applied on blur or form submission
+    const value = formData.strategy_config[param.name]
 
     // Special handling for position_control_mode - render as toggle switch
     if (param.name === 'position_control_mode' && param.options && param.options.length === 2) {
@@ -818,6 +820,13 @@ function Bots() {
             val = rawVal
           }
           handleParamChange(param.name, val)
+        }}
+        onBlur={() => {
+          // Apply default value if field is empty/invalid when focus is lost
+          const currentValue = formData.strategy_config[param.name]
+          if (currentValue === undefined || currentValue === null || currentValue === '') {
+            handleParamChange(param.name, param.default)
+          }
         }}
         className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white"
       />
