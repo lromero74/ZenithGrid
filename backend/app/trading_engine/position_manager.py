@@ -20,46 +20,84 @@ from app.models import Bot, Position
 
 def calculate_expected_position_budget(config: dict, aggregate_value: float) -> float:
     """
-    Calculate the expected total budget for a position based on manual sizing config.
+    Calculate the expected total budget for a position including base order + safety orders.
 
-    When using manual sizing with percentage-based orders, the budget should equal
-    the sum of all expected orders (base + DCAs), not the per-position allocation.
+    This handles both manual sizing mode AND fixed base orders with safety orders enabled.
+    When using fixed base orders with safety orders, the total budget must include room
+    for all potential safety orders to prevent over-allocation.
 
     Args:
-        config: Bot strategy config with manual sizing parameters
+        config: Bot strategy config with order sizing parameters
         aggregate_value: Total account liquidation value (for percentage calculations)
 
     Returns:
-        Expected total budget for this position based on configured order sizes
+        Expected total budget for this position (base + all safety orders), or 0.0 if using percentage-based sizing
     """
-    if not config.get("use_manual_sizing", False) or aggregate_value <= 0:
-        return 0.0  # Caller should use default per-position budget
+    # Handle manual sizing mode (original logic)
+    if config.get("use_manual_sizing", False) and aggregate_value > 0:
+        # Get order sizing config
+        base_order_type = config.get("base_order_type", "percentage")
+        base_order_value = config.get("base_order_value", 0.0)
+        dca_order_type = config.get("dca_order_type", "percentage")
+        dca_order_value = config.get("dca_order_value", 0.0)
+        dca_multiplier = config.get("dca_order_multiplier", 1.0)
+        max_dca_orders = config.get("manual_max_dca_orders", config.get("max_safety_orders", 3))
 
-    # Get order sizing config
-    base_order_type = config.get("base_order_type", "percentage")
-    base_order_value = config.get("base_order_value", 0.0)
-    dca_order_type = config.get("dca_order_type", "percentage")
-    dca_order_value = config.get("dca_order_value", 0.0)
-    dca_multiplier = config.get("dca_order_multiplier", 1.0)
-    max_dca_orders = config.get("manual_max_dca_orders", config.get("max_safety_orders", 3))
+        total_expected = 0.0
 
-    total_expected = 0.0
-
-    # Calculate base order amount
-    if base_order_type == "percentage":
-        total_expected += aggregate_value * (base_order_value / 100.0)
-    else:
-        total_expected += base_order_value
-
-    # Calculate DCA orders amount (each can have multiplier)
-    for i in range(max_dca_orders):
-        order_size = dca_order_value * (dca_multiplier ** i)
-        if dca_order_type == "percentage":
-            total_expected += aggregate_value * (order_size / 100.0)
+        # Calculate base order amount
+        if base_order_type == "percentage":
+            total_expected += aggregate_value * (base_order_value / 100.0)
         else:
-            total_expected += order_size
+            total_expected += base_order_value
 
-    return total_expected
+        # Calculate DCA orders amount (each can have multiplier)
+        for i in range(max_dca_orders):
+            order_size = dca_order_value * (dca_multiplier ** i)
+            if dca_order_type == "percentage":
+                total_expected += aggregate_value * (order_size / 100.0)
+            else:
+                total_expected += order_size
+
+        return total_expected
+
+    # Handle fixed base orders with safety orders (MACD Bot, etc.)
+    base_order_type = config.get("base_order_type", "percentage")
+    max_safety_orders = config.get("max_safety_orders", 0)
+
+    # Only calculate total budget for fixed orders with safety orders enabled
+    if base_order_type in ["fixed", "fixed_btc"] and max_safety_orders > 0:
+        total_expected = 0.0
+
+        # Get base order size (minimum 0.0001 BTC for Coinbase)
+        if base_order_type == "fixed_btc":
+            base_order_size = max(config.get("base_order_btc", 0.001), 0.0001)
+        else:
+            base_order_size = max(config.get("base_order_fixed", 0.001), 0.0001)
+
+        total_expected += base_order_size
+
+        # Calculate safety orders with volume scaling
+        safety_order_type = config.get("safety_order_type", "percentage_of_base")
+        volume_scale = config.get("safety_order_volume_scale", 1.0)
+
+        for order_num in range(1, max_safety_orders + 1):
+            # Calculate base safety order size
+            if safety_order_type == "percentage_of_base":
+                base_safety_size = base_order_size * (config.get("safety_order_percentage", 50.0) / 100.0)
+            elif safety_order_type == "fixed_btc":
+                base_safety_size = config.get("safety_order_btc", 0.0001)
+            else:
+                base_safety_size = config.get("safety_order_fixed", 0.0005)
+
+            # Apply volume scaling (each subsequent order scales up)
+            safety_order_size = base_safety_size * (volume_scale ** (order_num - 1))
+            total_expected += safety_order_size
+
+        return total_expected
+
+    # For percentage-based orders or no safety orders, return 0 (use default per-position budget)
+    return 0.0
 
 
 async def get_active_position(db: AsyncSession, bot: Bot, product_id: str) -> Optional[Position]:
