@@ -723,19 +723,64 @@ class IndicatorBasedStrategy(TradingStrategy):
         Note: The 'balance' passed in is already the per-position budget (accounting for
         split_budget_across_pairs if enabled). The strategy just applies the percentage
         to whatever budget it receives - no need to divide by max_concurrent_deals here.
+
+        For fixed orders with safety orders enabled, this auto-calculates the base order
+        size that fits within the budget after accounting for all safety orders (working
+        backwards from total budget to determine optimal base order size).
         """
         order_type = self.config.get("base_order_type", "percentage")
+        max_safety_orders = self.config.get("max_safety_orders", 0)
 
         if order_type == "percentage":
             percentage = self.config.get("base_order_percentage", 10.0)
             # Simply apply the percentage to the per-position budget
             # Budget splitting is handled upstream in multi_bot_monitor.py
             return balance * (percentage / 100.0)
-        elif order_type == "fixed_btc":
-            # UI uses base_order_btc for fixed BTC amount
-            return self.config.get("base_order_btc", 0.0001)
+        elif order_type in ["fixed", "fixed_btc"]:
+            # For fixed orders WITH safety orders, auto-calculate base size to fit budget
+            if max_safety_orders > 0 and balance > 0:
+                # Calculate the total multiplier (base + all safety orders)
+                total_multiplier = 1.0  # Base order
+
+                safety_order_type = self.config.get("safety_order_type", "percentage_of_base")
+                volume_scale = self.config.get("safety_order_volume_scale", 1.0)
+
+                # Add safety order multipliers
+                for order_num in range(1, max_safety_orders + 1):
+                    if safety_order_type == "percentage_of_base":
+                        # Safety order as percentage of base (e.g., 100% = 1.0x base)
+                        so_multiplier = self.config.get("safety_order_percentage", 50.0) / 100.0
+                        # Apply volume scaling to the multiplier
+                        scaled_multiplier = so_multiplier * (volume_scale ** (order_num - 1))
+                        total_multiplier += scaled_multiplier
+                    elif safety_order_type in ["fixed", "fixed_btc"]:
+                        # Fixed safety orders don't scale with base, so we need different logic
+                        # Get the fixed safety order size
+                        fixed_so_size = self.config.get("safety_order_btc", 0.0001)
+                        # Apply volume scaling
+                        scaled_so_size = fixed_so_size * (volume_scale ** (order_num - 1))
+                        # Subtract from available balance instead of using multiplier
+                        balance -= scaled_so_size
+                    else:
+                        # Fixed safety orders (legacy using safety_order_fixed field)
+                        fixed_so_size = self.config.get("safety_order_fixed", 0.0005)
+                        scaled_so_size = fixed_so_size * (volume_scale ** (order_num - 1))
+                        balance -= scaled_so_size
+
+                # Calculate base order size that fits within budget
+                # budget = base * total_multiplier → base = budget / total_multiplier
+                base_order_size = balance / total_multiplier
+
+                # Ensure minimum order size (0.0001 BTC for Coinbase)
+                return max(base_order_size, 0.0001)
+            else:
+                # No safety orders or no balance - use configured fixed amount
+                if order_type == "fixed_btc":
+                    return self.config.get("base_order_btc", 0.0001)
+                else:
+                    return self.config.get("base_order_fixed", 0.001)
         else:
-            # Fallback for legacy configs
+            # Fallback for unknown types
             return self.config.get("base_order_fixed", 0.001)
 
     def calculate_safety_order_size(self, base_order_size: float, order_number: int) -> float:
