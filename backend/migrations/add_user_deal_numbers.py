@@ -5,10 +5,13 @@ This migration:
 1. Adds user_id column to positions table (links to owner via bot.user_id)
 2. Adds user_deal_number column (user-specific sequential deal number)
 3. Backfills user_id from bots table (position -> bot -> user)
-4. Backfills user_deal_number by ordering positions by opened_at per user
+4. DOES NOT backfill user_deal_number (assigned by trading engine on successful trades)
 
-The user_deal_number starts at 1 for each user and increments for each new position.
-This provides user-friendly deal numbers instead of global auto-increment IDs.
+Deal numbers are assigned by the trading engine when base orders execute successfully.
+This aligns with 3Commas behavior where only successful deals get deal numbers.
+
+For existing databases with positions, run the renumbering migration separately:
+  ./venv/bin/python migrations/renumber_deal_numbers_successful_only.py
 
 Run with: cd backend && ./venv/bin/python migrations/add_user_deal_numbers.py
 """
@@ -62,36 +65,13 @@ def run_migration():
         positions_updated = cursor.rowcount
         print(f"  - Updated {positions_updated} positions with user_id from bots")
 
-        # Step 4: Backfill user_deal_number
-        # For each user, assign sequential numbers ordered by opened_at
-        print("Backfilling user_deal_number...")
-
-        # Get all distinct user_ids from positions
-        cursor.execute("SELECT DISTINCT user_id FROM positions WHERE user_id IS NOT NULL")
-        user_ids = [row[0] for row in cursor.fetchall()]
-
-        total_updated = 0
-        for user_id in user_ids:
-            # Get all positions for this user ordered by opened_at
-            cursor.execute("""
-                SELECT id FROM positions
-                WHERE user_id = ?
-                ORDER BY opened_at ASC
-            """, (user_id,))
-            position_ids = [row[0] for row in cursor.fetchall()]
-
-            # Assign sequential deal numbers
-            for deal_number, position_id in enumerate(position_ids, start=1):
-                cursor.execute("""
-                    UPDATE positions
-                    SET user_deal_number = ?
-                    WHERE id = ?
-                """, (deal_number, position_id))
-                total_updated += 1
-
-            print(f"  - User {user_id}: assigned deal numbers 1-{len(position_ids)}")
-
-        print(f"  - Total positions with user_deal_number: {total_updated}")
+        # Step 4: SKIP backfill - deal numbers should only be assigned to SUCCESSFUL positions
+        # Deal numbers will be assigned by the trading engine when base orders execute successfully
+        # For existing databases, run migrations/renumber_deal_numbers_successful_only.py separately
+        print("Skipping user_deal_number backfill...")
+        print("  - Deal numbers will be assigned when positions execute successfully")
+        print("  - For existing databases with positions, run:")
+        print("    ./venv/bin/python migrations/renumber_deal_numbers_successful_only.py")
 
         conn.commit()
         print("\nMigration completed successfully!")
