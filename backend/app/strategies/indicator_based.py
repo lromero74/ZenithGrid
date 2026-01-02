@@ -730,11 +730,33 @@ class IndicatorBasedStrategy(TradingStrategy):
         """
         order_type = self.config.get("base_order_type", "percentage")
         max_safety_orders = self.config.get("max_safety_orders", 0)
+        auto_calculate = self.config.get("auto_calculate_order_sizes", False)
 
         if order_type == "percentage":
+            # For percentage-based with auto-calculate, compute the optimal percentage
+            # that ensures full budget utilization when all safety orders execute
+            if auto_calculate and max_safety_orders > 0:
+                # Calculate total multiplier (base + all safety orders)
+                total_multiplier = 1.0  # Base order
+
+                safety_order_type = self.config.get("safety_order_type", "percentage_of_base")
+                volume_scale = self.config.get("safety_order_volume_scale", 1.0)
+
+                if safety_order_type == "percentage_of_base":
+                    # Safety orders as percentage of base
+                    so_percentage = self.config.get("safety_order_percentage", 50.0) / 100.0
+                    for order_num in range(1, max_safety_orders + 1):
+                        scaled_multiplier = so_percentage * (volume_scale ** (order_num - 1))
+                        total_multiplier += scaled_multiplier
+
+                    # Calculate percentage that results in full budget usage
+                    # If total_multiplier = 4.0, then base should be 25% of budget
+                    optimal_percentage = 100.0 / total_multiplier
+                    return balance * (optimal_percentage / 100.0)
+                # For fixed safety orders with percentage base, fall through to manual mode
+
+            # Manual mode: use the configured percentage
             percentage = self.config.get("base_order_percentage", 10.0)
-            # Simply apply the percentage to the per-position budget
-            # Budget splitting is handled upstream in multi_bot_monitor.py
             return balance * (percentage / 100.0)
         elif order_type in ["fixed", "fixed_btc"]:
             # For fixed orders WITH safety orders AND auto-calculate enabled, auto-calculate base size to fit budget

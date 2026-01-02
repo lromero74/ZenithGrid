@@ -382,16 +382,13 @@ function ThreeCommasStyleForm({
                   type="checkbox"
                   checked={config.auto_calculate_order_sizes || false}
                   onChange={(e) => {
-                    // Batch all updates into a single onChange call to avoid state issues
-                    const updates: Record<string, any> = {
+                    // Toggle auto-calculation without changing the order type
+                    // The system will auto-calculate percentages or fixed amounts
+                    // based on the user's chosen order type
+                    onChange({
+                      ...config,
                       auto_calculate_order_sizes: e.target.checked
-                    }
-                    // When enabling auto-calc, force base/safety order types to fixed
-                    if (e.target.checked) {
-                      updates.base_order_type = 'fixed'
-                      updates.safety_order_type = 'fixed'
-                    }
-                    onChange({ ...config, ...updates })
+                    })
                   }}
                   className="sr-only peer"
                 />
