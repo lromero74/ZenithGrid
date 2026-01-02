@@ -101,7 +101,7 @@ async def run_limit_order_monitor():
     from sqlalchemy import select
 
     # Run startup reconciliation once
-    logger.info("🚀 Starting limit order monitor with startup reconciliation...")
+    print("🔄 Running startup reconciliation for limit orders...")
     try:
         async with async_session_maker() as db:
             # Check ALL positions with limit_close_order_id (regardless of closing_via_limit flag)
@@ -115,14 +115,13 @@ async def run_limit_order_monitor():
             positions = result.scalars().all()
 
             if positions:
-                logger.info(f"🔄 Startup reconciliation: Checking {len(positions)} positions with limit order IDs")
+                print(f"   Found {len(positions)} positions with limit order IDs - checking each...")
 
                 for position in positions:
                     # Ensure closing_via_limit flag is set (fix orphaned orders)
                     if not position.closing_via_limit:
-                        logger.warning(
-                            f"⚠️ Position {position.id} has limit_close_order_id but closing_via_limit is False. "
-                            f"Fixing flag and checking order status..."
+                        print(
+                            f"   ⚠️ Position {position.id} has order ID but closing_via_limit is False - fixing..."
                         )
                         position.closing_via_limit = True
 
@@ -134,11 +133,11 @@ async def run_limit_order_monitor():
                             await monitor.check_single_position_limit_order(position)
 
                 await db.commit()
-                logger.info(f"✅ Startup reconciliation complete: Checked {len(positions)} orders")
+                print(f"   ✅ Startup reconciliation complete: Checked {len(positions)} orders")
             else:
-                logger.info("✅ Startup reconciliation: No pending limit orders to check")
+                print("   ✅ No pending limit orders to check")
     except Exception as e:
-        logger.error(f"❌ Error in startup reconciliation: {e}")
+        print(f"   ❌ Error in startup reconciliation: {e}")
 
     # Main monitoring loop
     while True:
