@@ -196,7 +196,33 @@ async def execute_sell(
             return None, 0.0, 0.0
 
         except Exception as e:
-            logger.warning(f"Failed to place limit close order: {e}. Falling back to market order.")
+            logger.warning(f"Failed to place limit close order: {e}. Checking if market order is viable...")
+
+            # SAFETY CHECK: Re-validate profit before falling back to market order
+            # If price dropped significantly during the limit order attempt, abort instead of selling below target
+            current_value = position.total_base_acquired * current_price
+            profit_amount = current_value - position.total_quote_spent
+            profit_pct = (profit_amount / position.total_quote_spent) * 100
+
+            # Get minimum profit threshold from config
+            # Use same logic as should_sell() to determine minimum profit requirement
+            min_profit_override = config.get("min_profit_for_conditions")
+            if min_profit_override is not None:
+                min_profit = min_profit_override
+            else:
+                min_profit = config.get("take_profit_percentage", 3.0)
+
+            if profit_pct < min_profit:
+                logger.warning(
+                    f"⚠️ Aborting market order fallback - current profit {profit_pct:.2f}% is below "
+                    f"minimum target {min_profit:.2f}%. Will retry on next check cycle."
+                )
+                return None, 0.0, 0.0
+
+            logger.info(
+                f"✅ Market order fallback approved - current profit {profit_pct:.2f}% >= "
+                f"minimum {min_profit:.2f}%. Proceeding with market order."
+            )
             # Fall through to market order execution below
 
     # Execute market order (default behavior or fallback)
