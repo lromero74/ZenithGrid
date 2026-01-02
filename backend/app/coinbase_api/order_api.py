@@ -171,6 +171,76 @@ async def cancel_order(request_func: Callable, order_id: str) -> Dict[str, Any]:
     return result
 
 
+async def edit_order(
+    request_func: Callable, order_id: str, price: Optional[str] = None, size: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Edit an existing order's price or size using Coinbase's native Edit Order API.
+
+    Only works for limit orders with time_in_force = GTC (good-till-cancelled).
+
+    Queue position behavior:
+    - Loses position if increasing size or changing price
+    - Keeps position if only decreasing size
+
+    Args:
+        request_func: Authenticated request function
+        order_id: Coinbase order ID to edit
+        price: New limit price (optional)
+        size: New order size (optional)
+
+    Returns:
+        Dict with edited order details
+
+    Raises:
+        ValueError: If neither price nor size is provided
+    """
+    if not price and not size:
+        raise ValueError("Must specify either price or size to edit")
+
+    data = {"order_id": order_id}
+
+    if price:
+        data["price"] = str(price)
+    if size:
+        data["size"] = str(size)
+
+    result = await request_func("POST", "/api/v3/brokerage/orders/edit", data=data)
+    return result
+
+
+async def edit_order_preview(
+    request_func: Callable, order_id: str, price: Optional[str] = None, size: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Preview the results of editing an order before actually editing it.
+
+    Args:
+        request_func: Authenticated request function
+        order_id: Coinbase order ID to preview editing
+        price: New limit price (optional)
+        size: New order size (optional)
+
+    Returns:
+        Dict with preview details including slippage, fees, etc.
+
+    Raises:
+        ValueError: If neither price nor size is provided
+    """
+    if not price and not size:
+        raise ValueError("Must specify either price or size to preview")
+
+    data = {"order_id": order_id}
+
+    if price:
+        data["price"] = str(price)
+    if size:
+        data["size"] = str(size)
+
+    result = await request_func("POST", "/api/v3/brokerage/orders/edit_preview", data=data)
+    return result
+
+
 async def list_orders(
     request_func: Callable, product_id: Optional[str] = None, order_status: Optional[List[str]] = None, limit: int = 100
 ) -> List[Dict[str, Any]]:

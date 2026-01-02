@@ -288,7 +288,7 @@ async def update_limit_close(
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
-    """Update the limit price for a pending limit close order"""
+    """Update the limit price for a pending limit close order using Coinbase's native Edit Order API"""
     try:
         query = select(Position).where(Position.id == position_id)
         result = await db.execute(query)
@@ -300,7 +300,7 @@ async def update_limit_close(
         if not position.closing_via_limit:
             raise HTTPException(status_code=400, detail="Position does not have a pending limit close order")
 
-        # Get the pending order to check remaining amount
+        # Get the pending order
         pending_order_query = select(PendingOrder).where(PendingOrder.order_id == position.limit_close_order_id)
         pending_order_result = await db.execute(pending_order_query)
         pending_order = pending_order_result.scalars().first()
@@ -308,76 +308,54 @@ async def update_limit_close(
         if not pending_order:
             raise HTTPException(status_code=404, detail="Pending order not found")
 
-        # Cancel the old order
-        await coinbase.cancel_order(position.limit_close_order_id)
-
-        # Create new limit order with updated price (for remaining amount)
-        # Round size to proper precision
-        from app.order_validation import get_product_minimums
-        from decimal import Decimal
-
-        minimums = await get_product_minimums(coinbase, position.product_id)
-        base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
-
-        remaining_amount = pending_order.remaining_base_amount or position.total_base_acquired
-        remaining_decimal = Decimal(str(remaining_amount))
-
-        # Floor division to round down to nearest increment
-        rounded_remaining = (remaining_decimal // base_increment) * base_increment
-        size_to_sell = str(float(rounded_remaining))
+        # Format the new limit price with product-specific precision
+        from app.product_precision import format_quote_amount_for_product
+        formatted_price = format_quote_amount_for_product(request.new_limit_price, position.product_id)
 
         logger.info(
-            f"Position {position_id} update limit close: "
-            f"raw remaining={remaining_amount}, "
-            f"base_increment={base_increment}, "
-            f"rounded size={size_to_sell}"
+            f"Position {position_id} editing limit order: "
+            f"order_id={position.limit_close_order_id}, "
+            f"new_price={formatted_price}"
         )
 
-        order_result = await coinbase.create_limit_order(
-            product_id=position.product_id, side="SELL", limit_price=request.new_limit_price, size=size_to_sell
+        # Use Coinbase's native Edit Order API (atomic operation, preserves order in some cases)
+        edit_result = await coinbase.edit_order(
+            order_id=position.limit_close_order_id,
+            price=formatted_price
         )
 
-        # Extract new order ID
-        new_order_id = order_result.get("order_id") or order_result.get("success_response", {}).get("order_id")
+        # Log the full response for debugging
+        logger.info(f"Coinbase edit_order response: {edit_result}")
 
-        if not new_order_id:
-            raise HTTPException(status_code=500, detail="Failed to create updated limit order")
+        # Check if edit was successful
+        success_response = edit_result.get("success_response") or edit_result
+        if not success_response or edit_result.get("error_response"):
+            error_response = edit_result.get("error_response", {})
+            error_msg = error_response.get("message", "Unknown error")
+            logger.error(
+                f"Failed to edit limit order for position {position_id}: "
+                f"error={error_response.get('error')}, message={error_msg}"
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to edit limit order: {error_msg}"
+            )
 
-        # Update old pending order to canceled
-        pending_order.status = "canceled"
-        pending_order.canceled_at = datetime.utcnow()
-
-        # Create new pending order
-        new_pending_order = PendingOrder(
-            position_id=position.id,
-            bot_id=position.bot_id,
-            order_id=new_order_id,
-            product_id=position.product_id,
-            side="SELL",
-            order_type="LIMIT",
-            limit_price=request.new_limit_price,
-            quote_amount=0.0,
-            base_amount=remaining_amount,
-            trade_type="limit_close",
-            status="pending",
-            remaining_base_amount=remaining_amount,
-            fills=pending_order.fills,  # Preserve existing fills
-        )
-        db.add(new_pending_order)
-
-        # Update position with new order ID
-        position.limit_close_order_id = new_order_id
+        # Update pending order with new price (order ID stays the same)
+        pending_order.limit_price = request.new_limit_price
 
         await db.commit()
 
         return {
             "message": "Limit close order updated successfully",
-            "order_id": new_order_id,
+            "order_id": position.limit_close_order_id,  # Same order ID
             "new_limit_price": request.new_limit_price,
-            "remaining_amount": remaining_amount,
+            "remaining_amount": pending_order.remaining_base_amount or position.total_base_acquired,
         }
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error updating limit close order for position {position_id}: {e}", exc_info=True)
+        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

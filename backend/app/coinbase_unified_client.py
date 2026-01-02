@@ -243,6 +243,44 @@ class CoinbaseClient:
         """Cancel an open order"""
         return await order_api.cancel_order(self._request, order_id)
 
+    async def edit_order(
+        self, order_id: str, price: Optional[str] = None, size: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Edit an existing order's price or size.
+
+        Only works for limit orders with time_in_force = GTC (good-till-cancelled).
+
+        Queue position behavior:
+        - Loses position if increasing size or changing price
+        - Keeps position if only decreasing size
+
+        Args:
+            order_id: The order ID to edit
+            price: New limit price (optional)
+            size: New order size (optional)
+
+        Returns:
+            Dict with edited order details
+        """
+        return await order_api.edit_order(self._request, order_id, price, size)
+
+    async def edit_order_preview(
+        self, order_id: str, price: Optional[str] = None, size: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Preview the results of editing an order before actually editing it.
+
+        Args:
+            order_id: The order ID to preview editing
+            price: New limit price (optional)
+            size: New order size (optional)
+
+        Returns:
+            Dict with preview details including slippage, fees, etc.
+        """
+        return await order_api.edit_order_preview(self._request, order_id, price, size)
+
     async def list_orders(
         self, product_id: Optional[str] = None, order_status: Optional[List[str]] = None, limit: int = 100
     ) -> List[Dict[str, Any]]:
