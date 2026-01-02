@@ -26,6 +26,47 @@ class LimitOrderMonitor:
         self.db = db
         self.coinbase = coinbase_client
 
+    async def startup_reconciliation(self):
+        """
+        Reconcile all pending limit orders on startup.
+
+        Checks ALL positions with limit_close_order_id set (even if closing_via_limit is False)
+        to catch any orders that filled during downtime or got orphaned due to flag sync issues.
+        """
+        try:
+            # Get all open positions with a limit_close_order_id (regardless of closing_via_limit flag)
+            # This catches both active limit orders AND orphaned orders where the flag wasn't set
+            query = select(Position).where(
+                Position.status == "open",
+                Position.limit_close_order_id.isnot(None)
+            )
+            result = await self.db.execute(query)
+            positions = result.scalars().all()
+
+            if not positions:
+                logger.info("✅ Startup reconciliation: No pending limit orders to check")
+                return
+
+            logger.info(f"🔄 Startup reconciliation: Checking {len(positions)} positions with limit order IDs")
+
+            for position in positions:
+                # Ensure closing_via_limit flag is set (fix orphaned orders)
+                if not position.closing_via_limit:
+                    logger.warning(
+                        f"⚠️ Position {position.id} has limit_close_order_id but closing_via_limit is False. "
+                        f"Fixing flag and checking order status..."
+                    )
+                    position.closing_via_limit = True
+
+                await self.check_single_position_limit_order(position)
+
+            await self.db.commit()
+            logger.info(f"✅ Startup reconciliation complete: Checked {len(positions)} orders")
+
+        except Exception as e:
+            logger.error(f"❌ Error in startup reconciliation: {e}")
+            await self.db.rollback()
+
     async def check_limit_close_orders(self):
         """Check all pending limit close orders for fills"""
         try:
@@ -450,6 +491,10 @@ class LimitOrderMonitor:
 async def run_limit_order_monitor(db: AsyncSession, coinbase_client: CoinbaseClient):
     """Main loop for limit order monitoring"""
     monitor = LimitOrderMonitor(db, coinbase_client)
+
+    # Run startup reconciliation to catch orders that filled during downtime
+    logger.info("🚀 Starting limit order monitor with startup reconciliation...")
+    await monitor.startup_reconciliation()
 
     while True:
         try:
