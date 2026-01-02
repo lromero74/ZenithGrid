@@ -296,67 +296,50 @@ class LimitOrderMonitor:
                 )
                 return
 
-            # Profit threshold met - cancel old order and place new one at bid
+            # Profit threshold met - use Edit Order API to change price to bid
             logger.info(
-                f"🔄 Position {position.id}: Cancelling mark order, placing new limit @ bid price {best_bid:.8f}"
+                f"🔄 Position {position.id}: Editing limit order price from {pending_order.limit_price:.8f} to bid {best_bid:.8f}"
             )
 
-            # Cancel old order
-            from app.trading_client import TradingClient
-            trading_client = TradingClient(self.coinbase)
-
             try:
-                await trading_client.cancel_order(pending_order.order_id)
-                logger.info(f"✅ Position {position.id}: Old order cancelled successfully")
-            except Exception as e:
-                logger.error(f"❌ Position {position.id}: Failed to cancel old order: {e}")
-                return
+                # Format bid price with product-specific precision
+                from app.product_precision import format_quote_amount_for_product
+                formatted_bid = format_quote_amount_for_product(best_bid, position.product_id)
 
-            # Place new limit order at bid price
-            try:
-                import math
-                from app.product_precision import get_base_precision
-
-                # Round base amount to proper precision
-                precision = get_base_precision(position.product_id)
-                base_amount_rounded = math.floor(position.total_base_acquired * (10 ** precision)) / (10 ** precision)
-
-                new_order_response = await trading_client.sell_limit(
-                    product_id=position.product_id,
-                    limit_price=best_bid,
-                    base_amount=base_amount_rounded
+                # Use Coinbase's native Edit Order API (atomic, may preserve queue position)
+                edit_result = await self.coinbase.edit_order(
+                    order_id=pending_order.order_id,
+                    price=formatted_bid
                 )
 
-                if not new_order_response.get("success", False):
-                    raise ValueError(f"Order placement failed: {new_order_response.get('error_response')}")
+                # Check if edit was successful
+                if edit_result.get("error_response"):
+                    error_response = edit_result.get("error_response", {})
+                    error_msg = error_response.get("message", "Unknown error")
+                    raise Exception(f"Edit order failed: {error_msg}")
 
-                new_order_id = new_order_response.get("success_response", {}).get("order_id")
-                if not new_order_id:
-                    raise ValueError("No order_id in response")
+                logger.info(
+                    f"✅ Position {position.id}: Order price edited to bid {best_bid:.8f} (Order ID: {pending_order.order_id})"
+                )
 
-                logger.info(f"✅ Position {position.id}: New limit order placed @ bid {best_bid:.8f} (Order ID: {new_order_id})")
-
-                # Update pending order record with new details
-                pending_order.order_id = new_order_id
+                # Update pending order with new price (same order_id)
                 pending_order.limit_price = best_bid
-                pending_order.status = "pending"
-                pending_order.created_at = datetime.utcnow()  # Reset timer for new order
-
-                # Update position's limit_close_order_id
-                position.limit_close_order_id = new_order_id
+                pending_order.created_at = datetime.utcnow()  # Reset timer for edited order
 
                 await self.db.commit()
 
-                logger.info(f"🎉 Position {position.id}: Successfully adjusted to bid price - should fill immediately")
+                logger.info(
+                    f"🎉 Position {position.id}: Successfully adjusted to bid price - should fill quickly"
+                )
 
             except Exception as e:
-                logger.error(f"❌ Position {position.id}: Failed to place new limit order: {e}")
-                # Position is now in limbo - old order cancelled but new order failed
-                # Reset closing_via_limit flag so user can manually intervene
-                position.closing_via_limit = False
-                position.limit_close_order_id = None
-                pending_order.status = "failed"
-                await self.db.commit()
+                logger.error(f"❌ Position {position.id}: Failed to edit limit order: {e}")
+                logger.warning(
+                    f"⚠️ Position {position.id}: Order remains at original price {pending_order.limit_price:.8f}"
+                )
+                # Order is still valid at original price, so don't mark as failed
+                # Just log the error and continue monitoring
+                await self.db.rollback()
                 return
 
         except Exception as e:
