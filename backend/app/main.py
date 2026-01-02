@@ -100,6 +100,47 @@ async def run_limit_order_monitor():
     from app.models import Position
     from sqlalchemy import select
 
+    # Run startup reconciliation once
+    logger.info("🚀 Starting limit order monitor with startup reconciliation...")
+    try:
+        async with async_session_maker() as db:
+            # Check ALL positions with limit_close_order_id (regardless of closing_via_limit flag)
+            # This catches orphaned orders where the flag wasn't set
+            result = await db.execute(
+                select(Position).where(
+                    Position.status == "open",
+                    Position.limit_close_order_id.isnot(None)
+                )
+            )
+            positions = result.scalars().all()
+
+            if positions:
+                logger.info(f"🔄 Startup reconciliation: Checking {len(positions)} positions with limit order IDs")
+
+                for position in positions:
+                    # Ensure closing_via_limit flag is set (fix orphaned orders)
+                    if not position.closing_via_limit:
+                        logger.warning(
+                            f"⚠️ Position {position.id} has limit_close_order_id but closing_via_limit is False. "
+                            f"Fixing flag and checking order status..."
+                        )
+                        position.closing_via_limit = True
+
+                    # Get exchange client and check order status
+                    if position.account_id:
+                        exchange = await get_exchange_client_for_account(db, position.account_id)
+                        if exchange:
+                            monitor = LimitOrderMonitor(db, exchange)
+                            await monitor.check_single_position_limit_order(position)
+
+                await db.commit()
+                logger.info(f"✅ Startup reconciliation complete: Checked {len(positions)} orders")
+            else:
+                logger.info("✅ Startup reconciliation: No pending limit orders to check")
+    except Exception as e:
+        logger.error(f"❌ Error in startup reconciliation: {e}")
+
+    # Main monitoring loop
     while True:
         try:
             async with async_session_maker() as db:
