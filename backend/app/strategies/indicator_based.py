@@ -737,8 +737,8 @@ class IndicatorBasedStrategy(TradingStrategy):
             # Budget splitting is handled upstream in multi_bot_monitor.py
             return balance * (percentage / 100.0)
         elif order_type in ["fixed", "fixed_btc"]:
-            # For fixed orders WITH safety orders, auto-calculate base size to fit budget
-            if max_safety_orders > 0 and balance > 0:
+            # For fixed orders WITH safety orders AND auto-calculate enabled, auto-calculate base size to fit budget
+            if self.config.get("auto_calculate_order_sizes", False) and max_safety_orders > 0 and balance > 0:
                 # Calculate the total multiplier (base + all safety orders)
                 total_multiplier = 1.0  # Base order
 
