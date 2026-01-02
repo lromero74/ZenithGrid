@@ -4,6 +4,7 @@ Handles market and limit buy orders
 """
 
 import logging
+import math
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -17,6 +18,7 @@ from app.currency_utils import get_quote_currency
 from app.trading_engine.order_logger import log_order_to_history
 from app.services.websocket_manager import ws_manager
 from app.services.shutdown_manager import shutdown_manager
+from app.product_precision import get_base_precision
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +259,19 @@ async def execute_buy(
                     actual_base_amount = gross_base_amount
             else:
                 actual_base_amount = gross_base_amount
+
+            # CRITICAL: Round actual_base_amount down to Coinbase's base_increment
+            # This ensures we never record more than we can sell (avoids precision loss on sell)
+            # Example: LINK-BTC has 0.01 increment, so 0.799 LINK → 0.79 LINK
+            precision = get_base_precision(product_id)
+            actual_base_amount_raw = actual_base_amount
+            actual_base_amount = math.floor(actual_base_amount * (10 ** precision)) / (10 ** precision)
+
+            if actual_base_amount_raw != actual_base_amount:
+                logger.info(
+                    f"Rounded base amount to increment: raw={actual_base_amount_raw:.8f}, "
+                    f"rounded={actual_base_amount:.8f} (precision={precision} decimals)"
+                )
 
             # Check if order has filled (non-zero amounts)
             if actual_base_amount > 0 and actual_quote_amount > 0:
