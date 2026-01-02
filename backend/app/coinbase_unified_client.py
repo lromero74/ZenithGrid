@@ -5,7 +5,9 @@ Wrapper class that coordinates all Coinbase API modules.
 Maintains backward compatibility with existing code.
 """
 
+import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +17,12 @@ from app.coinbase_api import market_data_api
 from app.coinbase_api import order_api
 
 logger = logging.getLogger(__name__)
+
+# Global rate limiter state for Coinbase API
+# Coinbase allows ~10 requests/second, we'll use 7/sec to be safe
+_last_request_time = 0
+_rate_limit_lock = asyncio.Lock()
+_min_interval = 0.15  # 150ms between requests = ~6.6 req/sec
 
 
 class CoinbaseClient:
@@ -96,7 +104,20 @@ class CoinbaseClient:
     async def _request(
         self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Make authenticated request"""
+        """Make authenticated request with rate limiting"""
+        global _last_request_time
+
+        # Rate limiting: ensure minimum interval between requests
+        async with _rate_limit_lock:
+            now = time.time()
+            time_since_last = now - _last_request_time
+
+            if time_since_last < _min_interval:
+                delay = _min_interval - time_since_last
+                await asyncio.sleep(delay)
+
+            _last_request_time = time.time()
+
         return await auth.authenticated_request(
             method,
             endpoint,
