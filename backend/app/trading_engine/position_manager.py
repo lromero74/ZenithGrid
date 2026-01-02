@@ -33,6 +33,11 @@ def calculate_expected_position_budget(config: dict, aggregate_value: float) -> 
     Returns:
         Expected total budget for this position (base + all safety orders), or 0.0 if using percentage-based sizing
     """
+    # CRITICAL: If auto-calculate is enabled, return 0 to use quote_balance as max_quote_allowed
+    # Auto-calculate dynamically sizes orders based on available budget, not config values
+    if config.get("auto_calculate_order_sizes", False):
+        return 0.0
+
     # Handle manual sizing mode (original logic)
     if config.get("use_manual_sizing", False) and aggregate_value > 0:
         # Get order sizing config

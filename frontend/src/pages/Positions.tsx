@@ -1155,6 +1155,7 @@ export default function Positions() {
       {showLimitCloseModal && limitClosePosition && (
         <LimitCloseModal
           positionId={limitClosePosition.id}
+          dealNumber={limitClosePosition.user_deal_number}
           productId={limitClosePosition.product_id || 'ETH-BTC'}
           totalAmount={limitClosePosition.total_base_acquired}
           quoteCurrency={limitClosePosition.product_id?.split('-')[1] || 'BTC'}

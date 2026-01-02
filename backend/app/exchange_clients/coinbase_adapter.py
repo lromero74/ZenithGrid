@@ -169,6 +169,18 @@ class CoinbaseAdapter(ExchangeClient):
         """Cancel a pending order."""
         return await self._client.cancel_order(order_id)
 
+    async def edit_order(
+        self, order_id: str, price: Optional[str] = None, size: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Edit an existing order's price or size."""
+        return await self._client.edit_order(order_id=order_id, price=price, size=size)
+
+    async def edit_order_preview(
+        self, order_id: str, price: Optional[str] = None, size: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Preview the results of editing an order."""
+        return await self._client.edit_order_preview(order_id=order_id, price=price, size=size)
+
     async def list_orders(
         self,
         product_id: Optional[str] = None,

@@ -6,6 +6,7 @@ import { DepthChart } from './DepthChart'
 
 interface LimitCloseModalProps {
   positionId: number
+  dealNumber?: number | null  // User-facing deal number (null for failed positions)
   productId: string
   totalAmount: number
   quoteCurrency: string
@@ -31,6 +32,7 @@ interface ProductPrecision {
 
 export function LimitCloseModal({
   positionId,
+  dealNumber,
   productId,
   totalAmount,
   quoteCurrency,
@@ -381,7 +383,7 @@ export function LimitCloseModal({
             <h2 className="text-xl font-bold text-white">
               {isEditing ? 'Update Limit Order' : 'Close Position at Limit Price'}
               <span className="ml-3 text-base font-normal text-slate-400">
-                Deal #{positionId} · {productId}
+                {dealNumber ? `Deal #${dealNumber}` : `Position #${positionId}`} · {productId}
               </span>
             </h2>
             <button
