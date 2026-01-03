@@ -455,16 +455,45 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
       dailyProfits.set(point.date, current + point.profit)
     })
 
-    // Get date range - from first trade to today (or last trade if in the future somehow)
-    const sortedDates = Array.from(dailyProfits.keys()).sort()
-    if (sortedDates.length === 0) return
-
-    // Use string-based date comparison to avoid timezone issues
+    // Calculate start date based on timeframe (show full window, not just from first trade)
     const todayStr = toDateStr(new Date())
-    const firstDateStr = sortedDates[0]
-    // Always show at least up to today, or later if data exists in the future
-    const lastDataDate = sortedDates[sortedDates.length - 1]
-    const lastDateStr = lastDataDate > todayStr ? lastDataDate : todayStr
+    let firstDateStr: string
+
+    if (timeRange === 'all') {
+      // For 'all', use first trade date
+      const sortedDates = Array.from(dailyProfits.keys()).sort()
+      if (sortedDates.length === 0) return
+      firstDateStr = sortedDates[0]
+    } else {
+      // For specific timeframes, calculate start date from today
+      const now = new Date()
+      const startDate = new Date()
+
+      switch (timeRange) {
+        case '7d':
+          startDate.setDate(now.getDate() - 7)
+          break
+        case '14d':
+          startDate.setDate(now.getDate() - 14)
+          break
+        case '30d':
+          startDate.setDate(now.getDate() - 30)
+          break
+        case '3m':
+          startDate.setMonth(now.getMonth() - 3)
+          break
+        case '6m':
+          startDate.setMonth(now.getMonth() - 6)
+          break
+        case '1y':
+          startDate.setFullYear(now.getFullYear() - 1)
+          break
+      }
+
+      firstDateStr = toDateStr(startDate)
+    }
+
+    const lastDateStr = todayStr // Always end at today
 
     // Fill in all dates from first to last (including days with no trades)
     const allDates: string[] = []
@@ -474,8 +503,18 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
       currentDateStr = addDays(currentDateStr, 1)
     }
 
-    // Build chart data with all dates, using 0 profit for missing days
+    // Calculate starting cumulative PnL (for timeframes, include P&L from before the window)
     let cumulativePnL = 0
+    if (timeRange !== 'all' && data) {
+      // Sum all profits from before the timeframe start date
+      data.summary.forEach((point) => {
+        if (point.date < firstDateStr) {
+          cumulativePnL += point.profit
+        }
+      })
+    }
+
+    // Build chart data with all dates, using 0 profit for missing days
     const chartData = allDates.map((date) => {
       const dailyProfit = dailyProfits.get(date) || 0
       cumulativePnL += dailyProfit
