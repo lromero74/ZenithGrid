@@ -179,6 +179,7 @@ function Bots() {
       return response.json()
     },
     refetchInterval: 60000, // Update every 60 seconds
+    placeholderData: keepPreviousData, // Keep portfolio value visible while refetching
   })
 
   // Fetch aggregate BTC/USD values for minimum percentage validation
@@ -1321,9 +1322,9 @@ function Bots() {
                 const yearlyPct = portfolioUsd > 0 ? (totalYearlyPnl / portfolioUsd) * 100 : 0
                 const pctPrefix = isPositive ? '+' : ''
 
-                // Format percentage - show loading indicator if portfolio not loaded yet
+                // Format percentage - only show placeholder if we don't have portfolio value yet
                 const formatPct = (pct: number) => {
-                  if (portfolioLoading || portfolioUsd === 0) return '--'
+                  if (portfolioUsd === 0) return '--'
                   return `${pctPrefix}${pct.toFixed(2)}`
                 }
 
