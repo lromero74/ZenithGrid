@@ -151,6 +151,7 @@ function Bots() {
     queryKey: ['bots', selectedAccount?.id, projectionTimeframe],
     queryFn: () => botsApi.getAll(projectionTimeframe),
     refetchInterval: 5000,
+    placeholderData: (previousData) => previousData, // Keep previous data while fetching new timeframe
     select: (data) => {
       if (!selectedAccount) return data
       // Filter by account_id
