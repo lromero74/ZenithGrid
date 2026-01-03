@@ -811,8 +811,8 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         if order_type == "percentage_of_base":
             base_safety_size = base_order_size * (self.config.get("safety_order_percentage", 50.0) / 100.0)
-        elif order_type == "fixed_btc":
-            # UI uses safety_order_btc for fixed BTC amount
+        elif order_type in ["fixed", "fixed_btc"]:
+            # FIXED: Handle both "fixed" and "fixed_btc" (UI uses safety_order_btc for fixed BTC amount)
             base_safety_size = self.config.get("safety_order_btc", 0.0001)
         else:
             # Fallback for legacy configs using safety_order_fixed
@@ -903,7 +903,15 @@ class IndicatorBasedStrategy(TradingStrategy):
                     return False, 0.0, f"SO #{next_order_number} price target met but conditions not met"
 
             # Calculate safety order size
-            base_order_size = position.total_quote_spent / (1 + safety_orders_count)
+            # CRITICAL FIX: For auto-calculate mode, recalculate base order size using the same logic
+            # Don't try to reverse-engineer it from total_quote_spent (which doesn't account for volume scaling)
+            if self.config.get("auto_calculate_order_sizes", False):
+                # Recalculate base order using the position's allocated budget
+                base_order_size = self.calculate_base_order_size(position.max_quote_allowed)
+            else:
+                # Manual mode: infer base order from average spent per order
+                base_order_size = position.total_quote_spent / (1 + safety_orders_count)
+
             safety_size = self.calculate_safety_order_size(base_order_size, next_order_number)
 
             if safety_size > balance:
