@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { botsApi, templatesApi, accountApi } from '../services/api'
 import { Bot, BotCreate, StrategyParameter } from '../types'
@@ -151,6 +151,7 @@ function Bots() {
     queryKey: ['bots', selectedAccount?.id, projectionTimeframe],
     queryFn: () => botsApi.getAll(projectionTimeframe),
     refetchInterval: 5000,
+    placeholderData: keepPreviousData, // Keep showing previous data while fetching new timeframe
     select: (data) => {
       if (!selectedAccount) return data
       // Filter by account_id
