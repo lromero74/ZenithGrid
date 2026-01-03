@@ -62,6 +62,37 @@ class CoinbaseAdapter(ExchangeClient):
         """Get available USD balance."""
         return await self._client.get_usd_balance()
 
+    async def get_balance(self, currency: str) -> Dict[str, Any]:
+        """
+        Get balance for a specific currency.
+
+        Args:
+            currency: Currency code (e.g., "USD", "BTC", "USDC", "USDT")
+
+        Returns:
+            Dictionary with balance information
+        """
+        accounts = await self._client.get_accounts(force_fresh=True)
+
+        # Find the account for the requested currency
+        for account in accounts:
+            if account.get('currency') == currency:
+                available_value = account.get('available_balance', {}).get('value', '0')
+                hold_value = account.get('hold', {}).get('value', '0')
+
+                return {
+                    'currency': currency,
+                    'available': available_value,
+                    'hold': hold_value
+                }
+
+        # If currency account not found, return zero balance
+        return {
+            'currency': currency,
+            'available': '0',
+            'hold': '0'
+        }
+
     async def invalidate_balance_cache(self):
         """Invalidate cached balance data."""
         await self._client.invalidate_balance_cache()

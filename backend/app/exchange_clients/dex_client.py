@@ -196,6 +196,42 @@ class DEXClient(ExchangeClient):
         """Get USDC balance (primary stablecoin)"""
         return await self._get_erc20_balance(TOKEN_ADDRESSES["USDC"], "USDC", 6)
 
+    async def get_balance(self, currency: str) -> Dict[str, Any]:
+        """
+        Get balance for a specific currency (token).
+
+        Args:
+            currency: Currency code (e.g., "ETH", "USDC", "USDT", "BTC" -> WBTC)
+
+        Returns:
+            Dictionary with balance information
+        """
+        # Map common currency codes to DEX tokens
+        token_map = {
+            "ETH": ("ETH", 18),
+            "USDC": (TOKEN_ADDRESSES.get("USDC"), 6),
+            "USDT": (TOKEN_ADDRESSES.get("USDT"), 6),
+            "WBTC": (TOKEN_ADDRESSES.get("WBTC"), 8),
+            "BTC": (TOKEN_ADDRESSES.get("WBTC"), 8),  # BTC -> WBTC on DEX
+        }
+
+        if currency == "ETH":
+            balance = await self.get_eth_balance()
+        elif currency in token_map:
+            token_address, decimals = token_map[currency]
+            if token_address:
+                balance = await self._get_erc20_balance(token_address, currency, decimals)
+            else:
+                balance = 0.0
+        else:
+            balance = 0.0
+
+        return {
+            'currency': currency,
+            'available': str(balance),
+            'hold': '0'
+        }
+
     async def _get_erc20_balance(self, token_address: str, symbol: str, decimals: int) -> float:
         """
         Get ERC-20 token balance

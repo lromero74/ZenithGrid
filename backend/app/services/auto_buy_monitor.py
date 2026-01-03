@@ -90,7 +90,7 @@ class AutoBuyMonitor:
     async def _process_account(self, account: Account, db: AsyncSession):
         """Process one account - check balances and buy BTC if needed"""
         try:
-            client = await get_exchange_client_for_account(account.id, db)
+            client = await get_exchange_client_for_account(db, account.id)
             if not client:
                 logger.warning(f"No exchange client for account {account.id}")
                 return
@@ -239,7 +239,7 @@ class AutoBuyMonitor:
                 return
 
             # Get exchange client
-            client = await get_exchange_client_for_account(pending_order.account_id, db)
+            client = await get_exchange_client_for_account(db, pending_order.account_id)
             if not client:
                 return
 

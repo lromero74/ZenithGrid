@@ -82,6 +82,24 @@ class ExchangeClient(ABC):
         pass
 
     @abstractmethod
+    async def get_balance(self, currency: str) -> Dict[str, Any]:
+        """
+        Get balance for a specific currency.
+
+        Args:
+            currency: Currency code (e.g., "USD", "BTC", "USDC", "USDT")
+
+        Returns:
+            Dictionary with balance information:
+            {
+                "currency": "USD",
+                "available": "100.50",
+                "hold": "0.00"
+            }
+        """
+        pass
+
+    @abstractmethod
     async def invalidate_balance_cache(self):
         """
         Invalidate cached balance data to force fresh fetch on next call.
