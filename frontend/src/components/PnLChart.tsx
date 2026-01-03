@@ -531,6 +531,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
       <div className="p-4 sm:p-6 border-b border-slate-800">
         <div className="flex gap-2 flex-wrap">
           <button
+            type="button"
             onClick={() => setTimeRange('all')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               timeRange === 'all'
@@ -541,6 +542,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
             All
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('7d')}
             disabled={!enabledTimeRanges.has('7d')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
@@ -554,6 +556,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
             7 days
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('14d')}
             disabled={!enabledTimeRanges.has('14d')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
@@ -567,6 +570,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
             14 days
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('30d')}
             disabled={!enabledTimeRanges.has('30d')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
@@ -580,6 +584,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
             30 days
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('3m')}
             disabled={!enabledTimeRanges.has('3m')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
@@ -593,6 +598,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
             3 months
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('6m')}
             disabled={!enabledTimeRanges.has('6m')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
@@ -606,6 +612,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
             6 months
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('1y')}
             disabled={!enabledTimeRanges.has('1y')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
