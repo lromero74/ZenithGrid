@@ -1059,24 +1059,14 @@ function Bots() {
                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-right">
                         {(() => {
                           const dailyPnl = (bot as any).avg_daily_pnl_usd || 0
-                          const portfolioUsd = portfolio?.total_usd_value || 0
 
-                          // Calculate bot's allocated value based on its budget percentage
-                          const botBudgetPct = bot.budget_percentage
-                          const botAllocatedValue = portfolioUsd * (botBudgetPct / 100)
+                          // Use simple linear projection (no compounding)
+                          // Compounding daily rates leads to unrealistic projections
+                          const projectPnl = (days: number) => dailyPnl * days
 
-                          // Calculate daily rate for this bot
-                          const dailyRate = botAllocatedValue > 0 ? dailyPnl / botAllocatedValue : 0
-
-                          // Use compound interest for projections
-                          const compoundGain = (days: number) => {
-                            if (botAllocatedValue <= 0 || dailyRate === 0) return dailyPnl * days
-                            return botAllocatedValue * (Math.pow(1 + dailyRate, days) - 1)
-                          }
-
-                          const weeklyPnl = compoundGain(7)
-                          const monthlyPnl = compoundGain(30)
-                          const yearlyPnl = compoundGain(365)
+                          const weeklyPnl = projectPnl(7)
+                          const monthlyPnl = projectPnl(30)
+                          const yearlyPnl = projectPnl(365)
 
                           const isPositive = dailyPnl > 0
                           const isNegative = dailyPnl < 0
@@ -1309,16 +1299,14 @@ function Bots() {
                 // Calculate daily rate as a decimal (e.g., 0.0009 for 0.09%)
                 const dailyRate = portfolioUsd > 0 ? totalDailyPnl / portfolioUsd : 0
 
-                // Use compound interest for projections: P * (1 + r)^n - P
-                // This accounts for percentage-based bots where gains compound
-                const compoundGain = (days: number) => {
-                  if (portfolioUsd <= 0 || dailyRate === 0) return totalDailyPnl * days
-                  return portfolioUsd * (Math.pow(1 + dailyRate, days) - 1)
-                }
+                // Use simple linear projection (no compounding)
+                // Compounding daily rates leads to unrealistic projections, especially for short timeframes
+                // Linear projection: avg_daily_pnl × number_of_days
+                const projectPnl = (days: number) => totalDailyPnl * days
 
-                const totalWeeklyPnl = compoundGain(7)
-                const totalMonthlyPnl = compoundGain(30)
-                const totalYearlyPnl = compoundGain(365)
+                const totalWeeklyPnl = projectPnl(7)
+                const totalMonthlyPnl = projectPnl(30)
+                const totalYearlyPnl = projectPnl(365)
 
                 const isPositive = totalDailyPnl > 0
                 const isNegative = totalDailyPnl < 0
