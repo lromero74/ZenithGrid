@@ -761,46 +761,63 @@ class IndicatorBasedStrategy(TradingStrategy):
         elif order_type in ["fixed", "fixed_btc"]:
             # For fixed orders WITH safety orders AND auto-calculate enabled, auto-calculate base size to fit budget
             if self.config.get("auto_calculate_order_sizes", False) and max_safety_orders > 0 and balance > 0:
-                # Calculate the total multiplier (base + all safety orders)
-                total_multiplier = 1.0  # Base order
-
                 safety_order_type = self.config.get("safety_order_type", "percentage_of_base")
-                volume_scale = self.config.get("safety_order_volume_scale", 1.0)
 
-                # Add safety order multipliers
-                for order_num in range(1, max_safety_orders + 1):
-                    if safety_order_type == "percentage_of_base":
+                # FIXED: When both base and safety orders are fixed types, dynamically calculate X where:
+                # base = X, SO1 = X, SO2 = X * volume_scale, etc., and all orders fit within budget
+                if safety_order_type in ["fixed", "fixed_btc"]:
+                    volume_scale = self.config.get("safety_order_volume_scale", 1.0)
+
+                    # Calculate total multiplier: base + SO1 + SO2*scale + SO3*scale^2 + ...
+                    # If base_order_btc = safety_order_btc (configured to be same), then:
+                    # base = X, SO1 = X, SO2 = X*scale, SO3 = X*scale^2, ...
+                    # Total = X + X + X*scale + X*scale^2 + ... = X * (1 + 1 + scale + scale^2 + ...)
+                    total_multiplier = 1.0  # Base order = X
+                    total_multiplier += 1.0  # SO1 = X (same as base)
+
+                    # Add remaining safety orders with volume scaling
+                    for order_num in range(2, max_safety_orders + 1):
+                        scaled_multiplier = volume_scale ** (order_num - 1)
+                        total_multiplier += scaled_multiplier
+
+                    # Solve for X: total_multiplier * X = balance
+                    base_order_size = balance / total_multiplier
+
+                    # Ensure minimum order size (0.0001 BTC for Coinbase)
+                    return max(base_order_size, 0.0001)
+                else:
+                    # Safety orders are percentage_of_base - calculate base to fit budget
+                    # Calculate the total multiplier (base + all safety orders)
+                    total_multiplier = 1.0  # Base order
+                    volume_scale = self.config.get("safety_order_volume_scale", 1.0)
+
+                    # Add safety order multipliers
+                    for order_num in range(1, max_safety_orders + 1):
                         # Safety order as percentage of base (e.g., 100% = 1.0x base)
                         so_multiplier = self.config.get("safety_order_percentage", 50.0) / 100.0
                         # Apply volume scaling to the multiplier
                         scaled_multiplier = so_multiplier * (volume_scale ** (order_num - 1))
                         total_multiplier += scaled_multiplier
-                    elif safety_order_type in ["fixed", "fixed_btc"]:
-                        # Fixed safety orders don't scale with base, so we need different logic
-                        # Get the fixed safety order size
-                        fixed_so_size = self.config.get("safety_order_btc", 0.0001)
-                        # Apply volume scaling
-                        scaled_so_size = fixed_so_size * (volume_scale ** (order_num - 1))
-                        # Subtract from available balance instead of using multiplier
-                        balance -= scaled_so_size
-                    else:
-                        # Fixed safety orders (legacy using safety_order_fixed field)
-                        fixed_so_size = self.config.get("safety_order_fixed", 0.0005)
-                        scaled_so_size = fixed_so_size * (volume_scale ** (order_num - 1))
-                        balance -= scaled_so_size
 
-                # Calculate base order size that fits within budget
-                # budget = base * total_multiplier → base = budget / total_multiplier
-                base_order_size = balance / total_multiplier
+                    # Calculate base order size that fits within budget
+                    # budget = base * total_multiplier → base = budget / total_multiplier
+                    base_order_size = balance / total_multiplier
 
-                # Ensure minimum order size (0.0001 BTC for Coinbase)
-                return max(base_order_size, 0.0001)
+                    # Ensure minimum order size (0.0001 BTC for Coinbase)
+                    return max(base_order_size, 0.0001)
             else:
                 # No safety orders or no balance - use configured fixed amount
-                if order_type == "fixed_btc":
-                    return self.config.get("base_order_btc", 0.0001)
+                # FIXED: Prioritize base_order_btc over base_order_fixed for better auto-calculate support
+                # If base_order_btc exists and is different from default, use it (modern config)
+                # Otherwise fall back to base_order_fixed (legacy config)
+                base_order_btc = self.config.get("base_order_btc", 0.0001)
+                base_order_fixed = self.config.get("base_order_fixed", 0.001)
+
+                # Use base_order_btc if it's explicitly set (not default) or if order_type is "fixed_btc"
+                if order_type == "fixed_btc" or (base_order_btc != 0.0001 and base_order_btc < base_order_fixed):
+                    return base_order_btc
                 else:
-                    return self.config.get("base_order_fixed", 0.001)
+                    return base_order_fixed
         else:
             # Fallback for unknown types
             return self.config.get("base_order_fixed", 0.001)
@@ -812,8 +829,14 @@ class IndicatorBasedStrategy(TradingStrategy):
         if order_type == "percentage_of_base":
             base_safety_size = base_order_size * (self.config.get("safety_order_percentage", 50.0) / 100.0)
         elif order_type in ["fixed", "fixed_btc"]:
-            # FIXED: Handle both "fixed" and "fixed_btc" (UI uses safety_order_btc for fixed BTC amount)
-            base_safety_size = self.config.get("safety_order_btc", 0.0001)
+            # FIXED: When auto_calculate is enabled, treat fixed safety orders as equal to base order
+            # (they scale together: base = SO1 = X, SO2 = X * volume_scale, etc.)
+            if self.config.get("auto_calculate_order_sizes", False):
+                # Safety order size equals base order size (then scaled by volume_scale)
+                base_safety_size = base_order_size
+            else:
+                # Use configured fixed amount
+                base_safety_size = self.config.get("safety_order_btc", 0.0001)
         else:
             # Fallback for legacy configs using safety_order_fixed
             base_safety_size = self.config.get("safety_order_fixed", 0.0005)

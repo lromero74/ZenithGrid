@@ -1,21 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, BarChart2, Search } from 'lucide-react'
-import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineStyle } from 'lightweight-charts'
-import axios from 'axios'
 import type { Position } from '../types'
-import {
-  calculateSMA,
-  calculateEMA,
-  calculateRSI,
-  calculateMACD,
-  calculateBollingerBands,
-  calculateStochastic,
-  calculateHeikinAshi,
-} from '../utils/indicators/calculations'
-import type { CandleData, IndicatorConfig } from '../utils/indicators/types'
+import type { IndicatorConfig } from '../utils/indicators/types'
 import { AVAILABLE_INDICATORS } from '../utils/indicators/definitions'
-import { API_BASE_URL } from '../config/api'
 import { getFeeAdjustedProfitMultiplier } from './positions/positionUtils'
+import { useChartData } from './LightweightChartModal/hooks/useChartData'
+import { useMainChart } from './LightweightChartModal/hooks/useMainChart'
+import { useIndicatorRendering } from './LightweightChartModal/hooks/useIndicatorRendering'
+import { useOscillators } from './LightweightChartModal/hooks/useOscillators'
 
 interface LightweightChartModalProps {
   isOpen: boolean
@@ -41,24 +33,7 @@ export default function LightweightChartModal({
   symbol,
   position
 }: LightweightChartModalProps) {
-  const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<IChartApi | null>(null)
-  const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
-  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map())
-  const positionLinesRef = useRef<ISeriesApi<any>[]>([])
-  const candleDataRef = useRef<CandleData[]>([])
-  const isCleanedUpRef = useRef<boolean>(false)
-
-  // Oscillator chart containers and instances
-  const rsiContainerRef = useRef<HTMLDivElement>(null)
-  const rsiChartRef = useRef<IChartApi | null>(null)
-  const macdContainerRef = useRef<HTMLDivElement>(null)
-  const macdChartRef = useRef<IChartApi | null>(null)
-  const stochasticContainerRef = useRef<HTMLDivElement>(null)
-  const stochasticChartRef = useRef<IChartApi | null>(null)
-
   const [timeframe, setTimeframe] = useState('FIFTEEN_MINUTE')
-  const [chartData, setChartData] = useState<CandleData[]>([])
   const [chartType, setChartType] = useState<'candlestick' | 'bar' | 'line' | 'area' | 'baseline'>('candlestick')
   const [useHeikinAshi, setUseHeikinAshi] = useState(false)
   const [indicators, setIndicators] = useState<IndicatorConfig[]>([])
@@ -79,760 +54,30 @@ export default function LightweightChartModal({
   }, [isOpen])
 
   // Fetch candle data
-  useEffect(() => {
-    if (!isOpen || !symbol) return
-
-    const fetchCandles = async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/candles`, {
-          params: {
-            product_id: symbol,
-            granularity: timeframe,
-            limit: 300,
-          },
-        })
-
-        const candles = response.data.candles || []
-        const formattedCandles = candles
-          .map((c: any) => ({
-            // API returns 'time' as Unix timestamp, not 'start' as ISO string
-            time: (typeof c.time === 'number' ? c.time : Math.floor(new Date(c.start || c.time).getTime() / 1000)) as Time,
-            open: parseFloat(c.open),
-            high: parseFloat(c.high),
-            low: parseFloat(c.low),
-            close: parseFloat(c.close),
-            volume: parseFloat(c.volume || 0),
-          }))
-          .filter((c: CandleData) =>
-            !isNaN(c.time as number) &&
-            !isNaN(c.open) &&
-            !isNaN(c.high) &&
-            !isNaN(c.low) &&
-            !isNaN(c.close)
-          )
-          .sort((a: CandleData, b: CandleData) => (a.time as number) - (b.time as number))
-
-        candleDataRef.current = formattedCandles
-        setChartData(formattedCandles)
-      } catch (error) {
-        console.error('Error fetching candles:', error)
-      }
-    }
-
-    fetchCandles()
-  }, [isOpen, symbol, timeframe])
-
-  // Initialize chart
-  useEffect(() => {
-    if (!isOpen || !chartContainerRef.current || chartData.length === 0) return
-    if (chartRef.current) return // Already initialized
-
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#0f172a' },
-        textColor: '#94a3b8',
-      },
-      grid: {
-        vertLines: { color: '#1e293b' },
-        horzLines: { color: '#1e293b' },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: 500,
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      rightPriceScale: {
-        borderColor: '#334155',
-        scaleMargins: { top: 0.1, bottom: 0.2 },
-        autoScale: true,
-        minimumWidth: 100,
-      },
-    })
-
-    chartRef.current = chart
-
-    // Handle resize
-    const handleResize = () => {
-      if (chartContainerRef.current && chart) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth })
-      }
-    }
-    window.addEventListener('resize', handleResize)
-
-    return () => {
-      isCleanedUpRef.current = true
-      window.removeEventListener('resize', handleResize)
-      if (chartRef.current) {
-        chartRef.current.remove()
-        chartRef.current = null
-      }
-    }
-  }, [isOpen, chartData])
-
-  // Render main chart series
-  useEffect(() => {
-    if (!chartRef.current || isCleanedUpRef.current) return
-    if (chartData.length === 0) return
-
-    // Remove existing main series
-    if (mainSeriesRef.current) {
-      try {
-        chartRef.current.removeSeries(mainSeriesRef.current)
-      } catch (e) {
-        // Series might already be removed
-      }
-      mainSeriesRef.current = null
-    }
-
-    const isBTCPair = symbol.endsWith('-BTC')
-    const priceFormat = isBTCPair
-      ? { type: 'price' as const, precision: 8, minMove: 0.00000001 }
-      : { type: 'price' as const, precision: 2, minMove: 0.01 }
-
-    let data = chartData
-
-    // Apply Heikin-Ashi if enabled
-    if (useHeikinAshi) {
-      data = calculateHeikinAshi(chartData)
-    }
-
-    // Create appropriate series based on chart type
-    if (chartType === 'candlestick') {
-      const series = chartRef.current.addCandlestickSeries({
-        upColor: '#26a69a',
-        downColor: '#ef5350',
-        borderVisible: false,
-        wickUpColor: '#26a69a',
-        wickDownColor: '#ef5350',
-        priceFormat,
-        priceScaleId: 'right',
-      })
-      series.setData(data as any)
-      mainSeriesRef.current = series
-    } else if (chartType === 'bar') {
-      const series = chartRef.current.addBarSeries({
-        upColor: '#26a69a',
-        downColor: '#ef5350',
-        priceFormat,
-        priceScaleId: 'right',
-      })
-      series.setData(data as any)
-      mainSeriesRef.current = series
-    } else if (chartType === 'line') {
-      const series = chartRef.current.addLineSeries({
-        color: '#2196F3',
-        lineWidth: 2,
-        priceFormat,
-        priceScaleId: 'right',
-      })
-      series.setData(data.map(d => ({ time: d.time as Time, value: d.close })))
-      mainSeriesRef.current = series
-    } else if (chartType === 'area') {
-      const series = chartRef.current.addAreaSeries({
-        topColor: 'rgba(33, 150, 243, 0.56)',
-        bottomColor: 'rgba(33, 150, 243, 0.04)',
-        lineColor: 'rgba(33, 150, 243, 1)',
-        lineWidth: 2,
-        priceFormat,
-        priceScaleId: 'right',
-      })
-      series.setData(data.map(d => ({ time: d.time as Time, value: d.close })))
-      mainSeriesRef.current = series
-    } else if (chartType === 'baseline') {
-      const baseValue = position?.average_buy_price || data[0]?.close || 0
-      const series = chartRef.current.addBaselineSeries({
-        baseValue: { type: 'price', price: baseValue },
-        topLineColor: '#26a69a',
-        topFillColor1: 'rgba(38, 166, 154, 0.28)',
-        topFillColor2: 'rgba(38, 166, 154, 0.05)',
-        bottomLineColor: '#ef5350',
-        bottomFillColor1: 'rgba(239, 83, 80, 0.05)',
-        bottomFillColor2: 'rgba(239, 83, 80, 0.28)',
-        priceFormat,
-        priceScaleId: 'right',
-      })
-      series.setData(data.map(d => ({ time: d.time as Time, value: d.close })))
-      mainSeriesRef.current = series
-    }
-
-    // Ensure right price scale is visible and properly configured
-    chartRef.current.priceScale('right').applyOptions({
-      borderColor: '#334155',
-      visible: true,
-    })
-
-    // Add position reference lines if we have position data
-    if (position && mainSeriesRef.current) {
-      addPositionLines()
-    }
-
-    // Add markers
-    if (position && mainSeriesRef.current) {
-      addMarkers()
-    }
-
-    chartRef.current.timeScale().fitContent()
-  }, [chartData, chartType, useHeikinAshi, position, symbol])
-
-  // Render indicators on chart
-  useEffect(() => {
-    if (!chartRef.current || chartData.length === 0 || !mainSeriesRef.current) return
-    if (indicators.length === 0) return  // Only run if we have indicators to render
-
-    // Clear existing indicator series
-    indicatorSeriesRef.current.forEach((seriesList) => {
-      seriesList.forEach((series) => {
-        try {
-          chartRef.current?.removeSeries(series)
-        } catch (e) {
-          // Series may already be removed
-        }
-      })
-    })
-    indicatorSeriesRef.current.clear()
-
-    // Render each indicator
-    indicators.forEach((indicator) => {
-      const closes = chartData.map(c => c.close)
-
-      if (indicator.type === 'sma') {
-        const period = indicator.settings.period || 20
-        const smaValues = calculateSMA(closes, period)
-        const smaData = chartData
-          .map((c, i) => ({ time: c.time as Time, value: smaValues[i] ?? 0 }))
-          .filter((_d, i) => smaValues[i] !== null)
-
-        const smaSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.color || '#FF9800',
-          lineWidth: 2,
-          title: `SMA(${period})`,
-          priceScaleId: 'right',
-        })
-        smaSeries.setData(smaData)
-        indicatorSeriesRef.current.set(indicator.id, [smaSeries])
-
-      } else if (indicator.type === 'ema') {
-        const period = indicator.settings.period || 12
-        const emaValues = calculateEMA(closes, period)
-        const emaData = chartData
-          .map((c, i) => ({ time: c.time as Time, value: emaValues[i] ?? 0 }))
-          .filter((_d, i) => emaValues[i] !== null)
-
-        const emaSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.color || '#9C27B0',
-          lineWidth: 2,
-          title: `EMA(${period})`,
-          priceScaleId: 'right',
-        })
-        emaSeries.setData(emaData)
-        indicatorSeriesRef.current.set(indicator.id, [emaSeries])
-
-      } else if (indicator.type === 'bollinger') {
-        const period = indicator.settings.period || 20
-        const stdDev = indicator.settings.stdDev || 2
-        const bands = calculateBollingerBands(closes, period, stdDev)
-
-        const upperData = chartData
-          .map((c, i) => ({ time: c.time as Time, value: bands.upper[i] ?? 0 }))
-          .filter((_d, i) => bands.upper[i] !== null)
-        const middleData = chartData
-          .map((c, i) => ({ time: c.time as Time, value: bands.middle[i] ?? 0 }))
-          .filter((_d, i) => bands.middle[i] !== null)
-        const lowerData = chartData
-          .map((c, i) => ({ time: c.time as Time, value: bands.lower[i] ?? 0 }))
-          .filter((_d, i) => bands.lower[i] !== null)
-
-        const upperSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.upperColor || '#2196F3',
-          lineWidth: 1,
-          title: `BB Upper(${period})`,
-          priceScaleId: 'right',
-        })
-        upperSeries.setData(upperData)
-
-        const middleSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.middleColor || '#FF9800',
-          lineWidth: 1,
-          title: `BB Middle(${period})`,
-          priceScaleId: 'right',
-        })
-        middleSeries.setData(middleData)
-
-        const lowerSeries = chartRef.current!.addLineSeries({
-          color: indicator.settings.lowerColor || '#2196F3',
-          lineWidth: 1,
-          title: `BB Lower(${period})`,
-          priceScaleId: 'right',
-        })
-        lowerSeries.setData(lowerData)
-
-        indicatorSeriesRef.current.set(indicator.id, [upperSeries, middleSeries, lowerSeries])
-
-      }
-      // Oscillators (RSI, MACD, Stochastic) are rendered in separate charts below
-    })
-
-    // Ensure right price scale remains visible after adding indicators
-    if (chartRef.current) {
-      chartRef.current.priceScale('right').applyOptions({
-        borderColor: '#334155',
-        visible: true,
-      })
-    }
-  }, [indicators, chartData, chartType, useHeikinAshi])
-
-  // RSI Oscillator Chart
-  useEffect(() => {
-    const rsiIndicator = indicators.find(ind => ind.type === 'rsi')
-    if (!rsiIndicator || !rsiContainerRef.current || chartData.length === 0) {
-      // Clean up if RSI was removed
-      if (rsiChartRef.current) {
-        rsiChartRef.current.remove()
-        rsiChartRef.current = null
-      }
-      return
-    }
-
-    // Create RSI chart if it doesn't exist
-    if (!rsiChartRef.current) {
-      const rsiChart = createChart(rsiContainerRef.current, {
-        layout: {
-          background: { type: ColorType.Solid, color: '#0f172a' },
-          textColor: '#94a3b8',
-        },
-        grid: {
-          vertLines: { color: '#1e293b' },
-          horzLines: { color: '#1e293b' },
-        },
-        width: rsiContainerRef.current.clientWidth,
-        height: 120,
-        timeScale: {
-          timeVisible: true,
-          borderColor: '#334155',
-          fixLeftEdge: true,
-          fixRightEdge: true,
-        },
-        rightPriceScale: {
-          borderColor: '#334155',
-          minimumWidth: 100,
-        },
-        handleScroll: false,
-        handleScale: false,
-      })
-      rsiChartRef.current = rsiChart
-
-      // Synchronize time scale with main chart (one-way: main -> RSI)
-      if (chartRef.current) {
-        chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
-          if (rsiChartRef.current && timeRange) {
-            rsiChartRef.current.timeScale().setVisibleRange(timeRange)
-          }
-        })
-      }
-    }
-
-    // Add RSI series
-    const period = rsiIndicator.settings.period || 14
-    const closes = chartData.map(c => c.close)
-    const rsiValues = calculateRSI(closes, period)
-    const rsiData = chartData
-      .map((c, i) => ({ time: c.time as Time, value: rsiValues[i] ?? 0 }))
-      .filter((_d, i) => rsiValues[i] !== null)
-
-    const rsiSeries = rsiChartRef.current.addLineSeries({
-      color: rsiIndicator.settings.color || '#2196F3',
-      lineWidth: 2,
-      title: `RSI(${period})`,
-    })
-    rsiSeries.setData(rsiData)
-
-    // Add overbought/oversold lines
-    const overbought = rsiIndicator.settings.overbought || 70
-    const oversold = rsiIndicator.settings.oversold || 30
-
-    const overboughtSeries = rsiChartRef.current.addLineSeries({
-      color: 'rgba(239, 83, 80, 0.5)',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      lastValueVisible: false,
-      priceLineVisible: false,
-    })
-    overboughtSeries.setData(chartData.map(c => ({ time: c.time as Time, value: overbought })))
-
-    const oversoldSeries = rsiChartRef.current.addLineSeries({
-      color: 'rgba(38, 166, 154, 0.5)',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      lastValueVisible: false,
-      priceLineVisible: false,
-    })
-    oversoldSeries.setData(chartData.map(c => ({ time: c.time as Time, value: oversold })))
-
-    rsiChartRef.current.timeScale().fitContent()
-
-    // Cleanup
-    return () => {
-      if (rsiChartRef.current) {
-        rsiChartRef.current.removeSeries(rsiSeries)
-        rsiChartRef.current.removeSeries(overboughtSeries)
-        rsiChartRef.current.removeSeries(oversoldSeries)
-      }
-    }
-  }, [indicators, chartData, chartType, useHeikinAshi])
-
-  // MACD Oscillator Chart
-  useEffect(() => {
-    const macdIndicator = indicators.find(ind => ind.type === 'macd')
-    if (!macdIndicator || !macdContainerRef.current || chartData.length === 0) {
-      // Clean up if MACD was removed
-      if (macdChartRef.current) {
-        macdChartRef.current.remove()
-        macdChartRef.current = null
-      }
-      return
-    }
-
-    // Create MACD chart if it doesn't exist
-    if (!macdChartRef.current) {
-      const macdChart = createChart(macdContainerRef.current, {
-        layout: {
-          background: { type: ColorType.Solid, color: '#0f172a' },
-          textColor: '#94a3b8',
-        },
-        grid: {
-          vertLines: { color: '#1e293b' },
-          horzLines: { color: '#1e293b' },
-        },
-        width: macdContainerRef.current.clientWidth,
-        height: 120,
-        timeScale: {
-          timeVisible: true,
-          borderColor: '#334155',
-          fixLeftEdge: true,
-          fixRightEdge: true,
-        },
-        rightPriceScale: {
-          borderColor: '#334155',
-          minimumWidth: 100,
-        },
-        handleScroll: false,
-        handleScale: false,
-      })
-      macdChartRef.current = macdChart
-
-      // Synchronize time scale with main chart (one-way: main -> MACD)
-      if (chartRef.current) {
-        chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
-          if (macdChartRef.current && timeRange) {
-            macdChartRef.current.timeScale().setVisibleRange(timeRange)
-          }
-        })
-      }
-    }
-
-    // Add MACD series
-    const fastPeriod = macdIndicator.settings.fastPeriod || 12
-    const slowPeriod = macdIndicator.settings.slowPeriod || 26
-    const signalPeriod = macdIndicator.settings.signalPeriod || 9
-    const closes = chartData.map(c => c.close)
-    const macdResult = calculateMACD(closes, fastPeriod, slowPeriod, signalPeriod)
-
-    const macdData = chartData
-      .map((c, i) => ({ time: c.time as Time, value: macdResult.macd[i] ?? 0 }))
-      .filter((_d, i) => macdResult.macd[i] !== null)
-    const signalData = chartData
-      .map((c, i) => ({ time: c.time as Time, value: macdResult.signal[i] ?? 0 }))
-      .filter((_d, i) => macdResult.signal[i] !== null)
-    const histogramData = chartData
-      .map((c, i) => ({ time: c.time as Time, value: macdResult.histogram[i] ?? 0 }))
-      .filter((_d, i) => macdResult.histogram[i] !== null)
-
-    const macdSeries = macdChartRef.current.addLineSeries({
-      color: macdIndicator.settings.macdColor || '#2196F3',
-      lineWidth: 2,
-      title: 'MACD',
-    })
-    macdSeries.setData(macdData)
-
-    const signalSeries = macdChartRef.current.addLineSeries({
-      color: macdIndicator.settings.signalColor || '#FF5722',
-      lineWidth: 2,
-      title: 'Signal',
-    })
-    signalSeries.setData(signalData)
-
-    const histogramSeries = macdChartRef.current.addLineSeries({
-      color: macdIndicator.settings.histogramColor || '#4CAF50',
-      lineWidth: 2,
-      title: 'Histogram',
-    })
-    histogramSeries.setData(histogramData)
-
-    macdChartRef.current.timeScale().fitContent()
-
-    // Cleanup
-    return () => {
-      if (macdChartRef.current) {
-        macdChartRef.current.removeSeries(macdSeries)
-        macdChartRef.current.removeSeries(signalSeries)
-        macdChartRef.current.removeSeries(histogramSeries)
-      }
-    }
-  }, [indicators, chartData, chartType, useHeikinAshi])
-
-  // Stochastic Oscillator Chart
-  useEffect(() => {
-    const stochasticIndicator = indicators.find(ind => ind.type === 'stochastic')
-    if (!stochasticIndicator || !stochasticContainerRef.current || chartData.length === 0) {
-      // Clean up if Stochastic was removed
-      if (stochasticChartRef.current) {
-        stochasticChartRef.current.remove()
-        stochasticChartRef.current = null
-      }
-      return
-    }
-
-    // Create Stochastic chart if it doesn't exist
-    if (!stochasticChartRef.current) {
-      const stochasticChart = createChart(stochasticContainerRef.current, {
-        layout: {
-          background: { type: ColorType.Solid, color: '#0f172a' },
-          textColor: '#94a3b8',
-        },
-        grid: {
-          vertLines: { color: '#1e293b' },
-          horzLines: { color: '#1e293b' },
-        },
-        width: stochasticContainerRef.current.clientWidth,
-        height: 120,
-        timeScale: {
-          timeVisible: true,
-          borderColor: '#334155',
-          fixLeftEdge: true,
-          fixRightEdge: true,
-        },
-        rightPriceScale: {
-          borderColor: '#334155',
-          minimumWidth: 100,
-        },
-        handleScroll: false,
-        handleScale: false,
-      })
-      stochasticChartRef.current = stochasticChart
-
-      // Synchronize time scale with main chart (one-way: main -> Stochastic)
-      if (chartRef.current) {
-        chartRef.current.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
-          if (stochasticChartRef.current && timeRange) {
-            stochasticChartRef.current.timeScale().setVisibleRange(timeRange)
-          }
-        })
-      }
-    }
-
-    // Add Stochastic series
-    const kPeriod = stochasticIndicator.settings.kPeriod || 14
-    const dPeriod = stochasticIndicator.settings.dPeriod || 3
-    const highs = chartData.map(c => c.high)
-    const lows = chartData.map(c => c.low)
-    const closes = chartData.map(c => c.close)
-    const stochasticResult = calculateStochastic(highs, lows, closes, kPeriod, dPeriod)
-
-    const kData = chartData
-      .map((c, i) => ({ time: c.time as Time, value: stochasticResult.k[i] ?? 0 }))
-      .filter((_d, i) => stochasticResult.k[i] !== null)
-    const dData = chartData
-      .map((c, i) => ({ time: c.time as Time, value: stochasticResult.d[i] ?? 0 }))
-      .filter((_d, i) => stochasticResult.d[i] !== null)
-
-    const kSeries = stochasticChartRef.current.addLineSeries({
-      color: stochasticIndicator.settings.kColor || '#2196F3',
-      lineWidth: 2,
-      title: '%K',
-    })
-    kSeries.setData(kData)
-
-    const dSeries = stochasticChartRef.current.addLineSeries({
-      color: stochasticIndicator.settings.dColor || '#FF5722',
-      lineWidth: 2,
-      title: '%D',
-    })
-    dSeries.setData(dData)
-
-    // Add 80/20 reference lines
-    const overboughtSeries = stochasticChartRef.current.addLineSeries({
-      color: 'rgba(239, 83, 80, 0.5)',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      lastValueVisible: false,
-      priceLineVisible: false,
-    })
-    overboughtSeries.setData(chartData.map(c => ({ time: c.time as Time, value: 80 })))
-
-    const oversoldSeries = stochasticChartRef.current.addLineSeries({
-      color: 'rgba(38, 166, 154, 0.5)',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      lastValueVisible: false,
-      priceLineVisible: false,
-    })
-    oversoldSeries.setData(chartData.map(c => ({ time: c.time as Time, value: 20 })))
-
-    stochasticChartRef.current.timeScale().fitContent()
-
-    // Cleanup
-    return () => {
-      if (stochasticChartRef.current) {
-        stochasticChartRef.current.removeSeries(kSeries)
-        stochasticChartRef.current.removeSeries(dSeries)
-        stochasticChartRef.current.removeSeries(overboughtSeries)
-        stochasticChartRef.current.removeSeries(oversoldSeries)
-      }
-    }
-  }, [indicators, chartData, chartType, useHeikinAshi])
-
-  // Add position reference lines
-  const addPositionLines = () => {
-    if (!chartRef.current || !position) return
-
-    // Clear existing position lines
-    positionLinesRef.current.forEach(series => {
-      try {
-        chartRef.current?.removeSeries(series)
-      } catch (e) {
-        // Series may already be removed
-      }
-    })
-    positionLinesRef.current = []
-
-    const avgBuyPrice = position.average_buy_price
-
-    // Get profit target from strategy config (min_profit_percentage or take_profit_percentage)
-    const profitTargetPercent = position.strategy_config_snapshot?.min_profit_percentage
-      || position.strategy_config_snapshot?.take_profit_percentage
-      || position.bot_config?.min_profit_percentage
-      || position.bot_config?.take_profit_percentage
-      || 2.0  // Default to 2% if not configured
-    // Apply fee adjustment to profit target
-    const targetPrice = avgBuyPrice * getFeeAdjustedProfitMultiplier(profitTargetPercent)
-
-    // Entry price line (orange)
-    const entrySeries = chartRef.current.addLineSeries({
-      color: '#f59e0b',
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-      title: 'Entry',
-      priceLineVisible: false,
-      lastValueVisible: false,
-    })
-    const entryData = chartData.map(d => ({ time: d.time as Time, value: avgBuyPrice }))
-    entrySeries.setData(entryData)
-    positionLinesRef.current.push(entrySeries)
-
-    // Target price line (green)
-    const targetSeries = chartRef.current.addLineSeries({
-      color: '#10b981',
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-      title: `Target (+${profitTargetPercent}%)`,
-      priceLineVisible: false,
-      lastValueVisible: false,
-    })
-    const targetData = chartData.map(d => ({ time: d.time as Time, value: targetPrice }))
-    targetSeries.setData(targetData)
-    positionLinesRef.current.push(targetSeries)
-
-    // Safety order lines (blue) if configured
-    if (position.bot_config?.safety_order_step_percentage && position.bot_config?.max_safety_orders) {
-      const stepPercentage = position.bot_config.safety_order_step_percentage
-      const maxSOs = Math.min(position.bot_config.max_safety_orders, 5) // Limit to 5 lines
-
-      for (let i = 1; i <= maxSOs; i++) {
-        const deviation = stepPercentage * i
-        const soPrice = avgBuyPrice * (1 - deviation / 100)
-
-        const soSeries = chartRef.current!.addLineSeries({
-          color: '#3b82f6',
-          lineWidth: 1,
-          lineStyle: LineStyle.Dotted,
-          title: `SO${i}`,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        })
-        const soData = chartData.map(d => ({ time: d.time as Time, value: soPrice }))
-        soSeries.setData(soData)
-        positionLinesRef.current.push(soSeries)
-      }
-    }
-
-    // DCA level lines (magenta) - show minimum price drops for next DCA orders
-    const minPriceDropForDCA = position.strategy_config_snapshot?.min_price_drop_for_dca
-      || position.bot_config?.min_price_drop_for_dca
-    const maxDCAOrders = position.strategy_config_snapshot?.max_safety_orders
-      || position.bot_config?.max_safety_orders
-      || 3
-
-    if (minPriceDropForDCA && position.status === 'open') {
-      const maxDCA = Math.min(maxDCAOrders, 5) // Limit to 5 lines
-
-      for (let i = 1; i <= maxDCA; i++) {
-        const dropPercentage = minPriceDropForDCA * i
-        const dcaPrice = avgBuyPrice * (1 - dropPercentage / 100)
-
-        const dcaSeries = chartRef.current!.addLineSeries({
-          color: '#a855f7', // Purple/magenta to distinguish from safety orders
-          lineWidth: 1,
-          lineStyle: LineStyle.Dotted,
-          title: `DCA${i} (-${dropPercentage.toFixed(1)}%)`,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        })
-        const dcaData = chartData.map(d => ({ time: d.time as Time, value: dcaPrice }))
-        dcaSeries.setData(dcaData)
-        positionLinesRef.current.push(dcaSeries)
-      }
-    }
-  }
-
-  // Add markers for entry and current price
-  const addMarkers = () => {
-    if (!mainSeriesRef.current || !position || chartData.length === 0) return
-
-    const markers: any[] = []
-
-    // Entry marker
-    if (position.opened_at) {
-      const openedTime = Math.floor(new Date(position.opened_at).getTime() / 1000)
-      const nearestCandle = chartData.reduce((prev, curr) =>
-        Math.abs((curr.time as number) - openedTime) < Math.abs((prev.time as number) - openedTime) ? curr : prev
-      )
-
-      if (nearestCandle) {
-        markers.push({
-          time: nearestCandle.time,
-          position: 'belowBar' as const,
-          color: '#10b981',
-          shape: 'arrowUp' as const,
-          text: 'Entry',
-        })
-      }
-    }
-
-    // Current price marker
-    const lastCandle = chartData[chartData.length - 1]
-    if (lastCandle) {
-      markers.push({
-        time: lastCandle.time,
-        position: 'inBar' as const,
-        color: '#3b82f6',
-        shape: 'circle' as const,
-        text: 'Now',
-      })
-    }
-
-    mainSeriesRef.current.setMarkers(markers)
-  }
+  const { chartData } = useChartData(isOpen, symbol, timeframe)
+
+  // Initialize and manage main chart
+  const { chartContainerRef, chartRef, mainSeriesRef, isCleanedUpRef } = useMainChart(
+    isOpen,
+    chartData,
+    chartType,
+    useHeikinAshi,
+    position,
+    symbol
+  )
+
+  // Render overlay indicators (SMA, EMA, Bollinger Bands)
+  useIndicatorRendering(chartRef, mainSeriesRef, indicators, chartData)
+
+  // Manage oscillator charts (RSI, MACD, Stochastic)
+  const {
+    rsiContainerRef,
+    macdContainerRef,
+    stochasticContainerRef,
+    hasRSI,
+    hasMACD,
+    hasStochastic,
+  } = useOscillators(chartRef, indicators, chartData, isCleanedUpRef)
 
   // Filter indicators by search
   const filteredIndicators = AVAILABLE_INDICATORS.filter(ind =>
@@ -922,7 +167,7 @@ export default function LightweightChartModal({
             {['candlestick', 'bar', 'line', 'area', 'baseline'].map(type => (
               <button
                 key={type}
-                onClick={() => setChartType(type as any)}
+                onClick={() => setChartType(type as 'candlestick' | 'bar' | 'line' | 'area' | 'baseline')}
                 className={`px-2 py-1 rounded text-xs font-medium transition-colors capitalize ${
                   chartType === type
                     ? 'bg-blue-600 text-white'
@@ -963,21 +208,21 @@ export default function LightweightChartModal({
           <div ref={chartContainerRef} className="w-full flex-1 min-h-[300px]" />
 
           {/* MACD Oscillator */}
-          {indicators.some(ind => ind.type === 'macd') && (
+          {hasMACD && (
             <div className="w-full h-[120px] border-t border-slate-700">
               <div ref={macdContainerRef} className="w-full h-full" />
             </div>
           )}
 
           {/* RSI Oscillator */}
-          {indicators.some(ind => ind.type === 'rsi') && (
+          {hasRSI && (
             <div className="w-full h-[120px] border-t border-slate-700">
               <div ref={rsiContainerRef} className="w-full h-full" />
             </div>
           )}
 
           {/* Stochastic Oscillator */}
-          {indicators.some(ind => ind.type === 'stochastic') && (
+          {hasStochastic && (
             <div className="w-full h-[120px] border-t border-slate-700">
               <div ref={stochasticContainerRef} className="w-full h-full" />
             </div>
@@ -987,7 +232,7 @@ export default function LightweightChartModal({
         {/* Footer */}
         <div className="p-3 border-t border-slate-700 text-xs text-slate-500">
           <p>
-            💡 Full-featured chart with position markers and reference lines. Add indicators, change timeframes, and analyze your trades.
+            Full-featured chart with position markers and reference lines. Add indicators, change timeframes, and analyze your trades.
           </p>
         </div>
       </div>
@@ -1057,7 +302,7 @@ export default function LightweightChartModal({
                       >
                         <div className="font-semibold text-white flex items-center justify-between">
                           {ind.name}
-                          {alreadyAdded && <span className="text-xs">✓ Added</span>}
+                          {alreadyAdded && <span className="text-xs">Added</span>}
                         </div>
                         <div className="text-xs text-slate-400">{ind.description}</div>
                       </button>

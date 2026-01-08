@@ -1,20 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
-import { positionsApi, botsApi } from '../services/api'
-import { useState, useEffect, useMemo } from 'react'
-import { formatDateTime, formatDateTimeCompact, formatDuration } from '../utils/dateFormat'
-import {
-  X,
-  AlertCircle,
-  BarChart3,
-  BarChart2,
-  Settings,
-  Building2,
-  Wallet
-} from 'lucide-react'
+import { useState } from 'react'
+import { BarChart3, Building2, Wallet } from 'lucide-react'
 import { useAccount, getChainName } from '../contexts/AccountContext'
-import axios from 'axios'
 import type { Position } from '../types'
-import { API_BASE_URL } from '../config/api'
 import PositionLogsModal from '../components/PositionLogsModal'
 import TradingViewChartModal from '../components/TradingViewChartModal'
 import LightweightChartModal from '../components/LightweightChartModal'
@@ -22,24 +9,27 @@ import { LimitCloseModal } from '../components/LimitCloseModal'
 import { SlippageWarningModal } from '../components/SlippageWarningModal'
 import { EditPositionSettingsModal } from '../components/EditPositionSettingsModal'
 import { AddFundsModal } from '../components/AddFundsModal'
-import CoinIcon from '../components/CoinIcon'
+import { usePositionsData } from './positions/hooks/usePositionsData'
+import { usePositionMutations } from './positions/hooks/usePositionMutations'
+import { usePositionFilters } from './positions/hooks/usePositionFilters'
+import { usePositionTrades } from './positions/hooks/usePositionTrades'
+import { calculateOverallStats, checkSlippageBeforeMarketClose } from './positions/helpers'
 import {
-  getQuoteCurrency,
-  formatBaseAmount,
-  formatQuoteAmount,
-  AISentimentIcon,
-  DealChart,
-  PriceBar,
-} from '../components/positions'
-
+  OverallStatsPanel,
+  FilterPanel,
+  PositionCard,
+  CloseConfirmModal,
+  NotesModal,
+  TradeHistoryModal,
+} from './positions/components'
 
 export default function Positions() {
   const { selectedAccount } = useAccount()
+
+  // Modal and UI state
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null)
   const [showAddFundsModal, setShowAddFundsModal] = useState(false)
   const [addFundsPosition, setAddFundsPosition] = useState<Position | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
   const [showLogsModal, setShowLogsModal] = useState(false)
   const [logsModalPosition, setLogsModalPosition] = useState<Position | null>(null)
   const [showChartModal, setShowChartModal] = useState(false)
@@ -63,265 +53,85 @@ export default function Positions() {
   const [showTradeHistoryModal, setShowTradeHistoryModal] = useState(false)
   const [tradeHistoryPosition, setTradeHistoryPosition] = useState<Position | null>(null)
 
-  // Filtering and sorting state (like 3Commas)
-  const [filterBot, setFilterBot] = useState<number | 'all'>('all')
-  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>('all')
-  const [filterPair, setFilterPair] = useState<string>('all')
-  const [sortBy, setSortBy] = useState<'created' | 'pnl' | 'invested' | 'pair' | 'bot'>('created')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  // Use custom hooks for data fetching
+  const {
+    allPositions,
+    positionsWithPnL,
+    bots,
+    btcUsdPrice,
+    currentPrices,
+    refetchPositions,
+  } = usePositionsData({ selectedAccountId: selectedAccount?.id })
 
-  const { data: allPositions, refetch: refetchPositions } = useQuery({
-    queryKey: ['positions', 'open', selectedAccount?.id],
-    queryFn: () => positionsApi.getAll('open', 100),
-    refetchInterval: 5000, // Update every 5 seconds for active deals
-    select: (data) => {
-      if (!selectedAccount) return data
-      // Filter by account_id
-      return data.filter((p: Position) => p.account_id === selectedAccount.id)
-    },
+  // Use custom hooks for mutations
+  const {
+    isProcessing,
+    handleClosePosition: performClosePosition,
+    handleAddFundsSuccess: performAddFundsSuccess,
+    handleSaveNotes: performSaveNotes,
+  } = usePositionMutations({ refetchPositions })
+
+  // Use custom hooks for filtering
+  const {
+    filterBot,
+    setFilterBot,
+    filterMarket,
+    setFilterMarket,
+    filterPair,
+    setFilterPair,
+    sortBy,
+    setSortBy,
+    sortOrder,
+    setSortOrder,
+    openPositions,
+    uniquePairs,
+    clearFilters,
+  } = usePositionFilters({ positionsWithPnL })
+
+  // Use custom hooks for trades
+  const { trades, tradeHistory, isLoadingTradeHistory } = usePositionTrades({
+    selectedPosition,
+    tradeHistoryPosition,
+    showTradeHistoryModal,
   })
 
-  // Fetch all bots to display bot names (filtered by account)
-  const { data: bots } = useQuery({
-    queryKey: ['bots', selectedAccount?.id],
-    queryFn: () => botsApi.getAll(),
-    refetchInterval: 10000,
-    select: (data) => {
-      if (!selectedAccount) return data
-      // Filter by account_id
-      return data.filter((bot: any) => bot.account_id === selectedAccount.id)
-    },
-  })
-
-  // Fetch portfolio for BTC/USD price (account-specific)
-  const { data: portfolio } = useQuery({
-    queryKey: ['account-portfolio', selectedAccount?.id],
-    queryFn: async () => {
-      if (selectedAccount) {
-        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json()
-      }
-      const response = await fetch('/api/account/portfolio')
-      if (!response.ok) throw new Error('Failed to fetch portfolio')
-      return response.json()
-    },
-    refetchInterval: 120000,
-    staleTime: 60000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  })
-
-  const totalBtcValue = portfolio?.total_btc_value || 0
-  const totalUsdValue = portfolio?.total_usd_value || 0
-  const btcUsdPrice = totalBtcValue > 0 ? totalUsdValue / totalBtcValue : 0
-
-  // Fetch real-time prices for all open positions
-  useEffect(() => {
-    const abortController = new AbortController()
-
-    const fetchPrices = async () => {
-      if (!allPositions) return
-
-      const openPositions = allPositions.filter(p => p.status === 'open')
-      if (openPositions.length === 0) return
-
-      try {
-        // Fetch all prices in a single batch request
-        const productIds = openPositions.map(p => p.product_id || 'ETH-BTC').join(',')
-        const response = await axios.get(`${API_BASE_URL}/api/prices/batch`, {
-          params: { products: productIds },
-          signal: abortController.signal
-        })
-
-        const priceMap = response.data.prices || {}
-
-        // Fill in fallback prices for positions that didn't get a price
-        openPositions.forEach(position => {
-          const productId = position.product_id || 'ETH-BTC'
-          if (!priceMap[productId]) {
-            priceMap[productId] = position.average_buy_price
-          }
-        })
-
-        setCurrentPrices(priceMap)
-      } catch (err) {
-        // Ignore abort errors (they're expected when component unmounts)
-        if (axios.isCancel(err) || (err as any)?.code === 'ECONNABORTED') {
-          return
-        }
-        console.error('Error fetching batch prices:', err)
-
-        // Fallback to using average buy prices
-        const fallbackPrices: Record<string, number> = {}
-        openPositions.forEach(position => {
-          const productId = position.product_id || 'ETH-BTC'
-          fallbackPrices[productId] = position.average_buy_price
-        })
-        setCurrentPrices(fallbackPrices)
-      }
-    }
-
-    fetchPrices()
-    const interval = setInterval(fetchPrices, 5000) // Update every 5 seconds
-
-    return () => {
-      clearInterval(interval)
-      abortController.abort() // Cancel any in-flight requests
-    }
-  }, [allPositions])
-
-  const { data: trades } = useQuery({
-    queryKey: ['position-trades', selectedPosition],
-    queryFn: () => positionsApi.getTrades(selectedPosition!),
-    enabled: selectedPosition !== null,
-  })
-
-  // Fetch trade history for modal (separate from expanded details trades)
-  const { data: tradeHistory, isLoading: isLoadingTradeHistory } = useQuery({
-    queryKey: ['trade-history-modal', tradeHistoryPosition?.id],
-    queryFn: () => positionsApi.getTrades(tradeHistoryPosition!.id),
-    enabled: tradeHistoryPosition !== null && showTradeHistoryModal,
-  })
-
-  // Calculate unrealized P&L for open position (needed for sorting)
-  const calculateUnrealizedPnL = (position: Position, currentPrice?: number) => {
-    if (position.status !== 'open') return null
-
-    // Use real-time price if available, otherwise fall back to average buy price
-    const price = currentPrice || position.average_buy_price
-    const currentValue = position.total_base_acquired * price
-    const costBasis = position.total_quote_spent
-    const unrealizedPnL = currentValue - costBasis
-
-    // Prevent division by zero for new positions with no trades yet
-    const unrealizedPnLPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0
-
-    return {
-      btc: unrealizedPnL,
-      percent: unrealizedPnLPercent,
-      usd: unrealizedPnL * (position.btc_usd_price_at_open || 0),
-      currentPrice: price
-    }
-  }
-
-  // Memoize P&L calculations to avoid recalculating on every render
-  // This is a major performance optimization - reduces 5 calculations per position to 1
-  const positionsWithPnL = useMemo(() => {
-    if (!allPositions) return []
-
-    return allPositions.map(position => {
-      const currentPrice = currentPrices[position.product_id || 'ETH-BTC']
-      const pnl = calculateUnrealizedPnL(position, currentPrice)
-
-      return {
-        ...position,
-        _cachedPnL: pnl // Cache the P&L calculation result
-      }
-    })
-  }, [allPositions, currentPrices])
-
-  // Apply filters and sorting (like 3Commas)
-  // Use memoized positionsWithPnL instead of recalculating
-  const openPositions = positionsWithPnL.filter(p => {
-    if (p.status !== 'open') return false
-
-    // Filter by bot
-    if (filterBot !== 'all' && p.bot_id !== filterBot) return false
-
-    // Filter by market (USD-based or BTC-based)
-    if (filterMarket !== 'all') {
-      const quoteCurrency = (p.product_id || 'ETH-BTC').split('-')[1]
-      if (filterMarket === 'USD' && quoteCurrency !== 'USD') return false
-      if (filterMarket === 'BTC' && quoteCurrency !== 'BTC') return false
-    }
-
-    // Filter by specific pair
-    if (filterPair !== 'all' && p.product_id !== filterPair) return false
-
-    return true
-  }).sort((a, b) => {
-    let aVal: any, bVal: any
-
-    switch (sortBy) {
-      case 'created':
-        // For closed positions, sort by closed_at (most recent closure first)
-        // For open positions, sort by opened_at
-        aVal = a.status === 'closed' && a.closed_at
-          ? new Date(a.closed_at).getTime()
-          : new Date(a.opened_at).getTime()
-        bVal = b.status === 'closed' && b.closed_at
-          ? new Date(b.closed_at).getTime()
-          : new Date(b.opened_at).getTime()
-        break
-      case 'pnl':
-        // Use cached P&L instead of recalculating
-        aVal = a._cachedPnL?.percent || 0
-        bVal = b._cachedPnL?.percent || 0
-        break
-      case 'invested':
-        aVal = a.total_quote_spent
-        bVal = b.total_quote_spent
-        break
-      case 'pair':
-        aVal = a.product_id || 'ETH-BTC'
-        bVal = b.product_id || 'ETH-BTC'
-        break
-      default:
-        aVal = 0
-        bVal = 0
-    }
-
-    if (sortOrder === 'asc') {
-      return aVal > bVal ? 1 : -1
-    } else {
-      return aVal < bVal ? 1 : -1
-    }
-  })
-
-  // Get unique pairs for filter dropdown
-  const uniquePairs = Array.from(new Set(allPositions?.filter(p => p.status === 'open').map(p => p.product_id || 'ETH-BTC') || []))
-
-  const checkSlippageBeforeMarketClose = async (positionId: number) => {
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/positions/${positionId}/slippage-check`)
-      const slippage = response.data
-
-      if (slippage.show_warning) {
-        // Show slippage warning modal
-        setSlippageData(slippage)
-        setPendingMarketClosePositionId(positionId)
-        setShowSlippageWarning(true)
-      } else {
-        // No significant slippage, proceed directly to close confirmation
-        setCloseConfirmPositionId(positionId)
-        setShowCloseConfirm(true)
-      }
-    } catch (err: any) {
-      console.error('Error checking slippage:', err)
-      // If slippage check fails, still allow closing (fallback)
-      setCloseConfirmPositionId(positionId)
-      setShowCloseConfirm(true)
-    }
-  }
-
-  const handleClosePosition = async () => {
-    if (!closeConfirmPositionId) return
-
-    setIsProcessing(true)
-    try {
-      const result = await positionsApi.close(closeConfirmPositionId)
+  // Handler functions
+  const handleClosePositionClick = async () => {
+    const result = await performClosePosition(closeConfirmPositionId)
+    if (result?.success) {
       setShowCloseConfirm(false)
       setCloseConfirmPositionId(null)
-      // Refetch positions instead of full page reload
-      refetchPositions()
-      // Show success notification
-      alert(`Position closed successfully!\nProfit: ${result.profit_quote.toFixed(8)} (${result.profit_percentage.toFixed(2)}%)`)
-    } catch (err: any) {
-      alert(`Error closing position: ${err.response?.data?.detail || err.message}`)
-    } finally {
-      setIsProcessing(false)
     }
+  }
+
+  const handleAddFundsSuccess = () => {
+    performAddFundsSuccess()
+    setShowAddFundsModal(false)
+    setAddFundsPosition(null)
+  }
+
+  const handleSaveNotes = async () => {
+    const result = await performSaveNotes(editingNotesPositionId, notesText)
+    if (result?.success) {
+      setShowNotesModal(false)
+      setEditingNotesPositionId(null)
+      setNotesText('')
+    }
+  }
+
+  const handleCheckSlippage = async (positionId: number) => {
+    await checkSlippageBeforeMarketClose(
+      positionId,
+      (slippage, posId) => {
+        setSlippageData(slippage)
+        setPendingMarketClosePositionId(posId)
+        setShowSlippageWarning(true)
+      },
+      (posId) => {
+        setCloseConfirmPositionId(posId)
+        setShowCloseConfirm(true)
+      }
+    )
   }
 
   const openAddFundsModal = (position: Position) => {
@@ -329,36 +139,10 @@ export default function Positions() {
     setShowAddFundsModal(true)
   }
 
-  const handleAddFundsSuccess = () => {
-    refetchPositions()
-    setShowAddFundsModal(false)
-    setAddFundsPosition(null)
-  }
-
   const openNotesModal = (position: Position) => {
     setEditingNotesPositionId(position.id)
     setNotesText(position.notes || '')
     setShowNotesModal(true)
-  }
-
-  const handleSaveNotes = async () => {
-    if (!editingNotesPositionId) return
-
-    setIsProcessing(true)
-    try {
-      await axios.patch(`${API_BASE_URL}/api/positions/${editingNotesPositionId}/notes`, {
-        notes: notesText
-      })
-      setShowNotesModal(false)
-      setEditingNotesPositionId(null)
-      setNotesText('')
-      // Refetch positions to show updated notes
-      refetchPositions()
-    } catch (err: any) {
-      alert(`Error saving notes: ${err.response?.data?.detail || err.message}`)
-    } finally {
-      setIsProcessing(false)
-    }
   }
 
   const togglePosition = (positionId: number) => {
@@ -370,25 +154,7 @@ export default function Positions() {
   }
 
   // Calculate overall statistics
-  // Use cached P&L values instead of recalculating
-  const calculateOverallStats = () => {
-    const totalFundsLocked = openPositions.reduce((sum, pos) => sum + pos.total_quote_spent, 0)
-    const totalUPnL = openPositions.reduce((sum, pos) => {
-      return sum + (pos._cachedPnL?.btc || 0)
-    }, 0)
-    const totalUPnLUSD = openPositions.reduce((sum, pos) => {
-      return sum + (pos._cachedPnL?.usd || 0)
-    }, 0)
-
-    return {
-      activeTrades: openPositions.length,
-      fundsLocked: totalFundsLocked,
-      uPnL: totalUPnL,
-      uPnLUSD: totalUPnLUSD
-    }
-  }
-
-  const stats = calculateOverallStats()
+  const stats = calculateOverallStats(openPositions)
 
   return (
     <div className="space-y-6">
@@ -421,124 +187,20 @@ export default function Positions() {
         </div>
 
         {/* Overall Stats Panel - 3Commas Style */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Overall Stats */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">Overall stats</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Active trades:</span>
-                  <span className="text-white font-medium">{stats.activeTrades}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Funds locked in DCA bot trades:</span>
-                  <span className="text-white font-medium">{stats.fundsLocked.toFixed(8)} BTC</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">uPnL of active Bot trades:</span>
-                  <span className={`font-medium ${stats.uPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stats.uPnL >= 0 ? '+' : ''}{stats.uPnL.toFixed(8)} BTC
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Completed Trades Profit (placeholder for now) */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">Completed trades profit</h3>
-              <div className="space-y-2 text-sm">
-                <div className="text-slate-400">Coming soon...</div>
-              </div>
-            </div>
-
-            {/* Balances */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center justify-between">
-                Balances
-                <button className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                  🔄 Refresh
-                </button>
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between text-slate-400">
-                  <span>Reserved</span>
-                  <span>Available</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-300">BTC</span>
-                  <div className="flex gap-4">
-                    <span className="text-white">{stats.fundsLocked.toFixed(8)}</span>
-                    <span className="text-white">-</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <OverallStatsPanel stats={stats} />
 
         {/* Filters - 3Commas Style (Account, Bot, Pair) */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-slate-300">Filters</h3>
-            <button
-              onClick={() => {
-                setFilterBot('all')
-                setFilterMarket('all')
-                setFilterPair('all')
-              }}
-              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Clear
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Account Filter (Market in our case) */}
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Account</label>
-              <select
-                value={filterMarket}
-                onChange={(e) => setFilterMarket(e.target.value as 'all' | 'USD' | 'BTC')}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-              >
-                <option value="all">All</option>
-                <option value="USD">USD Markets</option>
-                <option value="BTC">BTC Markets</option>
-              </select>
-            </div>
-
-            {/* Bot Filter */}
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Bot</label>
-              <select
-                value={filterBot}
-                onChange={(e) => setFilterBot(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-              >
-                <option value="all">All</option>
-                {bots?.map(bot => (
-                  <option key={bot.id} value={bot.id}>{bot.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Pair Filter */}
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Pair</label>
-              <select
-                value={filterPair}
-                onChange={(e) => setFilterPair(e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-              >
-                <option value="all">All</option>
-                {uniquePairs.map(pair => (
-                  <option key={pair} value={pair}>{pair}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
+        <FilterPanel
+          filterBot={filterBot}
+          setFilterBot={setFilterBot}
+          filterMarket={filterMarket}
+          setFilterMarket={setFilterMarket}
+          filterPair={filterPair}
+          setFilterPair={setFilterPair}
+          bots={bots}
+          uniquePairs={uniquePairs}
+          onClearFilters={clearFilters}
+        />
 
         {openPositions.length === 0 ? (
           <div className="bg-slate-800 rounded-lg border border-slate-700 p-12 text-center">
@@ -635,426 +297,63 @@ export default function Positions() {
               </div>
             </div>
 
-            {/* Group positions by bot */}
-            {openPositions.map((position) => {
-              const currentPrice = currentPrices[position.product_id || 'ETH-BTC']
-              // Use cached P&L instead of recalculating (performance optimization)
-              const pnl = position._cachedPnL
-              const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
-
-              const bot = bots?.find(b => b.id === position.bot_id)
-              const strategyConfig = position.strategy_config_snapshot || bot?.strategy_config || {}
-
-              return (
-                <div key={position.id} className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-                  {/* Deal Row - 3Commas Style Horizontal Layout */}
-                  <div
-                    className="p-4 cursor-pointer hover:bg-slate-750 transition-colors"
-                    onClick={() => togglePosition(position.id)}
-                  >
-                    <div className="grid grid-cols-12 gap-4 items-start text-sm">
-                      {/* Column 1: Bot Info + Strategy (2 cols) */}
-                      <div className="col-span-2">
-                        <div className="text-white font-semibold mb-1">
-                          {bot?.name || `Bot #${position.bot_id || 'N/A'}`}
-                        </div>
-                        <div className="text-[10px] text-slate-400 space-y-0.5">
-                          {bot?.strategy_type && (
-                            <div>[{bot.strategy_type.toUpperCase()}]</div>
-                          )}
-                          {strategyConfig.take_profit_percent && (
-                            <div>MP: {strategyConfig.take_profit_percent}%</div>
-                          )}
-                          {strategyConfig.base_order_size && (
-                            <div>BO: {strategyConfig.base_order_size}</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Column 2: Pair + Exchange (1.5 cols) */}
-                      <div className="col-span-2 flex items-start gap-2">
-                        <CoinIcon
-                          symbol={position.product_id?.split('-')[0] || 'BTC'}
-                          size="sm"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className="text-white font-semibold cursor-pointer hover:opacity-80 transition-opacity"
-                              onClick={() => {
-                                setChartModalSymbol(position.product_id || 'ETH-BTC')
-                                setChartModalPosition(position)
-                                setShowChartModal(true)
-                              }}
-                            >
-                              {position.product_id || 'ETH-BTC'}
-                            </span>
-                            <BarChart2
-                              size={14}
-                              className="text-slate-400 hover:text-blue-400 cursor-pointer transition-colors"
-                              onClick={() => {
-                                setLightweightChartSymbol(position.product_id || 'ETH-BTC')
-                                setLightweightChartPosition(position)
-                                setShowLightweightChart(true)
-                              }}
-                            />
-                            {/* AI Sentiment Indicator */}
-                            {position.bot_id && (
-                              <AISentimentIcon
-                                botId={position.bot_id}
-                                productId={position.product_id || 'ETH-BTC'}
-                              />
-                            )}
-                            {/* Error Indicator (like 3Commas) */}
-                            {position.last_error_message && (
-                              <div
-                                className="flex items-center cursor-help"
-                                title={`Error: ${position.last_error_message}\n${position.last_error_timestamp ? `Time: ${formatDateTime(position.last_error_timestamp)}` : ''}`}
-                              >
-                                <AlertCircle size={14} className="text-red-400" />
-                              </div>
-                            )}
-                            {/* Coin Status Badge - different colors by category */}
-                            {position.is_blacklisted && (() => {
-                              const reason = position.blacklist_reason || '';
-                              const isApproved = reason.startsWith('[APPROVED]');
-                              const isBorderline = reason.startsWith('[BORDERLINE]');
-                              const isQuestionable = reason.startsWith('[QUESTIONABLE]');
-                              const displayReason = reason.replace(/^\[(APPROVED|BORDERLINE|QUESTIONABLE)\]\s*/, '');
-
-                              if (isApproved) {
-                                return (
-                                  <span
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-600/20 border border-green-600/50 text-green-400 cursor-help"
-                                    title={displayReason || 'Approved coin'}
-                                  >
-                                    APPROVED
-                                  </span>
-                                );
-                              } else if (isBorderline) {
-                                return (
-                                  <span
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-600/20 border border-yellow-600/50 text-yellow-400 cursor-help"
-                                    title={displayReason || 'Borderline coin'}
-                                  >
-                                    BORDERLINE
-                                  </span>
-                                );
-                              } else if (isQuestionable) {
-                                return (
-                                  <span
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-600/20 border border-orange-600/50 text-orange-400 cursor-help"
-                                    title={displayReason || 'Questionable coin'}
-                                  >
-                                    QUESTIONABLE
-                                  </span>
-                                );
-                              } else {
-                                return (
-                                  <span
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-600/20 border border-red-600/50 text-red-400 cursor-help"
-                                    title={reason || 'Blacklisted coin'}
-                                  >
-                                    BLACKLISTED
-                                  </span>
-                                );
-                              }
-                            })()}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>
-                            {/* Limit Close Status Badge */}
-                            {position.closing_via_limit && position.limit_order_details && (
-                              <div className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-[10px] font-medium">
-                                Limit Close {position.limit_order_details.fill_percentage > 0 ? `${position.limit_order_details.fill_percentage.toFixed(0)}%` : 'Pending'}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Column 3: uPnL + Price Bar (4 cols) */}
-                      <div className="col-span-4">
-                        <PriceBar
-                          position={position}
-                          currentPrice={currentPrice}
-                          pnl={pnl}
-                          strategyConfig={strategyConfig}
-                          fundsUsedPercent={fundsUsedPercent}
-                        />
-                      </div>
-
-                      {/* Column 4: Volume (2 cols) */}
-                      <div className="col-span-2">
-                        <div className="text-[10px] space-y-0.5">
-                          <div className="text-white">
-                            {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}
-                            {getQuoteCurrency(position.product_id || 'ETH-BTC').symbol === 'BTC' && btcUsdPrice > 0 && (
-                              <span className="text-slate-400">
-                                {' '}(${(position.total_quote_spent * btcUsdPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })})
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-slate-400">{formatBaseAmount(position.total_base_acquired, position.product_id || 'ETH-BTC')}</div>
-                          {pnl && pnl.usd !== undefined && (
-                            <div className={pnl.btc >= 0 ? 'text-green-400' : 'text-red-400'}>
-                              {pnl.btc >= 0 ? '+' : ''}${Math.abs(pnl.usd).toFixed(2)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Column 5: Avg. O (Averaging Orders) - Like 3Commas (1 col) */}
-                      <div className="col-span-1">
-                        <div className="text-[10px] space-y-0.5">
-                          <div className="text-slate-400">
-                            Completed: {(() => {
-                              // Calculate DCA count from trade_count (total trades - 1 initial = DCA count)
-                              // If trades array is available AND has trades for THIS position, use it for more detail
-                              if (trades && trades.length > 0) {
-                                const positionTrades = trades.filter(t => t.position_id === position.id && t.side === 'buy') || []
-                                // Only use trades array if it actually has trades for this position
-                                // Otherwise the trades are for a different selected position
-                                if (positionTrades.length > 0) {
-                                  const autoSO = positionTrades.filter(t => t.trade_type === 'dca').length
-                                  const manualSO = positionTrades.filter(t => t.trade_type === 'manual_safety_order').length
-
-                                  if (manualSO > 0) {
-                                    return `${autoSO} (+${manualSO})`
-                                  }
-                                  return autoSO
-                                }
-                              }
-
-                              // Fallback: use trade_count from position (trade_count - 1 = DCA count)
-                              const dcaCount = Math.max(0, (position.trade_count || 0) - 1)
-                              return dcaCount
-                            })()}
-                          </div>
-                          <div className="text-slate-400">Active: {position.pending_orders_count || 0}</div>
-                          <div className="text-slate-400">
-                            Max: {position.strategy_config_snapshot?.max_safety_orders ?? bot?.strategy_config?.max_safety_orders ?? 0}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Column 6: Created (1 col) */}
-                      <div className="col-span-1">
-                        <div className="text-[10px] space-y-0.5">
-                          <div
-                            className="text-blue-400 hover:text-blue-300 cursor-pointer underline"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setTradeHistoryPosition(position)
-                              setShowTradeHistoryModal(true)
-                            }}
-                            title="Click to view trade history"
-                          >
-                            Deal #{position.user_deal_number ?? position.id}
-                          </div>
-                          <div className="text-slate-400">Start: {formatDateTimeCompact(position.opened_at)}</div>
-                          <div className="text-slate-400">Age: {formatDuration(position.opened_at)}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Our Special "Better than 3Commas" Budget Usage Bar */}
-                    <div className="mt-3 px-4">
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-slate-400">Budget Used</span>
-                        <span className="text-slate-300">
-                          {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')} / {formatQuoteAmount(position.max_quote_allowed, position.product_id || 'ETH-BTC')}
-                          <span className="text-slate-400 ml-1">({fundsUsedPercent.toFixed(0)}%)</span>
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-blue-500 h-2 rounded-full transition-all"
-                          style={{ width: `${Math.min(fundsUsedPercent, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Action Buttons Row */}
-                    <div className="mt-3 px-4 flex items-center gap-3">
-                      <button
-                        className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedPosition(null)
-                        }}
-                      >
-                        <span>🚫</span> Cancel
-                      </button>
-
-                      {/* Show edit/cancel if there's a pending limit order */}
-                      {position.closing_via_limit ? (
-                        <>
-                          <button
-                            className="text-xs text-yellow-400 hover:text-yellow-300 flex items-center gap-1"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setLimitClosePosition(position)
-                              setShowLimitCloseModal(true)
-                            }}
-                          >
-                            <span>✏️</span> Edit limit price
-                          </button>
-                          <button
-                            className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
-                            onClick={async (e) => {
-                              e.stopPropagation()
-                              if (confirm('Cancel limit close order?')) {
-                                try {
-                                  await axios.post(`${API_BASE_URL}/api/positions/${position.id}/cancel-limit-close`)
-                                  refetchPositions()
-                                } catch (err: any) {
-                                  alert(`Error: ${err.response?.data?.detail || err.message}`)
-                                }
-                              }
-                            }}
-                          >
-                            <span>❌</span> Cancel limit order
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              checkSlippageBeforeMarketClose(position.id)
-                            }}
-                          >
-                            <span>💱</span> Close at market
-                          </button>
-                          <button
-                            className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setLimitClosePosition(position)
-                              setShowLimitCloseModal(true)
-                            }}
-                          >
-                            <span>📊</span> Close at limit
-                          </button>
-                        </>
-                      )}
-                      <button
-                        className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setShowLogsModal(true)
-                          setLogsModalPosition(position)
-                        }}
-                      >
-                        <span>📊</span> AI Reasoning
-                      </button>
-                      <button
-                        className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openAddFundsModal(position)
-                        }}
-                      >
-                        <span>💰</span> Add funds
-                      </button>
-                      <button
-                        className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setEditSettingsPosition(position)
-                          setShowEditSettingsModal(true)
-                        }}
-                      >
-                        <Settings size={12} /> Edit deal
-                      </button>
-                      <button
-                        className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          refetchPositions()
-                        }}
-                      >
-                        <span>🔄</span> Refresh
-                      </button>
-                    </div>
-
-                    {/* Notes Section (like 3Commas) */}
-                    <div className="mt-3 px-4 pb-3">
-                      <div
-                        className="text-xs flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openNotesModal(position)
-                        }}
-                      >
-                        <span>📝</span>
-                        {position.notes ? (
-                          <span className="text-slate-300">{position.notes}</span>
-                        ) : (
-                          <span className="text-slate-500 italic">You can place a note here</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expandable Details Section (keep existing chart/details) */}
-                  {selectedPosition === position.id && (
-                    <div className="border-t border-slate-700 bg-slate-900/50 p-6">
-                      <DealChart
-                        position={position}
-                        productId={position.product_id || "ETH-BTC"}
-                        currentPrice={currentPrice}
-                        trades={trades}
-                      />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            {/* Position Cards */}
+            {openPositions.map((position) => (
+              <PositionCard
+                key={position.id}
+                position={position}
+                currentPrice={currentPrices[position.product_id || 'ETH-BTC']}
+                bots={bots}
+                btcUsdPrice={btcUsdPrice}
+                trades={trades}
+                selectedPosition={selectedPosition}
+                onTogglePosition={togglePosition}
+                onOpenChart={(productId, pos) => {
+                  setChartModalSymbol(productId)
+                  setChartModalPosition(pos)
+                  setShowChartModal(true)
+                }}
+                onOpenLightweightChart={(productId, pos) => {
+                  setLightweightChartSymbol(productId)
+                  setLightweightChartPosition(pos)
+                  setShowLightweightChart(true)
+                }}
+                onOpenLimitClose={(pos) => {
+                  setLimitClosePosition(pos)
+                  setShowLimitCloseModal(true)
+                }}
+                onOpenLogs={(pos) => {
+                  setShowLogsModal(true)
+                  setLogsModalPosition(pos)
+                }}
+                onOpenAddFunds={openAddFundsModal}
+                onOpenEditSettings={(pos) => {
+                  setEditSettingsPosition(pos)
+                  setShowEditSettingsModal(true)
+                }}
+                onOpenNotes={openNotesModal}
+                onOpenTradeHistory={(pos) => {
+                  setTradeHistoryPosition(pos)
+                  setShowTradeHistoryModal(true)
+                }}
+                onCheckSlippage={handleCheckSlippage}
+                onRefetch={refetchPositions}
+              />
+            ))}
           </div>
         )}
       </div>
 
       {/* Close Position Confirmation Modal */}
-      {showCloseConfirm && closeConfirmPositionId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg w-full max-w-md p-6">
-            <h2 className="text-xl font-bold mb-4 text-red-400 flex items-center gap-2">
-              <span>⚠️</span> Close Position at Market Price
-            </h2>
-
-            <p className="text-slate-300 mb-4">
-              This will immediately sell the entire position at the current market price.
-            </p>
-
-            <p className="text-slate-400 text-sm mb-6">
-              <strong>Warning:</strong> This action cannot be undone. The position will be closed and profits/losses will be realized.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowCloseConfirm(false)
-                  setCloseConfirmPositionId(null)
-                }}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
-                disabled={isProcessing}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleClosePosition}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
-                disabled={isProcessing}
-              >
-                {isProcessing ? 'Closing...' : 'Close Position'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CloseConfirmModal
+        isOpen={showCloseConfirm}
+        isProcessing={isProcessing}
+        onClose={() => {
+          setShowCloseConfirm(false)
+          setCloseConfirmPositionId(null)
+        }}
+        onConfirm={handleClosePositionClick}
+      />
 
       {/* Add Funds Modal */}
       {addFundsPosition && (
@@ -1100,56 +399,14 @@ export default function Positions() {
       />
 
       {/* Notes Modal (like 3Commas) */}
-      {showNotesModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg w-full max-w-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-white">Edit Note</h3>
-              <button
-                onClick={() => setShowNotesModal(false)}
-                className="text-slate-400 hover:text-white transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <textarea
-                value={notesText}
-                onChange={(e) => setNotesText(e.target.value)}
-                onKeyDown={(e) => {
-                  // Save on Cmd+Enter or Ctrl+Enter
-                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                    handleSaveNotes()
-                  }
-                }}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-2 sm:px-4 py-2 sm:py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] resize-y"
-                placeholder="Add a note for this position..."
-                autoFocus
-                disabled={isProcessing}
-              />
-              <p className="text-xs text-slate-400 mt-2">Cmd + Enter to save</p>
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowNotesModal(false)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
-                disabled={isProcessing}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveNotes}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-                disabled={isProcessing}
-              >
-                <span>✓</span> Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NotesModal
+        isOpen={showNotesModal}
+        isProcessing={isProcessing}
+        notesText={notesText}
+        onNotesChange={setNotesText}
+        onClose={() => setShowNotesModal(false)}
+        onSave={handleSaveNotes}
+      />
 
       {/* Limit Close Modal */}
       {showLimitCloseModal && limitClosePosition && (
@@ -1172,6 +429,7 @@ export default function Positions() {
         />
       )}
 
+      {/* Slippage Warning Modal */}
       {showSlippageWarning && slippageData && pendingMarketClosePositionId && (
         <SlippageWarningModal
           positionId={pendingMarketClosePositionId}
@@ -1216,97 +474,16 @@ export default function Positions() {
       )}
 
       {/* Trade History Modal */}
-      {showTradeHistoryModal && tradeHistoryPosition && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg w-full max-w-3xl p-6 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-2xl font-bold text-white">Trade History</h3>
-                <p className="text-sm text-slate-400 mt-1">
-                  Deal #{tradeHistoryPosition.user_deal_number ?? tradeHistoryPosition.id} • {tradeHistoryPosition.product_id || 'ETH-BTC'}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowTradeHistoryModal(false)
-                  setTradeHistoryPosition(null)
-                }}
-                className="text-slate-400 hover:text-white transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {isLoadingTradeHistory ? (
-              <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                <p className="text-slate-400 mt-4">Loading trade history...</p>
-              </div>
-            ) : tradeHistory && tradeHistory.length > 0 ? (
-              <div className="space-y-3">
-                {tradeHistory
-                  .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                  .map((trade: any) => (
-                    <div
-                      key={trade.id}
-                      className="bg-slate-700/50 rounded-lg p-4 border border-slate-600"
-                    >
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                          <div className="text-xs text-slate-400 mb-1">Type</div>
-                          <div className={`text-sm font-semibold ${
-                            trade.side.toUpperCase() === 'BUY' ? 'text-green-400' : 'text-blue-400'
-                          }`}>
-                            {trade.trade_type_display || trade.trade_type}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-400 mb-1">Price</div>
-                          <div className="text-sm text-white font-mono">
-                            {trade.price.toFixed(8)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-400 mb-1">Amount</div>
-                          <div className="text-sm text-white">
-                            {trade.base_amount.toFixed(8)} {(tradeHistoryPosition.product_id || 'ETH-BTC').split('-')[0]}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-400 mb-1">Total</div>
-                          <div className="text-sm text-white">
-                            {trade.quote_amount.toFixed(8)} {(tradeHistoryPosition.product_id || 'ETH-BTC').split('-')[1]}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-slate-600">
-                        <div className="text-xs text-slate-400">
-                          {formatDateTime(trade.timestamp)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-slate-400">No trades found for this position</p>
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => {
-                  setShowTradeHistoryModal(false)
-                  setTradeHistoryPosition(null)
-                }}
-                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TradeHistoryModal
+        isOpen={showTradeHistoryModal}
+        position={tradeHistoryPosition}
+        trades={tradeHistory}
+        isLoading={isLoadingTradeHistory}
+        onClose={() => {
+          setShowTradeHistoryModal(false)
+          setTradeHistoryPosition(null)
+        }}
+      />
     </div>
   )
 }

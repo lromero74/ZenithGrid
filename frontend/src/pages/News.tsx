@@ -6,8 +6,7 @@
  * Also includes video news from reputable crypto YouTube channels.
  */
 
-import { useState, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
@@ -19,80 +18,15 @@ import {
   sourceColors,
   videoSourceColors,
 } from '../components/news'
-
-interface NewsItem {
-  title: string
-  url: string
-  source: string
-  source_name: string
-  published: string | null
-  summary: string | null
-  thumbnail: string | null
-}
-
-interface VideoItem {
-  title: string
-  url: string
-  video_id: string
-  source: string
-  source_name: string
-  channel_name: string
-  published: string | null
-  thumbnail: string | null
-  description: string | null
-}
-
-interface NewsSource {
-  id: string
-  name: string
-  website: string
-}
-
-interface VideoSource {
-  id: string
-  name: string
-  website: string
-  description: string
-}
-
-interface NewsResponse {
-  news: NewsItem[]
-  sources: NewsSource[]
-  cached_at: string
-  cache_expires_at: string
-  total_items: number
-  page: number
-  page_size: number
-  total_pages: number
-}
-
-interface VideoResponse {
-  videos: VideoItem[]
-  sources: VideoSource[]
-  cached_at: string
-  cache_expires_at: string
-  total_items: number
-}
-
-interface ArticleContentResponse {
-  url: string
-  title: string | null
-  content: string | null
-  author: string | null
-  date: string | null
-  success: boolean
-  error: string | null
-}
-
-type TabType = 'articles' | 'videos'
+import { NewsItem, TabType } from './news/types'
+import { useNewsData, useArticleContent, useNewsFilters } from './news/hooks'
+import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource } from './news/helpers'
 
 export default function News() {
-  const [selectedSource, setSelectedSource] = useState<string>('all')
-  const [selectedVideoSource, setSelectedVideoSource] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<TabType>('articles')
   const [showSourceSettings, setShowSourceSettings] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 50
+
   // Track which article is being previewed (null means none)
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
 
@@ -106,32 +40,44 @@ export default function News() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const dropdownButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Clean up hover highlights when dropdown closes
-  const cleanupHoverHighlights = () => {
-    setHoveredPlaylistIndex(null)
-    document.querySelectorAll('[data-video-id]').forEach(el => {
-      el.classList.remove('ring-4', 'ring-blue-500/50', 'border-blue-500')
-    })
-  }
+  // Fetch news and video data
+  const {
+    newsData,
+    videoData,
+    newsLoading,
+    videosLoading,
+    newsError,
+    videosError,
+    newsFetching,
+    videosFetching,
+    refetchNews,
+    refetchVideos,
+    handleForceRefresh,
+  } = useNewsData()
 
-  // Scroll to currently playing video (centered in viewport) with pulse effect
-  const scrollToPlayingVideo = () => {
-    if (!currentVideo) return
-    const playingElement = document.querySelector(`[data-video-id="${currentVideo.video_id}"]`)
-    if (playingElement) {
-      playingElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      // Add pulsing effect for 3 seconds
-      playingElement.classList.add('animate-pulse-ring')
-      setTimeout(() => {
-        playingElement.classList.remove('animate-pulse-ring')
-      }, 3000)
-    }
-  }
+  // Article content for reader mode
+  const {
+    articleContent,
+    articleContentLoading,
+    readerModeEnabled,
+    setReaderModeEnabled,
+    clearContent,
+  } = useArticleContent({ previewArticle })
 
-  // Track article reader mode content
-  const [articleContent, setArticleContent] = useState<ArticleContentResponse | null>(null)
-  const [articleContentLoading, setArticleContentLoading] = useState(false)
-  const [readerModeEnabled, setReaderModeEnabled] = useState(false)
+  // Filtering and pagination
+  const {
+    selectedSource,
+    setSelectedSource,
+    selectedVideoSource,
+    setSelectedVideoSource,
+    currentPage,
+    setCurrentPage,
+    filteredNews,
+    filteredVideos,
+    paginatedNews,
+    totalPages,
+    totalFilteredItems,
+  } = useNewsFilters({ newsData, videoData, pageSize: PAGE_SIZE })
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -147,47 +93,11 @@ export default function News() {
     }
   }, [showPlaylistDropdown])
 
-  // Fetch article content when reader mode is enabled
-  useEffect(() => {
-    if (!previewArticle || !readerModeEnabled) {
-      return
-    }
-
-    const fetchArticleContent = async () => {
-      setArticleContentLoading(true)
-      setArticleContent(null)
-
-      try {
-        const response = await fetch(`/api/news/article-content?url=${encodeURIComponent(previewArticle.url)}`)
-        if (!response.ok) {
-          throw new Error('Failed to fetch article content')
-        }
-        const data: ArticleContentResponse = await response.json()
-        setArticleContent(data)
-      } catch {
-        setArticleContent({
-          url: previewArticle.url,
-          title: null,
-          content: null,
-          author: null,
-          date: null,
-          success: false,
-          error: 'Failed to connect to article extraction service'
-        })
-      } finally {
-        setArticleContentLoading(false)
-      }
-    }
-
-    fetchArticleContent()
-  }, [previewArticle, readerModeEnabled])
-
   // Reset reader mode when closing modal
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setPreviewArticle(null)
-    setReaderModeEnabled(false)
-    setArticleContent(null)
-  }
+    clearContent()
+  }, [clearContent])
 
   // Close article modal on ESC key press
   useEffect(() => {
@@ -198,7 +108,7 @@ export default function News() {
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [previewArticle])
+  }, [previewArticle, handleCloseModal])
 
   // Force re-render every minute to update relative timestamps
   const [, setTimeTick] = useState(0)
@@ -209,81 +119,11 @@ export default function News() {
     return () => clearInterval(interval)
   }, [])
 
-  // Fetch ALL news articles once (client-side pagination for instant page changes)
-  const {
-    data: newsData,
-    isLoading: newsLoading,
-    error: newsError,
-    refetch: refetchNews,
-    isFetching: newsFetching,
-  } = useQuery<NewsResponse>({
-    queryKey: ['crypto-news'],
-    queryFn: async () => {
-      // Fetch all articles (large page_size), paginate client-side for instant transitions
-      const response = await fetch('/api/news/?page=1&page_size=1000')
-      if (!response.ok) throw new Error('Failed to fetch news')
-      return response.json()
-    },
-    staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
-    refetchInterval: 1000 * 60 * 15, // Auto-refresh every 15 minutes
-    refetchOnWindowFocus: false,
-  })
-
-  // Fetch video news
-  const {
-    data: videoData,
-    isLoading: videosLoading,
-    error: videosError,
-    refetch: refetchVideos,
-    isFetching: videosFetching,
-  } = useQuery<VideoResponse>({
-    queryKey: ['crypto-videos'],
-    queryFn: async () => {
-      const response = await fetch('/api/news/videos')
-      if (!response.ok) throw new Error('Failed to fetch videos')
-      return response.json()
-    },
-    staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
-    refetchInterval: 1000 * 60 * 15, // Auto-refresh every 15 minutes
-    refetchOnWindowFocus: false,
-  })
-
-  const handleForceRefresh = async () => {
-    if (activeTab === 'articles') {
-      await fetch('/api/news/?force_refresh=true')
-      refetchNews()
-    } else {
-      await fetch('/api/news/videos?force_refresh=true')
-      refetchVideos()
-    }
+  // Scroll to currently playing video (centered in viewport) with pulse effect
+  const scrollToPlayingVideo = () => {
+    if (!currentVideo) return
+    scrollToVideo(currentVideo.video_id, true)
   }
-
-  // Filter news by selected source
-  const filteredNews =
-    selectedSource === 'all'
-      ? newsData?.news || []
-      : newsData?.news.filter((item) => item.source === selectedSource) || []
-
-  // Client-side pagination - slice filtered news for current page (instant page changes)
-  const totalFilteredItems = filteredNews.length
-  const totalPages = Math.ceil(totalFilteredItems / PAGE_SIZE) || 1
-  const paginatedNews = filteredNews.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  )
-
-  // Reset to page 1 if current page is out of bounds (e.g., after filtering)
-  useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(1)
-    }
-  }, [currentPage, totalPages])
-
-  // Filter videos by selected source
-  const filteredVideos =
-    selectedVideoSource === 'all'
-      ? videoData?.videos || []
-      : videoData?.videos.filter((item) => item.source === selectedVideoSource) || []
 
   // Get unique sources from actual news items
   const availableSources = newsData?.sources || []
@@ -353,7 +193,7 @@ export default function News() {
 
           {/* Refresh button */}
           <button
-            onClick={handleForceRefresh}
+            onClick={() => handleForceRefresh(activeTab)}
             disabled={isFetching}
             className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors disabled:opacity-50"
           >
@@ -429,7 +269,7 @@ export default function News() {
               All ({newsData?.total_items || 0})
             </button>
             {availableSources.map((source) => {
-              const count = newsData?.news.filter((n) => n.source === source.id).length || 0
+              const count = countItemsBySource(newsData?.news || [], source.id)
               return (
                 <button
                   key={source.id}
@@ -613,7 +453,7 @@ export default function News() {
               All ({videoData?.total_items || 0})
             </button>
             {availableVideoSources.map((source) => {
-              const count = videoData?.videos.filter((v) => v.source === source.id).length || 0
+              const count = countItemsBySource(videoData?.videos || [], source.id)
               return (
                 <button
                   key={source.id}
@@ -707,20 +547,13 @@ export default function News() {
                       onMouseEnter={() => {
                         setHoveredPlaylistIndex(idx)
                         // Scroll to and highlight the video in the grid
-                        const videoElement = document.querySelector(`[data-video-id="${video.video_id}"]`)
-                        if (videoElement) {
-                          videoElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                          // Add blue halo effect
-                          videoElement.classList.add('ring-4', 'ring-blue-500/50', 'border-blue-500')
-                        }
+                        highlightVideo(video.video_id)
+                        scrollToVideo(video.video_id, false)
                       }}
                       onMouseLeave={() => {
                         setHoveredPlaylistIndex(null)
                         // Remove blue halo effect
-                        const videoElement = document.querySelector(`[data-video-id="${video.video_id}"]`)
-                        if (videoElement) {
-                          videoElement.classList.remove('ring-4', 'ring-blue-500/50', 'border-blue-500')
-                        }
+                        unhighlightVideo(video.video_id)
                       }}
                       className={`w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left ${
                         hoveredPlaylistIndex === idx ? 'bg-blue-500/10' : ''
