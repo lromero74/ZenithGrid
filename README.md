@@ -322,9 +322,9 @@ Full license text: [LICENSE](LICENSE)
 
 If you find Zenith Grid useful, consider supporting continued development:
 
-- **Bitcoin (BTC):** [PLACEHOLDER_BTC_ADDRESS]
-- **PayPal:** [PLACEHOLDER_PAYPAL]
-- **USDC:** [PLACEHOLDER_USDC_ADDRESS]
+- **Bitcoin (BTC):** 3LehBoma3aeDwdgMYK3hyr2TGfxkJs55MV
+- **PayPal:** @farolito74
+- **USDC:** 0x8B7Ff39C772c90AB58A3d74dCd17F1425b4001c0
 
 Every contribution helps maintain and improve this project!
 
