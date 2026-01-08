@@ -306,7 +306,27 @@ npm run dev
 
 ## 📄 License
 
-Private use only.
+Zenith Grid is licensed under the **GNU Affero General Public License v3.0 (AGPL v3)**.
+
+This means:
+- ✅ Free to use, modify, and distribute
+- ✅ Open source - full code access
+- ✅ Network copyleft - if you run a modified version as a service, you must share your changes
+- ✅ Commercial use allowed if you comply with AGPL (open source your modifications)
+
+For commercial licensing options (proprietary use, closed-source modifications), see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) or contact louis_romero@outlook.com
+
+Full license text: [LICENSE](LICENSE)
+
+## ☕ Support Development
+
+If you find Zenith Grid useful, consider supporting continued development:
+
+- **Bitcoin (BTC):** [PLACEHOLDER_BTC_ADDRESS]
+- **PayPal:** [PLACEHOLDER_PAYPAL]
+- **USDC:** [PLACEHOLDER_USDC_ADDRESS]
+
+Every contribution helps maintain and improve this project!
 
 ## ⚠️ Disclaimer
 
