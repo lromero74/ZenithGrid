@@ -789,11 +789,13 @@ def initialize_database(project_root):
                 entry_take_profit_target REAL,
                 pattern_data TEXT,
                 exit_reason TEXT,
-                previous_indicators TEXT
+                previous_indicators TEXT,
+                user_attempt_number INTEGER
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_id ON positions(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_deal_number ON positions(user_deal_number)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_attempt_number ON positions(user_attempt_number)")
 
         # Trades table
         cursor.execute("""
