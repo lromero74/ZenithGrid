@@ -1,6 +1,6 @@
 # Feature Development Handoff Document
 **Created**: 2025-11-23
-**Project**: GetRidOf3CommasBecauseTheyGoDownTooOften
+**Project**: ZenithGrid
 **Status**: Planning Phase
 
 ---

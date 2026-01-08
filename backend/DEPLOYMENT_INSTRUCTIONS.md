@@ -23,7 +23,7 @@
 
 ```bash
 ssh testbot
-cd ~/GetRidOf3CommasBecauseTheyGoDownTooOften
+cd ~/ZenithGrid
 ```
 
 ### Step 2: Fetch Latest Changes

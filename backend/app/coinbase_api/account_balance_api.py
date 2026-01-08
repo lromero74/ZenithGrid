@@ -234,7 +234,7 @@ async def calculate_aggregate_btc_value(
     try:
         import sqlite3
 
-        db_path = "/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/trading.db"
+        db_path = "/home/ec2-user/ZenithGrid/backend/trading.db"
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 

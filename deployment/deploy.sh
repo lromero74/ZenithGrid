@@ -8,7 +8,7 @@ set -e
 echo "🚀 Starting deployment..."
 
 # Configuration
-APP_DIR="/home/ubuntu/GetRidOf3CommasBecauseTheyGoDownTooOften"
+APP_DIR="/home/ubuntu/ZenithGrid"
 SERVICE_NAME="trading-bot"
 
 # Colors for output

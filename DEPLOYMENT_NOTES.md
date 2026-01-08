@@ -19,7 +19,7 @@
 #### On testbot (EC2):
 ```bash
 ssh testbot
-cd ~/GetRidOf3CommasBecauseTheyGoDownTooOften
+cd ~/ZenithGrid
 git pull origin main
 cd backend
 python migrations/add_limit_close_tracking.py
@@ -28,7 +28,7 @@ sudo systemctl restart trading-bot-backend
 
 #### On local development:
 ```bash
-cd /Users/louis/GetRidOf3CommasBecauseTheyGoDownTooOften/backend
+cd /Users/louis/ZenithGrid/backend
 python migrations/add_limit_close_tracking.py
 # Restart backend if running
 ```

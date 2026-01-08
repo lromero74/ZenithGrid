@@ -91,7 +91,7 @@ When creating/editing indicator-based bots, you'll see new AI settings:
 ### Step 1: Check for Affected Bots
 
 ```bash
-cd /home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend
+cd /home/ec2-user/ZenithGrid/backend
 ./venv/bin/python3 scripts/migrate_ai_indicators.py
 ```
 

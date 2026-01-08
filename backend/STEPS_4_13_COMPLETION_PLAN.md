@@ -213,7 +213,7 @@ async def authenticated_request(
 
 **Commands:**
 ```bash
-cd /Users/louis/GetRidOf3CommasBecauseTheyGoDownTooOften/backend
+cd /Users/louis/ZenithGrid/backend
 python3 -m py_compile app/coinbase_api/auth.py
 git add app/coinbase_api/
 git commit -m "STEP 4.1: Extract coinbase_api/auth.py (~180 lines)

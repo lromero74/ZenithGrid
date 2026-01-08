@@ -295,7 +295,7 @@ ssh testbot "sudo journalctl -u trading-bot-backend --since '7 days ago' | grep 
 
 1. **VERIFY PRODUCTION STATE**
    ```bash
-   ssh testbot "cd ~/GetRidOf3CommasBecauseTheyGoDownTooOften/backend && python3 -c 'import app.services.limit_order_monitor; print(\"Import works!\")'"
+   ssh testbot "cd ~/ZenithGrid/backend && python3 -c 'import app.services.limit_order_monitor; print(\"Import works!\")'"
    ```
 
 2. **CHECK IF CODE PATHS ARE USED**

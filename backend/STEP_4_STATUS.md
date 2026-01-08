@@ -40,7 +40,7 @@ app/coinbase_unified_client.py (~150 lines wrapper) TODO
 - `calculate_aggregate_btc_value()` - Total BTC value (available + positions)
 - `calculate_aggregate_usd_value()` - Total USD value
 
-**Note:** `calculate_aggregate_btc_value()` has hardcoded DB path `/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/trading.db`. This is preserved as-is (refactoring = no functionality changes).
+**Note:** `calculate_aggregate_btc_value()` has hardcoded DB path `/home/ec2-user/ZenithGrid/backend/trading.db`. This is preserved as-is (refactoring = no functionality changes).
 
 #### market_data_api.py (~130 lines)
 **Lines to extract:** 402-515, 867-874

@@ -39,7 +39,7 @@ A complete, production-ready trading bot that connects directly to Coinbase (rep
 ## 📁 Project Structure
 
 ```
-GetRidOf3CommasBecauseTheyGoDownTooOften/
+ZenithGrid/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI application
@@ -135,11 +135,11 @@ npm install && npm run dev
 ### EC2 Deployment
 ```bash
 # Upload code
-scp -i key.pem -r . ubuntu@your-ec2-ip:~/GetRidOf3CommasBecauseTheyGoDownTooOften
+scp -i key.pem -r . ubuntu@your-ec2-ip:~/ZenithGrid
 
 # Deploy
 ssh -i key.pem ubuntu@your-ec2-ip
-cd GetRidOf3CommasBecauseTheyGoDownTooOften/deployment
+cd ZenithGrid/deployment
 ./deploy.sh
 
 # Access via tunnel

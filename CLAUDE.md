@@ -34,12 +34,12 @@
 **Accessing Frontend:**
 - Frontend runs on testbot:5173 (Vite dev server)
 - Access locally via SSH port forwarding (localhost:5173 → testbot:5173)
-- After code changes, restart Vite: `ssh testbot "pkill -f vite && cd ~/GetRidOf3CommasBecauseTheyGoDownTooOften/frontend && nohup npm run dev > /tmp/vite.log 2>&1 &"`
+- After code changes, restart Vite: `ssh testbot "pkill -f vite && cd ~/ZenithGrid/frontend && nohup npm run dev > /tmp/vite.log 2>&1 &"`
 
 **Management:**
 ```bash
 ssh testbot
-cd GetRidOf3CommasBecauseTheyGoDownTooOften
+cd ZenithGrid
 ./bot.sh start|stop|restart|status|logs
 ```
 
@@ -53,7 +53,7 @@ cd GetRidOf3CommasBecauseTheyGoDownTooOften
 
 ```bash
 # Install on EC2 testbot (already in requirements.txt)
-cd GetRidOf3CommasBecauseTheyGoDownTooOften/backend
+cd ZenithGrid/backend
 ./venv/bin/pip install anthropic==0.74.0
 ./venv/bin/pip install google-generativeai==0.8.3
 ./venv/bin/pip install openai==2.8.1
@@ -182,7 +182,7 @@ Total Account BTC Value (aggregate)
 - production trading db is backend/trading.db
 - remember our python is in venv on localhost and in production (testbot host on EC2)
 - lint all code before committing new or changed code
-- CRITICAL!: be sure to stop production services (EC2 testbot host), and back up the database (/home/ec2-user/GetRidOf3CommasBecauseTheyGoDownTooOften/backend/trading.db), before applying migrations to it
+- CRITICAL!: be sure to stop production services (EC2 testbot host), and back up the database (/home/ec2-user/ZenithGrid/backend/trading.db), before applying migrations to it
 
 ## Commercialization Roadmap
 

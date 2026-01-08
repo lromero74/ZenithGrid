@@ -64,13 +64,13 @@ npm run dev
 
 ```bash
 # Upload code to EC2
-scp -i your-key.pem -r . ubuntu@your-ec2-ip:~/GetRidOf3CommasBecauseTheyGoDownTooOften
+scp -i your-key.pem -r . ubuntu@your-ec2-ip:~/ZenithGrid
 
 # SSH into instance
 ssh -i your-key.pem ubuntu@your-ec2-ip
 
 # Run deployment script
-cd GetRidOf3CommasBecauseTheyGoDownTooOften/deployment
+cd ZenithGrid/deployment
 ./deploy.sh
 ```
 

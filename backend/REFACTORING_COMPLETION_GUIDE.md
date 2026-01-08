@@ -97,7 +97,7 @@ async def execute_limit_buy(
 
 **Commands:**
 ```bash
-cd /Users/louis/GetRidOf3CommasBecauseTheyGoDownTooOften/backend
+cd /Users/louis/ZenithGrid/backend
 python3 -m py_compile app/trading_engine/buy_executor.py
 git add app/trading_engine/buy_executor.py
 git commit -m "STEP 3.3: Extract buy_executor.py from trading_engine_v2.py (~330 lines)

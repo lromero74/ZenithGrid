@@ -4,7 +4,7 @@
 
 set -e
 
-REPO_DIR=~/GetRidOf3CommasBecauseTheyGoDownTooOften
+REPO_DIR=~/ZenithGrid
 LOG_FILE=~/auto-deploy.log
 MAX_LOG_SIZE=1048576  # 1MB
 

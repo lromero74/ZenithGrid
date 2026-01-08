@@ -52,7 +52,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 ```bash
 # Clone repository
 git clone <your-repo-url>
-cd GetRidOf3CommasBecauseTheyGoDownTooOften
+cd ZenithGrid
 
 # Backend setup
 cd backend

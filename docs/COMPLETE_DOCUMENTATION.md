@@ -98,7 +98,7 @@ This is an automated trading bot for the ETH/BTC pair on Coinbase. It uses the M
 ### Project Structure
 
 ```
-GetRidOf3CommasBecauseTheyGoDownTooOften/
+ZenithGrid/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py
