@@ -32,6 +32,8 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
 
   useEffect(() => {
     // Load settings for all accounts
+    if (cexAccounts.length === 0) return
+
     Promise.all([
       Promise.all(cexAccounts.map(async (account) => {
         try {
@@ -53,7 +55,7 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
       setSettings(settingsMap)
       setBots(botsData)
     })
-  }, [])
+  }, [cexAccounts.length])
 
   const handleSave = async (accountId: number) => {
     setSaving(accountId)
@@ -75,6 +77,33 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
       ...prev,
       [accountId]: { ...prev[accountId], ...updates }
     }))
+  }
+
+  const handleToggleEnabled = async (accountId: number, enabled: boolean) => {
+    // Update local state immediately for responsive UI
+    updateAccountSettings(accountId, { enabled })
+
+    // Auto-save the toggle change to backend
+    try {
+      const updated = await autoBuyApi.updateSettings(accountId, {
+        ...settings[accountId],
+        enabled
+      })
+      setSettings(prev => ({ ...prev, [accountId]: updated }))
+
+      // Show brief success message
+      const accountName = cexAccounts.find(a => a.id === accountId)?.name || 'Account'
+      setMessage({
+        type: 'success',
+        text: `Auto-buy ${enabled ? 'enabled' : 'disabled'} for ${accountName}`
+      })
+      // Clear message after 3 seconds
+      setTimeout(() => setMessage(null), 3000)
+    } catch (err) {
+      // Revert on error
+      updateAccountSettings(accountId, { enabled: !enabled })
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save toggle' })
+    }
   }
 
   const hasStablecoinBots = (accountId: number): boolean => {
@@ -134,7 +163,7 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
                     <input
                       type="checkbox"
                       checked={accountSettings.enabled}
-                      onChange={(e) => updateAccountSettings(account.id, { enabled: e.target.checked })}
+                      onChange={(e) => handleToggleEnabled(account.id, e.target.checked)}
                       className="sr-only peer"
                     />
                     <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
