@@ -472,13 +472,13 @@ async def _run_portfolio_conversion(
     """
     Background task to convert portfolio to target currency
     """
-    from app.database import get_async_session
+    from app.database import get_db
 
     try:
         pcs.update_task_progress(task_id, status="running", message="Initializing conversion...")
 
         # Get database session
-        async for db in get_async_session():
+        async for db in get_db():
             # Get exchange client
             from app.services.exchange_service import get_exchange_client_for_account
             exchange = await get_exchange_client_for_account(db, account_id)
