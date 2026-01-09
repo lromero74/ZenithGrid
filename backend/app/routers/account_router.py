@@ -694,12 +694,13 @@ async def sell_portfolio_to_base_currency(
     background_tasks: BackgroundTasks,
     target_currency: str = Query("BTC", description="Target currency: BTC or USD"),
     confirm: bool = Query(False, description="Must be true to execute"),
+    account_id: Optional[int] = Query(None, description="Account ID to convert (defaults to default account)"),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Start portfolio conversion to BTC or USD (runs in background).
-    
+
     Returns immediately with a task_id to check progress via /conversion-status/{task_id}
     """
     if not confirm:
@@ -708,16 +709,25 @@ async def sell_portfolio_to_base_currency(
     if target_currency not in ["BTC", "USD"]:
         raise HTTPException(status_code=400, detail="target_currency must be BTC or USD")
 
-    # Get user's default account
-    account_query = select(Account).where(
-        Account.user_id == current_user.id,
-        Account.is_default == True
-    )
+    # Get the specified account or user's default account
+    if account_id:
+        account_query = select(Account).where(
+            Account.id == account_id,
+            Account.user_id == current_user.id
+        )
+    else:
+        account_query = select(Account).where(
+            Account.user_id == current_user.id,
+            Account.is_default == True
+        )
     account_result = await db.execute(account_query)
     account = account_result.scalars().first()
 
     if not account:
-        raise HTTPException(status_code=404, detail="No default account found")
+        if account_id:
+            raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+        else:
+            raise HTTPException(status_code=404, detail="No default account found")
 
     # Generate task ID and start background task
     task_id = str(uuid.uuid4())

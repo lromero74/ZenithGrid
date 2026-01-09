@@ -128,13 +128,13 @@ export const accountApi = {
   getBalances: () => api.get<Balances>('/account/balances').then((res) => res.data),
   getAggregateValue: () => api.get<AggregateValue>('/account/aggregate-value').then((res) => res.data),
   // Sell entire portfolio to BTC or USD (sells balances, not positions)
-  sellPortfolioToBase: (targetCurrency: 'BTC' | 'USD', confirm = true) =>
+  sellPortfolioToBase: (targetCurrency: 'BTC' | 'USD', confirm = true, accountId?: number) =>
     api.post<{
       task_id: string;
       message: string;
       status_url: string;
     }>('/account/sell-portfolio-to-base', null, {
-      params: { target_currency: targetCurrency, confirm }
+      params: { target_currency: targetCurrency, confirm, account_id: accountId }
     }).then((res) => res.data),
 
   getConversionStatus: (taskId: string) =>

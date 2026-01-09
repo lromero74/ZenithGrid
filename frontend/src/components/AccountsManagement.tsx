@@ -16,6 +16,7 @@ import {
   AlertCircle,
   RefreshCw,
   AlertTriangle,
+  ArrowRightLeft,
 } from 'lucide-react'
 import { useAccount, Account, getChainName } from '../contexts/AccountContext'
 import { accountApi } from '../services/api'
@@ -165,12 +166,12 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
     return () => clearInterval(pollInterval)
   }, [conversionProgress.taskId, conversionProgress.status, conversionProgress.targetCurrency, refreshAccounts])
 
-  const handleSellPortfolioToBase = async (targetCurrency: 'BTC' | 'USD') => {
+  const handleSellPortfolioToBase = async (account: Account, targetCurrency: 'BTC' | 'USD') => {
     const currencySetter = targetCurrency === 'BTC' ? setSellingToBTC : setSellingToUSD
 
     if (!confirm(
-      `🚨 CONVERT ENTIRE PORTFOLIO TO ${targetCurrency} 🚨\n\n` +
-      `This will sell ALL your portfolio holdings (ETH, ADA, etc.) to ${targetCurrency}.\n\n` +
+      `🚨 CONVERT ${account.name.toUpperCase()} PORTFOLIO TO ${targetCurrency} 🚨\n\n` +
+      `This will sell ALL holdings on ${account.name} (ETH, ADA, etc.) to ${targetCurrency}.\n\n` +
       `All balances will be converted at MARKET price.\n` +
       `This action CANNOT be undone.\n\n` +
       `Are you absolutely sure you want to proceed?`
@@ -183,7 +184,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
 
     try {
       // Start the conversion (returns task_id immediately)
-      const result = await accountApi.sellPortfolioToBase(targetCurrency, true)
+      const result = await accountApi.sellPortfolioToBase(targetCurrency, true, account.id)
 
       // Set up progress tracking
       setConversionProgress({
@@ -275,54 +276,6 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
         </div>
       )}
 
-      {/* Portfolio Conversion Section */}
-      {accounts.length > 0 && (
-        <div className="bg-orange-900/20 border border-orange-700 rounded-lg p-4">
-          <div className="flex items-start gap-3 mb-3">
-            <AlertTriangle className="w-5 h-5 text-orange-400 mt-0.5" />
-            <div className="flex-1">
-              <h4 className="text-orange-400 font-semibold mb-1">
-                Portfolio Conversion
-              </h4>
-              <p className="text-sm text-orange-300">
-                Convert your entire portfolio to BTC or USD. This sells all your holdings (ETH, ADA, etc.)
-                at market price. Use after cancelling deals to consolidate into a single currency.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => handleSellPortfolioToBase('BTC')}
-              disabled={sellingToBTC}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {sellingToBTC ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Converting...
-                </>
-              ) : (
-                'Convert Portfolio to BTC'
-              )}
-            </button>
-            <button
-              onClick={() => handleSellPortfolioToBase('USD')}
-              disabled={sellingToUSD}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {sellingToUSD ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Converting...
-                </>
-              ) : (
-                'Convert Portfolio to USD'
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* CEX Accounts */}
       {cexAccounts.length > 0 && (
         <div className="bg-slate-800 rounded-lg border border-slate-700">
@@ -342,6 +295,9 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
                 onMenuToggle={() => setOpenMenuId(openMenuId === account.id ? null : account.id)}
                 onDelete={() => handleDelete(account)}
                 onSetDefault={() => handleSetDefault(account)}
+                onConvertToBTC={() => handleSellPortfolioToBase(account, 'BTC')}
+                onConvertToUSD={() => handleSellPortfolioToBase(account, 'USD')}
+                isConverting={sellingToBTC || sellingToUSD}
               />
             ))}
           </div>
@@ -383,6 +339,9 @@ interface AccountRowProps {
   onMenuToggle: () => void
   onDelete: () => void
   onSetDefault: () => void
+  onConvertToBTC?: () => void
+  onConvertToUSD?: () => void
+  isConverting?: boolean
 }
 
 function AccountRow({
@@ -392,6 +351,9 @@ function AccountRow({
   onMenuToggle,
   onDelete,
   onSetDefault,
+  onConvertToBTC,
+  onConvertToUSD,
+  isConverting,
 }: AccountRowProps) {
   return (
     <div className={`flex items-center justify-between px-4 py-3 ${isDeleting ? 'opacity-50' : ''}`}>
@@ -444,7 +406,7 @@ function AccountRow({
           </button>
 
           {isMenuOpen && (
-            <div className="absolute right-0 bottom-full mb-1 w-48 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-1">
+            <div className="absolute right-0 bottom-full mb-1 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-1">
               <button
                 onClick={onSetDefault}
                 disabled={account.is_default}
@@ -462,6 +424,40 @@ function AccountRow({
                   </>
                 )}
               </button>
+
+              {/* Portfolio Conversion Options (CEX only) */}
+              {onConvertToBTC && onConvertToUSD && (
+                <>
+                  <div className="border-t border-slate-700 my-1" />
+                  <div className="px-3 py-1.5">
+                    <p className="text-xs text-slate-500 uppercase font-semibold">Convert Portfolio</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      onMenuToggle()
+                      onConvertToBTC()
+                    }}
+                    disabled={isConverting}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-orange-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ArrowRightLeft className="w-4 h-4" />
+                    <span>Convert to BTC</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onMenuToggle()
+                      onConvertToUSD()
+                    }}
+                    disabled={isConverting}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-green-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ArrowRightLeft className="w-4 h-4" />
+                    <span>Convert to USD</span>
+                  </button>
+                </>
+              )}
+
+              <div className="border-t border-slate-700 my-1" />
               <button
                 onClick={onDelete}
                 disabled={account.bot_count > 0}
