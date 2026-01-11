@@ -346,11 +346,23 @@ class MultiBotMonitor:
             trading_pairs = bot.get_trading_pairs()
             print(f"🔍 Got {len(trading_pairs)} trading pairs: {trading_pairs}")
 
+            # Get pairs with open positions (always need to monitor these)
+            from app.models import Position
+            open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
+            open_pos_result = await db.execute(open_pos_query)
+            open_positions = list(open_pos_result.scalars().all())
+            pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
+
             # Filter pairs by allowed categories (bot-level control)
+            # BUT always include pairs with existing positions
             allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None
             if allowed_categories:
-                trading_pairs = await filter_pairs_by_allowed_categories(db, trading_pairs, allowed_categories)
+                filtered_pairs = await filter_pairs_by_allowed_categories(db, trading_pairs, allowed_categories)
+                # Add back any pairs with open positions (must monitor existing positions!)
+                trading_pairs = list(set(filtered_pairs) | pairs_with_positions)
                 print(f"🔍 After category filter: {len(trading_pairs)} trading pairs: {trading_pairs}")
+                if pairs_with_positions - set(filtered_pairs):
+                    logger.info(f"  Including {len(pairs_with_positions - set(filtered_pairs))} pairs with open positions despite category filter")
 
             logger.info(
                 f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})"
@@ -358,11 +370,6 @@ class MultiBotMonitor:
 
             # If bot is stopped, filter to only pairs with open positions (for DCA/exit)
             if not bot.is_active:
-                from app.models import Position
-                open_pos_query = select(Position).where(Position.bot_id == bot.id, Position.status == "open")
-                open_pos_result = await db.execute(open_pos_query)
-                open_positions = list(open_pos_result.scalars().all())
-                pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
                 trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
                 logger.info(f"  ⏸️  Bot is STOPPED - filtered to {len(trading_pairs)} pairs with open positions")
                 if len(trading_pairs) == 0:
