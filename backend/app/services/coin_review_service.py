@@ -64,24 +64,27 @@ async def get_ai_review_provider_from_db() -> str:
 # Review history table would be nice but for now we'll just log
 COIN_REVIEW_PROMPT = """You are a cryptocurrency analyst evaluating coins for a trading bot.
 
-Analyze each coin and categorize it into one of four categories:
+Analyze each coin and categorize it into one of FIVE categories:
 - APPROVED: Legitimate projects with strong fundamentals, active development, clear utility
 - BORDERLINE: Projects with concerns but not outright bad - declining relevance, slow development, etc.
 - QUESTIONABLE: Projects with significant red flags - unclear utility, heavy selling pressure, overshadowed by competitors
-- BLACKLISTED: Projects with serious issues - SEC problems, abandoned, security vulnerabilities, scams, meme coins
+- MEME: Meme coins and tokens with primarily community-driven value, high volatility, speculative (DOGE, SHIB, PEPE, WIF, etc.)
+- BLACKLISTED: Projects with serious issues - SEC problems, abandoned, security vulnerabilities, scams, rugpulls
 
 For each coin, provide:
-1. A category (APPROVED, BORDERLINE, QUESTIONABLE, or BLACKLISTED)
+1. A category (APPROVED, BORDERLINE, QUESTIONABLE, MEME, or BLACKLISTED)
 2. A brief reason (max 60 chars) explaining the categorization
 
 Consider factors like:
 - Development activity and roadmap progress
 - Regulatory status and legal issues
 - Security history (hacks, 51% attacks)
-- Real utility vs hype
+- Real utility vs hype/meme status
 - Market position vs competitors
 - Team credibility and project longevity
 - Tokenomics and unlock schedules
+
+IMPORTANT: Categorize ALL meme coins as MEME, not BLACKLISTED. Reserve BLACKLISTED for truly problematic projects (scams, abandoned, security issues).
 
 Here are the coins to analyze (available on Coinbase across BTC, USD, and USDC markets):
 {coins_list}
@@ -89,7 +92,7 @@ Here are the coins to analyze (available on Coinbase across BTC, USD, and USDC m
 Respond with ONLY valid JSON in this exact format:
 {{
   "ETH": {{"category": "APPROVED", "reason": "#2 crypto, massive ecosystem, DeFi foundation"}},
-  "DOGE": {{"category": "BLACKLISTED", "reason": "Meme coin, no real utility"}},
+  "DOGE": {{"category": "MEME", "reason": "Original meme coin, community-driven"}},
   ...
 }}
 
@@ -303,6 +306,7 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str,
         "APPROVED": "[APPROVED]",
         "BORDERLINE": "[BORDERLINE]",
         "QUESTIONABLE": "[QUESTIONABLE]",
+        "MEME": "[MEME]",
         "BLACKLISTED": "",  # No prefix for blacklisted
     }
 
@@ -377,7 +381,7 @@ async def run_weekly_review() -> Dict[str, Any]:
         duration = (end_time - start_time).total_seconds()
 
         # Count by category
-        category_counts = {"APPROVED": 0, "BORDERLINE": 0, "QUESTIONABLE": 0, "BLACKLISTED": 0}
+        category_counts = {"APPROVED": 0, "BORDERLINE": 0, "QUESTIONABLE": 0, "MEME": 0, "BLACKLISTED": 0}
         for symbol, data in analysis.items():
             category = data.get("category", "BLACKLISTED").upper()
             if category in category_counts:
