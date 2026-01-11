@@ -155,30 +155,30 @@ Then configure API keys in `backend/.env` and create your admin user via the API
 
 ## 💡 AI Bot Quick Start
 
-### Setup AI Provider
+### Step 1: Add Your AI Provider (One-Time Setup)
 
-1. Navigate to **Settings** page
-2. Click **"AI Provider Credentials"**
-3. Choose your AI provider (Claude, GPT, Gemini, Grok, or Groq)
-4. Enter your API key (encrypted in database)
-5. Set as default for trading bots
+1. Open the application at http://localhost:5173
+2. Navigate to **Settings** page
+3. Click **"AI Provider Credentials"** button
+4. Choose your AI provider (Claude, GPT, Gemini, Grok, or Groq)
+5. Enter your API key (stored encrypted in database)
+6. Optionally set as default for new bots
 
-### Configuration Example:
-```json
-{
-  "name": "AI Trader Pro",
-  "strategy_type": "ai_spot_opinion",
-  "product_ids": ["ETH-BTC", "SOL-BTC"],
-  "split_budget_across_pairs": true,
-  "strategy_config": {
-    "ai_model": "claude-sonnet-4",
-    "confidence_threshold": 70,
-    "min_profit_percentage": 1.0,
-    "max_position_size_btc": 0.01,
-    "technical_prefilter": true
-  }
-}
-```
+### Step 2: Create an AI Bot
+
+1. Navigate to **Bots** page
+2. Click **"Create New Bot"**
+3. Select strategy: **"AI Spot Opinion"**
+4. Choose trading pairs (e.g., ETH-BTC, SOL-BTC)
+5. Configure bot settings in the form:
+   - AI model (e.g., claude-sonnet-4)
+   - Confidence threshold (70%)
+   - Min profit percentage (1.0%)
+   - Max position size
+   - Enable technical pre-filter (optional)
+6. Click **"Create Bot"**
+
+All configuration is done through the web interface - no manual JSON editing required!
 
 ### How It Works:
 1. Every 15 minutes (configurable), fetches market data
