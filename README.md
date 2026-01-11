@@ -200,12 +200,52 @@ Then configure API keys in `backend/.env` and create your admin user via the API
 
 ## 🔧 Commands
 
+### Service Management
+
 ```bash
 ./bot.sh start      # Start backend + frontend
 ./bot.sh stop       # Stop both
 ./bot.sh restart    # Restart both
 ./bot.sh status     # Check status
 ./bot.sh logs       # View logs
+```
+
+### Updating Zenith Grid
+
+The `update.py` script automates the entire update process:
+
+```bash
+python3 update.py                    # Full update with confirmation prompts
+python3 update.py --yes              # Auto-confirm all prompts (recommended for automation)
+python3 update.py --dry-run          # Preview what would be done without executing
+python3 update.py --preview          # Preview incoming commits before pulling
+python3 update.py --preview -d       # Preview with full file diffs
+python3 update.py --changelog        # Show last 5 versions' changes
+python3 update.py --changelog 10     # Show last 10 versions' changes
+python3 update.py --changelog v0.86.0  # Show what changed in specific version
+```
+
+**What the update script does:**
+1. Pulls latest changes from git (origin/main)
+2. Stops backend and/or frontend services (only services with changes)
+3. Backs up database (timestamped backup)
+4. Runs all database migrations (idempotent, safe to re-run)
+5. Installs npm dependencies (only if package.json/lock changed)
+6. Restarts services (only services that were stopped)
+
+**Advanced options:**
+```bash
+python3 update.py --no-backup        # Skip database backup (not recommended)
+python3 update.py --skip-pull        # Skip git pull (if already pulled manually)
+```
+
+**Best practice for production:**
+```bash
+# Preview what will change
+python3 update.py --preview
+
+# Apply the update
+python3 update.py --yes
 ```
 
 ## 📊 Features Comparison
