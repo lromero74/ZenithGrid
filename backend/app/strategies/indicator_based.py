@@ -580,10 +580,18 @@ class IndicatorBasedStrategy(TradingStrategy):
             is_sell_check = position is not None and (needs["ai_sell"] or "ai_opinion" in str(self.take_profit_conditions))
 
             if needs["ai_buy"] or needs["ai_sell"]:
+                # Get db and user_id from kwargs (passed from signal_processor)
+                db = kwargs.get("db")
+                user_id = kwargs.get("user_id")
+                if not db or not user_id:
+                    raise ValueError("AI strategies require db and user_id in kwargs")
+
                 ai_result = await self.ai_evaluator.evaluate(
                     candles=candles,  # Use primary candles
                     current_price=current_price,
                     product_id=product_id,
+                    db=db,
+                    user_id=user_id,
                     params=ai_params,
                     is_sell_check=is_sell_check
                 )

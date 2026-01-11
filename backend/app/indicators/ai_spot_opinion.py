@@ -204,15 +204,38 @@ class AISpotOpinionEvaluator:
 
     async def _call_llm(
         self,
+        db: Any,
+        user_id: int,
         product_id: str,
         metrics: Dict[str, Any],
         ai_model: str,
         is_sell_check: bool
     ) -> tuple[str, int, str]:
         """
-        Call LLM to analyze metrics and provide opinion.
+        Call LLM to analyze metrics and provide opinion using user's API key.
         Returns (signal, confidence, reasoning)
         """
+        # Get user's API key from database
+        from app.routers.ai_credentials_router import get_user_api_key
+
+        # Map ai_model to provider name
+        provider_map = {
+            "claude": "claude",
+            "gpt": "openai",
+            "openai": "openai",
+            "gemini": "gemini",
+        }
+        provider = provider_map.get(ai_model.lower())
+        if not provider:
+            raise ValueError(f"Unknown AI model: {ai_model}")
+
+        api_key = await get_user_api_key(db, user_id, provider)
+        if not api_key:
+            raise ValueError(
+                f"No API key configured for {provider}. "
+                f"Please add your {provider.upper()} API key in Settings."
+            )
+
         # Build prompt
         action_type = "SELL" if is_sell_check else "BUY"
 
@@ -244,13 +267,13 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
 """
 
         try:
-            # Call appropriate LLM
+            # Call appropriate LLM with user's API key
             if ai_model == "claude":
-                response_text = await self._call_claude(prompt)
+                response_text = await self._call_claude(prompt, api_key)
             elif ai_model == "gpt" or ai_model == "openai":
-                response_text = await self._call_openai(prompt)
+                response_text = await self._call_openai(prompt, api_key)
             elif ai_model == "gemini":
-                response_text = await self._call_gemini(prompt)
+                response_text = await self._call_gemini(prompt, api_key)
             else:
                 raise ValueError(f"Unknown AI model: {ai_model}")
 
@@ -281,13 +304,12 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             logger.error(f"Error calling LLM ({ai_model}): {e}")
             return "hold", 0, f"LLM error: {str(e)}"
 
-    async def _call_claude(self, prompt: str) -> str:
-        """Call Claude API."""
+    async def _call_claude(self, prompt: str, api_key: str) -> str:
+        """Call Claude API with user's API key."""
         from anthropic import AsyncAnthropic
 
-        api_key = settings.anthropic_api_key
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not configured")
+            raise ValueError("Claude API key not configured for this user")
 
         client = AsyncAnthropic(api_key=api_key)
         response = await client.messages.create(
@@ -299,13 +321,12 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
 
         return response.content[0].text
 
-    async def _call_openai(self, prompt: str) -> str:
-        """Call OpenAI API."""
+    async def _call_openai(self, prompt: str, api_key: str) -> str:
+        """Call OpenAI API with user's API key."""
         from openai import AsyncOpenAI
 
-        api_key = settings.openai_api_key
         if not api_key:
-            raise ValueError("OPENAI_API_KEY not configured")
+            raise ValueError("OpenAI API key not configured for this user")
 
         client = AsyncOpenAI(api_key=api_key)
         response = await client.chat.completions.create(
@@ -317,13 +338,12 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
 
         return response.choices[0].message.content or ""
 
-    async def _call_gemini(self, prompt: str) -> str:
-        """Call Google Gemini API."""
+    async def _call_gemini(self, prompt: str, api_key: str) -> str:
+        """Call Google Gemini API with user's API key."""
         import google.generativeai as genai
 
-        api_key = settings.gemini_api_key
         if not api_key:
-            raise ValueError("GEMINI_API_KEY not configured")
+            raise ValueError("Gemini API key not configured for this user")
 
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-2.0-flash")
@@ -343,6 +363,8 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
         candles: List[Dict[str, Any]],
         current_price: float,
         product_id: str,
+        db: Any,
+        user_id: int,
         params: Optional[AISpotOpinionParams] = None,
         is_sell_check: bool = False
     ) -> Dict[str, Any]:
@@ -353,6 +375,8 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
             candles: Historical candle data
             current_price: Current market price
             product_id: Trading pair (e.g., "ETH-BTC")
+            db: Database session for fetching user's API keys
+            user_id: User ID to fetch API keys for
             params: Configuration parameters
             is_sell_check: True if checking sell for held position, False for buy check
 
@@ -410,6 +434,8 @@ Be decisive but realistic. Confidence should reflect conviction (0-100).
 
         # Ask LLM for opinion
         signal, confidence, reasoning = await self._call_llm(
+            db=db,
+            user_id=user_id,
             product_id=product_id,
             metrics=metrics,
             ai_model=params.ai_model,

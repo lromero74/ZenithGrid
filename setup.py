@@ -1787,28 +1787,42 @@ def run_setup():
             print_success(f"Backed up existing .env to {backup_path}")
 
             print()
-            print_info("System AI (optional) - used for coin categorization.")
-            print_info("This AI analyzes coins weekly to categorize them as APPROVED,")
-            print_info("BORDERLINE, QUESTIONABLE, or BLACKLISTED.")
-            print_info("(News and YouTube are pulled directly from RSS feeds, not AI)")
-            print_info("(Per-user AI trading bot keys are configured in Settings)")
+            print_header("System AI Configuration")
+            print_info("IMPORTANT: System AI is used for weekly coin categorization ONLY.")
+            print_info("The system analyzes all coins weekly and categorizes them as:")
+            print_info("  - APPROVED, BORDERLINE, QUESTIONABLE, MEME, or BLACKLISTED")
+            print_info("")
+            print_info("This system-wide key is NOT used for user AI trading bots.")
+            print_info("Each user must configure their own AI API keys in Settings")
+            print_info("to use AI-powered trading strategies.")
+            print_info("")
+            print_info("Recommended: Configure at least one provider for coin analysis.")
             print()
 
-            if prompt_yes_no("Configure a system AI provider for coin categorization?", default='no'):
+            if prompt_yes_no("Configure a system AI provider for coin categorization?", default='yes'):
                 config = prompt_for_ai_provider(config)
+            else:
+                print_warning("Skipping system AI - coin categorization will not run.")
 
             generate_env_file(project_root, config)
     else:
         print()
-        print_info("System AI (optional) - used for coin categorization.")
-        print_info("This AI analyzes coins weekly to categorize them as APPROVED,")
-        print_info("BORDERLINE, QUESTIONABLE, or BLACKLISTED.")
-        print_info("(News and YouTube are pulled directly from RSS feeds, not AI)")
-        print_info("(Per-user AI trading bot keys are configured in Settings)")
+        print_header("System AI Configuration")
+        print_info("IMPORTANT: System AI is used for weekly coin categorization ONLY.")
+        print_info("The system analyzes all coins weekly and categorizes them as:")
+        print_info("  - APPROVED, BORDERLINE, QUESTIONABLE, MEME, or BLACKLISTED")
+        print_info("")
+        print_info("This system-wide key is NOT used for user AI trading bots.")
+        print_info("Each user must configure their own AI API keys in Settings")
+        print_info("to use AI-powered trading strategies.")
+        print_info("")
+        print_info("Recommended: Configure at least one provider for coin analysis.")
         print()
 
-        if prompt_yes_no("Configure a system AI provider for coin categorization?", default='no'):
+        if prompt_yes_no("Configure a system AI provider for coin categorization?", default='yes'):
             config = prompt_for_ai_provider(config)
+        else:
+            print_warning("Skipping system AI - coin categorization will not run.")
 
         generate_env_file(project_root, config)
 

@@ -146,9 +146,10 @@ export function AIProvidersManager() {
       </div>
 
       <p className="text-sm text-slate-400 mb-6">
-        Configure your AI provider API keys for trading bot analysis. Your keys are stored securely
-        and used by your AI-powered bots. System-wide fallback keys are available if you don't set
-        your own.
+        Configure your AI provider API keys for AI-powered trading bots. Your keys are stored
+        securely and used exclusively by your bots. <strong>You must configure your own API key
+        to use AI trading strategies.</strong> System-wide keys are only used for coin
+        categorization and are not available as fallbacks for user bots.
       </p>
 
       {/* Error Message */}
@@ -317,16 +318,16 @@ export function AIProvidersManager() {
         <h4 className="text-sm font-medium text-slate-300 mb-2">How it works</h4>
         <ul className="text-xs text-slate-400 space-y-1">
           <li>
-            <span className="text-green-400">Your Key</span> - Your personal API key, used by your
-            bots
+            <span className="text-green-400">Your Key</span> - Your personal API key, required for
+            AI trading bots
           </li>
           <li>
-            <span className="text-blue-400">System Key</span> - Fallback key provided by the
-            system (shared across users)
+            <span className="text-blue-400">System Key</span> - System-wide key for coin
+            categorization only (not available for your bots)
           </li>
           <li>
-            <span className="text-slate-400">Not Configured</span> - No key available, AI features
-            disabled for this provider
+            <span className="text-slate-400">Not Configured</span> - No key set, you cannot use
+            this provider for AI trading
           </li>
         </ul>
       </div>

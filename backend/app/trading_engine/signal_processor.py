@@ -181,9 +181,10 @@ async def process_signal(
         signal_data = pre_analyzed_signal
         logger.info(f"  Using pre-analyzed signal from batch mode (confidence: {signal_data.get('confidence')}%)")
     else:
-        # Analyze signal using strategy (with position and context for web search)
+        # Analyze signal using strategy (with position, context, db, and user_id)
         signal_data = await strategy.analyze_signal(
-            candles, current_price, position=position, action_context=action_context
+            candles, current_price, position=position, action_context=action_context,
+            db=db, user_id=bot.user_id
         )
 
     if not signal_data:
