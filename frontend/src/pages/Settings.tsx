@@ -3,7 +3,6 @@ import { User, Lock, CheckCircle, AlertCircle, Database, Trash2 } from 'lucide-r
 import { AccountsManagement } from '../components/AccountsManagement'
 import { AddAccountModal } from '../components/AddAccountModal'
 import { AIProvidersManager } from '../components/AIProvidersManager'
-import { BlacklistManager } from '../components/BlacklistManager'
 import { AutoBuySettings } from '../components/AutoBuySettings'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -297,9 +296,6 @@ export default function Settings() {
           </button>
         </form>
       </div>
-
-      {/* Coin Blacklist Section */}
-      <BlacklistManager />
 
       {/* Add Account Modal */}
       <AddAccountModal
