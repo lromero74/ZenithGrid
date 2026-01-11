@@ -436,54 +436,6 @@ async def delete_ai_credential(
 # =============================================================================
 
 
-async def get_api_key_for_provider(
-    db: AsyncSession,
-    user_id: int,
-    provider: str
-) -> Optional[str]:
-    """
-    Get API key for a provider, checking user's database entry first,
-    then falling back to system .env key.
-
-    Args:
-        db: Database session
-        user_id: User ID to check credentials for
-        provider: AI provider name (claude, gemini, grok, groq, openai)
-
-    Returns:
-        API key string if found, None otherwise
-    """
-    from app.config import settings
-
-    provider = provider.lower()
-
-    # First, check user's database credential
-    query = select(AIProviderCredential).where(
-        AIProviderCredential.user_id == user_id,
-        AIProviderCredential.provider == provider,
-        AIProviderCredential.is_active.is_(True)
-    )
-    result = await db.execute(query)
-    credential = result.scalar_one_or_none()
-
-    if credential and credential.api_key:
-        # Update last_used_at
-        credential.last_used_at = datetime.utcnow()
-        await db.commit()
-        return credential.api_key
-
-    # Fall back to system .env key
-    system_keys = {
-        "claude": settings.anthropic_api_key,
-        "gemini": settings.gemini_api_key,
-        "grok": settings.grok_api_key,
-        "groq": settings.groq_api_key,
-        "openai": settings.openai_api_key,
-    }
-
-    return system_keys.get(provider) or None
-
-
 async def get_user_api_key(
     db: AsyncSession,
     user_id: int,
