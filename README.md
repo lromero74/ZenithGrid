@@ -1,53 +1,101 @@
-# 3Commas Replacement - Advanced Trading Bot Platform
+# Zenith Grid - Advanced Trading Bot Platform
 
 A sophisticated self-hosted cryptocurrency trading platform with **AI-powered autonomous trading**, advanced DCA strategies, and professional chart analysis. Built to replace 3Commas with enhanced features and full control.
 
+**IMPORTANT: This software is licensed under the GNU Affero General Public License v3.0 (AGPL v3). Please read the [LICENSE](LICENSE) file before using this software.**
+
 ## 🌟 Unique Features
 
-### 🤖 **AI Autonomous Trading Bot** (NEW!)
+### 🤖 **AI Autonomous Trading Bot**
 The first and only DCA bot platform with built-in AI decision-making:
-- **Claude AI Integration**: Uses Anthropic's Claude 3.5 Sonnet for market analysis
+- **Multi-AI Provider Support**: Claude (Anthropic), GPT (OpenAI), Gemini (Google), Grok (xAI), Groq (Llama)
 - **Autonomous Trading**: AI analyzes markets and makes intelligent buy/sell decisions
 - **Never Sells at a Loss**: Hard-coded safety to protect capital
 - **Token Optimized**: Smart caching, batching, and rate limiting
 - **Sentiment Ready**: Framework for Twitter, news, and Reddit integration
 - **Configurable Risk**: Conservative, Moderate, or Aggressive modes
+- **Per-User API Keys**: Encrypted credential management
 
 ### 🎯 Advanced DCA Strategies
 - **Multi-Pair Bots**: One bot trades multiple pairs simultaneously
 - **Budget Splitting**: Optional budget division across pairs for safer allocation
+- **Category Filtering**: Filter trading pairs by APPROVED, BORDERLINE, QUESTIONABLE, MEME, BLACKLISTED
 - **Conditional DCA**: Custom conditions per phase (base order, safety orders, take profit)
-- **Multi-Timeframe**: Different timeframes per indicator
+- **Multi-Timeframe**: Different timeframes per indicator (5m, 15m, 30m, 1h, 4h, 1d)
 - **Bot Templates**: Quick-start from Conservative/Balanced/Aggressive presets
-- **7 Strategies**: MACD, RSI, Bollinger Bands, Conditional DCA, AI, and more
+- **6 Advanced Strategies**: Indicator-Based (custom), Bull Flag Scanner, AI Spot Opinion, Triangular Arbitrage, Spatial Arbitrage, Statistical Arbitrage
 
 ### 📊 Professional Dashboard
 - **3Commas-Style Deals**: Active positions with real-time P&L
 - **TradingView Charts**: Professional candlestick charts with indicators
 - **Position Markers**: Entry price, TP/SL lines, safety order levels
-- **Portfolio Tracking**: Real-time portfolio value and allocation
+- **Portfolio Tracking**: Real-time portfolio value and allocation (CEX & DEX)
 - **Trade History**: Complete audit trail of all trades
 - **Performance Metrics**: Win rate, total profit, active deals
+- **News Aggregation**: Multi-source crypto news (Reddit, CoinDesk, CoinTelegraph, The Block, etc.)
+- **YouTube Integration**: Educational content from Coin Bureau, Benjamin Cowen, and more
+- **Market Intelligence**: Fear & Greed Index, US National Debt tracking
 
 ## 🏗️ Architecture
 
 - **Backend**: Python 3.13 + FastAPI + SQLAlchemy (async) + SQLite
 - **Frontend**: React 18 + TypeScript + Vite + TanStack Query + TradingView Charts
 - **Exchange**: Coinbase Advanced Trade API
-- **AI**: Anthropic Claude 3.5 Sonnet API
-- **Deployment**: uvicorn + nginx + systemd (optional)
+- **AI**: Multi-provider support (Claude, GPT, Gemini, Grok, Groq)
+- **Deployment**: uvicorn + systemd/launchd (optional)
 
 ## 📋 Prerequisites
 
-- **Python 3.13+**
+- **Python 3.10+** (Python 3.13 recommended)
 - **Node.js 18+** and npm
 - **Coinbase account** with API credentials
-- **Anthropic API key** (optional, for AI bot only)
-- **BTC and/or ETH** in your Coinbase account
+- **AI API key** (optional, for AI bots - Claude, GPT, Gemini, Grok, or Groq)
+- **BTC and/or USD** in your Coinbase account
 
 ## 🚀 Quick Start
 
-### 1. Clone and Install
+### Automated Setup (Recommended)
+
+The easiest way to set up Zenith Grid is using the interactive setup wizard:
+
+```bash
+# Clone repository
+git clone <your-repo-url>
+cd ZenithGrid
+
+# Run the setup wizard
+python3 setup.py
+```
+
+The setup wizard will:
+1. **Display and require acceptance of the LICENSE**
+2. Create Python virtual environment and install all dependencies
+3. Install frontend Node.js dependencies
+4. Initialize the SQLite database
+5. Generate .env file with secure JWT secrets
+6. Prompt for optional AI provider (for coin categorization)
+7. Create your admin user account
+8. Configure your Coinbase API credentials
+9. Optionally install systemd/launchd services for auto-start
+10. **Start the services automatically**
+
+That's it! Access the application at: **http://localhost:5173**
+
+#### Setup Wizard Options
+
+```bash
+python3 setup.py                      # Full interactive setup
+python3 setup.py --services-only      # Only create/install service files
+python3 setup.py --uninstall-services # Stop and remove service files
+python3 setup.py --cleanup            # Remove dependencies (venv, node_modules)
+python3 setup.py --help               # Show all options
+```
+
+---
+
+### Manual Setup (Alternative)
+
+If you prefer manual control:
 
 ```bash
 # Clone repository
@@ -64,39 +112,19 @@ pip install -r requirements.txt
 cd ../frontend
 npm install
 
-# Return to root
+# Return to root and start services
 cd ..
-```
-
-### 2. Configure API Keys
-
-```bash
-cd backend
-cp .env.example .env
-nano .env
-```
-
-Add your API keys:
-```bash
-# Required for all bots
-COINBASE_API_KEY=your_coinbase_key
-COINBASE_API_SECRET=your_coinbase_secret
-
-# Optional - for AI Autonomous Bot only
-ANTHROPIC_API_KEY=your_anthropic_key
-```
-
-**Get API Keys:**
-- **Coinbase**: https://portal.cdp.coinbase.com/
-- **Anthropic**: https://console.anthropic.com/
-
-### 3. Start the Platform
-
-```bash
 ./bot.sh start
 ```
 
-Access at: **http://localhost:5173**
+Then configure API keys in `backend/.env` and create your admin user via the API.
+
+**Get API Keys:**
+- **Coinbase**: https://portal.cdp.coinbase.com/
+- **AI Providers** (optional):
+  - Claude: https://console.anthropic.com/
+  - GPT: https://platform.openai.com/
+  - Gemini: https://aistudio.google.com/apikey
 
 ## 🎮 Usage
 
@@ -118,42 +146,48 @@ Access at: **http://localhost:5173**
 
 ### Available Strategies
 
-1. **🤖 AI Autonomous** - Claude AI analyzes markets and makes decisions
-2. **📊 Conditional DCA** - Custom conditions per phase
-3. **📈 MACD DCA** - MACD-based DCA
-4. **🎯 RSI** - RSI-based trading
-5. **📉 Bollinger Bands** - Bollinger Band strategy
-6. **💰 Simple DCA** - Basic DCA
-7. **⚡ Advanced DCA** - Advanced DCA
+1. **🎯 Indicator-Based (Universal/Custom Bot)** - Mix-and-match framework with 20+ technical indicators, multi-timeframe support, and phase-based conditions
+2. **📊 Bull Flag Scanner** - Automated bullish reversal pattern detection with volume confirmation
+3. **🤖 AI Spot Opinion** - Real-time LLM-based market analysis (Claude, GPT, Gemini, Grok, Groq)
+4. **🔺 Triangular Arbitrage** - Single-exchange 3-way currency cycle profitability detection
+5. **🌐 Spatial Arbitrage** - Cross-exchange (CEX vs DEX) price difference exploitation
+6. **📈 Statistical Arbitrage (Pairs Trading)** - Mean-reversion trading between correlated pairs
 
 ## 💡 AI Bot Quick Start
+
+### Setup AI Provider
+
+1. Navigate to **Settings** page
+2. Click **"AI Provider Credentials"**
+3. Choose your AI provider (Claude, GPT, Gemini, Grok, or Groq)
+4. Enter your API key (encrypted in database)
+5. Set as default for trading bots
 
 ### Configuration Example:
 ```json
 {
   "name": "AI Trader Pro",
-  "strategy_type": "ai_autonomous",
+  "strategy_type": "ai_spot_opinion",
   "product_ids": ["ETH-BTC", "SOL-BTC"],
   "split_budget_across_pairs": true,
   "strategy_config": {
-    "market_focus": "BTC",
-    "initial_budget_percentage": 10.0,
-    "max_position_size_percentage": 25.0,
-    "risk_tolerance": "moderate",
-    "analysis_interval_minutes": 15,
-    "min_profit_percentage": 1.0
+    "ai_model": "claude-sonnet-4",
+    "confidence_threshold": 70,
+    "min_profit_percentage": 1.0,
+    "max_position_size_btc": 0.01,
+    "technical_prefilter": true
   }
 }
 ```
 
 ### How It Works:
 1. Every 15 minutes (configurable), fetches market data
-2. Summarizes price trends, volatility, and key metrics
-3. Calls Claude AI for analysis
-4. Claude returns: buy/hold/sell + confidence score + reasoning
-5. Bot executes if confident enough (60%+ buy, 70%+ sell)
-6. **Never sells at a loss** - waits for profit
-7. Budget grows with successful trades
+2. Applies optional technical pre-filter to reduce API costs
+3. Calls your chosen AI (Claude/GPT/Gemini) for analysis
+4. AI returns: buy/hold/sell + confidence score + reasoning
+5. Bot executes if confidence exceeds threshold
+6. **Never sells at a loss** - waits for profit target
+7. All decisions logged with reasoning in AI Bot Reasoning tab
 
 ### Token Optimization:
 - Analysis caching (5min TTL)
@@ -176,37 +210,48 @@ Access at: **http://localhost:5173**
 
 ## 📊 Features Comparison
 
-| Feature | 3Commas | This Platform |
-|---------|---------|---------------|
+| Feature | 3Commas | Zenith Grid |
+|---------|---------|-------------|
 | DCA Bots | ✅ | ✅ |
 | Multi-Pair Bots | ✅ | ✅ |
 | Conditional Trading | ✅ | ✅ |
 | Bot Templates | ✅ | ✅ |
-| **AI-Powered Trading** | ❌ | ✅ **Unique!** |
+| **AI-Powered Trading** | ❌ | ✅ **5+ AI providers** |
+| **Multi-AI Support** | ❌ | ✅ **Claude, GPT, Gemini, Grok, Groq** |
+| **Bull Flag Scanner** | ❌ | ✅ **Automated pattern detection** |
+| **Arbitrage Strategies** | Limited | ✅ **3 types** |
+| **News Aggregation** | ❌ | ✅ **8+ sources** |
+| **Category Filtering** | ❌ | ✅ **5 categories** |
 | **Self-Hosted** | ❌ | ✅ |
 | **No Monthly Fees** | ❌ | ✅ |
 | **Full Source Control** | ❌ | ✅ |
-| Multi-Timeframe | Limited | ✅ Full |
+| Multi-Timeframe | Limited | ✅ **6 timeframes** |
 | Budget Splitting | Basic | ✅ Advanced |
 | Real-time Charts | ✅ | ✅ TradingView |
 | Position Management | ✅ | ✅ |
+| Portfolio Tracking | ✅ | ✅ **CEX + DEX** |
 
 ## 🛡️ Safety Features
 
-- **Never Sell at a Loss** (AI bot)
-- **Budget Limits** per bot
-- **Position Size Limits**
+- **Never Sell at a Loss** (AI bot hard-coded rule)
+- **Budget Limits** per bot with percentage allocation
+- **Position Size Limits** (max concurrent deals)
+- **Category Filtering** (blacklist risky coins)
 - **Confirmation Dialogs** for destructive actions
-- **Real-time P&L** tracking
-- **Stop Loss** support
-- **Take Profit** targets
-- **Safety Order** ladder
+- **Real-time P&L** tracking with visual indicators
+- **Stop Loss** support (percentage or pattern-based)
+- **Take Profit** targets (percentage or conditions-based)
+- **Trailing Stop Loss** with deviation percentage
+- **Trailing Take Profit** with pullback protection
+- **Safety Order** ladder with configurable steps
+- **API Key Encryption** in database
+- **Multi-User Support** with account isolation
 
 ## 📖 Documentation
 
 - **[📄 Handoff Document](HANDOFF_DOCUMENT.md)** - Complete setup & migration guide
 - **[✅ Feature Checklist](3COMMAS_REPLACEMENT_CHECKLIST.md)** - Progress tracker
-- **[🔌 API Docs](http://localhost:8000/docs)** - FastAPI auto-docs (when running)
+- **[🔌 API Docs](http://localhost:8100/docs)** - FastAPI auto-docs (when running)
 
 ## 🔄 Persistence & Recovery
 
@@ -233,14 +278,19 @@ Access at: **http://localhost:5173**
 - [x] Multi-pair bots
 - [x] Budget splitting
 - [x] Bot templates (Conservative/Balanced/Aggressive)
-- [x] **AI autonomous trading** 🤖
-- [ ] **Sentiment analysis** (Twitter, news, Reddit)
-- [ ] Trailing take profit / stop loss
-- [ ] Position notifications / alerts
-- [ ] Performance analytics dashboard
-- [ ] Backtesting system
-- [ ] Multiple exchange support
-- [ ] Mobile app (React Native)
+- [x] **AI autonomous trading with multi-provider support** 🤖
+- [x] **Bull Flag pattern scanner**
+- [x] **Arbitrage strategies** (Triangular, Spatial, Statistical)
+- [x] **News aggregation** (8+ sources)
+- [x] **Category filtering system**
+- [x] **Trailing take profit / stop loss**
+- [x] **Portfolio tracking** (CEX + DEX)
+- [ ] **Enhanced sentiment analysis** (Twitter/X, social signals)
+- [ ] **Backtesting system** for strategy validation
+- [ ] **Multiple exchange support** (Binance, Kraken, etc.)
+- [ ] **Position notifications / alerts** (email, Telegram)
+- [ ] **Performance analytics dashboard** (advanced metrics)
+- [ ] **Mobile app** (React Native)
 
 ## 🐛 Troubleshooting
 
@@ -250,21 +300,25 @@ Access at: **http://localhost:5173**
 tail -f .pids/backend.log
 
 # Common issues:
-# - Missing API credentials (add to .env)
-# - Port 8000 in use
+# - Missing API credentials (add to backend/.env)
+# - Port 8100 in use (kill existing process or change port)
 # - Missing dependencies (pip install -r requirements.txt)
+# - Python version (requires Python 3.10+)
 ```
 
 ### AI Bot not working
 ```bash
-# Check if ANTHROPIC_API_KEY is set
-grep ANTHROPIC_API_KEY backend/.env
+# Check AI provider credentials in Settings page
+# Navigate to Settings → AI Provider Credentials
 
-# Verify strategy is loaded
-curl http://localhost:8000/api/bots/strategies | grep ai_autonomous
+# Verify AI strategies are loaded
+curl http://localhost:8100/api/bots/strategies | grep "ai_spot_opinion"
 
 # Check logs for API errors
-tail -f .pids/backend.log | grep "Claude"
+tail -f .pids/backend.log | grep -E "Claude|GPT|Gemini|AI"
+
+# Check AI Bot Reasoning logs in Dashboard
+# Navigate to Dashboard → AI Bot Reasoning tab
 ```
 
 ### Chart not displaying
@@ -285,38 +339,49 @@ npm run dev
 
 ## 📝 Recent Updates
 
-### 2025-11-15 - AI Autonomous Bot
-- ✅ Claude AI integration for autonomous trading
-- ✅ Token-optimized analysis (caching, batching)
-- ✅ Never sells at a loss safety rule
-- ✅ Configurable risk tolerance
-- ✅ Sentiment analysis framework
+### 2026-01 - Category System & Position Monitoring
+- ✅ Bot-level category filtering (APPROVED, BORDERLINE, QUESTIONABLE, MEME, BLACKLISTED)
+- ✅ Category badges on trading pairs list
+- ✅ Category counts on checkboxes
+- ✅ Always monitor existing positions regardless of category filter
+- ✅ Dedicated MEME category for coin review
 
-### 2025-11-15 - Templates & Multi-Pair
-- ✅ Bot templates (3 default presets)
-- ✅ Multi-pair bot support
-- ✅ Budget splitting toggle
-- ✅ Template selector in bot form
+### 2025-12 - Advanced Strategies & Multi-AI
+- ✅ Multi-AI provider support (Claude, GPT, Gemini, Grok, Groq)
+- ✅ Bull Flag pattern scanner with volume confirmation
+- ✅ Triangular arbitrage strategy
+- ✅ Spatial arbitrage (CEX vs DEX)
+- ✅ Statistical arbitrage (pairs trading)
+- ✅ AI provider credential management with encryption
 
-### 2025-11-10 - Chart Enhancements
-- ✅ Take Profit / Stop Loss lines
-- ✅ Safety order price levels
-- ✅ Real-time price updates (5s interval)
-- ✅ Live P&L calculations
+### 2025-11 - Core Features
+- ✅ AI Spot Opinion strategy with configurable confidence thresholds
+- ✅ Bot templates (Conservative/Balanced/Aggressive)
+- ✅ Multi-pair bot support with budget splitting
+- ✅ News aggregation (8+ sources including Reddit, CoinDesk, YouTube)
+- ✅ Portfolio tracking (CEX + DEX)
+- ✅ Trailing take profit and stop loss
+- ✅ TradingView charts with position markers
 
 ## 📄 License
 
+**IMPORTANT: You must read and agree to the license terms before using this software.**
+
 Zenith Grid is licensed under the **GNU Affero General Public License v3.0 (AGPL v3)**.
 
-This means:
-- ✅ Free to use, modify, and distribute
-- ✅ Open source - full code access
-- ✅ Network copyleft - if you run a modified version as a service, you must share your changes
-- ✅ Commercial use allowed if you comply with AGPL (open source your modifications)
+### What This Means:
+- ✅ **Free to use, modify, and distribute**
+- ✅ **Open source** - full code access
+- ✅ **Network copyleft** - if you run a modified version as a service, you must share your changes
+- ✅ **Commercial use allowed** if you comply with AGPL (open source your modifications)
 
-For commercial licensing options (proprietary use, closed-source modifications), see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) or contact louis_romero@outlook.com
+### License Requirements:
+- The `setup.py` wizard will display the full license and require your acceptance
+- Read the complete license: **[LICENSE](LICENSE)**
+- For commercial licensing without AGPL obligations (proprietary forks, closed-source use), contact: louis_romero@outlook.com
 
-Full license text: [LICENSE](LICENSE)
+### Commercial Licensing:
+For commercial licensing options that don't require open-sourcing your modifications, see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) or contact louis_romero@outlook.com
 
 ## ☕ Support Development
 
@@ -330,11 +395,17 @@ Every contribution helps maintain and improve this project!
 
 ## ⚠️ Disclaimer
 
-**This software is for educational purposes only.**
+**This software is for educational and informational purposes.**
 
-Trading cryptocurrencies involves substantial risk of loss and is not suitable for every investor. Past performance is not indicative of future results. The authors are not responsible for any losses incurred. **Use at your own risk.**
+Trading cryptocurrencies involves substantial risk of loss and is not suitable for every investor. Past performance is not indicative of future results. The authors and contributors are not responsible for any losses incurred. **Use at your own risk.**
 
-The AI trading bot is experimental. AI decisions are not guaranteed to be profitable. Always monitor your bots and start with small amounts.
+### Important Warnings:
+- **AI trading bots are experimental** - AI decisions are not guaranteed to be profitable
+- **Start with small amounts** - Test strategies with minimal capital first
+- **Monitor regularly** - Automated trading still requires supervision
+- **Understand the risks** - Only invest what you can afford to lose completely
+- **No financial advice** - This software does not provide investment advice
+- **Your responsibility** - You are solely responsible for your trading decisions
 
 ---
 
