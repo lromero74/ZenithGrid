@@ -43,7 +43,6 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./trading.db"
 
     # Security
-    secret_key: str = "change-this-secret-key"
     # CORS origins as comma-separated string (parsed to list via validator)
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
 
@@ -78,7 +77,6 @@ class Settings(BaseSettings):
     # Candle/Chart Parameters
     # Valid intervals: ONE_MINUTE, FIVE_MINUTE, FIFTEEN_MINUTE, THIRTY_MINUTE, ONE_HOUR, TWO_HOUR, SIX_HOUR, ONE_DAY
     candle_interval: str = "FIVE_MINUTE"  # Default to 5-minute candles
-    ticker_interval: str = "1m"  # Legacy support
 
 
 settings = Settings()
