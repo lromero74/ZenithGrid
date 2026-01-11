@@ -35,6 +35,86 @@ from app.constants import CANDLE_CACHE_TTL, PAIR_PROCESSING_DELAY_SECONDS, BOT_P
 logger = logging.getLogger(__name__)
 
 
+async def filter_pairs_by_allowed_categories(
+    db: AsyncSession,
+    trading_pairs: List[str],
+    allowed_categories: Optional[List[str]] = None
+) -> List[str]:
+    """
+    Filter trading pairs based on allowed coin categories from blacklist table.
+
+    Args:
+        db: Database session
+        trading_pairs: List of pairs to filter (e.g., ["ETH-BTC", "ADA-BTC"])
+        allowed_categories: List of allowed categories (e.g., ["APPROVED", "BORDERLINE"])
+                          If None or empty, no filtering is applied.
+
+    Returns:
+        Filtered list of trading pairs that match allowed categories
+    """
+    if not allowed_categories or len(allowed_categories) == 0:
+        # No filtering - allow all pairs
+        return trading_pairs
+
+    from app.models import BlacklistedCoin
+
+    # Extract base currencies from pairs
+    base_currencies = set()
+    pair_to_base = {}
+    for pair in trading_pairs:
+        if "-" in pair:
+            base = pair.split("-")[0]
+            base_currencies.add(base.upper())
+            pair_to_base[pair] = base.upper()
+
+    # Query blacklist table for these currencies (user_id IS NULL = global entries)
+    query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol.in_(base_currencies),
+        BlacklistedCoin.user_id.is_(None)
+    )
+    result = await db.execute(query)
+    blacklist_entries = result.scalars().all()
+
+    # Build map of currency -> category
+    currency_categories = {}
+    for entry in blacklist_entries:
+        reason = entry.reason or ""
+        # Extract category from reason (format: "[CATEGORY] reason" or just "reason" for BLACKLISTED)
+        if reason.startswith("[APPROVED]"):
+            category = "APPROVED"
+        elif reason.startswith("[BORDERLINE]"):
+            category = "BORDERLINE"
+        elif reason.startswith("[QUESTIONABLE]"):
+            category = "QUESTIONABLE"
+        elif reason.startswith("[MEME]"):
+            category = "MEME"
+        else:
+            category = "BLACKLISTED"
+
+        currency_categories[entry.symbol] = category
+
+    # Filter pairs based on allowed categories
+    filtered_pairs = []
+    for pair in trading_pairs:
+        base = pair_to_base.get(pair)
+        if not base:
+            continue
+
+        category = currency_categories.get(base, "APPROVED")  # Default to APPROVED if not in blacklist
+        if category in allowed_categories:
+            filtered_pairs.append(pair)
+        else:
+            logger.debug(f"  Filtered out {pair}: {base} is {category}, not in allowed {allowed_categories}")
+
+    if len(filtered_pairs) < len(trading_pairs):
+        logger.info(
+            f"  Category filter: {len(trading_pairs)} pairs → {len(filtered_pairs)} pairs "
+            f"(allowed: {', '.join(allowed_categories)})"
+        )
+
+    return filtered_pairs
+
+
 class MultiBotMonitor:
     """
     Monitor prices and signals for multiple active bots.
@@ -265,6 +345,13 @@ class MultiBotMonitor:
             # Get all trading pairs for this bot (supports multi-pair)
             trading_pairs = bot.get_trading_pairs()
             print(f"🔍 Got {len(trading_pairs)} trading pairs: {trading_pairs}")
+
+            # Filter pairs by allowed categories (bot-level control)
+            allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None
+            if allowed_categories:
+                trading_pairs = await filter_pairs_by_allowed_categories(db, trading_pairs, allowed_categories)
+                print(f"🔍 After category filter: {len(trading_pairs)} trading pairs: {trading_pairs}")
+
             logger.info(
                 f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})"
             )
@@ -1349,6 +1436,17 @@ class MultiBotMonitor:
 
             results["scanned"] = len(opportunities)
             results["opportunities"] = len([o for o in opportunities if o.get("pattern")])
+
+            # Filter opportunities by allowed categories
+            allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None
+            if allowed_categories and opportunities:
+                # Extract pairs from opportunities
+                opportunity_pairs = [o.get("product_id") for o in opportunities if o.get("product_id")]
+                filtered_pairs = await filter_pairs_by_allowed_categories(db, opportunity_pairs, allowed_categories)
+                filtered_pairs_set = set(filtered_pairs)
+                # Filter opportunities to only include allowed pairs
+                opportunities = [o for o in opportunities if o.get("product_id") in filtered_pairs_set]
+                logger.info(f"  Category filtered: {len(opportunities)} opportunities remain")
 
             # Step 5: Enter positions for valid opportunities
             # Skip coins we already have positions in

@@ -578,6 +578,78 @@ export function BotFormModal({
                       </label>
                     </div>
                   )}
+
+                  {/* Allowed Categories - Bot-level filtering */}
+                  <div className="mt-4 pt-4 border-t border-slate-600">
+                    <label className="block text-sm font-medium text-slate-300 mb-3">
+                      Allowed Coin Categories
+                      <span className="text-xs text-slate-400 font-normal ml-2">
+                        (Select which types of coins this bot can trade)
+                      </span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { value: 'APPROVED', label: 'Approved', description: 'Strong fundamentals, clear utility', color: 'green' },
+                        { value: 'BORDERLINE', label: 'Borderline', description: 'Some concerns, declining relevance', color: 'yellow' },
+                        { value: 'QUESTIONABLE', label: 'Questionable', description: 'Significant red flags, unclear utility', color: 'orange' },
+                        { value: 'MEME', label: 'Meme Coins', description: 'Community-driven, high volatility', color: 'purple' },
+                        { value: 'BLACKLISTED', label: 'Blacklisted', description: 'Scams, abandoned projects', color: 'red' },
+                      ].map((category) => {
+                        const allowedCategories = formData.strategy_config?.allowed_categories || ['APPROVED', 'BORDERLINE']
+                        const isChecked = allowedCategories.includes(category.value)
+
+                        const colorClasses = {
+                          green: 'border-green-600 bg-green-950/30',
+                          yellow: 'border-yellow-600 bg-yellow-950/30',
+                          orange: 'border-orange-600 bg-orange-950/30',
+                          purple: 'border-purple-600 bg-purple-950/30',
+                          red: 'border-red-600 bg-red-950/30',
+                        }
+
+                        return (
+                          <label
+                            key={category.value}
+                            className={`flex items-start gap-3 p-3 rounded border-2 cursor-pointer transition-all ${
+                              isChecked
+                                ? colorClasses[category.color as keyof typeof colorClasses]
+                                : 'border-slate-600 bg-slate-700/50 opacity-60'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const currentCategories = formData.strategy_config?.allowed_categories || ['APPROVED', 'BORDERLINE']
+                                const newCategories = e.target.checked
+                                  ? [...currentCategories, category.value]
+                                  : currentCategories.filter(c => c !== category.value)
+
+                                setFormData({
+                                  ...formData,
+                                  strategy_config: {
+                                    ...formData.strategy_config,
+                                    allowed_categories: newCategories,
+                                  },
+                                })
+                              }}
+                              className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-slate-200">
+                                {category.label}
+                              </div>
+                              <div className="text-xs text-slate-400 mt-0.5">
+                                {category.description}
+                              </div>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-3">
+                      💡 Bot will only trade coins in selected categories. Unselected categories are filtered out before trading.
+                    </p>
+                  </div>
                 </>
               )
             })()}
