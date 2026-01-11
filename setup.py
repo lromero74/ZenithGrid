@@ -981,6 +981,28 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_published_at ON news_articles(published_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_fetched_at ON news_articles(fetched_at)")
 
+        # Video articles table (cached YouTube videos)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS video_articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                url TEXT NOT NULL UNIQUE,
+                video_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                channel_name TEXT NOT NULL,
+                published_at DATETIME,
+                description TEXT,
+                thumbnail_url TEXT,
+                fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_video_articles_url ON video_articles(url)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_video_articles_video_id ON video_articles(video_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_video_articles_published_at ON video_articles(published_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_video_articles_fetched_at ON video_articles(fetched_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_video_articles_source ON video_articles(source)")
+
         # AI provider credentials table (per-user AI API keys)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS ai_provider_credentials (
