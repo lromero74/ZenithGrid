@@ -429,4 +429,3 @@ Trading cryptocurrencies involves substantial risk of loss and is not suitable f
 🤖 **Built with Claude Code**
 
 For detailed documentation, see [HANDOFF_DOCUMENT.md](HANDOFF_DOCUMENT.md)
-# Auto-deployment enabled - pushes to main will deploy automatically within 1 minute
