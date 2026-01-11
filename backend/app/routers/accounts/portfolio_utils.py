@@ -64,7 +64,13 @@ async def get_cex_portfolio(
             price = await coinbase.get_current_price(f"{asset}-USD")
             return (asset, price)
         except Exception as e:
-            logger.warning(f"Could not get USD price for {asset}: {e}")
+            # 404 errors are expected for delisted pairs - log at DEBUG level
+            # Other errors (rate limits, network issues, etc.) are WARNING level
+            error_str = str(e)
+            if "404" in error_str or "Not Found" in error_str:
+                logger.debug(f"Could not get USD price for {asset}: {e}")
+            else:
+                logger.warning(f"Could not get USD price for {asset}: {e}")
             return (asset, None)
 
     # Batch price fetching: 15 concurrent requests, then 0.2s delay, repeat

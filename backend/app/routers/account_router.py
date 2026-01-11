@@ -151,7 +151,13 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
                 price = await coinbase.get_current_price(f"{asset}-USD")
                 return (asset, price)
             except Exception as e:
-                logger.warning(f"Could not get USD price for {asset}: {e}")
+                # 404 errors are expected for delisted pairs - log at DEBUG level
+                # Other errors (rate limits, network issues, etc.) are WARNING level
+                error_str = str(e)
+                if "404" in error_str or "Not Found" in error_str:
+                    logger.debug(f"Could not get USD price for {asset}: {e}")
+                else:
+                    logger.warning(f"Could not get USD price for {asset}: {e}")
                 return (asset, None)
 
         # Batch price fetching: 15 concurrent requests, then 0.2s delay, repeat
@@ -223,8 +229,8 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
                     btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
                 else:
                     # Still include asset even if we couldn't get price
-                    # Log this for debugging
-                    logger.warning(f"Could not get USD price for {asset}, including with $0 value")
+                    # Log at DEBUG level (detailed error already logged in fetch_price)
+                    logger.debug(f"Could not get USD price for {asset}, including with $0 value")
                     current_price_usd = 0.0
                     usd_value = 0.0
                     btc_value = 0.0
