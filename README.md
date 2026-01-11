@@ -241,6 +241,9 @@ python3 update.py --skip-pull        # Skip git pull (if already pulled manually
 
 **Best practice for production:**
 ```bash
+# Check recent updates
+python3 update.py --changelog
+
 # Preview what will change
 python3 update.py --preview
 
@@ -376,32 +379,6 @@ npm run dev
 - ⚠️ **Use SSH tunnel** for remote access
 - ⚠️ **Rotate API keys** periodically
 - ⚠️ **Trading involves risk** - only invest what you can afford to lose
-
-## 📝 Recent Updates
-
-### 2026-01 - Category System & Position Monitoring
-- ✅ Bot-level category filtering (APPROVED, BORDERLINE, QUESTIONABLE, MEME, BLACKLISTED)
-- ✅ Category badges on trading pairs list
-- ✅ Category counts on checkboxes
-- ✅ Always monitor existing positions regardless of category filter
-- ✅ Dedicated MEME category for coin review
-
-### 2025-12 - Advanced Strategies & Multi-AI
-- ✅ Multi-AI provider support (Claude, GPT, Gemini, Grok, Groq)
-- ✅ Bull Flag pattern scanner with volume confirmation
-- ✅ Triangular arbitrage strategy
-- ✅ Spatial arbitrage (CEX vs DEX)
-- ✅ Statistical arbitrage (pairs trading)
-- ✅ AI provider credential management with encryption
-
-### 2025-11 - Core Features
-- ✅ AI Spot Opinion strategy with configurable confidence thresholds
-- ✅ Bot templates (Conservative/Balanced/Aggressive)
-- ✅ Multi-pair bot support with budget splitting
-- ✅ News aggregation (8+ sources including Reddit, CoinDesk, YouTube)
-- ✅ Portfolio tracking (CEX + DEX)
-- ✅ Trailing take profit and stop loss
-- ✅ TradingView charts with position markers
 
 ## 📄 License
 
