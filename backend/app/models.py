@@ -574,6 +574,13 @@ class PendingOrder(Base):
     fills = Column(JSON, nullable=True)  # Array of fill records: [{price, base_amount, quote_amount, timestamp}, ...]
     remaining_base_amount = Column(Float, nullable=True)  # Unfilled base amount for partial fills
 
+    # Capital Reservation (for grid trading bots)
+    # These fields track capital locked in pending orders (not yet filled)
+    # Buy orders: reserved_amount_quote = size * limit_price (capital needed to fill)
+    # Sell orders: reserved_amount_base = size (base currency needed)
+    reserved_amount_quote = Column(Float, nullable=False, default=0.0)
+    reserved_amount_base = Column(Float, nullable=False, default=0.0)
+
     # Time-in-force settings (for honoring GTC/GTD on manual orders)
     time_in_force = Column(String, nullable=False, default="gtc")  # "gtc" or "gtd"
     end_time = Column(DateTime, nullable=True)  # For GTD orders - when order expires

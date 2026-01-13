@@ -19,7 +19,7 @@ from typing import Optional
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.models import Bot, Position, Account, User
+from app.models import Bot, Position, Account, User, PendingOrder
 from app.exchange_clients.factory import create_exchange_client
 from app.routers.auth_dependencies import get_current_user_optional
 from app.services import portfolio_conversion_service as pcs
@@ -27,6 +27,80 @@ from app.services import portfolio_conversion_service as pcs
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/account", tags=["account"])
+
+
+async def calculate_available_balance(
+    currency: str,
+    db: AsyncSession,
+    coinbase: CoinbaseClient
+) -> float:
+    """
+    Calculate truly available balance for a specific currency.
+
+    This subtracts capital reserved in:
+    1. Open positions (total_quote_spent)
+    2. Pending orders (reserved_amount_quote/base)
+
+    Args:
+        currency: Currency code (BTC, ETH, USD, USDC, USDT)
+        db: Database session
+        coinbase: Coinbase client instance
+
+    Returns:
+        Available balance (can be used for new bots)
+    """
+    # Get account balance from exchange
+    if currency == "BTC":
+        account_balance = await coinbase.get_btc_balance()
+    elif currency == "ETH":
+        account_balance = await coinbase.get_eth_balance()
+    elif currency == "USD":
+        account_balance = await coinbase.get_usd_balance()
+    elif currency == "USDC":
+        account_balance = await coinbase.get_usdc_balance()
+    elif currency == "USDT":
+        account_balance = await coinbase.get_usdt_balance()
+    else:
+        raise ValueError(f"Unsupported currency: {currency}")
+
+    # Calculate reserved in open positions
+    positions_result = await db.execute(
+        select(Position).where(
+            Position.status == "open",
+            Position.product_id.like(f"%-{currency}")
+        )
+    )
+    open_positions = positions_result.scalars().all()
+    reserved_in_positions = sum(pos.total_quote_spent or 0 for pos in open_positions)
+
+    # Calculate reserved in pending orders
+    # For quote currency (buy orders)
+    pending_quote_result = await db.execute(
+        select(PendingOrder).where(
+            PendingOrder.status == "pending",
+            PendingOrder.side == "BUY",
+            PendingOrder.product_id.like(f"%-{currency}")
+        )
+    )
+    pending_quote_orders = pending_quote_result.scalars().all()
+    reserved_quote = sum(order.reserved_amount_quote or 0 for order in pending_quote_orders)
+
+    # For base currency (sell orders)
+    pending_base_result = await db.execute(
+        select(PendingOrder).where(
+            PendingOrder.status == "pending",
+            PendingOrder.side == "SELL",
+            PendingOrder.product_id.like(f"{currency}-%")
+        )
+    )
+    pending_base_orders = pending_base_result.scalars().all()
+    reserved_base = sum(order.reserved_amount_base or 0 for order in pending_base_orders)
+
+    # Calculate available
+    available = account_balance - reserved_in_positions - reserved_quote - reserved_base
+
+    # Ensure non-negative
+    return max(0, available)
 
 
 async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
@@ -75,9 +149,19 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
 
 @router.get("/balances")
 async def get_balances(db: AsyncSession = Depends(get_db)):
-    """Get current account balances for all quote currencies"""
+    """
+    Get current account balances for all quote currencies with capital reservation tracking.
+
+    Returns:
+    - Account balances from exchange (what you have in your account)
+    - Reserved capital in open positions (locked in active trades)
+    - Reserved capital in pending orders (locked in grid bot limit orders)
+    - Available balance (what you can use for new bots)
+    """
     try:
         coinbase = await get_coinbase_from_db(db)
+
+        # Get account balances from Coinbase
         btc_balance = await coinbase.get_btc_balance()
         eth_balance = await coinbase.get_eth_balance()
         usd_balance = await coinbase.get_usd_balance()
@@ -86,15 +170,77 @@ async def get_balances(db: AsyncSession = Depends(get_db)):
         current_price = await coinbase.get_current_price()
         btc_usd_price = await coinbase.get_btc_usd_price()
 
+        # Calculate reserved capital in OPEN POSITIONS (by quote currency)
+        positions_result = await db.execute(
+            select(Position).where(Position.status == "open")
+        )
+        open_positions = positions_result.scalars().all()
+
+        reserved_in_positions = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
+        for pos in open_positions:
+            if pos.product_id and "-" in pos.product_id:
+                quote_currency = pos.product_id.split("-")[1]
+                if quote_currency in reserved_in_positions and pos.total_quote_spent:
+                    reserved_in_positions[quote_currency] += pos.total_quote_spent
+
+        # Calculate reserved capital in PENDING ORDERS (by currency)
+        pending_result = await db.execute(
+            select(PendingOrder).where(PendingOrder.status == "pending")
+        )
+        pending_orders = pending_result.scalars().all()
+
+        reserved_in_pending_orders = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
+        for order in pending_orders:
+            # For buy orders: reserved quote currency
+            if order.side == "BUY" and order.product_id and "-" in order.product_id:
+                quote_currency = order.product_id.split("-")[1]
+                if quote_currency in reserved_in_pending_orders and order.reserved_amount_quote:
+                    reserved_in_pending_orders[quote_currency] += order.reserved_amount_quote
+
+            # For sell orders: reserved base currency
+            elif order.side == "SELL" and order.product_id and "-" in order.product_id:
+                base_currency = order.product_id.split("-")[0]
+                if base_currency in reserved_in_pending_orders and order.reserved_amount_base:
+                    reserved_in_pending_orders[base_currency] += order.reserved_amount_base
+
+        # Calculate truly AVAILABLE balances (what can be used for new bots)
+        # Available = Account Balance - Reserved in Positions - Reserved in Pending Orders
+        available_btc = btc_balance - reserved_in_positions["BTC"] - reserved_in_pending_orders["BTC"]
+        available_eth = eth_balance - reserved_in_positions["ETH"] - reserved_in_pending_orders["ETH"]
+        available_usd = usd_balance - reserved_in_positions["USD"] - reserved_in_pending_orders["USD"]
+        available_usdc = usdc_balance - reserved_in_positions["USDC"] - reserved_in_pending_orders["USDC"]
+        available_usdt = usdt_balance - reserved_in_positions["USDT"] - reserved_in_pending_orders["USDT"]
+
+        # Ensure no negative available balances (edge case protection)
+        available_btc = max(0, available_btc)
+        available_eth = max(0, available_eth)
+        available_usd = max(0, available_usd)
+        available_usdc = max(0, available_usdc)
+        available_usdt = max(0, available_usdt)
+
         total_btc_value = btc_balance + (eth_balance * current_price)
         total_usd_value = (total_btc_value * btc_usd_price) + usd_balance + usdc_balance + usdt_balance
 
         return {
+            # Account balances (from exchange)
             "btc": btc_balance,
             "eth": eth_balance,
             "usd": usd_balance,
             "usdc": usdc_balance,
             "usdt": usdt_balance,
+
+            # Reserved capital tracking
+            "reserved_in_positions": reserved_in_positions,
+            "reserved_in_pending_orders": reserved_in_pending_orders,
+
+            # Available balances (for new bots)
+            "available_btc": available_btc,
+            "available_eth": available_eth,
+            "available_usd": available_usd,
+            "available_usdc": available_usdc,
+            "available_usdt": available_usdt,
+
+            # Calculated values
             "eth_value_in_btc": eth_balance * current_price,
             "total_btc_value": total_btc_value,
             "current_eth_btc_price": current_price,
@@ -102,6 +248,7 @@ async def get_balances(db: AsyncSession = Depends(get_db)):
             "total_usd_value": total_usd_value,
         }
     except Exception as e:
+        logger.error(f"Error getting balances: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
