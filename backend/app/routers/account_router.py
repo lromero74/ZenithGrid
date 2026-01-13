@@ -75,11 +75,12 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
 
 @router.get("/balances")
 async def get_balances(db: AsyncSession = Depends(get_db)):
-    """Get current account balances"""
+    """Get current account balances for all quote currencies"""
     try:
         coinbase = await get_coinbase_from_db(db)
         btc_balance = await coinbase.get_btc_balance()
         eth_balance = await coinbase.get_eth_balance()
+        usd_balance = await coinbase.get_usd_balance()
         current_price = await coinbase.get_current_price()
         btc_usd_price = await coinbase.get_btc_usd_price()
 
@@ -88,11 +89,12 @@ async def get_balances(db: AsyncSession = Depends(get_db)):
         return {
             "btc": btc_balance,
             "eth": eth_balance,
+            "usd": usd_balance,
             "eth_value_in_btc": eth_balance * current_price,
             "total_btc_value": total_btc_value,
             "current_eth_btc_price": current_price,
             "btc_usd_price": btc_usd_price,
-            "total_usd_value": total_btc_value * btc_usd_price,
+            "total_usd_value": (total_btc_value * btc_usd_price) + usd_balance,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

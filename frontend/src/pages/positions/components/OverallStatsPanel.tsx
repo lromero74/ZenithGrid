@@ -11,6 +11,7 @@ interface CompletedStats {
 interface Balances {
   btc: number
   eth: number
+  usd: number
   eth_value_in_btc: number
   total_btc_value: number
   current_eth_btc_price: number
@@ -21,7 +22,7 @@ interface Balances {
 interface OverallStatsPanelProps {
   stats: {
     activeTrades: number
-    fundsLocked: number
+    reservedByQuote: Record<string, number>
     uPnL: number
     uPnLUSD: number
   }
@@ -43,13 +44,15 @@ export const OverallStatsPanel = ({ stats, completedStats, balances, onRefreshBa
               <span className="text-white font-medium">{stats.activeTrades}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Funds locked in DCA bot trades:</span>
-              <span className="text-white font-medium">{stats.fundsLocked.toFixed(8)} BTC</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">uPnL of active Bot trades:</span>
+              <span className="text-slate-400">uPnL of active trades (BTC):</span>
               <span className={`font-medium ${stats.uPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {stats.uPnL >= 0 ? '+' : ''}{stats.uPnL.toFixed(8)} BTC
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">uPnL of active trades (USD):</span>
+              <span className={`font-medium ${stats.uPnLUSD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
               </span>
             </div>
           </div>
@@ -104,19 +107,69 @@ export const OverallStatsPanel = ({ stats, completedStats, balances, onRefreshBa
             </button>
           </h3>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between text-slate-400">
-              <span>Reserved</span>
-              <span>Available</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-300">BTC</span>
+            <div className="flex justify-between text-slate-400 text-xs">
+              <span>Currency</span>
               <div className="flex gap-4">
-                <span className="text-white">{stats.fundsLocked.toFixed(8)}</span>
-                <span className="text-white">
-                  {balances ? balances.btc.toFixed(8) : '...'}
-                </span>
+                <span className="w-24 text-right" title="Funds locked in active positions">Reserved</span>
+                <span className="w-24 text-right" title="Available balance in account">Available</span>
               </div>
             </div>
+            {/* BTC */}
+            {(stats.reservedByQuote['BTC'] > 0 || (balances && balances.btc > 0)) && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">BTC</span>
+                <div className="flex gap-4">
+                  <span className="text-white w-24 text-right font-mono text-xs">
+                    {(stats.reservedByQuote['BTC'] || 0).toFixed(8)}
+                  </span>
+                  <span className="text-white w-24 text-right font-mono text-xs">
+                    {balances ? balances.btc.toFixed(8) : '...'}
+                  </span>
+                </div>
+              </div>
+            )}
+            {/* USD */}
+            {(stats.reservedByQuote['USD'] > 0 || (balances && balances.usd > 0)) && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">USD</span>
+                <div className="flex gap-4">
+                  <span className="text-white w-24 text-right font-mono text-xs">
+                    ${(stats.reservedByQuote['USD'] || 0).toFixed(2)}
+                  </span>
+                  <span className="text-white w-24 text-right font-mono text-xs">
+                    {balances ? `$${balances.usd.toFixed(2)}` : '...'}
+                  </span>
+                </div>
+              </div>
+            )}
+            {/* USDC */}
+            {stats.reservedByQuote['USDC'] > 0 && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">USDC</span>
+                <div className="flex gap-4">
+                  <span className="text-white w-24 text-right font-mono text-xs">
+                    ${(stats.reservedByQuote['USDC'] || 0).toFixed(2)}
+                  </span>
+                  <span className="text-slate-400 w-24 text-right font-mono text-xs italic">
+                    N/A
+                  </span>
+                </div>
+              </div>
+            )}
+            {/* USDT */}
+            {stats.reservedByQuote['USDT'] > 0 && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">USDT</span>
+                <div className="flex gap-4">
+                  <span className="text-white w-24 text-right font-mono text-xs">
+                    ${(stats.reservedByQuote['USDT'] || 0).toFixed(2)}
+                  </span>
+                  <span className="text-slate-400 w-24 text-right font-mono text-xs italic">
+                    N/A
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

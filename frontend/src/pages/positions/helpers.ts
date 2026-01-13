@@ -27,7 +27,18 @@ export const calculateUnrealizedPnL = (position: Position, currentPrice?: number
  * Calculate overall statistics for all open positions
  */
 export const calculateOverallStats = (openPositions: (Position & { _cachedPnL?: any })[]) => {
-  const totalFundsLocked = openPositions.reduce((sum, pos) => sum + pos.total_quote_spent, 0)
+  // Calculate reserved (locked) funds by quote currency
+  const reservedByQuote: Record<string, number> = {}
+
+  openPositions.forEach(pos => {
+    // Extract quote currency from product_id (e.g., "ETH-BTC" -> "BTC", "BTC-USD" -> "USD")
+    const quoteCurrency = pos.product_id?.split('-')[1] || 'BTC'
+    if (!reservedByQuote[quoteCurrency]) {
+      reservedByQuote[quoteCurrency] = 0
+    }
+    reservedByQuote[quoteCurrency] += pos.total_quote_spent
+  })
+
   const totalUPnL = openPositions.reduce((sum, pos) => {
     return sum + (pos._cachedPnL?.btc || 0)
   }, 0)
@@ -37,7 +48,7 @@ export const calculateOverallStats = (openPositions: (Position & { _cachedPnL?: 
 
   return {
     activeTrades: openPositions.length,
-    fundsLocked: totalFundsLocked,
+    reservedByQuote, // Reserved funds broken down by quote currency
     uPnL: totalUPnL,
     uPnLUSD: totalUPnLUSD
   }
