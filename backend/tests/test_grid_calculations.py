@@ -27,8 +27,10 @@ class TestArithmeticGrid:
         assert levels[0] == pytest.approx(45.0)
         assert levels[-1] == pytest.approx(55.0)
 
-        # Check middle level
-        assert levels[4] == pytest.approx(50.0, abs=0.01)
+        # Check a level near the middle (index 5 is middle of 0-9)
+        step_size = (55.0 - 45.0) / 9
+        expected_level_5 = 45.0 + (5 * step_size)
+        assert levels[5] == pytest.approx(expected_level_5, abs=0.01)
 
         # Check equal spacing
         step_size = (55.0 - 45.0) / 9
@@ -246,9 +248,9 @@ class TestGridLevelComparison:
         arith_levels = calculate_arithmetic_levels(lower, upper, num_levels)
         geom_levels = calculate_geometric_levels(lower, upper, num_levels)
 
-        # Both should have same first and last levels
-        assert arith_levels[0] == geom_levels[0]
-        assert arith_levels[-1] == geom_levels[-1]
+        # Both should have same first and last levels (within floating point precision)
+        assert arith_levels[0] == pytest.approx(geom_levels[0])
+        assert arith_levels[-1] == pytest.approx(geom_levels[-1], rel=1e-9)
 
         # Middle levels should differ
         # Geometric should have lower middle values (tighter spacing at bottom)
