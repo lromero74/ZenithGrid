@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { BarChart3, Building2, Wallet } from 'lucide-react'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import type { Position } from '../types'
@@ -9,6 +10,7 @@ import { LimitCloseModal } from '../components/LimitCloseModal'
 import { SlippageWarningModal } from '../components/SlippageWarningModal'
 import { EditPositionSettingsModal } from '../components/EditPositionSettingsModal'
 import { AddFundsModal } from '../components/AddFundsModal'
+import { positionsApi } from '../services/api'
 import { usePositionsData } from './positions/hooks/usePositionsData'
 import { usePositionMutations } from './positions/hooks/usePositionMutations'
 import { usePositionFilters } from './positions/hooks/usePositionFilters'
@@ -93,6 +95,13 @@ export default function Positions() {
     selectedPosition,
     tradeHistoryPosition,
     showTradeHistoryModal,
+  })
+
+  // Fetch completed trades statistics
+  const { data: completedStats } = useQuery({
+    queryKey: ['completed-trades-stats', selectedAccount?.id],
+    queryFn: () => positionsApi.getCompletedStats(selectedAccount?.id),
+    refetchInterval: 60000, // Refresh every minute
   })
 
   // Handler functions
@@ -187,7 +196,7 @@ export default function Positions() {
         </div>
 
         {/* Overall Stats Panel - 3Commas Style */}
-        <OverallStatsPanel stats={stats} />
+        <OverallStatsPanel stats={stats} completedStats={completedStats} />
 
         {/* Filters - 3Commas Style (Account, Bot, Pair) */}
         <FilterPanel

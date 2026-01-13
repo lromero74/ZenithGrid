@@ -267,6 +267,100 @@ async def get_pnl_timeseries(
     }
 
 
+@router.get("/completed/stats")
+async def get_completed_trades_stats(
+    account_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Get completed trades profit statistics.
+
+    Returns statistics for closed positions including:
+    - Total profit (BTC and USD)
+    - Win rate
+    - Total completed trades count
+    - Average profit per trade
+    """
+    # Get closed positions
+    query = select(Position).where(
+        Position.status == "closed",
+        Position.closed_at is not None
+    )
+
+    # Filter by user's accounts if authenticated
+    if current_user:
+        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+        accounts_result = await db.execute(accounts_query)
+        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        if user_account_ids:
+            query = query.where(Position.account_id.in_(user_account_ids))
+        else:
+            return {
+                "total_profit_btc": 0.0,
+                "total_profit_usd": 0.0,
+                "win_rate": 0.0,
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "average_profit_usd": 0.0,
+            }
+
+    # Filter by account_id if provided
+    if account_id is not None:
+        query = query.where(Position.account_id == account_id)
+
+    result = await db.execute(query)
+    positions = result.scalars().all()
+
+    if not positions:
+        return {
+            "total_profit_btc": 0.0,
+            "total_profit_usd": 0.0,
+            "win_rate": 0.0,
+            "total_trades": 0,
+            "winning_trades": 0,
+            "losing_trades": 0,
+            "average_profit_usd": 0.0,
+        }
+
+    # Calculate statistics
+    total_trades = len(positions)
+    total_profit_btc = 0.0
+    total_profit_usd = 0.0
+    winning_trades = 0
+    losing_trades = 0
+
+    for pos in positions:
+        # BTC profit (from BTC pairs where quote currency is BTC)
+        if pos.profit_quote is not None and pos.product_id and '-BTC' in pos.product_id:
+            total_profit_btc += pos.profit_quote
+
+        # USD profit
+        if pos.profit_usd is not None:
+            total_profit_usd += pos.profit_usd
+            if pos.profit_usd > 0:
+                winning_trades += 1
+            elif pos.profit_usd < 0:
+                losing_trades += 1
+
+    # Calculate win rate
+    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
+
+    # Calculate average profit
+    average_profit_usd = total_profit_usd / total_trades if total_trades > 0 else 0.0
+
+    return {
+        "total_profit_btc": round(total_profit_btc, 8),
+        "total_profit_usd": round(total_profit_usd, 2),
+        "win_rate": round(win_rate, 2),
+        "total_trades": total_trades,
+        "winning_trades": winning_trades,
+        "losing_trades": losing_trades,
+        "average_profit_usd": round(average_profit_usd, 2),
+    }
+
+
 @router.get("/{position_id}", response_model=PositionResponse)
 async def get_position(
     position_id: int,

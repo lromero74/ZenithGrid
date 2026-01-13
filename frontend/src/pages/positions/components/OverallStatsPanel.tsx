@@ -1,3 +1,13 @@
+interface CompletedStats {
+  total_profit_btc: number
+  total_profit_usd: number
+  win_rate: number
+  total_trades: number
+  winning_trades: number
+  losing_trades: number
+  average_profit_usd: number
+}
+
 interface OverallStatsPanelProps {
   stats: {
     activeTrades: number
@@ -5,9 +15,10 @@ interface OverallStatsPanelProps {
     uPnL: number
     uPnLUSD: number
   }
+  completedStats?: CompletedStats
 }
 
-export const OverallStatsPanel = ({ stats }: OverallStatsPanelProps) => {
+export const OverallStatsPanel = ({ stats, completedStats }: OverallStatsPanelProps) => {
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -32,11 +43,40 @@ export const OverallStatsPanel = ({ stats }: OverallStatsPanelProps) => {
           </div>
         </div>
 
-        {/* Completed Trades Profit (placeholder for now) */}
+        {/* Completed Trades Profit */}
         <div>
           <h3 className="text-sm font-semibold text-slate-300 mb-3">Completed trades profit</h3>
           <div className="space-y-2 text-sm">
-            <div className="text-slate-400">Coming soon...</div>
+            {completedStats ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Total profit (USD):</span>
+                  <span className={`font-medium ${completedStats.total_profit_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    ${completedStats.total_profit_usd.toFixed(2)}
+                  </span>
+                </div>
+                {completedStats.total_profit_btc !== 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Total profit (BTC):</span>
+                    <span className={`font-medium ${completedStats.total_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {completedStats.total_profit_btc >= 0 ? '+' : ''}{completedStats.total_profit_btc.toFixed(8)} BTC
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Completed trades:</span>
+                  <span className="text-white font-medium">{completedStats.total_trades}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Win rate:</span>
+                  <span className={`font-medium ${completedStats.win_rate >= 50 ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {completedStats.win_rate.toFixed(1)}% ({completedStats.winning_trades}W / {completedStats.losing_trades}L)
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="text-slate-400">Loading...</div>
+            )}
           </div>
         </div>
 

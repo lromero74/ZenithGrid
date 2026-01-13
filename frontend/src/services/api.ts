@@ -81,6 +81,16 @@ export const positionsApi = {
   updateSettings: (id: number, settings: UpdatePositionSettingsRequest) =>
     api.patch<{ message: string; updated_fields: string[]; new_config: Record<string, unknown> }>(`/positions/${id}/settings`, settings)
       .then((res) => res.data),
+  getCompletedStats: (accountId?: number) =>
+    api.get<{
+      total_profit_btc: number;
+      total_profit_usd: number;
+      win_rate: number;
+      total_trades: number;
+      winning_trades: number;
+      losing_trades: number;
+      average_profit_usd: number;
+    }>('/positions/completed/stats', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),
 };
 
 export const tradesApi = {
