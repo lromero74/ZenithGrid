@@ -81,20 +81,25 @@ async def get_balances(db: AsyncSession = Depends(get_db)):
         btc_balance = await coinbase.get_btc_balance()
         eth_balance = await coinbase.get_eth_balance()
         usd_balance = await coinbase.get_usd_balance()
+        usdc_balance = await coinbase.get_usdc_balance()
+        usdt_balance = await coinbase.get_usdt_balance()
         current_price = await coinbase.get_current_price()
         btc_usd_price = await coinbase.get_btc_usd_price()
 
         total_btc_value = btc_balance + (eth_balance * current_price)
+        total_usd_value = (total_btc_value * btc_usd_price) + usd_balance + usdc_balance + usdt_balance
 
         return {
             "btc": btc_balance,
             "eth": eth_balance,
             "usd": usd_balance,
+            "usdc": usdc_balance,
+            "usdt": usdt_balance,
             "eth_value_in_btc": eth_balance * current_price,
             "total_btc_value": total_btc_value,
             "current_eth_btc_price": current_price,
             "btc_usd_price": btc_usd_price,
-            "total_usd_value": (total_btc_value * btc_usd_price) + usd_balance,
+            "total_usd_value": total_usd_value,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

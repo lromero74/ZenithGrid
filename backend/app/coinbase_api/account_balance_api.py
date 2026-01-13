@@ -191,11 +191,51 @@ async def get_usd_balance(request_func: Callable) -> float:
     return balance
 
 
+async def get_usdc_balance(request_func: Callable) -> float:
+    """Get USDC balance (cached to reduce API calls)"""
+    cache_key = "balance_usdc"
+    cached = await api_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    accounts = await get_accounts(request_func)
+    balance = 0.0
+    for account in accounts:
+        if account.get("currency") == "USDC":
+            available = account.get("available_balance", {})
+            balance = float(available.get("value", 0))
+            break
+
+    await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
+    return balance
+
+
+async def get_usdt_balance(request_func: Callable) -> float:
+    """Get USDT balance (cached to reduce API calls)"""
+    cache_key = "balance_usdt"
+    cached = await api_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    accounts = await get_accounts(request_func)
+    balance = 0.0
+    for account in accounts:
+        if account.get("currency") == "USDT":
+            available = account.get("available_balance", {})
+            balance = float(available.get("value", 0))
+            break
+
+    await api_cache.set(cache_key, balance, BALANCE_CACHE_TTL)
+    return balance
+
+
 async def invalidate_balance_cache():
     """Invalidate balance cache (call after trades)"""
     await api_cache.delete("balance_btc")
     await api_cache.delete("balance_eth")
     await api_cache.delete("balance_usd")
+    await api_cache.delete("balance_usdc")
+    await api_cache.delete("balance_usdt")
     await api_cache.delete("accounts_list")
     await api_cache.delete("aggregate_btc_value")
     await api_cache.delete("aggregate_usd_value")

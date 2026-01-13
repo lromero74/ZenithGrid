@@ -12,6 +12,8 @@ interface Balances {
   btc: number
   eth: number
   usd: number
+  usdc: number
+  usdt: number
   eth_value_in_btc: number
   total_btc_value: number
   current_eth_btc_price: number
@@ -114,62 +116,66 @@ export const OverallStatsPanel = ({ stats, completedStats, balances, onRefreshBa
                 <span className="w-24 text-right" title="Available balance in account">Available</span>
               </div>
             </div>
-            {/* BTC */}
-            {(stats.reservedByQuote['BTC'] > 0 || (balances && balances.btc > 0)) && (
-              <div className="flex justify-between">
-                <span className="text-slate-300">BTC</span>
-                <div className="flex gap-4">
-                  <span className="text-white w-24 text-right font-mono text-xs">
-                    {(stats.reservedByQuote['BTC'] || 0).toFixed(8)}
-                  </span>
-                  <span className="text-white w-24 text-right font-mono text-xs">
-                    {balances ? balances.btc.toFixed(8) : '...'}
-                  </span>
-                </div>
+            {/* BTC - Always show */}
+            <div className="flex justify-between">
+              <span className="text-slate-300">BTC</span>
+              <div className="flex gap-4">
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  {(stats.reservedByQuote['BTC'] || 0).toFixed(8)}
+                </span>
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  {balances ? balances.btc.toFixed(8) : '...'}
+                </span>
               </div>
-            )}
-            {/* USD */}
-            {(stats.reservedByQuote['USD'] > 0 || (balances && balances.usd > 0)) && (
-              <div className="flex justify-between">
-                <span className="text-slate-300">USD</span>
-                <div className="flex gap-4">
-                  <span className="text-white w-24 text-right font-mono text-xs">
-                    ${(stats.reservedByQuote['USD'] || 0).toFixed(2)}
-                  </span>
-                  <span className="text-white w-24 text-right font-mono text-xs">
-                    {balances ? `$${balances.usd.toFixed(2)}` : '...'}
-                  </span>
-                </div>
+            </div>
+            {/* ETH - Always show */}
+            <div className="flex justify-between">
+              <span className="text-slate-300">ETH</span>
+              <div className="flex gap-4">
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  {(stats.reservedByQuote['ETH'] || 0).toFixed(6)}
+                </span>
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  {balances ? balances.eth.toFixed(6) : '...'}
+                </span>
               </div>
-            )}
-            {/* USDC */}
-            {stats.reservedByQuote['USDC'] > 0 && (
-              <div className="flex justify-between">
-                <span className="text-slate-300">USDC</span>
-                <div className="flex gap-4">
-                  <span className="text-white w-24 text-right font-mono text-xs">
-                    ${(stats.reservedByQuote['USDC'] || 0).toFixed(2)}
-                  </span>
-                  <span className="text-slate-400 w-24 text-right font-mono text-xs italic">
-                    N/A
-                  </span>
-                </div>
+            </div>
+            {/* USD - Always show */}
+            <div className="flex justify-between">
+              <span className="text-slate-300">USD</span>
+              <div className="flex gap-4">
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  ${(stats.reservedByQuote['USD'] || 0).toFixed(2)}
+                </span>
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  {balances ? `$${balances.usd.toFixed(2)}` : '...'}
+                </span>
               </div>
-            )}
-            {/* USDT */}
-            {stats.reservedByQuote['USDT'] > 0 && (
-              <div className="flex justify-between">
-                <span className="text-slate-300">USDT</span>
-                <div className="flex gap-4">
-                  <span className="text-white w-24 text-right font-mono text-xs">
-                    ${(stats.reservedByQuote['USDT'] || 0).toFixed(2)}
-                  </span>
-                  <span className="text-slate-400 w-24 text-right font-mono text-xs italic">
-                    N/A
-                  </span>
-                </div>
+            </div>
+            {/* USDC - Always show */}
+            <div className="flex justify-between">
+              <span className="text-slate-300">USDC</span>
+              <div className="flex gap-4">
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  ${(stats.reservedByQuote['USDC'] || 0).toFixed(2)}
+                </span>
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  {balances ? `$${balances.usdc.toFixed(2)}` : '...'}
+                </span>
               </div>
-            )}
+            </div>
+            {/* USDT - Always show */}
+            <div className="flex justify-between">
+              <span className="text-slate-300">USDT</span>
+              <div className="flex gap-4">
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  ${(stats.reservedByQuote['USDT'] || 0).toFixed(2)}
+                </span>
+                <span className="text-white w-24 text-right font-mono text-xs">
+                  {balances ? `$${balances.usdt.toFixed(2)}` : '...'}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

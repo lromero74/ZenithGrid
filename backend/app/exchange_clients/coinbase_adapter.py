@@ -62,6 +62,14 @@ class CoinbaseAdapter(ExchangeClient):
         """Get available USD balance."""
         return await self._client.get_usd_balance()
 
+    async def get_usdc_balance(self) -> float:
+        """Get available USDC balance."""
+        return await self._client.get_usdc_balance()
+
+    async def get_usdt_balance(self) -> float:
+        """Get available USDT balance."""
+        return await self._client.get_usdt_balance()
+
     async def get_balance(self, currency: str) -> Dict[str, Any]:
         """
         Get balance for a specific currency.

@@ -160,6 +160,14 @@ class CoinbaseClient:
         """Get USD balance"""
         return await account_balance_api.get_usd_balance(self._request)
 
+    async def get_usdc_balance(self) -> float:
+        """Get USDC balance"""
+        return await account_balance_api.get_usdc_balance(self._request)
+
+    async def get_usdt_balance(self) -> float:
+        """Get USDT balance"""
+        return await account_balance_api.get_usdt_balance(self._request)
+
     async def invalidate_balance_cache(self):
         """Invalidate balance cache (call after trades)"""
         await account_balance_api.invalidate_balance_cache()
