@@ -461,8 +461,253 @@ async def handle_grid_order_fill(
     return None
 
 
+async def rebalance_grid_on_breakout(
+    bot: Bot,
+    position: Position,
+    exchange_client: ExchangeClient,
+    db: AsyncSession,
+    breakout_direction: str,
+    current_price: float,
+    new_levels: List[float],
+    new_upper: float,
+    new_lower: float,
+) -> Dict[str, Any]:
+    """
+    Rebalance grid after price breakout.
+
+    This function:
+    1. Cancels all unfilled orders in old range
+    2. Updates grid range to new bounds
+    3. Places new orders in new range
+    4. Updates grid_state with breakout info
+
+    Args:
+        bot: Bot instance
+        position: Position with grid state
+        exchange_client: Exchange client
+        db: Database session
+        breakout_direction: "upward" or "downward"
+        current_price: Current market price
+        new_levels: New grid price levels
+        new_upper: New upper range limit
+        new_lower: New lower range limit
+
+    Returns:
+        Updated grid_state dict
+    """
+    logger.warning(f"🔄 REBALANCING GRID: {breakout_direction} breakout detected")
+    logger.info(f"   Old range: {bot.bot_config['grid_state']['current_range_lower']:.8f} - {bot.bot_config['grid_state']['current_range_upper']:.8f}")
+    logger.info(f"   New range: {new_lower:.8f} - {new_upper:.8f}")
+    logger.info(f"   Current price: {current_price:.8f}")
+
+    # Step 1: Cancel all unfilled orders in old range
+    cancelled_count = await cancel_grid_orders(
+        bot=bot,
+        position=position,
+        exchange_client=exchange_client,
+        db=db,
+        reason=f"{breakout_direction}_breakout"
+    )
+
+    logger.info(f"   Cancelled {cancelled_count} old orders")
+
+    # Step 2: Calculate new grid configuration
+    grid_mode = bot.bot_config.get("grid_mode", "neutral")
+    grid_type = bot.bot_config.get("grid_type", "arithmetic")
+
+    # Keep same investment amount
+    total_investment = bot.bot_config.get("total_investment_quote", 0)
+
+    # Build new grid config
+    new_grid_config = {
+        "grid_mode": grid_mode,
+        "grid_type": grid_type,
+        "upper_limit": new_upper,
+        "lower_limit": new_lower,
+        "levels": new_levels,
+    }
+
+    # Step 3: Place new grid orders in new range
+    logger.info(f"   Placing {len(new_levels)} new grid levels...")
+
+    new_grid_state = await initialize_grid(
+        bot=bot,
+        position=position,
+        exchange_client=exchange_client,
+        db=db,
+        grid_config=new_grid_config,
+        current_price=current_price,
+    )
+
+    # Step 4: Update grid state with rebalance info
+    old_grid_state = bot.bot_config.get("grid_state", {})
+    new_grid_state["breakout_count"] = old_grid_state.get("breakout_count", 0) + 1
+    new_grid_state["last_breakout_direction"] = breakout_direction
+    new_grid_state["last_breakout_time"] = datetime.utcnow().isoformat()
+    new_grid_state["previous_range_upper"] = old_grid_state.get("current_range_upper")
+    new_grid_state["previous_range_lower"] = old_grid_state.get("current_range_lower")
+
+    # Update bot config with new grid state
+    bot.bot_config["grid_state"] = new_grid_state
+
+    # Commit bot config update
+    await db.commit()
+
+    logger.info(f"✅ Grid rebalanced successfully! Breakout count: {new_grid_state['breakout_count']}")
+
+    return new_grid_state
+
+
+def calculate_new_range_after_breakout(
+    old_upper: float,
+    old_lower: float,
+    current_price: float,
+    breakout_direction: str,
+    range_expansion_factor: float = 1.2,
+) -> Tuple[float, float]:
+    """
+    Calculate new grid range after a breakout.
+
+    Strategy:
+    - Upward breakout: Shift range upward, maintain width
+    - Downward breakout: Shift range downward, maintain width
+    - Optionally expand range by factor to reduce future breakouts
+
+    Args:
+        old_upper: Previous upper limit
+        old_lower: Previous lower limit
+        current_price: Current market price
+        breakout_direction: "upward" or "downward"
+        range_expansion_factor: Multiplier for range width (default 1.2 = 20% wider)
+
+    Returns:
+        Tuple of (new_upper, new_lower)
+
+    Example:
+        Old range: 45-55 (width=10)
+        Current price: 58 (upward breakout)
+        Expansion: 1.2
+        New width: 10 * 1.2 = 12
+        New range: Center around 58 ± 6 = 52-64
+    """
+    old_width = old_upper - old_lower
+    new_width = old_width * range_expansion_factor
+
+    if breakout_direction == "upward":
+        # Shift range upward, centered on current price
+        new_upper = current_price + (new_width / 2)
+        new_lower = current_price - (new_width / 2)
+
+    elif breakout_direction == "downward":
+        # Shift range downward, centered on current price
+        new_upper = current_price + (new_width / 2)
+        new_lower = current_price - (new_width / 2)
+
+    else:
+        raise ValueError(f"Invalid breakout_direction: {breakout_direction}")
+
+    # Ensure lower bound is positive
+    new_lower = max(new_lower, current_price * 0.3)
+
+    logger.debug(f"Range calculation: {old_lower:.8f}-{old_upper:.8f} → {new_lower:.8f}-{new_upper:.8f}")
+
+    return (new_upper, new_lower)
+
+
+async def detect_and_handle_breakout(
+    bot: Bot,
+    position: Position,
+    exchange_client: ExchangeClient,
+    db: AsyncSession,
+    current_price: float,
+) -> bool:
+    """
+    Check for breakout and rebalance grid if needed.
+
+    This should be called periodically during bot execution to monitor for breakouts.
+
+    Args:
+        bot: Bot instance with grid_state
+        position: Position tracking the grid
+        exchange_client: Exchange client
+        db: Database session
+        current_price: Current market price
+
+    Returns:
+        True if breakout detected and handled, False otherwise
+    """
+    if not bot.bot_config.get("enable_dynamic_adjustment", True):
+        return False
+
+    grid_state = bot.bot_config.get("grid_state", {})
+    if not grid_state:
+        # Grid not initialized yet
+        return False
+
+    current_upper = grid_state.get("current_range_upper")
+    current_lower = grid_state.get("current_range_lower")
+
+    if not current_upper or not current_lower:
+        return False
+
+    # Check breakout threshold
+    threshold_pct = bot.bot_config.get("breakout_threshold_percent", 5.0)
+    threshold = threshold_pct / 100
+
+    breakout_direction = None
+
+    if current_price > current_upper * (1 + threshold):
+        breakout_direction = "upward"
+    elif current_price < current_lower * (1 - threshold):
+        breakout_direction = "downward"
+
+    if not breakout_direction:
+        return False  # No breakout
+
+    # Breakout detected - rebalance grid
+    logger.warning(f"⚠️  BREAKOUT DETECTED: {breakout_direction}")
+
+    # Calculate new range
+    new_upper, new_lower = calculate_new_range_after_breakout(
+        old_upper=current_upper,
+        old_lower=current_lower,
+        current_price=current_price,
+        breakout_direction=breakout_direction,
+        range_expansion_factor=1.2,  # 20% wider to reduce future breakouts
+    )
+
+    # Recalculate grid levels with same spacing type
+    grid_type = bot.bot_config.get("grid_type", "arithmetic")
+    num_levels = bot.bot_config.get("num_grid_levels", 20)
+
+    if grid_type == "arithmetic":
+        from app.strategies.grid_trading import calculate_arithmetic_levels
+        new_levels = calculate_arithmetic_levels(new_lower, new_upper, num_levels)
+    else:
+        from app.strategies.grid_trading import calculate_geometric_levels
+        new_levels = calculate_geometric_levels(new_lower, new_upper, num_levels)
+
+    # Rebalance the grid
+    await rebalance_grid_on_breakout(
+        bot=bot,
+        position=position,
+        exchange_client=exchange_client,
+        db=db,
+        breakout_direction=breakout_direction,
+        current_price=current_price,
+        new_levels=new_levels,
+        new_upper=new_upper,
+        new_lower=new_lower,
+    )
+
+    return True
+
+
 __all__ = [
     "initialize_grid",
     "cancel_grid_orders",
     "handle_grid_order_fill",
+    "rebalance_grid_on_breakout",
+    "calculate_new_range_after_breakout",
+    "detect_and_handle_breakout",
 ]
