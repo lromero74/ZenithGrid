@@ -7,10 +7,10 @@ export interface BotFormData {
   product_id: string  // Legacy - kept for backward compatibility
   product_ids: string[]  // Multi-pair support
   split_budget_across_pairs: boolean  // Budget splitting toggle
-  reserved_btc_balance: number  // BTC allocated to this bot (legacy)
-  reserved_usd_balance: number  // USD allocated to this bot (legacy)
-  budget_percentage: number  // % of aggregate portfolio value (preferred)
-  check_interval_seconds: number  // How often bot monitors positions
+  reserved_btc_balance: number | undefined  // BTC allocated to this bot (legacy)
+  reserved_usd_balance: number | undefined  // USD allocated to this bot (legacy)
+  budget_percentage: number | undefined  // % of aggregate portfolio value (preferred)
+  check_interval_seconds: number | undefined  // How often bot monitors positions
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   strategy_config: Record<string, any>
   // DEX-specific fields

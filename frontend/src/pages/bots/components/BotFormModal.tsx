@@ -183,6 +183,12 @@ export function BotFormModal({
       return
     }
 
+    // Ensure numeric fields have valid defaults if undefined
+    const check_interval_seconds = formData.check_interval_seconds ?? 300
+    const reserved_btc_balance = formData.reserved_btc_balance ?? 0
+    const reserved_usd_balance = formData.reserved_usd_balance ?? 0
+    const budget_percentage = formData.budget_percentage ?? 0
+
     const botData: any = {
       name: formData.name,
       description: formData.description || undefined,
@@ -191,10 +197,10 @@ export function BotFormModal({
       product_id: formData.product_ids[0],  // Legacy - use first pair
       product_ids: formData.product_ids,  // Multi-pair support
       split_budget_across_pairs: formData.split_budget_across_pairs,  // Budget splitting option
-      reserved_btc_balance: formData.reserved_btc_balance,
-      reserved_usd_balance: formData.reserved_usd_balance,
-      budget_percentage: formData.budget_percentage,
-      check_interval_seconds: formData.check_interval_seconds,  // Monitoring interval
+      reserved_btc_balance,
+      reserved_usd_balance,
+      budget_percentage,
+      check_interval_seconds,  // Monitoring interval
       strategy_config: formData.strategy_config,
       // DEX configuration fields
       exchange_type: formData.exchange_type,
@@ -697,7 +703,7 @@ export function BotFormModal({
                                 const currentCategories = formData.strategy_config?.allowed_categories || ['APPROVED', 'BORDERLINE']
                                 const newCategories = e.target.checked
                                   ? [...currentCategories, category.value]
-                                  : currentCategories.filter(c => c !== category.value)
+                                  : currentCategories.filter((c: string) => c !== category.value)
 
                                 setFormData({
                                   ...formData,
@@ -752,10 +758,10 @@ export function BotFormModal({
                   step="60"
                   min="60"
                   max="3600"
-                  value={formData.check_interval_seconds}
+                  value={formData.check_interval_seconds === undefined || formData.check_interval_seconds === null ? '' : formData.check_interval_seconds}
                   onChange={(e) => {
                     const val = e.target.value
-                    setFormData({ ...formData, check_interval_seconds: val === '' ? ('' as any) : (parseInt(val) || 300) })
+                    setFormData({ ...formData, check_interval_seconds: val === '' ? undefined : parseInt(val) })
                   }}
                   onBlur={(e) => {
                     if (e.target.value === '' || isNaN(parseInt(e.target.value))) {
@@ -803,10 +809,10 @@ export function BotFormModal({
                     step="0.1"
                     min="0"
                     max="100"
-                    value={formData.budget_percentage}
+                    value={formData.budget_percentage === undefined || formData.budget_percentage === null ? '' : formData.budget_percentage}
                     onChange={(e) => {
                       const val = e.target.value
-                      setFormData({ ...formData, budget_percentage: val === '' ? ('' as any) : (parseFloat(val) || 0) })
+                      setFormData({ ...formData, budget_percentage: val === '' ? undefined : parseFloat(val) })
                     }}
                     onBlur={(e) => {
                       // Ensure valid number on blur
@@ -834,10 +840,10 @@ export function BotFormModal({
                       type="number"
                       step="0.00000001"
                       min="0"
-                      value={formData.reserved_btc_balance}
+                      value={formData.reserved_btc_balance === undefined || formData.reserved_btc_balance === null ? '' : formData.reserved_btc_balance}
                       onChange={(e) => {
                         const val = e.target.value
-                        setFormData({ ...formData, reserved_btc_balance: val === '' ? ('' as any) : (parseFloat(val) || 0) })
+                        setFormData({ ...formData, reserved_btc_balance: val === '' ? undefined : parseFloat(val) })
                       }}
                       onBlur={(e) => {
                         if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
@@ -854,10 +860,10 @@ export function BotFormModal({
                       type="number"
                       step="0.01"
                       min="0"
-                      value={formData.reserved_usd_balance}
+                      value={formData.reserved_usd_balance === undefined || formData.reserved_usd_balance === null ? '' : formData.reserved_usd_balance}
                       onChange={(e) => {
                         const val = e.target.value
-                        setFormData({ ...formData, reserved_usd_balance: val === '' ? ('' as any) : (parseFloat(val) || 0) })
+                        setFormData({ ...formData, reserved_usd_balance: val === '' ? undefined : parseFloat(val) })
                       }}
                       onBlur={(e) => {
                         if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
@@ -1138,10 +1144,10 @@ export function BotFormModal({
                               step="0.1"
                               min="0"
                               max="100"
-                              value={formData.budget_percentage}
+                              value={formData.budget_percentage === undefined || formData.budget_percentage === null ? '' : formData.budget_percentage}
                               onChange={(e) => {
                                 const val = e.target.value
-                                setFormData({ ...formData, budget_percentage: val === '' ? ('' as any) : (parseFloat(val) || 0) })
+                                setFormData({ ...formData, budget_percentage: val === '' ? undefined : parseFloat(val) })
                               }}
                               onBlur={(e) => {
                                 if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
