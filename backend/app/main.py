@@ -17,6 +17,7 @@ from app.routers import accounts_router  # Multi-account management (CEX + DEX)
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
+from app.routers import strategies_router
 from app.routers.system_router import set_trading_pair_monitor, build_changelog_cache
 from app.routers import blacklist_router
 from app.routers import news_router
@@ -78,6 +79,7 @@ app.include_router(accounts_router.router)  # Multi-account management (CEX + DE
 app.include_router(market_data_router.router)
 app.include_router(settings_router.router)
 app.include_router(system_router.router)
+app.include_router(strategies_router.router)  # Trading strategy definitions
 app.include_router(blacklist_router.router)
 app.include_router(news_router.router)  # Crypto news with 24h caching
 app.include_router(sources_router.router)  # Content source subscriptions

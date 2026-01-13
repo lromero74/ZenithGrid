@@ -13,6 +13,7 @@ from app.routers import accounts_router  # Multi-account management (CEX + DEX)
 from app.routers import market_data_router
 from app.routers import settings_router
 from app.routers import system_router
+from app.routers import strategies_router
 
 __all__ = [
     "bots_router",
@@ -24,4 +25,5 @@ __all__ = [
     "market_data_router",
     "settings_router",
     "system_router",
+    "strategies_router",
 ]

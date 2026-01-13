@@ -171,9 +171,9 @@ export const statusApi = {
 
 export const botsApi = {
   getStrategies: () =>
-    api.get<StrategyDefinition[]>('/bots/strategies').then((res) => res.data),
+    api.get<StrategyDefinition[]>('/strategies/').then((res) => res.data),
   getStrategy: (strategyId: string) =>
-    api.get<StrategyDefinition>(`/bots/strategies/${strategyId}`).then((res) => res.data),
+    api.get<StrategyDefinition>(`/strategies/${strategyId}`).then((res) => res.data),
   getAll: (projectionTimeframe?: string) => {
     const params = projectionTimeframe ? `?projection_timeframe=${projectionTimeframe}` : ''
     return api.get<Bot[]>(`/bots${params}`).then((res) => res.data)
