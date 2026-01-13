@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.models import PendingOrder, Position, Trade
+from app.models import Bot, PendingOrder, Position, Trade
+from app.exchange_clients.factory import create_exchange_client
 
 logger = logging.getLogger(__name__)
 
@@ -190,8 +191,53 @@ class OrderMonitor:
         pending_order.filled_base_amount = filled_base_amount
         pending_order.filled_price = filled_price
 
+        # IMPORTANT: Release reserved capital now that order is filled
+        # Capital moves from "pending reserve" to "position reserve" (total_quote_spent)
+        pending_order.reserved_amount_quote = 0.0
+        pending_order.reserved_amount_base = 0.0
+
         logger.info(
             f"✅ Order {pending_order.order_id} filled: "
             f"{filled_base_amount:.8f} @ {filled_price:.8f} "
             f"(Position {position.id})"
         )
+
+        # Check if this is a grid trading bot - handle grid-specific logic
+        bot_query = select(Bot).where(Bot.id == pending_order.bot_id)
+        bot_result = await db.execute(bot_query)
+        bot = bot_result.scalar_one_or_none()
+
+        if bot and bot.strategy == "grid_trading":
+            logger.info(f"   Grid trading order filled - handling grid logic")
+
+            try:
+                from app.services.grid_trading_service import handle_grid_order_fill
+
+                # Get exchange client for this bot
+                # TODO: Support multiple exchange accounts per user
+                from app.models import Account
+                account_query = select(Account).where(
+                    Account.type == "cex",
+                    Account.is_active.is_(True)
+                ).order_by(Account.is_default.desc())
+                account_result = await db.execute(account_query)
+                account = account_result.scalar_one_or_none()
+
+                if account:
+                    exchange_client = create_exchange_client(
+                        exchange_type="cex",
+                        coinbase_key_name=account.api_key_name,
+                        coinbase_private_key=account.api_private_key,
+                    )
+
+                    # Handle grid order fill (may place opposite order)
+                    await handle_grid_order_fill(
+                        pending_order=pending_order,
+                        bot=bot,
+                        position=position,
+                        exchange_client=exchange_client,
+                        db=db,
+                    )
+
+            except Exception as e:
+                logger.error(f"Error handling grid order fill: {e}", exc_info=True)
