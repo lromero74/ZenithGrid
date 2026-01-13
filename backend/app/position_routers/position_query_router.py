@@ -332,9 +332,16 @@ async def get_completed_trades_stats(
     losing_trades = 0
 
     for pos in positions:
-        # BTC profit (from BTC pairs where quote currency is BTC)
-        if pos.profit_quote is not None and pos.product_id and '-BTC' in pos.product_id:
-            total_profit_btc += pos.profit_quote
+        # BTC profit calculation
+        if pos.product_id and '-BTC' in pos.product_id:
+            # For BTC pairs, profit_quote is already in BTC
+            if pos.profit_quote is not None:
+                total_profit_btc += pos.profit_quote
+        else:
+            # For USD pairs, convert USD profit to BTC
+            if pos.profit_usd is not None and pos.btc_usd_price_at_close:
+                # profit_usd / btc_price = profit_btc
+                total_profit_btc += pos.profit_usd / pos.btc_usd_price_at_close
 
         # USD profit
         if pos.profit_usd is not None:

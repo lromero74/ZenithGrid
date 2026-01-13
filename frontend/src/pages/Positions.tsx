@@ -104,6 +104,16 @@ export default function Positions() {
     refetchInterval: 60000, // Refresh every minute
   })
 
+  // Fetch account balances
+  const { data: balances, refetch: refetchBalances } = useQuery({
+    queryKey: ['account-balances'],
+    queryFn: async () => {
+      const { accountApi } = await import('../services/api')
+      return accountApi.getBalances()
+    },
+    refetchInterval: 60000, // Refresh every minute
+  })
+
   // Handler functions
   const handleClosePositionClick = async () => {
     const result = await performClosePosition(closeConfirmPositionId)
@@ -196,7 +206,12 @@ export default function Positions() {
         </div>
 
         {/* Overall Stats Panel - 3Commas Style */}
-        <OverallStatsPanel stats={stats} completedStats={completedStats} />
+        <OverallStatsPanel
+          stats={stats}
+          completedStats={completedStats}
+          balances={balances}
+          onRefreshBalances={refetchBalances}
+        />
 
         {/* Filters - 3Commas Style (Account, Bot, Pair) */}
         <FilterPanel
