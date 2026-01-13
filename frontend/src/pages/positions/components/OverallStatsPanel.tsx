@@ -19,6 +19,27 @@ interface Balances {
   current_eth_btc_price: number
   btc_usd_price: number
   total_usd_value: number
+
+  // Capital reservation tracking (from Phase 0)
+  reserved_in_positions: {
+    BTC: number
+    ETH: number
+    USD: number
+    USDC: number
+    USDT: number
+  }
+  reserved_in_pending_orders: {
+    BTC: number
+    ETH: number
+    USD: number
+    USDC: number
+    USDT: number
+  }
+  available_btc: number
+  available_eth: number
+  available_usd: number
+  available_usdc: number
+  available_usdt: number
 }
 
 interface OverallStatsPanelProps {
@@ -111,68 +132,84 @@ export const OverallStatsPanel = ({ stats, completedStats, balances, onRefreshBa
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-slate-400 text-xs">
               <span>Currency</span>
-              <div className="flex gap-4">
-                <span className="w-24 text-right" title="Funds locked in active positions">Reserved</span>
-                <span className="w-24 text-right" title="Available balance in account">Available</span>
+              <div className="flex gap-3">
+                <span className="w-20 text-right" title="Locked in open positions">In Positions</span>
+                <span className="w-20 text-right" title="Locked in pending orders (grids)">In Grids</span>
+                <span className="w-20 text-right" title="Available for new bots">Available</span>
               </div>
             </div>
             {/* BTC - Always show */}
             <div className="flex justify-between">
-              <span className="text-slate-300">BTC</span>
-              <div className="flex gap-4">
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  {(stats.reservedByQuote['BTC'] || 0).toFixed(8)}
+              <span className="text-slate-300 font-medium">BTC</span>
+              <div className="flex gap-3">
+                <span className="text-amber-400 w-20 text-right font-mono text-xs">
+                  {balances ? balances.reserved_in_positions.BTC.toFixed(8) : '...'}
                 </span>
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  {balances ? balances.btc.toFixed(8) : '...'}
+                <span className="text-purple-400 w-20 text-right font-mono text-xs">
+                  {balances ? balances.reserved_in_pending_orders.BTC.toFixed(8) : '...'}
+                </span>
+                <span className="text-green-400 w-20 text-right font-mono text-xs font-semibold">
+                  {balances ? balances.available_btc.toFixed(8) : '...'}
                 </span>
               </div>
             </div>
             {/* ETH - Always show */}
             <div className="flex justify-between">
-              <span className="text-slate-300">ETH</span>
-              <div className="flex gap-4">
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  {(stats.reservedByQuote['ETH'] || 0).toFixed(6)}
+              <span className="text-slate-300 font-medium">ETH</span>
+              <div className="flex gap-3">
+                <span className="text-amber-400 w-20 text-right font-mono text-xs">
+                  {balances ? balances.reserved_in_positions.ETH.toFixed(6) : '...'}
                 </span>
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  {balances ? balances.eth.toFixed(6) : '...'}
+                <span className="text-purple-400 w-20 text-right font-mono text-xs">
+                  {balances ? balances.reserved_in_pending_orders.ETH.toFixed(6) : '...'}
+                </span>
+                <span className="text-green-400 w-20 text-right font-mono text-xs font-semibold">
+                  {balances ? balances.available_eth.toFixed(6) : '...'}
                 </span>
               </div>
             </div>
             {/* USD - Always show */}
             <div className="flex justify-between">
-              <span className="text-slate-300">USD</span>
-              <div className="flex gap-4">
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  ${(stats.reservedByQuote['USD'] || 0).toFixed(2)}
+              <span className="text-slate-300 font-medium">USD</span>
+              <div className="flex gap-3">
+                <span className="text-amber-400 w-20 text-right font-mono text-xs">
+                  ${balances ? balances.reserved_in_positions.USD.toFixed(2) : '...'}
                 </span>
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  {balances ? `$${balances.usd.toFixed(2)}` : '...'}
+                <span className="text-purple-400 w-20 text-right font-mono text-xs">
+                  ${balances ? balances.reserved_in_pending_orders.USD.toFixed(2) : '...'}
+                </span>
+                <span className="text-green-400 w-20 text-right font-mono text-xs font-semibold">
+                  ${balances ? balances.available_usd.toFixed(2) : '...'}
                 </span>
               </div>
             </div>
             {/* USDC - Always show */}
             <div className="flex justify-between">
-              <span className="text-slate-300">USDC</span>
-              <div className="flex gap-4">
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  ${(stats.reservedByQuote['USDC'] || 0).toFixed(2)}
+              <span className="text-slate-300 font-medium">USDC</span>
+              <div className="flex gap-3">
+                <span className="text-amber-400 w-20 text-right font-mono text-xs">
+                  ${balances ? balances.reserved_in_positions.USDC.toFixed(2) : '...'}
                 </span>
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  {balances ? `$${balances.usdc.toFixed(2)}` : '...'}
+                <span className="text-purple-400 w-20 text-right font-mono text-xs">
+                  ${balances ? balances.reserved_in_pending_orders.USDC.toFixed(2) : '...'}
+                </span>
+                <span className="text-green-400 w-20 text-right font-mono text-xs font-semibold">
+                  ${balances ? balances.available_usdc.toFixed(2) : '...'}
                 </span>
               </div>
             </div>
             {/* USDT - Always show */}
             <div className="flex justify-between">
-              <span className="text-slate-300">USDT</span>
-              <div className="flex gap-4">
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  ${(stats.reservedByQuote['USDT'] || 0).toFixed(2)}
+              <span className="text-slate-300 font-medium">USDT</span>
+              <div className="flex gap-3">
+                <span className="text-amber-400 w-20 text-right font-mono text-xs">
+                  ${balances ? balances.reserved_in_positions.USDT.toFixed(2) : '...'}
                 </span>
-                <span className="text-white w-24 text-right font-mono text-xs">
-                  {balances ? `$${balances.usdt.toFixed(2)}` : '...'}
+                <span className="text-purple-400 w-20 text-right font-mono text-xs">
+                  ${balances ? balances.reserved_in_pending_orders.USDT.toFixed(2) : '...'}
+                </span>
+                <span className="text-green-400 w-20 text-right font-mono text-xs font-semibold">
+                  ${balances ? balances.available_usdt.toFixed(2) : '...'}
                 </span>
               </div>
             </div>
