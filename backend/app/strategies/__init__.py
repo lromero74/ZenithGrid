@@ -161,6 +161,7 @@ class StrategyRegistry:
 # Must be after StrategyRegistry class definition for decorators to work
 from app.strategies import (  # noqa: E402
     indicator_based,  # Unified strategy - replaces all legacy strategies
+    grid_trading,  # Grid trading bot
     # Arbitrage strategies
     spatial_arbitrage,
     triangular_arbitrage,
@@ -174,6 +175,7 @@ __all__ = [
     "StrategyRegistry",
     # Strategy implementations (imported for registration)
     "indicator_based",  # Unified strategy
+    "grid_trading",  # Grid trading bot
     # Arbitrage strategies
     "spatial_arbitrage",
     "triangular_arbitrage",
