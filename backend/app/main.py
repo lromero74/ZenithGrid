@@ -25,6 +25,7 @@ from app.routers import sources_router  # Content source subscriptions
 from app.routers import auth_router  # User authentication
 from app.routers import ai_credentials_router  # Per-user AI provider keys
 from app.routers import coin_icons_router  # Proxied coin icons to avoid CORS
+from app.routers import paper_trading_router  # Paper trading account management
 from app.services.websocket_manager import ws_manager
 from app.services.shutdown_manager import shutdown_manager
 from app.services.content_refresh_service import content_refresh_service
@@ -85,6 +86,7 @@ app.include_router(news_router.router)  # Crypto news with 24h caching
 app.include_router(sources_router.router)  # Content source subscriptions
 app.include_router(ai_credentials_router.router)  # Per-user AI provider keys
 app.include_router(coin_icons_router.router)  # Proxied coin icons to avoid CORS
+app.include_router(paper_trading_router.router)  # Paper trading account management
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/

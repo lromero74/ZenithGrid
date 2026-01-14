@@ -126,6 +126,10 @@ class Account(Base):
     auto_buy_usdt_enabled = Column(Boolean, default=False)
     auto_buy_usdt_min = Column(Float, default=10.0)
 
+    # Paper Trading
+    is_paper_trading = Column(Boolean, default=False)  # True for simulated trading accounts
+    paper_balances = Column(String, nullable=True)  # JSON: {"BTC": 1.0, "ETH": 10.0, "USD": 100000.0, ...}
+
     # Relationships
     user = relationship("User", back_populates="accounts")
     bots = relationship("Bot", back_populates="account")

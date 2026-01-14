@@ -3,6 +3,7 @@ Exchange Service
 
 Provides exchange clients based on user accounts stored in the database.
 Supports per-user, per-account exchange client instantiation.
+Includes support for paper trading accounts.
 """
 
 import logging
@@ -14,6 +15,7 @@ from sqlalchemy import select
 from app.models import Account
 from app.exchange_clients.factory import create_exchange_client
 from app.exchange_clients.base import ExchangeClient
+from app.exchange_clients.paper_trading_client import PaperTradingClient
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,13 @@ async def get_exchange_client_for_account(
     if not account.is_active:
         logger.warning(f"Account {account_id} is not active")
         return None
+
+    # Check if this is a paper trading account
+    if account.is_paper_trading:
+        logger.info(f"Creating paper trading client for account {account_id}")
+        client = PaperTradingClient(account=account, db=db)
+        # Don't cache paper trading clients (they hold db session)
+        return client
 
     # Create exchange client based on account type
     if account.type == "cex":

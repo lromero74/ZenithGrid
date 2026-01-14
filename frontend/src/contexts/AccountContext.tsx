@@ -21,6 +21,7 @@ export interface Account {
   type: AccountType
   is_default: boolean
   is_active: boolean
+  is_paper_trading?: boolean  // Paper trading account flag
 
   // CEX fields
   exchange?: string
