@@ -47,7 +47,8 @@ export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitc
     return () => document.removeEventListener('keydown', handleEscape)
   }, [])
 
-  const cexAccounts = accounts.filter((a) => a.type === 'cex')
+  // Exclude paper trading accounts from dropdown (controlled by toggle switch instead)
+  const cexAccounts = accounts.filter((a) => a.type === 'cex' && !a.is_paper_trading)
   const dexAccounts = accounts.filter((a) => a.type === 'dex')
 
   const handleSelect = (accountId: number) => {
