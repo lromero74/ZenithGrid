@@ -644,8 +644,11 @@ async def get_account_portfolio(
 
     For CEX accounts: Fetches from Coinbase API
     For DEX accounts: Fetches from blockchain via RPC
+    For Paper Trading accounts: Returns virtual balances
     """
     try:
+        import json
+
         # Get the account
         query = select(Account).where(Account.id == account_id)
         result = await db.execute(query)
@@ -653,6 +656,55 @@ async def get_account_portfolio(
 
         if not account:
             raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+
+        # Handle paper trading accounts
+        if account.is_paper_trading:
+            # Parse virtual balances from JSON
+            if account.paper_balances:
+                balances = json.loads(account.paper_balances)
+            else:
+                balances = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
+
+            # Get real prices for valuation (use system Coinbase client)
+            from app.config import settings
+            from app.coinbase_unified_client import CoinbaseUnifiedClient
+
+            system_coinbase = CoinbaseUnifiedClient(
+                api_key=settings.coinbase_api_key,
+                api_secret=settings.coinbase_api_secret,
+                user_id=account.user_id
+            )
+            btc_usd_price = await system_coinbase.get_btc_usd_price()
+            eth_btc_price = await system_coinbase.get_current_price()  # ETH-BTC
+
+            # Calculate totals
+            btc_balance = balances.get("BTC", 0.0)
+            eth_balance = balances.get("ETH", 0.0)
+            usd_balance = balances.get("USD", 0.0)
+            usdc_balance = balances.get("USDC", 0.0)
+            usdt_balance = balances.get("USDT", 0.0)
+
+            total_btc = btc_balance + (eth_balance * eth_btc_price)
+            total_usd = (total_btc * btc_usd_price) + usd_balance + usdc_balance + usdt_balance
+
+            # Build spot positions array (compatible with frontend)
+            spot_positions = []
+            for currency, amount in balances.items():
+                if amount > 0:
+                    spot_positions.append({
+                        "asset": currency,
+                        "total_balance_fiat": 0,  # Not used
+                        "total_balance_crypto": str(amount),
+                        "available_balance": {"value": str(amount), "currency": currency}
+                    })
+
+            return {
+                "spot_positions": spot_positions,
+                "total_btc_value": total_btc,
+                "total_usd_value": total_usd,
+                "btc_usd_price": btc_usd_price,
+                "is_paper_trading": True
+            }
 
         if account.type == "cex":
             # Use existing Coinbase portfolio logic
