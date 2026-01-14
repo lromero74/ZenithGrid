@@ -1,6 +1,7 @@
 import { useState, FormEvent, useEffect } from 'react'
 import { User, Lock, CheckCircle, AlertCircle, Database, Trash2 } from 'lucide-react'
 import { AccountsManagement } from '../components/AccountsManagement'
+import { PaperTradingManager } from '../components/PaperTradingManager'
 import { AddAccountModal } from '../components/AddAccountModal'
 import { AIProvidersManager } from '../components/AIProvidersManager'
 import { AutoBuySettings } from '../components/AutoBuySettings'
@@ -226,6 +227,9 @@ export default function Settings() {
 
       {/* Accounts Management Section */}
       <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
+
+      {/* Paper Trading Section */}
+      <PaperTradingManager />
 
       {/* Auto-Buy BTC Section */}
       <AutoBuySettings accounts={accounts} />
