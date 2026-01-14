@@ -703,6 +703,58 @@ async def detect_and_handle_breakout(
     return True
 
 
+async def check_and_run_ai_optimization(
+    bot: Bot,
+    position: Position,
+    exchange_client: ExchangeClient,
+    db: AsyncSession,
+    signal_data: Dict[str, Any],
+) -> bool:
+    """
+    Check if AI optimization is due and run it if needed.
+
+    Called from bot monitoring loop when signal indicates AI optimization is due.
+
+    Args:
+        bot: Bot instance
+        position: Current position
+        exchange_client: Exchange client
+        db: Database session
+        signal_data: Signal from analyze_signal (contains ai_optimization_due flag)
+
+    Returns:
+        True if AI optimization ran and made adjustments
+    """
+    if not signal_data.get("ai_optimization_due"):
+        return False
+
+    if not bot.strategy_config.get("enable_ai_optimization", False):
+        return False
+
+    logger.info(f"🤖 Running AI optimization for grid bot {bot.id}...")
+
+    try:
+        from app.services.ai_grid_optimizer import run_ai_grid_optimization
+
+        recommendations = await run_ai_grid_optimization(
+            bot=bot,
+            position=position,
+            exchange_client=exchange_client,
+            db=db
+        )
+
+        if recommendations:
+            logger.info(f"✅ AI optimization applied for bot {bot.id}")
+            return True
+        else:
+            logger.info(f"No AI adjustments made for bot {bot.id}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error running AI optimization for bot {bot.id}: {e}", exc_info=True)
+        return False
+
+
 __all__ = [
     "initialize_grid",
     "cancel_grid_orders",
@@ -710,4 +762,5 @@ __all__ = [
     "rebalance_grid_on_breakout",
     "calculate_new_range_after_breakout",
     "detect_and_handle_breakout",
+    "check_and_run_ai_optimization",
 ]

@@ -334,6 +334,65 @@ class GridTradingStrategy(TradingStrategy):
                     group="risk_management",
                     required=False,
                 ),
+
+                # AI-Dynamic Optimization
+                StrategyParameter(
+                    name="enable_ai_optimization",
+                    display_name="Enable AI-Dynamic Optimization",
+                    description="Use AI to continuously optimize grid parameters based on performance",
+                    type="bool",
+                    default=False,
+                    group="ai_optimization",
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="ai_provider",
+                    display_name="AI Provider",
+                    description="AI service for grid optimization",
+                    type="string",
+                    default="anthropic",
+                    options=["anthropic", "openai", "gemini"],
+                    group="ai_optimization",
+                    visible_when={"enable_ai_optimization": True},
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="ai_model",
+                    display_name="AI Model",
+                    description="Specific AI model to use",
+                    type="string",
+                    default="claude-sonnet-4.5",
+                    group="ai_optimization",
+                    visible_when={"enable_ai_optimization": True},
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="ai_adjustment_interval_minutes",
+                    display_name="AI Check Interval (minutes)",
+                    description="How often AI analyzes and optimizes grid",
+                    type="int",
+                    default=120,
+                    min_value=15,
+                    max_value=1440,
+                    group="ai_optimization",
+                    visible_when={"enable_ai_optimization": True},
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="ai_analysis_depth",
+                    display_name="AI Analysis Depth",
+                    description="Thoroughness of AI analysis (quick/standard/deep)",
+                    type="string",
+                    default="standard",
+                    options=["quick", "standard", "deep"],
+                    group="ai_optimization",
+                    visible_when={"enable_ai_optimization": True},
+                    required=False,
+                ),
             ],
             supported_products=["ETH-BTC", "ADA-BTC", "DOT-BTC", "BTC-USD", "ETH-USD"],
         )
@@ -436,6 +495,27 @@ class GridTradingStrategy(TradingStrategy):
                 breakout_direction = "downward"
                 logger.warning(f"BREAKOUT DETECTED: Price {current_price:.8f} < lower {current_range_lower:.8f}")
 
+        # Run AI optimization if enabled (returns signal with ai_optimization flag)
+        ai_optimization_signal = None
+        if self.config.get("enable_ai_optimization", False) and grid_state and not breakout_direction:
+            # Check if AI optimization should run
+            # (Actual AI analysis happens in bot monitor via ai_grid_optimizer service)
+            last_ai_check = grid_state.get("last_ai_check")
+            interval_minutes = self.config.get("ai_adjustment_interval_minutes", 120)
+
+            should_run_ai = False
+            if not last_ai_check:
+                should_run_ai = True
+            else:
+                last_check_time = datetime.fromisoformat(last_ai_check)
+                minutes_elapsed = (datetime.utcnow() - last_check_time).total_seconds() / 60
+                if minutes_elapsed >= interval_minutes:
+                    should_run_ai = True
+
+            if should_run_ai:
+                logger.info(f"🤖 AI optimization scheduled for next bot cycle")
+                ai_optimization_signal = "due"
+
         return {
             "action": "initialize_grid" if not grid_state else ("rebalance" if breakout_direction else "monitor"),
             "grid_type": grid_type,
@@ -445,6 +525,7 @@ class GridTradingStrategy(TradingStrategy):
             "levels": levels,
             "current_price": current_price,
             "breakout_direction": breakout_direction,
+            "ai_optimization_due": ai_optimization_signal,
             "timestamp": datetime.utcnow().isoformat(),
         }
 
