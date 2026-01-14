@@ -236,8 +236,22 @@ function Bots() {
       {bots.length === 0 ? (
         <div className="bg-slate-800 rounded-lg p-12 text-center">
           <Activity className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">No bots yet</h3>
-          <p className="text-slate-400 mb-6">Create your first trading bot to get started</p>
+          <h3 className="text-xl font-semibold mb-2">
+            No bots on {selectedAccount?.name || 'this account'}
+          </h3>
+          <p className="text-slate-400 mb-6">
+            {selectedAccount?.is_paper_trading ? (
+              <>
+                This is your paper trading account. Create a bot here to test strategies risk-free with virtual funds.
+                <br />
+                <span className="text-slate-500 text-sm mt-2 block">
+                  Toggle to Live Trading in the header to view your live account bots.
+                </span>
+              </>
+            ) : (
+              'Create your first trading bot to get started'
+            )}
+          </p>
           <button
             onClick={handleOpenCreate}
             className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded font-medium transition-colors"
