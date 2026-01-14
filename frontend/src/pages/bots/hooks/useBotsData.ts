@@ -16,7 +16,7 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
   const { data: bots = [], isLoading: botsLoading, isFetching: botsFetching } = useQuery({
     queryKey: ['bots', selectedAccount?.id, projectionTimeframe],
     queryFn: () => botsApi.getAll(projectionTimeframe),
-    refetchInterval: 5000,
+    refetchInterval: 30000, // Refetch every 30 seconds (reduced from 5 seconds)
     placeholderData: keepPreviousData, // Keep showing previous data while fetching new timeframe
     select: (data) => {
       if (!selectedAccount) return data
