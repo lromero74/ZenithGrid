@@ -27,8 +27,9 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
     result = await db.execute(
         select(Account).where(
             Account.type == "cex",
-            Account.is_active.is_(True)
-        ).order_by(Account.is_default.desc(), Account.created_at)
+            Account.is_active.is_(True),
+            Account.is_paper_trading.is_not(True)  # Exclude paper trading accounts
+        ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
     )
     account = result.scalar_one_or_none()
 
