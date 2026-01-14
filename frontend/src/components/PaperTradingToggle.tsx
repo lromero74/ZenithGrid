@@ -64,7 +64,7 @@ export function PaperTradingToggle() {
       <button
         onClick={handleToggle}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-700 ${
-          isPaperMode ? 'bg-yellow-600' : 'bg-green-600'
+          isPaperMode ? 'bg-orange-600' : 'bg-green-600'
         }`}
         role="switch"
         aria-checked={isPaperMode}
