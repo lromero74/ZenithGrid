@@ -233,20 +233,6 @@ function Bots() {
         />
       </div>
 
-      {/* TEMPORARY DEBUG INFO */}
-      <div className="mb-6 bg-yellow-900/20 border border-yellow-600/50 rounded-lg p-4">
-        <h3 className="text-yellow-400 font-bold mb-2">🔍 Debug Info (Temporary)</h3>
-        <div className="text-sm text-yellow-200 space-y-1 font-mono">
-          <div><strong>Selected Account ID:</strong> {selectedAccount?.id || 'null'}</div>
-          <div><strong>Selected Account Name:</strong> {selectedAccount?.name || 'null'}</div>
-          <div><strong>Is Paper Trading:</strong> {selectedAccount?.is_paper_trading ? 'Yes' : 'No'}</div>
-          <div><strong>Filtered Bots Count:</strong> {bots.length}</div>
-          <div><strong>Loading:</strong> {botsLoading ? 'Yes' : 'No'}</div>
-          <div><strong>Fetching:</strong> {botsFetching ? 'Yes' : 'No'}</div>
-          <div className="mt-2 text-xs opacity-75">Open browser console (if possible) for detailed bot data</div>
-        </div>
-      </div>
-
       {/* Bot List - 3Commas-style Table */}
       {bots.length === 0 ? (
         <div className="bg-slate-800 rounded-lg p-12 text-center">

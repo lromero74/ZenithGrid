@@ -19,23 +19,9 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
     refetchInterval: 30000, // Refetch every 30 seconds (reduced from 5 seconds)
     placeholderData: keepPreviousData, // Keep showing previous data while fetching new timeframe
     select: (data) => {
-      console.log('[DEBUG] useBotsData - Raw bots from API:', data)
-      console.log('[DEBUG] useBotsData - Selected account:', selectedAccount)
-
-      if (!selectedAccount) {
-        console.log('[DEBUG] useBotsData - No account selected, returning all bots')
-        return data
-      }
-
+      if (!selectedAccount) return data
       // Filter by account_id
-      const filtered = data.filter((bot: Bot) => {
-        const matches = bot.account_id === selectedAccount.id
-        console.log(`[DEBUG] Bot "${bot.name}" (id: ${bot.id}, account_id: ${bot.account_id}) ${matches ? 'MATCHES' : 'FILTERED OUT'}`)
-        return matches
-      })
-
-      console.log('[DEBUG] useBotsData - Filtered bots:', filtered)
-      return filtered
+      return data.filter((bot: Bot) => bot.account_id === selectedAccount.id)
     },
   })
 
