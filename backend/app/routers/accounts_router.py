@@ -667,12 +667,11 @@ async def get_account_portfolio(
 
             # Get real prices for valuation (use system Coinbase client)
             from app.config import settings
-            from app.coinbase_unified_client import CoinbaseUnifiedClient
+            from app.coinbase_unified_client import CoinbaseClient
 
-            system_coinbase = CoinbaseUnifiedClient(
+            system_coinbase = CoinbaseClient(
                 api_key=settings.coinbase_api_key,
-                api_secret=settings.coinbase_api_secret,
-                user_id=account.user_id
+                api_secret=settings.coinbase_api_secret
             )
             btc_usd_price = await system_coinbase.get_btc_usd_price()
             eth_btc_price = await system_coinbase.get_current_price()  # ETH-BTC
