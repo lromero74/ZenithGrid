@@ -106,10 +106,10 @@ export default function Positions() {
 
   // Fetch account balances
   const { data: balances, refetch: refetchBalances } = useQuery({
-    queryKey: ['account-balances'],
+    queryKey: ['account-balances', selectedAccount?.id],
     queryFn: async () => {
       const { accountApi } = await import('../services/api')
-      return accountApi.getBalances()
+      return accountApi.getBalances(selectedAccount?.id)
     },
     refetchInterval: 60000, // Refresh every minute
   })

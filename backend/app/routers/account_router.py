@@ -148,7 +148,10 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
 
 
 @router.get("/balances")
-async def get_balances(db: AsyncSession = Depends(get_db)):
+async def get_balances(
+    account_id: Optional[int] = Query(None, description="Account ID (defaults to first active CEX account)"),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Get current account balances for all quote currencies with capital reservation tracking.
 
@@ -157,22 +160,70 @@ async def get_balances(db: AsyncSession = Depends(get_db)):
     - Reserved capital in open positions (locked in active trades)
     - Reserved capital in pending orders (locked in grid bot limit orders)
     - Available balance (what you can use for new bots)
+
+    For paper trading accounts, returns virtual balances from paper_balances JSON field.
     """
     try:
-        coinbase = await get_coinbase_from_db(db)
+        import json
 
-        # Get account balances from Coinbase
-        btc_balance = await coinbase.get_btc_balance()
-        eth_balance = await coinbase.get_eth_balance()
-        usd_balance = await coinbase.get_usd_balance()
-        usdc_balance = await coinbase.get_usdc_balance()
-        usdt_balance = await coinbase.get_usdt_balance()
-        current_price = await coinbase.get_current_price()
-        btc_usd_price = await coinbase.get_btc_usd_price()
+        # Get account (either specified or default)
+        if account_id:
+            account_result = await db.execute(
+                select(Account).where(Account.id == account_id)
+            )
+            account = account_result.scalar_one_or_none()
+            if not account:
+                raise HTTPException(status_code=404, detail="Account not found")
+        else:
+            # Get first active CEX account (backwards compatibility)
+            account_result = await db.execute(
+                select(Account).where(
+                    Account.type == "cex",
+                    Account.is_active == True
+                ).order_by(Account.is_default.desc(), Account.created_at)
+            )
+            account = account_result.scalar_one_or_none()
+            if not account:
+                raise HTTPException(status_code=404, detail="No active account found")
+
+        # Check if this is a paper trading account
+        if account.is_paper_trading:
+            # Use virtual balances from paper_balances JSON
+            if account.paper_balances:
+                balances = json.loads(account.paper_balances)
+            else:
+                balances = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
+
+            btc_balance = balances.get("BTC", 0.0)
+            eth_balance = balances.get("ETH", 0.0)
+            usd_balance = balances.get("USD", 0.0)
+            usdc_balance = balances.get("USDC", 0.0)
+            usdt_balance = balances.get("USDT", 0.0)
+
+            # Still need real prices for calculations
+            coinbase = await get_coinbase_from_db(db)
+            current_price = await coinbase.get_current_price()
+            btc_usd_price = await coinbase.get_btc_usd_price()
+        else:
+            # Live account - fetch from Coinbase
+            coinbase = await get_coinbase_from_db(db)
+
+            # Get account balances from Coinbase
+            btc_balance = await coinbase.get_btc_balance()
+            eth_balance = await coinbase.get_eth_balance()
+            usd_balance = await coinbase.get_usd_balance()
+            usdc_balance = await coinbase.get_usdc_balance()
+            usdt_balance = await coinbase.get_usdt_balance()
+            current_price = await coinbase.get_current_price()
+            btc_usd_price = await coinbase.get_btc_usd_price()
 
         # Calculate reserved capital in OPEN POSITIONS (by quote currency)
+        # Filter by account_id to only include positions for this account
         positions_result = await db.execute(
-            select(Position).where(Position.status == "open")
+            select(Position).where(
+                Position.status == "open",
+                Position.account_id == account.id
+            )
         )
         open_positions = positions_result.scalars().all()
 
@@ -184,10 +235,23 @@ async def get_balances(db: AsyncSession = Depends(get_db)):
                     reserved_in_positions[quote_currency] += pos.total_quote_spent
 
         # Calculate reserved capital in PENDING ORDERS (by currency)
-        pending_result = await db.execute(
-            select(PendingOrder).where(PendingOrder.status == "pending")
+        # Get all bots for this account, then filter pending orders by those bot IDs
+        bots_result = await db.execute(
+            select(Bot).where(Bot.account_id == account.id)
         )
-        pending_orders = pending_result.scalars().all()
+        account_bots = bots_result.scalars().all()
+        bot_ids = [bot.id for bot in account_bots]
+
+        if bot_ids:
+            pending_result = await db.execute(
+                select(PendingOrder).where(
+                    PendingOrder.status == "pending",
+                    PendingOrder.bot_id.in_(bot_ids)
+                )
+            )
+            pending_orders = pending_result.scalars().all()
+        else:
+            pending_orders = []
 
         reserved_in_pending_orders = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
         for order in pending_orders:
