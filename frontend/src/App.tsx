@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X } from 'lucide-react'
 import { positionsApi } from './services/api'
-import { AccountSwitcher } from './components/AccountSwitcher'
 import { PaperTradingToggle } from './components/PaperTradingToggle'
 import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
@@ -204,12 +203,6 @@ function AppContent() {
             <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
               {/* Paper Trading Toggle */}
               <PaperTradingToggle />
-
-              {/* Account Switcher */}
-              <AccountSwitcher
-                onAddAccount={() => setShowAddAccountModal(true)}
-                onManageAccounts={() => navigate('/settings')}
-              />
 
               <div className="text-right hidden sm:block">
                 <p className="text-xs text-slate-400">BTC Price</p>
