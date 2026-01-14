@@ -444,6 +444,23 @@ class ExchangeClient(ABC):
         """
         pass
 
+    async def get_recent_trades(self, product_id: str, hours: int = 24) -> List[Dict[str, Any]]:
+        """
+        Get recent trades for volume analysis (optional feature for volume-weighted grids).
+
+        Default implementation returns empty list (falls back to standard grid).
+        Override in subclasses to enable volume-weighted grid levels.
+
+        Args:
+            product_id: Trading pair
+            hours: Lookback period in hours
+
+        Returns:
+            List of trades with 'price' and 'size' fields
+        """
+        logger.warning(f"get_recent_trades not implemented for {self.__class__.__name__}, volume weighting disabled")
+        return []
+
     @abstractmethod
     async def test_connection(self) -> bool:
         """

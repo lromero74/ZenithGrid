@@ -154,6 +154,119 @@ def calculate_auto_range_from_volatility(
     return (upper, lower)
 
 
+async def calculate_volume_weighted_levels(
+    product_id: str,
+    upper: float,
+    lower: float,
+    num_levels: int,
+    exchange_client,
+    lookback_hours: int = 24,
+    clustering_strength: float = 1.5
+) -> List[float]:
+    """
+    Calculate grid levels weighted by trading volume distribution.
+
+    Places more levels at price zones with historically high trading volume.
+    This increases fill rate by clustering orders where price action occurs most frequently.
+
+    Algorithm:
+    1. Fetch recent trades (last N hours)
+    2. Create price buckets across the range
+    3. Sum trading volume in each bucket
+    4. Calculate cumulative volume distribution
+    5. Place grid levels according to volume percentiles
+
+    Args:
+        product_id: Trading pair (e.g., "ETH-BTC")
+        upper: Upper price bound
+        lower: Lower price bound
+        num_levels: Number of grid levels
+        exchange_client: Exchange client to fetch trade data
+        lookback_hours: Historical period to analyze (default 24 hours)
+        clustering_strength: How strongly to cluster at high-volume zones (1.0-3.0)
+
+    Returns:
+        List of volume-weighted price levels
+
+    Example:
+        If ETH-BTC traded heavily around 0.032 and 0.038 (support/resistance),
+        more grid levels will cluster near those prices rather than spacing evenly.
+    """
+    try:
+        # Fetch recent trades for volume analysis
+        trades = await exchange_client.get_recent_trades(product_id, hours=lookback_hours)
+
+        if not trades or len(trades) < 100:
+            logger.warning(f"Insufficient trade data ({len(trades) if trades else 0} trades), falling back to arithmetic grid")
+            return calculate_arithmetic_levels(lower, upper, num_levels)
+
+        # Create price buckets (100 buckets for fine granularity)
+        num_buckets = 100
+        bucket_size = (upper - lower) / num_buckets
+        volume_by_bucket = [0.0] * num_buckets
+
+        # Sum volume in each bucket
+        for trade in trades:
+            price = float(trade.get('price', 0))
+            size = float(trade.get('size', 0))
+
+            # Only count trades within our range
+            if lower <= price <= upper:
+                bucket_index = int((price - lower) / bucket_size)
+                # Ensure bucket is within bounds
+                bucket_index = min(bucket_index, num_buckets - 1)
+                volume_by_bucket[bucket_index] += size
+
+        # Check if we got meaningful volume data
+        total_volume = sum(volume_by_bucket)
+        if total_volume == 0:
+            logger.warning("No trades within range, falling back to arithmetic grid")
+            return calculate_arithmetic_levels(lower, upper, num_levels)
+
+        # Apply clustering strength (power transform)
+        # Higher clustering_strength = more aggressive clustering at high-volume zones
+        weighted_volume = [vol ** clustering_strength for vol in volume_by_bucket]
+        total_weighted_volume = sum(weighted_volume)
+
+        # Calculate cumulative distribution
+        cumulative_volume = []
+        running_sum = 0
+        for vol in weighted_volume:
+            running_sum += vol
+            cumulative_volume.append(running_sum / total_weighted_volume)
+
+        # Place levels according to volume percentiles
+        levels = []
+        for i in range(num_levels):
+            # Target percentile for this level
+            target_percentile = i / (num_levels - 1) if num_levels > 1 else 0.5
+
+            # Find bucket closest to this percentile
+            bucket_index = 0
+            for idx, cumul in enumerate(cumulative_volume):
+                if cumul >= target_percentile:
+                    bucket_index = idx
+                    break
+
+            # Calculate price at this bucket
+            price = lower + (bucket_index * bucket_size) + (bucket_size / 2)
+            levels.append(price)
+
+        # Ensure first and last levels match bounds exactly
+        if levels:
+            levels[0] = lower
+            levels[-1] = upper
+
+        logger.info(f"Volume-weighted grid: {num_levels} levels with clustering strength {clustering_strength}")
+        logger.info(f"Total volume analyzed: {total_volume:.8f} over {len(trades)} trades")
+
+        return levels
+
+    except Exception as e:
+        logger.error(f"Error calculating volume-weighted levels: {e}, falling back to arithmetic grid")
+        return calculate_arithmetic_levels(lower, upper, num_levels)
+
+
 @StrategyRegistry.register
 class GridTradingStrategy(TradingStrategy):
     """
@@ -393,6 +506,43 @@ class GridTradingStrategy(TradingStrategy):
                     visible_when={"enable_ai_optimization": True},
                     required=False,
                 ),
+
+                # Volume-Weighted Levels
+                StrategyParameter(
+                    name="enable_volume_weighting",
+                    display_name="Enable Volume-Weighted Levels",
+                    description="Place more grid levels at price zones with high trading volume",
+                    type="bool",
+                    default=False,
+                    group="volume_weighting",
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="volume_analysis_hours",
+                    display_name="Volume Analysis Period (hours)",
+                    description="Historical period to analyze trade volume distribution",
+                    type="int",
+                    default=24,
+                    min_value=6,
+                    max_value=168,
+                    group="volume_weighting",
+                    visible_when={"enable_volume_weighting": True},
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="volume_clustering_strength",
+                    display_name="Volume Clustering Strength",
+                    description="How strongly to cluster levels at high-volume zones (1.0-3.0)",
+                    type="float",
+                    default=1.5,
+                    min_value=1.0,
+                    max_value=3.0,
+                    group="volume_weighting",
+                    visible_when={"enable_volume_weighting": True},
+                    required=False,
+                ),
             ],
             supported_products=["ETH-BTC", "ADA-BTC", "DOT-BTC", "BTC-USD", "ETH-USD"],
         )
@@ -473,13 +623,49 @@ class GridTradingStrategy(TradingStrategy):
         # Generate grid levels
         grid_type = self.config.get("grid_type", "arithmetic")
         num_levels = self.config["num_grid_levels"]
+        enable_volume_weighting = self.config.get("enable_volume_weighting", False)
 
-        if grid_type == "arithmetic":
-            levels = calculate_arithmetic_levels(lower, upper, num_levels)
-        elif grid_type == "geometric":
-            levels = calculate_geometric_levels(lower, upper, num_levels)
-        else:
-            raise ValueError(f"Unsupported grid_type: {grid_type}")
+        # Check if we should use volume-weighted levels
+        if enable_volume_weighting:
+            # Get exchange client from kwargs
+            exchange_client = kwargs.get("exchange_client")
+            if exchange_client:
+                volume_hours = self.config.get("volume_analysis_hours", 24)
+                clustering_strength = self.config.get("volume_clustering_strength", 1.5)
+
+                logger.info(f"Using volume-weighted grid levels (lookback: {volume_hours}h, strength: {clustering_strength})")
+
+                # Get product_id from kwargs
+                product_id = kwargs.get("product_id")
+                if not product_id:
+                    # Fallback to bot_config if available
+                    product_id = bot_config.get("product_id")
+
+                if product_id:
+                    levels = await calculate_volume_weighted_levels(
+                        product_id=product_id,
+                        upper=upper,
+                        lower=lower,
+                        num_levels=num_levels,
+                        exchange_client=exchange_client,
+                        lookback_hours=volume_hours,
+                        clustering_strength=clustering_strength
+                    )
+                else:
+                    logger.warning("No product_id available for volume weighting, falling back to standard grid")
+                    enable_volume_weighting = False
+            else:
+                logger.warning("No exchange client available for volume weighting, falling back to standard grid")
+                enable_volume_weighting = False
+
+        # Fallback to standard grid types if volume weighting is disabled or failed
+        if not enable_volume_weighting:
+            if grid_type == "arithmetic":
+                levels = calculate_arithmetic_levels(lower, upper, num_levels)
+            elif grid_type == "geometric":
+                levels = calculate_geometric_levels(lower, upper, num_levels)
+            else:
+                raise ValueError(f"Unsupported grid_type: {grid_type}")
 
         # Check for breakout (if dynamic adjustment enabled)
         breakout_direction = None
