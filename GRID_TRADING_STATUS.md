@@ -384,11 +384,13 @@ Once deployed and tested:
 
 3. **Volatile Markets:** Extreme volatility may cause rapid rebalancing
    - **Mitigation:** Cooldown period between rebalances (15 min minimum)
-   - **Status:** TODO - add cooldown logic
+   - **Status:** ✅ IMPLEMENTED - Added configurable cooldown (0-60 min, default 15 min)
+   - **Details:** Grid rebalancing checks `last_breakout_time` and enforces minimum wait between rebalances
 
 4. **Exchange Minimums:** Very small grids may create orders below exchange minimums
    - **Mitigation:** Validation before order placement
-   - **Status:** TODO - add pre-placement validation
+   - **Status:** ✅ IMPLEMENTED - Integrated `order_validation` module into grid service
+   - **Details:** Each grid order validated against Coinbase minimums before placement, skipped orders logged with warnings
 
 ---
 
@@ -402,9 +404,33 @@ Once deployed and tested:
 
 ---
 
-**Last Update:** 2026-01-14 00:15 UTC
+**Last Update:** 2026-01-14 22:15 UTC
 **Ready for:** Production Deployment (awaiting user approval)
 **Next Step:** User review, testing, and explicit approval to merge to main
+
+---
+
+## 🔥 NEW: Production-Ready Enhancements (2026-01-14)
+
+### Rebalancing Cooldown (Volatility Protection)
+- ✅ Added configurable cooldown period between rebalances (default: 15 minutes)
+- ✅ Prevents excessive grid adjustments during extreme volatility
+- ✅ Logs cooldown status when breakout detected but within cooldown window
+- **Parameter:** `rebalance_cooldown_minutes` (0-60 min, default 15)
+- **Logic:** Checks `grid_state.last_breakout_time` before allowing rebalance
+
+### Exchange Minimum Validation
+- ✅ Integrated `order_validation` module into grid service
+- ✅ Each order validated before placement using `validate_order_size()`
+- ✅ Orders below exchange minimum are skipped with warning logs
+- ✅ Summary message shows count of skipped orders
+- ✅ Pre-validation in `validate_config()` warns if order sizes likely below minimum
+
+**Example Log Output:**
+```
+⚠️  Skipping grid level 12 at 0.00034500: Order size 0.00005 BTC is below minimum 0.0001 BTC
+⚠️  5 grid order(s) were skipped because they were below exchange minimum order size
+```
 
 ## 🚀 Deployment Ready!
 

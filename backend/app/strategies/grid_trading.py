@@ -435,6 +435,20 @@ class GridTradingStrategy(TradingStrategy):
                     required=False,
                 ),
 
+                # Rebalance Cooldown
+                StrategyParameter(
+                    name="rebalance_cooldown_minutes",
+                    display_name="Rebalance Cooldown (minutes)",
+                    description="Minimum time between rebalances to prevent excessive adjustments in volatile markets",
+                    type="integer",
+                    default=15,
+                    min_value=0,
+                    max_value=60,
+                    group="advanced",
+                    visible_when={"enable_dynamic_adjustment": True},
+                    required=False,
+                ),
+
                 # Stop Loss
                 StrategyParameter(
                     name="stop_loss_percent",
@@ -626,6 +640,30 @@ class GridTradingStrategy(TradingStrategy):
         if total_investment <= 0:
             raise ValueError("total_investment_quote must be positive")
 
+        # Check if order size per level might be below exchange minimum
+        # For neutral grids, only half the levels are buy orders
+        grid_mode = self.config.get("grid_mode", "neutral")
+        num_buy_levels = num_levels if grid_mode == "long" else num_levels / 2
+        order_size_per_level = total_investment / num_buy_levels
+
+        # Typical minimum is 0.0001 BTC or $1 USD
+        # This is just a warning, not a hard error (actual validation happens at order placement)
+        product_id = self.config.get("product_id", "")
+        if "-BTC" in product_id:
+            min_size = 0.0001
+            if order_size_per_level < min_size:
+                logger.warning(
+                    f"⚠️  Grid order size per level ({order_size_per_level:.8f} BTC) may be below Coinbase minimum ({min_size} BTC). "
+                    f"Consider increasing total_investment_quote or reducing num_grid_levels."
+                )
+        elif "-USD" in product_id:
+            min_size = 1.0
+            if order_size_per_level < min_size:
+                logger.warning(
+                    f"⚠️  Grid order size per level (${order_size_per_level:.2f}) may be below Coinbase minimum (${min_size}). "
+                    f"Consider increasing total_investment_quote or reducing num_grid_levels."
+                )
+
         logger.info(f"Grid config validated: {self.config.get('grid_type')} grid, {num_levels} levels, range_mode={range_mode}")
 
     async def analyze_signal(
@@ -753,12 +791,42 @@ class GridTradingStrategy(TradingStrategy):
             current_range_lower = grid_state.get("current_range_lower", lower)
             threshold = self.config.get("breakout_threshold_percent", 5.0) / 100
 
+            # Check if breakout detected
+            breakout_detected = False
+            potential_direction = None
+
             if current_price > current_range_upper * (1 + threshold):
-                breakout_direction = "upward"
-                logger.warning(f"BREAKOUT DETECTED: Price {current_price:.8f} > upper {current_range_upper:.8f}")
+                breakout_detected = True
+                potential_direction = "upward"
             elif current_price < current_range_lower * (1 - threshold):
-                breakout_direction = "downward"
-                logger.warning(f"BREAKOUT DETECTED: Price {current_price:.8f} < lower {current_range_lower:.8f}")
+                breakout_detected = True
+                potential_direction = "downward"
+
+            # If breakout detected, check cooldown period before allowing rebalance
+            if breakout_detected:
+                cooldown_minutes = self.config.get("rebalance_cooldown_minutes", 15)
+                last_breakout_time = grid_state.get("last_breakout_time")
+
+                can_rebalance = True
+                if last_breakout_time and cooldown_minutes > 0:
+                    last_breakout = datetime.fromisoformat(last_breakout_time)
+                    minutes_elapsed = (datetime.utcnow() - last_breakout).total_seconds() / 60
+
+                    if minutes_elapsed < cooldown_minutes:
+                        can_rebalance = False
+                        logger.info(
+                            f"🕒 Breakout detected but in cooldown period. "
+                            f"Elapsed: {minutes_elapsed:.1f} min, Required: {cooldown_minutes} min"
+                        )
+
+                if can_rebalance:
+                    breakout_direction = potential_direction
+                    logger.warning(
+                        f"BREAKOUT DETECTED: Price {current_price:.8f} "
+                        f"{'>' if potential_direction == 'upward' else '<'} "
+                        f"{'upper' if potential_direction == 'upward' else 'lower'} "
+                        f"{current_range_upper if potential_direction == 'upward' else current_range_lower:.8f}"
+                    )
 
         # Run AI optimization if enabled (returns signal with ai_optimization flag)
         ai_optimization_signal = None

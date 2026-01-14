@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Bot, PendingOrder, Position
 from app.exchange_clients.base import ExchangeClient
+from app.order_validation import validate_order_size, get_product_minimums
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,15 @@ async def initialize_grid(
         base_amount = order_size_quote / level_price
 
         try:
+            # Validate order meets minimum size requirements
+            is_valid, error_msg = await validate_order_size(
+                exchange_client, product_id, quote_amount=order_size_quote, base_amount=base_amount
+            )
+
+            if not is_valid:
+                logger.warning(f"   ⚠️  Skipping grid level {i} at {level_price:.8f}: {error_msg}")
+                continue
+
             # Place limit buy order on exchange
             logger.debug(f"   Placing buy order: price={level_price:.8f}, size={base_amount:.8f}")
 
@@ -166,6 +176,15 @@ async def initialize_grid(
             base_amount = order_size_quote / level_price
 
             try:
+                # Validate order meets minimum size requirements
+                is_valid, error_msg = await validate_order_size(
+                    exchange_client, product_id, quote_amount=order_size_quote, base_amount=base_amount
+                )
+
+                if not is_valid:
+                    logger.warning(f"   ⚠️  Skipping sell level at {level_price:.8f}: {error_msg}")
+                    continue
+
                 logger.debug(f"   Placing sell order: price={level_price:.8f}, size={base_amount:.8f}")
 
                 order_response = await exchange_client.create_limit_order(
@@ -238,6 +257,17 @@ async def initialize_grid(
     }
 
     logger.info(f"🎉 Grid initialized: {buy_orders_placed} buy orders, {sell_orders_placed} sell orders")
+
+    # Warn if some orders were skipped due to size requirements
+    expected_buy_orders = len([level for level in levels if grid_mode == "long" or level < current_price])
+    expected_sell_orders = len([level for level in levels if grid_mode == "neutral" and level > current_price])
+    skipped_orders = (expected_buy_orders - buy_orders_placed) + (expected_sell_orders - sell_orders_placed)
+
+    if skipped_orders > 0:
+        logger.warning(
+            f"⚠️  {skipped_orders} grid order(s) were skipped because they were below exchange minimum order size. "
+            f"Consider increasing total_investment_quote or reducing num_grid_levels."
+        )
 
     return grid_state
 
