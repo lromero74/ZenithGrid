@@ -686,19 +686,45 @@ async def get_account_portfolio(
             total_btc = btc_balance + (eth_balance * eth_btc_price)
             total_usd = (total_btc * btc_usd_price) + usd_balance + usdc_balance + usdt_balance
 
-            # Build spot positions array (compatible with frontend)
-            spot_positions = []
+            # Build holdings array (compatible with frontend Portfolio page)
+            holdings = []
             for currency, amount in balances.items():
                 if amount > 0:
-                    spot_positions.append({
+                    # Calculate USD and BTC values for this holding
+                    if currency == "BTC":
+                        usd_value = amount * btc_usd_price
+                        btc_value = amount
+                        current_price_usd = btc_usd_price
+                    elif currency == "ETH":
+                        btc_value = amount * eth_btc_price
+                        usd_value = btc_value * btc_usd_price
+                        current_price_usd = eth_btc_price * btc_usd_price
+                    elif currency in ["USD", "USDC", "USDT"]:
+                        usd_value = amount
+                        btc_value = amount / btc_usd_price if btc_usd_price > 0 else 0
+                        current_price_usd = 1.0
+                    else:
+                        # Unknown currency
+                        usd_value = 0
+                        btc_value = 0
+                        current_price_usd = 0
+
+                    percentage = (usd_value / total_usd * 100) if total_usd > 0 else 0
+
+                    holdings.append({
                         "asset": currency,
-                        "total_balance_fiat": 0,  # Not used
-                        "total_balance_crypto": str(amount),
-                        "available_balance": {"value": str(amount), "currency": currency}
+                        "total_balance": amount,
+                        "available": amount,
+                        "hold": 0.0,
+                        "current_price_usd": current_price_usd,
+                        "usd_value": usd_value,
+                        "btc_value": btc_value,
+                        "percentage": percentage
                     })
 
             return {
-                "spot_positions": spot_positions,
+                "holdings": holdings,
+                "holdings_count": len(holdings),
                 "total_btc_value": total_btc,
                 "total_usd_value": total_usd,
                 "btc_usd_price": btc_usd_price,
