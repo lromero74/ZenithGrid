@@ -37,6 +37,7 @@ function Bots() {
   const {
     bots,
     botsLoading,
+    botsFetching,
     strategies,
     portfolio,
     aggregateData,
