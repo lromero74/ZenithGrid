@@ -543,6 +543,56 @@ class GridTradingStrategy(TradingStrategy):
                     visible_when={"enable_volume_weighting": True},
                     required=False,
                 ),
+
+                # Time-Based Grid Rotation
+                StrategyParameter(
+                    name="enable_time_rotation",
+                    display_name="Enable Time-Based Profit Rotation",
+                    description="Periodically lock in profits and refresh grid",
+                    type="bool",
+                    default=False,
+                    group="time_rotation",
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="rotation_interval_hours",
+                    display_name="Rotation Interval (hours)",
+                    description="Time between profit-locking rotations",
+                    type="int",
+                    default=48,
+                    min_value=12,
+                    max_value=168,
+                    group="time_rotation",
+                    visible_when={"enable_time_rotation": True},
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="profit_lock_percent",
+                    display_name="Profit Lock Threshold (%)",
+                    description="Close positions with profit >= this percentage on rotation",
+                    type="float",
+                    default=70.0,
+                    min_value=0.0,
+                    max_value=100.0,
+                    group="time_rotation",
+                    visible_when={"enable_time_rotation": True},
+                    required=False,
+                ),
+
+                StrategyParameter(
+                    name="min_profit_to_rotate",
+                    display_name="Minimum Profit to Trigger Rotation",
+                    description="Only rotate if total unrealized profit > this amount (0 = always rotate)",
+                    type="float",
+                    default=0.0,
+                    min_value=0.0,
+                    max_value=999999.0,
+                    group="time_rotation",
+                    visible_when={"enable_time_rotation": True},
+                    required=False,
+                ),
             ],
             supported_products=["ETH-BTC", "ADA-BTC", "DOT-BTC", "BTC-USD", "ETH-USD"],
         )

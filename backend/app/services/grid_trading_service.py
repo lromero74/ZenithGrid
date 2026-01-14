@@ -755,6 +755,43 @@ async def check_and_run_ai_optimization(
         return False
 
 
+async def check_and_run_rotation(
+    bot: Bot,
+    position: Position,
+    exchange_client: ExchangeClient,
+    db: AsyncSession,
+    current_price: float
+) -> bool:
+    """
+    Check if time-based rotation is due and execute if needed.
+
+    Wrapper that calls the grid_rotation_service.
+
+    Args:
+        bot: Bot instance
+        position: Current position
+        exchange_client: Exchange client
+        db: Database session
+        current_price: Current market price
+
+    Returns:
+        True if rotation was executed
+    """
+    try:
+        from app.services.grid_rotation_service import check_and_run_rotation as execute_rotation
+
+        result = await execute_rotation(bot, position, exchange_client, db, current_price)
+
+        if result:
+            logger.info(f"✅ Time-based rotation executed for bot {bot.id}")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error running rotation for bot {bot.id}: {e}", exc_info=True)
+        return False
+
+
 __all__ = [
     "initialize_grid",
     "cancel_grid_orders",
@@ -763,4 +800,5 @@ __all__ = [
     "calculate_new_range_after_breakout",
     "detect_and_handle_breakout",
     "check_and_run_ai_optimization",
+    "check_and_run_rotation",
 ]
