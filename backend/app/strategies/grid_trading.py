@@ -323,7 +323,7 @@ class GridTradingStrategy(TradingStrategy):
                     description="How to determine grid price range",
                     type="string",
                     default="manual",
-                    options=["manual", "auto_volatility"],
+                    options=["manual", "auto_volatility", "hybrid_ai"],
                     group="grid_config",
                     required=True,
                 ),
@@ -667,6 +667,35 @@ class GridTradingStrategy(TradingStrategy):
             )
             logger.info(f"Auto-calculated range: {lower:.8f} - {upper:.8f}")
 
+        elif range_mode == "hybrid_ai":
+            # First, calculate auto range from volatility
+            auto_upper, auto_lower = calculate_auto_range_from_volatility(
+                candles,
+                current_price,
+                buffer_percent=self.config.get("range_buffer_percent", 5.0)
+            )
+
+            logger.info(f"Auto-calculated base range: {auto_lower:.8f} - {auto_upper:.8f}")
+
+            # Then, get AI suggestions for adjustment (if AI client available)
+            ai_adjustments = await self._get_ai_range_suggestions(
+                candles=candles,
+                current_price=current_price,
+                auto_upper=auto_upper,
+                auto_lower=auto_lower,
+                kwargs=kwargs
+            )
+
+            if ai_adjustments:
+                upper = ai_adjustments.get("suggested_upper", auto_upper)
+                lower = ai_adjustments.get("suggested_lower", auto_lower)
+                logger.info(f"AI-adjusted range: {lower:.8f} - {upper:.8f}")
+                logger.info(f"AI reasoning: {ai_adjustments.get('reasoning', 'N/A')}")
+            else:
+                # Fall back to auto range if AI unavailable
+                upper, lower = auto_upper, auto_lower
+                logger.warning("AI range suggestions unavailable, using auto-volatility range")
+
         else:
             raise ValueError(f"Unsupported range_mode: {range_mode}")
 
@@ -804,6 +833,123 @@ class GridTradingStrategy(TradingStrategy):
         else:
             # Monitoring - no action
             return (False, 0, "Grid monitoring - no buy action")
+
+    async def _get_ai_range_suggestions(
+        self,
+        candles: List[Dict[str, Any]],
+        current_price: float,
+        auto_upper: float,
+        auto_lower: float,
+        kwargs: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get AI suggestions for range adjustments (Hybrid AI mode).
+
+        Args:
+            candles: Historical price data
+            current_price: Current market price
+            auto_upper: Auto-calculated upper bound
+            auto_lower: Auto-calculated lower bound
+            kwargs: Additional context (may contain db session, user_id)
+
+        Returns:
+            Dict with suggested_upper, suggested_lower, reasoning, or None if AI unavailable
+        """
+        try:
+            from app.ai_service import get_ai_client
+
+            # Get database session and user_id from kwargs
+            db = kwargs.get("db")
+            bot_config = kwargs.get("bot_config", {})
+            user_id = bot_config.get("user_id")
+
+            if not db or not user_id:
+                logger.warning("Missing db or user_id for AI range suggestions")
+                return None
+
+            # Get AI client
+            ai_client = await get_ai_client(
+                provider="anthropic",  # Default to Anthropic
+                model="claude-sonnet-4.5",
+                db=db,
+                user_id=user_id
+            )
+
+            # Build AI prompt
+            product_id = kwargs.get("product_id") or bot_config.get("product_id", "UNKNOWN")
+
+            # Calculate market metrics
+            prices = [float(c.get("close", current_price)) for c in candles[-30:]] if candles else [current_price]
+            high_30d = max(prices)
+            low_30d = min(prices)
+
+            prompt = f"""Analyze this grid trading range and suggest adjustments.
+
+**Product:** {product_id}
+**Current Price:** {current_price:.8f}
+
+**Auto-Calculated Range (from 30-day volatility):**
+- Upper: {auto_upper:.8f}
+- Lower: {auto_lower:.8f}
+- Range Width: {((auto_upper - auto_lower) / current_price * 100):.1f}%
+
+**Market Data (Last 30 days):**
+- High: {high_30d:.8f}
+- Low: {low_30d:.8f}
+- Current vs 30d High: {((current_price / high_30d - 1) * 100):.1f}%
+- Current vs 30d Low: {((current_price / low_30d - 1) * 100):.1f}%
+
+**Instructions:**
+Evaluate if the auto-calculated range is appropriate for grid trading. Consider:
+1. Is the range too tight or too wide for current market conditions?
+2. Are there nearby support/resistance levels that should be included?
+3. Should the range be asymmetric (wider on one side based on trend)?
+
+**Output Format (JSON):**
+```json
+{{
+  "suggested_upper": <recommended upper bound or {auto_upper}>,
+  "suggested_lower": <recommended lower bound or {auto_lower}>,
+  "reasoning": "Brief explanation of why these bounds are better",
+  "confidence": <0-100 confidence score>
+}}
+```
+
+If the auto-calculated range is already good, return the same values with high confidence.
+"""
+
+            response = await ai_client.analyze(prompt)
+
+            # Parse JSON response
+            import json
+            import re
+
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                else:
+                    logger.warning(f"AI response did not contain valid JSON")
+                    return None
+
+            suggestions = json.loads(json_str)
+
+            # Validate confidence threshold
+            confidence = suggestions.get("confidence", 0)
+            if confidence < 50:
+                logger.warning(f"AI range confidence too low ({confidence}%), using auto range")
+                return None
+
+            logger.info(f"AI range suggestions: upper={suggestions.get('suggested_upper'):.8f}, lower={suggestions.get('suggested_lower'):.8f}, confidence={confidence}%")
+
+            return suggestions
+
+        except Exception as e:
+            logger.error(f"Error getting AI range suggestions: {e}")
+            return None
 
     async def should_sell(
         self, signal_data: Dict[str, Any], position: Any, current_price: float
