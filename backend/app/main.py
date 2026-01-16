@@ -26,6 +26,7 @@ from app.routers import auth_router  # User authentication
 from app.routers import ai_credentials_router  # Per-user AI provider keys
 from app.routers import coin_icons_router  # Proxied coin icons to avoid CORS
 from app.routers import paper_trading_router  # Paper trading account management
+from app.routers import account_value_router  # Account value history tracking
 from app.services.websocket_manager import ws_manager
 from app.services.shutdown_manager import shutdown_manager
 from app.services.content_refresh_service import content_refresh_service
@@ -63,6 +64,7 @@ limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
 missing_order_detector_task = None
 decision_log_cleanup_task = None
+account_snapshot_task = None
 
 
 def override_get_price_monitor():
@@ -87,6 +89,7 @@ app.include_router(sources_router.router)  # Content source subscriptions
 app.include_router(ai_credentials_router.router)  # Per-user AI provider keys
 app.include_router(coin_icons_router.router)  # Proxied coin icons to avoid CORS
 app.include_router(paper_trading_router.router)  # Paper trading account management
+app.include_router(account_value_router.router)  # Account value history tracking
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -241,10 +244,46 @@ async def run_missing_order_detector():
         await asyncio.sleep(300)
 
 
+# Background task for capturing daily account value snapshots
+async def run_account_snapshot_capture():
+    """Background task that captures account value snapshots once per day"""
+    from app.database import async_session_maker
+    from app.services import account_snapshot_service
+    from app.models import User
+    from sqlalchemy import select
+
+    # Wait 5 minutes after startup before first check
+    await asyncio.sleep(300)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                # Get all active users
+                result = await db.execute(select(User).where(User.is_active == True))
+                users = result.scalars().all()
+
+                for user in users:
+                    try:
+                        logger.info(f"Capturing account snapshots for user {user.id}")
+                        result = await account_snapshot_service.capture_all_account_snapshots(db, user.id)
+                        logger.info(f"User {user.id}: {result['success_count']}/{result['total_accounts']} snapshots captured")
+                        if result['errors']:
+                            for error in result['errors']:
+                                logger.warning(f"Snapshot error: {error}")
+                    except Exception as e:
+                        logger.error(f"Failed to capture snapshots for user {user.id}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in account snapshot capture loop: {e}")
+
+        # Run once per day (24 hours)
+        await asyncio.sleep(86400)
+
+
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task, account_snapshot_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -289,13 +328,17 @@ async def startup_event():
     decision_log_cleanup_task = asyncio.create_task(cleanup_old_decision_logs())
     print("🚀 Decision log cleanup job started - cleaning old logs daily")
 
+    print("🚀 Starting account snapshot capture job...")
+    account_snapshot_task = asyncio.create_task(run_account_snapshot_capture())
+    print("🚀 Account snapshot capture job started - capturing daily account values")
+
     print("🚀 Startup complete!")
     print("🚀 ========================================")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task, account_snapshot_task
 
     logger.info("🛑 Shutting down - waiting for in-flight orders...")
 
@@ -344,6 +387,13 @@ async def shutdown_event():
         decision_log_cleanup_task.cancel()
         try:
             await decision_log_cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+    if account_snapshot_task:
+        account_snapshot_task.cancel()
+        try:
+            await account_snapshot_task
         except asyncio.CancelledError:
             pass
 

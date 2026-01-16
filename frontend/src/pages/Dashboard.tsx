@@ -17,6 +17,7 @@ import { Bot } from '../types'
 import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
 import { useAccount, getChainName } from '../contexts/AccountContext'
+import { AccountValueChart } from '../components/AccountValueChart'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
 
@@ -209,6 +210,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </p>
         </div>
       </div>
+
+      {/* Account Value Chart */}
+      <AccountValueChart />
 
       {/* Recent Deals */}
       {recentDeals.length > 0 && (

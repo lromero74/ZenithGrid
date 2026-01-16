@@ -790,3 +790,28 @@ class UserSourceSubscription(Base):
     # Relationships
     user = relationship("User", back_populates="source_subscriptions")
     source = relationship("ContentSource", back_populates="subscriptions")
+
+
+class AccountValueSnapshot(Base):
+    """
+    Daily snapshot of account value for historical tracking.
+
+    Stores total account value in both BTC and USD for charting over time.
+    Captured once daily by scheduled task.
+    """
+    __tablename__ = "account_value_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    snapshot_date = Column(DateTime, nullable=False, index=True)
+    total_value_btc = Column(Float, nullable=False, default=0.0)
+    total_value_usd = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Unique constraint: one snapshot per account per day
+    __table_args__ = (UniqueConstraint("account_id", "snapshot_date", name="uq_account_snapshot_date"),)
+
+    # Relationships
+    account = relationship("Account")
+    user = relationship("User")

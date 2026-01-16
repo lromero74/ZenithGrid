@@ -1087,6 +1087,25 @@ def initialize_database(project_root):
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_user_source_subscriptions_user_id ON user_source_subscriptions(user_id)")
 
+        # Account value snapshots (daily historical tracking)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS account_value_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                snapshot_date DATETIME NOT NULL,
+                total_value_btc REAL NOT NULL DEFAULT 0.0,
+                total_value_usd REAL NOT NULL DEFAULT 0.0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(account_id, snapshot_date)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_account_value_snapshots_account_id ON account_value_snapshots(account_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_account_value_snapshots_user_id ON account_value_snapshots(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_account_value_snapshots_date ON account_value_snapshots(snapshot_date)")
+
         # Seed default content sources
         default_sources = [
             # News sources
