@@ -113,8 +113,20 @@ function AppContent() {
   const totalBtcValue = portfolio?.total_btc_value || 0
   const totalUsdValue = portfolio?.total_usd_value || 0
 
-  // Calculate BTC/USD price from portfolio data
-  const btcUsdPrice = totalBtcValue > 0 ? totalUsdValue / totalBtcValue : 0
+  // Fetch BTC/USD price directly from market data (not calculated from portfolio)
+  // This ensures correct price display regardless of paper trading balances
+  const { data: btcPriceData } = useQuery({
+    queryKey: ['btc-usd-price'],
+    queryFn: async () => {
+      const response = await fetch('/api/market/btc-usd-price')
+      if (!response.ok) throw new Error('Failed to fetch BTC price')
+      return response.json()
+    },
+    refetchInterval: 60000, // Update every 60 seconds
+    staleTime: 30000, // Consider data fresh for 30 seconds
+  })
+
+  const btcUsdPrice = btcPriceData?.price || 0
   const usdBtcPrice = btcUsdPrice > 0 ? 1 / btcUsdPrice : 0
 
   // Fetch closed and failed positions to count total history items (deferred)
