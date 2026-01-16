@@ -56,6 +56,11 @@ export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitc
     setIsOpen(false)
   }
 
+  // Hide account switcher when paper trading is active
+  if (selectedAccount?.is_paper_trading === true) {
+    return <></>
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center space-x-2 px-3 py-2 bg-slate-700 rounded-lg animate-pulse">

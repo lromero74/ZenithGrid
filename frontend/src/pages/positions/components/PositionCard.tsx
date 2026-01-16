@@ -10,6 +10,7 @@ import {
   DealChart,
   PriceBar,
 } from '../../../components/positions'
+import { GridVisualizer } from '../../../components/GridVisualizer'
 import axios from 'axios'
 import { API_BASE_URL } from '../../../config/api'
 
@@ -410,12 +411,22 @@ export const PositionCard = ({
       {/* Expandable Details Section (keep existing chart/details) */}
       {selectedPosition === position.id && (
         <div className="border-t border-slate-700 bg-slate-900/50 p-6">
-          <DealChart
-            position={position}
-            productId={position.product_id || "ETH-BTC"}
-            currentPrice={currentPrice}
-            trades={trades}
-          />
+          {/* Grid Trading Visualization */}
+          {bot?.strategy_type === 'grid_trading' && bot?.strategy_config?.grid_state && currentPrice ? (
+            <GridVisualizer
+              gridState={bot.strategy_config.grid_state}
+              currentPrice={currentPrice}
+              productId={position.product_id || 'ETH-BTC'}
+            />
+          ) : (
+            /* Default Deal Chart for non-grid positions */
+            <DealChart
+              position={position}
+              productId={position.product_id || "ETH-BTC"}
+              currentPrice={currentPrice}
+              trades={trades}
+            />
+          )}
         </div>
       )}
     </div>

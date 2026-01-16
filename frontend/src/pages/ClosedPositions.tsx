@@ -92,14 +92,12 @@ function ClosedPositions() {
 
   const { data: failedOrdersData, isLoading: isLoadingFailed } = useQuery({
     queryKey: ['order-history-failed-paginated', selectedAccount?.id, failedPage],
-    queryFn: () => orderHistoryApi.getFailedPaginated(failedPage, pageSize),
+    queryFn: () => orderHistoryApi.getFailedPaginated(failedPage, pageSize, undefined, selectedAccount?.id),
     refetchInterval: 30000,
   })
 
-  // Filter by account_id on the client side (API returns all accounts)
-  const failedOrders = failedOrdersData?.items?.filter((order: any) =>
-    !selectedAccount || order.account_id === selectedAccount.id
-  ) || []
+  // API now filters by account_id on server side
+  const failedOrders = failedOrdersData?.items || []
   const failedTotal = failedOrdersData?.total || 0
   const failedTotalPages = failedOrdersData?.total_pages || 1
 

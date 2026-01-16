@@ -173,100 +173,101 @@ function AppContent() {
     <VideoPlayerProvider>
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700">
-        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold">Zenith Grid</h1>
-                <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
-                  Multi-Strategy Trading Platform{' '}
-                  <button
-                    onClick={() => setShowAboutModal(true)}
-                    className={`${updateAvailable ? 'text-yellow-500' : 'text-slate-500'} hover:text-blue-400 hover:underline transition-colors cursor-pointer`}
-                    title="Click to view changelog"
-                  >
-                    {appVersion}
-                  </button>
-                  {updateAvailable && (
+      <header className="sticky top-0 z-50 bg-slate-800">
+        <div className="border-b border-slate-700">
+          <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold">Zenith Grid</h1>
+                  <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
+                    Multi-Strategy Trading Platform{' '}
                     <button
                       onClick={() => setShowAboutModal(true)}
-                      className="ml-1 text-green-400 hover:text-green-300 hover:underline transition-colors cursor-pointer"
-                      title={`Latest: ${latestVersion} - Click to view changelog`}
+                      className={`${updateAvailable ? 'text-yellow-500' : 'text-slate-500'} hover:text-blue-400 hover:underline transition-colors cursor-pointer`}
+                      title="Click to view changelog"
                     >
-                      ({latestVersion} available)
+                      {appVersion}
                     </button>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
-              {/* Paper Trading Toggle */}
-              <PaperTradingToggle />
-
-              {/* Account Switcher */}
-              <AccountSwitcher
-                onAddAccount={() => setShowAddAccountModal(true)}
-                onManageAccounts={() => navigate('/settings')}
-              />
-
-              <div className="text-right hidden sm:block">
-                <p className="text-xs text-slate-400">BTC Price</p>
-                <p className="text-sm font-medium text-orange-400">
-                  ${btcUsdPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {usdBtcPrice.toFixed(8)} BTC/USD
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs sm:text-sm text-slate-400">Account Value</p>
-                <p className="text-base sm:text-xl font-bold text-blue-400">
-                  {totalBtcValue.toFixed(6)} BTC
-                </p>
-                <p className="text-xs sm:text-sm text-green-400">
-                  ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </p>
-              </div>
-              <DollarSign className="w-8 h-8 sm:w-10 sm:h-10 text-green-500 opacity-50" />
-
-              {/* User Info & Logout */}
-              <div className="flex items-center space-x-2 pl-4 border-l border-slate-600">
-                <div className="text-right hidden sm:block">
-                  <p className="text-xs text-slate-400">Logged in as</p>
-                  <p className="text-sm text-slate-200">{user?.display_name || user?.email}</p>
+                    {updateAvailable && (
+                      <button
+                        onClick={() => setShowAboutModal(true)}
+                        className="ml-1 text-green-400 hover:text-green-300 hover:underline transition-colors cursor-pointer"
+                        title={`Latest: ${latestVersion} - Click to view changelog`}
+                      >
+                        ({latestVersion} available)
+                      </button>
+                    )}
+                  </p>
                 </div>
-                <button
-                  onClick={() => setShowLogoutConfirm(true)}
-                  className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
-                  title="Sign Out"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
+              </div>
+              <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
+                {/* Paper Trading Toggle */}
+                <PaperTradingToggle />
+
+                {/* Account Switcher */}
+                <AccountSwitcher
+                  onAddAccount={() => setShowAddAccountModal(true)}
+                  onManageAccounts={() => navigate('/settings')}
+                />
+
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs text-slate-400">BTC Price</p>
+                  <p className="text-sm font-medium text-orange-400">
+                    ${btcUsdPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {usdBtcPrice.toFixed(8)} BTC/USD
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs sm:text-sm text-slate-400">Account Value</p>
+                  <p className="text-base sm:text-xl font-bold text-blue-400">
+                    {totalBtcValue.toFixed(6)} BTC
+                  </p>
+                  <p className="text-xs sm:text-sm text-green-400">
+                    ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </p>
+                </div>
+                <DollarSign className="w-8 h-8 sm:w-10 sm:h-10 text-green-500 opacity-50" />
+
+                {/* User Info & Logout */}
+                <div className="flex items-center space-x-2 pl-4 border-l border-slate-600">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs text-slate-400">Logged in as</p>
+                    <p className="text-sm text-slate-200">{user?.display_name || user?.email}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowLogoutConfirm(true)}
+                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </header>
 
-      {/* Paper Trading Mode Indicator */}
-      {selectedAccount?.is_paper_trading && (
-        <div className="bg-yellow-900/50 border-b border-yellow-600/50">
-          <div className="container mx-auto px-4 sm:px-6 py-2">
-            <div className="flex items-center justify-center space-x-2 text-yellow-200">
-              <AlertTriangle className="w-5 h-5" />
-              <span className="text-sm font-medium">
-                Paper Trading Mode - All trades are simulated
-              </span>
-              <AlertTriangle className="w-5 h-5" />
+        {/* Paper Trading Mode Indicator */}
+        {selectedAccount?.is_paper_trading && (
+          <div className="bg-yellow-900/50 border-b border-yellow-600/50">
+            <div className="container mx-auto px-4 sm:px-6 py-2">
+              <div className="flex items-center justify-center space-x-2 text-yellow-200">
+                <AlertTriangle className="w-5 h-5" />
+                <span className="text-sm font-medium">
+                  Paper Trading Mode - All trades are simulated
+                </span>
+                <AlertTriangle className="w-5 h-5" />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Navigation */}
-      <nav className="bg-slate-800 border-b border-slate-700 overflow-x-auto">
+        {/* Navigation */}
+        <nav className="bg-slate-800 border-b border-slate-700 overflow-x-auto">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex space-x-1 min-w-max sm:min-w-0">
             {/* Account-Specific Pages */}
@@ -389,6 +390,7 @@ function AppContent() {
           </div>
         </div>
       </nav>
+      </header>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">

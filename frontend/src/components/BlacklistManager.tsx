@@ -51,9 +51,8 @@ export function BlacklistManager() {
   const [error, setError] = useState<string | null>(null)
   const [savingSymbol, setSavingSymbol] = useState<string | null>(null)
 
-  // Category settings
+  // Category settings (used for fetching, but permissions now handled at bot level)
   const [categorySettings, setCategorySettings] = useState<CategorySettings | null>(null)
-  const [savingCategories, setSavingCategories] = useState(false)
 
   // AI Review
   const [runningAIReview, setRunningAIReview] = useState(false)
@@ -173,37 +172,6 @@ export function BlacklistManager() {
     }
     return counts
   }, [coinList])
-
-  // Toggle category trading permission
-  const toggleCategory = async (category: string) => {
-    if (!categorySettings || savingCategories) return
-
-    setSavingCategories(true)
-    setError(null)
-
-    try {
-      const currentAllowed = categorySettings.allowed_categories
-      let newAllowed: string[]
-
-      if (currentAllowed.includes(category)) {
-        newAllowed = currentAllowed.filter((c) => c !== category)
-        if (newAllowed.length === 0) {
-          setError('At least one category must be allowed to trade')
-          setSavingCategories(false)
-          return
-        }
-      } else {
-        newAllowed = [...currentAllowed, category]
-      }
-
-      const updated = await blacklistApi.updateCategories(newAllowed)
-      setCategorySettings(updated)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update category settings')
-    } finally {
-      setSavingCategories(false)
-    }
-  }
 
   // Change coin category
   const changeCoinCategory = async (symbol: string, newCategory: string, currentReasonText: string) => {
@@ -332,83 +300,42 @@ export function BlacklistManager() {
         </button>
       </div>
 
-      {/* Category Trading Permissions */}
-      {categorySettings && (
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h4 className="font-medium text-white text-sm">Category Trading Permissions</h4>
-              <p className="text-xs text-slate-400">Select which categories are allowed to open new positions</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* AI Provider Selector */}
-              {aiProviderSettings && (
-                <select
-                  value={aiProviderSettings.provider}
-                  onChange={(e) => updateAIProvider(e.target.value)}
-                  disabled={savingAIProvider || runningAIReview}
-                  className="px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500 disabled:opacity-50"
-                  title="Select AI provider for coin review"
-                >
-                  {aiProviderSettings.available_providers.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider.charAt(0).toUpperCase() + provider.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <button
-                onClick={triggerAIReview}
-                disabled={runningAIReview}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
-                title="Run AI to re-categorize all coins"
+      {/* AI Coin Review */}
+      <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-medium text-white text-sm">Coin Categorization</h4>
+            <p className="text-xs text-slate-400">AI-reviewed coin safety categories. Category filters are set per-bot when creating/editing bots.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* AI Provider Selector */}
+            {aiProviderSettings && (
+              <select
+                value={aiProviderSettings.provider}
+                onChange={(e) => updateAIProvider(e.target.value)}
+                disabled={savingAIProvider || runningAIReview}
+                className="px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                title="Select AI provider for coin review"
               >
-                <Sparkles className={`w-4 h-4 ${runningAIReview ? 'animate-pulse' : ''}`} />
-                {runningAIReview ? 'Reviewing...' : 'AI Review'}
-              </button>
-            </div>
+                {aiProviderSettings.available_providers.map((provider) => (
+                  <option key={provider} value={provider}>
+                    {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={triggerAIReview}
+              disabled={runningAIReview}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
+              title="Run AI to re-categorize all coins"
+            >
+              <Sparkles className={`w-4 h-4 ${runningAIReview ? 'animate-pulse' : ''}`} />
+              {runningAIReview ? 'Reviewing...' : 'AI Review'}
+            </button>
           </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {CATEGORIES.map((category) => {
-              const config = CATEGORY_CONFIG[category]
-              const isAllowed = categorySettings.allowed_categories.includes(category)
-              const count = categoryCounts[category] || 0
-
-              return (
-                <button
-                  key={category}
-                  onClick={() => toggleCategory(category)}
-                  disabled={savingCategories}
-                  className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
-                    isAllowed
-                      ? `${config.bgColor} ${config.borderColor} border-2`
-                      : 'bg-slate-700/30 border-slate-600 opacity-60 hover:opacity-80'
-                  } ${savingCategories ? 'cursor-wait' : 'cursor-pointer'}`}
-                >
-                  <div className="flex items-center gap-2">
-                    {isAllowed ? (
-                      <ToggleRight className={`w-5 h-5 ${config.color}`} />
-                    ) : (
-                      <ToggleLeft className="w-5 h-5 text-slate-500" />
-                    )}
-                    <span className={`text-sm font-medium ${isAllowed ? config.color : 'text-slate-400'}`}>
-                      {config.label}
-                    </span>
-                  </div>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${isAllowed ? config.bgColor : 'bg-slate-600'} ${isAllowed ? config.color : 'text-slate-400'}`}>
-                    {count}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          <p className="text-xs text-slate-500 mt-3">
-            Coins in allowed categories can open new positions. Position badges still show for all categories.
-          </p>
         </div>
-      )}
+      </div>
 
       {/* Error Message */}
       {error && (

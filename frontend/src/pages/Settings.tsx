@@ -5,6 +5,7 @@ import { PaperTradingManager } from '../components/PaperTradingManager'
 import { AddAccountModal } from '../components/AddAccountModal'
 import { AIProvidersManager } from '../components/AIProvidersManager'
 import { AutoBuySettings } from '../components/AutoBuySettings'
+import { BlacklistManager } from '../components/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
 import { settingsApi } from '../services/api'
@@ -12,7 +13,10 @@ import { settingsApi } from '../services/api'
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const { user, changePassword } = useAuth()
-  const { accounts } = useAccount()
+  const { accounts, selectedAccount } = useAccount()
+
+  // Check if paper trading is currently active
+  const isPaperTradingActive = Boolean(selectedAccount?.is_paper_trading)
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -225,14 +229,21 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Accounts Management Section */}
-      <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
+      {/* Accounts Management Section - Hidden when paper trading is active */}
+      {!isPaperTradingActive && (
+        <AccountsManagement onAddAccount={() => setShowAddAccountModal(true)} />
+      )}
 
       {/* Paper Trading Section */}
       <PaperTradingManager />
 
-      {/* Auto-Buy BTC Section */}
-      <AutoBuySettings accounts={accounts} />
+      {/* Auto-Buy BTC Section - Hidden when paper trading is active */}
+      {!isPaperTradingActive && (
+        <AutoBuySettings accounts={accounts} />
+      )}
+
+      {/* Coin Categorization Section - Always visible (informational) */}
+      <BlacklistManager />
 
       {/* AI Providers Section */}
       <AIProvidersManager />

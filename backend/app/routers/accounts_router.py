@@ -122,6 +122,7 @@ class AccountResponse(BaseModel):
     type: str
     is_default: bool
     is_active: bool
+    is_paper_trading: bool = False
 
     # CEX fields
     exchange: Optional[str] = None
@@ -233,6 +234,7 @@ async def list_accounts(
                 type=account.type,
                 is_default=account.is_default,
                 is_active=account.is_active,
+                is_paper_trading=account.is_paper_trading or False,
                 exchange=account.exchange,
                 api_key_name=account.api_key_name,
                 chain_id=account.chain_id,
@@ -283,6 +285,7 @@ async def get_account(
             type=account.type,
             is_default=account.is_default,
             is_active=account.is_active,
+            is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
             api_key_name=account.api_key_name,
             chain_id=account.chain_id,
@@ -369,6 +372,7 @@ async def create_account(
             type=account.type,
             is_default=account.is_default,
             is_active=account.is_active,
+            is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
             api_key_name=account.api_key_name,
             chain_id=account.chain_id,
@@ -432,6 +436,7 @@ async def update_account(
             type=account.type,
             is_default=account.is_default,
             is_active=account.is_active,
+            is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
             api_key_name=account.api_key_name,
             chain_id=account.chain_id,
@@ -613,6 +618,7 @@ async def get_default_account(
             type=account.type,
             is_default=account.is_default,
             is_active=account.is_active,
+            is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
             api_key_name=account.api_key_name,
             chain_id=account.chain_id,

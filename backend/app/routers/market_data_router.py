@@ -31,33 +31,30 @@ router = APIRouter(prefix="/api", tags=["market_data"])
 
 async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
     """
-    Get Coinbase client from the first active CEX account in the database.
+    Get Coinbase client for market data.
 
-    TODO: Once authentication is wired up, this should get the exchange
-    client for the currently logged-in user's account.
+    Excludes paper trading accounts and uses real CEX account credentials.
+    If no user account is available, falls back to system credentials.
     """
-    # Get first active CEX account
+    # Get first active CEX account (excluding paper trading accounts)
     result = await db.execute(
         select(Account).where(
             Account.type == "cex",
-            Account.is_active.is_(True)
+            Account.is_active.is_(True),
+            Account.is_paper_trading.is_not(True)  # Exclude paper trading accounts
         ).order_by(Account.is_default.desc(), Account.created_at)
     )
     account = result.scalar_one_or_none()
 
-    if not account:
-        raise HTTPException(
-            status_code=503,
-            detail="No Coinbase account configured. Please add your API credentials in Settings."
+    # If no user account found, use system credentials
+    if not account or not account.api_key_name or not account.api_private_key:
+        logger.info("No user CEX account found, using system Coinbase credentials for market data")
+        return CoinbaseClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret
         )
 
-    if not account.api_key_name or not account.api_private_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Coinbase account missing API credentials. Please update in Settings."
-        )
-
-    # Create and return the client
+    # Create and return client using user's credentials
     client = create_exchange_client(
         exchange_type="cex",
         coinbase_key_name=account.api_key_name,
@@ -65,9 +62,11 @@ async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
     )
 
     if not client:
-        raise HTTPException(
-            status_code=503,
-            detail="Failed to create Coinbase client. Please check your API credentials."
+        # Fallback to system credentials if user client fails
+        logger.warning("Failed to create user Coinbase client, using system credentials")
+        return CoinbaseClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret
         )
 
     return client

@@ -690,7 +690,18 @@ def initialize_database(project_root):
                 wallet_type TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                last_used_at DATETIME
+                last_used_at DATETIME,
+                auto_buy_enabled BOOLEAN DEFAULT 0,
+                auto_buy_check_interval_minutes INTEGER DEFAULT 60,
+                auto_buy_order_type TEXT DEFAULT 'market',
+                auto_buy_usd_enabled BOOLEAN DEFAULT 0,
+                auto_buy_usd_min REAL DEFAULT 0.0,
+                auto_buy_usdc_enabled BOOLEAN DEFAULT 0,
+                auto_buy_usdc_min REAL DEFAULT 0.0,
+                auto_buy_usdt_enabled BOOLEAN DEFAULT 0,
+                auto_buy_usdt_min REAL DEFAULT 0.0,
+                is_paper_trading BOOLEAN DEFAULT 0,
+                paper_balances TEXT
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_accounts_user_id ON accounts(user_id)")
@@ -920,7 +931,9 @@ def initialize_database(project_root):
                 remaining_base_amount REAL,
                 time_in_force TEXT NOT NULL DEFAULT 'gtc',
                 end_time DATETIME,
-                is_manual BOOLEAN NOT NULL DEFAULT 0
+                is_manual BOOLEAN NOT NULL DEFAULT 0,
+                reserved_amount_quote REAL DEFAULT 0.0,
+                reserved_amount_base REAL DEFAULT 0.0
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_pending_orders_order_id ON pending_orders(order_id)")
@@ -1166,6 +1179,129 @@ print(hashed.decode('utf-8'))
         conn.rollback()
         print_error(f"Failed to create admin user: {e}")
         return None
+    finally:
+        conn.close()
+
+
+def seed_coin_categorizations(project_root, user_id):
+    """Seed initial coin categorizations with AI-reviewed safety assessments"""
+    db_path = project_root / 'backend' / 'trading.db'
+
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    try:
+        # Check if any categorizations already exist
+        cursor.execute("SELECT COUNT(*) FROM blacklisted_coins WHERE user_id = ?", (user_id,))
+        existing_count = cursor.fetchone()[0]
+
+        if existing_count > 0:
+            print_info(f"Coin categorizations already exist ({existing_count} coins)")
+            return True
+
+        # Comprehensive coin categorizations - essential [APPROVED] coins and major [MEME] coins
+        # Full production database has 361 coins; this includes most important ones
+        coin_categories = [
+            ('1INCH', '[APPROVED] DEX aggregator, useful DeFi tool'),
+            ('AAVE', '[APPROVED] Leading DeFi lending platform'),
+            ('ADA', '[APPROVED] Solid tech, active development'),
+            ('ALGO', '[APPROVED] Fast, secure blockchain'),
+            ('APT', '[APPROVED] New blockchain, promising tech'),
+            ('ARB', '[APPROVED] Ethereum Layer 2 scaling solution'),
+            ('ATOM', '[APPROVED] Cosmos, internet of blockchains'),
+            ('AVAX', '[APPROVED] Fast, scalable blockchain'),
+            ('BAL', '[APPROVED] DEX, automated portfolio manager'),
+            ('BAT', '[APPROVED] Brave browser integration, privacy focus'),
+            ('BNB', '[APPROVED] Binance ecosystem, high utility'),
+            ('BTC', '[APPROVED] Dominant cryptocurrency, store of value'),
+            ('CBETH', '[APPROVED] Coinbase ETH staking derivative'),
+            ('COMP', '[APPROVED] DeFi lending protocol, established'),
+            ('CRV', '[APPROVED] Curve Finance governance token, DeFi'),
+            ('CVX', '[APPROVED] Convex Finance, boosts CRV rewards'),
+            ('DAI', '[APPROVED] Decentralized stablecoin, widely used'),
+            ('DOT', '[APPROVED] Solid tech, parachains, active development'),
+            ('ENS', '[APPROVED] Decentralized naming, growing adoption'),
+            ('ETH', '[APPROVED] #2 crypto, massive ecosystem, DeFi foundation'),
+            ('EURC', '[APPROVED] Euro-backed stablecoin, regulated'),
+            ('FET', '[APPROVED] AI focus, solid partnerships, growing use'),
+            ('GNO', '[APPROVED] Solid tech, DAO tooling, active dev'),
+            ('GRT', '[APPROVED] Indexing protocol, growing adoption'),
+            ('HBAR', '[APPROVED] Hashgraph tech, enterprise focus'),
+            ('ILV', '[APPROVED] Gaming/NFT project, active development'),
+            ('IMX', '[APPROVED] Layer-2 scaling for NFTs, strong partnerships'),
+            ('INJ', '[APPROVED] DeFi focused blockchain, growing ecosystem'),
+            ('IOTX', '[APPROVED] Decentralized IoT platform, real-world use'),
+            ('JUPITER', '[APPROVED] Solana DEX aggregator, high volume'),
+            ('KAVA', '[APPROVED] Cross-chain DeFi platform, growing TVL'),
+            ('KSM', "[APPROVED] Polkadot's canary network, innovation"),
+            ('LDO', '[APPROVED] Lido DAO, liquid staking dominance'),
+            ('LINK', '[APPROVED] Decentralized oracle network, essential'),
+            ('LPT', '[APPROVED] Livepeer, decentralized video streaming'),
+            ('LQTY', '[APPROVED] Decentralized borrowing protocol'),
+            ('LTC', '[APPROVED] Established cryptocurrency, payment focus'),
+            ('MAGIC', '[APPROVED] Gaming ecosystem, active development'),
+            ('MANA', '[APPROVED] Decentraland, metaverse platform'),
+            ('MANTLE', '[APPROVED] Ethereum Layer-2, growing ecosystem'),
+            ('MASK', '[APPROVED] Web3 social protocol, privacy focus'),
+            ('METIS', '[APPROVED] Ethereum Layer-2, growing ecosystem'),
+            ('MINA', '[APPROVED] Succinct blockchain, privacy focus'),
+            ('MKR', '[APPROVED] Governance token for MakerDAO, stablecoin leader'),
+            ('MORPHO', '[APPROVED] Optimized DeFi lending, growing TVL'),
+            ('NEAR', '[APPROVED] Scalable blockchain, active development'),
+            ('OCEAN', '[APPROVED] Data sharing protocol, growing ecosystem'),
+            ('ONDO', '[APPROVED] Tokenized real-world assets, institutional focus'),
+            ('OP', '[APPROVED] Optimism L2 scaling solution, growing ecosystem'),
+            ('ORCA', '[APPROVED] Solana DEX, strong performance'),
+            ('OSMO', '[APPROVED] Cosmos DEX, interchain focus'),
+            ('PAX', '[APPROVED] Stablecoin, regulated, reliable'),
+            ('PAXG', '[APPROVED] Gold-backed token, stable value'),
+            ('PENDLE', '[APPROVED] Yield trading protocol, innovative DeFi'),
+            ('PERP', '[APPROVED] Perpetual futures DEX, growing adoption'),
+            ('PNG', '[APPROVED] Avalanche DEX, established platform'),
+            ('PYTH', '[APPROVED] Decentralized financial data, growing adoption'),
+            ('QNT', '[APPROVED] Interoperability focus, strong partnerships'),
+            ('RENDER', '[APPROVED] Decentralized GPU rendering, growing demand'),
+            ('RONIN', '[APPROVED] Gaming blockchain, strong ecosystem'),
+            ('RPL', '[APPROVED] Ethereum staking infrastructure, solid utility'),
+            ('SAND', '[APPROVED] Metaverse platform, established presence'),
+            ('SNX', '[APPROVED] Derivatives platform, established DeFi'),
+            ('SOL', '[APPROVED] Fast blockchain, growing ecosystem'),
+            ('STORJ', '[APPROVED] Decentralized storage, real-world use'),
+            ('STX', '[APPROVED] Bitcoin L2, growing ecosystem'),
+            ('TAO', '[APPROVED] Decentralized AI compute network, strong growth'),
+            ('TIA', '[APPROVED] Modular blockchain, promising tech'),
+            ('TON', '[APPROVED] Telegram-integrated blockchain, growing ecosystem'),
+            ('UMA', '[APPROVED] Synthetic assets, established DeFi project'),
+            ('UNI', '[APPROVED] Leading DEX, strong governance'),
+            ('USDT', '[APPROVED] Dominant stablecoin, high liquidity'),
+            ('VET', '[APPROVED] Supply chain blockchain, enterprise adoption'),
+            ('WLD', '[APPROVED] Worldcoin, identity protocol, controversial'),
+            ('XLM', '[APPROVED] Fast, cheap payments, established network'),
+            ('XRP', '[APPROVED] Payment protocol, regulatory uncertainty'),
+            ('YFI', '[APPROVED] Yield farming aggregator, established DeFi'),
+            ('ZRX', '[APPROVED] Decentralized exchange protocol, established project'),
+            ('DOGE', '[MEME] Original meme coin, community-driven'),
+            ('PEPE', '[MEME] Popular meme coin, high volatility'),
+            ('SHIB', '[MEME] Popular meme coin, high volatility'),
+            ('BONK', '[MEME] Solana meme coin, community-driven'),
+            ('FLOKI', '[MEME] Meme coin, speculative, high risk'),
+        ]
+
+        # Insert all categorizations
+        for symbol, reason in coin_categories:
+            cursor.execute("""
+                INSERT OR IGNORE INTO blacklisted_coins (user_id, symbol, reason, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, symbol, reason, datetime.utcnow()))
+
+        conn.commit()
+        print_success(f"Seeded {len(coin_categories)} coin categorizations")
+        return True
+
+    except Exception as e:
+        conn.rollback()
+        print_error(f"Failed to seed coin categorizations: {e}")
+        return False
     finally:
         conn.close()
 
@@ -1881,6 +2017,10 @@ def run_setup():
         # Need to ensure bcrypt is available
         sys.path.insert(0, str(project_root / 'backend'))
         user_id = create_admin_user(project_root, email, password, display_name or None)
+
+        # Seed initial coin categorizations
+        if user_id:
+            seed_coin_categorizations(project_root, user_id)
 
         # Prompt for Coinbase credentials if user was created
         if user_id:

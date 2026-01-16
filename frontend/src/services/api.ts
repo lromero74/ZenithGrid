@@ -279,22 +279,30 @@ export interface PaginatedResponse<T> {
 }
 
 export const orderHistoryApi = {
-  getAll: (botId?: number, status?: string, limit = 100, offset = 0) => {
+  getAll: (botId?: number, accountId?: number, status?: string, limit = 100, offset = 0) => {
     const params: any = { limit, offset };
     if (botId !== undefined) params.bot_id = botId;
+    if (accountId !== undefined) params.account_id = accountId;
     if (status) params.status = status;
     return api.get<OrderHistory[]>('/order-history', { params }).then((res) => res.data);
   },
-  getFailed: (botId?: number, limit = 50) =>
-    api.get<OrderHistory[]>('/order-history/failed', {
-      params: { bot_id: botId, limit }
-    }).then((res) => res.data),
-  getFailedPaginated: (page = 1, pageSize = 25, botId?: number) =>
-    api.get<PaginatedResponse<OrderHistory>>('/order-history/failed/paginated', {
-      params: { page, page_size: pageSize, bot_id: botId }
-    }).then((res) => res.data),
-  getStats: (botId?: number) =>
-    api.get<{
+  getFailed: (botId?: number, accountId?: number, limit = 50) => {
+    const params: any = { limit };
+    if (botId !== undefined) params.bot_id = botId;
+    if (accountId !== undefined) params.account_id = accountId;
+    return api.get<OrderHistory[]>('/order-history/failed', { params }).then((res) => res.data);
+  },
+  getFailedPaginated: (page = 1, pageSize = 25, botId?: number, accountId?: number) => {
+    const params: any = { page, page_size: pageSize };
+    if (botId !== undefined) params.bot_id = botId;
+    if (accountId !== undefined) params.account_id = accountId;
+    return api.get<PaginatedResponse<OrderHistory>>('/order-history/failed/paginated', { params }).then((res) => res.data);
+  },
+  getStats: (botId?: number, accountId?: number) => {
+    const params: any = {};
+    if (botId !== undefined) params.bot_id = botId;
+    if (accountId !== undefined) params.account_id = accountId;
+    return api.get<{
       total_orders: number;
       successful_orders: number;
       failed_orders: number;
@@ -302,8 +310,9 @@ export const orderHistoryApi = {
       success_rate: number;
       failure_rate: number;
     }>('/order-history/stats', {
-      params: botId !== undefined ? { bot_id: botId } : undefined
-    }).then((res) => res.data),
+      params: Object.keys(params).length > 0 ? params : undefined
+    }).then((res) => res.data);
+  },
 };
 
 export interface BlacklistEntry {

@@ -59,6 +59,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 async def get_order_history(
     db: AsyncSession = Depends(get_db),
     bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
+    account_id: Optional[int] = Query(None, description="Filter by account ID"),
     status: Optional[str] = Query(None, description="Filter by status (success, failed, canceled)"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
     offset: int = Query(0, ge=0, description="Number of records to skip"),
@@ -79,6 +80,9 @@ async def get_order_history(
     # Apply filters
     if bot_id is not None:
         query = query.where(OrderHistory.bot_id == bot_id)
+
+    if account_id is not None:
+        query = query.where(Bot.account_id == account_id)
 
     if status is not None:
         query = query.where(OrderHistory.status == status)
@@ -121,6 +125,7 @@ async def get_order_history(
 async def get_failed_orders(
     db: AsyncSession = Depends(get_db),
     bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
+    account_id: Optional[int] = Query(None, description="Filter by account ID"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of records to return"),
 ):
     """
@@ -128,13 +133,14 @@ async def get_failed_orders(
 
     Useful for debugging and troubleshooting.
     """
-    return await get_order_history(db=db, bot_id=bot_id, status="failed", limit=limit, offset=0)
+    return await get_order_history(db=db, bot_id=bot_id, account_id=account_id, status="failed", limit=limit, offset=0)
 
 
 @router.get("/failed/paginated")
 async def get_failed_orders_paginated(
     db: AsyncSession = Depends(get_db),
     bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
+    account_id: Optional[int] = Query(None, description="Filter by account ID"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(25, ge=1, le=100, description="Items per page"),
 ):
@@ -143,8 +149,18 @@ async def get_failed_orders_paginated(
 
     Returns items plus pagination metadata for UI controls.
     """
-    # Build base query for counting
-    count_query = select(func.count()).select_from(OrderHistory).where(OrderHistory.status == "failed")
+    # Build base query for counting - need to join with Bot to filter by account_id
+    if account_id is not None:
+        count_query = (
+            select(func.count())
+            .select_from(OrderHistory)
+            .join(Bot, OrderHistory.bot_id == Bot.id)
+            .where(OrderHistory.status == "failed")
+            .where(Bot.account_id == account_id)
+        )
+    else:
+        count_query = select(func.count()).select_from(OrderHistory).where(OrderHistory.status == "failed")
+
     if bot_id is not None:
         count_query = count_query.where(OrderHistory.bot_id == bot_id)
 
@@ -157,7 +173,7 @@ async def get_failed_orders_paginated(
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
 
     # Get paginated items
-    items = await get_order_history(db=db, bot_id=bot_id, status="failed", limit=page_size, offset=offset)
+    items = await get_order_history(db=db, bot_id=bot_id, account_id=account_id, status="failed", limit=page_size, offset=offset)
 
     return {
         "items": items,
@@ -170,13 +186,18 @@ async def get_failed_orders_paginated(
 
 @router.get("/stats")
 async def get_order_stats(
-    db: AsyncSession = Depends(get_db), bot_id: Optional[int] = Query(None, description="Filter by bot ID")
+    db: AsyncSession = Depends(get_db),
+    bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
+    account_id: Optional[int] = Query(None, description="Filter by account ID"),
 ):
     """
     Get order statistics (success rate, failure rate, etc.)
     """
     # Build base query
-    query = select(OrderHistory)
+    if account_id is not None:
+        query = select(OrderHistory).join(Bot, OrderHistory.bot_id == Bot.id).where(Bot.account_id == account_id)
+    else:
+        query = select(OrderHistory)
 
     if bot_id is not None:
         query = query.where(OrderHistory.bot_id == bot_id)
