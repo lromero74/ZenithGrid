@@ -144,7 +144,8 @@ async def capture_all_account_snapshots(db: AsyncSession, user_id: int) -> Dict[
 async def get_account_value_history(
     db: AsyncSession,
     user_id: int,
-    days: int = 365
+    days: int = 365,
+    include_paper_trading: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Get aggregated account value history for a user across all their accounts.
@@ -153,26 +154,35 @@ async def get_account_value_history(
         db: Database session
         user_id: User ID
         days: Number of days to fetch (default 365)
+        include_paper_trading: Whether to include paper trading accounts (default False)
 
     Returns:
         List of daily snapshots with aggregated values
     """
     cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-    # Query snapshots grouped by date, summing across all user's accounts
-    result = await db.execute(
+    # Query snapshots grouped by date, summing across user's accounts
+    # Exclude paper trading accounts by default (virtual money shouldn't mix with real)
+    query = (
         select(
             AccountValueSnapshot.snapshot_date,
             func.sum(AccountValueSnapshot.total_value_btc).label("total_btc"),
             func.sum(AccountValueSnapshot.total_value_usd).label("total_usd")
         )
+        .join(Account, AccountValueSnapshot.account_id == Account.id)
         .where(
             AccountValueSnapshot.user_id == user_id,
             AccountValueSnapshot.snapshot_date >= cutoff_date
         )
-        .group_by(AccountValueSnapshot.snapshot_date)
-        .order_by(AccountValueSnapshot.snapshot_date)
     )
+
+    # Filter out paper trading accounts unless explicitly requested
+    if not include_paper_trading:
+        query = query.where(Account.is_paper_trading == False)
+
+    query = query.group_by(AccountValueSnapshot.snapshot_date).order_by(AccountValueSnapshot.snapshot_date)
+
+    result = await db.execute(query)
 
     snapshots = []
     for row in result:
@@ -186,28 +196,35 @@ async def get_account_value_history(
     return snapshots
 
 
-async def get_latest_snapshot(db: AsyncSession, user_id: int) -> Dict[str, Any]:
+async def get_latest_snapshot(db: AsyncSession, user_id: int, include_paper_trading: bool = False) -> Dict[str, Any]:
     """
     Get the most recent aggregated snapshot for a user.
 
     Args:
         db: Database session
         user_id: User ID
+        include_paper_trading: Whether to include paper trading accounts (default False)
 
     Returns:
         Latest snapshot data or empty dict if none found
     """
-    result = await db.execute(
+    query = (
         select(
             AccountValueSnapshot.snapshot_date,
             func.sum(AccountValueSnapshot.total_value_btc).label("total_btc"),
             func.sum(AccountValueSnapshot.total_value_usd).label("total_usd")
         )
+        .join(Account, AccountValueSnapshot.account_id == Account.id)
         .where(AccountValueSnapshot.user_id == user_id)
-        .group_by(AccountValueSnapshot.snapshot_date)
-        .order_by(AccountValueSnapshot.snapshot_date.desc())
-        .limit(1)
     )
+
+    # Filter out paper trading accounts unless explicitly requested
+    if not include_paper_trading:
+        query = query.where(Account.is_paper_trading == False)
+
+    query = query.group_by(AccountValueSnapshot.snapshot_date).order_by(AccountValueSnapshot.snapshot_date.desc()).limit(1)
+
+    result = await db.execute(query)
 
     row = result.first()
     if not row:

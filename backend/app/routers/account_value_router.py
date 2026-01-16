@@ -23,6 +23,7 @@ router = APIRouter(prefix="/api/account-value", tags=["account-value"])
 @router.get("/history")
 async def get_account_value_history(
     days: int = Query(365, ge=1, le=1825, description="Number of days to fetch (max 5 years)"),
+    include_paper_trading: bool = Query(False, description="Include paper trading accounts (default: false)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
@@ -30,10 +31,11 @@ async def get_account_value_history(
     Get historical account value snapshots aggregated across all user accounts.
 
     Returns daily snapshots with total BTC and USD values.
+    By default, excludes paper trading accounts (virtual money).
     """
     try:
         history = await account_snapshot_service.get_account_value_history(
-            db, current_user.id, days
+            db, current_user.id, days, include_paper_trading
         )
         return history
     except Exception as e:
@@ -43,14 +45,16 @@ async def get_account_value_history(
 
 @router.get("/latest")
 async def get_latest_snapshot(
+    include_paper_trading: bool = Query(False, description="Include paper trading accounts (default: false)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get the most recent account value snapshot.
+    By default, excludes paper trading accounts (virtual money).
     """
     try:
-        snapshot = await account_snapshot_service.get_latest_snapshot(db, current_user.id)
+        snapshot = await account_snapshot_service.get_latest_snapshot(db, current_user.id, include_paper_trading)
         return snapshot
     except Exception as e:
         logger.error(f"Failed to fetch latest snapshot: {e}")
