@@ -478,6 +478,10 @@ class DEXClient(ExchangeClient):
         """Get BTC-USD price (WBTC-USDC on Uniswap)"""
         return await self.get_current_price("WBTC-USDC")
 
+    async def get_eth_usd_price(self) -> float:
+        """Get ETH-USD price (WETH-USDC on Uniswap)"""
+        return await self.get_current_price("WETH-USDC")
+
     async def get_product_stats(self, product_id: str = "WETH-USDC") -> Dict[str, Any]:
         """
         Get 24h statistics for a product

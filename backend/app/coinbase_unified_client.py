@@ -206,6 +206,10 @@ class CoinbaseClient:
         """Get current BTC/USD price"""
         return await market_data_api.get_btc_usd_price(self._request, self.auth_type)
 
+    async def get_eth_usd_price(self) -> float:
+        """Get current ETH/USD price"""
+        return await market_data_api.get_eth_usd_price(self._request, self.auth_type)
+
     async def get_product_stats(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Get 24-hour stats for a product"""
         return await market_data_api.get_product_stats(self._request, product_id)

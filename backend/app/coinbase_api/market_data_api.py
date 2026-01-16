@@ -87,6 +87,11 @@ async def get_btc_usd_price(request_func: Callable, auth_type: str) -> float:
     return await get_current_price(request_func, auth_type, "BTC-USD")
 
 
+async def get_eth_usd_price(request_func: Callable, auth_type: str) -> float:
+    """Get current ETH/USD price"""
+    return await get_current_price(request_func, auth_type, "ETH-USD")
+
+
 async def get_product_stats(request_func: Callable, product_id: str = "ETH-BTC") -> Dict[str, Any]:
     """
     Get 24-hour stats for a product including volume

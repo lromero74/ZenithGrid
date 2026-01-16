@@ -129,6 +129,21 @@ function AppContent() {
   const btcUsdPrice = btcPriceData?.price || 0
   const usdBtcPrice = btcUsdPrice > 0 ? 1 / btcUsdPrice : 0
 
+  // Fetch ETH/USD price directly from market data
+  const { data: ethPriceData } = useQuery({
+    queryKey: ['eth-usd-price'],
+    queryFn: async () => {
+      const response = await fetch('/api/market/eth-usd-price')
+      if (!response.ok) throw new Error('Failed to fetch ETH price')
+      return response.json()
+    },
+    refetchInterval: 60000, // Update every 60 seconds
+    staleTime: 30000, // Consider data fresh for 30 seconds
+  })
+
+  const ethUsdPrice = ethPriceData?.price || 0
+  const usdEthPrice = ethUsdPrice > 0 ? 1 / ethUsdPrice : 0
+
   // Fetch closed and failed positions to count total history items (deferred)
   const { data: closedPositions = [] } = useQuery({
     queryKey: ['closed-positions-badge'],
@@ -231,6 +246,15 @@ function AppContent() {
                   </p>
                   <p className="text-xs text-slate-500">
                     {usdBtcPrice.toFixed(8)} BTC/USD
+                  </p>
+                </div>
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs text-slate-400">ETH Price</p>
+                  <p className="text-sm font-medium text-blue-400">
+                    ${ethUsdPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {usdEthPrice.toFixed(8)} ETH/USD
                   </p>
                 </div>
                 <div className="text-right">

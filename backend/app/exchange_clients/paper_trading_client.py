@@ -304,6 +304,36 @@ class PaperTradingClient(ExchangeClient):
         )
         return await real_client.get_recent_trades(product_id, limit)
 
+    async def get_btc_usd_price(self) -> float:
+        """Get BTC/USD price from real exchange."""
+        if self.real_client:
+            return await self.real_client.get_btc_usd_price()
+
+        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.config import settings
+
+        real_client = CoinbaseUnifiedClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret,
+            user_id=self.account.user_id
+        )
+        return await real_client.get_btc_usd_price()
+
+    async def get_eth_usd_price(self) -> float:
+        """Get ETH/USD price from real exchange."""
+        if self.real_client:
+            return await self.real_client.get_eth_usd_price()
+
+        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.config import settings
+
+        real_client = CoinbaseUnifiedClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret,
+            user_id=self.account.user_id
+        )
+        return await real_client.get_eth_usd_price()
+
     def is_paper_trading(self) -> bool:
         """Returns True to indicate this is a paper trading client."""
         return True

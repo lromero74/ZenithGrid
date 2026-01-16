@@ -137,6 +137,10 @@ class CoinbaseAdapter(ExchangeClient):
         """Get current BTC-USD price."""
         return await self._client.get_btc_usd_price()
 
+    async def get_eth_usd_price(self) -> float:
+        """Get current ETH-USD price."""
+        return await self._client.get_eth_usd_price()
+
     async def get_product_stats(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Get 24-hour statistics."""
         return await self._client.get_product_stats(product_id)
