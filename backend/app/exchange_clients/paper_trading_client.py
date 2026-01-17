@@ -76,14 +76,13 @@ class PaperTradingClient(ExchangeClient):
             return await self.real_client.get_price(product_id)
 
         # Fallback: import and use Coinbase client
-        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.coinbase_unified_client import CoinbaseClient
         from app.config import settings
 
         # Use system API key for price data
-        real_client = CoinbaseUnifiedClient(
+        real_client = CoinbaseClient(
             api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret,
-            user_id=self.account.user_id
+            api_secret=settings.coinbase_api_secret
         )
         return await real_client.get_price(product_id)
 
@@ -98,13 +97,12 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_candles(product_id, granularity, start, end)
 
-        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.coinbase_unified_client import CoinbaseClient
         from app.config import settings
 
-        real_client = CoinbaseUnifiedClient(
+        real_client = CoinbaseClient(
             api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret,
-            user_id=self.account.user_id
+            api_secret=settings.coinbase_api_secret
         )
         return await real_client.get_candles(product_id, granularity, start, end)
 
@@ -260,13 +258,12 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_products()
 
-        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.coinbase_unified_client import CoinbaseClient
         from app.config import settings
 
-        real_client = CoinbaseUnifiedClient(
+        real_client = CoinbaseClient(
             api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret,
-            user_id=self.account.user_id
+            api_secret=settings.coinbase_api_secret
         )
         return await real_client.get_products()
 
@@ -275,13 +272,12 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_order_book(product_id, level)
 
-        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.coinbase_unified_client import CoinbaseClient
         from app.config import settings
 
-        real_client = CoinbaseUnifiedClient(
+        real_client = CoinbaseClient(
             api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret,
-            user_id=self.account.user_id
+            api_secret=settings.coinbase_api_secret
         )
         return await real_client.get_order_book(product_id, level)
 
@@ -294,13 +290,12 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_recent_trades(product_id, limit)
 
-        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.coinbase_unified_client import CoinbaseClient
         from app.config import settings
 
-        real_client = CoinbaseUnifiedClient(
+        real_client = CoinbaseClient(
             api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret,
-            user_id=self.account.user_id
+            api_secret=settings.coinbase_api_secret
         )
         return await real_client.get_recent_trades(product_id, limit)
 
@@ -309,13 +304,12 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_btc_usd_price()
 
-        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.coinbase_unified_client import CoinbaseClient
         from app.config import settings
 
-        real_client = CoinbaseUnifiedClient(
+        real_client = CoinbaseClient(
             api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret,
-            user_id=self.account.user_id
+            api_secret=settings.coinbase_api_secret
         )
         return await real_client.get_btc_usd_price()
 
@@ -324,16 +318,291 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_eth_usd_price()
 
-        from app.coinbase_unified_client import CoinbaseUnifiedClient
+        from app.coinbase_unified_client import CoinbaseClient
         from app.config import settings
 
-        real_client = CoinbaseUnifiedClient(
+        real_client = CoinbaseClient(
             api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret,
-            user_id=self.account.user_id
+            api_secret=settings.coinbase_api_secret
         )
         return await real_client.get_eth_usd_price()
 
     def is_paper_trading(self) -> bool:
         """Returns True to indicate this is a paper trading client."""
+        return True
+
+    # ========================================
+    # MISSING ABSTRACT METHOD IMPLEMENTATIONS
+    # ========================================
+
+    async def get_accounts(self, force_fresh: bool = False) -> List[Dict[str, Any]]:
+        """Get virtual accounts (returns single paper trading account)."""
+        accounts = []
+        for currency, balance in self.balances.items():
+            if balance > 0:
+                accounts.append({
+                    "uuid": f"paper-{currency.lower()}",
+                    "currency": currency,
+                    "available_balance": {
+                        "value": str(balance),
+                        "currency": currency
+                    }
+                })
+        return accounts
+
+    async def get_account(self, account_id: str = None) -> Dict[str, float]:
+        """
+        Get account balances.
+
+        Returns:
+            Dict mapping currency to balance (e.g., {"BTC": 1.0, "USD": 100000.0})
+        """
+        return self.balances.copy()
+
+    async def get_btc_balance(self) -> float:
+        """Get BTC balance."""
+        return self.balances.get("BTC", 0.0)
+
+    async def get_eth_balance(self) -> float:
+        """Get ETH balance."""
+        return self.balances.get("ETH", 0.0)
+
+    async def get_usd_balance(self) -> float:
+        """Get USD balance (includes USDC and USDT)."""
+        usd = self.balances.get("USD", 0.0)
+        usdc = self.balances.get("USDC", 0.0)
+        usdt = self.balances.get("USDT", 0.0)
+        return usd + usdc + usdt
+
+    async def get_balance(self, currency: str) -> Dict[str, Any]:
+        """Get balance for specific currency."""
+        balance = self.balances.get(currency.upper(), 0.0)
+        return {
+            "currency": currency.upper(),
+            "available": str(balance),
+            "hold": "0.00"
+        }
+
+    async def invalidate_balance_cache(self):
+        """No-op for paper trading (balances always up-to-date in memory)."""
+        pass
+
+    async def calculate_aggregate_btc_value(self) -> float:
+        """
+        Calculate total portfolio value in BTC.
+
+        Includes:
+        - BTC balance
+        - BTC value of altcoins (ETH, etc.)
+        """
+        total_btc = self.balances.get("BTC", 0.0)
+
+        # Convert ETH to BTC
+        eth_balance = self.balances.get("ETH", 0.0)
+        if eth_balance > 0:
+            try:
+                eth_btc_price = await self.get_price("ETH-BTC")
+                if eth_btc_price:
+                    total_btc += eth_balance * eth_btc_price
+            except Exception as e:
+                logger.warning(f"Failed to get ETH-BTC price for aggregate calculation: {e}")
+
+        # Convert USD/stablecoins to BTC
+        usd_balance = await self.get_usd_balance()
+        if usd_balance > 0:
+            try:
+                btc_usd_price = await self.get_btc_usd_price()
+                if btc_usd_price and btc_usd_price > 0:
+                    total_btc += usd_balance / btc_usd_price
+            except Exception as e:
+                logger.warning(f"Failed to get BTC-USD price for aggregate calculation: {e}")
+
+        return total_btc
+
+    async def calculate_aggregate_usd_value(self) -> float:
+        """
+        Calculate total portfolio value in USD.
+
+        Includes:
+        - USD balance (including stablecoins)
+        - USD value of crypto holdings
+        """
+        total_usd = await self.get_usd_balance()
+
+        # Convert BTC to USD
+        btc_balance = self.balances.get("BTC", 0.0)
+        if btc_balance > 0:
+            try:
+                btc_usd_price = await self.get_btc_usd_price()
+                if btc_usd_price:
+                    total_usd += btc_balance * btc_usd_price
+            except Exception as e:
+                logger.warning(f"Failed to get BTC-USD price for aggregate calculation: {e}")
+
+        # Convert ETH to USD
+        eth_balance = self.balances.get("ETH", 0.0)
+        if eth_balance > 0:
+            try:
+                eth_usd_price = await self.get_eth_usd_price()
+                if eth_usd_price:
+                    total_usd += eth_balance * eth_usd_price
+            except Exception as e:
+                logger.warning(f"Failed to get ETH-USD price for aggregate calculation: {e}")
+
+        return total_usd
+
+    async def list_products(self) -> List[Dict[str, Any]]:
+        """List available trading pairs from real exchange."""
+        return await self.get_products()
+
+    async def get_product(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
+        """Get product details from real exchange."""
+        if self.real_client:
+            return await self.real_client.get_product(product_id)
+
+        from app.coinbase_unified_client import CoinbaseClient
+        from app.config import settings
+
+        real_client = CoinbaseClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret
+        )
+        return await real_client.get_product(product_id)
+
+    async def get_ticker(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
+        """Get ticker data from real exchange."""
+        if self.real_client:
+            return await self.real_client.get_ticker(product_id)
+
+        from app.coinbase_unified_client import CoinbaseClient
+        from app.config import settings
+
+        real_client = CoinbaseClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret
+        )
+        return await real_client.get_ticker(product_id)
+
+    async def get_current_price(self, product_id: str = "ETH-BTC") -> float:
+        """Get current price from real exchange."""
+        return await self.get_price(product_id)
+
+    async def get_product_stats(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
+        """Get 24hr stats from real exchange."""
+        if self.real_client:
+            return await self.real_client.get_product_stats(product_id)
+
+        from app.coinbase_unified_client import CoinbaseClient
+        from app.config import settings
+
+        real_client = CoinbaseClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret
+        )
+        return await real_client.get_product_stats(product_id)
+
+    async def get_candles(
+        self,
+        product_id: str,
+        start: int,
+        end: int,
+        granularity: str,
+    ) -> List[Dict[str, Any]]:
+        """Get candle data from real exchange (updated signature)."""
+        if self.real_client:
+            return await self.real_client.get_candles(product_id, start, end, granularity)
+
+        from app.coinbase_unified_client import CoinbaseClient
+        from app.config import settings
+
+        real_client = CoinbaseClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret
+        )
+        return await real_client.get_candles(product_id, start, end, granularity)
+
+    async def create_market_order(
+        self,
+        product_id: str,
+        side: str,
+        size: Optional[str] = None,
+        funds: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Create market order (wrapper around place_order)."""
+        size_float = float(size) if size else None
+        funds_float = float(funds) if funds else None
+
+        return await self.place_order(
+            product_id=product_id,
+            side=side.lower(),
+            order_type="market",
+            size=size_float,
+            funds=funds_float
+        )
+
+    async def create_limit_order(
+        self,
+        product_id: str,
+        side: str,
+        limit_price: float,
+        size: Optional[str] = None,
+        funds: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create limit order (paper trading treats as market order).
+
+        Note: Paper trading executes immediately at current price,
+        not at the limit price.
+        """
+        logger.info(f"Paper trading: Limit order requested at {limit_price}, executing as market")
+        return await self.create_market_order(product_id, side, size, funds)
+
+    async def list_orders(
+        self,
+        product_id: Optional[str] = None,
+        order_status: Optional[List[str]] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """List orders (paper trading orders are all immediately filled)."""
+        # Paper trading orders fill instantly, so no open orders exist
+        return []
+
+    async def buy_eth_with_btc(self, btc_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
+        """Buy ETH with BTC."""
+        return await self.create_market_order(
+            product_id=product_id,
+            side="buy",
+            funds=str(btc_amount)
+        )
+
+    async def sell_eth_for_btc(self, eth_amount: float, product_id: str = "ETH-BTC") -> Dict[str, Any]:
+        """Sell ETH for BTC."""
+        return await self.create_market_order(
+            product_id=product_id,
+            side="sell",
+            size=str(eth_amount)
+        )
+
+    async def buy_with_usd(self, usd_amount: float, product_id: str) -> Dict[str, Any]:
+        """Buy crypto with USD."""
+        return await self.create_market_order(
+            product_id=product_id,
+            side="buy",
+            funds=str(usd_amount)
+        )
+
+    async def sell_for_usd(self, base_amount: float, product_id: str) -> Dict[str, Any]:
+        """Sell crypto for USD."""
+        return await self.create_market_order(
+            product_id=product_id,
+            side="sell",
+            size=str(base_amount)
+        )
+
+    def get_exchange_type(self) -> str:
+        """Return exchange type."""
+        return "cex"  # Paper trading simulates CEX behavior
+
+    async def test_connection(self) -> bool:
+        """Test connection (always succeeds for paper trading)."""
         return True
