@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, Time, LineData } from 'lightweight-charts'
 import { TrendingUp, DollarSign } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
+import { useAccount } from '../contexts/AccountContext'
+import axios from 'axios'
 
 interface AccountValueSnapshot {
   date: string
@@ -23,6 +25,10 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   const chartRef = useRef<IChartApi | null>(null)
   const btcSeriesRef = useRef<any>(null)
   const usdSeriesRef = useRef<any>(null)
+  const { selectedAccount } = useAccount()
+
+  // Determine if we should include paper trading accounts
+  const includePaperTrading = selectedAccount?.is_paper_trading || false
 
   // Map time ranges to days
   const getDaysForTimeRange = (range: TimeRange): number => {
@@ -40,12 +46,16 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
 
   // Fetch account value history
   const { data: history, isLoading } = useQuery<AccountValueSnapshot[]>({
-    queryKey: ['account-value-history', timeRange],
+    queryKey: ['account-value-history', timeRange, includePaperTrading],
     queryFn: async () => {
       const days = getDaysForTimeRange(timeRange)
-      const response = await fetch(`/api/account-value/history?days=${days}`)
-      if (!response.ok) throw new Error('Failed to fetch account value history')
-      return response.json()
+      const response = await axios.get<AccountValueSnapshot[]>('/api/account-value/history', {
+        params: {
+          days,
+          include_paper_trading: includePaperTrading
+        }
+      })
+      return response.data
     },
     refetchInterval: 300000, // Refresh every 5 minutes
   })
