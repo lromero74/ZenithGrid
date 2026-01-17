@@ -487,3 +487,194 @@ async def execute_limit_buy(
     )
 
     return pending_order
+
+
+async def execute_buy_close_short(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    current_price: float,
+    signal_data: Optional[Dict[str, Any]] = None,
+) -> tuple[Optional[Trade], float, float]:
+    """
+    Execute a buy order to CLOSE a SHORT position (bidirectional DCA)
+
+    For short positions:
+    - We sold BTC at short_average_sell_price
+    - We need to buy it back now at current_price
+    - Profit if current_price < short_average_sell_price (bought back cheaper)
+    - Loss if current_price > short_average_sell_price (bought back more expensive)
+
+    Args:
+        db: Database session
+        exchange: Exchange client instance (CEX or DEX)
+        trading_client: TradingClient instance
+        bot: Bot instance
+        product_id: Trading pair (e.g., 'BTC-USD')
+        position: Current short position to close
+        current_price: Current market price
+        signal_data: Optional signal metadata
+
+    Returns:
+        Tuple of (trade, profit_quote, profit_percentage)
+    """
+    quote_currency = get_quote_currency(product_id)
+
+    # Check if shutdown is in progress - reject new orders
+    if shutdown_manager.is_shutting_down:
+        logger.warning(f"Rejecting close-short buy order for {product_id} - shutdown in progress")
+        raise RuntimeError("Cannot place orders - shutdown in progress")
+
+    # For short positions, we need to buy back the BTC we sold
+    btc_to_buy_back = position.short_total_sold_base or 0.0
+
+    if btc_to_buy_back <= 0:
+        raise ValueError(f"Position #{position.id} has no BTC to buy back (short_total_sold_base = {btc_to_buy_back})")
+
+    # Calculate how much USD we need to buy back the BTC
+    quote_amount_needed = btc_to_buy_back * current_price
+
+    logger.info(f"  📈 CLOSING SHORT: Buying back {btc_to_buy_back:.8f} BTC @ ${current_price:.2f} (need ${quote_amount_needed:.2f})")
+
+    # Check if we should use a limit order for closing
+    config: Dict = position.strategy_config_snapshot or {}
+    take_profit_order_type = config.get("take_profit_order_type", "limit")
+
+    if take_profit_order_type == "limit":
+        # TODO: Implement limit order logic for closing shorts
+        logger.warning("  ⚠️ Limit close orders for shorts not yet implemented - using market order")
+
+    # Execute market buy order to close short
+    logger.info(f"  💱 Executing MARKET close (buy back) @ {current_price:.8f}")
+
+    # Execute order via TradingClient
+    order_id = None
+    await shutdown_manager.increment_in_flight()
+    try:
+        order_response = await trading_client.buy(product_id=product_id, quote_amount=quote_amount_needed)
+        success_response = order_response.get("success_response", {})
+        error_response = order_response.get("error_response", {})
+        order_id = success_response.get("order_id", "")
+
+        if not order_id:
+            logger.error(f"Coinbase close-short buy failed - Full response: {order_response}")
+            if error_response:
+                error_msg = error_response.get("message", "Unknown error")
+                error_details = error_response.get("error_details", "")
+                raise ValueError(f"Coinbase close-short buy failed: {error_msg}. Details: {error_details}")
+            else:
+                raise ValueError(f"Coinbase close-short buy failed. Full response: {order_response}")
+
+    except Exception as e:
+        logger.error(f"Error executing close-short buy order: {e}")
+        raise
+    finally:
+        await shutdown_manager.decrement_in_flight()
+
+    # Fetch actual fill data from Coinbase
+    logger.info(f"Fetching order details for close-short order_id: {order_id}")
+    import asyncio
+
+    max_retries = 10
+    retry_delay = 3.0  # seconds
+    filled_size = None
+    average_filled_price = None
+
+    for attempt in range(max_retries):
+        try:
+            order_details = await trading_client.get_order(order_id)
+            filled_size = float(order_details.get("filled_size", 0))
+            average_filled_price = float(order_details.get("average_filled_price", 0))
+
+            if filled_size > 0 and average_filled_price > 0:
+                logger.info(f"Order filled: {filled_size:.8f} BTC @ ${average_filled_price:.8f}")
+                break
+
+            if attempt < max_retries - 1:
+                logger.warning(f"Order {order_id} not fully filled yet (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+
+        except Exception as e:
+            logger.error(f"Error fetching order details (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+
+    if not filled_size or not average_filled_price:
+        raise ValueError(f"Failed to fetch fill data for order {order_id} after {max_retries} attempts")
+
+    # Calculate profit for short position
+    # Profit = (average sell price - buy back price) * BTC amount
+    # We received short_total_sold_quote USD when we sold
+    # We spent filled_size * average_filled_price USD to buy back
+    usd_spent_to_close = filled_size * average_filled_price
+    usd_received_from_short = position.short_total_sold_quote or 0.0
+
+    profit_quote = usd_received_from_short - usd_spent_to_close
+    profit_percentage = (profit_quote / usd_received_from_short) * 100 if usd_received_from_short > 0 else 0.0
+
+    logger.info(f"  💰 SHORT CLOSED: Sold @ avg ${position.short_average_sell_price:.2f}, bought back @ ${average_filled_price:.2f}")
+    logger.info(f"  💰 P&L: ${profit_quote:.2f} ({profit_percentage:.2f}%)")
+
+    # Get BTC/USD price for USD profit tracking
+    try:
+        btc_usd_price_at_close = await exchange.get_btc_usd_price()
+        if quote_currency == "BTC":
+            profit_usd = profit_quote * btc_usd_price_at_close
+        else:
+            profit_usd = profit_quote
+    except Exception:
+        btc_usd_price_at_close = None
+        profit_usd = profit_quote if quote_currency == "USD" else None
+
+    # Create Trade record for closing short
+    trade = Trade(
+        position_id=position.id,
+        bot_id=bot.id,
+        order_id=order_id,
+        product_id=product_id,
+        side="buy",  # Buying back BTC to close short
+        size=filled_size,  # BTC bought back
+        filled_value=usd_spent_to_close,  # USD spent
+        commission=0.0,  # TODO: Extract from order response
+        price=average_filled_price,  # Average buy-back price
+        executed_at=datetime.utcnow(),
+        trade_type="close_short",
+        btc_usd_price_at_execution=btc_usd_price_at_close,
+    )
+
+    db.add(trade)
+
+    # Close position and record profit
+    position.status = "closed"
+    position.closed_at = datetime.utcnow()
+    position.profit_quote = profit_quote
+    position.profit_percentage = profit_percentage
+    position.profit_usd = profit_usd
+
+    await db.commit()
+    await db.refresh(trade)
+
+    # Log to order history
+    await log_order_to_history(
+        db=db,
+        exchange=exchange,
+        bot=bot,
+        action="CLOSE_SHORT",
+        order_id=order_id,
+        product_id=product_id,
+        amount=filled_size,
+        price=average_filled_price,
+        total=usd_spent_to_close,
+        reason="Closing short position",
+        signal_data=signal_data,
+    )
+
+    # Send WebSocket update
+    await ws_manager.broadcast_position_update(position)
+
+    logger.info(f"  ✅ SHORT POSITION CLOSED: Profit ${profit_quote:.2f} ({profit_percentage:.2f}%)")
+
+    return trade, profit_quote, profit_percentage
