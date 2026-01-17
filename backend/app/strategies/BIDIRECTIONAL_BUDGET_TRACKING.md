@@ -106,6 +106,35 @@ if bot.strategy_config.get("enable_bidirectional"):
         raise HTTPException(status_code=400, detail=error)
 ```
 
-## Key Principle
+## Key Principles
 
-**Bidirectional bots reserve capital in BOTH currencies simultaneously, and that capital converts between currencies as positions are opened/closed. Track the converted value to prevent other bots from "stealing" it.**
+1. **Bidirectional bots reserve capital in BOTH currencies simultaneously**, and that capital converts between currencies as positions are opened/closed. Track the converted value to prevent other bots from "stealing" it.
+
+2. **Live and paper trading have separate reservations**. Paper trading bots reserve "virtual" capital that should NOT affect live trading bots' available balance calculations, and vice versa.
+
+## Live vs Paper Trading Separation
+
+**Critical Implementation Detail**: Reservations are filtered by `account_id`:
+
+```python
+# When calculating available USD for a live trading bot
+available_usd = await calculate_available_usd(
+    db, raw_usd, current_btc_price,
+    account_id=live_account.id,  # Only count live trading bot reservations
+    exclude_bot_id=current_bot.id
+)
+
+# When calculating available USD for a paper trading bot
+available_usd = await calculate_available_usd(
+    db, raw_usd, current_btc_price,
+    account_id=paper_account.id,  # Only count paper trading bot reservations
+    exclude_bot_id=current_bot.id
+)
+```
+
+**Why this matters**:
+- Paper trading bot reserves $10,000 (virtual money)
+- Live trading bot should still see full $50,000 real balance available
+- Without account filtering, live bot would see only $40,000 available (incorrect!)
+
+**Implementation**: Budget calculator functions (`calculate_available_usd`, `calculate_available_btc`) filter bidirectional bots by account_id before summing reservations.
