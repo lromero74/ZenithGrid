@@ -252,6 +252,71 @@ class Bot(Base):
         else:
             return self.reserved_btc_balance
 
+    def get_total_reserved_usd(self, current_btc_price: float = None) -> float:
+        """
+        Get total USD reserved by this bot (for bidirectional bots).
+
+        Includes:
+        - Initial USD reserved for longs
+        - USD value of BTC acquired from long positions (needs to be sold later)
+        - USD received from short positions (needs to buy back BTC)
+
+        Args:
+            current_btc_price: Current BTC/USD price for valuation
+
+        Returns:
+            Total USD that should be considered "locked" by this bot
+        """
+        total_usd = self.reserved_usd_for_longs or 0.0
+
+        # Add USD from short positions (sold BTC, got USD, need to buy back)
+        for position in self.positions:
+            if position.status == "open" and position.direction == "short":
+                # Short position: we received USD, it's locked until we buy back BTC
+                total_usd += position.short_total_sold_quote or 0.0
+
+        # Add USD value of BTC in long positions (bought BTC, need to sell it)
+        if current_btc_price:
+            for position in self.positions:
+                if position.status == "open" and position.direction == "long":
+                    # Long position: BTC we own, valued in USD
+                    btc_amount = position.total_base_acquired or 0.0
+                    total_usd += btc_amount * current_btc_price
+
+        return total_usd
+
+    def get_total_reserved_btc(self, current_btc_price: float = None) -> float:
+        """
+        Get total BTC reserved by this bot (for bidirectional bots).
+
+        Includes:
+        - Initial BTC reserved for shorts
+        - BTC acquired from long positions (bought BTC, need to sell it)
+        - BTC value of USD from short positions (got USD, need to buy back BTC)
+
+        Args:
+            current_btc_price: Current BTC/USD price for valuation
+
+        Returns:
+            Total BTC that should be considered "locked" by this bot
+        """
+        total_btc = self.reserved_btc_for_shorts or 0.0
+
+        # Add BTC from long positions (bought BTC, need to sell it)
+        for position in self.positions:
+            if position.status == "open" and position.direction == "long":
+                total_btc += position.total_base_acquired or 0.0
+
+        # Add BTC value of USD from short positions
+        if current_btc_price and current_btc_price > 0:
+            for position in self.positions:
+                if position.status == "open" and position.direction == "short":
+                    # Short: we have USD, need to convert to BTC equivalent
+                    usd_amount = position.short_total_sold_quote or 0.0
+                    total_btc += usd_amount / current_btc_price
+
+        return total_btc
+
 
 class BotTemplate(Base):
     __tablename__ = "bot_templates"
