@@ -89,6 +89,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     refetchOnWindowFocus: false,
   })
 
+  // Fetch bidirectional bot reservations
+  const { data: reservations } = useQuery({
+    queryKey: ['account-reservations', selectedAccount?.id],
+    queryFn: async () => {
+      if (!selectedAccount) return null
+      const response = await fetch(`/api/account-value/reservations?account_id=${selectedAccount.id}`)
+      if (!response.ok) throw new Error('Failed to fetch reservations')
+      return response.json()
+    },
+    enabled: !!selectedAccount,
+    refetchInterval: 30000, // 30 seconds
+    staleTime: 15000,
+  })
+
   const activeBots = bots.filter(bot => bot.is_active)
 
   // Calculate total profit (USD is normalized across all bots)
@@ -208,6 +222,28 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           <p className="text-sm text-slate-400 mt-1">
             {formatCurrency(portfolio?.total_usd_value || 0)}
           </p>
+
+          {/* Bidirectional Reservations Breakdown */}
+          {reservations && (reservations.reserved_usd > 0 || reservations.reserved_btc > 0) && (
+            <div className="mt-3 pt-3 border-t border-slate-700 space-y-1.5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500">Available USD:</span>
+                <span className="text-white font-mono">{formatCurrency(reservations.available_usd)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500">Reserved (Grid):</span>
+                <span className="text-yellow-400 font-mono">{formatCurrency(reservations.reserved_usd)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-slate-700/50">
+                <span className="text-slate-500">Available BTC:</span>
+                <span className="text-white font-mono">{formatCrypto(reservations.available_btc, 8)} BTC</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500">Reserved (Grid):</span>
+                <span className="text-yellow-400 font-mono">{formatCrypto(reservations.reserved_btc, 8)} BTC</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
