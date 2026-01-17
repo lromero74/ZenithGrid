@@ -40,10 +40,16 @@
   - Tracks initial BTC + BTC from longs + BTC equivalent from shorts
   - Ensures full capital lifecycle tracking
 - ✅ **Budget Calculator Service** (`app/services/budget_calculator.py`)
-  - `calculate_available_usd()`: Returns USD available for other bots
-  - `calculate_available_btc()`: Returns BTC available for other bots
+  - `calculate_available_usd()`: Returns USD available for other bots **on same account**
+  - `calculate_available_btc()`: Returns BTC available for other bots **on same account**
   - `validate_bidirectional_budget()`: Pre-creation validation
-- ✅ **Documentation**: `BIDIRECTIONAL_BUDGET_TRACKING.md` explains concept with examples
+  - **Account isolation**: Filters by `account_id` to prevent cross-exchange interference
+- ✅ **Per-Account Isolation**
+  - Each account = one CEX (Coinbase, Kraken, etc.) OR paper trading
+  - Coinbase bot reservations don't affect Kraken bots
+  - Paper trading reservations don't affect live trading
+  - Complete budget separation across accounts
+- ✅ **Documentation**: `BIDIRECTIONAL_BUDGET_TRACKING.md` explains concept with multi-account examples
 
 ### Frontend
 - ✅ **PositionCard** shows direction badges

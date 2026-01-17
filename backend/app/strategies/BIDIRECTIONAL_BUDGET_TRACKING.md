@@ -112,15 +112,53 @@ if bot.strategy_config.get("enable_bidirectional"):
 
 2. **Live and paper trading have separate reservations**. Paper trading bots reserve "virtual" capital that should NOT affect live trading bots' available balance calculations, and vice versa.
 
-## Live vs Paper Trading Separation
+## Per-Account Reservation Isolation
 
-**Critical Implementation Detail**: Reservations are filtered by `account_id`:
+**CRITICAL**: Reservations are completely isolated per account. Each account represents:
+- A different CEX (Coinbase, Kraken, Binance, etc.)
+- OR paper trading (virtual balances)
+
+**This means**:
+- Bots on Coinbase account only see Coinbase reservations
+- Bots on Kraken account only see Kraken reservations
+- Bots on paper trading account only see paper reservations
+- **No cross-account interference**
+
+### Example Multi-Account Setup
+
+User has 3 accounts:
+1. **Account 1** (Coinbase Live): $50,000 USD + 0.5 BTC
+2. **Account 2** (Kraken Live): $25,000 USD + 0.25 BTC
+3. **Account 3** (Paper Trading): $100,000 USD + 1.0 BTC (virtual)
+
+User creates bidirectional bots:
+- **Bot A** on Coinbase reserves $20,000 USD + 0.2 BTC
+- **Bot B** on Kraken reserves $10,000 USD + 0.1 BTC
+- **Bot C** on Paper reserves $50,000 USD + 0.5 BTC
+
+**Available capital for NEW bots**:
+- Coinbase account: $30,000 USD + 0.3 BTC available
+- Kraken account: $15,000 USD + 0.15 BTC available
+- Paper account: $50,000 USD + 0.5 BTC available
+
+**Key insight**: Bot C's paper reservations don't affect Bot A or Bot B. Bot A's Coinbase reservations don't affect Bot B's Kraken availability.
+
+### Implementation
+
+Budget calculator functions filter by `account_id`:
 
 ```python
-# When calculating available USD for a live trading bot
+# When calculating available USD for a Coinbase bot
 available_usd = await calculate_available_usd(
     db, raw_usd, current_btc_price,
-    account_id=live_account.id,  # Only count live trading bot reservations
+    account_id=coinbase_account.id,  # Only count Coinbase bot reservations
+    exclude_bot_id=current_bot.id
+)
+
+# When calculating available USD for a Kraken bot
+available_usd = await calculate_available_usd(
+    db, raw_usd, current_btc_price,
+    account_id=kraken_account.id,  # Only count Kraken bot reservations
     exclude_bot_id=current_bot.id
 )
 
@@ -132,9 +170,14 @@ available_usd = await calculate_available_usd(
 )
 ```
 
-**Why this matters**:
-- Paper trading bot reserves $10,000 (virtual money)
-- Live trading bot should still see full $50,000 real balance available
-- Without account filtering, live bot would see only $40,000 available (incorrect!)
+**SQL Query Filtering**:
+```sql
+SELECT * FROM bots
+JOIN accounts ON bots.account_id = accounts.id
+WHERE
+    bots.is_active = TRUE
+    AND bots.account_id = :specific_account_id  -- KEY: Only bots on THIS account
+    AND bots.strategy_config->>'enable_bidirectional' = 'true'
+```
 
-**Implementation**: Budget calculator functions (`calculate_available_usd`, `calculate_available_btc`) filter bidirectional bots by account_id before summing reservations.
+**Result**: Complete isolation between accounts, preventing cross-exchange and live/paper interference.
