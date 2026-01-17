@@ -11,6 +11,7 @@ from typing import List, Dict, Any
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import Account, AccountValueSnapshot, User
 from app.services.exchange_service import get_exchange_client_for_account
@@ -31,38 +32,17 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
     """
     try:
         # Get exchange client for account
-        client = await get_exchange_client_for_account(db, account)
+        client = await get_exchange_client_for_account(db, account.id)
+        if not client:
+            logger.error(f"Failed to get exchange client for account {account.id}")
+            return False
 
-        # Fetch current account balances
-        balances = await client.get_account()
+        # Get current BTC price
+        btc_usd_price = await client.get_btc_usd_price()
 
-        # Calculate total BTC value
-        total_btc = 0.0
-        for currency, amount in balances.items():
-            if currency == "BTC":
-                total_btc += amount
-            elif currency == "ETH":
-                # Convert ETH to BTC
-                try:
-                    eth_btc_price = await client.get_current_price("ETH-BTC")
-                    total_btc += amount * eth_btc_price
-                except Exception as e:
-                    logger.warning(f"Failed to get ETH-BTC price: {e}")
-            # USD/USDC/USDT converted to BTC using BTC-USD price
-            elif currency in ["USD", "USDC", "USDT"]:
-                try:
-                    btc_usd_price = await client.get_btc_usd_price()
-                    total_btc += amount / btc_usd_price
-                except Exception as e:
-                    logger.warning(f"Failed to get BTC-USD price: {e}")
-
-        # Calculate total USD value
-        try:
-            btc_usd_price = await client.get_btc_usd_price()
-            total_usd = total_btc * btc_usd_price
-        except Exception as e:
-            logger.error(f"Failed to get BTC-USD price for USD calculation: {e}")
-            total_usd = 0.0
+        # Calculate total BTC and USD values using methods from exchange client
+        total_btc = await client.calculate_aggregate_btc_value()
+        total_usd = total_btc * btc_usd_price
 
         # Create snapshot with today's date (00:00:00)
         snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -114,29 +94,29 @@ async def capture_all_account_snapshots(db: AsyncSession, user_id: int) -> Dict[
         Dict with success count and errors
     """
     result = await db.execute(
-        select(Account).where(
+        select(Account.id, Account.name, Account).where(
             Account.user_id == user_id,
             Account.is_active == True
         )
     )
-    accounts = result.scalars().all()
+    account_tuples = result.all()
 
     success_count = 0
     errors = []
 
-    for account in accounts:
+    for account_id, account_name, account in account_tuples:
         try:
             success = await capture_account_snapshot(db, account)
             if success:
                 success_count += 1
             else:
-                errors.append(f"Account {account.id} ({account.name}): Snapshot failed")
+                errors.append(f"Account {account_id} ({account_name}): Snapshot failed")
         except Exception as e:
-            errors.append(f"Account {account.id} ({account.name}): {str(e)}")
+            errors.append(f"Account {account_id} ({account_name}): {str(e)}")
 
     return {
         "success_count": success_count,
-        "total_accounts": len(accounts),
+        "total_accounts": len(account_tuples),
         "errors": errors
     }
 
