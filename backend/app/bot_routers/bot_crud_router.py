@@ -120,7 +120,7 @@ async def create_bot(
                 )
                 bot_data.strategy_config["market_focus"] = quote_currency
 
-    # Create bot
+    # Create bot instance (but don't commit yet - need to validate bidirectional budget first)
     bot = Bot(
         name=bot_data.name,
         description=bot_data.description,
@@ -136,6 +136,83 @@ async def create_bot(
         is_active=False,
         user_id=current_user.id if current_user else None,
     )
+
+    # Validate bidirectional budget if enabled
+    if bot.strategy_config.get("enable_bidirectional", False):
+        logger.info(f"Validating bidirectional budget for new bot '{bot.name}'")
+
+        # Validate percentages sum to 100%
+        long_pct = bot.strategy_config.get("long_budget_percentage", 50.0)
+        short_pct = bot.strategy_config.get("short_budget_percentage", 50.0)
+
+        if abs((long_pct + short_pct) - 100.0) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Long and short budget percentages must sum to 100% (got {long_pct}% + {short_pct}% = {long_pct + short_pct}%)"
+            )
+
+        # Get exchange client for this bot's account
+        try:
+            exchange = await create_exchange_client(db, bot.account_id)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to connect to exchange: {e}")
+
+        # Get raw balances
+        try:
+            balances = await exchange.get_account()
+            raw_usd = balances.get("USD", 0.0) + balances.get("USDC", 0.0) + balances.get("USDT", 0.0)
+            raw_btc = balances.get("BTC", 0.0)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to fetch account balances: {e}")
+
+        # Calculate aggregate values
+        try:
+            if quote_currency == "USD":
+                aggregate_usd_value = await exchange.calculate_aggregate_usd_value()
+                aggregate_btc_value = raw_btc  # For USD bots, BTC aggregate is just raw BTC
+            else:
+                aggregate_btc_value = await exchange.calculate_aggregate_btc_value()
+                aggregate_usd_value = raw_usd  # For BTC bots, USD aggregate is just raw USD
+
+            # Get current BTC price for validation
+            current_btc_price = await exchange.get_btc_usd_price()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to calculate aggregate values: {e}")
+
+        # Calculate bot's total budget
+        budget_pct = bot.budget_percentage or 0.0
+        if budget_pct <= 0:
+            raise HTTPException(status_code=400, detail="Budget percentage must be > 0 for bidirectional bots")
+
+        bot_budget_usd = aggregate_usd_value * (budget_pct / 100.0)
+        bot_budget_btc = aggregate_btc_value * (budget_pct / 100.0)
+
+        # Calculate required reservations
+        required_usd = bot_budget_usd * (long_pct / 100.0)
+        required_btc = bot_budget_btc * (short_pct / 100.0)
+
+        # Validate availability using budget calculator
+        from app.services.budget_calculator import validate_bidirectional_budget
+
+        is_valid, error_msg = await validate_bidirectional_budget(
+            db, bot, required_usd, required_btc, current_btc_price
+        )
+
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        # Set reservations on bot
+        bot.reserved_usd_for_longs = required_usd
+        bot.reserved_btc_for_shorts = required_btc
+
+        logger.info(
+            f"Bidirectional bot validated: ${required_usd:.2f} USD reserved for longs, "
+            f"{required_btc:.8f} BTC reserved for shorts"
+        )
+    else:
+        # Non-bidirectional bot - clear any reservations
+        bot.reserved_usd_for_longs = 0.0
+        bot.reserved_btc_for_shorts = 0.0
 
     db.add(bot)
     await db.commit()
@@ -497,6 +574,78 @@ async def update_bot(
 
     bot.updated_at = datetime.utcnow()
 
+    # Recalculate bidirectional reservations if config or budget changed
+    config_changed = bot_update.strategy_config is not None
+    budget_changed = bot_update.budget_percentage is not None
+
+    if (config_changed or budget_changed) and bot.strategy_config.get("enable_bidirectional", False):
+        logger.info(f"Recalculating bidirectional reservations for updated bot '{bot.name}'")
+
+        # Validate percentages sum to 100%
+        long_pct = bot.strategy_config.get("long_budget_percentage", 50.0)
+        short_pct = bot.strategy_config.get("short_budget_percentage", 50.0)
+
+        if abs((long_pct + short_pct) - 100.0) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Long and short budget percentages must sum to 100% (got {long_pct}% + {short_pct}% = {long_pct + short_pct}%)"
+            )
+
+        # Get exchange client
+        try:
+            exchange = await create_exchange_client(db, bot.account_id)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to connect to exchange: {e}")
+
+        # Get raw balances and aggregate values
+        try:
+            balances = await exchange.get_account()
+            if quote_currency == "USD":
+                aggregate_usd_value = await exchange.calculate_aggregate_usd_value()
+                aggregate_btc_value = balances.get("BTC", 0.0)
+            else:
+                aggregate_btc_value = await exchange.calculate_aggregate_btc_value()
+                aggregate_usd_value = balances.get("USD", 0.0) + balances.get("USDC", 0.0) + balances.get("USDT", 0.0)
+
+            current_btc_price = await exchange.get_btc_usd_price()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to calculate aggregate values: {e}")
+
+        # Calculate new reservations
+        budget_pct = bot.budget_percentage or 0.0
+        if budget_pct <= 0:
+            raise HTTPException(status_code=400, detail="Budget percentage must be > 0 for bidirectional bots")
+
+        bot_budget_usd = aggregate_usd_value * (budget_pct / 100.0)
+        bot_budget_btc = aggregate_btc_value * (budget_pct / 100.0)
+
+        required_usd = bot_budget_usd * (long_pct / 100.0)
+        required_btc = bot_budget_btc * (short_pct / 100.0)
+
+        # Validate availability
+        from app.services.budget_calculator import validate_bidirectional_budget
+
+        is_valid, error_msg = await validate_bidirectional_budget(
+            db, bot, required_usd, required_btc, current_btc_price
+        )
+
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        # Update reservations
+        bot.reserved_usd_for_longs = required_usd
+        bot.reserved_btc_for_shorts = required_btc
+
+        logger.info(
+            f"Bidirectional reservations updated: ${required_usd:.2f} USD for longs, "
+            f"{required_btc:.8f} BTC for shorts"
+        )
+    elif config_changed and not bot.strategy_config.get("enable_bidirectional", False):
+        # Bidirectional was disabled - release reservations
+        bot.reserved_usd_for_longs = 0.0
+        bot.reserved_btc_for_shorts = 0.0
+        logger.info(f"Bidirectional disabled for bot '{bot.name}' - reservations released")
+
     await db.commit()
     await db.refresh(bot)
 
@@ -526,6 +675,12 @@ async def delete_bot(
     open_result = await db.execute(open_pos_query)
     if open_result.scalars().first():
         raise HTTPException(status_code=400, detail="Cannot delete bot with open positions. Close positions first.")
+
+    # Release bidirectional reservations before deletion
+    if bot.strategy_config.get("enable_bidirectional", False):
+        logger.info(f"Releasing bidirectional reservations for bot '{bot.name}' (${bot.reserved_usd_for_longs:.2f} USD, {bot.reserved_btc_for_shorts:.8f} BTC)")
+        bot.reserved_usd_for_longs = 0.0
+        bot.reserved_btc_for_shorts = 0.0
 
     await db.delete(bot)
     await db.commit()

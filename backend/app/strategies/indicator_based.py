@@ -331,6 +331,71 @@ class IndicatorBasedStrategy(TradingStrategy):
                     group="Bull Flag",
                 ),
                 # ========================================
+                # BIDIRECTIONAL DCA GRID BOT
+                # ========================================
+                StrategyParameter(
+                    name="enable_bidirectional",
+                    display_name="Enable Bidirectional Trading",
+                    description="Run both long and short DCA strategies simultaneously (requires USD + BTC reserves)",
+                    type="bool",
+                    default=False,
+                    group="Bidirectional",
+                ),
+                StrategyParameter(
+                    name="long_budget_percentage",
+                    display_name="Long Budget %",
+                    description="% of bot budget allocated to long positions (buying)",
+                    type="float",
+                    default=50.0,
+                    min_value=10.0,
+                    max_value=90.0,
+                    group="Bidirectional",
+                ),
+                StrategyParameter(
+                    name="short_budget_percentage",
+                    display_name="Short Budget %",
+                    description="% of bot budget allocated to short positions (selling)",
+                    type="float",
+                    default=50.0,
+                    min_value=10.0,
+                    max_value=90.0,
+                    group="Bidirectional",
+                ),
+                StrategyParameter(
+                    name="enable_dynamic_allocation",
+                    display_name="Enable Dynamic Allocation",
+                    description="Automatically shift capital to better-performing direction (70/30 max)",
+                    type="bool",
+                    default=False,
+                    group="Bidirectional",
+                ),
+                StrategyParameter(
+                    name="enable_neutral_zone",
+                    display_name="Enforce Neutral Zone",
+                    description="Require minimum price distance between long and short entries",
+                    type="bool",
+                    default=True,
+                    group="Bidirectional",
+                ),
+                StrategyParameter(
+                    name="neutral_zone_percentage",
+                    display_name="Neutral Zone %",
+                    description="Minimum % distance between long and short entry prices",
+                    type="float",
+                    default=5.0,
+                    min_value=1.0,
+                    max_value=20.0,
+                    group="Bidirectional",
+                ),
+                StrategyParameter(
+                    name="auto_mirror_conditions",
+                    display_name="Auto-Mirror Conditions",
+                    description="Automatically create mirrored short conditions from long conditions",
+                    type="bool",
+                    default=True,
+                    group="Bidirectional",
+                ),
+                # ========================================
                 # CONDITIONS (stored as JSON in strategy_config)
                 # ========================================
                 # Note: These are not StrategyParameters but part of config dict:
@@ -340,6 +405,8 @@ class IndicatorBasedStrategy(TradingStrategy):
                 # - safety_order_logic: "and" or "or"
                 # - take_profit_conditions: List of conditions for exit
                 # - take_profit_logic: "and" or "or"
+                # - short_base_order_conditions: Manual short entry conditions (if auto_mirror=false)
+                # - short_take_profit_conditions: Manual short exit conditions (if auto_mirror=false)
             ],
             supported_products=["ETH-BTC", "BTC-USD", "ETH-USD", "SOL-BTC", "SOL-USD", "*-BTC", "*-USD"],
         )
@@ -672,9 +739,15 @@ class IndicatorBasedStrategy(TradingStrategy):
                 else:
                     reference_price = position.average_buy_price
 
-                # Calculate trigger price using the existing method
-                trigger_price = self.calculate_safety_order_price(reference_price, next_order_number)
-                price_drop_met = current_price <= trigger_price
+                # Calculate trigger price using the existing method (direction-aware)
+                direction = getattr(position, "direction", "long")  # Default to "long" for backward compatibility
+                trigger_price = self.calculate_safety_order_price(reference_price, next_order_number, direction)
+
+                # Check if price target met (direction-specific)
+                if direction == "long":
+                    price_drop_met = current_price <= trigger_price
+                else:  # short
+                    price_drop_met = current_price >= trigger_price
 
                 # Add price_drop as a condition detail
                 price_drop_detail = {
@@ -852,11 +925,27 @@ class IndicatorBasedStrategy(TradingStrategy):
         volume_scale = self.config.get("safety_order_volume_scale", 1.0)
         return base_safety_size * (volume_scale ** (order_number - 1))
 
-    def calculate_safety_order_price(self, entry_price: float, order_number: int) -> float:
-        """Calculate trigger price for safety order with step scaling."""
+    def calculate_safety_order_price(
+        self, entry_price: float, order_number: int, direction: str = "long"
+    ) -> float:
+        """
+        Calculate trigger price for safety order with step scaling.
+
+        Args:
+            entry_price: Reference price (entry or average)
+            order_number: Safety order number (1, 2, 3, ...)
+            direction: "long" or "short"
+
+        Returns:
+            Trigger price for the safety order
+
+        For LONG: SO prices go DOWN (buy dips)
+        For SHORT: SO prices go UP (short into pumps)
+        """
         deviation = self.config.get("price_deviation", 2.0)
         step_scale = self.config.get("safety_order_step_scale", 1.0)
 
+        # Calculate cumulative deviation
         total_deviation = 0.0
         for i in range(order_number):
             if i == 0:
@@ -864,26 +953,125 @@ class IndicatorBasedStrategy(TradingStrategy):
             else:
                 total_deviation += deviation * (step_scale ** i)
 
-        return entry_price * (1.0 - total_deviation / 100.0)
+        # Apply direction-specific calculation
+        if direction == "long":
+            # Long: Buy when price drops below reference
+            return entry_price * (1.0 - total_deviation / 100.0)
+        else:  # short
+            # Short: Sell when price rises above reference
+            return entry_price * (1.0 + total_deviation / 100.0)
+
+    def _check_entry_conditions(self, signal_data: Dict[str, Any], direction: str) -> bool:
+        """
+        Check if entry conditions are met for a specific direction.
+
+        Args:
+            signal_data: Signal data with base_order_signal
+            direction: "long" or "short"
+
+        Returns:
+            True if conditions met for this direction
+        """
+        # For now, use the base_order_signal from signal_data
+        # In the future, this will evaluate direction-specific conditions
+        base_order_signal = signal_data.get("base_order_signal", False)
+
+        # If no base order conditions configured, always allow entry
+        if not self.base_order_conditions:
+            return True
+
+        return base_order_signal
 
     async def should_buy(
         self, signal_data: Dict[str, Any], position: Optional[Any], balance: float, **kwargs
     ) -> Tuple[bool, float, str]:
-        """Determine if we should buy based on signal data."""
+        """
+        Determine if we should buy/sell based on signal data.
+
+        Supports bidirectional trading: can initiate long (buy) or short (sell) positions.
+        """
         current_price = signal_data.get("price", 0)
         base_order_signal = signal_data.get("base_order_signal", False)
         safety_order_signal = signal_data.get("safety_order_signal", False)
 
         if position is None:
-            # Initial base order
-            if not base_order_signal and self.base_order_conditions:
-                return False, 0.0, "Base order conditions not met"
+            # ===== OPENING NEW POSITION =====
 
-            amount = self.calculate_base_order_size(balance)
-            if amount <= 0 or amount > balance:
-                return False, 0.0, "Insufficient balance"
+            # Check if bidirectional trading enabled
+            enable_bidirectional = self.config.get("enable_bidirectional", False)
 
-            return True, amount, f"Base order (conditions met): {amount:.8f}"
+            if enable_bidirectional:
+                # Bidirectional mode: check both long and short conditions
+                long_signal = self._check_entry_conditions(signal_data, "long")
+                short_signal = self._check_entry_conditions(signal_data, "short")
+
+                # Neutral zone enforcement: prevent simultaneous long/short entries too close together
+                if long_signal and short_signal:
+                    if self.config.get("enable_neutral_zone", True):
+                        # Both signals active - need to wait for clear directional move
+                        # In future, we'll check if there's already an opposite direction position
+                        # and verify minimum price distance
+                        return False, 0.0, "Neutral zone - both signals active, waiting for clear direction"
+
+                # Determine direction to enter
+                if long_signal:
+                    direction = "long"
+                elif short_signal:
+                    direction = "short"
+                else:
+                    return False, 0.0, "No entry signal (bidirectional mode)"
+
+                # Calculate direction-specific budget
+                # Get total bot budget from kwargs if available
+                aggregate_value = kwargs.get("aggregate_btc_value", 0) or kwargs.get("aggregate_usd_value", 0)
+                if aggregate_value > 0:
+                    bot_budget_pct = self.config.get("budget_percentage", 10.0)
+                    bot_total_budget = aggregate_value * (bot_budget_pct / 100.0)
+
+                    # Check for dynamic allocation
+                    if self.config.get("enable_dynamic_allocation", False):
+                        # TODO: Implement dynamic allocation based on performance
+                        long_budget_pct = self.config.get("long_budget_percentage", 50.0)
+                        short_budget_pct = self.config.get("short_budget_percentage", 50.0)
+                    else:
+                        long_budget_pct = self.config.get("long_budget_percentage", 50.0)
+                        short_budget_pct = self.config.get("short_budget_percentage", 50.0)
+
+                    # Allocate budget based on direction
+                    if direction == "long":
+                        per_position_budget = bot_total_budget * (long_budget_pct / 100.0)
+                    else:  # short
+                        per_position_budget = bot_total_budget * (short_budget_pct / 100.0)
+
+                    # Divide by max concurrent deals if configured
+                    max_concurrent = self.config.get("max_concurrent_deals", 1)
+                    if max_concurrent > 1:
+                        per_position_budget /= max_concurrent
+
+                    amount = self.calculate_base_order_size(per_position_budget)
+                else:
+                    # Fallback to balance-based calculation
+                    amount = self.calculate_base_order_size(balance)
+
+                if amount <= 0 or amount > balance:
+                    return False, 0.0, f"Insufficient balance for {direction} entry"
+
+                # Store direction in signal data for position creation
+                # This will be picked up by the signal processor
+                signal_data["direction"] = direction
+
+                return True, amount, f"{direction.upper()} entry (conditions met): {amount:.8f}"
+
+            else:
+                # Traditional long-only mode
+                if not base_order_signal and self.base_order_conditions:
+                    return False, 0.0, "Base order conditions not met"
+
+                amount = self.calculate_base_order_size(balance)
+                if amount <= 0 or amount > balance:
+                    return False, 0.0, "Insufficient balance"
+
+                return True, amount, f"Base order (conditions met): {amount:.8f}"
         else:
             # Safety order logic
 
@@ -921,11 +1109,21 @@ class IndicatorBasedStrategy(TradingStrategy):
                 # "average_price" or fallback - use average buy price
                 reference_price = position.average_buy_price
 
-            # Always check price target as minimum threshold
+            # Always check price target as minimum threshold (direction-aware)
             # DCA targets set the MINIMUM drop required before a DCA can trigger
-            trigger_price = self.calculate_safety_order_price(reference_price, next_order_number)
-            if current_price > trigger_price:
-                return False, 0.0, f"Price not low enough for SO #{next_order_number} (need ≤{trigger_price:.8f})"
+            direction = getattr(position, "direction", "long")  # Default to "long" for backward compatibility
+            trigger_price = self.calculate_safety_order_price(reference_price, next_order_number, direction)
+
+            # Check price target based on direction
+            if direction == "long":
+                price_target_met = current_price <= trigger_price
+                reason = f"Price not low enough for SO #{next_order_number} (need ≤{trigger_price:.8f})"
+            else:  # short
+                price_target_met = current_price >= trigger_price
+                reason = f"Price not high enough for SO #{next_order_number} (need ≥{trigger_price:.8f})"
+
+            if not price_target_met:
+                return False, 0.0, reason
 
             # If safety order conditions exist (like AI_BUY), also check them
             # Price target must be met AND conditions must be satisfied

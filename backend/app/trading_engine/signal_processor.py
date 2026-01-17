@@ -433,12 +433,18 @@ async def process_signal(
         is_new_position = position is None
         trade_type = "initial" if is_new_position else "dca"
 
-        if is_new_position:
-            logger.info(f"  🔨 Executing {trade_type} buy order FIRST (position will be created after success)...")
-        else:
-            logger.info(f"  🔨 Executing {trade_type} buy order for existing position...")
+        # Check if this is a short order (bidirectional DCA)
+        direction = signal_data.get("direction", "long")
+        is_short = direction == "short"
 
-        # Execute buy FIRST - don't create position until we know trade succeeds
+        if is_new_position:
+            action_verb = "SELL" if is_short else "BUY"
+            logger.info(f"  🔨 Executing {trade_type} {action_verb} order FIRST (position will be created after success)...")
+        else:
+            action_verb = "sell" if is_short else "buy"
+            logger.info(f"  🔨 Executing {trade_type} {action_verb} order for existing position...")
+
+        # Execute order FIRST - don't create position until we know trade succeeds
         try:
             # For new positions, we need to create position for the trade to reference
             # BUT we do it in a transaction that will rollback if trade fails
@@ -459,24 +465,51 @@ async def process_signal(
 
                 position = await create_position(
                     db, exchange, bot, product_id, quote_balance, quote_amount, aggregate_value,
-                    pattern_data=pattern_data
+                    pattern_data=pattern_data,
+                    direction=direction  # Pass direction to position
                 )
-                logger.info(f"  ✅ Position created: ID={position.id} (pending trade execution)")
+                logger.info(f"  ✅ Position created: ID={position.id} direction={direction} (pending trade execution)")
 
-            # Execute the actual trade
-            trade = await execute_buy(
-                db=db,
-                exchange=exchange,
-                trading_client=trading_client,
-                bot=bot,
-                product_id=product_id,
-                position=position,
-                quote_amount=quote_amount,
-                current_price=current_price,
-                trade_type=trade_type,
-                signal_data=signal_data,
-                commit_on_error=not is_new_position,  # Don't commit errors for base orders
-            )
+            # Execute the actual trade (direction-aware)
+            if is_short:
+                # SHORT ORDER: Sell BTC for USD
+                # Calculate how much BTC to sell based on quote_amount (USD value)
+                base_amount = quote_amount / current_price
+                logger.info(f"  📉 SHORT: Selling {base_amount:.8f} BTC (${quote_amount:.2f} worth) @ ${current_price:.2f}")
+
+                # Execute short order using existing sell infrastructure
+                # For base orders (trade_type="initial"), we execute market sell
+                # For safety orders, we check config for limit vs market
+                from app.trading_engine.sell_executor import execute_sell_short
+
+                trade = await execute_sell_short(
+                    db=db,
+                    exchange=exchange,
+                    trading_client=trading_client,
+                    bot=bot,
+                    product_id=product_id,
+                    position=position,
+                    base_amount=base_amount,
+                    current_price=current_price,
+                    trade_type=trade_type,
+                    signal_data=signal_data,
+                    commit_on_error=not is_new_position,
+                )
+            else:
+                # LONG ORDER: Buy BTC with USD (existing logic)
+                trade = await execute_buy(
+                    db=db,
+                    exchange=exchange,
+                    trading_client=trading_client,
+                    bot=bot,
+                    product_id=product_id,
+                    position=position,
+                    quote_amount=quote_amount,
+                    current_price=current_price,
+                    trade_type=trade_type,
+                    signal_data=signal_data,
+                    commit_on_error=not is_new_position,  # Don't commit errors for base orders
+                )
 
             if trade is None:
                 # Limit order was placed instead
@@ -625,17 +658,35 @@ async def process_signal(
                     "position": position,
                 }
 
-            # Execute sell (market or limit based on config)
-            trade, profit_quote, profit_pct = await execute_sell(
-                db=db,
-                exchange=exchange,
-                trading_client=trading_client,
-                bot=bot,
-                product_id=product_id,
-                position=position,
-                current_price=current_price,
-                signal_data=signal_data,
-            )
+            # Execute close order (direction-aware)
+            # For long positions: sell the BTC we bought
+            # For short positions: buy back the BTC we sold
+            if position.direction == "short":
+                # CLOSE SHORT: Buy back BTC (opposite of opening short)
+                from app.trading_engine.buy_executor import execute_buy_close_short
+
+                trade, profit_quote, profit_pct = await execute_buy_close_short(
+                    db=db,
+                    exchange=exchange,
+                    trading_client=trading_client,
+                    bot=bot,
+                    product_id=product_id,
+                    position=position,
+                    current_price=current_price,
+                    signal_data=signal_data,
+                )
+            else:
+                # CLOSE LONG: Sell the BTC we bought (existing logic)
+                trade, profit_quote, profit_pct = await execute_sell(
+                    db=db,
+                    exchange=exchange,
+                    trading_client=trading_client,
+                    bot=bot,
+                    product_id=product_id,
+                    position=position,
+                    current_price=current_price,
+                    signal_data=signal_data,
+                )
 
             # If trade is None, a limit order was placed - position stays open
             if trade is None:

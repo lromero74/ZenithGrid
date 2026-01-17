@@ -730,6 +730,8 @@ def initialize_database(project_root):
                 reserved_btc_balance REAL DEFAULT 0.0,
                 reserved_usd_balance REAL DEFAULT 0.0,
                 budget_percentage REAL DEFAULT 0.0,
+                reserved_usd_for_longs REAL DEFAULT 0.0,
+                reserved_btc_for_shorts REAL DEFAULT 0.0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_signal_check DATETIME,
@@ -769,6 +771,7 @@ def initialize_database(project_root):
                 status TEXT DEFAULT 'open',
                 opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 closed_at DATETIME,
+                direction TEXT DEFAULT 'long',
                 exchange_type TEXT DEFAULT 'cex',
                 chain_id INTEGER,
                 dex_router TEXT,
@@ -779,6 +782,11 @@ def initialize_database(project_root):
                 total_quote_spent REAL DEFAULT 0.0,
                 total_base_acquired REAL DEFAULT 0.0,
                 average_buy_price REAL DEFAULT 0.0,
+                entry_price REAL,
+                short_entry_price REAL,
+                short_average_sell_price REAL,
+                short_total_sold_quote REAL,
+                short_total_sold_base REAL,
                 sell_price REAL,
                 total_quote_received REAL,
                 profit_quote REAL,
@@ -807,6 +815,7 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_id ON positions(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_deal_number ON positions(user_deal_number)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_attempt_number ON positions(user_attempt_number)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_positions_direction ON positions(direction)")
 
         # Trades table
         cursor.execute("""

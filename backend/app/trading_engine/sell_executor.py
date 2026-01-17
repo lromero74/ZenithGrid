@@ -20,6 +20,209 @@ from app.services.shutdown_manager import shutdown_manager
 logger = logging.getLogger(__name__)
 
 
+async def execute_sell_short(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    base_amount: float,
+    current_price: float,
+    trade_type: str,
+    signal_data: Optional[Dict[str, Any]] = None,
+    commit_on_error: bool = True,
+) -> Optional[Trade]:
+    """
+    Execute a sell order to OPEN or ADD TO a SHORT position (bidirectional DCA)
+
+    This is different from execute_sell() which CLOSES long positions.
+    This function sells BTC to enter/add to a short position.
+
+    Args:
+        db: Database session
+        exchange: Exchange client instance (CEX or DEX)
+        trading_client: TradingClient instance
+        bot: Bot instance
+        product_id: Trading pair (e.g., 'BTC-USD')
+        position: Current short position
+        base_amount: Amount of base currency to sell (BTC)
+        current_price: Current market price
+        trade_type: 'initial' or 'safety_order_X'
+        signal_data: Optional signal metadata
+        commit_on_error: If True, commit errors to DB (for safety orders).
+                       If False, don't commit errors (for base orders - let rollback work)
+
+    Returns:
+        Trade record (for market orders only; limit orders return None)
+    """
+    from app.order_validation import validate_order_size
+    from app.trading_engine.order_logger import log_order_to_history
+    from app.services.websocket_manager import ws_manager
+
+    quote_currency = get_quote_currency(product_id)
+
+    # Check if shutdown is in progress - reject new orders
+    if shutdown_manager.is_shutting_down:
+        logger.warning(f"Rejecting short sell order for {product_id} - shutdown in progress")
+        raise RuntimeError("Cannot place orders - shutdown in progress")
+
+    # Check if this is a safety order that should use limit orders
+    is_safety_order = trade_type.startswith("safety_order")
+    config: Dict = position.strategy_config_snapshot or {}
+    safety_order_type = config.get("safety_order_type", "market")
+
+    if is_safety_order and safety_order_type == "limit":
+        # Place limit sell order for short safety order
+        limit_price = current_price
+
+        logger.info(f"  📋 Placing limit short sell order: {base_amount:.8f} BTC @ {limit_price:.8f}")
+
+        # TODO: Implement limit order logic for short safety orders
+        # For now, fall through to market order
+        logger.warning("  ⚠️ Limit short safety orders not yet implemented - using market order")
+
+    # Execute market sell order (immediate execution)
+    logger.info(f"  💱 Executing SHORT SELL: {base_amount:.8f} BTC @ {current_price:.8f}")
+
+    # Round base_amount down to proper precision (floor to avoid INSUFFICIENT_FUND)
+    precision = get_base_precision(product_id)
+    base_amount_rounded = math.floor(base_amount * (10 ** precision)) / (10 ** precision)
+
+    # Validate order size meets exchange minimums
+    is_valid, error_msg = validate_order_size(product_id, base_amount_rounded, current_price)
+    if not is_valid:
+        error = f"Order validation failed: {error_msg}"
+        logger.error(f"  ❌ {error}")
+        if commit_on_error:
+            position.last_error_message = error
+            position.last_error_timestamp = datetime.utcnow()
+            await db.commit()
+        raise ValueError(error)
+
+    # Execute order via TradingClient
+    order_id = None
+    await shutdown_manager.increment_in_flight()
+    try:
+        order_response = await trading_client.sell(product_id=product_id, base_amount=base_amount_rounded)
+
+        logger.info(f"Coinbase short sell order response: {order_response}")
+
+        # Check success flag
+        if not order_response.get("success", False):
+            error_response = order_response.get("error_response", {})
+            if error_response:
+                error_msg = error_response.get("message", "Unknown error")
+                error_details = error_response.get("error_details", "")
+                error_code = error_response.get("error", "UNKNOWN")
+                raise ValueError(f"Coinbase short sell failed [{error_code}]: {error_msg}. Details: {error_details}")
+            else:
+                raise ValueError(f"Coinbase short sell failed. Full response: {order_response}")
+
+        # Extract order_id
+        success_response = order_response.get("success_response", {})
+        order_id = success_response.get("order_id", "") or order_response.get("order_id", "")
+
+        if not order_id:
+            logger.error(f"Full Coinbase response: {order_response}")
+            raise ValueError(f"No order_id in successful Coinbase response")
+
+        # Get filled price and amount from response
+        order_config = success_response.get("order_configuration", {})
+        market_config = order_config.get("market_market_ioc", {})
+
+        # Calculate filled amounts
+        quote_received = base_amount_rounded * current_price  # USD received from selling BTC
+
+    except Exception as e:
+        logger.error(f"Error executing short sell order: {e}")
+        if commit_on_error:
+            position.last_error_message = f"Short sell failed: {str(e)}"
+            position.last_error_timestamp = datetime.utcnow()
+            await db.commit()
+        raise
+    finally:
+        await shutdown_manager.decrement_in_flight()
+
+    # Get BTC/USD price for USD tracking
+    try:
+        btc_usd_price = await exchange.get_btc_usd_price()
+    except Exception:
+        btc_usd_price = None
+
+    # Create Trade record
+    trade = Trade(
+        position_id=position.id,
+        bot_id=bot.id,
+        order_id=order_id,
+        product_id=product_id,
+        side="sell",  # Selling BTC to open/add to short
+        size=base_amount_rounded,  # BTC sold
+        filled_value=quote_received,  # USD received
+        commission=0.0,  # TODO: Extract from order response if available
+        price=current_price,  # Execution price
+        executed_at=datetime.utcnow(),
+        trade_type=trade_type,
+        btc_usd_price_at_execution=btc_usd_price,
+    )
+
+    db.add(trade)
+
+    # Update position's short tracking fields
+    is_first_short = position.short_entry_price is None
+
+    if is_first_short:
+        # First short order - initialize fields
+        position.short_entry_price = current_price
+        position.short_average_sell_price = current_price
+        position.short_total_sold_base = base_amount_rounded
+        position.short_total_sold_quote = quote_received
+        logger.info(f"  📉 SHORT POSITION OPENED: Entry={current_price:.8f}, BTC sold={base_amount_rounded:.8f}, USD received={quote_received:.2f}")
+    else:
+        # Adding to existing short position (safety order)
+        # Update average sell price: ((prev_avg * prev_btc) + (new_price * new_btc)) / (prev_btc + new_btc)
+        prev_sold_base = position.short_total_sold_base or 0.0
+        prev_sold_quote = position.short_total_sold_quote or 0.0
+
+        new_total_sold_base = prev_sold_base + base_amount_rounded
+        new_total_sold_quote = prev_sold_quote + quote_received
+
+        position.short_total_sold_base = new_total_sold_base
+        position.short_total_sold_quote = new_total_sold_quote
+        position.short_average_sell_price = new_total_sold_quote / new_total_sold_base if new_total_sold_base > 0 else current_price
+
+        logger.info(f"  📉 SHORT POSITION UPDATED: Avg={position.short_average_sell_price:.8f}, Total BTC sold={new_total_sold_base:.8f}, Total USD={new_total_sold_quote:.2f}")
+
+    # Clear any error status
+    position.last_error_message = None
+    position.last_error_timestamp = None
+
+    await db.commit()
+    await db.refresh(trade)
+
+    # Log to order history
+    await log_order_to_history(
+        db=db,
+        exchange=exchange,
+        bot=bot,
+        action="SHORT_SELL",
+        order_id=order_id,
+        product_id=product_id,
+        amount=base_amount_rounded,
+        price=current_price,
+        total=quote_received,
+        reason=f"{trade_type} for short position",
+        signal_data=signal_data,
+    )
+
+    # Send WebSocket update
+    await ws_manager.broadcast_position_update(position)
+
+    logger.info(f"  ✅ SHORT SELL EXECUTED: {base_amount_rounded:.8f} BTC @ {current_price:.8f} = ${quote_received:.2f} (Order: {order_id})")
+
+    return trade
+
+
 async def execute_limit_sell(
     db: AsyncSession,
     exchange: ExchangeClient,

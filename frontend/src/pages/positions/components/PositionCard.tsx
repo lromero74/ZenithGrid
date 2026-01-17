@@ -1,4 +1,4 @@
-import { AlertCircle, BarChart2, Settings } from 'lucide-react'
+import { AlertCircle, BarChart2, Settings, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
 import type { Position, Bot } from '../../../types'
 import CoinIcon from '../../../components/CoinIcon'
@@ -81,8 +81,23 @@ export const PositionCard = ({
         <div className="grid grid-cols-12 gap-4 items-start text-sm">
           {/* Column 1: Bot Info + Strategy (2 cols) */}
           <div className="col-span-2">
-            <div className="text-white font-semibold mb-1">
-              {bot?.name || `Bot #${position.bot_id || 'N/A'}`}
+            <div className="flex items-center gap-2 mb-1">
+              <div className="text-white font-semibold">
+                {bot?.name || `Bot #${position.bot_id || 'N/A'}`}
+              </div>
+              {/* Bidirectional DCA: Show direction badge */}
+              {position.direction && position.direction !== 'long' && (
+                <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500/20 border border-red-500/30 rounded text-[9px] font-semibold text-red-400">
+                  <TrendingDown size={10} />
+                  <span>SHORT</span>
+                </div>
+              )}
+              {position.direction === 'long' && (
+                <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-500/20 border border-green-500/30 rounded text-[9px] font-semibold text-green-400">
+                  <TrendingUp size={10} />
+                  <span>LONG</span>
+                </div>
+              )}
             </div>
             <div className="text-[10px] text-slate-400 space-y-0.5">
               {bot?.strategy_type && (
