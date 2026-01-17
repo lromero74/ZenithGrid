@@ -2,13 +2,13 @@
 - Always think "How does 3Commas do it?" and do that.
 - new work should be done in dev branches and merged after I confirm good
 - always do git diff check before new git add to make sure we didn't lose functionality we want to keep
-- we are now running from EC2.  Restarts should be done with "sudo systemctl restart trading-bot-backend"
+- we are now running from EC2.  Restarts should be done with systemctl
 
 ## Current Environment Detection
 
 **If hostname contains `ec2.internal`**: You are ON the EC2 production instance.
 - Services run LOCALLY - no SSH needed
-- Restart backend: `sudo systemctl restart trading-bot-backend`
+- Restart services: `sudo systemctl restart trading-bot-backend trading-bot-frontend`
 - Database is local: `backend/trading.db`
 - This IS production - be careful with changes
 
@@ -28,13 +28,24 @@
 
 **Services Running:**
 - Trading bot backend (systemd: trading-bot-backend.service)
-- Trading bot frontend (Vite dev server on port 5173)
+- Trading bot frontend (systemd: trading-bot-frontend.service)
 - Both auto-start on boot
+
+**Restarting Services:**
+```bash
+# Restart backend only
+sudo systemctl restart trading-bot-backend
+
+# Restart frontend only
+sudo systemctl restart trading-bot-frontend
+
+# Restart both at once
+sudo systemctl restart trading-bot-backend trading-bot-frontend
+```
 
 **Accessing Frontend:**
 - Frontend runs on testbot:5173 (Vite dev server)
 - Access locally via SSH port forwarding (localhost:5173 → testbot:5173)
-- After code changes, restart Vite: `ssh testbot "pkill -f vite && cd ~/ZenithGrid/frontend && nohup npm run dev > /tmp/vite.log 2>&1 &"`
 
 **Management:**
 ```bash
@@ -68,7 +79,7 @@ cd ZenithGrid/backend
 1. These are already listed in `backend/requirements.txt`
 2. On fresh EC2 instance: `pip install -r requirements.txt`
 3. If missing libraries cause errors in AI Bot Reasoning logs, install individually
-4. After installation, always restart backend: `sudo systemctl restart trading-bot-backend`
+4. After installation, always restart services: `sudo systemctl restart trading-bot-backend trading-bot-frontend`
 - please always back up the database before you mess with it
 
 ## CRITICAL: Budget Calculation for BTC Bots
@@ -196,7 +207,6 @@ See **COMMERCIALIZATION.md** for the full roadmap to make Zenith Grid sale-ready
 - when updating prod, use our "update.py --yes" script to ensure user experience will be good when they* too use it
 - be sure not to hardcode migrations paths (use os.path.dirname pattern we currently use).  Otherwise the update.py script will fail when other folk try to update and run.
 - you can tell the update.py script to answer "yes" automatically with "-y"
-- don't forget to use systemctl to restart our app on testbot
 - if we are just fixing things that should already work, bump tag patch number when I tell you it's time (major.minor.patch)
 - if we are adding a new feature, bump tag minor number when I tell you it's time (major.minor.patch)
-- use systemctl scripts on testbot to restart services.
+- always use systemctl to restart services on testbot (both backend and frontend): `sudo systemctl restart trading-bot-backend trading-bot-frontend`
