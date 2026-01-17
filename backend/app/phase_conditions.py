@@ -21,10 +21,15 @@ class PhaseConditionEvaluator:
     Supports two formats:
     1. Legacy flat format: { conditions: [...], logic: 'and'|'or' }
     2. New grouped format: { groups: [...], groupLogic: 'and'|'or' }
+
+    Bidirectional support:
+    - Conditions can have a "direction" field ("long" or "short")
+    - If direction is set, condition only applies to positions with matching direction
     """
 
-    def __init__(self, indicator_calculator: IndicatorCalculator):
+    def __init__(self, indicator_calculator: IndicatorCalculator, position_direction: Optional[str] = None):
         self.indicator_calculator = indicator_calculator
+        self.position_direction = position_direction  # "long", "short", or None
 
     def evaluate_expression(
         self,
@@ -206,7 +211,22 @@ class PhaseConditionEvaluator:
         previous_indicators: Optional[Dict[str, Any]],
         capture_details: bool = False,
     ) -> Union[bool, tuple]:
-        """Evaluate a single phase condition"""
+        """Evaluate a single phase condition (with bidirectional support)"""
+        # BIDIRECTIONAL: Check if condition's direction matches position's direction
+        condition_direction = condition.get("direction")  # "long", "short", or None
+        if condition_direction and self.position_direction:
+            if condition_direction != self.position_direction:
+                # Condition doesn't apply to this position direction
+                print(f"[DEBUG] Skipping condition (direction mismatch: condition={condition_direction}, position={self.position_direction})")
+                if capture_details:
+                    detail = {
+                        "type": condition.get("type"),
+                        "result": False,
+                        "error": f"Direction mismatch (condition={condition_direction}, position={self.position_direction})"
+                    }
+                    return False, detail
+                return False
+
         condition_type = condition.get("type")
         operator = condition.get("operator")
         value = condition.get("value", 0)

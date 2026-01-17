@@ -187,6 +187,12 @@ class Bot(Base):
     reserved_usd_balance = Column(Float, default=0.0)  # USD reserved for this bot (legacy)
     budget_percentage = Column(Float, default=0.0)  # % of aggregate BTC value (preferred method)
 
+    # Bidirectional DCA Grid Bot - Budget Reservations
+    # These track RESERVED amounts for bidirectional bots (even with 0 open positions)
+    # DCA bots wait for signals, so capital must be reserved upfront
+    reserved_usd_for_longs = Column(Float, default=0.0)  # USD reserved for long positions
+    reserved_btc_for_shorts = Column(Float, default=0.0)  # BTC reserved for short positions
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -286,6 +292,10 @@ class Position(Base):
     opened_at = Column(DateTime, default=datetime.utcnow)
     closed_at = Column(DateTime, nullable=True)
 
+    # Bidirectional DCA Grid Bot - Direction Tracking
+    # Indicates whether position is long (buying) or short (selling)
+    direction = Column(String, default="long")  # "long" or "short"
+
     # Exchange configuration (frozen at position creation)
     exchange_type = Column(String, default="cex", nullable=False)  # "cex" or "dex"
     chain_id = Column(Integer, nullable=True)  # Blockchain chain ID (for DEX positions)
@@ -299,10 +309,19 @@ class Position(Base):
     initial_quote_balance = Column(Float)
     max_quote_allowed = Column(Float)  # 25% of initial balance (configurable)
 
-    # Position totals
+    # Position totals (LONG positions)
     total_quote_spent = Column(Float, default=0.0)  # Amount of quote currency spent (BTC or USD)
     total_base_acquired = Column(Float, default=0.0)  # Amount of base currency acquired (ETH, ADA, etc.)
     average_buy_price = Column(Float, default=0.0)  # Average price paid (quote/base)
+
+    # Bidirectional DCA Grid Bot - Short Position Tracking
+    # For short positions: we SELL base currency (e.g., BTC) to get quote currency (e.g., USD)
+    # Then we buy back later at lower price to profit
+    entry_price = Column(Float, nullable=True)  # Initial entry price (used for both long and short)
+    short_entry_price = Column(Float, nullable=True)  # Price at first short (for short positions)
+    short_average_sell_price = Column(Float, nullable=True)  # Average price of all short sells
+    short_total_sold_quote = Column(Float, nullable=True)  # Total USD received from selling BTC
+    short_total_sold_base = Column(Float, nullable=True)  # Total BTC sold
 
     # Closing metrics
     sell_price = Column(Float, nullable=True)
@@ -369,14 +388,58 @@ class Position(Base):
         return "ETH"  # Default fallback
 
     def update_averages(self):
-        """Recalculate average buy price and totals from trades"""
-        buy_trades = [t for t in self.trades if t.side == "buy"]
-        if buy_trades:
-            total_quote = sum(t.quote_amount for t in buy_trades)
-            total_base = sum(t.base_amount for t in buy_trades)
-            self.total_quote_spent = total_quote
-            self.total_base_acquired = total_base
-            self.average_buy_price = total_quote / total_base if total_base > 0 else 0.0
+        """Recalculate average buy/sell price and totals from trades (direction-aware)"""
+        if self.direction == "long":
+            # LONG: Track buy trades
+            buy_trades = [t for t in self.trades if t.side == "buy"]
+            if buy_trades:
+                total_quote = sum(t.quote_amount for t in buy_trades)
+                total_base = sum(t.base_amount for t in buy_trades)
+                self.total_quote_spent = total_quote
+                self.total_base_acquired = total_base
+                self.average_buy_price = total_quote / total_base if total_base > 0 else 0.0
+        else:
+            # SHORT: Track sell trades
+            sell_trades = [t for t in self.trades if t.side == "sell"]
+            if sell_trades:
+                total_quote = sum(t.quote_amount for t in sell_trades)  # USD received
+                total_base = sum(t.base_amount for t in sell_trades)  # BTC sold
+                self.short_total_sold_quote = total_quote
+                self.short_total_sold_base = total_base
+                self.short_average_sell_price = total_quote / total_base if total_base > 0 else 0.0
+
+    def calculate_profit(self, current_price: float) -> dict:
+        """
+        Calculate P&L for both long and short positions.
+
+        Args:
+            current_price: Current market price
+
+        Returns:
+            Dict with profit_quote, profit_pct, unrealized_value
+        """
+        if self.direction == "long":
+            # LONG: Profit when price goes UP
+            # We bought BTC, current value is what we could sell it for now
+            unrealized_value = self.total_base_acquired * current_price
+            profit_quote = unrealized_value - self.total_quote_spent
+            profit_pct = (profit_quote / self.total_quote_spent) * 100 if self.total_quote_spent > 0 else 0.0
+
+        else:
+            # SHORT: Profit when price goes DOWN
+            # We sold BTC high, need to buy back low
+            # Cost to cover = how much USD we'd need to buy back the BTC we sold
+            cost_to_cover = (self.short_total_sold_base or 0.0) * current_price
+            # Profit = USD we received from selling - USD needed to buy back
+            profit_quote = (self.short_total_sold_quote or 0.0) - cost_to_cover
+            profit_pct = (profit_quote / (self.short_total_sold_quote or 1.0)) * 100
+            unrealized_value = cost_to_cover
+
+        return {
+            "profit_quote": profit_quote,
+            "profit_pct": profit_pct,
+            "unrealized_value": unrealized_value
+        }
 
 
 class Trade(Base):

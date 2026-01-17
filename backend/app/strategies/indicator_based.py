@@ -672,9 +672,15 @@ class IndicatorBasedStrategy(TradingStrategy):
                 else:
                     reference_price = position.average_buy_price
 
-                # Calculate trigger price using the existing method
-                trigger_price = self.calculate_safety_order_price(reference_price, next_order_number)
-                price_drop_met = current_price <= trigger_price
+                # Calculate trigger price using the existing method (direction-aware)
+                direction = getattr(position, "direction", "long")  # Default to "long" for backward compatibility
+                trigger_price = self.calculate_safety_order_price(reference_price, next_order_number, direction)
+
+                # Check if price target met (direction-specific)
+                if direction == "long":
+                    price_drop_met = current_price <= trigger_price
+                else:  # short
+                    price_drop_met = current_price >= trigger_price
 
                 # Add price_drop as a condition detail
                 price_drop_detail = {
@@ -852,11 +858,27 @@ class IndicatorBasedStrategy(TradingStrategy):
         volume_scale = self.config.get("safety_order_volume_scale", 1.0)
         return base_safety_size * (volume_scale ** (order_number - 1))
 
-    def calculate_safety_order_price(self, entry_price: float, order_number: int) -> float:
-        """Calculate trigger price for safety order with step scaling."""
+    def calculate_safety_order_price(
+        self, entry_price: float, order_number: int, direction: str = "long"
+    ) -> float:
+        """
+        Calculate trigger price for safety order with step scaling.
+
+        Args:
+            entry_price: Reference price (entry or average)
+            order_number: Safety order number (1, 2, 3, ...)
+            direction: "long" or "short"
+
+        Returns:
+            Trigger price for the safety order
+
+        For LONG: SO prices go DOWN (buy dips)
+        For SHORT: SO prices go UP (short into pumps)
+        """
         deviation = self.config.get("price_deviation", 2.0)
         step_scale = self.config.get("safety_order_step_scale", 1.0)
 
+        # Calculate cumulative deviation
         total_deviation = 0.0
         for i in range(order_number):
             if i == 0:
@@ -864,7 +886,13 @@ class IndicatorBasedStrategy(TradingStrategy):
             else:
                 total_deviation += deviation * (step_scale ** i)
 
-        return entry_price * (1.0 - total_deviation / 100.0)
+        # Apply direction-specific calculation
+        if direction == "long":
+            # Long: Buy when price drops below reference
+            return entry_price * (1.0 - total_deviation / 100.0)
+        else:  # short
+            # Short: Sell when price rises above reference
+            return entry_price * (1.0 + total_deviation / 100.0)
 
     async def should_buy(
         self, signal_data: Dict[str, Any], position: Optional[Any], balance: float, **kwargs
@@ -921,11 +949,21 @@ class IndicatorBasedStrategy(TradingStrategy):
                 # "average_price" or fallback - use average buy price
                 reference_price = position.average_buy_price
 
-            # Always check price target as minimum threshold
+            # Always check price target as minimum threshold (direction-aware)
             # DCA targets set the MINIMUM drop required before a DCA can trigger
-            trigger_price = self.calculate_safety_order_price(reference_price, next_order_number)
-            if current_price > trigger_price:
-                return False, 0.0, f"Price not low enough for SO #{next_order_number} (need ≤{trigger_price:.8f})"
+            direction = getattr(position, "direction", "long")  # Default to "long" for backward compatibility
+            trigger_price = self.calculate_safety_order_price(reference_price, next_order_number, direction)
+
+            # Check price target based on direction
+            if direction == "long":
+                price_target_met = current_price <= trigger_price
+                reason = f"Price not low enough for SO #{next_order_number} (need ≤{trigger_price:.8f})"
+            else:  # short
+                price_target_met = current_price >= trigger_price
+                reason = f"Price not high enough for SO #{next_order_number} (need ≥{trigger_price:.8f})"
+
+            if not price_target_met:
+                return False, 0.0, reason
 
             # If safety order conditions exist (like AI_BUY), also check them
             # Price target must be met AND conditions must be satisfied

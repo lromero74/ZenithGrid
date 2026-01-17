@@ -158,6 +158,7 @@ async def create_position(
     quote_amount: float,
     aggregate_value: float = None,
     pattern_data: dict = None,
+    direction: str = "long",
 ) -> Position:
     """
     Create a new position for this bot
@@ -171,6 +172,7 @@ async def create_position(
         quote_amount: Amount of quote currency being spent on initial buy
         aggregate_value: Total account liquidation value (for manual sizing budget calc)
         pattern_data: Optional pattern data (bull_flag targets: entry, stop_loss, take_profit_target)
+        direction: Position direction - "long" (buy) or "short" (sell)
     """
     # Get BTC/USD price for USD tracking
     try:
@@ -201,6 +203,7 @@ async def create_position(
         user_deal_number=None,  # Will be assigned AFTER successful base order execution
         product_id=product_id,  # Use the engine's product_id (specific pair being traded)
         status="open",
+        direction=direction,  # "long" or "short" for bidirectional DCA
         opened_at=datetime.utcnow(),
         initial_quote_balance=quote_balance,
         max_quote_allowed=max_quote,  # Expected total based on order sizes
