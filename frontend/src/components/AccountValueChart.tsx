@@ -4,7 +4,7 @@ import { createChart, ColorType, IChartApi, Time, LineData } from 'lightweight-c
 import { TrendingUp, DollarSign } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 import { useAccount } from '../contexts/AccountContext'
-import axios from 'axios'
+import { accountValueApi } from '../services/api'
 
 interface AccountValueSnapshot {
   date: string
@@ -49,13 +49,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
     queryKey: ['account-value-history', timeRange, includePaperTrading],
     queryFn: async () => {
       const days = getDaysForTimeRange(timeRange)
-      const response = await axios.get<AccountValueSnapshot[]>('/api/account-value/history', {
-        params: {
-          days,
-          include_paper_trading: includePaperTrading
-        }
-      })
-      return response.data
+      return accountValueApi.getHistory(days, includePaperTrading)
     },
     refetchInterval: 300000, // Refresh every 5 minutes
   })

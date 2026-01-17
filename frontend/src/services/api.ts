@@ -417,3 +417,21 @@ export const autoBuyApi = {
   updateSettings: (accountId: number, settings: AutoBuySettingsUpdate) =>
     api.put<AutoBuySettings>(`/accounts/${accountId}/auto-buy-settings`, settings).then((res) => res.data),
 };
+
+interface AccountValueSnapshot {
+  date: string
+  timestamp: string
+  total_value_btc: number
+  total_value_usd: number
+}
+
+export const accountValueApi = {
+  getHistory: (days: number, includePaperTrading: boolean) =>
+    api.get<AccountValueSnapshot[]>('/account-value/history', {
+      params: { days, include_paper_trading: includePaperTrading }
+    }).then((res) => res.data),
+  getLatest: (includePaperTrading: boolean) =>
+    api.get<AccountValueSnapshot>('/account-value/latest', {
+      params: { include_paper_trading: includePaperTrading }
+    }).then((res) => res.data),
+};
