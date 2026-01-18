@@ -124,6 +124,15 @@ export function useBotMutations({
     },
   })
 
+  // Copy to account mutation (live <-> paper trading)
+  const copyToAccount = useMutation({
+    mutationFn: ({ id, targetAccountId }: { id: number; targetAccountId: number }) =>
+      botsApi.copyToAccount(id, targetAccountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bots'] })
+    },
+  })
+
   // Force run mutation
   const forceRunBot = useMutation({
     mutationFn: (id: number) => botsApi.forceRun(id),
@@ -185,6 +194,7 @@ export function useBotMutations({
     startBot,
     stopBot,
     cloneBot,
+    copyToAccount,
     forceRunBot,
     cancelAllPositions,
     sellAllPositions

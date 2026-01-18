@@ -197,6 +197,8 @@ export const botsApi = {
     api.post<{ message: string; note: string }>(`/bots/${id}/force-run`).then((res) => res.data),
   clone: (id: number) =>
     api.post<Bot>(`/bots/${id}/clone`).then((res) => res.data),
+  copyToAccount: (id: number, targetAccountId: number) =>
+    api.post<Bot>(`/bots/${id}/copy-to-account?target_account_id=${targetAccountId}`).then((res) => res.data),
   getStats: (id: number) =>
     api.get<BotStats>(`/bots/${id}/stats`).then((res) => res.data),
   getLogs: (id: number, limit = 50, offset = 0, productId?: string, since?: string) => {

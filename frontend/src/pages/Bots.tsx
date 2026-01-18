@@ -21,7 +21,7 @@ import { BotListItem } from './bots/components/BotListItem'
 
 function Bots() {
   const location = useLocation()
-  const { selectedAccount } = useAccount()
+  const { selectedAccount, accounts } = useAccount()
   const [showModal, setShowModal] = useState(false)
   const [editingBot, setEditingBot] = useState<Bot | null>(null)
   const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
@@ -106,6 +106,7 @@ function Bots() {
     startBot,
     stopBot,
     cloneBot,
+    copyToAccount,
     forceRunBot,
     cancelAllPositions,
     sellAllPositions
@@ -291,6 +292,9 @@ function Bots() {
                     startBot={startBot}
                     stopBot={stopBot}
                     cloneBot={cloneBot}
+                    copyToAccount={copyToAccount}
+                    accounts={accounts}
+                    currentAccountId={selectedAccount?.id}
                     forceRunBot={forceRunBot}
                     cancelAllPositions={cancelAllPositions}
                     sellAllPositions={sellAllPositions}

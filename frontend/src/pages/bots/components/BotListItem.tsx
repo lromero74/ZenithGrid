@@ -1,5 +1,6 @@
 import { Bot } from '../../../types'
-import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine } from 'lucide-react'
+import { Account } from '../../../contexts/AccountContext'
+import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
 
 interface BotListItemProps {
@@ -10,6 +11,9 @@ interface BotListItemProps {
   startBot: any
   stopBot: any
   cloneBot: any
+  copyToAccount: any
+  accounts: Account[]
+  currentAccountId?: number
   forceRunBot: any
   cancelAllPositions: any
   sellAllPositions: any
@@ -30,6 +34,9 @@ export function BotListItem({
   startBot,
   stopBot,
   cloneBot,
+  copyToAccount,
+  accounts,
+  currentAccountId,
   forceRunBot,
   cancelAllPositions,
   sellAllPositions,
@@ -328,6 +335,36 @@ export function BotListItem({
                   <Copy className="w-4 h-4 text-blue-400" />
                   <span>Clone Bot</span>
                 </button>
+
+                {/* Copy to Account - show if there are other accounts to copy to */}
+                {(() => {
+                  // Get accounts other than the current one
+                  const targetAccounts = accounts.filter(acc => acc.id !== currentAccountId && acc.is_active)
+
+                  if (targetAccounts.length === 0) return null
+
+                  return (
+                    <>
+                      <div className="border-t border-slate-600 my-1"></div>
+                      {targetAccounts.map((targetAccount) => (
+                        <button
+                          key={targetAccount.id}
+                          onClick={() => {
+                            copyToAccount.mutate({ id: bot.id, targetAccountId: targetAccount.id })
+                            setOpenMenuId(null)
+                          }}
+                          className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
+                        >
+                          <ArrowRightLeft className="w-4 h-4 text-purple-400" />
+                          <span>Copy to {targetAccount.name}</span>
+                          {targetAccount.is_paper_trading && (
+                            <span className="text-xs text-slate-400">(Paper)</span>
+                          )}
+                        </button>
+                      ))}
+                    </>
+                  )
+                })()}
 
                 {/* Separator if bot has open positions */}
                 {(bot.open_positions_count ?? 0) > 0 && (

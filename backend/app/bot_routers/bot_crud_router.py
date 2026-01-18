@@ -773,6 +773,111 @@ async def clone_bot(
     return bot_response
 
 
+@router.post("/{bot_id}/copy-to-account", response_model=BotResponse, status_code=201)
+async def copy_bot_to_account(
+    bot_id: int,
+    target_account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Copy bot configuration to a different account (e.g., live to paper trading or vice versa)
+
+    Creates a copy of the bot with:
+    - Same strategy and configuration
+    - Same trading pairs
+    - Assigned to target account
+    - Name suffix indicating source account type
+    - Starts in stopped state (is_active = False)
+    - No positions copied (fresh start)
+    - Reserved balances reset to 0
+    """
+    # Get original bot
+    query = select(Bot).where(Bot.id == bot_id)
+    if current_user:
+        query = query.where(Bot.user_id == current_user.id)
+    result = await db.execute(query)
+    original_bot = result.scalars().first()
+
+    if not original_bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    # Get target account and verify ownership
+    account_query = select(Account).where(Account.id == target_account_id)
+    if current_user:
+        account_query = account_query.where(Account.user_id == current_user.id)
+    account_result = await db.execute(account_query)
+    target_account = account_result.scalars().first()
+
+    if not target_account:
+        raise HTTPException(status_code=404, detail="Target account not found or not accessible")
+
+    # Get source account to determine type
+    source_account = None
+    if original_bot.account_id:
+        source_account_query = select(Account).where(Account.id == original_bot.account_id)
+        source_account_result = await db.execute(source_account_query)
+        source_account = source_account_result.scalars().first()
+
+    # Generate new name with account type suffix
+    new_name = original_bot.name
+
+    # Determine suffix based on target account type
+    if target_account.is_paper_trading:
+        suffix = " (Paper)"
+    else:
+        suffix = f" ({target_account.name})"
+
+    # Remove existing suffixes first
+    import re
+    new_name = re.sub(r" \((Paper|Copy.*?)\)$", "", new_name)
+    new_name = f"{new_name}{suffix}"
+
+    # Ensure name is unique
+    counter = 2
+    base_new_name = new_name
+    while True:
+        name_check_query = select(Bot).where(Bot.name == new_name)
+        if current_user:
+            name_check_query = name_check_query.where(Bot.user_id == current_user.id)
+        name_check_result = await db.execute(name_check_query)
+        if not name_check_result.scalars().first():
+            break
+        new_name = f"{base_new_name} {counter}"
+        counter += 1
+
+    # Create copied bot
+    copied_bot = Bot(
+        name=new_name,
+        description=original_bot.description,
+        account_id=target_account_id,
+        strategy_type=original_bot.strategy_type,
+        strategy_config=original_bot.strategy_config.copy() if original_bot.strategy_config else {},
+        product_id=original_bot.product_id,
+        product_ids=original_bot.product_ids.copy() if original_bot.product_ids else [],
+        split_budget_across_pairs=original_bot.split_budget_across_pairs,
+        budget_percentage=original_bot.budget_percentage,
+        reserved_btc_balance=0.0,  # Reset reserved balances
+        reserved_usd_balance=0.0,
+        reserved_usd_for_longs=0.0,
+        reserved_btc_for_shorts=0.0,
+        is_active=False,  # Start stopped
+        check_interval_seconds=original_bot.check_interval_seconds,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+        user_id=current_user.id if current_user else None,
+    )
+
+    db.add(copied_bot)
+    await db.commit()
+    await db.refresh(copied_bot)
+
+    logger.info(f"Copied bot {bot_id} to account {target_account_id} as bot {copied_bot.id}")
+
+    bot_response = BotResponse.model_validate(copied_bot)
+    return bot_response
+
+
 @router.get("/{bot_id}/stats", response_model=BotStats)
 async def get_bot_stats(
     bot_id: int,
