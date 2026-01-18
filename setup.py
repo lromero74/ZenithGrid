@@ -1325,12 +1325,12 @@ def seed_coin_categorizations(project_root, user_id):
     cursor = conn.cursor()
 
     try:
-        # Check if any categorizations already exist
-        cursor.execute("SELECT COUNT(*) FROM blacklisted_coins WHERE user_id = ?", (user_id,))
+        # Check if any GLOBAL categorizations already exist (user_id IS NULL)
+        cursor.execute("SELECT COUNT(*) FROM blacklisted_coins WHERE user_id IS NULL")
         existing_count = cursor.fetchone()[0]
 
         if existing_count > 0:
-            print_info(f"Coin categorizations already exist ({existing_count} coins)")
+            print_info(f"Global coin categorizations already exist ({existing_count} coins)")
             return True
 
         # Comprehensive coin categorizations - essential [APPROVED] coins and major [MEME] coins
@@ -1421,12 +1421,13 @@ def seed_coin_categorizations(project_root, user_id):
             ('FLOKI', '[MEME] Meme coin, speculative, high risk'),
         ]
 
-        # Insert all categorizations
+        # Insert all categorizations as GLOBAL entries (user_id = NULL)
+        # These are visible to all users and managed by admins only
         for symbol, reason in coin_categories:
             cursor.execute("""
                 INSERT OR IGNORE INTO blacklisted_coins (user_id, symbol, reason, created_at)
                 VALUES (?, ?, ?, ?)
-            """, (user_id, symbol, reason, datetime.utcnow()))
+            """, (None, symbol, reason, datetime.utcnow()))
 
         conn.commit()
         print_success(f"Seeded {len(coin_categories)} coin categorizations")
