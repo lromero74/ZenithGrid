@@ -9,11 +9,23 @@ export interface Position {
   bot_config?: Record<string, any>;  // Snapshot of bot config at position open
   opened_at: string;
   closed_at: string | null;
+
+  // Bidirectional DCA Grid Bot - Direction
+  direction?: string;  // "long" or "short" (default: "long")
+
   initial_quote_balance: number;  // BTC or USD
   max_quote_allowed: number;      // BTC or USD
   total_quote_spent: number;      // BTC or USD
   total_base_acquired: number;    // ETH, ADA, etc.
   average_buy_price: number;
+
+  // Bidirectional DCA Grid Bot - Short Position Tracking
+  entry_price?: number | null;  // Initial entry price (for both long and short)
+  short_entry_price?: number | null;  // Price at first short
+  short_average_sell_price?: number | null;  // Average price of all short sells
+  short_total_sold_quote?: number | null;  // Total USD received from selling
+  short_total_sold_base?: number | null;  // Total BTC sold
+
   sell_price: number | null;
   total_quote_received: number | null;  // BTC or USD
   profit_quote: number | null;    // BTC or USD
@@ -140,6 +152,19 @@ export interface Balances {
   current_eth_btc_price: number;
   btc_usd_price: number;
   total_usd_value: number;
+
+  // Multi-currency support
+  usd?: number;
+  usdc?: number;
+  usdt?: number;
+  reserved_in_positions?: number;
+  reserved_in_pending_orders?: number;
+  available_btc?: number;
+  available_usd?: number;
+  available_eth?: number;
+  available_usdc?: number;
+  available_usdt?: number;
+  [key: string]: number | undefined;  // Allow dynamic coin balances
 }
 
 export interface AggregateValue {
