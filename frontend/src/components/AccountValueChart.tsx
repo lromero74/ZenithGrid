@@ -20,7 +20,7 @@ interface AccountValueChartProps {
 }
 
 export function AccountValueChart({ className = '' }: AccountValueChartProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>('30d')
+  const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [showAllAccounts, setShowAllAccounts] = useState(false)
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
