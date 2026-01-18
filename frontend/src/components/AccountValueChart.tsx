@@ -100,7 +100,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
 
     // Add BTC line series (left scale - orange)
     const btcSeries = chart.addLineSeries({
-      color: '#fb923c',
+      color: '#ff8800',
       lineWidth: 2,
       priceScaleId: 'left',
       title: 'BTC',
