@@ -116,6 +116,8 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         minMove: 0.00000001,
         formatter: (price: number) => price.toFixed(8),
       },
+      lastValueVisible: false,
+      priceLineVisible: false,
     })
     btcSeriesRef.current = btcSeries
 
@@ -125,6 +127,8 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       lineWidth: 2,
       priceScaleId: 'right',
       title: 'USD',
+      lastValueVisible: false,
+      priceLineVisible: false,
     })
     usdSeriesRef.current = usdSeries
 
