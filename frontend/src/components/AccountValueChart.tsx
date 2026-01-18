@@ -82,16 +82,26 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       rightPriceScale: {
         visible: true,
         borderColor: '#334155',
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
       leftPriceScale: {
         visible: true,
         borderColor: '#334155',
         mode: 0, // Normal price scale mode
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
       timeScale: {
         borderColor: '#334155',
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 12,
+        barSpacing: 12,
       },
     })
 
