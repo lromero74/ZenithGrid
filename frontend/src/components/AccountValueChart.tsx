@@ -109,6 +109,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
     const btcSeries = chart.addLineSeries({
       color: '#ff8800',
       lineWidth: 2,
+      lineType: 2, // 2 = curved/smooth line
       priceScaleId: 'left',
       title: 'BTC',
       priceFormat: {
@@ -125,6 +126,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
     const usdSeries = chart.addLineSeries({
       color: '#4ade80',
       lineWidth: 2,
+      lineType: 2, // 2 = curved/smooth line
       priceScaleId: 'right',
       title: 'USD',
       lastValueVisible: false,
