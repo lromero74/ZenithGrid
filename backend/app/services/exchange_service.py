@@ -72,7 +72,31 @@ async def get_exchange_client_for_account(
     # Check if this is a paper trading account
     if account.is_paper_trading:
         logger.info(f"Creating paper trading client for account {account_id}")
-        client = PaperTradingClient(account=account, db=db)
+
+        # Get a real CEX account for price data
+        real_client = None
+        try:
+            cex_result = await db.execute(
+                select(Account).where(
+                    Account.type == "cex",
+                    Account.is_active == True,
+                    Account.api_key_name.isnot(None),
+                    Account.api_private_key.isnot(None)
+                ).order_by(Account.is_default.desc(), Account.created_at)
+            )
+            cex_account = cex_result.scalar_one_or_none()
+
+            if cex_account:
+                real_client = create_exchange_client(
+                    exchange_type="cex",
+                    coinbase_key_name=cex_account.api_key_name,
+                    coinbase_private_key=cex_account.api_private_key,
+                )
+                logger.info(f"Using CEX account {cex_account.id} for paper trading price data")
+        except Exception as e:
+            logger.warning(f"Failed to get real client for paper trading price data: {e}")
+
+        client = PaperTradingClient(account=account, db=db, real_client=real_client)
         # Don't cache paper trading clients (they hold db session)
         return client
 

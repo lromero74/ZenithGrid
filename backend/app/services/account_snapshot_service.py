@@ -31,18 +31,35 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
         True if snapshot captured successfully
     """
     try:
-        # Get exchange client for account
-        client = await get_exchange_client_for_account(db, account.id)
-        if not client:
-            logger.error(f"Failed to get exchange client for account {account.id}")
+        # Use the same portfolio calculation that the header/dashboard uses
+        from app.routers.accounts.portfolio_utils import get_cex_portfolio, get_dex_portfolio
+        from app.routers.accounts_router import get_coinbase_for_account
+
+        if account.is_paper_trading:
+            # Paper trading - use exchange client directly
+            client = await get_exchange_client_for_account(db, account.id)
+            if not client:
+                logger.error(f"Failed to get exchange client for account {account.id}")
+                return False
+
+            total_btc = await client.calculate_aggregate_btc_value()
+            total_usd = await client.calculate_aggregate_usd_value()
+
+            portfolio = {
+                "total_btc_value": total_btc,
+                "total_usd_value": total_usd
+            }
+        elif account.type == "cex":
+            portfolio = await get_cex_portfolio(account, db, get_coinbase_for_account)
+        elif account.type == "dex":
+            portfolio = await get_dex_portfolio(account, db, get_coinbase_for_account)
+        else:
+            logger.error(f"Unknown account type: {account.type}")
             return False
 
-        # Get current BTC price
-        btc_usd_price = await client.get_btc_usd_price()
-
-        # Calculate total BTC and USD values using methods from exchange client
-        total_btc = await client.calculate_aggregate_btc_value()
-        total_usd = total_btc * btc_usd_price
+        # Extract totals from portfolio
+        total_btc = portfolio.get("total_btc_value", 0.0)
+        total_usd = portfolio.get("total_usd_value", 0.0)
 
         # Create snapshot with today's date (00:00:00)
         snapshot_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)

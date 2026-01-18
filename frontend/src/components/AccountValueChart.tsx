@@ -82,6 +82,8 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       leftPriceScale: {
         visible: true,
         borderColor: '#334155',
+        precision: 8,
+        minMove: 0.00000001,
       },
       timeScale: {
         borderColor: '#334155',
