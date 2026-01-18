@@ -100,8 +100,6 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         borderColor: '#334155',
         timeVisible: true,
         secondsVisible: false,
-        rightOffset: 12,
-        barSpacing: 12,
       },
     })
 
