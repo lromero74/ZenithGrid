@@ -7,7 +7,7 @@ Runs once per day via scheduled task.
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -142,42 +142,63 @@ async def get_account_value_history(
     db: AsyncSession,
     user_id: int,
     days: int = 365,
-    include_paper_trading: bool = False
+    include_paper_trading: bool = False,
+    account_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
-    Get aggregated account value history for a user across all their accounts.
+    Get account value history for a user.
+
+    If account_id is provided, returns snapshots for that specific account only.
+    Otherwise, returns aggregated snapshots across all user accounts.
 
     Args:
         db: Database session
         user_id: User ID
         days: Number of days to fetch (default 365)
         include_paper_trading: Whether to include paper trading accounts (default False)
+        account_id: Optional specific account ID to filter by
 
     Returns:
-        List of daily snapshots with aggregated values
+        List of daily snapshots with values (aggregated if account_id is None)
     """
     cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-    # Query snapshots grouped by date, summing across user's accounts
-    # Exclude paper trading accounts by default (virtual money shouldn't mix with real)
-    query = (
-        select(
-            AccountValueSnapshot.snapshot_date,
-            func.sum(AccountValueSnapshot.total_value_btc).label("total_btc"),
-            func.sum(AccountValueSnapshot.total_value_usd).label("total_usd")
+    if account_id is not None:
+        # Single account mode - return snapshots for specific account only
+        query = (
+            select(
+                AccountValueSnapshot.snapshot_date,
+                AccountValueSnapshot.total_value_btc.label("total_btc"),
+                AccountValueSnapshot.total_value_usd.label("total_usd")
+            )
+            .where(
+                AccountValueSnapshot.user_id == user_id,
+                AccountValueSnapshot.account_id == account_id,
+                AccountValueSnapshot.snapshot_date >= cutoff_date
+            )
+            .order_by(AccountValueSnapshot.snapshot_date)
         )
-        .join(Account, AccountValueSnapshot.account_id == Account.id)
-        .where(
-            AccountValueSnapshot.user_id == user_id,
-            AccountValueSnapshot.snapshot_date >= cutoff_date
+    else:
+        # Aggregated mode - sum across user's accounts
+        # Exclude paper trading accounts by default (virtual money shouldn't mix with real)
+        query = (
+            select(
+                AccountValueSnapshot.snapshot_date,
+                func.sum(AccountValueSnapshot.total_value_btc).label("total_btc"),
+                func.sum(AccountValueSnapshot.total_value_usd).label("total_usd")
+            )
+            .join(Account, AccountValueSnapshot.account_id == Account.id)
+            .where(
+                AccountValueSnapshot.user_id == user_id,
+                AccountValueSnapshot.snapshot_date >= cutoff_date
+            )
         )
-    )
 
-    # Filter out paper trading accounts unless explicitly requested
-    if not include_paper_trading:
-        query = query.where(Account.is_paper_trading == False)
+        # Filter out paper trading accounts unless explicitly requested
+        if not include_paper_trading:
+            query = query.where(Account.is_paper_trading == False)
 
-    query = query.group_by(AccountValueSnapshot.snapshot_date).order_by(AccountValueSnapshot.snapshot_date)
+        query = query.group_by(AccountValueSnapshot.snapshot_date).order_by(AccountValueSnapshot.snapshot_date)
 
     result = await db.execute(query)
 

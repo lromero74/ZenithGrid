@@ -21,6 +21,7 @@ interface AccountValueChartProps {
 
 export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d')
+  const [showAllAccounts, setShowAllAccounts] = useState(false)
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const btcSeriesRef = useRef<any>(null)
@@ -29,6 +30,9 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
 
   // Determine if we should include paper trading accounts
   const includePaperTrading = selectedAccount?.is_paper_trading || false
+
+  // Determine which account(s) to show
+  const accountId = showAllAccounts ? undefined : selectedAccount?.id
 
   // Map time ranges to days
   const getDaysForTimeRange = (range: TimeRange): number => {
@@ -46,10 +50,10 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
 
   // Fetch account value history
   const { data: history, isLoading } = useQuery<AccountValueSnapshot[]>({
-    queryKey: ['account-value-history', timeRange, includePaperTrading],
+    queryKey: ['account-value-history', timeRange, includePaperTrading, accountId],
     queryFn: async () => {
       const days = getDaysForTimeRange(timeRange)
-      return accountValueApi.getHistory(days, includePaperTrading)
+      return accountValueApi.getHistory(days, includePaperTrading, accountId)
     },
     refetchInterval: 300000, // Refresh every 5 minutes
   })
@@ -260,6 +264,20 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Account Filter Toggle */}
+      <div className="flex items-center justify-end mb-4">
+        <button
+          onClick={() => setShowAllAccounts(!showAllAccounts)}
+          className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+            showAllAccounts
+              ? 'bg-purple-600 text-white hover:bg-purple-700'
+              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+          }`}
+        >
+          {showAllAccounts ? 'Showing: All Accounts' : `Showing: ${selectedAccount?.name || 'Current Account'}`}
+        </button>
       </div>
 
       {/* Stats Cards */}

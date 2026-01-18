@@ -24,18 +24,21 @@ router = APIRouter(prefix="/api/account-value", tags=["account-value"])
 async def get_account_value_history(
     days: int = Query(365, ge=1, le=1825, description="Number of days to fetch (max 5 years)"),
     include_paper_trading: bool = Query(False, description="Include paper trading accounts (default: false)"),
+    account_id: int = Query(None, description="Specific account ID (omit for all accounts)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """
-    Get historical account value snapshots aggregated across all user accounts.
+    Get historical account value snapshots.
 
-    Returns daily snapshots with total BTC and USD values.
-    By default, excludes paper trading accounts (virtual money).
+    If account_id is provided, returns snapshots for that specific account only.
+    Otherwise, returns aggregated snapshots across all user accounts.
+
+    By default, excludes paper trading accounts (virtual money) when aggregating.
     """
     try:
         history = await account_snapshot_service.get_account_value_history(
-            db, current_user.id, days, include_paper_trading
+            db, current_user.id, days, include_paper_trading, account_id
         )
         return history
     except Exception as e:

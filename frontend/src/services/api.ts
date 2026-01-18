@@ -426,9 +426,13 @@ interface AccountValueSnapshot {
 }
 
 export const accountValueApi = {
-  getHistory: (days: number, includePaperTrading: boolean) =>
+  getHistory: (days: number, includePaperTrading: boolean, accountId?: number) =>
     api.get<AccountValueSnapshot[]>('/account-value/history', {
-      params: { days, include_paper_trading: includePaperTrading }
+      params: {
+        days,
+        include_paper_trading: includePaperTrading,
+        account_id: accountId
+      }
     }).then((res) => res.data),
   getLatest: (includePaperTrading: boolean) =>
     api.get<AccountValueSnapshot>('/account-value/latest', {
