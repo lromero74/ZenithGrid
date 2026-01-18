@@ -404,18 +404,42 @@ AI_PROVIDERS = {
 }
 
 
-def prompt_for_ai_provider(config):
-    """Prompt user to select an AI provider and enter their API key"""
+def prompt_for_ai_provider(config, existing_env=None):
+    """Prompt user to select an AI provider and enter their API key
+
+    Args:
+        config: Configuration dict to update
+        existing_env: Optional dict of existing .env values
+    """
+    if existing_env is None:
+        existing_env = {}
+
     print()
     print_header("Select AI Provider")
+
+    # Check if there's an existing provider configured
+    existing_provider = existing_env.get('SYSTEM_AI_PROVIDER', '').lower()
+    existing_provider_name = None
+    default_choice = '1'
+
+    if existing_provider:
+        for num, provider in AI_PROVIDERS.items():
+            if provider['key'] == existing_provider:
+                existing_provider_name = provider['name']
+                default_choice = num
+                break
+
+    if existing_provider_name:
+        print_info(f"Currently configured: {existing_provider_name}")
     print()
 
     for num, provider in AI_PROVIDERS.items():
-        print(f"  {num}. {provider['name']}")
+        marker = " (current)" if provider['key'] == existing_provider else ""
+        print(f"  {num}. {provider['name']}{marker}")
     print()
 
     while True:
-        choice = input("Enter choice [1]: ").strip() or '1'
+        choice = input(f"Enter choice [{default_choice}]: ").strip() or default_choice
         if choice in AI_PROVIDERS:
             break
         print_warning("Please enter 1, 2, 3, or 4")
@@ -426,12 +450,25 @@ def prompt_for_ai_provider(config):
     print_info(f"Get your API key at: {provider['url']}")
     print()
 
-    api_key = prompt_input(f"{provider['name']} API key", required=False)
+    # Check for existing API key
+    existing_key = existing_env.get(provider['env_key'], '')
+    if existing_key:
+        masked_key = existing_key[:8] + '...' + existing_key[-4:] if len(existing_key) > 12 else '***'
+        print_info(f"Existing key found: {masked_key}")
+        if prompt_yes_no("Keep existing API key?", default='yes'):
+            api_key = existing_key
+        else:
+            api_key = prompt_input(f"New {provider['name']} API key", required=False)
+    else:
+        api_key = prompt_input(f"{provider['name']} API key", required=False)
 
     if api_key:
         config['system_ai_provider'] = provider['key']
         config[provider['env_key']] = api_key
-        print_success(f"Configured {provider['name']} as system AI provider")
+        if existing_key and api_key == existing_key:
+            print_success(f"Keeping existing {provider['name']} configuration")
+        else:
+            print_success(f"Configured {provider['name']} as system AI provider")
     else:
         print_warning("No API key provided, skipping AI configuration")
 
@@ -1262,6 +1299,40 @@ def initialize_database(project_root):
     finally:
         conn.close()
 
+def get_existing_admin_user(project_root):
+    """Get existing admin user info from database if exists
+
+    Returns:
+        tuple: (email, display_name) or (None, None) if no admin exists
+    """
+    db_path = project_root / 'backend' / 'trading.db'
+
+    if not db_path.exists():
+        return None, None
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Get first admin user
+        cursor.execute("""
+            SELECT email, display_name
+            FROM users
+            WHERE is_superuser = 1
+            ORDER BY created_at
+            LIMIT 1
+        """)
+        result = cursor.fetchone()
+        conn.close()
+
+        if result:
+            return result[0], result[1]
+    except Exception:
+        pass
+
+    return None, None
+
+
 def create_admin_user(project_root, email, password, display_name=None):
     """Create the initial admin user and return the user_id"""
     db_path = project_root / 'backend' / 'trading.db'
@@ -1541,20 +1612,32 @@ def prompt_for_coinbase_credentials():
 
     return api_key_name, api_private_key
 
-def get_existing_jwt_secret(env_path):
-    """Extract JWT_SECRET_KEY from existing .env file if it exists"""
+def parse_existing_env(env_path):
+    """Parse existing .env file and return dict of key-value pairs"""
     if not env_path.exists():
-        return None
+        return {}
 
+    env_vars = {}
     try:
         with open(env_path, 'r') as f:
             for line in f:
                 line = line.strip()
-                if line.startswith('JWT_SECRET_KEY='):
-                    return line.split('=', 1)[1]
+                # Skip comments and empty lines
+                if not line or line.startswith('#'):
+                    continue
+                # Parse key=value pairs
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    env_vars[key.strip()] = value.strip()
     except Exception:
         pass
-    return None
+    return env_vars
+
+
+def get_existing_jwt_secret(env_path):
+    """Extract JWT_SECRET_KEY from existing .env file if it exists"""
+    env_vars = parse_existing_env(env_path)
+    return env_vars.get('JWT_SECRET_KEY')
 
 
 def generate_env_file(project_root, config):
@@ -2126,11 +2209,14 @@ def run_setup():
     print_step(4, "Environment Configuration")
     env_path = project_root / 'backend' / '.env'
 
+    # Parse existing .env values if file exists
+    existing_env = parse_existing_env(env_path)
+
     config = {}
 
     if env_path.exists():
         print_warning(".env file already exists")
-        if not prompt_yes_no("Regenerate .env file? (Will backup existing)", default='no'):
+        if not prompt_yes_no("Review/update .env configuration?", default='no'):
             print_info("Keeping existing .env file")
         else:
             # Backup existing
@@ -2155,7 +2241,7 @@ def run_setup():
             print()
 
             if prompt_yes_no("Configure a system AI provider for coin categorization?", default='yes'):
-                config = prompt_for_ai_provider(config)
+                config = prompt_for_ai_provider(config, existing_env)
             else:
                 print_warning("Skipping system AI - coin categorization will not run.")
                 print_warning("WARNING: Bots will be able to trade ALL coins without safety filtering!")
@@ -2179,7 +2265,7 @@ def run_setup():
         print()
 
         if prompt_yes_no("Configure a system AI provider for coin categorization?", default='yes'):
-            config = prompt_for_ai_provider(config)
+            config = prompt_for_ai_provider(config, existing_env)
         else:
             print_warning("Skipping system AI - coin categorization will not run.")
             print_warning("WARNING: Bots will be able to trade ALL coins without safety filtering!")
@@ -2189,16 +2275,20 @@ def run_setup():
     # Step 5: Create Admin User
     print_step(5, "Create Admin User")
 
-    # Check if any users exist
+    # Check if any users exist and get existing admin
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM users")
     user_count = cursor.fetchone()[0]
     conn.close()
 
+    existing_email, existing_display_name = get_existing_admin_user(project_root)
+
     create_user = False
     if user_count > 0:
         print_info(f"{user_count} user(s) already exist in database")
+        if existing_email:
+            print_info(f"Admin user: {existing_email}" + (f" ({existing_display_name})" if existing_display_name else ""))
         if prompt_yes_no("Create another admin user?", default='no'):
             create_user = True
         else:
@@ -2210,8 +2300,12 @@ def run_setup():
     user_id = None
     if create_user:
         print()
+        # Offer existing email as default
         while True:
-            email = prompt_input("Admin email address")
+            if existing_email:
+                email = prompt_input("Admin email address", default=existing_email)
+            else:
+                email = prompt_input("Admin email address")
             if validate_email(email):
                 break
             print_error("Invalid email format. Please try again.")
@@ -2228,7 +2322,11 @@ def run_setup():
                 break
             print_error("Passwords do not match. Please try again.")
 
-        display_name = prompt_input("Display name (optional)", required=False)
+        # Offer existing display name as default
+        if existing_display_name:
+            display_name = prompt_input("Display name (optional)", default=existing_display_name, required=False)
+        else:
+            display_name = prompt_input("Display name (optional)", required=False)
 
         # Need to ensure bcrypt is available
         sys.path.insert(0, str(project_root / 'backend'))
