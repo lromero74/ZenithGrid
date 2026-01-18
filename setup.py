@@ -390,9 +390,10 @@ def check_python_version():
                 print()
                 if prompt_yes_no("Install Homebrew?", default='yes'):
                     try:
+                        # Run Homebrew installation script
                         result = run_with_spinner(
                             ['/bin/bash', '-c',
-                             'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'],
+                             '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'],
                             "Installing Homebrew (this may take a few minutes)",
                             success_msg="Homebrew installed!",
                             error_msg="Failed to install Homebrew"
@@ -1918,8 +1919,36 @@ def run_setup():
         else:
             print_success("Frontend dependencies already installed")
     else:
-        print_warning("npm not found. Please install Node.js to run the frontend.")
-        print_info("Download from: https://nodejs.org/")
+        print_warning("npm not found")
+
+        # On macOS, offer to install via Homebrew
+        if os_type == 'darwin' and shutil.which('brew'):
+            print()
+            if prompt_yes_no("Install Node.js/npm via Homebrew?", default='yes'):
+                try:
+                    result = run_with_spinner(
+                        ['brew', 'install', 'node'],
+                        "Installing Node.js and npm (this may take a few minutes)",
+                        success_msg="Node.js and npm installed!",
+                        error_msg="Failed to install Node.js/npm"
+                    )
+                    if result.returncode == 0 and check_npm_installed():
+                        print_success("npm is now available")
+                        # Try to install frontend dependencies
+                        if not check_node_modules_exists(project_root):
+                            print_info("Installing frontend dependencies...")
+                            install_frontend_dependencies(project_root)
+                    else:
+                        print_warning("npm installation may require restarting your terminal")
+                        print_info("After restarting terminal, run: python3.11 setup.py")
+                except Exception as e:
+                    print_error(f"Failed to install npm: {e}")
+                    print_info("Try manually: brew install node")
+            else:
+                print_info("To install manually: brew install node")
+        else:
+            print_info("Please install Node.js to run the frontend.")
+            print_info("Download from: https://nodejs.org/")
 
     # Step 3: Database Initialization
     print_step(3, "Database Initialization")
