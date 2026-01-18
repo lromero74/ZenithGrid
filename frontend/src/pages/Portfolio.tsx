@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw, Building2 } from 'lucide-react'
+import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw, Building2, ArrowRightLeft } from 'lucide-react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
 import { LoadingSpinner } from '../components/LoadingSpinner'
@@ -56,6 +56,7 @@ type SortDirection = 'asc' | 'desc'
 
 function Portfolio() {
   const { selectedAccount } = useAccount()
+  const queryClient = useQueryClient()
 
   // Use React Query with account-specific key to support CEX/DEX switching
   const { data: portfolio, isLoading: loading, error, refetch, isFetching } = useQuery({
@@ -78,6 +79,61 @@ function Portfolio() {
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
     enabled: true, // Always enabled, will use fallback if no account selected
   })
+
+  // Sell coin mutation
+  const sellCoinMutation = useMutation({
+    mutationFn: async ({ asset, quoteAsset, size }: { asset: string; quoteAsset: string; size: number }) => {
+      const productId = `${asset}-${quoteAsset}`
+      const response = await axios.post(`${API_BASE_URL}/trading/market-sell`, {
+        product_id: productId,
+        size: size
+      })
+      return response.data
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['account-portfolio'] })
+      alert(`✅ Successfully sold ${variables.size} ${variables.asset} to ${variables.quoteAsset}\nReceived: ${data.filled_value || 'N/A'} ${variables.quoteAsset}`)
+    },
+    onError: (error: any, variables) => {
+      const errorMsg = error.response?.data?.detail || error.message || 'Unknown error'
+      alert(`❌ Failed to sell ${variables.asset} to ${variables.quoteAsset}: ${errorMsg}`)
+    }
+  })
+
+  // Helper: Check if sell to USD is available for this asset
+  const canSellToUSD = (asset: string) => {
+    // Can't sell USD, USDC, USDT to USD (they are quote currencies)
+    if (['USD', 'USDC', 'USDT'].includes(asset)) return false
+    // All other assets can typically be sold to USD on Coinbase
+    return true
+  }
+
+  // Helper: Check if sell to BTC is available for this asset
+  const canSellToBTC = (asset: string) => {
+    // Can't sell BTC to BTC
+    if (asset === 'BTC') return false
+    // Can't sell USD/stablecoins to BTC (no such market)
+    if (['USD', 'USDC', 'USDT'].includes(asset)) return false
+    // Most other assets have BTC pairs on Coinbase
+    return true
+  }
+
+  // Handle sell action
+  const handleSell = (asset: string, quoteAsset: 'USD' | 'BTC', available: number) => {
+    if (available <= 0) {
+      alert(`No ${asset} available to sell`)
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Sell all ${available.toFixed(8)} ${asset} to ${quoteAsset}?\n\n` +
+      `This will execute a market sell order.`
+    )
+
+    if (confirmed) {
+      sellCoinMutation.mutate({ asset, quoteAsset, size: available })
+    }
+  }
 
   const [sortColumn, setSortColumn] = useState<SortColumn>('usd_value')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
@@ -677,6 +733,9 @@ function Portfolio() {
                       {getSortIcon('unrealized_pnl_usd')}
                     </div>
                   </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
@@ -753,6 +812,35 @@ function Portfolio() {
                           </div>
                         )
                       })()}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        {canSellToUSD(holding.asset) && (
+                          <button
+                            onClick={() => handleSell(holding.asset, 'USD', holding.available)}
+                            disabled={holding.available <= 0 || sellCoinMutation.isPending}
+                            className="px-2 py-1 text-xs rounded bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                            title={`Sell ${holding.asset} to USD`}
+                          >
+                            <DollarSign size={12} />
+                            <span>USD</span>
+                          </button>
+                        )}
+                        {canSellToBTC(holding.asset) && (
+                          <button
+                            onClick={() => handleSell(holding.asset, 'BTC', holding.available)}
+                            disabled={holding.available <= 0 || sellCoinMutation.isPending}
+                            className="px-2 py-1 text-xs rounded bg-orange-600 hover:bg-orange-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                            title={`Sell ${holding.asset} to BTC`}
+                          >
+                            <Bitcoin size={12} />
+                            <span>BTC</span>
+                          </button>
+                        )}
+                        {!canSellToUSD(holding.asset) && !canSellToBTC(holding.asset) && (
+                          <span className="text-xs text-slate-500">—</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
