@@ -86,8 +86,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       leftPriceScale: {
         visible: true,
         borderColor: '#334155',
-        precision: 8,
-        minMove: 0.00000001,
+        mode: 0, // Normal price scale mode
       },
       timeScale: {
         borderColor: '#334155',
@@ -104,6 +103,11 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       lineWidth: 2,
       priceScaleId: 'left',
       title: 'BTC',
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.00000001,
+        formatter: (price: number) => price.toFixed(8),
+      },
     })
     btcSeriesRef.current = btcSeries
 
