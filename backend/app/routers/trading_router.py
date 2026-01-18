@@ -12,7 +12,7 @@ from typing import Dict, Any
 import logging
 
 from app.database import get_db
-from app.auth import get_current_user
+from app.routers.auth_dependencies import get_current_user
 from app.models import User, Account
 from app.exchange_clients.factory import get_exchange_client
 

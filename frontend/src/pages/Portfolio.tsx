@@ -818,9 +818,15 @@ function Portfolio() {
                         {canSellToUSD(holding.asset) && (
                           <button
                             onClick={() => handleSell(holding.asset, 'USD', holding.available)}
-                            disabled={holding.available <= 0 || sellCoinMutation.isPending}
+                            disabled={holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
                             className="px-2 py-1 text-xs rounded bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                            title={`Sell ${holding.asset} to USD`}
+                            title={
+                              holding.hold > 0
+                                ? `Cannot sell - ${holding.asset} has open positions (${formatCrypto(holding.hold)} held)`
+                                : holding.available <= 0
+                                ? `No ${holding.asset} available to sell`
+                                : `Sell ${holding.asset} to USD`
+                            }
                           >
                             <DollarSign size={12} />
                             <span>USD</span>
@@ -829,9 +835,15 @@ function Portfolio() {
                         {canSellToBTC(holding.asset) && (
                           <button
                             onClick={() => handleSell(holding.asset, 'BTC', holding.available)}
-                            disabled={holding.available <= 0 || sellCoinMutation.isPending}
+                            disabled={holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
                             className="px-2 py-1 text-xs rounded bg-orange-600 hover:bg-orange-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                            title={`Sell ${holding.asset} to BTC`}
+                            title={
+                              holding.hold > 0
+                                ? `Cannot sell - ${holding.asset} has open positions (${formatCrypto(holding.hold)} held)`
+                                : holding.available <= 0
+                                ? `No ${holding.asset} available to sell`
+                                : `Sell ${holding.asset} to BTC`
+                            }
                           >
                             <Bitcoin size={12} />
                             <span>BTC</span>
