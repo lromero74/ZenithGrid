@@ -193,6 +193,92 @@ def detect_os():
     else:
         return 'unknown'
 
+def get_homebrew_prefix():
+    """
+    Get Homebrew installation prefix based on architecture.
+
+    Returns:
+        str: Homebrew prefix path (/opt/homebrew for Apple Silicon, /usr/local for Intel)
+    """
+    machine = platform.machine()
+
+    if machine == 'arm64':
+        # Apple Silicon (M1, M2, M3, etc.)
+        return '/opt/homebrew'
+    else:
+        # Intel Mac
+        return '/usr/local'
+
+def get_brew_path():
+    """
+    Get full path to brew executable.
+
+    Returns:
+        str: Full path to brew, or None if not found
+    """
+    # First try to find in PATH
+    brew_in_path = shutil.which('brew')
+    if brew_in_path:
+        return brew_in_path
+
+    # Try architecture-specific paths
+    prefix = get_homebrew_prefix()
+    brew_path = f'{prefix}/bin/brew'
+
+    if os.path.exists(brew_path):
+        return brew_path
+
+    return None
+
+def check_xcode_tools():
+    """
+    Check if Xcode Command Line Tools are installed (required for Homebrew on macOS).
+
+    Returns:
+        bool: True if installed, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            ['xcode-select', '-p'],
+            capture_output=True,
+            check=False
+        )
+        return result.returncode == 0
+    except FileNotFoundError:
+        return False
+
+def install_xcode_tools():
+    """Prompt user to install Xcode Command Line Tools"""
+    print_warning("Xcode Command Line Tools not found (required for Homebrew)")
+    print()
+    if prompt_yes_no("Install Xcode Command Line Tools?", default='yes'):
+        print_info("Opening Xcode Command Line Tools installer...")
+        print_info("After installation completes, please re-run: python3 setup.py")
+        try:
+            subprocess.run(['xcode-select', '--install'], check=False)
+            sys.exit(0)
+        except Exception as e:
+            print_error(f"Failed to launch installer: {e}")
+            return False
+    else:
+        print_info("Xcode Command Line Tools required for Homebrew.")
+        print_info("Install manually: xcode-select --install")
+        return False
+
+def update_shell_path_for_homebrew():
+    """
+    Update PATH to include Homebrew after fresh installation.
+    This allows subsequent commands to find brew without restarting shell.
+    """
+    prefix = get_homebrew_prefix()
+    brew_bin = f'{prefix}/bin'
+
+    # Add to current process PATH
+    current_path = os.environ.get('PATH', '')
+    if brew_bin not in current_path:
+        os.environ['PATH'] = f'{brew_bin}:{current_path}'
+        print_info(f"Added {brew_bin} to PATH for this session")
+
 def prompt_yes_no(question, default='yes'):
     """Ask a yes/no question"""
     valid = {'yes': True, 'y': True, 'no': False, 'n': False}
@@ -369,13 +455,21 @@ def check_python_version():
 
         # Offer to install Python 3.11
         if os_type == 'mac':
+            # Check for Xcode Command Line Tools first (required for Homebrew)
+            if not check_xcode_tools():
+                if not install_xcode_tools():
+                    sys.exit(1)
+                # If we get here, user declined - can't proceed
+                sys.exit(1)
+
             # Check if brew is available
-            if shutil.which('brew'):
+            brew_path = get_brew_path()
+            if brew_path:
                 print()
                 if prompt_yes_no("Install Python 3.11 via Homebrew?", default='yes'):
                     try:
                         result = run_with_spinner(
-                            ['brew', 'install', 'python@3.11'],
+                            [brew_path, 'install', 'python@3.11'],
                             "Installing Python 3.11 (this may take a few minutes)",
                             success_msg="Python 3.11 installed!",
                             error_msg="Failed to install Python 3.11"
@@ -400,9 +494,20 @@ def check_python_version():
                         )
                         if result.returncode == 0:
                             print()
+                            # Update PATH for this session so brew can be found
+                            update_shell_path_for_homebrew()
+
+                            # Get brew path (should work now)
+                            brew_path = get_brew_path()
+                            if not brew_path:
+                                print_error("Homebrew installed but brew command not found")
+                                print_info("Try manually: eval \"$($(get_homebrew_prefix)/bin/brew shellenv)\"")
+                                print_info("Then: brew install python@3.11 && python3.11 setup.py")
+                                sys.exit(1)
+
                             # Now install Python 3.11
                             result = run_with_spinner(
-                                ['/opt/homebrew/bin/brew', 'install', 'python@3.11'],
+                                [brew_path, 'install', 'python@3.11'],
                                 "Installing Python 3.11 (this may take a few minutes)",
                                 success_msg="Python 3.11 installed!",
                                 error_msg="Failed to install Python 3.11"
@@ -1922,30 +2027,36 @@ def run_setup():
         print_warning("npm not found")
 
         # On macOS, offer to install via Homebrew
-        if os_type == 'darwin' and shutil.which('brew'):
-            print()
-            if prompt_yes_no("Install Node.js/npm via Homebrew?", default='yes'):
-                try:
-                    result = run_with_spinner(
-                        ['brew', 'install', 'node'],
-                        "Installing Node.js and npm (this may take a few minutes)",
-                        success_msg="Node.js and npm installed!",
-                        error_msg="Failed to install Node.js/npm"
-                    )
-                    if result.returncode == 0 and check_npm_installed():
-                        print_success("npm is now available")
-                        # Try to install frontend dependencies
-                        if not check_node_modules_exists(project_root):
-                            print_info("Installing frontend dependencies...")
-                            install_frontend_dependencies(project_root)
-                    else:
-                        print_warning("npm installation may require restarting your terminal")
-                        print_info("After restarting terminal, run: python3.11 setup.py")
-                except Exception as e:
-                    print_error(f"Failed to install npm: {e}")
-                    print_info("Try manually: brew install node")
+        if os_type == 'darwin':
+            brew_path = get_brew_path()
+            if brew_path:
+                print()
+                if prompt_yes_no("Install Node.js/npm via Homebrew?", default='yes'):
+                    try:
+                        result = run_with_spinner(
+                            [brew_path, 'install', 'node'],
+                            "Installing Node.js and npm (this may take a few minutes)",
+                            success_msg="Node.js and npm installed!",
+                            error_msg="Failed to install Node.js/npm"
+                        )
+                        if result.returncode == 0 and check_npm_installed():
+                            print_success("npm is now available")
+                            # Try to install frontend dependencies
+                            if not check_node_modules_exists(project_root):
+                                print_info("Installing frontend dependencies...")
+                                install_frontend_dependencies(project_root)
+                        else:
+                            print_warning("npm installation may require restarting your terminal")
+                            print_info("After restarting terminal, run: python3.11 setup.py")
+                    except Exception as e:
+                        print_error(f"Failed to install npm: {e}")
+                        print_info("Try manually: brew install node")
+                else:
+                    print_info("To install manually: brew install node")
             else:
-                print_info("To install manually: brew install node")
+                print_warning("Homebrew not found. Install Homebrew first to use automated installation.")
+                print_info("Install Homebrew: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+                print_info("Or download Node.js directly from: https://nodejs.org/")
         else:
             print_info("Please install Node.js to run the frontend.")
             print_info("Download from: https://nodejs.org/")
