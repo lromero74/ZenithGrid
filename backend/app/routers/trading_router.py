@@ -14,7 +14,7 @@ import logging
 from app.database import get_db
 from app.routers.auth_dependencies import get_current_user
 from app.models import User, Account
-from app.exchange_clients.factory import get_exchange_client
+from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ async def market_sell(
             )
 
         # Get exchange client
-        exchange = await get_exchange_client(account, db)
+        exchange = await get_exchange_client_for_account(db, account.id)
         if not exchange:
             raise HTTPException(
                 status_code=500,
