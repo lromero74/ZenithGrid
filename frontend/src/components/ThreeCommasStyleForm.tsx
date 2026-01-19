@@ -125,7 +125,10 @@ function calculateDCABudget(
 
   const totalCapitalPerDeal = runningTotal
   const maxSimultaneousCapital = totalCapitalPerDeal * maxConcurrentDeals
-  const budgetUtilization = (maxSimultaneousCapital / budgetPerPair) * 100
+
+  // Calculate budget utilization PER DEAL, not against total bot budget
+  // Each deal should fit within budgetPerDeal
+  const budgetUtilization = (totalCapitalPerDeal / budgetPerDeal) * 100
 
   // Check if minimum enforcement caused over-allocation
   const isOverAllocated = minimumEnforced && budgetUtilization > 100
@@ -297,16 +300,28 @@ function ThreeCommasStyleForm({
   }, [updateConfig])
 
   // Calculate minimum safety order percentage (as % of base order)
-  // Safety order = (base_order_percentage / 100) * aggregate * (safety_order_percentage / 100)
-  // For SO to meet minimum: (base_pct / 100) * agg * (so_pct / 100) >= min
-  // so_pct >= (min * 100 * 100) / (base_pct * agg)
+  // Safety order = base_order_size * (safety_order_percentage / 100)
+  // For SO to meet minimum: base_order_size * (so_pct / 100) >= exchangeMinimum
+  // so_pct >= (exchangeMinimum / base_order_size) * 100
   const calculateMinSafetyOrderPercentage = useCallback(() => {
-    if (!aggregateValue || aggregateValue <= 0) return 10 // Default 10%
-    const basePct = config.base_order_percentage || 10
-    const minSoPct = (exchangeMinimum * 10000) / (basePct * aggregateValue)
+    // Get actual base order size (not percentage)
+    let baseSize: number
+
+    if (config.base_order_type === 'fixed') {
+      baseSize = getBaseOrderSize()
+    } else {
+      // Calculate from percentage
+      if (!aggregateValue || aggregateValue <= 0) return 10
+      baseSize = (aggregateValue * (config.base_order_percentage || 10)) / 100
+    }
+
+    if (baseSize <= 0) return 100 // Default if invalid base size
+
+    // Calculate min SO percentage
+    const minSoPct = (exchangeMinimum / baseSize) * 100
     // Round up to nearest 1%
     return Math.max(10, Math.ceil(minSoPct))
-  }, [aggregateValue, exchangeMinimum, config.base_order_percentage])
+  }, [aggregateValue, exchangeMinimum, config.base_order_percentage, config.base_order_type, config.base_order_size])
 
   // Use generic key names that work for both BTC and USD
   // Backend will store as base_order_size/safety_order_size with quote_currency
@@ -920,7 +935,9 @@ function ThreeCommasStyleForm({
                       <p className="text-yellow-400 font-semibold">⚠️ Over-Allocation Warning</p>
                       <p className="text-yellow-300 text-xs mt-1">
                         Order sizes enforced to exchange minimum ({exchangeMinimum.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}).
-                        Required capital ({breakdown.budgetUtilization.toFixed(1)}%) exceeds allocated budget.
+                        Each position needs {breakdown.totalCapitalPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency},
+                        but allocated budget per position is {breakdown.budgetPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
+                        ({breakdown.budgetUtilization.toFixed(1)}% of budget).
                         {splitBudget ? ' Consider reducing pairs, max deals, or safety orders.' : ' Consider reducing max deals or safety orders.'}
                       </p>
                     </div>
@@ -958,9 +975,11 @@ function ThreeCommasStyleForm({
                   )}
                   <p className="pt-2 border-t border-slate-700">
                     💵 <strong>Max Capital/Position:</strong> {breakdown.totalCapitalPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
+                    {' '}({breakdown.budgetUtilization.toFixed(1)}% of per-position budget)
                   </p>
                   <p>
-                    🔢 <strong>Max Simultaneous:</strong> {breakdown.maxSimultaneousCapital.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency} ({breakdown.budgetUtilization.toFixed(1)}% of allocated)
+                    🔢 <strong>Max Simultaneous Capital:</strong> {breakdown.maxSimultaneousCapital.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
+                    {' '}({maxConcurrentDeals || config.max_concurrent_deals || 1} positions × {breakdown.totalCapitalPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency})
                   </p>
                 </div>
               )

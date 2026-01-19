@@ -18,7 +18,7 @@ from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/trading", tags=["trading"])
+router = APIRouter(prefix="/api/trading", tags=["trading"])
 
 
 class MarketSellRequest(BaseModel):
