@@ -73,6 +73,10 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
     return true
   })
 
+  // Calculate stats for display
+  const totalMet = logs.filter((log: IndicatorLog) => log.conditions_met).length
+  const totalNotMet = logs.filter((log: IndicatorLog) => !log.conditions_met).length
+
   const getPhaseLabel = (phase: string) => {
     switch (phase) {
       case 'base_order':
@@ -170,35 +174,44 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
 
         {/* Filters */}
         <div className="p-4 border-b border-slate-700 bg-slate-800/50">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium text-slate-300">Phase:</label>
-              <select
-                value={filterPhase}
-                onChange={(e) => setFilterPhase(e.target.value)}
-                className="bg-slate-700 text-white px-3 py-1.5 rounded border border-slate-600 text-sm"
-              >
-                <option value="all">All Phases</option>
-                <option value="base_order">Entry Only</option>
-                <option value="safety_order">DCA Only</option>
-                <option value="take_profit">Exit Only</option>
-              </select>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <label className="text-sm font-medium text-slate-300">Phase:</label>
+                <select
+                  value={filterPhase}
+                  onChange={(e) => setFilterPhase(e.target.value)}
+                  className="bg-slate-700 text-white px-3 py-1.5 rounded border border-slate-600 text-sm"
+                >
+                  <option value="all">All Phases</option>
+                  <option value="base_order">Entry Only</option>
+                  <option value="safety_order">DCA Only</option>
+                  <option value="take_profit">Exit Only</option>
+                </select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <label className="text-sm font-medium text-slate-300">Result:</label>
+                <select
+                  value={filterResult}
+                  onChange={(e) => setFilterResult(e.target.value)}
+                  className="bg-slate-700 text-white px-3 py-1.5 rounded border border-slate-600 text-sm"
+                >
+                  <option value="all">All (Debug Mode)</option>
+                  <option value="met">✓ Matches Only</option>
+                  <option value="not_met">✗ Failures Only</option>
+                </select>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium text-slate-300">Result:</label>
-              <select
-                value={filterResult}
-                onChange={(e) => setFilterResult(e.target.value)}
-                className="bg-slate-700 text-white px-3 py-1.5 rounded border border-slate-600 text-sm"
-              >
-                <option value="all">All Results</option>
-                <option value="met">Conditions Met</option>
-                <option value="not_met">Conditions Not Met</option>
-              </select>
+            <div className="flex items-center space-x-3">
+              <span className="text-sm text-slate-400">
+                ({filteredLogs.length} {filteredLogs.length === 1 ? 'entry' : 'entries'})
+              </span>
+              {filterResult === 'all' && (
+                <span className="text-xs text-yellow-400 bg-yellow-900/20 border border-yellow-700/50 px-2 py-1 rounded">
+                  Debug: Showing all evaluations
+                </span>
+              )}
             </div>
-            <span className="text-sm text-slate-400">
-              ({filteredLogs.length} {filteredLogs.length === 1 ? 'entry' : 'entries'})
-            </span>
           </div>
         </div>
 
@@ -327,9 +340,16 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
 
         {/* Footer */}
         <div className="p-4 border-t border-slate-700 bg-slate-800/50">
-          <p className="text-xs text-slate-400 text-center">
-            Indicator logs refresh automatically every 10 seconds
-          </p>
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center space-x-4 text-slate-400">
+              <span>Total: {logs.length}</span>
+              <span className="text-green-400">✓ Matched: {totalMet}</span>
+              <span className="text-red-400">✗ Failed: {totalNotMet}</span>
+            </div>
+            <p className="text-slate-400">
+              Refreshes automatically every 10 seconds
+            </p>
+          </div>
         </div>
       </div>
     </div>
