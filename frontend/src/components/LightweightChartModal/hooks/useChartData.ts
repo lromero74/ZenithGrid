@@ -33,17 +33,30 @@ export function useChartData(
 
         const candles = response.data.candles || []
         const formattedCandles = candles
-          .map((c: { time?: number | string; start?: string; open: string; high: string; low: string; close: string; volume?: string }) => ({
-            // API returns 'time' as Unix timestamp, not 'start' as ISO string
-            time: (typeof c.time === 'number' ? c.time : Math.floor(new Date(c.start || c.time).getTime() / 1000)) as Time,
-            open: parseFloat(c.open),
-            high: parseFloat(c.high),
-            low: parseFloat(c.low),
-            close: parseFloat(c.close),
-            volume: parseFloat(c.volume || 0),
-          }))
+          .map((c: { time?: number | string; start?: string; open: string; high: string; low: string; close: string; volume?: string }) => {
+            // Convert to Unix timestamp (seconds)
+            let timestamp: number
+            if (typeof c.time === 'number') {
+              timestamp = c.time
+            } else if (c.start) {
+              timestamp = Math.floor(new Date(c.start).getTime() / 1000)
+            } else if (c.time) {
+              timestamp = Math.floor(new Date(c.time).getTime() / 1000)
+            } else {
+              timestamp = 0  // Fallback, will be filtered out
+            }
+
+            return {
+              time: timestamp as Time,
+              open: parseFloat(c.open),
+              high: parseFloat(c.high),
+              low: parseFloat(c.low),
+              close: parseFloat(c.close),
+              volume: parseFloat(c.volume || '0'),
+            }
+          })
           .filter((c: CandleData) =>
-            !isNaN(c.time as number) &&
+            (c.time as number) > 0 &&
             !isNaN(c.open) &&
             !isNaN(c.high) &&
             !isNaN(c.low) &&

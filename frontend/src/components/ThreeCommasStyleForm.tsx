@@ -198,8 +198,8 @@ function ThreeCommasStyleForm({
   aggregateBtcValue,
   aggregateUsdValue,
   budgetPercentage,
-  numPairs,
-  splitBudget,
+  numPairs: _numPairs,
+  splitBudget: _splitBudget,
   maxConcurrentDeals
 }: ThreeCommasStyleFormProps) {
   // Track which fields have validation error (red flash)

@@ -5,7 +5,6 @@ import type { CandleData } from '../../../utils/indicators/types'
 import { calculateHeikinAshi } from '../../../utils/indicators/calculations'
 import { addPositionLines } from '../utils/positionLinesRenderer'
 import { addMarkers } from '../utils/chartMarkers'
-import { getFeeAdjustedProfitMultiplier } from '../../positions/positionUtils'
 
 /**
  * Hook for managing the main chart initialization and rendering
@@ -18,7 +17,7 @@ export function useMainChart(
   position: Position | null | undefined,
   symbol: string
 ): {
-  chartContainerRef: React.RefObject<HTMLDivElement>
+  chartContainerRef: React.RefObject<HTMLDivElement | null>
   chartRef: React.RefObject<IChartApi | null>
   mainSeriesRef: React.RefObject<ISeriesApi<'Candlestick' | 'Bar' | 'Line' | 'Area' | 'Baseline'> | null>
   positionLinesRef: React.RefObject<ISeriesApi<'Line'>[]>

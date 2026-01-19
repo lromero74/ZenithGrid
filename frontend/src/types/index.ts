@@ -144,6 +144,14 @@ export interface Candle {
   volume: number;
 }
 
+export interface ReservedBalances {
+  BTC: number;
+  ETH: number;
+  USD: number;
+  USDC: number;
+  USDT: number;
+}
+
 export interface Balances {
   btc: number;
   eth: number;
@@ -154,17 +162,20 @@ export interface Balances {
   total_usd_value: number;
 
   // Multi-currency support
-  usd?: number;
-  usdc?: number;
-  usdt?: number;
-  reserved_in_positions?: number;
-  reserved_in_pending_orders?: number;
-  available_btc?: number;
-  available_usd?: number;
-  available_eth?: number;
-  available_usdc?: number;
-  available_usdt?: number;
-  [key: string]: number | undefined;  // Allow dynamic coin balances
+  usd: number;
+  usdc: number;
+  usdt: number;
+
+  // Capital reservation tracking (matches backend structure)
+  reserved_in_positions: ReservedBalances;
+  reserved_in_pending_orders: ReservedBalances;
+
+  // Available balances for new bots
+  available_btc: number;
+  available_usd: number;
+  available_eth: number;
+  available_usdc: number;
+  available_usdt: number;
 }
 
 export interface AggregateValue {

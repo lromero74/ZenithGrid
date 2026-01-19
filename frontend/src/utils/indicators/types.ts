@@ -1,7 +1,8 @@
 // Indicator type definitions
+import { Time } from 'lightweight-charts'
 
 export interface CandleData {
-  time: string | number
+  time: Time
   open: number
   high: number
   low: number

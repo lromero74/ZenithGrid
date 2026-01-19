@@ -6,7 +6,7 @@ import React from 'react'
  * Eliminates code duplication by providing a reusable chart creation pattern
  */
 export function createOscillatorChart(
-  containerRef: React.RefObject<HTMLDivElement>,
+  containerRef: React.RefObject<HTMLDivElement | null>,
   mainChartRef: React.RefObject<IChartApi | null>,
   isCleanedUp: React.MutableRefObject<boolean>
 ): {

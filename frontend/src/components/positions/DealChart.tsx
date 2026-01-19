@@ -122,7 +122,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
       // Entry is in the middle, insert synthetic candle
       const newCandles = [...candles]
       newCandles.splice(insertIndex, 0, {
-        time: openedTime,
+        time: openedTime as Time,
         open: entryPrice,
         high: entryPrice,
         low: entryPrice,
