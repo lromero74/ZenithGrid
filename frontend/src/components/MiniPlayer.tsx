@@ -318,7 +318,7 @@ export function MiniPlayer() {
               <iframe
                 ref={iframeRef}
                 key={`player-${currentVideo.video_id}`}
-                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
+                src={`https://www.youtube.com/embed/${currentVideo.video_id}?autoplay=1&mute=1&rel=0&enablejsapi=1&origin=${window.location.origin}`}
                 title={currentVideo.title}
                 className="w-full h-full rounded"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
