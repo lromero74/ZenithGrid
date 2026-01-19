@@ -422,6 +422,32 @@ async def register(
     await db.commit()
     await db.refresh(new_user)
 
+    # Create default paper trading account for new user
+    from app.models import Account
+    import json
+
+    default_paper_account = Account(
+        user_id=new_user.id,
+        name="Paper Trading Account",
+        type="cex",
+        exchange="coinbase",
+        is_default=True,
+        is_active=True,
+        is_paper_trading=True,
+        paper_balances=json.dumps({
+            "BTC": 0.01,      # Start with 0.01 BTC
+            "ETH": 0.0,
+            "USD": 1000.0,    # Start with $1000 USD
+            "USDC": 0.0,
+            "USDT": 0.0
+        })
+    )
+
+    db.add(default_paper_account)
+    await db.commit()
+    await db.refresh(default_paper_account)
+
+    logger.info(f"Created default paper trading account for new user: {new_user.email}")
     logger.info(f"New user registered: {new_user.email} (by {current_user.email})")
 
     return UserResponse(
@@ -497,6 +523,33 @@ async def signup(
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+
+    # Create default paper trading account for new user
+    from app.models import Account
+    import json
+
+    default_paper_account = Account(
+        user_id=new_user.id,
+        name="Paper Trading Account",
+        type="cex",
+        exchange="coinbase",
+        is_default=True,
+        is_active=True,
+        is_paper_trading=True,
+        paper_balances=json.dumps({
+            "BTC": 0.01,      # Start with 0.01 BTC
+            "ETH": 0.0,
+            "USD": 1000.0,    # Start with $1000 USD
+            "USDC": 0.0,
+            "USDT": 0.0
+        })
+    )
+
+    db.add(default_paper_account)
+    await db.commit()
+    await db.refresh(default_paper_account)
+
+    logger.info(f"Created default paper trading account for new user: {new_user.email}")
 
     # Generate tokens for immediate login
     access_token = create_access_token(new_user.id, new_user.email)

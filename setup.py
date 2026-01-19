@@ -1555,6 +1555,53 @@ def create_coinbase_account(project_root, user_id, api_key_name, api_private_key
         conn.close()
 
 
+def create_paper_trading_account(project_root, user_id):
+    """Create a default paper trading account for the user"""
+    db_path = project_root / 'backend' / 'trading.db'
+
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    try:
+        # Check if user already has a paper trading account
+        cursor.execute("""
+            SELECT id FROM accounts
+            WHERE user_id = ? AND is_paper_trading = 1
+        """, (user_id,))
+        existing = cursor.fetchone()
+
+        if existing:
+            print_info("Paper trading account already exists")
+            return True
+
+        # Create paper trading account with initial balances
+        import json
+        initial_balances = json.dumps({
+            "BTC": 0.01,      # Start with 0.01 BTC
+            "ETH": 0.0,
+            "USD": 1000.0,    # Start with $1000 USD
+            "USDC": 0.0,
+            "USDT": 0.0
+        })
+
+        cursor.execute("""
+            INSERT INTO accounts (user_id, name, type, exchange, is_default, is_active,
+                                 is_paper_trading, paper_balances, created_at, updated_at)
+            VALUES (?, 'Paper Trading Account', 'cex', 'coinbase', 1, 1, 1, ?, ?, ?)
+        """, (user_id, initial_balances, datetime.utcnow(), datetime.utcnow()))
+
+        conn.commit()
+        print_success("Paper trading account created with $1000 USD and 0.01 BTC")
+        return True
+
+    except Exception as e:
+        conn.rollback()
+        print_error(f"Failed to create paper trading account: {e}")
+        return False
+    finally:
+        conn.close()
+
+
 def prompt_for_coinbase_credentials():
     """Prompt user for Coinbase CDP API credentials"""
     print()
@@ -2335,6 +2382,10 @@ def run_setup():
         # Seed initial coin categorizations
         if user_id:
             seed_coin_categorizations(project_root, user_id)
+
+        # Create default paper trading account
+        if user_id:
+            create_paper_trading_account(project_root, user_id)
 
         # Prompt for Coinbase credentials if user was created
         if user_id:
