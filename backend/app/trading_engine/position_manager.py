@@ -75,11 +75,17 @@ def calculate_expected_position_budget(config: dict, aggregate_value: float) -> 
         total_expected = 0.0
 
         # Get base order size (minimum 0.0001 BTC for Coinbase)
-        if base_order_type == "fixed_btc":
-            base_order_size = max(config.get("base_order_btc", 0.001), 0.0001)
-        else:
-            base_order_size = max(config.get("base_order_fixed", 0.001), 0.0001)
+        # IMPORTANT: Match the logic in calculate_base_order_size() - prioritize base_order_btc over base_order_fixed
+        base_order_btc = config.get("base_order_btc", 0.0001)
+        base_order_fixed = config.get("base_order_fixed", 0.001)
 
+        # Use base_order_btc if it's explicitly set (not default) or if order_type is "fixed_btc"
+        if base_order_type == "fixed_btc" or (base_order_btc != 0.0001 and base_order_btc < base_order_fixed):
+            base_order_size = base_order_btc
+        else:
+            base_order_size = base_order_fixed
+
+        base_order_size = max(base_order_size, 0.0001)  # Enforce Coinbase minimum
         total_expected += base_order_size
 
         # Calculate safety orders with volume scaling
@@ -88,11 +94,14 @@ def calculate_expected_position_budget(config: dict, aggregate_value: float) -> 
 
         for order_num in range(1, max_safety_orders + 1):
             # Calculate base safety order size
+            # IMPORTANT: Match the logic in calculate_safety_order_size()
             if safety_order_type == "percentage_of_base":
                 base_safety_size = base_order_size * (config.get("safety_order_percentage", 50.0) / 100.0)
-            elif safety_order_type == "fixed_btc":
+            elif safety_order_type in ["fixed", "fixed_btc"]:
+                # Prioritize safety_order_btc over safety_order_fixed (match execution logic)
                 base_safety_size = config.get("safety_order_btc", 0.0001)
             else:
+                # Fallback for legacy configs
                 base_safety_size = config.get("safety_order_fixed", 0.0005)
 
             # Apply volume scaling (each subsequent order scales up)
