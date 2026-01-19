@@ -1278,9 +1278,7 @@ class MultiBotMonitor:
                         continue
                     phase_signal_key = f"{phase}_signal"
                     conditions_met = signal_data.get(phase_signal_key, False)
-                    # Only log when conditions match (reduces noise significantly)
-                    if not conditions_met:
-                        continue
+
                     # Skip DCA/Exit phases when there's no position (irrelevant)
                     if not has_position and phase in ("safety_order", "take_profit"):
                         continue
@@ -1290,6 +1288,8 @@ class MultiBotMonitor:
                     # Skip DCA phase when no DCA slots available
                     if phase == "safety_order" and not dca_slots_available:
                         continue
+
+                    # Log ALL evaluations (both passing and failing) for debugging
                     await log_indicator_evaluation(
                         db=db,
                         bot_id=bot.id,
@@ -1302,7 +1302,7 @@ class MultiBotMonitor:
                     )
                     logged_any = True
                 if logged_any:
-                    logger.info(f"  📊 Logged indicator match for {product_id}")
+                    logger.info(f"  📊 Logged indicator evaluation for {product_id}")
 
             # Create trading engine for this bot/pair combination
             engine = StrategyTradingEngine(
