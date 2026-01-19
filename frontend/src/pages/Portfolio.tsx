@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw, Building2, ArrowRightLeft } from 'lucide-react'
+import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw, Building2 } from 'lucide-react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'

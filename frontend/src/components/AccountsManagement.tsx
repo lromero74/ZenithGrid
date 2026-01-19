@@ -15,7 +15,6 @@ import {
   MoreVertical,
   AlertCircle,
   RefreshCw,
-  AlertTriangle,
   ArrowRightLeft,
 } from 'lucide-react'
 import { useAccount, Account, getChainName } from '../contexts/AccountContext'

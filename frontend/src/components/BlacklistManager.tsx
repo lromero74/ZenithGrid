@@ -19,8 +19,6 @@ import {
   X,
   Search,
   Sparkles,
-  ToggleLeft,
-  ToggleRight,
   ChevronDown,
   Coins,
 } from 'lucide-react'
@@ -52,7 +50,7 @@ export function BlacklistManager() {
   const [savingSymbol, setSavingSymbol] = useState<string | null>(null)
 
   // Category settings (used for fetching, but permissions now handled at bot level)
-  const [categorySettings, setCategorySettings] = useState<CategorySettings | null>(null)
+  const [_categorySettings, setCategorySettings] = useState<CategorySettings | null>(null)
 
   // AI Review
   const [runningAIReview, setRunningAIReview] = useState(false)

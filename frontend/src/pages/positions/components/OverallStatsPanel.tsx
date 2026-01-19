@@ -1,3 +1,5 @@
+import { Balances } from '../../../types'
+
 interface CompletedStats {
   total_profit_btc: number
   total_profit_usd: number
@@ -6,40 +8,6 @@ interface CompletedStats {
   winning_trades: number
   losing_trades: number
   average_profit_usd: number
-}
-
-interface Balances {
-  btc: number
-  eth: number
-  usd: number
-  usdc: number
-  usdt: number
-  eth_value_in_btc: number
-  total_btc_value: number
-  current_eth_btc_price: number
-  btc_usd_price: number
-  total_usd_value: number
-
-  // Capital reservation tracking (from Phase 0)
-  reserved_in_positions: {
-    BTC: number
-    ETH: number
-    USD: number
-    USDC: number
-    USDT: number
-  }
-  reserved_in_pending_orders: {
-    BTC: number
-    ETH: number
-    USD: number
-    USDC: number
-    USDT: number
-  }
-  available_btc: number
-  available_eth: number
-  available_usd: number
-  available_usdc: number
-  available_usdt: number
 }
 
 interface OverallStatsPanelProps {
