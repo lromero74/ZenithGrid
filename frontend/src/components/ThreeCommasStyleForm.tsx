@@ -50,7 +50,6 @@ const getNumericValue = (value: any, fallback: number): number => {
 // Calculate DCA budget breakdown
 interface DCABudgetBreakdown {
   totalBudget: number
-  budgetPerPair: number
   budgetPerDeal: number
   baseOrderSize: number
   safetyOrders: { order: number; size: number; total: number }[]
@@ -64,8 +63,6 @@ interface DCABudgetBreakdown {
 function calculateDCABudget(
   aggregateValue: number,
   budgetPercentage: number,
-  numPairs: number,
-  splitBudget: boolean,
   maxConcurrentDeals: number,
   maxSafetyOrders: number,
   safetyOrderVolumeScale: number,
@@ -74,11 +71,10 @@ function calculateDCABudget(
   // Calculate total bot budget
   const totalBudget = (aggregateValue * budgetPercentage) / 100
 
-  // Budget per pair (if splitting)
-  const budgetPerPair = splitBudget && numPairs > 0 ? totalBudget / numPairs : totalBudget
-
   // Budget per deal (divided by max concurrent deals)
-  const budgetPerDeal = budgetPerPair / Math.max(1, maxConcurrentDeals)
+  // NOTE: We divide by maxConcurrentDeals, NOT numPairs
+  // The bot can analyze many pairs but only open maxConcurrentDeals positions at once
+  const budgetPerDeal = totalBudget / Math.max(1, maxConcurrentDeals)
 
   // Calculate total capital needed for full DCA ladder
   // Base order + SO1 + SO2 + ... + SO_n
@@ -135,7 +131,6 @@ function calculateDCABudget(
 
   return {
     totalBudget,
-    budgetPerPair,
     budgetPerDeal,
     baseOrderSize,
     safetyOrders,
@@ -242,8 +237,6 @@ function ThreeCommasStyleForm({
       const breakdown = calculateDCABudget(
         aggregateValue!,
         budgetPercentage!,
-        numPairs || 1,
-        splitBudget || false,
         maxConcurrentDeals || config.max_concurrent_deals || 1,
         config.max_safety_orders ?? 5,
         config.safety_order_volume_scale ?? 1.0,
@@ -264,7 +257,7 @@ function ThreeCommasStyleForm({
         })
       }
     }
-  }, [useBudgetCalculator, budgetPercentage, numPairs, splitBudget, maxConcurrentDeals,
+  }, [useBudgetCalculator, budgetPercentage, maxConcurrentDeals,
       config.max_concurrent_deals, config.max_safety_orders, config.safety_order_volume_scale,
       aggregateValue, exchangeMinimum])
 
@@ -920,8 +913,6 @@ function ThreeCommasStyleForm({
               const breakdown = calculateDCABudget(
                 aggregateValue,
                 budgetPercentage,
-                numPairs || 1,
-                splitBudget || false,
                 maxConcurrentDeals || config.max_concurrent_deals || 1,
                 config.max_safety_orders ?? 5,
                 config.safety_order_volume_scale ?? 1.0,
@@ -938,7 +929,7 @@ function ThreeCommasStyleForm({
                         Each position needs {breakdown.totalCapitalPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency},
                         but allocated budget per position is {breakdown.budgetPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
                         ({breakdown.budgetUtilization.toFixed(1)}% of budget).
-                        {splitBudget ? ' Consider reducing pairs, max deals, or safety orders.' : ' Consider reducing max deals or safety orders.'}
+                        Consider reducing max deals or safety orders.
                       </p>
                     </div>
                   )}
@@ -952,13 +943,9 @@ function ThreeCommasStyleForm({
                   <p>
                     📊 <strong>Total Bot Budget:</strong> {breakdown.totalBudget.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
                   </p>
-                  {splitBudget && numPairs && numPairs > 1 && (
-                    <p>
-                      🔀 <strong>Per Pair:</strong> {breakdown.budgetPerPair.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency} ({numPairs} pairs)
-                    </p>
-                  )}
                   <p>
                     🎯 <strong>Per Position:</strong> {breakdown.budgetPerDeal.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
+                    {' '}(divided by {maxConcurrentDeals || config.max_concurrent_deals || 1} max concurrent {maxConcurrentDeals === 1 ? 'deal' : 'deals'})
                   </p>
                   <p>
                     📥 <strong>Base Order:</strong> {breakdown.baseOrderSize.toFixed(quoteCurrency === 'BTC' ? 8 : 2)} {quoteCurrency}
