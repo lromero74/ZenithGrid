@@ -75,3 +75,4 @@ backend/scripts/*
 # Database backups
 backend/trading.db.local.backup*
 backend/trading.db.prod
+CLAUDE.md
