@@ -172,10 +172,15 @@ class CoinbaseClient:
         """Invalidate balance cache (call after trades)"""
         await account_balance_api.invalidate_balance_cache()
 
-    async def calculate_aggregate_btc_value(self) -> float:
-        """Calculate total BTC value of entire account (available BTC + liquidation value of all positions)"""
+    async def calculate_aggregate_btc_value(self, bypass_cache: bool = False) -> float:
+        """
+        Calculate total BTC value of entire account (available BTC + liquidation value of all positions)
+
+        Args:
+            bypass_cache: If True, skip cache and force fresh calculation (use for critical operations)
+        """
         return await account_balance_api.calculate_aggregate_btc_value(
-            self._request, self.auth_type, self.get_current_price
+            self._request, self.auth_type, self.get_current_price, bypass_cache=bypass_cache
         )
 
     async def calculate_aggregate_usd_value(self) -> float:

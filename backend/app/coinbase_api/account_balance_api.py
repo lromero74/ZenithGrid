@@ -242,7 +242,7 @@ async def invalidate_balance_cache():
 
 
 async def calculate_aggregate_btc_value(
-    request_func: Callable, auth_type: str, get_current_price_func: Callable = None
+    request_func: Callable, auth_type: str, get_current_price_func: Callable = None, bypass_cache: bool = False
 ) -> float:
     """
     Calculate total BTC value of entire account (available BTC + liquidation value of all BTC-pair positions).
@@ -251,19 +251,29 @@ async def calculate_aggregate_btc_value(
     Uses database to get positions held in open trades (since Coinbase API doesn't provide this).
     Uses CURRENT market prices (not cost basis) for true liquidation value.
 
+    Args:
+        request_func: Function to make API requests
+        auth_type: Authentication type
+        get_current_price_func: Optional function to fetch current prices
+        bypass_cache: If True, skip cache and force fresh calculation (use for critical operations like position creation)
+
     Returns:
         Total BTC value across all holdings (available + current value of positions)
     """
     import asyncio
 
-    # Check cache first to reduce API spam
+    # Check cache first to reduce API spam (unless bypassed for critical operations)
     cache_key = "aggregate_btc_value"
-    cached = await api_cache.get(cache_key)
-    if cached is not None:
-        logger.info(f"✅ Using cached aggregate BTC value: {cached:.8f} BTC")
-        return cached
+    if not bypass_cache:
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            logger.info(f"✅ Using cached aggregate BTC value: {cached:.8f} BTC")
+            return cached
 
-    logger.info("📊 Calculating aggregate BTC value for budget allocation...")
+    if bypass_cache:
+        logger.info("📊 Calculating FRESH aggregate BTC value (cache bypassed for critical operation)...")
+    else:
+        logger.info("📊 Calculating aggregate BTC value for budget allocation...")
 
     # Get available BTC balance from Coinbase
     available_btc = await get_btc_balance(request_func, auth_type)

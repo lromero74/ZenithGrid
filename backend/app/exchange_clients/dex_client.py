@@ -272,9 +272,12 @@ class DEXClient(ExchangeClient):
         self._balance_cache.clear()
         logger.debug("Balance cache invalidated")
 
-    async def calculate_aggregate_btc_value(self) -> float:
+    async def calculate_aggregate_btc_value(self, bypass_cache: bool = False) -> float:
         """
         Calculate total portfolio value in BTC (WBTC)
+
+        Args:
+            bypass_cache: Not used for DEX (no cache implemented yet)
 
         For DEX: Includes WBTC balance + BTC value of other holdings
 

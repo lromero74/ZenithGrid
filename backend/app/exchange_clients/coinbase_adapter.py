@@ -105,9 +105,9 @@ class CoinbaseAdapter(ExchangeClient):
         """Invalidate cached balance data."""
         await self._client.invalidate_balance_cache()
 
-    async def calculate_aggregate_btc_value(self) -> float:
+    async def calculate_aggregate_btc_value(self, bypass_cache: bool = False) -> float:
         """Calculate total portfolio value in BTC."""
-        return await self._client.calculate_aggregate_btc_value()
+        return await self._client.calculate_aggregate_btc_value(bypass_cache=bypass_cache)
 
     async def calculate_aggregate_usd_value(self) -> float:
         """Calculate total portfolio value in USD."""

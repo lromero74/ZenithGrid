@@ -109,9 +109,12 @@ class ExchangeClient(ABC):
         pass
 
     @abstractmethod
-    async def calculate_aggregate_btc_value(self) -> float:
+    async def calculate_aggregate_btc_value(self, bypass_cache: bool = False) -> float:
         """
         Calculate total portfolio value in BTC.
+
+        Args:
+            bypass_cache: If True, skip cache and force fresh calculation (use for critical operations)
 
         Should include:
         - Available BTC balance

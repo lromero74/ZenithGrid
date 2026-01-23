@@ -495,10 +495,11 @@ class MultiBotMonitor:
             print(f"🔍 Max concurrent deals: {max_concurrent_deals}")
 
             # Calculate available budget for new positions
+            # Bypass cache for position creation to ensure accurate budget allocation
             quote_currency = bot.get_quote_currency()
             try:
                 if quote_currency == "BTC":
-                    aggregate_value = await self.exchange.calculate_aggregate_btc_value()
+                    aggregate_value = await self.exchange.calculate_aggregate_btc_value(bypass_cache=True)
                 else:  # USD
                     aggregate_value = await self.exchange.calculate_aggregate_usd_value()
             except Exception as e:

@@ -171,7 +171,8 @@ async def create_bot(
                 aggregate_usd_value = await exchange.calculate_aggregate_usd_value()
                 aggregate_btc_value = raw_btc  # For USD bots, BTC aggregate is just raw BTC
             else:
-                aggregate_btc_value = await exchange.calculate_aggregate_btc_value()
+                # Bypass cache for bot creation to ensure accurate budget validation
+                aggregate_btc_value = await exchange.calculate_aggregate_btc_value(bypass_cache=True)
                 aggregate_usd_value = raw_usd  # For BTC bots, USD aggregate is just raw USD
 
             # Get current BTC price for validation
@@ -604,7 +605,8 @@ async def update_bot(
                 aggregate_usd_value = await exchange.calculate_aggregate_usd_value()
                 aggregate_btc_value = balances.get("BTC", 0.0)
             else:
-                aggregate_btc_value = await exchange.calculate_aggregate_btc_value()
+                # Bypass cache for bot update to ensure accurate budget validation
+                aggregate_btc_value = await exchange.calculate_aggregate_btc_value(bypass_cache=True)
                 aggregate_usd_value = balances.get("USD", 0.0) + balances.get("USDC", 0.0) + balances.get("USDT", 0.0)
 
             current_btc_price = await exchange.get_btc_usd_price()

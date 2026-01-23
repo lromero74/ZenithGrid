@@ -387,9 +387,12 @@ class PaperTradingClient(ExchangeClient):
         """No-op for paper trading (balances always up-to-date in memory)."""
         pass
 
-    async def calculate_aggregate_btc_value(self) -> float:
+    async def calculate_aggregate_btc_value(self, bypass_cache: bool = False) -> float:
         """
         Calculate total portfolio value in BTC.
+
+        Args:
+            bypass_cache: Not used for paper trading (uses simulated balances, no API caching)
 
         Includes:
         - BTC balance
