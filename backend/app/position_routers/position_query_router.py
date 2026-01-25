@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -29,6 +29,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[PositionResponse])
 async def get_positions(
+    response: Response,
     status: Optional[str] = None,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
@@ -36,6 +37,10 @@ async def get_positions(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get positions with optional status filter"""
+    # Prevent browser HTTP caching of position data (force fresh data on every request)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     # Use eager loading to avoid N+1 queries
     query = select(Position).options(
         selectinload(Position.trades),
