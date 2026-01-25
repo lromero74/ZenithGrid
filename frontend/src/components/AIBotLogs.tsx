@@ -259,7 +259,6 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                 </div>
               )
             })
-          )
           )}
         </div>
 
