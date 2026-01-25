@@ -18,6 +18,8 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     queryKey: ['positions', 'open', selectedAccountId],
     queryFn: () => positionsApi.getAll('open', 100),
     refetchInterval: 5000, // Update every 5 seconds for active deals
+    refetchOnMount: 'always', // Always fetch fresh data on mount (don't show stale cache)
+    staleTime: 0, // Treat cached data as immediately stale
     select: (data) => {
       if (!selectedAccountId) return data
       // Filter by account_id
@@ -30,6 +32,8 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     queryKey: ['bots', selectedAccountId],
     queryFn: () => botsApi.getAll(),
     refetchInterval: 10000,
+    refetchOnMount: 'always', // Always fetch fresh data on mount
+    staleTime: 0, // Treat cached data as immediately stale
     select: (data) => {
       if (!selectedAccountId) return data
       // Filter by account_id
