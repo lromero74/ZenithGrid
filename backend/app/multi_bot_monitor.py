@@ -1142,7 +1142,7 @@ class MultiBotMonitor:
                 # For AI strategies: Skip entirely and only check existing positions
                 if bot.strategy_type == "conditional_dca":
                     logger.info("  ⏭️  Technical check: Analyzing conditional_dca signals without AI")
-                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id)
+                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id, product_id=product_id)
                 else:
                     logger.info("  ⏭️  SKIPPING AI: Technical-only check (existing positions only)")
                     signal_data = {"signal_type": "hold", "confidence": 0, "reasoning": "Technical-only check (no AI)"}
@@ -1151,7 +1151,7 @@ class MultiBotMonitor:
                 # For conditional_dca, pass the candles_by_timeframe dict
                 if bot.strategy_type == "conditional_dca":
                     logger.info("  Analyzing conditional_dca signals...")
-                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id)
+                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id, product_id=product_id)
                 else:
                     # For indicator_based strategy, pass the previous_indicators_cache for crossing detection
                     # This enables crossing_above/crossing_below operators for ENTRY conditions (no position yet)
@@ -1162,7 +1162,8 @@ class MultiBotMonitor:
                         position=existing_position,
                         previous_indicators_cache=previous_indicators_from_cache,
                         db=db,
-                        user_id=bot.user_id
+                        user_id=bot.user_id,
+                        product_id=product_id
                     )
                     # Update cache with current indicators for next check cycle
                     if signal_data and "indicators" in signal_data:
