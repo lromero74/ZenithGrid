@@ -1252,13 +1252,14 @@ class MultiBotMonitor:
                 await self.log_ai_decision(db, bot, product_id, log_signal_data, pair_info, open_positions_list)
                 logger.info(f"  📝 Logged AI decision for {product_id}")
 
-            # Log indicator condition evaluations for non-AI indicator-based bots
+            # Log indicator condition evaluations for indicator-based bots
+            # This includes bots with AI indicators - they get BOTH AI logs AND indicator logs
             # Only log when conditions MATCH to reduce noise:
             # - Entry (base_order): log only when entry conditions are met AND bot has capacity
             # - DCA (safety_order): log only when we have a position AND DCA slots available AND DCA conditions are met
             # - Exit (take_profit): log only when we have a position AND exit conditions are met
             condition_details = signal_data.get("condition_details")
-            if condition_details and not should_log_ai:
+            if condition_details:
                 has_position = existing_position is not None
                 logged_any = False
 

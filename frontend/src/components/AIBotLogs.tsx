@@ -14,8 +14,8 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
   const [filterDecision, setFilterDecision] = useState<string>('all')
 
   const { data: logs = [], isLoading, refetch } = useQuery({
-    queryKey: ['bot-logs', botId],
-    queryFn: () => botsApi.getLogs(botId, 100, 0),
+    queryKey: ['bot-decision-logs', botId],
+    queryFn: () => botsApi.getDecisionLogs(botId, 100, 0),
     enabled: isOpen,
     refetchInterval: isOpen ? 10000 : false, // Refresh every 10 seconds when open
   })
@@ -43,7 +43,23 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
 
   const filteredLogs = logs.filter((log: any) => {
     if (filterDecision === 'all') return true
-    return log.decision === filterDecision
+    // For AI logs, filter by decision
+    if (log.log_type === 'ai') {
+      return log.decision === filterDecision
+    }
+    // For indicator logs, check phase and conditions_met
+    if (log.log_type === 'indicator') {
+      if (filterDecision === 'buy' && (log.phase === 'base_order' || log.phase === 'safety_order') && log.conditions_met) {
+        return true
+      }
+      if (filterDecision === 'sell' && log.phase === 'take_profit' && log.conditions_met) {
+        return true
+      }
+      if (filterDecision === 'hold' && !log.conditions_met) {
+        return true
+      }
+    }
+    return false
   })
 
   const getDecisionIcon = (decision: string) => {
@@ -130,65 +146,120 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                 : `No "${filterDecision}" decisions logged yet.`}
             </div>
           ) : (
-            filteredLogs.map((log: any) => (
-              <div
-                key={log.id}
-                className="bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors"
-              >
-                {/* Header Row */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center space-x-3">
-                    {getDecisionIcon(log.decision)}
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-1 rounded text-xs font-medium border ${getDecisionColor(log.decision)}`}>
-                          {log.decision.toUpperCase()}
-                        </span>
-                        {log.confidence !== null && (
-                          <span className={`text-sm font-medium ${getConfidenceColor(log.confidence)}`}>
-                            {log.confidence}% confidence
+            filteredLogs.map((log: any) => {
+              // Determine display values based on log type
+              const isAILog = log.log_type === 'ai'
+              const isIndicatorLog = log.log_type === 'indicator'
+
+              let decision = 'hold'
+              if (isAILog) {
+                decision = log.decision
+              } else if (isIndicatorLog) {
+                if (log.phase === 'base_order' || log.phase === 'safety_order') {
+                  decision = log.conditions_met ? 'buy' : 'hold'
+                } else if (log.phase === 'take_profit') {
+                  decision = log.conditions_met ? 'sell' : 'hold'
+                }
+              }
+
+              return (
+                <div
+                  key={`${log.log_type}-${log.id}`}
+                  className="bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors"
+                >
+                  {/* Header Row */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      {getDecisionIcon(decision)}
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          {isIndicatorLog && (
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-cyan-600/20 border border-cyan-600/50 text-cyan-300">
+                              {log.phase.replace('_', ' ').toUpperCase()}
+                            </span>
+                          )}
+                          <span className={`px-2 py-1 rounded text-xs font-medium border ${getDecisionColor(decision)}`}>
+                            {decision.toUpperCase()}
                           </span>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-3 mt-1 text-xs text-slate-400">
-                        <span className="flex items-center space-x-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{formatDateTime(log.timestamp)}</span>
-                        </span>
-                        {log.product_id && (
-                          <span className="px-1.5 py-0.5 bg-purple-600/20 border border-purple-600/50 rounded text-xs font-medium text-purple-300">
-                            {log.product_id}
-                          </span>
-                        )}
-                        {log.current_price && (
+                          {log.confidence !== null && log.confidence !== undefined && (
+                            <span className={`text-sm font-medium ${getConfidenceColor(log.confidence)}`}>
+                              {log.confidence}% confidence
+                            </span>
+                          )}
+                          {isIndicatorLog && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${log.conditions_met ? 'bg-green-600/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
+                              {log.conditions_met ? '✓ Conditions Met' : '✗ Not Met'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-3 mt-1 text-xs text-slate-400">
                           <span className="flex items-center space-x-1">
-                            <Target className="w-3 h-3" />
-                            <span>{(() => {
-                              const quoteCurrency = log.product_id?.split('-')[1] || 'BTC';
-                              if (quoteCurrency === 'USD') {
-                                return `${log.current_price.toFixed(2)} USD`;
-                              }
-                              return `${log.current_price.toFixed(8)} BTC`;
-                            })()}</span>
+                            <Clock className="w-3 h-3" />
+                            <span>{formatDateTime(log.timestamp)}</span>
                           </span>
-                        )}
-                        {log.position_status && (
-                          <span className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">
-                            Position: {log.position_status}
-                          </span>
-                        )}
+                          {log.product_id && (
+                            <span className="px-1.5 py-0.5 bg-purple-600/20 border border-purple-600/50 rounded text-xs font-medium text-purple-300">
+                              {log.product_id}
+                            </span>
+                          )}
+                          {log.current_price && (
+                            <span className="flex items-center space-x-1">
+                              <Target className="w-3 h-3" />
+                              <span>{(() => {
+                                const quoteCurrency = log.product_id?.split('-')[1] || 'BTC';
+                                if (quoteCurrency === 'USD') {
+                                  return `${log.current_price.toFixed(2)} USD`;
+                                }
+                                return `${log.current_price.toFixed(8)} BTC`;
+                              })()}</span>
+                            </span>
+                          )}
+                          {log.position_status && (
+                            <span className="px-1.5 py-0.5 bg-slate-700 rounded text-xs">
+                              Position: {log.position_status}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* AI Thinking */}
-                <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
-                  <p className="text-sm font-medium text-purple-300 mb-1">🧠 AI Reasoning:</p>
-                  <p className="text-sm text-slate-300 leading-relaxed">{log.thinking}</p>
+                  {/* Log Content */}
+                  {isAILog && log.thinking && (
+                    <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
+                      <p className="text-sm font-medium text-purple-300 mb-1">🧠 AI Reasoning:</p>
+                      <p className="text-sm text-slate-300 leading-relaxed">{log.thinking}</p>
+                    </div>
+                  )}
+
+                  {isIndicatorLog && log.conditions_detail && (
+                    <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
+                      <p className="text-sm font-medium text-cyan-300 mb-2">📊 Indicator Conditions:</p>
+                      <div className="space-y-1">
+                        {log.conditions_detail.map((cond: any, idx: number) => (
+                          <div key={idx} className="text-xs text-slate-300 flex items-center space-x-2">
+                            <span className={cond.met ? 'text-green-400' : 'text-red-400'}>
+                              {cond.met ? '✓' : '✗'}
+                            </span>
+                            <span className="font-mono">{cond.indicator || cond.type}</span>
+                            <span className="text-slate-500">{cond.operator}</span>
+                            <span className="text-slate-400">{cond.value}</span>
+                            <span className="text-slate-500">→</span>
+                            <span className={cond.met ? 'text-green-400' : 'text-slate-400'}>
+                              {cond.actual !== undefined && cond.actual !== null ? cond.actual.toFixed(2) : 'N/A'}
+                            </span>
+                            {cond.ai_reasoning && (
+                              <span className="text-purple-300 ml-2">({cond.ai_reasoning})</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))
+              )
+            })
+          )
           )}
         </div>
 
