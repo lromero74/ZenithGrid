@@ -236,23 +236,39 @@ function AIBotLogs({ botId, isOpen, onClose }: AIBotLogsProps) {
                     <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
                       <p className="text-sm font-medium text-cyan-300 mb-2">📊 Indicator Conditions:</p>
                       <div className="space-y-1">
-                        {log.conditions_detail.map((cond: any, idx: number) => (
-                          <div key={idx} className="text-xs text-slate-300 flex items-center space-x-2">
-                            <span className={cond.met ? 'text-green-400' : 'text-red-400'}>
-                              {cond.met ? '✓' : '✗'}
-                            </span>
-                            <span className="font-mono">{cond.indicator || cond.type}</span>
-                            <span className="text-slate-500">{cond.operator}</span>
-                            <span className="text-slate-400">{cond.value}</span>
-                            <span className="text-slate-500">→</span>
-                            <span className={cond.met ? 'text-green-400' : 'text-slate-400'}>
-                              {cond.actual !== undefined && cond.actual !== null ? cond.actual.toFixed(2) : 'N/A'}
-                            </span>
-                            {cond.ai_reasoning && (
-                              <span className="text-purple-300 ml-2">({cond.ai_reasoning})</span>
-                            )}
-                          </div>
-                        ))}
+                        {log.conditions_detail.map((cond: any, idx: number) => {
+                          // Handle both old format (met/value/actual) and new format (result/threshold/actual_value)
+                          const conditionMet = cond.result !== undefined ? cond.result : cond.met
+                          const thresholdValue = cond.threshold !== undefined ? cond.threshold : cond.value
+                          const actualValue = cond.actual_value !== undefined ? cond.actual_value : cond.actual
+
+                          return (
+                            <div key={idx} className="text-xs text-slate-300 flex items-center space-x-2">
+                              <span className={conditionMet ? 'text-green-400' : 'text-red-400'}>
+                                {conditionMet ? '✓' : '✗'}
+                              </span>
+                              <span className="font-mono">{cond.indicator || cond.type}</span>
+                              {cond.timeframe && cond.timeframe !== 'required' && (
+                                <span className="text-slate-600 text-[10px]">[{cond.timeframe}]</span>
+                              )}
+                              <span className="text-slate-500">{cond.operator}</span>
+                              <span className="text-slate-400">
+                                {thresholdValue !== undefined && thresholdValue !== null
+                                  ? (typeof thresholdValue === 'number' ? thresholdValue.toFixed(8) : thresholdValue)
+                                  : 'N/A'}
+                              </span>
+                              <span className="text-slate-500">→</span>
+                              <span className={conditionMet ? 'text-green-400' : 'text-slate-400'}>
+                                {actualValue !== undefined && actualValue !== null
+                                  ? (typeof actualValue === 'number' ? actualValue.toFixed(8) : actualValue)
+                                  : 'N/A'}
+                              </span>
+                              {cond.ai_reasoning && (
+                                <span className="text-purple-300 ml-2">({cond.ai_reasoning})</span>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}
