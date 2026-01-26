@@ -241,20 +241,33 @@ export function BotListItem({
           )
 
           return (
-            <div className="relative">
-              <div className="text-[10px] space-y-1">
+            <div className="flex items-start gap-1">
+              <div className="text-[10px] flex-1">
                 {isPnlExpanded ? (
                   // Show all boxes when expanded
-                  projections.map((proj, idx) => renderBox(proj, idx))
+                  <div className="space-y-1">
+                    {projections.map((proj, idx) => renderBox(proj, idx))}
+                  </div>
                 ) : (
-                  // Show only current box when collapsed (carousel mode)
-                  renderBox(projections[currentTimeframeIndex], currentTimeframeIndex)
+                  // Show only current box when collapsed (carousel mode) with smooth transition
+                  <div className="relative overflow-hidden" style={{ height: '50px' }}>
+                    <div
+                      className="absolute w-full transition-transform duration-500 ease-in-out"
+                      style={{ transform: `translateY(-${currentTimeframeIndex * 50}px)` }}
+                    >
+                      {projections.map((proj, idx) => (
+                        <div key={idx} style={{ height: '50px' }}>
+                          {renderBox(proj, idx)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
               {/* Toggle button */}
               <button
                 onClick={() => setIsPnlExpanded(!isPnlExpanded)}
-                className="absolute -top-1 -right-1 p-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-400 hover:text-slate-200 transition-colors"
+                className="flex-shrink-0 p-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-400 hover:text-slate-200 transition-colors"
                 title={isPnlExpanded ? 'Collapse' : 'Expand all timeframes'}
               >
                 {isPnlExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
