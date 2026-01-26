@@ -1059,6 +1059,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
                     )
                   })}
               </Bar>
+              )}
             </BarChart>
           </ResponsiveContainer>
         ) : (
