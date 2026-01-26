@@ -268,17 +268,17 @@ function Bots() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-900 border-b border-slate-700">
-                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Name</th>
-                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Strategy</th>
-                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Pair</th>
-                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
-                  <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Trade Stats</th>
-                  <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Win Rate</th>
-                  <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">PnL</th>
-                  <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Projected PnL</th>
-                  <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Budget</th>
-                  <th className="text-center px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Status</th>
-                  <th className="text-center px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-400">Actions</th>
+                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Name</th>
+                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Strategy</th>
+                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Pair</th>
+                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
+                  <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Trade Stats</th>
+                  <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Win Rate</th>
+                  <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">PnL</th>
+                  <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Projected PnL</th>
+                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Budget</th>
+                  <th className="text-center px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Status</th>
+                  <th className="text-center px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -316,11 +316,11 @@ function Bots() {
           <table className="w-full">
             <thead className="bg-slate-900">
               <tr>
-                <th className="text-left px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Portfolio Totals</th>
-                <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Daily</th>
-                <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Weekly</th>
-                <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Monthly</th>
-                <th className="text-right px-2 sm:px-4 py-2 sm:py-3 text-sm font-medium text-slate-400">Yearly</th>
+                <th className="text-left px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Portfolio Totals</th>
+                <th className="text-right px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Daily</th>
+                <th className="text-right px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Weekly</th>
+                <th className="text-right px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Monthly</th>
+                <th className="text-right px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Yearly</th>
               </tr>
             </thead>
             <tbody>
@@ -360,26 +360,26 @@ function Bots() {
 
                 return (
                   <tr>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-sm font-semibold text-slate-300">Projected PnL</td>
-                    <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
+                    <td className="px-1 sm:px-2 py-2 text-sm font-semibold text-slate-300">Projected PnL</td>
+                    <td className={`px-1 sm:px-2 py-2 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalDailyPnl.toFixed(2)}
                       <span className="text-xs ml-1 text-slate-400">
                         ({formatPct(dailyPct)}%)
                       </span>
                     </td>
-                    <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
+                    <td className={`px-1 sm:px-2 py-2 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalWeeklyPnl.toFixed(2)}
                       <span className="text-xs ml-1 text-slate-400">
                         ({formatPct(weeklyPct)}%)
                       </span>
                     </td>
-                    <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
+                    <td className={`px-1 sm:px-2 py-2 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalMonthlyPnl.toFixed(2)}
                       <span className="text-xs ml-1 text-slate-400">
                         ({formatPct(monthlyPct)}%)
                       </span>
                     </td>
-                    <td className={`px-2 sm:px-4 py-2 sm:py-3 text-right text-lg font-bold ${colorClass}`}>
+                    <td className={`px-1 sm:px-2 py-2 text-right text-lg font-bold ${colorClass}`}>
                       {prefix}${totalYearlyPnl.toFixed(2)}
                       <span className="text-xs ml-1 text-slate-400">
                         ({formatPct(yearlyPct)}%)
