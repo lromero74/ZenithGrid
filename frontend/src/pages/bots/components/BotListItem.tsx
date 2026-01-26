@@ -121,9 +121,9 @@ export function BotListItem({
       </td>
 
       {/* Active Trades */}
-      <td className="px-0.5 sm:px-1 py-2">
+      <td className="px-0.5 sm:px-1 py-2 w-16">
         {(bot.strategy_config?.max_concurrent_deals || bot.strategy_config?.max_concurrent_positions) ? (
-          <div className="text-sm">
+          <div className="text-sm whitespace-nowrap">
             <span className="text-blue-400 font-medium">
               {bot.open_positions_count ?? 0}
             </span>
@@ -150,7 +150,7 @@ export function BotListItem({
       </td>
 
       {/* Win Rate */}
-      <td className="px-1 sm:px-2 py-2 text-right">
+      <td className="px-1 sm:px-2 py-2 text-right w-16">
         {(() => {
           const winRate = (bot as any).win_rate || 0
           const closedCount = (bot as any).closed_positions_count || 0
@@ -159,7 +159,7 @@ export function BotListItem({
             winRate >= 50 ? 'text-yellow-400' :
             'text-red-400'
           return (
-            <span className={`text-sm font-medium ${colorClass}`}>
+            <span className={`text-sm font-medium whitespace-nowrap ${colorClass}`}>
               {closedCount === 0 ? '—' : `${winRate.toFixed(1)}%`}
             </span>
           )
@@ -167,7 +167,7 @@ export function BotListItem({
       </td>
 
       {/* PnL */}
-      <td className="px-1 sm:px-2 py-2 text-right">
+      <td className="px-1 sm:px-2 py-2 text-right whitespace-nowrap">
         {(() => {
           const pnlUsd = (bot as any).total_pnl_usd || 0
           const pnlBtc = (bot as any).total_pnl_btc || 0
@@ -188,7 +188,7 @@ export function BotListItem({
       </td>
 
       {/* Projected PnL */}
-      <td className="px-1 sm:px-2 py-2 text-right">
+      <td className="px-1 sm:px-2 py-2 text-right whitespace-nowrap">
         {(() => {
           const dailyPnlUsd = (bot as any).avg_daily_pnl_usd || 0
           const dailyPnlBtc = (bot as any).avg_daily_pnl_btc || 0
@@ -235,14 +235,14 @@ export function BotListItem({
       </td>
 
       {/* Budget */}
-      <td className="px-1 sm:px-2 py-2">
+      <td className="px-1 sm:px-2 py-2 w-20">
         <div className="flex flex-col gap-1">
-          <span className="text-sm text-emerald-400 font-medium">
+          <span className="text-sm text-emerald-400 font-medium whitespace-nowrap">
             {bot.budget_percentage}%
           </span>
           {/* Budget Utilization */}
           {bot.budget_utilization_percentage !== undefined && (
-            <div className="text-[10px] text-slate-400">
+            <div className="text-[10px] text-slate-400 whitespace-nowrap">
               {bot.budget_utilization_percentage.toFixed(1)}% in use
             </div>
           )}
@@ -250,7 +250,7 @@ export function BotListItem({
       </td>
 
       {/* Status Toggle */}
-      <td className="px-1 sm:px-2 py-2">
+      <td className="px-1 sm:px-2 py-2 w-16">
         <div className="flex justify-center">
           <label className="relative inline-flex items-center cursor-pointer">
             <input
