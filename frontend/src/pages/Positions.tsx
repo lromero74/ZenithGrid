@@ -104,6 +104,13 @@ export default function Positions() {
     refetchInterval: 60000, // Refresh every minute
   })
 
+  // Fetch realized PnL (daily and weekly)
+  const { data: realizedPnL } = useQuery({
+    queryKey: ['realized-pnl', selectedAccount?.id],
+    queryFn: () => positionsApi.getRealizedPnL(selectedAccount?.id),
+    refetchInterval: 60000, // Refresh every minute
+  })
+
   // Fetch account balances
   const { data: balances, refetch: refetchBalances } = useQuery({
     queryKey: ['account-balances', selectedAccount?.id],
@@ -209,6 +216,7 @@ export default function Positions() {
         <OverallStatsPanel
           stats={stats}
           completedStats={completedStats}
+          realizedPnL={realizedPnL}
           balances={balances}
           onRefreshBalances={refetchBalances}
         />

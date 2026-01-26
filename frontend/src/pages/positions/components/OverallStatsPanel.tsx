@@ -10,6 +10,13 @@ interface CompletedStats {
   average_profit_usd: number
 }
 
+interface RealizedPnL {
+  daily_profit_btc: number
+  daily_profit_usd: number
+  weekly_profit_btc: number
+  weekly_profit_usd: number
+}
+
 interface OverallStatsPanelProps {
   stats: {
     activeTrades: number
@@ -18,11 +25,12 @@ interface OverallStatsPanelProps {
     uPnLUSD: number
   }
   completedStats?: CompletedStats
+  realizedPnL?: RealizedPnL
   balances?: Balances
   onRefreshBalances: () => void
 }
 
-export const OverallStatsPanel = ({ stats, completedStats, balances, onRefreshBalances }: OverallStatsPanelProps) => {
+export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -35,17 +43,27 @@ export const OverallStatsPanel = ({ stats, completedStats, balances, onRefreshBa
               <span className="text-white font-medium">{stats.activeTrades}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">uPnL of active trades (BTC):</span>
+              <span className="text-slate-400">uPnL of active trades:</span>
               <span className={`font-medium ${stats.uPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {stats.uPnL >= 0 ? '+' : ''}{stats.uPnL.toFixed(8)} BTC
+                {stats.uPnL >= 0 ? '+' : ''}{stats.uPnL.toFixed(8)} BTC / {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">uPnL of active trades (USD):</span>
-              <span className={`font-medium ${stats.uPnLUSD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
-              </span>
-            </div>
+            {realizedPnL && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Realized PnL (today):</span>
+                  <span className={`font-medium ${realizedPnL.daily_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {realizedPnL.daily_profit_btc >= 0 ? '+' : ''}{realizedPnL.daily_profit_btc.toFixed(8)} BTC / {realizedPnL.daily_profit_usd >= 0 ? '+' : ''}${realizedPnL.daily_profit_usd.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Realized PnL (week):</span>
+                  <span className={`font-medium ${realizedPnL.weekly_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {realizedPnL.weekly_profit_btc >= 0 ? '+' : ''}{realizedPnL.weekly_profit_btc.toFixed(8)} BTC / {realizedPnL.weekly_profit_usd >= 0 ? '+' : ''}${realizedPnL.weekly_profit_usd.toFixed(2)}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

@@ -91,6 +91,13 @@ export const positionsApi = {
       losing_trades: number;
       average_profit_usd: number;
     }>('/positions/completed/stats', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),
+  getRealizedPnL: (accountId?: number) =>
+    api.get<{
+      daily_profit_btc: number;
+      daily_profit_usd: number;
+      weekly_profit_btc: number;
+      weekly_profit_usd: number;
+    }>('/positions/realized-pnl', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),
 };
 
 export const tradesApi = {

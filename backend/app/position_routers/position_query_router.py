@@ -373,6 +373,96 @@ async def get_completed_trades_stats(
     }
 
 
+@router.get("/realized-pnl")
+async def get_realized_pnl(
+    account_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Get realized PnL for today and this week.
+
+    Returns realized profit/loss for positions closed:
+    - Today (since midnight UTC)
+    - This week (last 7 days)
+    """
+    from datetime import datetime, timedelta
+
+    now = datetime.utcnow()
+    # Start of today (midnight UTC)
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Start of week (7 days ago)
+    start_of_week = now - timedelta(days=7)
+
+    # Get closed positions
+    query = select(Position).where(
+        Position.status == "closed",
+        Position.closed_at is not None
+    )
+
+    # Filter by user's accounts if authenticated
+    if current_user:
+        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+        accounts_result = await db.execute(accounts_query)
+        user_account_ids = [row[0] for row in accounts_result.fetchall()]
+        if user_account_ids:
+            query = query.where(Position.account_id.in_(user_account_ids))
+        else:
+            return {
+                "daily_profit_btc": 0.0,
+                "daily_profit_usd": 0.0,
+                "weekly_profit_btc": 0.0,
+                "weekly_profit_usd": 0.0,
+            }
+
+    # Filter by account_id if provided
+    if account_id is not None:
+        query = query.where(Position.account_id == account_id)
+
+    result = await db.execute(query)
+    positions = result.scalars().all()
+
+    # Calculate daily and weekly PnL
+    daily_profit_btc = 0.0
+    daily_profit_usd = 0.0
+    weekly_profit_btc = 0.0
+    weekly_profit_usd = 0.0
+
+    for pos in positions:
+        if not pos.closed_at:
+            continue
+
+        # Calculate BTC profit
+        profit_btc = 0.0
+        if pos.product_id and '-BTC' in pos.product_id:
+            # For BTC pairs, profit_quote is already in BTC
+            if pos.profit_quote is not None:
+                profit_btc = pos.profit_quote
+        else:
+            # For USD pairs, convert USD profit to BTC
+            if pos.profit_usd is not None and pos.btc_usd_price_at_close:
+                profit_btc = pos.profit_usd / pos.btc_usd_price_at_close
+
+        profit_usd = pos.profit_usd if pos.profit_usd is not None else 0.0
+
+        # Check if closed today
+        if pos.closed_at >= start_of_today:
+            daily_profit_btc += profit_btc
+            daily_profit_usd += profit_usd
+
+        # Check if closed this week
+        if pos.closed_at >= start_of_week:
+            weekly_profit_btc += profit_btc
+            weekly_profit_usd += profit_usd
+
+    return {
+        "daily_profit_btc": round(daily_profit_btc, 8),
+        "daily_profit_usd": round(daily_profit_usd, 2),
+        "weekly_profit_btc": round(weekly_profit_btc, 8),
+        "weekly_profit_usd": round(weekly_profit_usd, 2),
+    }
+
+
 @router.get("/{position_id}", response_model=PositionResponse)
 async def get_position(
     position_id: int,
