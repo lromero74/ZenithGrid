@@ -169,15 +169,20 @@ export function BotListItem({
       {/* PnL */}
       <td className="px-2 sm:px-4 py-2 sm:py-3 text-right">
         {(() => {
-          const pnl = (bot as any).total_pnl_usd || 0
-          const isPositive = pnl > 0
-          const isNegative = pnl < 0
+          const pnlUsd = (bot as any).total_pnl_usd || 0
+          const pnlBtc = (bot as any).total_pnl_btc || 0
+          const isPositive = pnlUsd > 0
+          const isNegative = pnlUsd < 0
+          const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
           return (
-            <span className={`text-sm font-medium ${
-              isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
-            }`}>
-              {isPositive ? '+' : ''}${pnl.toFixed(2)} {isPositive ? '↑' : isNegative ? '↓' : ''}
-            </span>
+            <div className="flex flex-col items-end text-xs">
+              <span className={colorClass}>
+                {pnlBtc.toFixed(8)} BTC
+              </span>
+              <span className={colorClass}>
+                ${pnlUsd.toFixed(2)}
+              </span>
+            </div>
           )
         })()}
       </td>
@@ -185,34 +190,44 @@ export function BotListItem({
       {/* Projected PnL */}
       <td className="px-2 sm:px-4 py-2 sm:py-3 text-right">
         {(() => {
-          const dailyPnl = (bot as any).avg_daily_pnl_usd || 0
+          const dailyPnlUsd = (bot as any).avg_daily_pnl_usd || 0
+          const dailyPnlBtc = (bot as any).avg_daily_pnl_btc || 0
 
           // Use simple linear projection (no compounding)
-          // Compounding daily rates leads to unrealistic projections
-          const projectPnl = (days: number) => dailyPnl * days
+          const projectPnl = (days: number) => ({
+            btc: dailyPnlBtc * days,
+            usd: dailyPnlUsd * days
+          })
 
-          const weeklyPnl = projectPnl(7)
-          const monthlyPnl = projectPnl(30)
-          const yearlyPnl = projectPnl(365)
+          const weekly = projectPnl(7)
+          const monthly = projectPnl(30)
+          const yearly = projectPnl(365)
 
-          const isPositive = dailyPnl > 0
-          const isNegative = dailyPnl < 0
+          const isPositive = dailyPnlUsd > 0
+          const isNegative = dailyPnlUsd < 0
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
-          const prefix = isPositive ? '+' : ''
 
           return (
-            <div className="text-xs space-y-0.5">
-              <div className={`font-medium ${colorClass}`}>
-                Day: {prefix}${dailyPnl.toFixed(2)}
-              </div>
+            <div className="text-[10px] space-y-0.5">
               <div className={`${colorClass}`}>
-                Week: {prefix}${weeklyPnl.toFixed(2)}
+                <div className="font-medium">Day:</div>
+                <div>{dailyPnlBtc.toFixed(8)} BTC</div>
+                <div>${dailyPnlUsd.toFixed(2)}</div>
               </div>
-              <div className={`${colorClass}`}>
-                Month: {prefix}${monthlyPnl.toFixed(2)}
+              <div className={`${colorClass} opacity-80`}>
+                <div className="font-medium">Week:</div>
+                <div>{weekly.btc.toFixed(8)} BTC</div>
+                <div>${weekly.usd.toFixed(2)}</div>
               </div>
-              <div className={`${colorClass}`}>
-                Year: {prefix}${yearlyPnl.toFixed(2)}
+              <div className={`${colorClass} opacity-70`}>
+                <div className="font-medium">Month:</div>
+                <div>{monthly.btc.toFixed(8)} BTC</div>
+                <div>${monthly.usd.toFixed(2)}</div>
+              </div>
+              <div className={`${colorClass} opacity-60`}>
+                <div className="font-medium">Year:</div>
+                <div>{yearly.btc.toFixed(8)} BTC</div>
+                <div>${yearly.usd.toFixed(2)}</div>
               </div>
             </div>
           )

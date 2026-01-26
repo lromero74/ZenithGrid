@@ -58,7 +58,9 @@ class BotResponse(BaseModel):
     closed_positions_count: int = 0
     trades_per_day: float = 0.0
     total_pnl_usd: float = 0.0
+    total_pnl_btc: float = 0.0
     avg_daily_pnl_usd: float = 0.0
+    avg_daily_pnl_btc: float = 0.0
     insufficient_funds: bool = False
     budget_utilization_percentage: float = 0.0
     win_rate: float = 0.0  # Percentage of profitable closed positions

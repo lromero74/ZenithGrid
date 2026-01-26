@@ -330,9 +330,23 @@ async def list_bots(
         # Calculate total PnL (only from closed positions)
         # Note: Open positions don't have realized profit_usd yet
         total_pnl_usd = 0.0
+        total_pnl_btc = 0.0
         for pos in closed_positions:
-            if pos.profit_usd:
-                total_pnl_usd += pos.profit_usd
+            profit_usd = pos.profit_usd or 0.0
+            total_pnl_usd += profit_usd
+
+            # Calculate profit_btc based on pair type
+            if pos.product_id and "-BTC" in pos.product_id:
+                # BTC pair: profit_quote IS the BTC profit
+                profit_btc = pos.profit_quote or 0.0
+            else:
+                # USD/USDC/USDT pair: convert USD profit to BTC
+                btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+                if btc_price > 0:
+                    profit_btc = profit_usd / btc_price
+                else:
+                    profit_btc = 0.0
+            total_pnl_btc += profit_btc
 
         # Calculate avg daily PnL based on selected projection timeframe
         # This prevents wild projections when portfolio value changes due to withdrawals
@@ -364,6 +378,24 @@ async def list_bots(
 
         recent_pnl_usd = sum(p.profit_usd for p in recent_closed_positions if p.profit_usd)
 
+        # Calculate recent BTC PnL
+        recent_pnl_btc = 0.0
+        for pos in recent_closed_positions:
+            profit_usd = pos.profit_usd or 0.0
+
+            # Calculate profit_btc based on pair type
+            if pos.product_id and "-BTC" in pos.product_id:
+                # BTC pair: profit_quote IS the BTC profit
+                profit_btc = pos.profit_quote or 0.0
+            else:
+                # USD/USDC/USDT pair: convert USD profit to BTC
+                btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+                if btc_price > 0:
+                    profit_btc = profit_usd / btc_price
+                else:
+                    profit_btc = 0.0
+            recent_pnl_btc += profit_btc
+
         # Calculate days in period: min of timeframe_days or actual time since first recent trade
         if recent_closed_positions:
             first_recent_close = min(p.closed_at for p in recent_closed_positions if p.closed_at)
@@ -378,6 +410,7 @@ async def list_bots(
                 days_in_recent_period = max(1, (datetime.utcnow() - bot.created_at).total_seconds() / 86400)
 
         avg_daily_pnl_usd = recent_pnl_usd / days_in_recent_period
+        avg_daily_pnl_btc = recent_pnl_btc / days_in_recent_period
 
         # Calculate trades per day (use all-time for this metric)
         days_active = (datetime.utcnow() - bot.created_at).total_seconds() / 86400
@@ -444,7 +477,9 @@ async def list_bots(
         bot_response.closed_positions_count = len(closed_positions)
         bot_response.trades_per_day = trades_per_day
         bot_response.total_pnl_usd = total_pnl_usd
+        bot_response.total_pnl_btc = total_pnl_btc
         bot_response.avg_daily_pnl_usd = avg_daily_pnl_usd
+        bot_response.avg_daily_pnl_btc = avg_daily_pnl_btc
         bot_response.insufficient_funds = insufficient_funds
         bot_response.budget_utilization_percentage = budget_utilization_percentage
         bot_response.win_rate = win_rate
