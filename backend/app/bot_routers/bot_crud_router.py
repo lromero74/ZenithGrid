@@ -14,7 +14,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Account, Bot, Position, User
+from app.models import Account, Bot, Position, User, AIBotLog, IndicatorLog
 from app.strategies import StrategyDefinition, StrategyRegistry
 from app.coinbase_unified_client import CoinbaseClient
 from app.exchange_clients.factory import create_exchange_client
@@ -471,6 +471,31 @@ async def list_bots(
             insufficient_funds = False
             budget_utilization_percentage = 0.0
 
+        # Get latest log timestamps for notification pulse
+        latest_ai_log_timestamp = None
+        latest_indicator_log_timestamp = None
+
+        try:
+            # Get latest AI bot log timestamp
+            ai_log_query = select(AIBotLog.timestamp).where(
+                AIBotLog.bot_id == bot.id
+            ).order_by(desc(AIBotLog.timestamp)).limit(1)
+            ai_log_result = await db.execute(ai_log_query)
+            latest_ai_log = ai_log_result.scalar()
+            if latest_ai_log:
+                latest_ai_log_timestamp = latest_ai_log
+
+            # Get latest indicator log timestamp
+            indicator_log_query = select(IndicatorLog.timestamp).where(
+                IndicatorLog.bot_id == bot.id
+            ).order_by(desc(IndicatorLog.timestamp)).limit(1)
+            indicator_log_result = await db.execute(indicator_log_query)
+            latest_indicator_log = indicator_log_result.scalar()
+            if latest_indicator_log:
+                latest_indicator_log_timestamp = latest_indicator_log
+        except Exception as e:
+            logger.error(f"Error fetching log timestamps for bot {bot.id}: {e}")
+
         bot_response = BotResponse.model_validate(bot)
         bot_response.open_positions_count = len(open_positions)
         bot_response.total_positions_count = len(all_positions)
@@ -483,6 +508,8 @@ async def list_bots(
         bot_response.insufficient_funds = insufficient_funds
         bot_response.budget_utilization_percentage = budget_utilization_percentage
         bot_response.win_rate = win_rate
+        bot_response.latest_ai_log_timestamp = latest_ai_log_timestamp
+        bot_response.latest_indicator_log_timestamp = latest_indicator_log_timestamp
         bot_responses.append(bot_response)
 
     return bot_responses

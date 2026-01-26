@@ -57,6 +57,12 @@ export function BotListItem({
   const [isTransitioning, setIsTransitioning] = useState(true)
   const timeframes = ['day', 'week', 'month', 'year']
 
+  // State for notification pulse effects
+  const [aiLogPulse, setAiLogPulse] = useState(false)
+  const [indicatorLogPulse, setIndicatorLogPulse] = useState(false)
+  const [prevAiLogTimestamp, setPrevAiLogTimestamp] = useState<string | null>(null)
+  const [prevIndicatorLogTimestamp, setPrevIndicatorLogTimestamp] = useState<string | null>(null)
+
   // Auto-scroll through timeframes every 5 seconds (only when not expanded)
   useEffect(() => {
     if (isPnlExpanded) return
@@ -84,6 +90,28 @@ export function BotListItem({
       }, 500) // Match transition duration
     }
   }, [currentTimeframeIndex, isPnlExpanded, timeframes.length])
+
+  // Detect new AI bot logs and trigger pulse
+  useEffect(() => {
+    const currentTimestamp = (bot as any).latest_ai_log_timestamp
+    if (currentTimestamp && prevAiLogTimestamp && currentTimestamp !== prevAiLogTimestamp) {
+      // New log detected - trigger pulse
+      setAiLogPulse(true)
+      setTimeout(() => setAiLogPulse(false), 4000) // Stop pulse after 4 seconds
+    }
+    setPrevAiLogTimestamp(currentTimestamp || null)
+  }, [(bot as any).latest_ai_log_timestamp])
+
+  // Detect new indicator logs and trigger pulse
+  useEffect(() => {
+    const currentTimestamp = (bot as any).latest_indicator_log_timestamp
+    if (currentTimestamp && prevIndicatorLogTimestamp && currentTimestamp !== prevIndicatorLogTimestamp) {
+      // New log detected - trigger pulse
+      setIndicatorLogPulse(true)
+      setTimeout(() => setIndicatorLogPulse(false), 4000) // Stop pulse after 4 seconds
+    }
+    setPrevIndicatorLogTimestamp(currentTimestamp || null)
+  }, [(bot as any).latest_indicator_log_timestamp])
 
   return (
     <tr
@@ -349,7 +377,9 @@ export function BotListItem({
           {botUsesAIIndicators(bot) && (
             <button
               onClick={() => setAiLogsBotId(bot.id)}
-              className="p-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded transition-colors"
+              className={`p-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded transition-colors ${
+                aiLogPulse ? 'animate-pulse-glow' : ''
+              }`}
               title="View AI Reasoning Logs"
             >
               <Brain className="w-4 h-4" />
@@ -358,7 +388,9 @@ export function BotListItem({
           {botUsesNonAIIndicators(bot) && (
             <button
               onClick={() => setIndicatorLogsBotId(bot.id)}
-              className="p-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded transition-colors"
+              className={`p-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded transition-colors ${
+                indicatorLogPulse ? 'animate-pulse-glow' : ''
+              }`}
               title="View Indicator Logs"
             >
               <BarChart2 className="w-4 h-4" />

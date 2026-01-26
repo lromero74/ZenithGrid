@@ -66,6 +66,8 @@ class BotResponse(BaseModel):
     win_rate: float = 0.0  # Percentage of profitable closed positions
     account_id: Optional[int] = None  # For multi-account support
     exchange_type: Optional[str] = None  # 'cex' or 'dex'
+    latest_ai_log_timestamp: Optional[datetime] = None  # For notification pulse
+    latest_indicator_log_timestamp: Optional[datetime] = None  # For notification pulse
 
     class Config:
         from_attributes = True
