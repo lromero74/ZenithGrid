@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
 import { TrendingUp } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 
@@ -914,25 +914,72 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
                   return `${d.getMonth() + 1}/${d.getDate()}`
                 }}
               />
-              <YAxis
-                tick={{ fill: '#94a3b8', fontSize: 12 }}
-                tickFormatter={(value) => currencyDisplay === 'btc' ? value.toFixed(6) : `$${value}`}
-              />
+              {currencyDisplay === 'both' ? (
+                <>
+                  <YAxis
+                    yAxisId="left"
+                    orientation="left"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tickFormatter={(value) => value.toFixed(6)}
+                    label={{ value: 'BTC', angle: -90, position: 'insideLeft', fill: '#ff8800' }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tickFormatter={(value) => `$${value}`}
+                    label={{ value: 'USD', angle: 90, position: 'insideRight', fill: '#4ade80' }}
+                  />
+                </>
+              ) : (
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  tickFormatter={(value) => currencyDisplay === 'btc' ? value.toFixed(6) : `$${value}`}
+                />
+              )}
               <Tooltip
                 content={<CustomTooltip currencyDisplay={currencyDisplay} labelFormatter={(date: string) => new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} />}
                 cursor={false}
               />
-              <Bar dataKey={currencyDisplay === 'btc' ? 'daily_pnl_btc' : 'daily_pnl_usd'} radius={[4, 4, 0, 0]}>
-                {getFilledByDayData().map((entry, index) => {
-                  const value = currencyDisplay === 'btc' ? entry.daily_pnl_btc : entry.daily_pnl_usd
-                  return (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={value >= 0 ? '#22c55e' : '#ef4444'}
-                    />
-                  )
-                })}
-              </Bar>
+              {currencyDisplay === 'both' && (
+                <Legend
+                  wrapperStyle={{ paddingTop: '10px' }}
+                  iconType="square"
+                  formatter={(value) => <span style={{ color: '#94a3b8' }}>{value}</span>}
+                />
+              )}
+              {currencyDisplay === 'both' ? (
+                <>
+                  <Bar yAxisId="left" dataKey="daily_pnl_btc" name="BTC" radius={[4, 4, 0, 0]} fill="#ff8800">
+                    {getFilledByDayData().map((entry, index) => (
+                      <Cell
+                        key={`cell-btc-${index}`}
+                        fill={entry.daily_pnl_btc >= 0 ? '#ff8800' : '#cc6600'}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar yAxisId="right" dataKey="daily_pnl_usd" name="USD" radius={[4, 4, 0, 0]} fill="#4ade80">
+                    {getFilledByDayData().map((entry, index) => (
+                      <Cell
+                        key={`cell-usd-${index}`}
+                        fill={entry.daily_pnl_usd >= 0 ? '#4ade80' : '#ef4444'}
+                      />
+                    ))}
+                  </Bar>
+                </>
+              ) : (
+                <Bar dataKey={currencyDisplay === 'btc' ? 'daily_pnl_btc' : 'daily_pnl_usd'} radius={[4, 4, 0, 0]}>
+                  {getFilledByDayData().map((entry, index) => {
+                    const value = currencyDisplay === 'btc' ? entry.daily_pnl_btc : entry.daily_pnl_usd
+                    return (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={value >= 0 ? '#22c55e' : '#ef4444'}
+                      />
+                    )
+                  })}
+                </Bar>
+              )}
             </BarChart>
           </ResponsiveContainer>
         ) : activeTab === 'by_pair' ? (
@@ -947,24 +994,70 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
                 height={80}
                 tick={{ fill: '#94a3b8', fontSize: 12 }}
               />
-              <YAxis
-                tick={{ fill: '#94a3b8', fontSize: 12 }}
-                tickFormatter={(value) => currencyDisplay === 'btc' ? value.toFixed(6) : `$${value}`}
-              />
+              {currencyDisplay === 'both' ? (
+                <>
+                  <YAxis
+                    yAxisId="left"
+                    orientation="left"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tickFormatter={(value) => value.toFixed(6)}
+                    label={{ value: 'BTC', angle: -90, position: 'insideLeft', fill: '#ff8800' }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tickFormatter={(value) => `$${value}`}
+                    label={{ value: 'USD', angle: 90, position: 'insideRight', fill: '#4ade80' }}
+                  />
+                </>
+              ) : (
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  tickFormatter={(value) => currencyDisplay === 'btc' ? value.toFixed(6) : `$${value}`}
+                />
+              )}
               <Tooltip
                 content={<CustomTooltip currencyDisplay={currencyDisplay} labelFormatter={(pair: string) => pair} />}
                 cursor={false}
               />
-              <Bar dataKey={currencyDisplay === 'btc' ? 'total_pnl_btc' : 'total_pnl_usd'} radius={[4, 4, 0, 0]}>
-                {stats.filteredByPair.map((entry, index) => {
-                  const value = currencyDisplay === 'btc' ? entry.total_pnl_btc : entry.total_pnl_usd
-                  return (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={value >= 0 ? '#22c55e' : '#ef4444'}
-                    />
-                  )
-                })}
+              {currencyDisplay === 'both' && (
+                <Legend
+                  wrapperStyle={{ paddingTop: '10px' }}
+                  iconType="square"
+                  formatter={(value) => <span style={{ color: '#94a3b8' }}>{value}</span>}
+                />
+              )}
+              {currencyDisplay === 'both' ? (
+                <>
+                  <Bar yAxisId="left" dataKey="total_pnl_btc" name="BTC" radius={[4, 4, 0, 0]} fill="#ff8800">
+                    {stats.filteredByPair.map((entry, index) => (
+                      <Cell
+                        key={`cell-btc-${index}`}
+                        fill={entry.total_pnl_btc >= 0 ? '#ff8800' : '#cc6600'}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar yAxisId="right" dataKey="total_pnl_usd" name="USD" radius={[4, 4, 0, 0]} fill="#4ade80">
+                    {stats.filteredByPair.map((entry, index) => (
+                      <Cell
+                        key={`cell-usd-${index}`}
+                        fill={entry.total_pnl_usd >= 0 ? '#4ade80' : '#ef4444'}
+                      />
+                    ))}
+                  </Bar>
+                </>
+              ) : (
+                <Bar dataKey={currencyDisplay === 'btc' ? 'total_pnl_btc' : 'total_pnl_usd'} radius={[4, 4, 0, 0]}>
+                  {stats.filteredByPair.map((entry, index) => {
+                    const value = currencyDisplay === 'btc' ? entry.total_pnl_btc : entry.total_pnl_usd
+                    return (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={value >= 0 ? '#22c55e' : '#ef4444'}
+                      />
+                    )
+                  })}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
