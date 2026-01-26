@@ -9,7 +9,7 @@ from sqlalchemy import select, and_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import AIBotLog, IndicatorLog, Position, Settings
+from app.models import AIBotLog, IndicatorLog, Position, Settings, OrderHistory
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +139,52 @@ async def cleanup_failed_condition_logs():
 
         except Exception as e:
             logger.error(f"Error in failed condition log cleanup job: {e}", exc_info=True)
+
+        # Run every 6 hours
+        await asyncio.sleep(21600)
+
+
+async def cleanup_old_failed_orders():
+    """
+    Clean up failed order records older than 24 hours.
+
+    Failed orders are useful for immediate debugging but don't need to be
+    kept indefinitely. This prevents the order_history table from filling
+    up with old failed order attempts.
+
+    Keeps successful orders indefinitely for audit trail.
+    Runs every 6 hours.
+    """
+    # Wait 20 minutes after startup before first cleanup
+    await asyncio.sleep(1200)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                cutoff_time = datetime.utcnow() - timedelta(hours=24)
+
+                # Delete failed orders older than 24 hours
+                # Keep successful and canceled orders for audit trail
+                failed_delete_query = delete(OrderHistory).where(
+                    and_(
+                        OrderHistory.timestamp < cutoff_time,
+                        OrderHistory.status == 'failed'
+                    )
+                )
+                result = await db.execute(failed_delete_query)
+                deleted_count = result.rowcount
+
+                await db.commit()
+
+                if deleted_count > 0:
+                    logger.info(
+                        f"🧹 Cleaned up {deleted_count} failed order records older than 24 hours"
+                    )
+                else:
+                    logger.debug("No old failed orders to clean up")
+
+        except Exception as e:
+            logger.error(f"Error in failed order cleanup job: {e}", exc_info=True)
 
         # Run every 6 hours
         await asyncio.sleep(21600)
