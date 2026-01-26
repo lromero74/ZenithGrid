@@ -380,11 +380,13 @@ async def get_realized_pnl(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
-    Get realized PnL for today and this week.
+    Get realized PnL for multiple time periods.
 
     Returns realized profit/loss for positions closed:
     - Today (since midnight UTC)
     - This week (last 7 days)
+    - 4 weeks (last 28 days)
+    - YTD (year to date - since January 1st of current year)
     """
     from datetime import datetime, timedelta
 
@@ -393,6 +395,10 @@ async def get_realized_pnl(
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     # Start of week (7 days ago)
     start_of_week = now - timedelta(days=7)
+    # Start of 4 weeks (28 days ago)
+    start_of_4_weeks = now - timedelta(days=28)
+    # Start of year (January 1st of current year)
+    start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
     # Get closed positions
     query = select(Position).where(
@@ -413,6 +419,10 @@ async def get_realized_pnl(
                 "daily_profit_usd": 0.0,
                 "weekly_profit_btc": 0.0,
                 "weekly_profit_usd": 0.0,
+                "four_weeks_profit_btc": 0.0,
+                "four_weeks_profit_usd": 0.0,
+                "ytd_profit_btc": 0.0,
+                "ytd_profit_usd": 0.0,
             }
 
     # Filter by account_id if provided
@@ -422,11 +432,15 @@ async def get_realized_pnl(
     result = await db.execute(query)
     positions = result.scalars().all()
 
-    # Calculate daily and weekly PnL
+    # Calculate PnL for all time periods
     daily_profit_btc = 0.0
     daily_profit_usd = 0.0
     weekly_profit_btc = 0.0
     weekly_profit_usd = 0.0
+    four_weeks_profit_btc = 0.0
+    four_weeks_profit_usd = 0.0
+    ytd_profit_btc = 0.0
+    ytd_profit_usd = 0.0
 
     for pos in positions:
         if not pos.closed_at:
@@ -455,11 +469,25 @@ async def get_realized_pnl(
             weekly_profit_btc += profit_btc
             weekly_profit_usd += profit_usd
 
+        # Check if closed in last 4 weeks
+        if pos.closed_at >= start_of_4_weeks:
+            four_weeks_profit_btc += profit_btc
+            four_weeks_profit_usd += profit_usd
+
+        # Check if closed this year
+        if pos.closed_at >= start_of_year:
+            ytd_profit_btc += profit_btc
+            ytd_profit_usd += profit_usd
+
     return {
         "daily_profit_btc": round(daily_profit_btc, 8),
         "daily_profit_usd": round(daily_profit_usd, 2),
         "weekly_profit_btc": round(weekly_profit_btc, 8),
         "weekly_profit_usd": round(weekly_profit_usd, 2),
+        "four_weeks_profit_btc": round(four_weeks_profit_btc, 8),
+        "four_weeks_profit_usd": round(four_weeks_profit_usd, 2),
+        "ytd_profit_btc": round(ytd_profit_btc, 8),
+        "ytd_profit_usd": round(ytd_profit_usd, 2),
     }
 
 

@@ -15,6 +15,10 @@ interface RealizedPnL {
   daily_profit_usd: number
   weekly_profit_btc: number
   weekly_profit_usd: number
+  four_weeks_profit_btc: number
+  four_weeks_profit_usd: number
+  ytd_profit_btc: number
+  ytd_profit_usd: number
 }
 
 interface OverallStatsPanelProps {
@@ -60,6 +64,18 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                   <span className="text-slate-400">Realized PnL (week):</span>
                   <span className={`font-medium ${realizedPnL.weekly_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {realizedPnL.weekly_profit_btc >= 0 ? '+' : ''}{realizedPnL.weekly_profit_btc.toFixed(8)} BTC / {realizedPnL.weekly_profit_usd >= 0 ? '+' : ''}${realizedPnL.weekly_profit_usd.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Realized PnL (4 weeks):</span>
+                  <span className={`font-medium ${realizedPnL.four_weeks_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {realizedPnL.four_weeks_profit_btc >= 0 ? '+' : ''}{realizedPnL.four_weeks_profit_btc.toFixed(8)} BTC / {realizedPnL.four_weeks_profit_usd >= 0 ? '+' : ''}${realizedPnL.four_weeks_profit_usd.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Realized PnL (YTD):</span>
+                  <span className={`font-medium ${realizedPnL.ytd_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {realizedPnL.ytd_profit_btc >= 0 ? '+' : ''}{realizedPnL.ytd_profit_btc.toFixed(8)} BTC / {realizedPnL.ytd_profit_usd >= 0 ? '+' : ''}${realizedPnL.ytd_profit_usd.toFixed(2)}
                   </span>
                 </div>
               </>
