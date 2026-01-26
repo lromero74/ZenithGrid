@@ -22,6 +22,8 @@ interface RealizedPnL {
   last_month_profit_usd: number
   last_quarter_profit_btc: number
   last_quarter_profit_usd: number
+  wtd_profit_btc: number
+  wtd_profit_usd: number
   mtd_profit_btc: number
   mtd_profit_usd: number
   qtd_profit_btc: number
@@ -45,7 +47,7 @@ interface OverallStatsPanelProps {
 
 export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
   const [selectedHistorical, setSelectedHistorical] = useState<'yesterday' | 'last_week' | 'last_month' | 'last_quarter'>('last_week')
-  const [selectedToDate, setSelectedToDate] = useState<'mtd' | 'qtd' | 'ytd'>('ytd')
+  const [selectedToDate, setSelectedToDate] = useState<'wtd' | 'mtd' | 'qtd' | 'ytd'>('ytd')
 
   // Get the selected historical period's data
   const getHistoricalData = () => {
@@ -66,6 +68,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
   const getToDateData = () => {
     if (!realizedPnL) return { btc: 0, usd: 0 }
     switch (selectedToDate) {
+      case 'wtd':
+        return { btc: realizedPnL.wtd_profit_btc, usd: realizedPnL.wtd_profit_usd }
       case 'mtd':
         return { btc: realizedPnL.mtd_profit_btc, usd: realizedPnL.mtd_profit_usd }
       case 'qtd':
@@ -85,27 +89,27 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
         <div>
           <h3 className="text-sm font-semibold text-slate-300 mb-3">Overall stats</h3>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Active trades:</span>
-              <span className="text-white font-medium">{stats.activeTrades}</span>
+            <div className="flex justify-between items-baseline">
+              <span className="text-slate-400 text-xs">Active trades:</span>
+              <span className="text-white font-medium text-xs">{stats.activeTrades}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">uPnL of active trades:</span>
-              <span className={`font-medium ${stats.uPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div className="flex justify-between items-baseline">
+              <span className="text-slate-400 text-xs">uPnL (active):</span>
+              <span className={`font-medium text-xs ${stats.uPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {stats.uPnL >= 0 ? '+' : ''}{stats.uPnL.toFixed(8)} BTC / {stats.uPnLUSD >= 0 ? '+' : ''}${stats.uPnLUSD.toFixed(2)}
               </span>
             </div>
             {realizedPnL && (
               <>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Realized PnL (today):</span>
-                  <span className={`font-medium ${realizedPnL.daily_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-slate-400 text-xs">Realized (today):</span>
+                  <span className={`font-medium text-xs ${realizedPnL.daily_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {realizedPnL.daily_profit_btc >= 0 ? '+' : ''}{realizedPnL.daily_profit_btc.toFixed(8)} BTC / {realizedPnL.daily_profit_usd >= 0 ? '+' : ''}${realizedPnL.daily_profit_usd.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400 flex items-center gap-2">
-                    Realized PnL (
+                <div className="flex justify-between items-baseline gap-2">
+                  <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
+                    Realized (
                     <select
                       value={selectedHistorical}
                       onChange={(e) => setSelectedHistorical(e.target.value as 'yesterday' | 'last_week' | 'last_month' | 'last_quarter')}
@@ -118,25 +122,26 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     ):
                   </span>
-                  <span className={`font-medium ${historicalData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`font-medium text-xs ${historicalData.btc >= 0 ? 'text-green-400' : 'text-red-400'} whitespace-nowrap`}>
                     {historicalData.btc >= 0 ? '+' : ''}{historicalData.btc.toFixed(8)} BTC / {historicalData.usd >= 0 ? '+' : ''}${historicalData.usd.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400 flex items-center gap-2">
-                    Realized PnL (
+                <div className="flex justify-between items-baseline gap-2">
+                  <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
+                    Realized (
                     <select
                       value={selectedToDate}
-                      onChange={(e) => setSelectedToDate(e.target.value as 'mtd' | 'qtd' | 'ytd')}
+                      onChange={(e) => setSelectedToDate(e.target.value as 'wtd' | 'mtd' | 'qtd' | 'ytd')}
                       className="bg-slate-700 text-slate-300 border border-slate-600 rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-slate-600"
                     >
+                      <option value="wtd">WTD</option>
                       <option value="mtd">MTD</option>
                       <option value="qtd">QTD</option>
                       <option value="ytd">YTD</option>
                     </select>
                     ):
                   </span>
-                  <span className={`font-medium ${toDateData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`font-medium text-xs ${toDateData.btc >= 0 ? 'text-green-400' : 'text-red-400'} whitespace-nowrap`}>
                     {toDateData.btc >= 0 ? '+' : ''}{toDateData.btc.toFixed(8)} BTC / {toDateData.usd >= 0 ? '+' : ''}${toDateData.usd.toFixed(2)}
                   </span>
                 </div>
@@ -148,36 +153,36 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
         {/* Completed Trades Profit */}
         <div>
           <h3 className="text-sm font-semibold text-slate-300 mb-3">Completed trades profit</h3>
-          <div className="space-y-2 text-sm">
+          <div className="space-y-2">
             {completedStats ? (
               <>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Total profit (USD):</span>
-                  <span className={`font-medium ${completedStats.total_profit_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-slate-400 text-xs">Total profit (USD):</span>
+                  <span className={`font-medium text-xs ${completedStats.total_profit_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     ${completedStats.total_profit_usd.toFixed(2)}
                   </span>
                 </div>
                 {completedStats.total_profit_btc !== 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Total profit (BTC):</span>
-                    <span className={`font-medium ${completedStats.total_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-slate-400 text-xs">Total profit (BTC):</span>
+                    <span className={`font-medium text-xs ${completedStats.total_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {completedStats.total_profit_btc >= 0 ? '+' : ''}{completedStats.total_profit_btc.toFixed(8)} BTC
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Completed trades:</span>
-                  <span className="text-white font-medium">{completedStats.total_trades}</span>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-slate-400 text-xs">Completed trades:</span>
+                  <span className="text-white font-medium text-xs">{completedStats.total_trades}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Win rate:</span>
-                  <span className={`font-medium ${completedStats.win_rate >= 50 ? 'text-green-400' : 'text-yellow-400'}`}>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-slate-400 text-xs">Win rate:</span>
+                  <span className={`font-medium text-xs ${completedStats.win_rate >= 50 ? 'text-green-400' : 'text-yellow-400'}`}>
                     {completedStats.win_rate.toFixed(1)}% ({completedStats.winning_trades}W / {completedStats.losing_trades}L)
                   </span>
                 </div>
               </>
             ) : (
-              <div className="text-slate-400">Loading...</div>
+              <div className="text-slate-400 text-xs">Loading...</div>
             )}
           </div>
         </div>
@@ -193,7 +198,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               🔄 Refresh
             </button>
           </h3>
-          <div className="space-y-2 text-sm">
+          <div className="space-y-2">
             <div className="flex justify-between text-slate-400 text-xs">
               <span>Currency</span>
               <div className="flex gap-3">
@@ -203,8 +208,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* BTC - Always show */}
-            <div className="flex justify-between">
-              <span className="text-slate-300 font-medium">BTC</span>
+            <div className="flex justify-between items-baseline">
+              <span className="text-slate-300 font-medium text-xs">BTC</span>
               <div className="flex gap-3">
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   {balances ? balances.reserved_in_positions.BTC.toFixed(8) : '...'}
@@ -218,8 +223,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* ETH - Always show */}
-            <div className="flex justify-between">
-              <span className="text-slate-300 font-medium">ETH</span>
+            <div className="flex justify-between items-baseline">
+              <span className="text-slate-300 font-medium text-xs">ETH</span>
               <div className="flex gap-3">
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   {balances ? balances.reserved_in_positions.ETH.toFixed(6) : '...'}
@@ -233,8 +238,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* USD - Always show */}
-            <div className="flex justify-between">
-              <span className="text-slate-300 font-medium">USD</span>
+            <div className="flex justify-between items-baseline">
+              <span className="text-slate-300 font-medium text-xs">USD</span>
               <div className="flex gap-3">
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USD.toFixed(2) : '...'}
@@ -248,8 +253,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* USDC - Always show */}
-            <div className="flex justify-between">
-              <span className="text-slate-300 font-medium">USDC</span>
+            <div className="flex justify-between items-baseline">
+              <span className="text-slate-300 font-medium text-xs">USDC</span>
               <div className="flex gap-3">
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USDC.toFixed(2) : '...'}
@@ -263,8 +268,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
               </div>
             </div>
             {/* USDT - Always show */}
-            <div className="flex justify-between">
-              <span className="text-slate-300 font-medium">USDT</span>
+            <div className="flex justify-between items-baseline">
+              <span className="text-slate-300 font-medium text-xs">USDT</span>
               <div className="flex gap-3">
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USDT.toFixed(2) : '...'}

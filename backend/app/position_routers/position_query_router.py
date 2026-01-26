@@ -388,6 +388,7 @@ async def get_realized_pnl(
     - Last week (previous calendar week, Monday to Sunday)
     - Last month (previous calendar month)
     - Last quarter (previous calendar quarter)
+    - WTD (week to date - since Monday of current week)
     - MTD (month to date - since 1st of current month)
     - QTD (quarter to date - since 1st of current quarter)
     - YTD (year to date - since January 1st of current year)
@@ -415,6 +416,8 @@ async def get_realized_pnl(
     end_of_last_month = last_day_of_prev_month.replace(hour=23, minute=59, second=59, microsecond=999999)
     # Start of month (1st of current month)
     start_of_month = first_of_current_month
+    # Week to date (since Monday of current week - same as Last Week definition)
+    start_of_wtd = start_of_this_week
     # Start of quarter (1st of current quarter)
     current_quarter = (now.month - 1) // 3 + 1
     start_month_of_quarter = (current_quarter - 1) * 3 + 1
@@ -454,6 +457,8 @@ async def get_realized_pnl(
                 "last_month_profit_usd": 0.0,
                 "last_quarter_profit_btc": 0.0,
                 "last_quarter_profit_usd": 0.0,
+                "wtd_profit_btc": 0.0,
+                "wtd_profit_usd": 0.0,
                 "mtd_profit_btc": 0.0,
                 "mtd_profit_usd": 0.0,
                 "qtd_profit_btc": 0.0,
@@ -480,6 +485,8 @@ async def get_realized_pnl(
     last_month_profit_usd = 0.0
     last_quarter_profit_btc = 0.0
     last_quarter_profit_usd = 0.0
+    wtd_profit_btc = 0.0
+    wtd_profit_usd = 0.0
     mtd_profit_btc = 0.0
     mtd_profit_usd = 0.0
     qtd_profit_btc = 0.0
@@ -529,6 +536,11 @@ async def get_realized_pnl(
             last_quarter_profit_btc += profit_btc
             last_quarter_profit_usd += profit_usd
 
+        # Check if closed this week (week to date)
+        if pos.closed_at >= start_of_wtd:
+            wtd_profit_btc += profit_btc
+            wtd_profit_usd += profit_usd
+
         # Check if closed this month
         if pos.closed_at >= start_of_month:
             mtd_profit_btc += profit_btc
@@ -555,6 +567,8 @@ async def get_realized_pnl(
         "last_month_profit_usd": round(last_month_profit_usd, 2),
         "last_quarter_profit_btc": round(last_quarter_profit_btc, 8),
         "last_quarter_profit_usd": round(last_quarter_profit_usd, 2),
+        "wtd_profit_btc": round(wtd_profit_btc, 8),
+        "wtd_profit_usd": round(wtd_profit_usd, 2),
         "mtd_profit_btc": round(mtd_profit_btc, 8),
         "mtd_profit_usd": round(mtd_profit_usd, 2),
         "qtd_profit_btc": round(qtd_profit_btc, 8),
