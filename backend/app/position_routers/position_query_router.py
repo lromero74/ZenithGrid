@@ -198,7 +198,19 @@ async def get_pnl_timeseries(
 
     for pos in positions:
         profit_usd = pos.profit_usd or 0.0
-        profit_btc = pos.profit_btc or 0.0
+
+        # Calculate profit_btc based on pair type
+        if pos.product_id and "-BTC" in pos.product_id:
+            # BTC pair: profit_quote IS the BTC profit
+            profit_btc = pos.profit_quote or 0.0
+        else:
+            # USD/USDC/USDT pair: convert USD profit to BTC
+            btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+            if btc_price > 0:
+                profit_btc = profit_usd / btc_price
+            else:
+                profit_btc = 0.0
+
         cumulative_pnl_usd += profit_usd
         cumulative_pnl_btc += profit_btc
 
@@ -262,39 +274,37 @@ async def get_pnl_timeseries(
     active_count_result = await db.execute(active_count_query)
     active_trades = active_count_result.scalar() or 0
 
-    # Get bot-level P&L for most profitable bot (filtered by account if specified)
-    bot_pnl_query = (
-        select(
-            Position.bot_id,
-            func.sum(Position.profit_usd).label("total_pnl_usd"),
-            func.sum(Position.profit_btc).label("total_pnl_btc")
-        )
-        .where(Position.status == "closed", Position.profit_usd is not None)
-    )
-    if account_id is not None:
-        bot_pnl_query = bot_pnl_query.where(Position.account_id == account_id)
-    bot_pnl_query = (
-        bot_pnl_query
-        .group_by(Position.bot_id)
-        .order_by(func.sum(Position.profit_usd).desc())
-    )
+    # Calculate bot-level P&L from already-fetched positions
+    bot_pnl_map: Dict[int, dict] = {}
+    for pos in positions:
+        if pos.bot_id:
+            profit_usd = pos.profit_usd or 0.0
 
-    bot_pnl_result = await db.execute(bot_pnl_query)
-    bot_pnls = bot_pnl_result.all()
+            # Calculate profit_btc based on pair type
+            if pos.product_id and "-BTC" in pos.product_id:
+                profit_btc = pos.profit_quote or 0.0
+            else:
+                btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+                profit_btc = profit_usd / btc_price if btc_price > 0 else 0.0
+
+            if pos.bot_id not in bot_pnl_map:
+                bot_pnl_map[pos.bot_id] = {"total_pnl_usd": 0.0, "total_pnl_btc": 0.0}
+            bot_pnl_map[pos.bot_id]["total_pnl_usd"] += profit_usd
+            bot_pnl_map[pos.bot_id]["total_pnl_btc"] += profit_btc
 
     most_profitable_bot = None
-    if bot_pnls:
-        top_bot_id, top_bot_pnl_usd, top_bot_pnl_btc = bot_pnls[0]
+    if bot_pnl_map:
+        # Find bot with highest USD profit
+        top_bot_id = max(bot_pnl_map.keys(), key=lambda k: bot_pnl_map[k]["total_pnl_usd"])
+        top_bot_data = bot_pnl_map[top_bot_id]
+
         # Get bot name
-        bot_query = select(Bot).where(Bot.id == top_bot_id)
-        bot_result = await db.execute(bot_query)
-        bot = bot_result.scalars().first()
-        if bot:
+        if top_bot_id in bot_name_map:
             most_profitable_bot = {
                 "bot_id": top_bot_id,
-                "bot_name": bot.name,
-                "total_pnl_usd": round(top_bot_pnl_usd or 0, 2),
-                "total_pnl_btc": round(top_bot_pnl_btc or 0, 8)
+                "bot_name": bot_name_map[top_bot_id],
+                "total_pnl_usd": round(top_bot_data["total_pnl_usd"], 2),
+                "total_pnl_btc": round(top_bot_data["total_pnl_btc"], 8)
             }
 
     return {
