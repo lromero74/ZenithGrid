@@ -386,6 +386,8 @@ async def get_realized_pnl(
     - Today (since midnight UTC)
     - This week (last 7 days)
     - 4 weeks (last 28 days)
+    - Last month (previous calendar month)
+    - Last quarter (previous calendar quarter)
     - MTD (month to date - since 1st of current month)
     - QTD (quarter to date - since 1st of current quarter)
     - YTD (year to date - since January 1st of current year)
@@ -399,12 +401,24 @@ async def get_realized_pnl(
     start_of_week = now - timedelta(days=7)
     # Start of 4 weeks (28 days ago)
     start_of_4_weeks = now - timedelta(days=28)
+    # Last month (previous month's first and last day)
+    first_of_current_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_day_of_prev_month = first_of_current_month - timedelta(days=1)
+    start_of_last_month = last_day_of_prev_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end_of_last_month = last_day_of_prev_month.replace(hour=23, minute=59, second=59, microsecond=999999)
     # Start of month (1st of current month)
-    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    start_of_month = first_of_current_month
     # Start of quarter (1st of current quarter)
     current_quarter = (now.month - 1) // 3 + 1
     start_month_of_quarter = (current_quarter - 1) * 3 + 1
     start_of_quarter = now.replace(month=start_month_of_quarter, day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Last quarter (previous calendar quarter)
+    previous_quarter = current_quarter - 1 if current_quarter > 1 else 4
+    previous_quarter_year = now.year if current_quarter > 1 else now.year - 1
+    start_month_of_prev_quarter = (previous_quarter - 1) * 3 + 1
+    start_of_last_quarter = datetime(previous_quarter_year, start_month_of_prev_quarter, 1, 0, 0, 0)
+    # Last day of previous quarter is day before current quarter starts
+    end_of_last_quarter = start_of_quarter - timedelta(microseconds=1)
     # Start of year (January 1st of current year)
     start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -429,6 +443,10 @@ async def get_realized_pnl(
                 "weekly_profit_usd": 0.0,
                 "four_weeks_profit_btc": 0.0,
                 "four_weeks_profit_usd": 0.0,
+                "last_month_profit_btc": 0.0,
+                "last_month_profit_usd": 0.0,
+                "last_quarter_profit_btc": 0.0,
+                "last_quarter_profit_usd": 0.0,
                 "mtd_profit_btc": 0.0,
                 "mtd_profit_usd": 0.0,
                 "qtd_profit_btc": 0.0,
@@ -451,6 +469,10 @@ async def get_realized_pnl(
     weekly_profit_usd = 0.0
     four_weeks_profit_btc = 0.0
     four_weeks_profit_usd = 0.0
+    last_month_profit_btc = 0.0
+    last_month_profit_usd = 0.0
+    last_quarter_profit_btc = 0.0
+    last_quarter_profit_usd = 0.0
     mtd_profit_btc = 0.0
     mtd_profit_usd = 0.0
     qtd_profit_btc = 0.0
@@ -490,6 +512,16 @@ async def get_realized_pnl(
             four_weeks_profit_btc += profit_btc
             four_weeks_profit_usd += profit_usd
 
+        # Check if closed last month (previous calendar month)
+        if start_of_last_month <= pos.closed_at <= end_of_last_month:
+            last_month_profit_btc += profit_btc
+            last_month_profit_usd += profit_usd
+
+        # Check if closed last quarter (previous calendar quarter)
+        if start_of_last_quarter <= pos.closed_at <= end_of_last_quarter:
+            last_quarter_profit_btc += profit_btc
+            last_quarter_profit_usd += profit_usd
+
         # Check if closed this month
         if pos.closed_at >= start_of_month:
             mtd_profit_btc += profit_btc
@@ -512,6 +544,10 @@ async def get_realized_pnl(
         "weekly_profit_usd": round(weekly_profit_usd, 2),
         "four_weeks_profit_btc": round(four_weeks_profit_btc, 8),
         "four_weeks_profit_usd": round(four_weeks_profit_usd, 2),
+        "last_month_profit_btc": round(last_month_profit_btc, 8),
+        "last_month_profit_usd": round(last_month_profit_usd, 2),
+        "last_quarter_profit_btc": round(last_quarter_profit_btc, 8),
+        "last_quarter_profit_usd": round(last_quarter_profit_usd, 2),
         "mtd_profit_btc": round(mtd_profit_btc, 8),
         "mtd_profit_usd": round(mtd_profit_usd, 2),
         "qtd_profit_btc": round(qtd_profit_btc, 8),

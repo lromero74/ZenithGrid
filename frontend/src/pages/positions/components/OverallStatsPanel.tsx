@@ -18,6 +18,10 @@ interface RealizedPnL {
   weekly_profit_usd: number
   four_weeks_profit_btc: number
   four_weeks_profit_usd: number
+  last_month_profit_btc: number
+  last_month_profit_usd: number
+  last_quarter_profit_btc: number
+  last_quarter_profit_usd: number
   mtd_profit_btc: number
   mtd_profit_usd: number
   qtd_profit_btc: number
@@ -40,12 +44,28 @@ interface OverallStatsPanelProps {
 }
 
 export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
-  const [selectedPeriod, setSelectedPeriod] = useState<'mtd' | 'qtd' | 'ytd'>('ytd')
+  const [selectedShortPeriod, setSelectedShortPeriod] = useState<'week' | '4weeks' | 'last_month' | 'last_quarter'>('week')
+  const [selectedLongPeriod, setSelectedLongPeriod] = useState<'mtd' | 'qtd' | 'ytd'>('ytd')
 
-  // Get the selected period's data
-  const getPeriodData = () => {
+  // Get the selected short period's data (week/4weeks/last_month/last_quarter)
+  const getShortPeriodData = () => {
     if (!realizedPnL) return { btc: 0, usd: 0 }
-    switch (selectedPeriod) {
+    switch (selectedShortPeriod) {
+      case 'week':
+        return { btc: realizedPnL.weekly_profit_btc, usd: realizedPnL.weekly_profit_usd }
+      case '4weeks':
+        return { btc: realizedPnL.four_weeks_profit_btc, usd: realizedPnL.four_weeks_profit_usd }
+      case 'last_month':
+        return { btc: realizedPnL.last_month_profit_btc, usd: realizedPnL.last_month_profit_usd }
+      case 'last_quarter':
+        return { btc: realizedPnL.last_quarter_profit_btc, usd: realizedPnL.last_quarter_profit_usd }
+    }
+  }
+
+  // Get the selected long period's data (MTD/QTD/YTD)
+  const getLongPeriodData = () => {
+    if (!realizedPnL) return { btc: 0, usd: 0 }
+    switch (selectedLongPeriod) {
       case 'mtd':
         return { btc: realizedPnL.mtd_profit_btc, usd: realizedPnL.mtd_profit_usd }
       case 'qtd':
@@ -55,8 +75,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
     }
   }
 
-  const periodData = getPeriodData()
-  const periodLabel = selectedPeriod === 'mtd' ? 'MTD' : selectedPeriod === 'qtd' ? 'QTD' : 'YTD'
+  const shortPeriodData = getShortPeriodData()
+  const longPeriodData = getLongPeriodData()
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
@@ -84,23 +104,30 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Realized PnL (week):</span>
-                  <span className={`font-medium ${realizedPnL.weekly_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {realizedPnL.weekly_profit_btc >= 0 ? '+' : ''}{realizedPnL.weekly_profit_btc.toFixed(8)} BTC / {realizedPnL.weekly_profit_usd >= 0 ? '+' : ''}${realizedPnL.weekly_profit_usd.toFixed(2)}
+                  <span className="text-slate-400 flex items-center gap-2">
+                    Realized PnL (
+                    <select
+                      value={selectedShortPeriod}
+                      onChange={(e) => setSelectedShortPeriod(e.target.value as 'week' | '4weeks' | 'last_month' | 'last_quarter')}
+                      className="bg-slate-700 text-slate-300 border border-slate-600 rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-slate-600"
+                    >
+                      <option value="week">Week</option>
+                      <option value="4weeks">4 Weeks</option>
+                      <option value="last_month">Last Month</option>
+                      <option value="last_quarter">Last Quarter</option>
+                    </select>
+                    ):
                   </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Realized PnL (4 weeks):</span>
-                  <span className={`font-medium ${realizedPnL.four_weeks_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {realizedPnL.four_weeks_profit_btc >= 0 ? '+' : ''}{realizedPnL.four_weeks_profit_btc.toFixed(8)} BTC / {realizedPnL.four_weeks_profit_usd >= 0 ? '+' : ''}${realizedPnL.four_weeks_profit_usd.toFixed(2)}
+                  <span className={`font-medium ${shortPeriodData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {shortPeriodData.btc >= 0 ? '+' : ''}{shortPeriodData.btc.toFixed(8)} BTC / {shortPeriodData.usd >= 0 ? '+' : ''}${shortPeriodData.usd.toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400 flex items-center gap-2">
                     Realized PnL (
                     <select
-                      value={selectedPeriod}
-                      onChange={(e) => setSelectedPeriod(e.target.value as 'mtd' | 'qtd' | 'ytd')}
+                      value={selectedLongPeriod}
+                      onChange={(e) => setSelectedLongPeriod(e.target.value as 'mtd' | 'qtd' | 'ytd')}
                       className="bg-slate-700 text-slate-300 border border-slate-600 rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-slate-600"
                     >
                       <option value="mtd">MTD</option>
@@ -109,8 +136,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     ):
                   </span>
-                  <span className={`font-medium ${periodData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {periodData.btc >= 0 ? '+' : ''}{periodData.btc.toFixed(8)} BTC / {periodData.usd >= 0 ? '+' : ''}${periodData.usd.toFixed(2)}
+                  <span className={`font-medium ${longPeriodData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {longPeriodData.btc >= 0 ? '+' : ''}{longPeriodData.btc.toFixed(8)} BTC / {longPeriodData.usd >= 0 ? '+' : ''}${longPeriodData.usd.toFixed(2)}
                   </span>
                 </div>
               </>
