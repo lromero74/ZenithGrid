@@ -14,10 +14,10 @@ interface CompletedStats {
 interface RealizedPnL {
   daily_profit_btc: number
   daily_profit_usd: number
-  weekly_profit_btc: number
-  weekly_profit_usd: number
-  four_weeks_profit_btc: number
-  four_weeks_profit_usd: number
+  yesterday_profit_btc: number
+  yesterday_profit_usd: number
+  last_week_profit_btc: number
+  last_week_profit_usd: number
   last_month_profit_btc: number
   last_month_profit_usd: number
   last_quarter_profit_btc: number
@@ -44,17 +44,17 @@ interface OverallStatsPanelProps {
 }
 
 export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
-  const [selectedShortPeriod, setSelectedShortPeriod] = useState<'week' | '4weeks' | 'last_month' | 'last_quarter'>('week')
-  const [selectedLongPeriod, setSelectedLongPeriod] = useState<'mtd' | 'qtd' | 'ytd'>('ytd')
+  const [selectedHistorical, setSelectedHistorical] = useState<'yesterday' | 'last_week' | 'last_month' | 'last_quarter'>('last_week')
+  const [selectedToDate, setSelectedToDate] = useState<'mtd' | 'qtd' | 'ytd'>('ytd')
 
-  // Get the selected short period's data (week/4weeks/last_month/last_quarter)
-  const getShortPeriodData = () => {
+  // Get the selected historical period's data
+  const getHistoricalData = () => {
     if (!realizedPnL) return { btc: 0, usd: 0 }
-    switch (selectedShortPeriod) {
-      case 'week':
-        return { btc: realizedPnL.weekly_profit_btc, usd: realizedPnL.weekly_profit_usd }
-      case '4weeks':
-        return { btc: realizedPnL.four_weeks_profit_btc, usd: realizedPnL.four_weeks_profit_usd }
+    switch (selectedHistorical) {
+      case 'yesterday':
+        return { btc: realizedPnL.yesterday_profit_btc, usd: realizedPnL.yesterday_profit_usd }
+      case 'last_week':
+        return { btc: realizedPnL.last_week_profit_btc, usd: realizedPnL.last_week_profit_usd }
       case 'last_month':
         return { btc: realizedPnL.last_month_profit_btc, usd: realizedPnL.last_month_profit_usd }
       case 'last_quarter':
@@ -62,10 +62,10 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
     }
   }
 
-  // Get the selected long period's data (MTD/QTD/YTD)
-  const getLongPeriodData = () => {
+  // Get the selected to-date period's data
+  const getToDateData = () => {
     if (!realizedPnL) return { btc: 0, usd: 0 }
-    switch (selectedLongPeriod) {
+    switch (selectedToDate) {
       case 'mtd':
         return { btc: realizedPnL.mtd_profit_btc, usd: realizedPnL.mtd_profit_usd }
       case 'qtd':
@@ -75,8 +75,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
     }
   }
 
-  const shortPeriodData = getShortPeriodData()
-  const longPeriodData = getLongPeriodData()
+  const historicalData = getHistoricalData()
+  const toDateData = getToDateData()
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
@@ -107,27 +107,27 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                   <span className="text-slate-400 flex items-center gap-2">
                     Realized PnL (
                     <select
-                      value={selectedShortPeriod}
-                      onChange={(e) => setSelectedShortPeriod(e.target.value as 'week' | '4weeks' | 'last_month' | 'last_quarter')}
+                      value={selectedHistorical}
+                      onChange={(e) => setSelectedHistorical(e.target.value as 'yesterday' | 'last_week' | 'last_month' | 'last_quarter')}
                       className="bg-slate-700 text-slate-300 border border-slate-600 rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-slate-600"
                     >
-                      <option value="week">Week</option>
-                      <option value="4weeks">4 Weeks</option>
+                      <option value="yesterday">Yesterday</option>
+                      <option value="last_week">Last Week</option>
                       <option value="last_month">Last Month</option>
                       <option value="last_quarter">Last Quarter</option>
                     </select>
                     ):
                   </span>
-                  <span className={`font-medium ${shortPeriodData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {shortPeriodData.btc >= 0 ? '+' : ''}{shortPeriodData.btc.toFixed(8)} BTC / {shortPeriodData.usd >= 0 ? '+' : ''}${shortPeriodData.usd.toFixed(2)}
+                  <span className={`font-medium ${historicalData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {historicalData.btc >= 0 ? '+' : ''}{historicalData.btc.toFixed(8)} BTC / {historicalData.usd >= 0 ? '+' : ''}${historicalData.usd.toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400 flex items-center gap-2">
                     Realized PnL (
                     <select
-                      value={selectedLongPeriod}
-                      onChange={(e) => setSelectedLongPeriod(e.target.value as 'mtd' | 'qtd' | 'ytd')}
+                      value={selectedToDate}
+                      onChange={(e) => setSelectedToDate(e.target.value as 'mtd' | 'qtd' | 'ytd')}
                       className="bg-slate-700 text-slate-300 border border-slate-600 rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-slate-600"
                     >
                       <option value="mtd">MTD</option>
@@ -136,8 +136,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     </select>
                     ):
                   </span>
-                  <span className={`font-medium ${longPeriodData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {longPeriodData.btc >= 0 ? '+' : ''}{longPeriodData.btc.toFixed(8)} BTC / {longPeriodData.usd >= 0 ? '+' : ''}${longPeriodData.usd.toFixed(2)}
+                  <span className={`font-medium ${toDateData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {toDateData.btc >= 0 ? '+' : ''}{toDateData.btc.toFixed(8)} BTC / {toDateData.usd >= 0 ? '+' : ''}${toDateData.usd.toFixed(2)}
                   </span>
                 </div>
               </>

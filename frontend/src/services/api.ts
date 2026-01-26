@@ -95,10 +95,10 @@ export const positionsApi = {
     api.get<{
       daily_profit_btc: number;
       daily_profit_usd: number;
-      weekly_profit_btc: number;
-      weekly_profit_usd: number;
-      four_weeks_profit_btc: number;
-      four_weeks_profit_usd: number;
+      yesterday_profit_btc: number;
+      yesterday_profit_usd: number;
+      last_week_profit_btc: number;
+      last_week_profit_usd: number;
       last_month_profit_btc: number;
       last_month_profit_usd: number;
       last_quarter_profit_btc: number;

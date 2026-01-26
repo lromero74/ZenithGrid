@@ -384,8 +384,8 @@ async def get_realized_pnl(
 
     Returns realized profit/loss for positions closed:
     - Today (since midnight UTC)
-    - This week (last 7 days)
-    - 4 weeks (last 28 days)
+    - Yesterday (previous day)
+    - Last week (previous calendar week, Monday to Sunday)
     - Last month (previous calendar month)
     - Last quarter (previous calendar quarter)
     - MTD (month to date - since 1st of current month)
@@ -397,10 +397,17 @@ async def get_realized_pnl(
     now = datetime.utcnow()
     # Start of today (midnight UTC)
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    # Start of week (7 days ago)
-    start_of_week = now - timedelta(days=7)
-    # Start of 4 weeks (28 days ago)
-    start_of_4_weeks = now - timedelta(days=28)
+    # Yesterday (previous day, full 24 hours)
+    start_of_yesterday = start_of_today - timedelta(days=1)
+    end_of_yesterday = start_of_today - timedelta(microseconds=1)
+    # Last week (previous calendar week: Monday to Sunday)
+    # Find start of this week (Monday)
+    days_since_monday = now.weekday()  # Monday=0, Sunday=6
+    start_of_this_week = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Last week starts 7 days before this week starts
+    start_of_last_week = start_of_this_week - timedelta(days=7)
+    # Last week ends just before this week starts
+    end_of_last_week = start_of_this_week - timedelta(microseconds=1)
     # Last month (previous month's first and last day)
     first_of_current_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     last_day_of_prev_month = first_of_current_month - timedelta(days=1)
@@ -439,10 +446,10 @@ async def get_realized_pnl(
             return {
                 "daily_profit_btc": 0.0,
                 "daily_profit_usd": 0.0,
-                "weekly_profit_btc": 0.0,
-                "weekly_profit_usd": 0.0,
-                "four_weeks_profit_btc": 0.0,
-                "four_weeks_profit_usd": 0.0,
+                "yesterday_profit_btc": 0.0,
+                "yesterday_profit_usd": 0.0,
+                "last_week_profit_btc": 0.0,
+                "last_week_profit_usd": 0.0,
                 "last_month_profit_btc": 0.0,
                 "last_month_profit_usd": 0.0,
                 "last_quarter_profit_btc": 0.0,
@@ -465,10 +472,10 @@ async def get_realized_pnl(
     # Calculate PnL for all time periods
     daily_profit_btc = 0.0
     daily_profit_usd = 0.0
-    weekly_profit_btc = 0.0
-    weekly_profit_usd = 0.0
-    four_weeks_profit_btc = 0.0
-    four_weeks_profit_usd = 0.0
+    yesterday_profit_btc = 0.0
+    yesterday_profit_usd = 0.0
+    last_week_profit_btc = 0.0
+    last_week_profit_usd = 0.0
     last_month_profit_btc = 0.0
     last_month_profit_usd = 0.0
     last_quarter_profit_btc = 0.0
@@ -502,15 +509,15 @@ async def get_realized_pnl(
             daily_profit_btc += profit_btc
             daily_profit_usd += profit_usd
 
-        # Check if closed this week
-        if pos.closed_at >= start_of_week:
-            weekly_profit_btc += profit_btc
-            weekly_profit_usd += profit_usd
+        # Check if closed yesterday (previous day)
+        if start_of_yesterday <= pos.closed_at <= end_of_yesterday:
+            yesterday_profit_btc += profit_btc
+            yesterday_profit_usd += profit_usd
 
-        # Check if closed in last 4 weeks
-        if pos.closed_at >= start_of_4_weeks:
-            four_weeks_profit_btc += profit_btc
-            four_weeks_profit_usd += profit_usd
+        # Check if closed last week (previous calendar week)
+        if start_of_last_week <= pos.closed_at <= end_of_last_week:
+            last_week_profit_btc += profit_btc
+            last_week_profit_usd += profit_usd
 
         # Check if closed last month (previous calendar month)
         if start_of_last_month <= pos.closed_at <= end_of_last_month:
@@ -540,10 +547,10 @@ async def get_realized_pnl(
     return {
         "daily_profit_btc": round(daily_profit_btc, 8),
         "daily_profit_usd": round(daily_profit_usd, 2),
-        "weekly_profit_btc": round(weekly_profit_btc, 8),
-        "weekly_profit_usd": round(weekly_profit_usd, 2),
-        "four_weeks_profit_btc": round(four_weeks_profit_btc, 8),
-        "four_weeks_profit_usd": round(four_weeks_profit_usd, 2),
+        "yesterday_profit_btc": round(yesterday_profit_btc, 8),
+        "yesterday_profit_usd": round(yesterday_profit_usd, 2),
+        "last_week_profit_btc": round(last_week_profit_btc, 8),
+        "last_week_profit_usd": round(last_week_profit_usd, 2),
         "last_month_profit_btc": round(last_month_profit_btc, 8),
         "last_month_profit_usd": round(last_month_profit_usd, 2),
         "last_quarter_profit_btc": round(last_quarter_profit_btc, 8),
