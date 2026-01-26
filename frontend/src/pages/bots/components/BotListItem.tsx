@@ -121,7 +121,7 @@ export function BotListItem({
       </td>
 
       {/* Active Trades */}
-      <td className="px-1 sm:px-2 py-2">
+      <td className="px-0.5 sm:px-1 py-2">
         {(bot.strategy_config?.max_concurrent_deals || bot.strategy_config?.max_concurrent_positions) ? (
           <div className="text-sm">
             <span className="text-blue-400 font-medium">

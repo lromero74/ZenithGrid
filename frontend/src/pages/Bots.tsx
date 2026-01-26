@@ -271,7 +271,7 @@ function Bots() {
                   <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Name</th>
                   <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Strategy</th>
                   <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Pair</th>
-                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
+                  <th className="text-left px-0.5 sm:px-1 py-2 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
                   <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Trade Stats</th>
                   <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Win Rate</th>
                   <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">PnL</th>
