@@ -20,6 +20,7 @@ from app.trading_engine.order_logger import save_ai_log
 from app.trading_engine.buy_executor import execute_buy
 from app.trading_engine.sell_executor import execute_sell
 from app.indicator_calculator import IndicatorCalculator
+from app.services.indicator_log_service import log_indicator_evaluation
 
 logger = logging.getLogger(__name__)
 
@@ -407,9 +408,51 @@ async def process_signal(
                     print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}, aggregate={agg_str}")
                     should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
                     print(f"🔍 Should buy result: {should_buy}, amount: {(quote_amount if quote_amount else 0):.8f}, reason: {buy_reason}")
+
+                    # Log budget blockers to indicator_logs so they show in GUI
+                    if not should_buy and ("insufficient" in buy_reason.lower() or "budget" in buy_reason.lower()):
+                        await log_indicator_evaluation(
+                            db=db,
+                            bot_id=bot.id,
+                            product_id=product_id,
+                            phase="budget_check",
+                            conditions_met=False,
+                            conditions_detail=[{
+                                "type": "budget",
+                                "indicator": "Available Balance",
+                                "operator": "sufficient_for",
+                                "threshold": quote_amount if quote_amount else 0,
+                                "actual_value": quote_balance,
+                                "result": False,
+                                "reason": buy_reason
+                            }],
+                            indicators_snapshot=signal_data.get("indicators", {}),
+                            current_price=current_price
+                        )
         else:
             # Position already exists for this pair - check for DCA
             should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
+
+            # Log budget blockers to indicator_logs so they show in GUI
+            if not should_buy and ("insufficient" in buy_reason.lower() or "budget" in buy_reason.lower()):
+                await log_indicator_evaluation(
+                    db=db,
+                    bot_id=bot.id,
+                    product_id=product_id,
+                    phase="budget_check_dca",
+                    conditions_met=False,
+                    conditions_detail=[{
+                        "type": "budget",
+                        "indicator": "Available Balance",
+                        "operator": "sufficient_for",
+                        "threshold": quote_amount if quote_amount else 0,
+                        "actual_value": quote_balance,
+                        "result": False,
+                        "reason": buy_reason
+                    }],
+                    indicators_snapshot=signal_data.get("indicators", {}),
+                    current_price=current_price
+                )
     else:
         # Bot is stopped - don't open new positions, but still check DCA for existing positions
         if position is None:
@@ -419,6 +462,27 @@ async def process_signal(
             should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
             if not should_buy:
                 buy_reason = f"Bot stopped, DCA check: {buy_reason}"
+
+                # Log budget blockers to indicator_logs so they show in GUI (even when bot stopped)
+                if "insufficient" in buy_reason.lower() or "budget" in buy_reason.lower():
+                    await log_indicator_evaluation(
+                        db=db,
+                        bot_id=bot.id,
+                        product_id=product_id,
+                        phase="budget_check_dca",
+                        conditions_met=False,
+                        conditions_detail=[{
+                            "type": "budget",
+                            "indicator": "Available Balance",
+                            "operator": "sufficient_for",
+                            "threshold": quote_amount if quote_amount else 0,
+                            "actual_value": quote_balance,
+                            "result": False,
+                            "reason": buy_reason
+                        }],
+                        indicators_snapshot=signal_data.get("indicators", {}),
+                        current_price=current_price
+                    )
 
     if should_buy:
         # Get BTC/USD price for logging

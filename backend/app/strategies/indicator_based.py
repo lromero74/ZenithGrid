@@ -1067,8 +1067,18 @@ class IndicatorBasedStrategy(TradingStrategy):
                     # Fallback to balance-based calculation
                     amount = self.calculate_base_order_size(balance)
 
-                if amount <= 0 or amount > balance:
-                    return False, 0.0, f"Insufficient balance for {direction} entry"
+                if amount <= 0:
+                    logger.warning(f"💰 BUDGET BLOCKER: Calculated amount is zero or negative")
+                    logger.warning(f"   Per-position budget: {per_position_budget if 'per_position_budget' in locals() else balance:.8f} BTC")
+                    logger.warning(f"   Calculated amount: {amount:.8f} BTC")
+                    return False, 0.0, f"Calculated {direction} entry amount is invalid ({amount:.8f} BTC)"
+
+                if amount > balance:
+                    logger.warning(f"💰 BUDGET BLOCKER: Insufficient balance for {direction} entry")
+                    logger.warning(f"   Available balance: {balance:.8f} BTC")
+                    logger.warning(f"   Required amount: {amount:.8f} BTC")
+                    logger.warning(f"   Shortfall: {(amount - balance):.8f} BTC ({((amount - balance) / amount * 100):.1f}%)")
+                    return False, 0.0, f"Insufficient balance for {direction} entry (need {amount:.8f} BTC, have {balance:.8f} BTC)"
 
                 # Store direction in signal data for position creation
                 # This will be picked up by the signal processor
@@ -1082,8 +1092,19 @@ class IndicatorBasedStrategy(TradingStrategy):
                     return False, 0.0, "Base order conditions not met"
 
                 amount = self.calculate_base_order_size(balance)
-                if amount <= 0 or amount > balance:
-                    return False, 0.0, "Insufficient balance"
+
+                if amount <= 0:
+                    logger.warning(f"💰 BUDGET BLOCKER: Calculated base order amount is zero or negative")
+                    logger.warning(f"   Available balance: {balance:.8f} BTC")
+                    logger.warning(f"   Calculated amount: {amount:.8f} BTC")
+                    return False, 0.0, f"Calculated base order amount is invalid ({amount:.8f} BTC)"
+
+                if amount > balance:
+                    logger.warning(f"💰 BUDGET BLOCKER: Insufficient balance for base order")
+                    logger.warning(f"   Available balance: {balance:.8f} BTC")
+                    logger.warning(f"   Required amount: {amount:.8f} BTC")
+                    logger.warning(f"   Shortfall: {(amount - balance):.8f} BTC ({((amount - balance) / amount * 100):.1f}%)")
+                    return False, 0.0, f"Insufficient balance for base order (need {amount:.8f} BTC, have {balance:.8f} BTC)"
 
                 return True, amount, f"Base order (conditions met): {amount:.8f}"
         else:
@@ -1158,7 +1179,14 @@ class IndicatorBasedStrategy(TradingStrategy):
             safety_size = self.calculate_safety_order_size(base_order_size, next_order_number)
 
             if safety_size > balance:
-                return False, 0.0, "Insufficient balance for safety order"
+                logger.warning(f"💰 BUDGET BLOCKER: Insufficient balance for safety order #{next_order_number}")
+                logger.warning(f"   Available balance: {balance:.8f} BTC")
+                logger.warning(f"   Required for SO #{next_order_number}: {safety_size:.8f} BTC")
+                logger.warning(f"   Base order size: {base_order_size:.8f} BTC")
+                logger.warning(f"   Position allocated budget: {position.max_quote_allowed:.8f} BTC")
+                logger.warning(f"   Position spent so far: {position.total_quote_spent:.8f} BTC")
+                logger.warning(f"   Shortfall: {(safety_size - balance):.8f} BTC ({((safety_size - balance) / safety_size * 100):.1f}%)")
+                return False, 0.0, f"Insufficient balance for safety order #{next_order_number} (need {safety_size:.8f} BTC, have {balance:.8f} BTC)"
 
             return True, safety_size, f"Safety order #{next_order_number}"
 
