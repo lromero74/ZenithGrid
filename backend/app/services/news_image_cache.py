@@ -8,17 +8,23 @@ SSH tunneling and simplifies serving images from any environment.
 
 import asyncio
 import base64
+import io
 import logging
 from typing import Optional
 from urllib.parse import urlparse
 
 import aiohttp
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
 # Image download settings
 IMAGE_DOWNLOAD_TIMEOUT = 10  # seconds
 MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2MB max (smaller for base64 storage)
+
+# Image compression settings
+THUMBNAIL_MAX_WIDTH = 400  # Resize thumbnails to max 400px width
+WEBP_QUALITY = 85  # 85% quality - visually identical but much smaller
 
 
 def get_mime_type_from_url(url: str) -> str:
@@ -97,12 +103,63 @@ async def download_image(session: aiohttp.ClientSession, url: str) -> Optional[t
         return None
 
 
-async def download_image_as_base64(session: aiohttp.ClientSession, url: str) -> Optional[str]:
+def compress_image(image_bytes: bytes) -> tuple[bytes, str]:
     """
-    Download an image and return it as a base64 data URI.
+    Compress and optimize an image for thumbnail storage.
+
+    - Resizes to max 400px width while maintaining aspect ratio
+    - Converts to WebP format for better compression
+    - Applies 85% quality (visually identical but much smaller)
 
     Returns:
-        Base64 data URI (e.g., "data:image/jpeg;base64,/9j/4AAQ...")
+        Tuple of (compressed_bytes, 'image/webp')
+    """
+    try:
+        # Open image from bytes
+        img = Image.open(io.BytesIO(image_bytes))
+
+        # Convert RGBA/LA to RGB (WebP doesn't handle transparency well in all cases)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            # Create white background
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # Resize if image is wider than max width
+        if img.width > THUMBNAIL_MAX_WIDTH:
+            # Calculate new height to maintain aspect ratio
+            ratio = THUMBNAIL_MAX_WIDTH / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((THUMBNAIL_MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
+            logger.debug(f"Resized image to {THUMBNAIL_MAX_WIDTH}x{new_height}")
+
+        # Save as WebP with optimization
+        output = io.BytesIO()
+        img.save(output, format='WEBP', quality=WEBP_QUALITY, method=6)  # method=6 = best compression
+        compressed_bytes = output.getvalue()
+
+        original_size = len(image_bytes)
+        compressed_size = len(compressed_bytes)
+        savings = (1 - compressed_size / original_size) * 100
+        logger.debug(f"Compressed image: {original_size:,} → {compressed_size:,} bytes ({savings:.1f}% savings)")
+
+        return (compressed_bytes, 'image/webp')
+    except Exception as e:
+        logger.warning(f"Failed to compress image: {e}, returning original")
+        # If compression fails, return original
+        return (image_bytes, 'image/jpeg')
+
+
+async def download_image_as_base64(session: aiohttp.ClientSession, url: str) -> Optional[str]:
+    """
+    Download an image, compress it, and return it as a base64 data URI.
+
+    Returns:
+        Base64 data URI (e.g., "data:image/webp;base64,/9j/4AAQ...")
         or None if download failed.
     """
     if not url:
@@ -114,9 +171,12 @@ async def download_image_as_base64(session: aiohttp.ClientSession, url: str) -> 
 
     image_data, mime_type = result
 
+    # Compress the image (resize + convert to WebP)
+    compressed_data, compressed_mime = compress_image(image_data)
+
     # Convert to base64 data URI
-    b64_data = base64.b64encode(image_data).decode('ascii')
-    data_uri = f"data:{mime_type};base64,{b64_data}"
+    b64_data = base64.b64encode(compressed_data).decode('ascii')
+    data_uri = f"data:{compressed_mime};base64,{b64_data}"
 
     logger.debug(f"Converted image to base64 ({len(b64_data)} chars): {url[:50]}...")
     return data_uri
