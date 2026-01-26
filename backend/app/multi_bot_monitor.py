@@ -27,6 +27,7 @@ from app.utils.candle_utils import (
     aggregate_candles,
     calculate_bot_check_interval,
     fill_candle_gaps,
+    get_timeframes_for_phases,
     next_check_time_aligned,
     prepare_market_context,
     timeframe_to_seconds,
@@ -1079,21 +1080,26 @@ class MultiBotMonitor:
                     current_price = await self.exchange.get_current_price(product_id)
                     logger.info(f"    Current {product_id} price (from ticker): {current_price:.8f}")
 
-            # For conditional_dca strategy, extract all timeframes from conditions
-            if bot.strategy_type == "conditional_dca":
-                # Extract unique timeframes from all conditions
-                timeframes_needed = set()
-                for phase_key in ["base_order_conditions", "safety_order_conditions", "take_profit_conditions"]:
-                    conditions = bot.strategy_config.get(phase_key, [])
-                    for condition in conditions:
-                        tf = condition.get("timeframe", "FIVE_MINUTE")
-                        timeframes_needed.add(tf)
+            # For indicator-based strategies, extract timeframes from conditions
+            if bot.strategy_type in ("conditional_dca", "indicator_based"):
+                # Phase 3 Optimization: Lazy fetching - only fetch timeframes for current phase
+                # Determine which phases we need to check based on position status
+                if existing_position:
+                    # Open position: check safety orders (DCA) + take profit (exit)
+                    phases_to_check = ["safety_order_conditions", "take_profit_conditions"]
+                    print("  📊 Open position detected - checking DCA + exit phases only")
+                else:
+                    # No position: check base order (entry) conditions only
+                    phases_to_check = ["base_order_conditions"]
+                    print("  📊 No position - checking entry phase only")
 
-                # If no conditions, use default
-                if not timeframes_needed:
-                    timeframes_needed.add("FIVE_MINUTE")
+                # Extract unique timeframes for the phases we actually need
+                timeframes_needed = get_timeframes_for_phases(bot.strategy_config, phases_to_check)
 
-                logger.info(f"  Fetching candles for timeframes: {timeframes_needed}")
+                print(
+                    f"  📊 Fetching candles for timeframes: {timeframes_needed} "
+                    f"(phases: {phases_to_check})"
+                )
 
                 # Fetch candles for each unique timeframe
                 # Use more lookback for longer timeframes to ensure we get enough data
@@ -1156,10 +1162,10 @@ class MultiBotMonitor:
                 signal_data = pre_analyzed_signal
             elif skip_ai_analysis:
                 # Skip AI analysis for technical-only check
-                # For conditional_dca: Still evaluate conditions (it doesn't use AI)
-                # For indicator_based: Still evaluate conditions, AI indicators will use cached values
-                if bot.strategy_type == "conditional_dca":
-                    logger.info("  ⏭️  Technical check: Analyzing conditional_dca signals without AI")
+                # For indicator-based strategies: Still evaluate conditions
+                # conditional_dca doesn't use AI, indicator_based uses cached AI values
+                if bot.strategy_type in ("conditional_dca", "indicator_based"):
+                    print("  ⏭️  Technical check: Analyzing indicator-based signals")
                     signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id, product_id=product_id)
                 else:
                     logger.info("  ⏭️  Technical check: Evaluating conditions with cached AI values")
@@ -1177,9 +1183,9 @@ class MultiBotMonitor:
                     )
             else:
                 # Analyze signal using strategy
-                # For conditional_dca, pass the candles_by_timeframe dict
-                if bot.strategy_type == "conditional_dca":
-                    logger.info("  Analyzing conditional_dca signals...")
+                # For indicator-based strategies, pass the candles_by_timeframe dict
+                if bot.strategy_type in ("conditional_dca", "indicator_based"):
+                    print("  📊 Analyzing indicator-based signals...")
                     signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id, product_id=product_id)
                 else:
                     # For indicator_based strategy, pass the previous_indicators_cache for crossing detection

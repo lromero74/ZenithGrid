@@ -338,3 +338,57 @@ def next_check_time_aligned(interval_seconds: int, current_time: int) -> int:
         next_check = hour_boundary + next_offset
 
     return next_check
+
+
+def get_timeframes_for_phases(
+    bot_config: Dict[str, Any], phases: List[str]
+) -> set:
+    """
+    Extract unique timeframes needed for specific trading phases.
+
+    Phase 3 optimization: Only fetch candles for timeframes actually needed
+    in the current phase (e.g., only take_profit timeframes for open positions).
+
+    Args:
+        bot_config: Bot's strategy_config dict
+        phases: List of phase names to extract timeframes from
+                (e.g., ["base_order_conditions"], ["safety_order_conditions", "take_profit_conditions"])
+
+    Returns:
+        Set of unique timeframe strings needed for the specified phases
+
+    Example:
+        # For open position (checking DCA + exit):
+        get_timeframes_for_phases(config, ["safety_order_conditions", "take_profit_conditions"])
+        -> {"THREE_MINUTE", "FIFTEEN_MINUTE"}
+
+        # For new position (checking entry):
+        get_timeframes_for_phases(config, ["base_order_conditions"])
+        -> {"FIVE_MINUTE"}
+    """
+    timeframes = set()
+
+    for phase in phases:
+        conditions = bot_config.get(phase, [])
+        if not isinstance(conditions, list):
+            continue
+
+        for condition in conditions:
+            if isinstance(condition, dict) and 'timeframe' in condition:
+                tf = condition['timeframe']
+                if tf and tf != 'required':  # Skip special "required" markers
+                    timeframes.add(tf)
+
+    # Also check standalone indicator config if provided (for different bot formats)
+    if 'indicators' in bot_config and isinstance(bot_config['indicators'], dict):
+        for indicator_config in bot_config['indicators'].values():
+            if isinstance(indicator_config, dict) and 'timeframe' in indicator_config:
+                tf = indicator_config['timeframe']
+                if tf and tf != 'required':
+                    timeframes.add(tf)
+
+    # Default to FIVE_MINUTE if no timeframes found
+    if not timeframes:
+        timeframes.add("FIVE_MINUTE")
+
+    return timeframes
