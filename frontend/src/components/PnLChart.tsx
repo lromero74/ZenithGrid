@@ -410,7 +410,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
     if (chartRef.current) {
       try {
         chartRef.current.remove()
-      } catch (e) {
+      } catch {
         // Chart already disposed, ignore
       }
       chartRef.current = null
@@ -504,7 +504,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
         if (chart) {
           chart.remove()
         }
-      } catch (e) {
+      } catch {
         // Chart already disposed, ignore
       }
     }
