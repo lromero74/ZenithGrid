@@ -30,7 +30,7 @@ from app.utils.candle_utils import (
     timeframe_to_seconds,
     SYNTHETIC_TIMEFRAMES,
 )
-from app.constants import CANDLE_CACHE_TTL, PAIR_PROCESSING_DELAY_SECONDS, BOT_PROCESSING_DELAY_SECONDS
+from app.constants import CANDLE_CACHE_TTL, CANDLE_CACHE_DEFAULT_TTL, PAIR_PROCESSING_DELAY_SECONDS, BOT_PROCESSING_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +144,8 @@ class MultiBotMonitor:
 
         # Cache for candle data (to avoid fetching same data multiple times)
         # Shared across all bots monitoring the same product_id:granularity
+        # TTL is per-timeframe (e.g., 15-min candles cached for 15 minutes)
         self._candle_cache: Dict[str, tuple] = {}  # product_id:granularity -> (timestamp, candles)
-        self._cache_ttl = CANDLE_CACHE_TTL  # Configurable via constants.py (60s default)
 
         # Cache for exchange clients per account
         self._exchange_cache: Dict[int, ExchangeClient] = {}
@@ -243,16 +243,27 @@ class MultiBotMonitor:
 
         Note: THREE_MINUTE is not natively supported by Coinbase, so it's synthesized
         by aggregating ONE_MINUTE candles.
+
+        Caching: Uses per-timeframe TTL (e.g., 15-min candles cached for 15 minutes).
+        This dramatically reduces API calls since candles don't change until the next
+        candle closes.
         """
         # Use product_id + granularity as cache key
         cache_key = f"{product_id}:{granularity}"
 
-        # Check cache
+        # Check cache with per-timeframe TTL
         now = datetime.utcnow().timestamp()
         if cache_key in self._candle_cache:
             cached_time, cached_candles = self._candle_cache[cache_key]
-            if now - cached_time < self._cache_ttl:
-                # Cache hit - silent to reduce log noise
+            # Get TTL for this specific timeframe (falls back to default for unknown timeframes)
+            cache_ttl = CANDLE_CACHE_TTL.get(granularity, CANDLE_CACHE_DEFAULT_TTL)
+            age_seconds = now - cached_time
+            if age_seconds < cache_ttl:
+                # Cache hit - log occasionally for monitoring (every ~5 minutes)
+                if int(now) % 300 < 10:  # Log for 10 seconds every 5 minutes
+                    logger.debug(
+                        f"📦 Cache hit: {product_id} {granularity} (age: {int(age_seconds)}s, TTL: {cache_ttl}s)"
+                    )
                 return cached_candles
 
         # Fetch new candles

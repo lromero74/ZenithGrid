@@ -78,8 +78,29 @@ BALANCE_CACHE_TTL = 60  # Cache balances for 60 seconds
 PRICE_CACHE_TTL = 60  # Cache prices for 60 seconds (budget calc doesn't need real-time prices)
 AGGREGATE_VALUE_CACHE_TTL = 300  # Cache aggregate portfolio values for 5 minutes (was 2 min)
 PRODUCT_STATS_CACHE_TTL = 600  # Cache product stats (24h volume, etc.) for 10 minutes
-CANDLE_CACHE_TTL = 60  # Cache candle data for 60 seconds (shared across bots, was 30s)
 MIN_USD_BALANCE_FOR_AGGREGATE = 1.0  # Skip dust balances below $1 in aggregate calculations
+
+# Candle Cache TTL (seconds) - Per-timeframe optimization
+# Cache TTL = candle interval duration (candles don't change until next candle closes)
+# This dramatically reduces API calls: 15-min candles only re-fetched every 15 minutes
+CANDLE_CACHE_TTL = {
+    "ONE_MINUTE": 60,        # 1 minute
+    "THREE_MINUTE": 180,     # 3 minutes
+    "FIVE_MINUTE": 300,      # 5 minutes
+    "FIFTEEN_MINUTE": 900,   # 15 minutes
+    "THIRTY_MINUTE": 1800,   # 30 minutes
+    "ONE_HOUR": 3600,        # 1 hour
+    "TWO_HOUR": 7200,        # 2 hours
+    "FOUR_HOUR": 14400,      # 4 hours
+    "SIX_HOUR": 21600,       # 6 hours
+    "ONE_DAY": 86400,        # 24 hours
+    "TWO_DAY": 172800,       # 2 days
+    "THREE_DAY": 259200,     # 3 days
+    "ONE_WEEK": 604800,      # 7 days
+    "TWO_WEEK": 1209600,     # 14 days
+    "ONE_MONTH": 2592000,    # 30 days
+}
+CANDLE_CACHE_DEFAULT_TTL = 300  # 5 minutes default for unknown timeframes
 
 # Throttling for low-resource environments (t2.micro)
 # These delays are critical for allowing HTTP API requests to be processed
