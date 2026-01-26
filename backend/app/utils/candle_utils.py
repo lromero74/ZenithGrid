@@ -252,3 +252,89 @@ def fill_candle_gaps(
         )
 
     return filled[-max_candles:] if len(filled) > max_candles else filled
+
+
+def calculate_bot_check_interval(bot_config: Dict[str, Any]) -> int:
+    """
+    Calculate the minimum check interval for a bot based on its indicator timeframes.
+
+    The bot should check as frequently as its shortest timeframe indicator,
+    since that's the fastest-moving signal that could trigger a trade.
+
+    Args:
+        bot_config: Bot's strategy_config dict containing conditions for each phase
+
+    Returns:
+        Minimum check interval in seconds (defaults to 300 if no timeframes found)
+
+    Example:
+        Bot with 15-min SMA + 3-min RSI -> returns 180 (check every 3 minutes)
+        Bot with only 1-hour indicators -> returns 3600 (check every hour)
+    """
+    timeframes = []
+
+    # Extract timeframes from all phases
+    for phase in ['base_order_conditions', 'safety_order_conditions', 'take_profit_conditions']:
+        conditions = bot_config.get(phase, [])
+        if not isinstance(conditions, list):
+            continue
+
+        for condition in conditions:
+            if isinstance(condition, dict) and 'timeframe' in condition:
+                tf = condition['timeframe']
+                if tf and tf != 'required':  # Skip special "required" markers
+                    timeframes.append(tf)
+
+    # Also check standalone indicator config (for bots that use different format)
+    if 'indicators' in bot_config and isinstance(bot_config['indicators'], dict):
+        for indicator_config in bot_config['indicators'].values():
+            if isinstance(indicator_config, dict) and 'timeframe' in indicator_config:
+                tf = indicator_config['timeframe']
+                if tf and tf != 'required':
+                    timeframes.append(tf)
+
+    # Convert to seconds and find minimum
+    if not timeframes:
+        return 300  # Default to 5 minutes if no timeframes found
+
+    intervals_seconds = [timeframe_to_seconds(tf) for tf in timeframes]
+    return min(intervals_seconds)
+
+
+def next_check_time_aligned(interval_seconds: int, current_time: int) -> int:
+    """
+    Calculate the next check time aligned to candle close boundaries.
+
+    This ensures we check RIGHT when candles close, not mid-candle.
+
+    Args:
+        interval_seconds: Check interval in seconds (e.g., 180 for 3-minute)
+        current_time: Current Unix timestamp
+
+    Returns:
+        Next check time as Unix timestamp
+
+    Example:
+        Current time: 12:04:30, interval: 180 (3-min)
+        Next boundary: 12:06:00 (next 3-min candle close at :00, :03, :06, :09...)
+    """
+    # Calculate seconds since Unix epoch start
+    # For proper alignment, we need to align to hour boundaries
+    # Example: 3-min candles close at :00, :03, :06, :09, :12, :15, etc.
+
+    # Get current hour boundary
+    hour_boundary = (current_time // 3600) * 3600
+
+    # Calculate seconds since hour start
+    seconds_since_hour = current_time - hour_boundary
+
+    # Find next boundary within the hour
+    next_offset = ((seconds_since_hour // interval_seconds) + 1) * interval_seconds
+
+    # If next boundary is beyond the hour, wrap to next hour
+    if next_offset >= 3600:
+        next_check = hour_boundary + 3600  # Start of next hour
+    else:
+        next_check = hour_boundary + next_offset
+
+    return next_check

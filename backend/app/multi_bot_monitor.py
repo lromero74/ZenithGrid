@@ -25,7 +25,9 @@ from app.trading_engine.trailing_stops import (
 from app.trading_engine_v2 import StrategyTradingEngine
 from app.utils.candle_utils import (
     aggregate_candles,
+    calculate_bot_check_interval,
     fill_candle_gaps,
+    next_check_time_aligned,
     prepare_market_context,
     timeframe_to_seconds,
     SYNTHETIC_TIMEFRAMES,
@@ -155,6 +157,11 @@ class MultiBotMonitor:
         # This enables crossing_above/crossing_below operators for ENTRY conditions
         # (Position-based storage only works for open positions)
         self._previous_indicators_cache: Dict[tuple, Dict] = {}
+
+        # Per-bot next check time tracking (Phase 2 optimization)
+        # Key: bot_id -> next_check_timestamp
+        # Bots check only when their fastest indicator timeframe closes
+        self._bot_next_check: Dict[int, int] = {}
 
     async def get_exchange_for_bot(self, db: AsyncSession, bot: Bot) -> Optional[ExchangeClient]:
         """
@@ -1613,40 +1620,50 @@ class MultiBotMonitor:
                                     logger.warning(f"No exchange client for bot {bot.name} (account_id={bot.account_id})")
                                     continue
 
-                                # Two-tier checking strategy:
-                                # 1. Technical conditions checked every 45s (fast, cheap) - faster to catch BB% crossings
-                                # 2. AI analysis only at longer intervals (expensive)
-                                technical_check_interval = 45  # Always check technical conditions every 45s
-                                ai_check_interval = bot.check_interval_seconds or self.interval_seconds
-                                now = datetime.utcnow()
+                                # Phase 2 Optimization: Smart check scheduling
+                                # Calculate bot-specific check interval based on its shortest indicator timeframe
+                                bot_check_interval = calculate_bot_check_interval(bot.strategy_config or {})
+                                current_timestamp = int(datetime.utcnow().timestamp())
 
-                                # Determine if we need ANY check at all (technical + AI or just technical)
-                                time_since_last_signal_check = 0
-                                if bot.last_signal_check:
-                                    time_since_last_signal_check = (now - bot.last_signal_check).total_seconds()
-                                    if time_since_last_signal_check < technical_check_interval:
+                                # Check if this bot is due for a check
+                                if bot.id in self._bot_next_check:
+                                    next_check = self._bot_next_check[bot.id]
+                                    if current_timestamp < next_check:
+                                        seconds_until = next_check - current_timestamp
                                         print(
-                                            f"⏭️  Skipping {bot.name} - last checked {time_since_last_signal_check:.0f}s ago (technical interval: {technical_check_interval}s)"
+                                            f"⏭️  Skipping {bot.name} - not due yet "
+                                            f"(next check in {seconds_until}s, interval: {bot_check_interval}s)"
                                         )
                                         continue
 
-                                # Determine if we need AI analysis
+                                # Bot is due for a check
+                                # Determine if we need AI analysis (separate from candle-based scheduling)
+                                ai_check_interval = bot.check_interval_seconds or self.interval_seconds
                                 needs_ai_analysis = True
-                                time_since_last_ai_check = None
+                                now = datetime.utcnow()
+
                                 if bot.last_ai_check:
                                     time_since_last_ai_check = (now - bot.last_ai_check).total_seconds()
                                     if time_since_last_ai_check < ai_check_interval:
                                         needs_ai_analysis = False
                                         print(
-                                            f"🔧 {bot.name}: Technical-only check (last AI: {time_since_last_ai_check:.0f}s ago, AI interval: {ai_check_interval}s)"
+                                            f"🔧 {bot.name}: Technical-only check "
+                                            f"(last AI: {time_since_last_ai_check:.0f}s ago, "
+                                            f"AI interval: {ai_check_interval}s, "
+                                            f"candle interval: {bot_check_interval}s)"
                                         )
                                     else:
-                                        print(f"🤖 {bot.name}: Full check with AI analysis (interval: {ai_check_interval}s)")
+                                        print(
+                                            f"🤖 {bot.name}: Full check with AI analysis "
+                                            f"(AI: {ai_check_interval}s, candle: {bot_check_interval}s)"
+                                        )
                                 else:
-                                    print(f"🤖 {bot.name}: First-time AI analysis")
+                                    print(
+                                        f"🤖 {bot.name}: First-time AI analysis "
+                                        f"(candle interval: {bot_check_interval}s)"
+                                    )
 
                                 # Update timestamp BEFORE processing to prevent race condition
-                                # (if processing takes >10s, next loop iteration would start processing again!)
                                 bot.last_signal_check = datetime.utcnow()
                                 if needs_ai_analysis:
                                     bot.last_ai_check = datetime.utcnow()
@@ -1655,6 +1672,15 @@ class MultiBotMonitor:
                                 print(f"🔍 Calling process_bot for {bot.name} (AI: {needs_ai_analysis})...")
                                 await self.process_bot(db, bot, skip_ai_analysis=not needs_ai_analysis)
                                 print(f"✅ Finished processing {bot.name}")
+
+                                # Calculate and store next check time (aligned to candle boundaries)
+                                next_check_timestamp = next_check_time_aligned(bot_check_interval, current_timestamp)
+                                self._bot_next_check[bot.id] = next_check_timestamp
+                                next_check_in = next_check_timestamp - current_timestamp
+                                logger.debug(
+                                    f"📅 {bot.name}: Next check in {next_check_in}s "
+                                    f"(interval: {bot_check_interval}s, aligned to candle close)"
+                                )
 
                                 # Throttle between bots to reduce CPU burst (t2.micro friendly)
                                 await asyncio.sleep(BOT_PROCESSING_DELAY_SECONDS)
