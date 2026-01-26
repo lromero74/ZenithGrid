@@ -671,7 +671,7 @@ function Portfolio() {
               <thead className="bg-slate-900">
                 <tr>
                   <th
-                    className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="px-3 py-3 text-left text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('asset')}
                   >
                     <div className="flex items-center gap-2">
@@ -680,25 +680,25 @@ function Portfolio() {
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('total_balance')}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      <span>Total Balance</span>
+                      <span>Balance</span>
                       {getSortIcon('total_balance')}
                     </div>
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                    Available
+                  <th className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
+                    Avail
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
                     Hold
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                    Price (USD)
+                  <th className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
+                    Price
                   </th>
                   <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('usd_value')}
                   >
                     <div className="flex items-center justify-end gap-2">
@@ -707,7 +707,7 @@ function Portfolio() {
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('btc_value')}
                   >
                     <div className="flex items-center justify-end gap-2">
@@ -716,25 +716,25 @@ function Portfolio() {
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('percentage')}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      <span>% of Portfolio</span>
+                      <span>% Port</span>
                       {getSortIcon('percentage')}
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('unrealized_pnl_usd')}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      <span>Unrealized PnL</span>
+                      <span>uPnL</span>
                       {getSortIcon('unrealized_pnl_usd')}
                     </div>
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">
-                    Actions
+                  <th className="px-2 py-3 text-center text-sm font-medium text-slate-400 uppercase tracking-wider">
+                    Sell
                   </th>
                 </tr>
               </thead>
@@ -744,52 +744,52 @@ function Portfolio() {
                     key={holding.asset}
                     className="hover:bg-slate-750 transition-colors"
                   >
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold text-white">{holding.asset}</span>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-white text-sm">{holding.asset}</span>
                         <button
                           onClick={() => openChartModal(holding.asset)}
                           className="text-slate-400 hover:text-blue-400 transition-colors"
                           title="View Chart"
                         >
-                          <BarChart3 size={16} />
+                          <BarChart3 size={14} />
                         </button>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-right text-white font-mono">
+                    <td className="px-3 py-3 text-right text-white font-mono text-sm">
                       {formatCrypto(holding.total_balance)}
                     </td>
-                    <td className="px-4 py-4 text-right text-green-400 font-mono">
+                    <td className="px-3 py-3 text-right text-green-400 font-mono text-sm">
                       {formatCrypto(holding.available)}
                     </td>
-                    <td className="px-4 py-4 text-right text-orange-400 font-mono">
+                    <td className="px-3 py-3 text-right text-orange-400 font-mono text-sm">
                       {holding.hold > 0 ? formatCrypto(holding.hold) : '-'}
                     </td>
-                    <td className="px-4 py-4 text-right text-slate-300 font-mono">
+                    <td className="px-3 py-3 text-right text-slate-300 font-mono text-sm">
                       {holding.current_price_usd > 0
                         ? formatCurrency(holding.current_price_usd)
                         : '-'}
                     </td>
-                    <td className="px-4 py-4 text-right text-white font-semibold">
+                    <td className="px-3 py-3 text-right text-white font-semibold text-sm">
                       {formatCurrency(holding.usd_value)}
                     </td>
-                    <td className="px-4 py-4 text-right text-orange-400 font-mono">
+                    <td className="px-3 py-3 text-right text-orange-400 font-mono text-sm">
                       {formatCrypto(holding.btc_value, 6)}
                     </td>
-                    <td className="px-4 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="text-white font-medium">
-                          {holding.percentage.toFixed(2)}%
+                    <td className="px-3 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className="text-white font-medium text-sm">
+                          {holding.percentage.toFixed(1)}%
                         </span>
-                        <div className="w-20 bg-slate-700 rounded-full h-2">
+                        <div className="w-16 bg-slate-700 rounded-full h-1.5">
                           <div
-                            className="bg-blue-500 h-2 rounded-full"
+                            className="bg-blue-500 h-1.5 rounded-full"
                             style={{ width: `${Math.min(holding.percentage, 100)}%` }}
                           />
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-right">
+                    <td className="px-3 py-3 text-right">
                       {(() => {
                         const pnl = (holding as any).unrealized_pnl_usd || 0
                         const pnlPct = (holding as any).unrealized_pnl_percentage || 0
@@ -798,28 +798,28 @@ function Portfolio() {
                         const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
 
                         if (Math.abs(pnl) < 0.01) {
-                          return <span className="text-slate-500">—</span>
+                          return <span className="text-slate-500 text-sm">—</span>
                         }
 
                         return (
                           <div className="flex flex-col items-end">
-                            <span className={`font-medium ${colorClass}`}>
+                            <span className={`font-medium text-sm ${colorClass}`}>
                               {isPositive ? '+' : ''}{formatCurrency(pnl)}
                             </span>
                             <span className={`text-xs ${colorClass}`}>
-                              {isPositive ? '+' : ''}{pnlPct.toFixed(2)}%
+                              {isPositive ? '+' : ''}{pnlPct.toFixed(1)}%
                             </span>
                           </div>
                         )
                       })()}
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-2 py-3">
+                      <div className="flex items-center justify-center gap-1">
                         {canSellToUSD(holding.asset) && (
                           <button
                             onClick={() => handleSell(holding.asset, 'USD', holding.available)}
                             disabled={holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
-                            className="px-2 py-1 text-xs rounded bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                            className="p-1.5 rounded bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                             title={
                               holding.hold > 0
                                 ? `Cannot sell - ${holding.asset} has open positions (${formatCrypto(holding.hold)} held)`
@@ -828,15 +828,14 @@ function Portfolio() {
                                 : `Sell ${holding.asset} to USD`
                             }
                           >
-                            <DollarSign size={12} />
-                            <span>USD</span>
+                            <DollarSign size={14} />
                           </button>
                         )}
                         {canSellToBTC(holding.asset) && (
                           <button
                             onClick={() => handleSell(holding.asset, 'BTC', holding.available)}
                             disabled={holding.available <= 0 || holding.hold > 0 || sellCoinMutation.isPending}
-                            className="px-2 py-1 text-xs rounded bg-orange-600 hover:bg-orange-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                            className="p-1.5 rounded bg-orange-600 hover:bg-orange-700 text-white disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                             title={
                               holding.hold > 0
                                 ? `Cannot sell - ${holding.asset} has open positions (${formatCrypto(holding.hold)} held)`
@@ -845,8 +844,7 @@ function Portfolio() {
                                 : `Sell ${holding.asset} to BTC`
                             }
                           >
-                            <Bitcoin size={12} />
-                            <span>BTC</span>
+                            <Bitcoin size={14} />
                           </button>
                         )}
                         {!canSellToUSD(holding.asset) && !canSellToBTC(holding.asset) && (
