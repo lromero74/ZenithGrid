@@ -1139,13 +1139,24 @@ class MultiBotMonitor:
             elif skip_ai_analysis:
                 # Skip AI analysis for technical-only check
                 # For conditional_dca: Still evaluate conditions (it doesn't use AI)
-                # For AI strategies: Skip entirely and only check existing positions
+                # For indicator_based: Still evaluate conditions, AI indicators will use cached values
                 if bot.strategy_type == "conditional_dca":
                     logger.info("  ⏭️  Technical check: Analyzing conditional_dca signals without AI")
                     signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id, product_id=product_id)
                 else:
-                    logger.info("  ⏭️  SKIPPING AI: Technical-only check (existing positions only)")
-                    signal_data = {"signal_type": "hold", "confidence": 0, "reasoning": "Technical-only check (no AI)"}
+                    logger.info("  ⏭️  Technical check: Evaluating conditions with cached AI values")
+                    # For indicator_based strategy, pass the previous_indicators_cache for crossing detection
+                    cache_key = (bot.id, product_id)
+                    previous_indicators_from_cache = self._previous_indicators_cache.get(cache_key)
+                    signal_data = await strategy.analyze_signal(
+                        candles, current_price,
+                        position=existing_position,
+                        previous_indicators_cache=previous_indicators_from_cache,
+                        db=db,
+                        user_id=bot.user_id,
+                        product_id=product_id,
+                        use_cached_ai=True  # Use cached AI values, don't call LLM
+                    )
             else:
                 # Analyze signal using strategy
                 # For conditional_dca, pass the candles_by_timeframe dict

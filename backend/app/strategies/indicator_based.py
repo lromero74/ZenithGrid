@@ -638,46 +638,60 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         # Calculate aggregate indicators if needed
         if needs["ai_buy"] or needs["ai_sell"]:
-            # Pass condition-level params (risk_preset, ai_provider) if found
-            ai_params = self._get_ai_params()
+            # Check if we should use cached AI values (from previous check) or call AI fresh
+            use_cached_ai = kwargs.get("use_cached_ai", False)
+            previous_indicators_cache = kwargs.get("previous_indicators_cache")
 
-            # Evaluate AI opinion for buy or sell
-            # We call it once - for buy checks (no position) or sell checks (with position)
-            product_id = kwargs.get("product_id", "UNKNOWN")
-            is_sell_check = position is not None and (needs["ai_sell"] or "ai_opinion" in str(self.take_profit_conditions))
+            # If using cached AI and we have cached values, reuse them
+            if use_cached_ai and previous_indicators_cache:
+                # Use cached AI values from previous check
+                current_indicators["ai_opinion"] = previous_indicators_cache.get("ai_opinion", "hold")
+                current_indicators["ai_confidence"] = previous_indicators_cache.get("ai_confidence", 0)
+                current_indicators["ai_reasoning"] = previous_indicators_cache.get("ai_reasoning", "Using cached AI values")
+                current_indicators["ai_buy"] = previous_indicators_cache.get("ai_buy", 0)
+                current_indicators["ai_sell"] = previous_indicators_cache.get("ai_sell", 0)
+            else:
+                # Call AI fresh (full AI check)
+                # Pass condition-level params (risk_preset, ai_provider) if found
+                ai_params = self._get_ai_params()
 
-            if needs["ai_buy"] or needs["ai_sell"]:
-                # Get db and user_id from kwargs (passed from signal_processor)
-                db = kwargs.get("db")
-                user_id = kwargs.get("user_id")
-                if not db or not user_id:
-                    raise ValueError("AI strategies require db and user_id in kwargs")
+                # Evaluate AI opinion for buy or sell
+                # We call it once - for buy checks (no position) or sell checks (with position)
+                product_id = kwargs.get("product_id", "UNKNOWN")
+                is_sell_check = position is not None and (needs["ai_sell"] or "ai_opinion" in str(self.take_profit_conditions))
 
-                ai_result = await self.ai_evaluator.evaluate(
-                    candles=candles,  # Use primary candles
-                    current_price=current_price,
-                    product_id=product_id,
-                    db=db,
-                    user_id=user_id,
-                    params=ai_params,
-                    is_sell_check=is_sell_check
-                )
-                # Store AI opinion results
-                current_indicators["ai_opinion"] = ai_result["signal"]  # "buy", "sell", or "hold"
-                current_indicators["ai_confidence"] = ai_result["confidence"]  # 0-100
-                current_indicators["ai_reasoning"] = ai_result["reasoning"]
+                if needs["ai_buy"] or needs["ai_sell"]:
+                    # Get db and user_id from kwargs (passed from signal_processor)
+                    db = kwargs.get("db")
+                    user_id = kwargs.get("user_id")
+                    if not db or not user_id:
+                        raise ValueError("AI strategies require db and user_id in kwargs")
 
-                # For backward compatibility during migration (deprecated)
-                # Map to old indicator names temporarily
-                if ai_result["signal"] == "buy":
-                    current_indicators["ai_buy"] = 1
-                    current_indicators["ai_sell"] = 0
-                elif ai_result["signal"] == "sell":
-                    current_indicators["ai_buy"] = 0
-                    current_indicators["ai_sell"] = 1
-                else:  # hold
-                    current_indicators["ai_buy"] = 0
-                    current_indicators["ai_sell"] = 0
+                    ai_result = await self.ai_evaluator.evaluate(
+                        candles=candles,  # Use primary candles
+                        current_price=current_price,
+                        product_id=product_id,
+                        db=db,
+                        user_id=user_id,
+                        params=ai_params,
+                        is_sell_check=is_sell_check
+                    )
+                    # Store AI opinion results
+                    current_indicators["ai_opinion"] = ai_result["signal"]  # "buy", "sell", or "hold"
+                    current_indicators["ai_confidence"] = ai_result["confidence"]  # 0-100
+                    current_indicators["ai_reasoning"] = ai_result["reasoning"]
+
+                    # For backward compatibility during migration (deprecated)
+                    # Map to old indicator names temporarily
+                    if ai_result["signal"] == "buy":
+                        current_indicators["ai_buy"] = 1
+                        current_indicators["ai_sell"] = 0
+                    elif ai_result["signal"] == "sell":
+                        current_indicators["ai_buy"] = 0
+                        current_indicators["ai_sell"] = 1
+                    else:  # hold
+                        current_indicators["ai_buy"] = 0
+                        current_indicators["ai_sell"] = 0
 
         if needs["bull_flag"]:
             bf_params = self._get_bull_flag_params()
