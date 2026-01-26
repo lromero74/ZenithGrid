@@ -208,24 +208,24 @@ export function BotListItem({
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
 
           return (
-            <div className="text-[10px] space-y-0.5">
-              <div className={`${colorClass}`}>
-                <div className="font-medium">Day:</div>
+            <div className="text-[10px] space-y-1">
+              <div className={`${colorClass} bg-slate-900/50 rounded px-1.5 py-0.5 border border-slate-700/50`}>
+                <div className="font-medium text-slate-300">Day:</div>
                 <div>{dailyPnlBtc.toFixed(8)} BTC</div>
                 <div>${dailyPnlUsd.toFixed(2)}</div>
               </div>
-              <div className={`${colorClass} opacity-80`}>
-                <div className="font-medium">Week:</div>
+              <div className={`${colorClass} bg-slate-900/40 rounded px-1.5 py-0.5 border border-slate-700/40 opacity-90`}>
+                <div className="font-medium text-slate-300">Week:</div>
                 <div>{weekly.btc.toFixed(8)} BTC</div>
                 <div>${weekly.usd.toFixed(2)}</div>
               </div>
-              <div className={`${colorClass} opacity-70`}>
-                <div className="font-medium">Month:</div>
+              <div className={`${colorClass} bg-slate-900/30 rounded px-1.5 py-0.5 border border-slate-700/30 opacity-80`}>
+                <div className="font-medium text-slate-300">Month:</div>
                 <div>{monthly.btc.toFixed(8)} BTC</div>
                 <div>${monthly.usd.toFixed(2)}</div>
               </div>
-              <div className={`${colorClass} opacity-60`}>
-                <div className="font-medium">Year:</div>
+              <div className={`${colorClass} bg-slate-900/20 rounded px-1.5 py-0.5 border border-slate-700/20 opacity-70`}>
+                <div className="font-medium text-slate-300">Year:</div>
                 <div>{yearly.btc.toFixed(8)} BTC</div>
                 <div>${yearly.usd.toFixed(2)}</div>
               </div>
