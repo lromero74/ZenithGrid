@@ -54,6 +54,7 @@ export function BotListItem({
   // State for projected PnL carousel
   const [currentTimeframeIndex, setCurrentTimeframeIndex] = useState(0)
   const [isPnlExpanded, setIsPnlExpanded] = useState(false)
+  const [isTransitioning, setIsTransitioning] = useState(true)
   const timeframes = ['day', 'week', 'month', 'year']
 
   // Auto-scroll through timeframes every 5 seconds (only when not expanded)
@@ -61,11 +62,28 @@ export function BotListItem({
     if (isPnlExpanded) return
 
     const interval = setInterval(() => {
-      setCurrentTimeframeIndex((prev) => (prev + 1) % timeframes.length)
+      setIsTransitioning(true)
+      setCurrentTimeframeIndex((prev) => prev + 1)
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [isPnlExpanded, timeframes.length])
+  }, [isPnlExpanded])
+
+  // Reset to beginning seamlessly after completing one cycle
+  useEffect(() => {
+    if (isPnlExpanded) return
+    if (currentTimeframeIndex === timeframes.length) {
+      // Wait for transition to complete, then reset without animation
+      setTimeout(() => {
+        setIsTransitioning(false)
+        setCurrentTimeframeIndex(0)
+        // Re-enable transitions on next frame
+        requestAnimationFrame(() => {
+          setIsTransitioning(true)
+        })
+      }, 500) // Match transition duration
+    }
+  }, [currentTimeframeIndex, isPnlExpanded, timeframes.length])
 
   return (
     <tr
@@ -232,8 +250,8 @@ export function BotListItem({
           const isNegative = dailyPnlUsd < 0
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
 
-          const renderBox = (projection: typeof projections[0], index: number) => (
-            <div key={index} className={`${colorClass} ${projection.bg} rounded px-2 py-0.5 border ${projection.border} ${projection.opacity}`}>
+          const renderBox = (projection: typeof projections[0]) => (
+            <div className={`${colorClass} ${projection.bg} rounded px-2 py-0.5 border ${projection.border} ${projection.opacity}`}>
               <div className="font-medium text-slate-300 whitespace-nowrap">{projection.label}:</div>
               <div className="whitespace-nowrap">{projection.data.btc.toFixed(8)} BTC</div>
               <div className="whitespace-nowrap">${projection.data.usd.toFixed(2)}</div>
@@ -246,18 +264,23 @@ export function BotListItem({
                 {isPnlExpanded ? (
                   // Show all boxes when expanded
                   <div className="space-y-1">
-                    {projections.map((proj, idx) => renderBox(proj, idx))}
+                    {projections.map((proj, idx) => (
+                      <div key={idx}>
+                        {renderBox(proj)}
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   // Show only current box when collapsed (carousel mode) with smooth transition
                   <div className="relative overflow-hidden" style={{ height: '50px' }}>
                     <div
-                      className="transition-transform duration-500 ease-in-out"
+                      className={isTransitioning ? 'transition-transform duration-500 ease-in-out' : ''}
                       style={{ transform: `translateY(-${currentTimeframeIndex * 50}px)` }}
                     >
-                      {projections.map((proj, idx) => (
+                      {/* Render projections twice for infinite loop effect */}
+                      {[...projections, ...projections].map((proj, idx) => (
                         <div key={idx} style={{ height: '50px' }} className="pr-1">
-                          {renderBox(proj, idx)}
+                          {renderBox(proj)}
                         </div>
                       ))}
                     </div>
@@ -266,7 +289,14 @@ export function BotListItem({
               </div>
               {/* Toggle button */}
               <button
-                onClick={() => setIsPnlExpanded(!isPnlExpanded)}
+                onClick={() => {
+                  setIsPnlExpanded(!isPnlExpanded)
+                  // Reset carousel to first item when collapsing
+                  if (isPnlExpanded) {
+                    setCurrentTimeframeIndex(0)
+                    setIsTransitioning(true)
+                  }
+                }}
                 className="flex-shrink-0 p-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-400 hover:text-slate-200 transition-colors"
                 title={isPnlExpanded ? 'Collapse' : 'Expand all timeframes'}
               >
