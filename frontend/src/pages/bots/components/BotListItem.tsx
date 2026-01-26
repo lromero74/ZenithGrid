@@ -205,7 +205,7 @@ export function BotListItem({
       </td>
 
       {/* Projected PnL */}
-      <td className="px-1 sm:px-2 py-2 text-right whitespace-nowrap">
+      <td className="px-1 sm:px-2 py-2 text-right">
         {(() => {
           const dailyPnlUsd = (bot as any).avg_daily_pnl_usd || 0
           const dailyPnlBtc = (bot as any).avg_daily_pnl_btc || 0
@@ -233,16 +233,16 @@ export function BotListItem({
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
 
           const renderBox = (projection: typeof projections[0], index: number) => (
-            <div key={index} className={`${colorClass} ${projection.bg} rounded px-1.5 py-0.5 border ${projection.border} ${projection.opacity}`}>
-              <div className="font-medium text-slate-300">{projection.label}:</div>
-              <div>{projection.data.btc.toFixed(8)} BTC</div>
-              <div>${projection.data.usd.toFixed(2)}</div>
+            <div key={index} className={`${colorClass} ${projection.bg} rounded px-2 py-0.5 border ${projection.border} ${projection.opacity}`}>
+              <div className="font-medium text-slate-300 whitespace-nowrap">{projection.label}:</div>
+              <div className="whitespace-nowrap">{projection.data.btc.toFixed(8)} BTC</div>
+              <div className="whitespace-nowrap">${projection.data.usd.toFixed(2)}</div>
             </div>
           )
 
           return (
             <div className="flex items-start gap-1">
-              <div className="text-[10px] flex-1">
+              <div className="text-[10px] flex-1 min-w-0">
                 {isPnlExpanded ? (
                   // Show all boxes when expanded
                   <div className="space-y-1">
@@ -252,11 +252,11 @@ export function BotListItem({
                   // Show only current box when collapsed (carousel mode) with smooth transition
                   <div className="relative overflow-hidden" style={{ height: '50px' }}>
                     <div
-                      className="absolute w-full transition-transform duration-500 ease-in-out"
+                      className="transition-transform duration-500 ease-in-out"
                       style={{ transform: `translateY(-${currentTimeframeIndex * 50}px)` }}
                     >
                       {projections.map((proj, idx) => (
-                        <div key={idx} style={{ height: '50px' }}>
+                        <div key={idx} style={{ height: '50px' }} className="pr-1">
                           {renderBox(proj, idx)}
                         </div>
                       ))}
