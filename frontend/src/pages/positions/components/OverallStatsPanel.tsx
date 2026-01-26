@@ -22,6 +22,8 @@ interface RealizedPnL {
   last_month_profit_usd: number
   last_quarter_profit_btc: number
   last_quarter_profit_usd: number
+  last_year_profit_btc: number
+  last_year_profit_usd: number
   wtd_profit_btc: number
   wtd_profit_usd: number
   mtd_profit_btc: number
@@ -46,7 +48,7 @@ interface OverallStatsPanelProps {
 }
 
 export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
-  const [selectedHistorical, setSelectedHistorical] = useState<'yesterday' | 'last_week' | 'last_month' | 'last_quarter'>('last_week')
+  const [selectedHistorical, setSelectedHistorical] = useState<'yesterday' | 'last_week' | 'last_month' | 'last_quarter' | 'last_year'>('last_week')
   const [selectedToDate, setSelectedToDate] = useState<'wtd' | 'mtd' | 'qtd' | 'ytd'>('ytd')
 
   // Get the selected historical period's data
@@ -61,6 +63,8 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
         return { btc: realizedPnL.last_month_profit_btc, usd: realizedPnL.last_month_profit_usd }
       case 'last_quarter':
         return { btc: realizedPnL.last_quarter_profit_btc, usd: realizedPnL.last_quarter_profit_usd }
+      case 'last_year':
+        return { btc: realizedPnL.last_year_profit_btc, usd: realizedPnL.last_year_profit_usd }
     }
   }
 
@@ -112,13 +116,14 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                     Realized (
                     <select
                       value={selectedHistorical}
-                      onChange={(e) => setSelectedHistorical(e.target.value as 'yesterday' | 'last_week' | 'last_month' | 'last_quarter')}
+                      onChange={(e) => setSelectedHistorical(e.target.value as 'yesterday' | 'last_week' | 'last_month' | 'last_quarter' | 'last_year')}
                       className="bg-slate-700 text-slate-300 border border-slate-600 rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-slate-600"
                     >
                       <option value="yesterday">Yesterday</option>
                       <option value="last_week">Last Week</option>
                       <option value="last_month">Last Month</option>
                       <option value="last_quarter">Last Quarter</option>
+                      <option value="last_year">Last Year</option>
                     </select>
                     ):
                   </span>

@@ -388,6 +388,7 @@ async def get_realized_pnl(
     - Last week (previous calendar week, Monday to Sunday)
     - Last month (previous calendar month)
     - Last quarter (previous calendar quarter)
+    - Last year (previous calendar year)
     - WTD (week to date - since Monday of current week)
     - MTD (month to date - since 1st of current month)
     - QTD (quarter to date - since 1st of current quarter)
@@ -429,6 +430,9 @@ async def get_realized_pnl(
     start_of_last_quarter = datetime(previous_quarter_year, start_month_of_prev_quarter, 1, 0, 0, 0)
     # Last day of previous quarter is day before current quarter starts
     end_of_last_quarter = start_of_quarter - timedelta(microseconds=1)
+    # Last year (previous calendar year)
+    start_of_last_year = datetime(now.year - 1, 1, 1, 0, 0, 0)
+    end_of_last_year = datetime(now.year - 1, 12, 31, 23, 59, 59, 999999)
     # Start of year (January 1st of current year)
     start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -457,6 +461,8 @@ async def get_realized_pnl(
                 "last_month_profit_usd": 0.0,
                 "last_quarter_profit_btc": 0.0,
                 "last_quarter_profit_usd": 0.0,
+                "last_year_profit_btc": 0.0,
+                "last_year_profit_usd": 0.0,
                 "wtd_profit_btc": 0.0,
                 "wtd_profit_usd": 0.0,
                 "mtd_profit_btc": 0.0,
@@ -485,6 +491,8 @@ async def get_realized_pnl(
     last_month_profit_usd = 0.0
     last_quarter_profit_btc = 0.0
     last_quarter_profit_usd = 0.0
+    last_year_profit_btc = 0.0
+    last_year_profit_usd = 0.0
     wtd_profit_btc = 0.0
     wtd_profit_usd = 0.0
     mtd_profit_btc = 0.0
@@ -536,6 +544,11 @@ async def get_realized_pnl(
             last_quarter_profit_btc += profit_btc
             last_quarter_profit_usd += profit_usd
 
+        # Check if closed last year (previous calendar year)
+        if start_of_last_year <= pos.closed_at <= end_of_last_year:
+            last_year_profit_btc += profit_btc
+            last_year_profit_usd += profit_usd
+
         # Check if closed this week (week to date)
         if pos.closed_at >= start_of_wtd:
             wtd_profit_btc += profit_btc
@@ -567,6 +580,8 @@ async def get_realized_pnl(
         "last_month_profit_usd": round(last_month_profit_usd, 2),
         "last_quarter_profit_btc": round(last_quarter_profit_btc, 8),
         "last_quarter_profit_usd": round(last_quarter_profit_usd, 2),
+        "last_year_profit_btc": round(last_year_profit_btc, 8),
+        "last_year_profit_usd": round(last_year_profit_usd, 2),
         "wtd_profit_btc": round(wtd_profit_btc, 8),
         "wtd_profit_usd": round(wtd_profit_usd, 2),
         "mtd_profit_btc": round(mtd_profit_btc, 8),

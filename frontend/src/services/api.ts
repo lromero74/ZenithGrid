@@ -103,6 +103,8 @@ export const positionsApi = {
       last_month_profit_usd: number;
       last_quarter_profit_btc: number;
       last_quarter_profit_usd: number;
+      last_year_profit_btc: number;
+      last_year_profit_usd: number;
       wtd_profit_btc: number;
       wtd_profit_usd: number;
       mtd_profit_btc: number;
