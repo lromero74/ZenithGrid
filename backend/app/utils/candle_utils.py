@@ -275,11 +275,24 @@ def calculate_bot_check_interval(bot_config: Dict[str, Any]) -> int:
 
     # Extract timeframes from all phases
     for phase in ['base_order_conditions', 'safety_order_conditions', 'take_profit_conditions']:
-        conditions = bot_config.get(phase, [])
-        if not isinstance(conditions, list):
-            continue
+        phase_data = bot_config.get(phase, [])
 
-        for condition in conditions:
+        # Handle both formats:
+        # 1. List format: [{condition}, {condition}, ...]
+        # 2. Dict format: {"groups": [{"conditions": [...]}, ...]}
+        conditions_to_check = []
+
+        if isinstance(phase_data, list):
+            # Old format: direct list of conditions
+            conditions_to_check = phase_data
+        elif isinstance(phase_data, dict) and 'groups' in phase_data:
+            # New format: grouped conditions
+            for group in phase_data.get('groups', []):
+                if isinstance(group, dict) and 'conditions' in group:
+                    conditions_to_check.extend(group['conditions'])
+
+        # Extract timeframes from conditions
+        for condition in conditions_to_check:
             if isinstance(condition, dict) and 'timeframe' in condition:
                 tf = condition['timeframe']
                 if tf and tf != 'required':  # Skip special "required" markers
@@ -369,11 +382,24 @@ def get_timeframes_for_phases(
     timeframes = set()
 
     for phase in phases:
-        conditions = bot_config.get(phase, [])
-        if not isinstance(conditions, list):
-            continue
+        phase_data = bot_config.get(phase, [])
 
-        for condition in conditions:
+        # Handle both formats:
+        # 1. List format: [{condition}, {condition}, ...]
+        # 2. Dict format: {"groups": [{"conditions": [...]}, ...]}
+        conditions_to_check = []
+
+        if isinstance(phase_data, list):
+            # Old format: direct list of conditions
+            conditions_to_check = phase_data
+        elif isinstance(phase_data, dict) and 'groups' in phase_data:
+            # New format: grouped conditions
+            for group in phase_data.get('groups', []):
+                if isinstance(group, dict) and 'conditions' in group:
+                    conditions_to_check.extend(group['conditions'])
+
+        # Extract timeframes from conditions
+        for condition in conditions_to_check:
             if isinstance(condition, dict) and 'timeframe' in condition:
                 tf = condition['timeframe']
                 if tf and tf != 'required':  # Skip special "required" markers
