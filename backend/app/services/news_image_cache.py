@@ -23,7 +23,7 @@ IMAGE_DOWNLOAD_TIMEOUT = 10  # seconds
 MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2MB max (smaller for base64 storage)
 
 # Image compression settings
-THUMBNAIL_MAX_WIDTH = 400  # Resize thumbnails to max 400px width
+THUMBNAIL_MAX_WIDTH = 600  # Resize thumbnails to max 600px width (50% increase from 400px)
 WEBP_QUALITY = 85  # 85% quality - visually identical but much smaller
 
 
@@ -107,7 +107,7 @@ def compress_image(image_bytes: bytes) -> tuple[bytes, str]:
     """
     Compress and optimize an image for thumbnail storage.
 
-    - Resizes to max 400px width while maintaining aspect ratio
+    - Resizes to max 600px width while maintaining aspect ratio
     - Converts to WebP format for better compression
     - Applies 85% quality (visually identical but much smaller)
 
