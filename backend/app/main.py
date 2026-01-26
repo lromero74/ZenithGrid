@@ -31,7 +31,7 @@ from app.routers import trading_router  # Manual trading operations
 from app.services.websocket_manager import ws_manager
 from app.services.shutdown_manager import shutdown_manager
 from app.services.content_refresh_service import content_refresh_service
-from app.cleanup_jobs import cleanup_old_decision_logs
+from app.cleanup_jobs import cleanup_old_decision_logs, cleanup_failed_condition_logs
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
 missing_order_detector_task = None
 decision_log_cleanup_task = None
+failed_condition_cleanup_task = None
 account_snapshot_task = None
 
 
@@ -285,7 +286,7 @@ async def run_account_snapshot_capture():
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task, account_snapshot_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task, failed_condition_cleanup_task, account_snapshot_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -330,6 +331,10 @@ async def startup_event():
     decision_log_cleanup_task = asyncio.create_task(cleanup_old_decision_logs())
     print("🚀 Decision log cleanup job started - cleaning old logs daily")
 
+    print("🚀 Starting failed condition log cleanup job...")
+    failed_condition_cleanup_task = asyncio.create_task(cleanup_failed_condition_logs())
+    print("🚀 Failed condition log cleanup job started - removing noise logs every 6 hours")
+
     print("🚀 Starting account snapshot capture job...")
     account_snapshot_task = asyncio.create_task(run_account_snapshot_capture())
     print("🚀 Account snapshot capture job started - capturing daily account values")
@@ -340,7 +345,7 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task, account_snapshot_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task, failed_condition_cleanup_task, account_snapshot_task
 
     logger.info("🛑 Shutting down - waiting for in-flight orders...")
 
@@ -389,6 +394,13 @@ async def shutdown_event():
         decision_log_cleanup_task.cancel()
         try:
             await decision_log_cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+    if failed_condition_cleanup_task:
+        failed_condition_cleanup_task.cancel()
+        try:
+            await failed_condition_cleanup_task
         except asyncio.CancelledError:
             pass
 

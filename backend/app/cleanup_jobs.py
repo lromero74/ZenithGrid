@@ -86,6 +86,64 @@ async def cleanup_old_decision_logs():
         await asyncio.sleep(86400)  # 24 hours
 
 
+async def cleanup_failed_condition_logs():
+    """
+    Clean up indicator and AI logs where conditions didn't match.
+
+    Keeps logs where conditions were met (potential trades) indefinitely,
+    but removes "noise" logs where conditions failed after 24 hours.
+    This prevents the database from filling up with informational logs.
+
+    Runs every 6 hours.
+    """
+    # Wait 15 minutes after startup before first cleanup
+    await asyncio.sleep(900)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                cutoff_time = datetime.utcnow() - timedelta(hours=24)
+
+                # Delete indicator logs where conditions were NOT met (conditions_met = False or 0)
+                # Keep logs where conditions_met = True as they represent successful matches
+                indicator_delete_query = delete(IndicatorLog).where(
+                    and_(
+                        IndicatorLog.timestamp < cutoff_time,
+                        IndicatorLog.conditions_met == False
+                    )
+                )
+                indicator_result = await db.execute(indicator_delete_query)
+                indicator_deleted = indicator_result.rowcount
+
+                # Delete AI logs with low confidence (<30%) older than 24h
+                # Keep high-confidence AI signals as they're valuable for analysis
+                ai_delete_query = delete(AIBotLog).where(
+                    and_(
+                        AIBotLog.timestamp < cutoff_time,
+                        AIBotLog.confidence < 30
+                    )
+                )
+                ai_result = await db.execute(ai_delete_query)
+                ai_deleted = ai_result.rowcount
+
+                await db.commit()
+
+                if indicator_deleted > 0 or ai_deleted > 0:
+                    logger.info(
+                        f"🧹 Cleaned up failed condition logs: "
+                        f"{indicator_deleted} indicator logs (conditions not met), "
+                        f"{ai_deleted} AI logs (confidence <30%) older than 24h"
+                    )
+                else:
+                    logger.debug("No failed condition logs to clean up")
+
+        except Exception as e:
+            logger.error(f"Error in failed condition log cleanup job: {e}", exc_info=True)
+
+        # Run every 6 hours
+        await asyncio.sleep(21600)
+
+
 async def get_log_retention_days(db: AsyncSession) -> int:
     """Get the configured log retention period from settings"""
     try:
