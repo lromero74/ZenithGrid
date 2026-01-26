@@ -188,22 +188,29 @@ async def get_pnl_timeseries(
             bot_name_map[bot.id] = bot.name
 
     # Build cumulative P&L over time
-    cumulative_pnl = 0.0
+    cumulative_pnl_usd = 0.0
+    cumulative_pnl_btc = 0.0
     summary_data = []
-    daily_pnl: Dict[str, float] = defaultdict(float)
-    pair_pnl: Dict[str, float] = defaultdict(float)
+    daily_pnl_usd: Dict[str, float] = defaultdict(float)
+    daily_pnl_btc: Dict[str, float] = defaultdict(float)
+    pair_pnl_usd: Dict[str, float] = defaultdict(float)
+    pair_pnl_btc: Dict[str, float] = defaultdict(float)
 
     for pos in positions:
-        profit = pos.profit_usd or 0.0
-        cumulative_pnl += profit
+        profit_usd = pos.profit_usd or 0.0
+        profit_btc = pos.profit_btc or 0.0
+        cumulative_pnl_usd += profit_usd
+        cumulative_pnl_btc += profit_btc
 
         # Add to summary timeline
         summary_data.append(
             {
                 "timestamp": pos.closed_at.isoformat(),
                 "date": pos.closed_at.strftime("%Y-%m-%d"),
-                "cumulative_pnl": round(cumulative_pnl, 2),
-                "profit": round(profit, 2),
+                "cumulative_pnl_usd": round(cumulative_pnl_usd, 2),
+                "cumulative_pnl_btc": round(cumulative_pnl_btc, 8),
+                "profit_usd": round(profit_usd, 2),
+                "profit_btc": round(profit_btc, 8),
                 "product_id": pos.product_id,  # Include pair for frontend filtering
                 "bot_id": pos.bot_id,  # Include bot_id for frontend filtering
                 "bot_name": bot_name_map.get(pos.bot_id, "Unknown"),  # Include bot name for display
@@ -212,23 +219,41 @@ async def get_pnl_timeseries(
 
         # Aggregate by day
         day_key = pos.closed_at.date().isoformat()
-        daily_pnl[day_key] += profit
+        daily_pnl_usd[day_key] += profit_usd
+        daily_pnl_btc[day_key] += profit_btc
 
         # Aggregate by pair
-        pair_pnl[pos.product_id] += profit
+        pair_pnl_usd[pos.product_id] += profit_usd
+        pair_pnl_btc[pos.product_id] += profit_btc
 
     # Convert daily P&L to cumulative
     by_day_data = []
-    cumulative = 0.0
-    for day in sorted(daily_pnl.keys()):
-        cumulative += daily_pnl[day]
-        by_day_data.append({"date": day, "daily_pnl": round(daily_pnl[day], 2), "cumulative_pnl": round(cumulative, 2)})
+    cumulative_usd = 0.0
+    cumulative_btc = 0.0
+    all_days = sorted(set(daily_pnl_usd.keys()) | set(daily_pnl_btc.keys()))
+    for day in all_days:
+        cumulative_usd += daily_pnl_usd[day]
+        cumulative_btc += daily_pnl_btc[day]
+        by_day_data.append({
+            "date": day,
+            "daily_pnl_usd": round(daily_pnl_usd[day], 2),
+            "daily_pnl_btc": round(daily_pnl_btc[day], 8),
+            "cumulative_pnl_usd": round(cumulative_usd, 2),
+            "cumulative_pnl_btc": round(cumulative_btc, 8)
+        })
 
     # Convert pair P&L to list
+    all_pairs = sorted(set(pair_pnl_usd.keys()) | set(pair_pnl_btc.keys()))
     by_pair_data = [
-        {"pair": pair, "total_pnl": round(pnl, 2)}
-        for pair, pnl in sorted(pair_pnl.items(), key=lambda x: x[1], reverse=True)
+        {
+            "pair": pair,
+            "total_pnl_usd": round(pair_pnl_usd[pair], 2),
+            "total_pnl_btc": round(pair_pnl_btc[pair], 8)
+        }
+        for pair in all_pairs
     ]
+    # Sort by USD profit (descending)
+    by_pair_data.sort(key=lambda x: x["total_pnl_usd"], reverse=True)
 
     # Get active trades count (filtered by account if specified)
     active_count_query = select(func.count(Position.id)).where(Position.status == "open")
@@ -239,7 +264,11 @@ async def get_pnl_timeseries(
 
     # Get bot-level P&L for most profitable bot (filtered by account if specified)
     bot_pnl_query = (
-        select(Position.bot_id, func.sum(Position.profit_usd).label("total_pnl"))
+        select(
+            Position.bot_id,
+            func.sum(Position.profit_usd).label("total_pnl_usd"),
+            func.sum(Position.profit_btc).label("total_pnl_btc")
+        )
         .where(Position.status == "closed", Position.profit_usd is not None)
     )
     if account_id is not None:
@@ -255,13 +284,18 @@ async def get_pnl_timeseries(
 
     most_profitable_bot = None
     if bot_pnls:
-        top_bot_id, top_bot_pnl = bot_pnls[0]
+        top_bot_id, top_bot_pnl_usd, top_bot_pnl_btc = bot_pnls[0]
         # Get bot name
         bot_query = select(Bot).where(Bot.id == top_bot_id)
         bot_result = await db.execute(bot_query)
         bot = bot_result.scalars().first()
         if bot:
-            most_profitable_bot = {"bot_id": top_bot_id, "bot_name": bot.name, "total_pnl": round(top_bot_pnl, 2)}
+            most_profitable_bot = {
+                "bot_id": top_bot_id,
+                "bot_name": bot.name,
+                "total_pnl_usd": round(top_bot_pnl_usd or 0, 2),
+                "total_pnl_btc": round(top_bot_pnl_btc or 0, 8)
+            }
 
     return {
         "summary": summary_data,

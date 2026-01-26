@@ -8,8 +8,10 @@ import { LoadingSpinner } from './LoadingSpinner'
 interface PnLDataPoint {
   timestamp: string
   date: string
-  cumulative_pnl: number
-  profit: number
+  cumulative_pnl_usd: number
+  cumulative_pnl_btc: number
+  profit_usd: number
+  profit_btc: number
   product_id?: string
   bot_id?: number
   bot_name?: string
@@ -17,19 +19,23 @@ interface PnLDataPoint {
 
 interface DailyPnL {
   date: string
-  daily_pnl: number
-  cumulative_pnl: number
+  daily_pnl_usd: number
+  daily_pnl_btc: number
+  cumulative_pnl_usd: number
+  cumulative_pnl_btc: number
 }
 
 interface PairPnL {
   pair: string
-  total_pnl: number
+  total_pnl_usd: number
+  total_pnl_btc: number
 }
 
 interface MostProfitableBot {
   bot_id: number
   bot_name: string
-  total_pnl: number
+  total_pnl_usd: number
+  total_pnl_btc: number
 }
 
 interface PnLTimeSeriesData {
@@ -42,6 +48,7 @@ interface PnLTimeSeriesData {
 
 export type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
 type TabType = 'summary' | 'by_day' | 'by_pair'
+type CurrencyDisplay = 'usd' | 'btc' | 'both'
 
 interface PnLChartProps {
   accountId?: number
@@ -49,23 +56,32 @@ interface PnLChartProps {
 }
 
 // Custom tooltip component for 3Commas-style tooltips
-const CustomTooltip = ({ active, payload, label, labelFormatter }: any) => {
+const CustomTooltip = ({ active, payload, label, labelFormatter, currencyDisplay }: any) => {
   if (!active || !payload || !payload.length) return null
 
-  const value = payload[0].value
-  const isProfit = value >= 0
-
-  // Convert USD to BTC (using approximate current BTC price)
-  const btcValue = value / 100000 // Approximate conversion
+  const entry = payload[0].payload
+  const valueUSD = entry.daily_pnl_usd || entry.total_pnl_usd || 0
+  const valueBTC = entry.daily_pnl_btc || entry.total_pnl_btc || 0
+  const isProfit = valueUSD >= 0
 
   return (
     <div className="bg-slate-800 border-2 border-slate-600 rounded-lg p-3 shadow-lg">
       <div className="text-slate-300 text-sm mb-2">
         {labelFormatter ? labelFormatter(label) : label}
       </div>
-      <div className={`text-base font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-        Profit ${value.toFixed(2)} / {btcValue.toFixed(8)} BTC
-      </div>
+      {currencyDisplay === 'both' ? (
+        <div className={`text-base font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+          {valueBTC.toFixed(6)} BTC / ${valueUSD.toFixed(2)}
+        </div>
+      ) : currencyDisplay === 'btc' ? (
+        <div className={`text-base font-semibold ${valueBTC >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          {valueBTC.toFixed(6)} BTC
+        </div>
+      ) : (
+        <div className={`text-base font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+          ${valueUSD.toFixed(2)}
+        </div>
+      )}
     </div>
   )
 }
@@ -73,9 +89,11 @@ const CustomTooltip = ({ active, payload, label, labelFormatter }: any) => {
 export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
   const [activeTab, setActiveTab] = useState<TabType>('summary')
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
+  const [currencyDisplay, setCurrencyDisplay] = useState<CurrencyDisplay>('both')
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const areaSeriesRef = useRef<ISeriesApi<'Area'> | null>(null)
+  const btcSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const usdSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
 
   // Notify parent when timeRange changes
   useEffect(() => {
@@ -293,7 +311,8 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
   const calculateStats = () => {
     if (!data || data.summary.length === 0) {
       return {
-        totalPnL: 0,
+        totalPnLUSD: 0,
+        totalPnLBTC: 0,
         closedTrades: 0,
         bestPair: null as PairPnL | null,
         worstPair: null as PairPnL | null,
@@ -331,42 +350,59 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
     const filteredSummary = data.summary.filter((item) => new Date(item.date) >= cutoffDate)
 
     // Sum up profits for positions within the selected time range (not cumulative_pnl which is all-time running total)
-    const totalPnL = filteredSummary.reduce((sum, item) => sum + item.profit, 0)
+    const totalPnLUSD = filteredSummary.reduce((sum, item) => sum + item.profit_usd, 0)
+    const totalPnLBTC = filteredSummary.reduce((sum, item) => sum + item.profit_btc, 0)
     const closedTrades = filteredSummary.length
 
     // Calculate by_pair from filtered summary data (respects time range)
-    const pairPnLMap = new Map<string, number>()
+    const pairPnLMap = new Map<string, { usd: number; btc: number }>()
     filteredSummary.forEach((item) => {
       if (item.product_id) {
-        const current = pairPnLMap.get(item.product_id) || 0
-        pairPnLMap.set(item.product_id, current + item.profit)
+        const current = pairPnLMap.get(item.product_id) || { usd: 0, btc: 0 }
+        current.usd += item.profit_usd
+        current.btc += item.profit_btc
+        pairPnLMap.set(item.product_id, current)
       }
     })
     const filteredByPair: PairPnL[] = Array.from(pairPnLMap.entries())
-      .map(([pair, total_pnl]) => ({ pair, total_pnl: Math.round(total_pnl * 100) / 100 }))
-      .sort((a, b) => b.total_pnl - a.total_pnl)
+      .map(([pair, pnl]) => ({
+        pair,
+        total_pnl_usd: Math.round(pnl.usd * 100) / 100,
+        total_pnl_btc: Math.round(pnl.btc * 100000000) / 100000000
+      }))
+      .sort((a, b) => b.total_pnl_usd - a.total_pnl_usd)
 
     const bestPair = filteredByPair.length > 0 ? filteredByPair[0] : null
     const worstPair = filteredByPair.length > 0 ? filteredByPair[filteredByPair.length - 1] : null
 
     // Calculate most profitable bot from filtered summary (respects time range)
-    const botPnLMap = new Map<number, { total_pnl: number; bot_name: string }>()
+    const botPnLMap = new Map<number, { total_pnl_usd: number; total_pnl_btc: number; bot_name: string }>()
     filteredSummary.forEach((item) => {
       if (item.bot_id) {
-        const current = botPnLMap.get(item.bot_id) || { total_pnl: 0, bot_name: item.bot_name || 'Unknown' }
-        current.total_pnl += item.profit
+        const current = botPnLMap.get(item.bot_id) || {
+          total_pnl_usd: 0,
+          total_pnl_btc: 0,
+          bot_name: item.bot_name || 'Unknown'
+        }
+        current.total_pnl_usd += item.profit_usd
+        current.total_pnl_btc += item.profit_btc
         botPnLMap.set(item.bot_id, current)
       }
     })
     const sortedBots = Array.from(botPnLMap.entries())
-      .map(([bot_id, { total_pnl, bot_name }]) => ({ bot_id, bot_name, total_pnl: Math.round(total_pnl * 100) / 100 }))
-      .sort((a, b) => b.total_pnl - a.total_pnl)
+      .map(([bot_id, { total_pnl_usd, total_pnl_btc, bot_name }]) => ({
+        bot_id,
+        bot_name,
+        total_pnl_usd: Math.round(total_pnl_usd * 100) / 100,
+        total_pnl_btc: Math.round(total_pnl_btc * 100000000) / 100000000
+      }))
+      .sort((a, b) => b.total_pnl_usd - a.total_pnl_usd)
     const filteredMostProfitableBot = sortedBots.length > 0 ? sortedBots[0] : null
 
-    return { totalPnL, closedTrades, bestPair, worstPair, filteredByPair, filteredMostProfitableBot }
+    return { totalPnLUSD, totalPnLBTC, closedTrades, bestPair, worstPair, filteredByPair, filteredMostProfitableBot }
   }
 
-  // Initialize chart - recreate when switching to summary tab
+  // Initialize chart - recreate when switching to summary tab or currency display changes
   useEffect(() => {
     if (!chartContainerRef.current || !data || activeTab !== 'summary') return
 
@@ -378,7 +414,8 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
         // Chart already disposed, ignore
       }
       chartRef.current = null
-      areaSeriesRef.current = null
+      btcSeriesRef.current = null
+      usdSeriesRef.current = null
     }
 
     const chart = createChart(chartContainerRef.current, {
@@ -403,19 +440,51 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
         fixRightEdge: true,
       },
       rightPriceScale: {
+        visible: currencyDisplay === 'both' || currencyDisplay === 'usd',
         borderColor: '#1e293b',
+      },
+      leftPriceScale: {
+        visible: currencyDisplay === 'both' || currencyDisplay === 'btc',
+        borderColor: '#1e293b',
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
     })
 
-    const areaSeries = chart.addAreaSeries({
-      topColor: 'rgba(34, 197, 94, 0.4)',
-      bottomColor: 'rgba(34, 197, 94, 0.0)',
-      lineColor: 'rgba(34, 197, 94, 1)',
-      lineWidth: 2,
-    })
-
     chartRef.current = chart
-    areaSeriesRef.current = areaSeries
+
+    // Add BTC series if showing BTC or both
+    if (currencyDisplay === 'btc' || currencyDisplay === 'both') {
+      const btcSeries = chart.addLineSeries({
+        color: '#ff8800',
+        lineWidth: 2,
+        priceScaleId: 'left',
+        title: 'BTC',
+        priceFormat: {
+          type: 'custom',
+          minMove: 0.00000001,
+          formatter: (price: number) => price.toFixed(8),
+        },
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
+      btcSeriesRef.current = btcSeries
+    }
+
+    // Add USD series if showing USD or both
+    if (currencyDisplay === 'usd' || currencyDisplay === 'both') {
+      const usdSeries = chart.addLineSeries({
+        color: '#4ade80',
+        lineWidth: 2,
+        priceScaleId: 'right',
+        title: 'USD',
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
+      usdSeriesRef.current = usdSeries
+    }
 
     // Handle resize
     const handleResize = () => {
@@ -439,20 +508,24 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
         // Chart already disposed, ignore
       }
     }
-  }, [data, activeTab])
+  }, [data, activeTab, currencyDisplay])
 
   // Update chart data
   useEffect(() => {
-    if (!areaSeriesRef.current || !data || activeTab !== 'summary') return
+    if (!data || activeTab !== 'summary') return
+    if (!btcSeriesRef.current && !usdSeriesRef.current) return
 
     const filteredData = getFilteredData() as PnLDataPoint[]
     if (filteredData.length === 0) return
 
     // First, aggregate profits by day (multiple positions can close on same day)
-    const dailyProfits = new Map<string, number>()
+    const dailyProfitsUSD = new Map<string, number>()
+    const dailyProfitsBTC = new Map<string, number>()
     filteredData.forEach((point) => {
-      const current = dailyProfits.get(point.date) || 0
-      dailyProfits.set(point.date, current + point.profit)
+      const currentUSD = dailyProfitsUSD.get(point.date) || 0
+      const currentBTC = dailyProfitsBTC.get(point.date) || 0
+      dailyProfitsUSD.set(point.date, currentUSD + point.profit_usd)
+      dailyProfitsBTC.set(point.date, currentBTC + point.profit_btc)
     })
 
     // Calculate start date based on timeframe (show full window, not just from first trade)
@@ -461,7 +534,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
 
     if (timeRange === 'all') {
       // For 'all', use first trade date
-      const sortedDates = Array.from(dailyProfits.keys()).sort()
+      const sortedDates = Array.from(dailyProfitsUSD.keys()).sort()
       if (sortedDates.length === 0) return
       firstDateStr = sortedDates[0]
     } else {
@@ -504,41 +577,45 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
     }
 
     // Calculate starting cumulative PnL (for timeframes, include P&L from before the window)
-    let cumulativePnL = 0
+    let cumulativePnLUSD = 0
+    let cumulativePnLBTC = 0
     if (timeRange !== 'all' && data) {
       // Sum all profits from before the timeframe start date
       data.summary.forEach((point) => {
         if (point.date < firstDateStr) {
-          cumulativePnL += point.profit
+          cumulativePnLUSD += point.profit_usd
+          cumulativePnLBTC += point.profit_btc
         }
       })
     }
 
     // Build chart data with all dates, using 0 profit for missing days
-    const chartData = allDates.map((date) => {
-      const dailyProfit = dailyProfits.get(date) || 0
-      cumulativePnL += dailyProfit
+    const chartDataUSD = allDates.map((date) => {
+      const dailyProfit = dailyProfitsUSD.get(date) || 0
+      cumulativePnLUSD += dailyProfit
       const timestamp = Math.floor(new Date(date).getTime() / 1000) as Time
-      return { time: timestamp, value: Math.round(cumulativePnL * 100) / 100 }
+      return { time: timestamp, value: Math.round(cumulativePnLUSD * 100) / 100 }
     })
 
-    // Determine if we have profits or losses
-    const latestValue = chartData[chartData.length - 1]?.value || 0
-    const isProfit = latestValue >= 0
-
-    // Update series colors based on profit/loss
-    areaSeriesRef.current.applyOptions({
-      topColor: isProfit ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)',
-      bottomColor: isProfit ? 'rgba(34, 197, 94, 0.0)' : 'rgba(239, 68, 68, 0.0)',
-      lineColor: isProfit ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)',
+    const chartDataBTC = allDates.map((date) => {
+      const dailyProfit = dailyProfitsBTC.get(date) || 0
+      cumulativePnLBTC += dailyProfit
+      const timestamp = Math.floor(new Date(date).getTime() / 1000) as Time
+      return { time: timestamp, value: Math.round(cumulativePnLBTC * 100000000) / 100000000 }
     })
 
-    areaSeriesRef.current.setData(chartData)
+    // Update series data
+    if (btcSeriesRef.current) {
+      btcSeriesRef.current.setData(chartDataBTC)
+    }
+    if (usdSeriesRef.current) {
+      usdSeriesRef.current.setData(chartDataUSD)
+    }
 
     if (chartRef.current) {
       chartRef.current.timeScale().fitContent()
     }
-  }, [data, activeTab, timeRange])
+  }, [data, activeTab, timeRange, currencyDisplay])
 
   const stats = calculateStats()
 
@@ -562,12 +639,50 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
     )
   }
 
-  const isProfit = stats.totalPnL >= 0
+  const isProfit = stats.totalPnLUSD >= 0
 
   return (
     <div className="bg-slate-900 rounded-lg overflow-hidden">
       {/* Time Range Pills - 3Commas style */}
       <div className="p-4 sm:p-6 border-b border-slate-800">
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex gap-2 flex-wrap">
+            <span className="text-sm text-slate-400 self-center mr-2">Display:</span>
+            <button
+              type="button"
+              onClick={() => setCurrencyDisplay('both')}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                currencyDisplay === 'both'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              Both
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrencyDisplay('btc')}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                currencyDisplay === 'btc'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              BTC
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrencyDisplay('usd')}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                currencyDisplay === 'usd'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              USD
+            </button>
+          </div>
+        </div>
         <div className="flex gap-2 flex-wrap">
           <button
             type="button"
@@ -674,9 +789,19 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
           {/* Total P&L Card */}
           <div className="bg-slate-800/50 rounded-lg p-4">
             <div className="text-sm text-slate-400 mb-1">PnL</div>
-            <div className={`text-2xl font-bold mb-2 ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-              {isProfit ? '' : '-'}${Math.abs(stats.totalPnL).toFixed(2)}
-            </div>
+            {currencyDisplay === 'both' ? (
+              <div className={`text-lg font-bold mb-2 ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                {stats.totalPnLBTC >= 0 ? '' : ''}{stats.totalPnLBTC.toFixed(8)} BTC / ${stats.totalPnLUSD.toFixed(2)}
+              </div>
+            ) : currencyDisplay === 'btc' ? (
+              <div className={`text-2xl font-bold mb-2 ${stats.totalPnLBTC >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {stats.totalPnLBTC.toFixed(8)} BTC
+              </div>
+            ) : (
+              <div className={`text-2xl font-bold mb-2 ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                ${stats.totalPnLUSD.toFixed(2)}
+              </div>
+            )}
           </div>
 
           {/* Closed Trades Card */}
@@ -694,9 +819,19 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
                 <div key={pair.pair} className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">#{index + 1}</span>
                   <span className="text-sm text-white flex-1">{pair.pair}</span>
-                  <span className={`text-sm font-semibold ${pair.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {pair.total_pnl >= 0 ? '+' : ''}${pair.total_pnl.toFixed(2)}
-                  </span>
+                  {currencyDisplay === 'both' ? (
+                    <span className={`text-xs font-semibold ${pair.total_pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pair.total_pnl_btc.toFixed(6)} BTC / ${pair.total_pnl_usd.toFixed(2)}
+                    </span>
+                  ) : currencyDisplay === 'btc' ? (
+                    <span className={`text-sm font-semibold ${pair.total_pnl_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pair.total_pnl_btc.toFixed(6)} BTC
+                    </span>
+                  ) : (
+                    <span className={`text-sm font-semibold ${pair.total_pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      ${pair.total_pnl_usd.toFixed(2)}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -707,9 +842,19 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
             <div className="text-sm text-slate-400 mb-1">Most profitable bot</div>
             {stats.filteredMostProfitableBot ? (
               <>
-                <div className={`text-2xl font-bold mb-1 ${stats.filteredMostProfitableBot.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {stats.filteredMostProfitableBot.total_pnl >= 0 ? '+' : ''}${stats.filteredMostProfitableBot.total_pnl.toFixed(2)}
-                </div>
+                {currencyDisplay === 'both' ? (
+                  <div className={`text-lg font-bold mb-1 ${stats.filteredMostProfitableBot.total_pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stats.filteredMostProfitableBot.total_pnl_btc.toFixed(6)} BTC / ${stats.filteredMostProfitableBot.total_pnl_usd.toFixed(2)}
+                  </div>
+                ) : currencyDisplay === 'btc' ? (
+                  <div className={`text-2xl font-bold mb-1 ${stats.filteredMostProfitableBot.total_pnl_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stats.filteredMostProfitableBot.total_pnl_btc.toFixed(6)} BTC
+                  </div>
+                ) : (
+                  <div className={`text-2xl font-bold mb-1 ${stats.filteredMostProfitableBot.total_pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    ${stats.filteredMostProfitableBot.total_pnl_usd.toFixed(2)}
+                  </div>
+                )}
                 <div className="text-xs text-blue-400 truncate">{stats.filteredMostProfitableBot.bot_name}</div>
               </>
             ) : (
@@ -771,19 +916,22 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
               />
               <YAxis
                 tick={{ fill: '#94a3b8', fontSize: 12 }}
-                tickFormatter={(value) => `$${value}`}
+                tickFormatter={(value) => currencyDisplay === 'btc' ? value.toFixed(6) : `$${value}`}
               />
               <Tooltip
-                content={<CustomTooltip labelFormatter={(date: string) => new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} />}
+                content={<CustomTooltip currencyDisplay={currencyDisplay} labelFormatter={(date: string) => new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} />}
                 cursor={false}
               />
-              <Bar dataKey="daily_pnl" radius={[4, 4, 0, 0]}>
-                {getFilledByDayData().map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={entry.daily_pnl >= 0 ? '#22c55e' : '#ef4444'}
-                  />
-                ))}
+              <Bar dataKey={currencyDisplay === 'btc' ? 'daily_pnl_btc' : 'daily_pnl_usd'} radius={[4, 4, 0, 0]}>
+                {getFilledByDayData().map((entry, index) => {
+                  const value = currencyDisplay === 'btc' ? entry.daily_pnl_btc : entry.daily_pnl_usd
+                  return (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={value >= 0 ? '#22c55e' : '#ef4444'}
+                    />
+                  )
+                })}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -801,19 +949,22 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
               />
               <YAxis
                 tick={{ fill: '#94a3b8', fontSize: 12 }}
-                tickFormatter={(value) => `$${value}`}
+                tickFormatter={(value) => currencyDisplay === 'btc' ? value.toFixed(6) : `$${value}`}
               />
               <Tooltip
-                content={<CustomTooltip labelFormatter={(pair: string) => pair} />}
+                content={<CustomTooltip currencyDisplay={currencyDisplay} labelFormatter={(pair: string) => pair} />}
                 cursor={false}
               />
-              <Bar dataKey="total_pnl" radius={[4, 4, 0, 0]}>
-                {stats.filteredByPair.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={entry.total_pnl >= 0 ? '#22c55e' : '#ef4444'}
-                  />
-                ))}
+              <Bar dataKey={currencyDisplay === 'btc' ? 'total_pnl_btc' : 'total_pnl_usd'} radius={[4, 4, 0, 0]}>
+                {stats.filteredByPair.map((entry, index) => {
+                  const value = currencyDisplay === 'btc' ? entry.total_pnl_btc : entry.total_pnl_usd
+                  return (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={value >= 0 ? '#22c55e' : '#ef4444'}
+                    />
+                  )
+                })}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
