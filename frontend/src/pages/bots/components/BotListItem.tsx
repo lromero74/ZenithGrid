@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react'
 import { Bot } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
-import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft } from 'lucide-react'
+import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
 
 interface BotListItemProps {
@@ -49,6 +50,22 @@ export function BotListItem({
   const botPairs = ((bot as any).product_ids || [bot.product_id])
   const strategyName = strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
   const aiProvider = bot.strategy_config?.ai_provider
+
+  // State for projected PnL carousel
+  const [currentTimeframeIndex, setCurrentTimeframeIndex] = useState(0)
+  const [isPnlExpanded, setIsPnlExpanded] = useState(false)
+  const timeframes = ['day', 'week', 'month', 'year']
+
+  // Auto-scroll through timeframes every 5 seconds (only when not expanded)
+  useEffect(() => {
+    if (isPnlExpanded) return
+
+    const interval = setInterval(() => {
+      setCurrentTimeframeIndex((prev) => (prev + 1) % timeframes.length)
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [isPnlExpanded, timeframes.length])
 
   return (
     <tr
@@ -199,36 +216,49 @@ export function BotListItem({
             usd: dailyPnlUsd * days
           })
 
+          const daily = { btc: dailyPnlBtc, usd: dailyPnlUsd }
           const weekly = projectPnl(7)
           const monthly = projectPnl(30)
           const yearly = projectPnl(365)
+
+          const projections = [
+            { label: 'Day', data: daily, bg: 'bg-slate-900/50', border: 'border-slate-700/50', opacity: '' },
+            { label: 'Week', data: weekly, bg: 'bg-slate-900/40', border: 'border-slate-700/40', opacity: 'opacity-90' },
+            { label: 'Month', data: monthly, bg: 'bg-slate-900/30', border: 'border-slate-700/30', opacity: 'opacity-80' },
+            { label: 'Year', data: yearly, bg: 'bg-slate-900/20', border: 'border-slate-700/20', opacity: 'opacity-70' },
+          ]
 
           const isPositive = dailyPnlUsd > 0
           const isNegative = dailyPnlUsd < 0
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
 
+          const renderBox = (projection: typeof projections[0], index: number) => (
+            <div key={index} className={`${colorClass} ${projection.bg} rounded px-1.5 py-0.5 border ${projection.border} ${projection.opacity}`}>
+              <div className="font-medium text-slate-300">{projection.label}:</div>
+              <div>{projection.data.btc.toFixed(8)} BTC</div>
+              <div>${projection.data.usd.toFixed(2)}</div>
+            </div>
+          )
+
           return (
-            <div className="text-[10px] space-y-1">
-              <div className={`${colorClass} bg-slate-900/50 rounded px-1.5 py-0.5 border border-slate-700/50`}>
-                <div className="font-medium text-slate-300">Day:</div>
-                <div>{dailyPnlBtc.toFixed(8)} BTC</div>
-                <div>${dailyPnlUsd.toFixed(2)}</div>
+            <div className="relative">
+              <div className="text-[10px] space-y-1">
+                {isPnlExpanded ? (
+                  // Show all boxes when expanded
+                  projections.map((proj, idx) => renderBox(proj, idx))
+                ) : (
+                  // Show only current box when collapsed (carousel mode)
+                  renderBox(projections[currentTimeframeIndex], currentTimeframeIndex)
+                )}
               </div>
-              <div className={`${colorClass} bg-slate-900/40 rounded px-1.5 py-0.5 border border-slate-700/40 opacity-90`}>
-                <div className="font-medium text-slate-300">Week:</div>
-                <div>{weekly.btc.toFixed(8)} BTC</div>
-                <div>${weekly.usd.toFixed(2)}</div>
-              </div>
-              <div className={`${colorClass} bg-slate-900/30 rounded px-1.5 py-0.5 border border-slate-700/30 opacity-80`}>
-                <div className="font-medium text-slate-300">Month:</div>
-                <div>{monthly.btc.toFixed(8)} BTC</div>
-                <div>${monthly.usd.toFixed(2)}</div>
-              </div>
-              <div className={`${colorClass} bg-slate-900/20 rounded px-1.5 py-0.5 border border-slate-700/20 opacity-70`}>
-                <div className="font-medium text-slate-300">Year:</div>
-                <div>{yearly.btc.toFixed(8)} BTC</div>
-                <div>${yearly.usd.toFixed(2)}</div>
-              </div>
+              {/* Toggle button */}
+              <button
+                onClick={() => setIsPnlExpanded(!isPnlExpanded)}
+                className="absolute -top-1 -right-1 p-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-400 hover:text-slate-200 transition-colors"
+                title={isPnlExpanded ? 'Collapse' : 'Expand all timeframes'}
+              >
+                {isPnlExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
             </div>
           )
         })()}
