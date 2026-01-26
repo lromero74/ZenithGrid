@@ -99,6 +99,10 @@ export const positionsApi = {
       weekly_profit_usd: number;
       four_weeks_profit_btc: number;
       four_weeks_profit_usd: number;
+      mtd_profit_btc: number;
+      mtd_profit_usd: number;
+      qtd_profit_btc: number;
+      qtd_profit_usd: number;
       ytd_profit_btc: number;
       ytd_profit_usd: number;
     }>('/positions/realized-pnl', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),

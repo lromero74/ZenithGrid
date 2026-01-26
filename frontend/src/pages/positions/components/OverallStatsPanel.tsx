@@ -1,4 +1,5 @@
 import { Balances } from '../../../types'
+import { useState } from 'react'
 
 interface CompletedStats {
   total_profit_btc: number
@@ -17,6 +18,10 @@ interface RealizedPnL {
   weekly_profit_usd: number
   four_weeks_profit_btc: number
   four_weeks_profit_usd: number
+  mtd_profit_btc: number
+  mtd_profit_usd: number
+  qtd_profit_btc: number
+  qtd_profit_usd: number
   ytd_profit_btc: number
   ytd_profit_usd: number
 }
@@ -35,6 +40,24 @@ interface OverallStatsPanelProps {
 }
 
 export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
+  const [selectedPeriod, setSelectedPeriod] = useState<'mtd' | 'qtd' | 'ytd'>('ytd')
+
+  // Get the selected period's data
+  const getPeriodData = () => {
+    if (!realizedPnL) return { btc: 0, usd: 0 }
+    switch (selectedPeriod) {
+      case 'mtd':
+        return { btc: realizedPnL.mtd_profit_btc, usd: realizedPnL.mtd_profit_usd }
+      case 'qtd':
+        return { btc: realizedPnL.qtd_profit_btc, usd: realizedPnL.qtd_profit_usd }
+      case 'ytd':
+        return { btc: realizedPnL.ytd_profit_btc, usd: realizedPnL.ytd_profit_usd }
+    }
+  }
+
+  const periodData = getPeriodData()
+  const periodLabel = selectedPeriod === 'mtd' ? 'MTD' : selectedPeriod === 'qtd' ? 'QTD' : 'YTD'
+
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -73,9 +96,21 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Realized PnL (YTD):</span>
-                  <span className={`font-medium ${realizedPnL.ytd_profit_btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {realizedPnL.ytd_profit_btc >= 0 ? '+' : ''}{realizedPnL.ytd_profit_btc.toFixed(8)} BTC / {realizedPnL.ytd_profit_usd >= 0 ? '+' : ''}${realizedPnL.ytd_profit_usd.toFixed(2)}
+                  <span className="text-slate-400 flex items-center gap-2">
+                    Realized PnL (
+                    <select
+                      value={selectedPeriod}
+                      onChange={(e) => setSelectedPeriod(e.target.value as 'mtd' | 'qtd' | 'ytd')}
+                      className="bg-slate-700 text-slate-300 border border-slate-600 rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-slate-600"
+                    >
+                      <option value="mtd">MTD</option>
+                      <option value="qtd">QTD</option>
+                      <option value="ytd">YTD</option>
+                    </select>
+                    ):
+                  </span>
+                  <span className={`font-medium ${periodData.btc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {periodData.btc >= 0 ? '+' : ''}{periodData.btc.toFixed(8)} BTC / {periodData.usd >= 0 ? '+' : ''}${periodData.usd.toFixed(2)}
                   </span>
                 </div>
               </>
