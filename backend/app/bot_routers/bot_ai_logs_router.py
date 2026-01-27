@@ -4,6 +4,7 @@ Bot AI Logs Router
 Handles AI bot reasoning/thinking log creation and retrieval.
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import List, Optional
@@ -230,22 +231,45 @@ async def get_unified_decision_logs(
 
         # Add AI-specific fields if this is an AI log
         if row.log_type == 'ai':
+            # Parse JSON context if it's a string
+            context = row.context
+            if isinstance(context, str):
+                try:
+                    context = json.loads(context)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
             log_dict.update({
                 'thinking': row.thinking,
                 'decision': row.decision,
                 'confidence': row.confidence,
                 'position_status': row.position_status,
                 'position_id': row.position_id,
-                'context': row.context,
+                'context': context,
             })
 
         # Add Indicator-specific fields if this is an indicator log
         if row.log_type == 'indicator':
+            # Parse JSON fields if they're strings
+            conditions_detail = row.conditions_detail
+            if isinstance(conditions_detail, str):
+                try:
+                    conditions_detail = json.loads(conditions_detail)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            indicators_snapshot = row.indicators_snapshot
+            if isinstance(indicators_snapshot, str):
+                try:
+                    indicators_snapshot = json.loads(indicators_snapshot)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
             log_dict.update({
                 'phase': row.phase,
                 'conditions_met': row.conditions_met,
-                'conditions_detail': row.conditions_detail,
-                'indicators_snapshot': row.indicators_snapshot,
+                'conditions_detail': conditions_detail,
+                'indicators_snapshot': indicators_snapshot,
             })
 
         unified_logs.append(log_dict)
