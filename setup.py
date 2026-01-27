@@ -835,10 +835,10 @@ def initialize_database(project_root):
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_used_at DATETIME,
                 auto_buy_enabled BOOLEAN DEFAULT 0,
-                auto_buy_check_interval_minutes INTEGER DEFAULT 60,
+                auto_buy_check_interval_minutes INTEGER DEFAULT 5,
                 auto_buy_order_type TEXT DEFAULT 'market',
                 auto_buy_usd_enabled BOOLEAN DEFAULT 0,
-                auto_buy_usd_min REAL DEFAULT 0.0,
+                auto_buy_usd_min REAL DEFAULT 10.0,
                 auto_buy_usdc_enabled BOOLEAN DEFAULT 0,
                 auto_buy_usdc_min REAL DEFAULT 0.0,
                 auto_buy_usdt_enabled BOOLEAN DEFAULT 0,
@@ -854,7 +854,7 @@ def initialize_database(project_root):
             CREATE TABLE IF NOT EXISTS bots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER REFERENCES users(id),
-                name TEXT UNIQUE,
+                name TEXT,
                 description TEXT,
                 account_id INTEGER REFERENCES accounts(id),
                 exchange_type TEXT DEFAULT 'cex',
@@ -889,7 +889,7 @@ def initialize_database(project_root):
             CREATE TABLE IF NOT EXISTS bot_templates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER REFERENCES users(id),
-                name TEXT UNIQUE,
+                name TEXT,
                 description TEXT,
                 strategy_type TEXT,
                 strategy_config TEXT,
@@ -964,7 +964,7 @@ def initialize_database(project_root):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                position_id INTEGER REFERENCES positions(id),
+                position_id INTEGER REFERENCES positions(id) ON DELETE CASCADE,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 side TEXT,
                 quote_amount REAL,
