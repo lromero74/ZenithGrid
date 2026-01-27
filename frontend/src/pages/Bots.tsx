@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Bot } from '../types'
-import { Plus, Activity, Building2, Wallet } from 'lucide-react'
+import { Plus, Activity, Building2, Wallet, Upload, ClipboardPaste, X, CheckCircle, AlertCircle } from 'lucide-react'
 import AIBotLogs from '../components/AIBotLogs'
 import IndicatorLogs from '../components/IndicatorLogs'
 import ScannerLogs from '../components/ScannerLogs'
@@ -32,6 +32,16 @@ function Bots() {
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [formData, setFormData] = useState<BotFormData>(getDefaultFormData())
   const [projectionTimeframe, setProjectionTimeframe] = useState<TimeRange>('all')
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importMode, setImportMode] = useState<'file' | 'paste'>('file')
+  const [pasteInput, setPasteInput] = useState('')
+  const [importValidation, setImportValidation] = useState<{
+    isValid: boolean | null
+    errors: string[]
+    warnings: string[]
+    parsedData: any | null
+  }>({ isValid: null, errors: [], warnings: [], parsedData: null })
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch all data
   const {
@@ -183,6 +193,149 @@ function Bots() {
     }
   }
 
+  // Validate imported bot JSON and check for duplicates
+  const validateImportedBot = (jsonString: string): {
+    isValid: boolean
+    errors: string[]
+    warnings: string[]
+    parsedData: any | null
+  } => {
+    const errors: string[] = []
+    const warnings: string[] = []
+    let parsedData: any = null
+
+    // Step 1: Parse JSON
+    try {
+      parsedData = JSON.parse(jsonString)
+    } catch (err) {
+      return { isValid: false, errors: ['Invalid JSON format'], warnings: [], parsedData: null }
+    }
+
+    // Step 2: Check required fields
+    if (!parsedData.strategy_type) {
+      errors.push('Missing required field: strategy_type')
+    }
+    if (!parsedData.product_id && (!parsedData.product_ids || parsedData.product_ids.length === 0)) {
+      errors.push('Missing required field: product_id or product_ids')
+    }
+
+    // Step 3: Validate strategy_type exists in our strategies
+    if (parsedData.strategy_type && strategies.length > 0) {
+      const strategyExists = strategies.some(s => s.id === parsedData.strategy_type)
+      if (!strategyExists) {
+        errors.push(`Unknown strategy type: "${parsedData.strategy_type}"`)
+      }
+    }
+
+    // Step 4: Validate trading pairs exist
+    const pairs = parsedData.product_ids || (parsedData.product_id ? [parsedData.product_id] : [])
+    if (TRADING_PAIRS.length > 0) {
+      const invalidPairs = pairs.filter((p: string) => !TRADING_PAIRS.some(tp => tp.value === p))
+      if (invalidPairs.length > 0) {
+        warnings.push(`Unknown trading pair(s): ${invalidPairs.join(', ')} - they may not be available`)
+      }
+    }
+
+    // Step 5: Check for duplicate bot (same strategy_type, same pairs, same strategy_config)
+    if (errors.length === 0) {
+      const isDuplicate = bots.some(existingBot => {
+        const existingPairs = (existingBot as any).product_ids || [existingBot.product_id]
+        const newPairs = parsedData.product_ids || [parsedData.product_id]
+
+        const sameStrategy = existingBot.strategy_type === parsedData.strategy_type
+        const samePairs = existingPairs.length === newPairs.length &&
+          existingPairs.every((p: string) => newPairs.includes(p))
+        const sameConfig = JSON.stringify(existingBot.strategy_config) === JSON.stringify(parsedData.strategy_config)
+
+        return sameStrategy && samePairs && sameConfig
+      })
+
+      if (isDuplicate) {
+        warnings.push('A bot with identical configuration already exists')
+      }
+    }
+
+    // Step 6: Validate budget_percentage if provided
+    if (parsedData.budget_percentage !== undefined) {
+      if (typeof parsedData.budget_percentage !== 'number' || parsedData.budget_percentage < 0 || parsedData.budget_percentage > 100) {
+        errors.push('budget_percentage must be a number between 0 and 100')
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+      parsedData
+    }
+  }
+
+  // Validate input when it changes (for paste mode)
+  const handlePasteInputChange = (value: string) => {
+    setPasteInput(value)
+    if (!value.trim()) {
+      setImportValidation({ isValid: null, errors: [], warnings: [], parsedData: null })
+      return
+    }
+    const validation = validateImportedBot(value)
+    setImportValidation(validation)
+  }
+
+  // Handle file selection in modal
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const content = e.target?.result as string
+      setPasteInput(content)
+      const validation = validateImportedBot(content)
+      setImportValidation(validation)
+    }
+    reader.readAsText(file)
+    event.target.value = ''
+  }
+
+  const handleImportSubmit = () => {
+    if (!importValidation.isValid || !importValidation.parsedData) return
+
+    // Show warnings confirmation if any
+    if (importValidation.warnings.length > 0) {
+      const proceed = confirm(
+        `Warnings:\n${importValidation.warnings.join('\n')}\n\nDo you want to import anyway?`
+      )
+      if (!proceed) return
+    }
+
+    const importedData = importValidation.parsedData
+
+    // Prepare bot data for creation
+    const botData = {
+      name: importedData.name ? `${importedData.name} (Imported)` : 'Imported Bot',
+      description: importedData.description || '',
+      strategy_type: importedData.strategy_type,
+      strategy_config: importedData.strategy_config || {},
+      product_id: importedData.product_id || importedData.product_ids?.[0] || 'BTC-USD',
+      product_ids: importedData.product_ids || [importedData.product_id || 'BTC-USD'],
+      split_budget_across_pairs: importedData.split_budget_across_pairs || false,
+      budget_percentage: importedData.budget_percentage || 10,
+      exchange_type: importedData.exchange_type || 'cex',
+      reserved_btc_balance: 0,
+      reserved_usd_balance: 0,
+    }
+
+    createBot.mutate(botData)
+    closeImportModal()
+  }
+
+  const closeImportModal = () => {
+    setShowImportModal(false)
+    setPasteInput('')
+    setImportValidation({ isValid: null, errors: [], warnings: [], parsedData: null })
+    setImportMode('file')
+  }
+
   if (botsLoading && bots.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -217,13 +370,23 @@ function Bots() {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleOpenCreate}
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Create Bot</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded font-medium transition-colors"
+            title="Import bot from file or clipboard"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Import Bot</span>
+          </button>
+          <button
+            onClick={handleOpenCreate}
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create Bot</span>
+          </button>
+        </div>
       </div>
 
       {/* P&L Chart - 3Commas-style (filtered by account) */}
@@ -439,6 +602,171 @@ function Bots() {
           isOpen={scannerLogsBotId !== null}
           onClose={() => setScannerLogsBotId(null)}
         />
+      )}
+
+      {/* Import Bot Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-2xl mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h2 className="text-xl font-semibold">Import Bot</h2>
+              <button
+                onClick={closeImportModal}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Tab Selector */}
+            <div className="flex border-b border-slate-700">
+              <button
+                onClick={() => {
+                  setImportMode('file')
+                  setPasteInput('')
+                  setImportValidation({ isValid: null, errors: [], warnings: [], parsedData: null })
+                }}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                  importMode === 'file'
+                    ? 'text-blue-400 border-b-2 border-blue-400 bg-slate-700/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Upload className="w-4 h-4 inline mr-2" />
+                From File
+              </button>
+              <button
+                onClick={() => {
+                  setImportMode('paste')
+                  setPasteInput('')
+                  setImportValidation({ isValid: null, errors: [], warnings: [], parsedData: null })
+                }}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                  importMode === 'paste'
+                    ? 'text-blue-400 border-b-2 border-blue-400 bg-slate-700/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <ClipboardPaste className="w-4 h-4 inline mr-2" />
+                From Clipboard
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {importMode === 'file' ? (
+                <>
+                  <p className="text-slate-400 text-sm">
+                    Select a JSON file containing a bot configuration.
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-8 border-2 border-dashed border-slate-600 rounded-lg hover:border-slate-500 hover:bg-slate-700/30 transition-colors"
+                  >
+                    <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                    <div className="text-slate-300 font-medium">Click to select file</div>
+                    <div className="text-slate-500 text-sm">or drag and drop a .json file</div>
+                  </button>
+                  {pasteInput && (
+                    <div className="bg-slate-900 border border-slate-600 rounded-lg p-3 max-h-32 overflow-auto">
+                      <pre className="text-xs font-mono text-slate-400 whitespace-pre-wrap">{pasteInput.substring(0, 500)}{pasteInput.length > 500 ? '...' : ''}</pre>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-400 text-sm">
+                    Paste a bot configuration JSON below. The configuration will be validated before import.
+                  </p>
+                  <textarea
+                    value={pasteInput}
+                    onChange={(e) => handlePasteInputChange(e.target.value)}
+                    placeholder='{"name": "My Bot", "strategy_type": "grid", ...}'
+                    className="w-full h-48 bg-slate-900 border border-slate-600 rounded-lg p-3 text-sm font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </>
+              )}
+
+              {/* Validation Status */}
+              {importValidation.isValid !== null && (
+                <div className="space-y-2">
+                  {importValidation.isValid ? (
+                    <div className="flex items-center gap-2 text-green-400">
+                      <CheckCircle className="w-5 h-5" />
+                      <span className="font-medium">Valid configuration</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-red-400">
+                      <AlertCircle className="w-5 h-5" />
+                      <span className="font-medium">Invalid configuration</span>
+                    </div>
+                  )}
+
+                  {/* Errors */}
+                  {importValidation.errors.length > 0 && (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded p-3">
+                      <div className="text-red-400 text-sm font-medium mb-1">Errors:</div>
+                      <ul className="text-red-300 text-sm list-disc list-inside space-y-1">
+                        {importValidation.errors.map((error, i) => (
+                          <li key={i}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Warnings */}
+                  {importValidation.warnings.length > 0 && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3">
+                      <div className="text-yellow-400 text-sm font-medium mb-1">Warnings:</div>
+                      <ul className="text-yellow-300 text-sm list-disc list-inside space-y-1">
+                        {importValidation.warnings.map((warning, i) => (
+                          <li key={i}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Show parsed bot info when valid */}
+                  {importValidation.isValid && importValidation.parsedData && (
+                    <div className="bg-slate-700/50 rounded p-3 text-sm">
+                      <div className="text-slate-300 font-medium mb-2">Bot Preview:</div>
+                      <div className="grid grid-cols-2 gap-2 text-slate-400">
+                        <div>Name: <span className="text-slate-200">{importValidation.parsedData.name || 'Imported Bot'}</span></div>
+                        <div>Strategy: <span className="text-slate-200">{importValidation.parsedData.strategy_type}</span></div>
+                        <div>Pairs: <span className="text-slate-200">
+                          {(importValidation.parsedData.product_ids || [importValidation.parsedData.product_id]).join(', ')}
+                        </span></div>
+                        <div>Budget: <span className="text-slate-200">{importValidation.parsedData.budget_percentage || 10}%</span></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 p-4 border-t border-slate-700">
+              <button
+                onClick={closeImportModal}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportSubmit}
+                disabled={!importValidation.isValid}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded font-medium transition-colors"
+              >
+                Import Bot
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

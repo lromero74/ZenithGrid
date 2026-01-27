@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Bot } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
-import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react'
+import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
 
 interface BotListItemProps {
@@ -422,6 +422,61 @@ export function BotListItem({
                 >
                   <Copy className="w-4 h-4 text-blue-400" />
                   <span>Clone Bot</span>
+                </button>
+                <button
+                  onClick={() => {
+                    // Export bot configuration to JSON file
+                    const exportData = {
+                      name: bot.name,
+                      description: bot.description,
+                      strategy_type: bot.strategy_type,
+                      strategy_config: bot.strategy_config,
+                      product_id: bot.product_id,
+                      product_ids: (bot as any).product_ids,
+                      split_budget_across_pairs: (bot as any).split_budget_across_pairs,
+                      budget_percentage: bot.budget_percentage,
+                      exchange_type: (bot as any).exchange_type,
+                    }
+                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${bot.name.replace(/[^a-z0-9]/gi, '_')}_bot.json`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                    setOpenMenuId(null)
+                  }}
+                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
+                >
+                  <Download className="w-4 h-4 text-blue-400" />
+                  <span>Export to File</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    // Copy bot configuration to clipboard
+                    const exportData = {
+                      name: bot.name,
+                      description: bot.description,
+                      strategy_type: bot.strategy_type,
+                      strategy_config: bot.strategy_config,
+                      product_id: bot.product_id,
+                      product_ids: (bot as any).product_ids,
+                      split_budget_across_pairs: (bot as any).split_budget_across_pairs,
+                      budget_percentage: bot.budget_percentage,
+                      exchange_type: (bot as any).exchange_type,
+                    }
+                    try {
+                      await navigator.clipboard.writeText(JSON.stringify(exportData, null, 2))
+                      alert('Bot configuration copied to clipboard!')
+                    } catch (err) {
+                      alert('Failed to copy to clipboard')
+                    }
+                    setOpenMenuId(null)
+                  }}
+                  className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
+                >
+                  <Clipboard className="w-4 h-4 text-green-400" />
+                  <span>Copy to Clipboard</span>
                 </button>
 
                 {/* Copy to Account - show if there are other accounts to copy to */}
