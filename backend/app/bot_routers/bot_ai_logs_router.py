@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, union_all, literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -125,8 +125,8 @@ async def get_unified_decision_logs(
     """
     Get unified decision logs (AI + Indicator) in chronological order.
 
-    Returns both AI reasoning logs and indicator evaluation logs merged by timestamp.
-    Each entry has a 'log_type' field indicating 'ai' or 'indicator'.
+    Uses SQL UNION ALL to merge both log tables at database level with proper
+    pagination. Database handles sorting and limiting for optimal performance.
 
     Args:
         bot_id: Bot ID to get logs for
@@ -145,63 +145,109 @@ async def get_unified_decision_logs(
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
 
-    # Query AI logs
-    ai_logs_query = select(AIBotLog).where(AIBotLog.bot_id == bot_id)
+    # Build AI logs subquery with discriminator column
+    ai_logs_stmt = select(
+        literal('ai').label('log_type'),
+        AIBotLog.id,
+        AIBotLog.bot_id,
+        AIBotLog.timestamp,
+        AIBotLog.product_id,
+        AIBotLog.thinking,
+        AIBotLog.decision,
+        AIBotLog.confidence,
+        AIBotLog.current_price,
+        AIBotLog.position_status,
+        AIBotLog.position_id,
+        AIBotLog.context,
+        literal(None).label('phase'),
+        literal(None).label('conditions_met'),
+        literal(None).label('conditions_detail'),
+        literal(None).label('indicators_snapshot'),
+    ).where(AIBotLog.bot_id == bot_id)
+
+    # Apply optional filters to AI logs
     if product_id:
-        ai_logs_query = ai_logs_query.where(AIBotLog.product_id == product_id)
+        ai_logs_stmt = ai_logs_stmt.where(AIBotLog.product_id == product_id)
     if since:
-        ai_logs_query = ai_logs_query.where(AIBotLog.timestamp >= since)
+        ai_logs_stmt = ai_logs_stmt.where(AIBotLog.timestamp >= since)
 
-    ai_logs_result = await db.execute(ai_logs_query)
-    ai_logs = ai_logs_result.scalars().all()
+    # Build Indicator logs subquery with discriminator column
+    indicator_logs_stmt = select(
+        literal('indicator').label('log_type'),
+        IndicatorLog.id,
+        IndicatorLog.bot_id,
+        IndicatorLog.timestamp,
+        IndicatorLog.product_id,
+        literal(None).label('thinking'),
+        literal(None).label('decision'),
+        literal(None).label('confidence'),
+        IndicatorLog.current_price,
+        literal(None).label('position_status'),
+        literal(None).label('position_id'),
+        literal(None).label('context'),
+        IndicatorLog.phase,
+        IndicatorLog.conditions_met,
+        IndicatorLog.conditions_detail,
+        IndicatorLog.indicators_snapshot,
+    ).where(IndicatorLog.bot_id == bot_id)
 
-    # Query Indicator logs
-    indicator_logs_query = select(IndicatorLog).where(IndicatorLog.bot_id == bot_id)
+    # Apply optional filters to Indicator logs
     if product_id:
-        indicator_logs_query = indicator_logs_query.where(IndicatorLog.product_id == product_id)
+        indicator_logs_stmt = indicator_logs_stmt.where(
+            IndicatorLog.product_id == product_id
+        )
     if since:
-        indicator_logs_query = indicator_logs_query.where(IndicatorLog.timestamp >= since)
+        indicator_logs_stmt = indicator_logs_stmt.where(
+            IndicatorLog.timestamp >= since
+        )
 
-    indicator_logs_result = await db.execute(indicator_logs_query)
-    indicator_logs = indicator_logs_result.scalars().all()
+    # UNION ALL both queries
+    union_stmt = union_all(ai_logs_stmt, indicator_logs_stmt)
 
-    # Convert to unified format
+    # Apply ORDER BY and pagination at SQL level
+    final_query = (
+        select(union_stmt.c)  # Select all columns from union result
+        .order_by(desc(union_stmt.c.timestamp))
+        .limit(limit)
+        .offset(offset)
+    )
+
+    # Execute query
+    result = await db.execute(final_query)
+    rows = result.fetchall()
+
+    # Convert rows to response dictionaries
     unified_logs = []
+    for row in rows:
+        log_dict = {
+            'log_type': row.log_type,
+            'id': row.id,
+            'bot_id': row.bot_id,
+            'timestamp': row.timestamp,
+            'product_id': row.product_id,
+            'current_price': row.current_price,
+        }
 
-    # Add AI logs
-    for log in ai_logs:
-        unified_logs.append({
-            "log_type": "ai",
-            "id": log.id,
-            "timestamp": log.timestamp,
-            "product_id": log.product_id,
-            "decision": log.decision,
-            "confidence": log.confidence,
-            "thinking": log.thinking,
-            "current_price": log.current_price,
-            "position_status": log.position_status,
-            "context": log.context,
-            "position_id": log.position_id,
-        })
+        # Add AI-specific fields if this is an AI log
+        if row.log_type == 'ai':
+            log_dict.update({
+                'thinking': row.thinking,
+                'decision': row.decision,
+                'confidence': row.confidence,
+                'position_status': row.position_status,
+                'position_id': row.position_id,
+                'context': row.context,
+            })
 
-    # Add Indicator logs
-    for log in indicator_logs:
-        unified_logs.append({
-            "log_type": "indicator",
-            "id": log.id,
-            "timestamp": log.timestamp,
-            "product_id": log.product_id,
-            "phase": log.phase,
-            "conditions_met": log.conditions_met,
-            "conditions_detail": log.conditions_detail,
-            "indicators_snapshot": log.indicators_snapshot,
-            "current_price": log.current_price,
-        })
+        # Add Indicator-specific fields if this is an indicator log
+        if row.log_type == 'indicator':
+            log_dict.update({
+                'phase': row.phase,
+                'conditions_met': row.conditions_met,
+                'conditions_detail': row.conditions_detail,
+                'indicators_snapshot': row.indicators_snapshot,
+            })
 
-    # Sort by timestamp descending (most recent first)
-    unified_logs.sort(key=lambda x: x["timestamp"], reverse=True)
+        unified_logs.append(log_dict)
 
-    # Apply pagination
-    paginated_logs = unified_logs[offset:offset + limit]
-
-    return paginated_logs
+    return unified_logs
