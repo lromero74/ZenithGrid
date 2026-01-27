@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Bot } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
-import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
+import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard, CheckCircle } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
+import { useNotifications } from '../../../contexts/NotificationContext'
 
 interface BotListItemProps {
   bot: Bot
@@ -47,6 +48,7 @@ export function BotListItem({
   setIndicatorLogsBotId,
   setScannerLogsBotId,
 }: BotListItemProps) {
+  const { addToast } = useNotifications()
   const botPairs = ((bot as any).product_ids || [bot.product_id])
   const strategyName = strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
   const aiProvider = bot.strategy_config?.ai_provider
@@ -467,9 +469,17 @@ export function BotListItem({
                     }
                     try {
                       await navigator.clipboard.writeText(JSON.stringify(exportData, null, 2))
-                      alert('Bot configuration copied to clipboard!')
+                      addToast({
+                        type: 'success',
+                        title: 'Copied to Clipboard',
+                        message: `"${bot.name}" config ready to share`,
+                      })
                     } catch (err) {
-                      alert('Failed to copy to clipboard')
+                      addToast({
+                        type: 'error',
+                        title: 'Copy Failed',
+                        message: 'Could not access clipboard',
+                      })
                     }
                     setOpenMenuId(null)
                   }}

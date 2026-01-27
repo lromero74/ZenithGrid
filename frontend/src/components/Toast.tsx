@@ -4,9 +4,9 @@
  */
 
 import { useEffect, useState } from 'react'
-import { TrendingUp, TrendingDown, DollarSign, ArrowDownCircle, X } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, ArrowDownCircle, X, CheckCircle } from 'lucide-react'
 
-export type ToastType = 'base_order' | 'dca_order' | 'sell_order' | 'partial_fill' | 'info' | 'error'
+export type ToastType = 'base_order' | 'dca_order' | 'sell_order' | 'partial_fill' | 'info' | 'error' | 'success'
 
 export interface ToastData {
   id: string
@@ -86,6 +86,14 @@ export function Toast({ toast, onDismiss }: ToastProps) {
           borderColor: 'border-red-500',
           iconColor: 'text-red-400',
           titleColor: 'text-red-300',
+        }
+      case 'success':
+        return {
+          icon: <CheckCircle className="w-6 h-6" />,
+          bgColor: 'bg-emerald-900/90',
+          borderColor: 'border-emerald-500',
+          iconColor: 'text-emerald-400',
+          titleColor: 'text-emerald-300',
         }
       default:
         return {
