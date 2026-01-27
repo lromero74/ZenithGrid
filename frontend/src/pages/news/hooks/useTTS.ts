@@ -23,6 +23,7 @@ interface UseTTSReturn {
   isPlaying: boolean
   isPaused: boolean
   isLoading: boolean
+  isReady: boolean  // Audio loaded but needs user click to play (autoplay blocked)
   error: string | null
   currentVoice: string
   playbackRate: number
@@ -30,6 +31,7 @@ interface UseTTSReturn {
 
   // Actions
   speak: (text: string) => Promise<void>
+  play: () => void  // Start playback when isReady (after autoplay blocked)
   pause: () => void
   resume: () => void
   stop: () => void
@@ -52,6 +54,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isReady, setIsReady] = useState(false)  // Audio ready but autoplay was blocked
   const [error, setError] = useState<string | null>(null)
   const [currentVoice, setCurrentVoice] = useState(defaultVoice)
   const [playbackRate, setPlaybackRate] = useState(defaultRate)
@@ -88,6 +91,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     setError(null)
     setIsPlaying(false)
     setIsPaused(false)
+    setIsReady(false)
 
     try {
       // Convert playback rate to percentage (1.0 = +0%, 1.2 = +20%, 0.8 = -20%)
@@ -149,7 +153,20 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
         URL.revokeObjectURL(audioUrl)
       }
 
-      await audio.play()
+      // Try to play - may be blocked by autoplay policy
+      try {
+        await audio.play()
+      } catch (playErr) {
+        // Check if it's an autoplay policy block
+        if ((playErr as Error).name === 'NotAllowedError') {
+          // Audio is loaded but needs user interaction to play
+          setIsLoading(false)
+          setIsReady(true)
+          console.log('Autoplay blocked - user needs to click play')
+        } else {
+          throw playErr
+        }
+      }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         // Request was cancelled, not an error
@@ -160,6 +177,20 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
       setIsLoading(false)
     }
   }, [currentVoice, playbackRate])
+
+  // Play when audio is ready (after autoplay was blocked)
+  const play = useCallback(() => {
+    if (audioRef.current && isReady) {
+      audioRef.current.play()
+        .then(() => {
+          setIsReady(false)
+        })
+        .catch((err) => {
+          console.error('Play failed:', err)
+          setError('Failed to play audio')
+        })
+    }
+  }, [isReady])
 
   const pause = useCallback(() => {
     if (audioRef.current && !audioRef.current.paused) {
@@ -186,6 +217,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     setIsPlaying(false)
     setIsPaused(false)
     setIsLoading(false)
+    setIsReady(false)
     setError(null)
   }, [])
 
@@ -205,11 +237,13 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     isPlaying,
     isPaused,
     isLoading,
+    isReady,
     error,
     currentVoice,
     playbackRate,
     voices,
     speak,
+    play,
     pause,
     resume,
     stop,

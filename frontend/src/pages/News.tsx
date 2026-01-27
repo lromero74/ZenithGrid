@@ -84,11 +84,13 @@ export default function News() {
     isPlaying: ttsPlaying,
     isPaused: ttsPaused,
     isLoading: ttsLoading,
+    isReady: ttsReady,
     error: ttsError,
     currentVoice,
     playbackRate,
     voices,
     speak,
+    play: ttsPlay,
     pause: ttsPause,
     resume: ttsResume,
     stop: ttsStop,
@@ -885,6 +887,24 @@ export default function News() {
                           >
                             <Square className="w-4 h-4" />
                           </button>
+                        </>
+                      ) : ttsReady ? (
+                        <>
+                          <button
+                            onClick={ttsPlay}
+                            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white transition-colors animate-pulse"
+                          >
+                            <Play className="w-4 h-4" />
+                            <span>Click to Start</span>
+                          </button>
+                          <button
+                            onClick={ttsStop}
+                            className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white transition-colors"
+                            title="Cancel"
+                          >
+                            <Square className="w-4 h-4" />
+                          </button>
+                          <span className="text-xs text-slate-400">Audio ready</span>
                         </>
                       ) : (
                         <button
