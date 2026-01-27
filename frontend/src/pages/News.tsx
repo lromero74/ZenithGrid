@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair, Volume2, Pause, Square, Loader2 } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
 import { useVideoPlayer, VideoItem as ContextVideoItem } from '../contexts/VideoPlayerContext'
@@ -19,7 +19,7 @@ import {
   videoSourceColors,
 } from '../components/news'
 import { NewsItem, TabType } from './news/types'
-import { useNewsData, useArticleContent, useNewsFilters } from './news/hooks'
+import { useNewsData, useArticleContent, useNewsFilters, useTTS } from './news/hooks'
 import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource } from './news/helpers'
 
 export default function News() {
@@ -79,6 +79,23 @@ export default function News() {
     totalFilteredItems,
   } = useNewsFilters({ newsData, videoData, pageSize: PAGE_SIZE })
 
+  // Text-to-speech for reading articles aloud
+  const {
+    isPlaying: ttsPlaying,
+    isPaused: ttsPaused,
+    isLoading: ttsLoading,
+    error: ttsError,
+    currentVoice,
+    playbackRate,
+    voices,
+    speak,
+    pause: ttsPause,
+    resume: ttsResume,
+    stop: ttsStop,
+    setVoice,
+    setRate,
+  } = useTTS()
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -93,11 +110,12 @@ export default function News() {
     }
   }, [showPlaylistDropdown])
 
-  // Reset reader mode when closing modal
+  // Reset reader mode and stop TTS when closing modal
   const handleCloseModal = useCallback(() => {
     setPreviewArticle(null)
     clearContent()
-  }, [clearContent])
+    ttsStop()
+  }, [clearContent, ttsStop])
 
   // Close article modal on ESC key press
   useEffect(() => {
@@ -818,6 +836,103 @@ export default function News() {
                     {articleContent.author && <span>By {articleContent.author}</span>}
                     {articleContent.author && articleContent.date && <span>•</span>}
                     {articleContent.date && <span>{articleContent.date}</span>}
+                  </div>
+                )}
+
+                {/* Text-to-Speech Controls - show when article content is loaded */}
+                {readerModeEnabled && articleContent?.success && articleContent.content && (
+                  <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
+                    {/* Play/Pause/Stop buttons */}
+                    <div className="flex items-center space-x-2">
+                      {ttsLoading ? (
+                        <button
+                          disabled
+                          className="flex items-center space-x-2 px-4 py-2 bg-slate-600 rounded-lg text-slate-400"
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Loading...</span>
+                        </button>
+                      ) : ttsPlaying ? (
+                        <>
+                          <button
+                            onClick={ttsPause}
+                            className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-white transition-colors"
+                          >
+                            <Pause className="w-4 h-4" />
+                            <span>Pause</span>
+                          </button>
+                          <button
+                            onClick={ttsStop}
+                            className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white transition-colors"
+                            title="Stop"
+                          >
+                            <Square className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : ttsPaused ? (
+                        <>
+                          <button
+                            onClick={ttsResume}
+                            className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white transition-colors"
+                          >
+                            <Play className="w-4 h-4" />
+                            <span>Resume</span>
+                          </button>
+                          <button
+                            onClick={ttsStop}
+                            className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white transition-colors"
+                            title="Stop"
+                          >
+                            <Square className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => speak(articleContent.content || '')}
+                          className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white transition-colors"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                          <span>Read Aloud</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Voice selector */}
+                    <div className="flex items-center space-x-2">
+                      <label className="text-xs text-slate-400">Voice:</label>
+                      <select
+                        value={currentVoice}
+                        onChange={(e) => setVoice(e.target.value)}
+                        className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white"
+                      >
+                        {voices.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name} ({v.gender})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Speed control */}
+                    <div className="flex items-center space-x-2">
+                      <label className="text-xs text-slate-400">Speed:</label>
+                      <select
+                        value={playbackRate}
+                        onChange={(e) => setRate(parseFloat(e.target.value))}
+                        className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white"
+                      >
+                        <option value="0.75">0.75x</option>
+                        <option value="1">1x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                      </select>
+                    </div>
+
+                    {/* TTS Error */}
+                    {ttsError && (
+                      <span className="text-xs text-red-400">{ttsError}</span>
+                    )}
                   </div>
                 )}
 

@@ -35,7 +35,9 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import feedparser
 import trafilatura
-from fastapi import APIRouter, HTTPException, Response
+import edge_tts
+from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
@@ -1432,3 +1434,96 @@ async def get_article_content(url: str):
             success=False,
             error=f"Failed to extract content: {str(e)}"
         )
+
+
+# =============================================================================
+# Text-to-Speech Endpoint
+# =============================================================================
+
+# Available voices for TTS (high-quality neural voices)
+TTS_VOICES = {
+    "aria": "en-US-AriaNeural",      # Female, News - default
+    "guy": "en-US-GuyNeural",        # Male, News
+    "jenny": "en-US-JennyNeural",    # Female, General
+    "brian": "en-US-BrianNeural",    # Male, Conversational
+    "emma": "en-US-EmmaMultilingualNeural",  # Female, Conversational
+    "andrew": "en-US-AndrewNeural",  # Male, Conversational
+}
+
+DEFAULT_VOICE = "aria"
+
+
+@router.post("/tts")
+async def text_to_speech(
+    text: str = Query(..., min_length=1, max_length=50000, description="Text to convert to speech"),
+    voice: str = Query(DEFAULT_VOICE, description="Voice to use (aria, guy, jenny, brian, emma, andrew)"),
+    rate: str = Query("+0%", description="Speech rate adjustment (e.g., +10%, -20%)"),
+):
+    """
+    Convert text to speech using Microsoft Edge's neural TTS.
+
+    Returns streaming MP3 audio. Free, high-quality neural voices.
+
+    Query params:
+    - text: The text to convert (max 50,000 characters)
+    - voice: Voice selection (default: aria - female news voice)
+    - rate: Speed adjustment (e.g., "+10%" for faster, "-20%" for slower)
+
+    Available voices:
+    - aria: Female, News voice (default) - clear and professional
+    - guy: Male, News voice - authoritative
+    - jenny: Female, General - friendly
+    - brian: Male, Conversational - approachable
+    - emma: Female, Conversational - cheerful
+    - andrew: Male, Conversational - warm
+    """
+    # Validate voice selection
+    voice_name = TTS_VOICES.get(voice.lower(), TTS_VOICES[DEFAULT_VOICE])
+
+    # Validate rate format
+    if not (rate.startswith("+") or rate.startswith("-")) or not rate.endswith("%"):
+        rate = "+0%"
+
+    async def generate_audio():
+        """Generate audio chunks using edge-tts"""
+        try:
+            communicate = edge_tts.Communicate(text, voice_name, rate=rate)
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    yield chunk["data"]
+        except Exception as e:
+            logger.error(f"TTS generation error: {e}")
+            raise
+
+    try:
+        return StreamingResponse(
+            generate_audio(),
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": "inline",
+                "Cache-Control": "no-cache",
+            }
+        )
+    except Exception as e:
+        logger.error(f"TTS endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
+
+
+@router.get("/tts/voices")
+async def get_tts_voices():
+    """
+    Get available TTS voices.
+
+    Returns list of voice options with descriptions.
+    """
+    return {
+        "voices": [
+            {"id": "aria", "name": "Aria", "gender": "Female", "style": "News", "desc": "Clear"},
+            {"id": "guy", "name": "Guy", "gender": "Male", "style": "News", "desc": "Authoritative"},
+            {"id": "jenny", "name": "Jenny", "gender": "Female", "style": "General", "desc": "Friendly"},
+            {"id": "brian", "name": "Brian", "gender": "Male", "style": "Casual", "desc": "Approachable"},
+            {"id": "emma", "name": "Emma", "gender": "Female", "style": "Casual", "desc": "Cheerful"},
+            {"id": "andrew", "name": "Andrew", "gender": "Male", "style": "Casual", "desc": "Warm"},
+        ],
+        "default": DEFAULT_VOICE,
+    }
