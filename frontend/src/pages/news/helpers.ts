@@ -164,3 +164,61 @@ export const unhighlightVideo = (videoId: string): void => {
   if (!element) return
   element.classList.remove('ring-4', 'ring-blue-500/50', 'border-blue-500')
 }
+
+/**
+ * Convert markdown to plain text for TTS
+ * Strips all markdown formatting while preserving readable content
+ * @param markdown - Markdown formatted text
+ * @returns Plain text suitable for text-to-speech
+ */
+export const markdownToPlainText = (markdown: string): string => {
+  let text = markdown
+
+  // Remove code blocks (``` ... ```)
+  text = text.replace(/```[\s\S]*?```/g, '')
+
+  // Remove inline code (`code`)
+  text = text.replace(/`([^`]+)`/g, '$1')
+
+  // Remove images ![alt](url)
+  text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+
+  // Convert links [text](url) to just text
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+
+  // Remove heading markers (# ## ### etc) but keep the text
+  text = text.replace(/^#{1,6}\s+/gm, '')
+
+  // Remove bold/italic markers
+  text = text.replace(/\*\*\*([^*]+)\*\*\*/g, '$1')  // ***bold italic***
+  text = text.replace(/\*\*([^*]+)\*\*/g, '$1')      // **bold**
+  text = text.replace(/\*([^*]+)\*/g, '$1')          // *italic*
+  text = text.replace(/___([^_]+)___/g, '$1')        // ___bold italic___
+  text = text.replace(/__([^_]+)__/g, '$1')          // __bold__
+  text = text.replace(/_([^_]+)_/g, '$1')            // _italic_
+
+  // Remove horizontal rules
+  text = text.replace(/^[-*_]{3,}\s*$/gm, '')
+
+  // Remove blockquote markers
+  text = text.replace(/^>\s+/gm, '')
+
+  // Remove list markers (-, *, +, 1., 2., etc)
+  text = text.replace(/^[\s]*[-*+]\s+/gm, '')
+  text = text.replace(/^[\s]*\d+\.\s+/gm, '')
+
+  // Remove HTML tags if any
+  text = text.replace(/<[^>]+>/g, '')
+
+  // Collapse multiple newlines into double newline (paragraph break)
+  text = text.replace(/\n{3,}/g, '\n\n')
+
+  // Collapse multiple spaces
+  text = text.replace(/[ \t]+/g, ' ')
+
+  // Trim each line
+  text = text.split('\n').map(line => line.trim()).join('\n')
+
+  // Final trim
+  return text.trim()
+}
