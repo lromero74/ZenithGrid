@@ -66,6 +66,7 @@ REQUIRED_PACKAGES = {
     'aiohttp': 'aiohttp',
     'feedparser': 'feedparser',
     'trafilatura': 'trafilatura',
+    'Pillow': 'PIL',
 }
 
 # Color codes for terminal output
