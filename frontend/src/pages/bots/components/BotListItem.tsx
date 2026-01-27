@@ -426,6 +426,7 @@ export function BotListItem({
                 <button
                   onClick={() => {
                     // Export bot configuration to JSON file
+                    // Note: exchange_type is NOT exported - importer's account type will be used
                     const exportData = {
                       name: bot.name,
                       description: bot.description,
@@ -435,7 +436,6 @@ export function BotListItem({
                       product_ids: (bot as any).product_ids,
                       split_budget_across_pairs: (bot as any).split_budget_across_pairs,
                       budget_percentage: bot.budget_percentage,
-                      exchange_type: (bot as any).exchange_type,
                     }
                     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
                     const url = URL.createObjectURL(blob)
@@ -454,6 +454,7 @@ export function BotListItem({
                 <button
                   onClick={async () => {
                     // Copy bot configuration to clipboard
+                    // Note: exchange_type is NOT exported - importer's account type will be used
                     const exportData = {
                       name: bot.name,
                       description: bot.description,
@@ -463,7 +464,6 @@ export function BotListItem({
                       product_ids: (bot as any).product_ids,
                       split_budget_across_pairs: (bot as any).split_budget_across_pairs,
                       budget_percentage: bot.budget_percentage,
-                      exchange_type: (bot as any).exchange_type,
                     }
                     try {
                       await navigator.clipboard.writeText(JSON.stringify(exportData, null, 2))

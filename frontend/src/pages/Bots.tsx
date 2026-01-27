@@ -309,24 +309,29 @@ function Bots() {
     }
 
     const importedData = importValidation.parsedData
+    const productIds = importedData.product_ids || [importedData.product_id || 'BTC-USD']
 
-    // Prepare bot data for creation
-    const botData = {
+    // Populate the Create Bot form with imported data (don't create yet)
+    // Note: exchange_type uses current account's type, not imported value
+    setFormData({
       name: importedData.name ? `${importedData.name} (Imported)` : 'Imported Bot',
       description: importedData.description || '',
       strategy_type: importedData.strategy_type,
       strategy_config: importedData.strategy_config || {},
-      product_id: importedData.product_id || importedData.product_ids?.[0] || 'BTC-USD',
-      product_ids: importedData.product_ids || [importedData.product_id || 'BTC-USD'],
+      product_id: productIds[0],
+      product_ids: productIds,
       split_budget_across_pairs: importedData.split_budget_across_pairs || false,
       budget_percentage: importedData.budget_percentage || 10,
-      exchange_type: importedData.exchange_type || 'cex',
+      exchange_type: selectedAccount?.type || 'cex',
       reserved_btc_balance: 0,
       reserved_usd_balance: 0,
-    }
+      check_interval_seconds: importedData.strategy_config?.check_interval_seconds || 300,
+    })
 
-    createBot.mutate(botData)
+    // Close import modal and open create modal
     closeImportModal()
+    setEditingBot(null) // Ensure it's a new bot, not editing
+    setShowModal(true)
   }
 
   const closeImportModal = () => {
