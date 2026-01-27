@@ -109,14 +109,7 @@ export function useChartsData(
         }
 
         candleDataRef.current = candles
-
-        const latestCandleKey = candles.length > 0
-          ? `${candles[candles.length - 1].time}_${candles[candles.length - 1].close}_${useHeikinAshi}`
-          : ''
-
-        if (latestCandleKey !== lastUpdateRef.current) {
-          lastUpdateRef.current = latestCandleKey
-        }
+        // Note: lastUpdateRef is managed by Charts.tsx to track what's been rendered
       } catch (err: any) {
         console.error('Error fetching candles:', err)
         setError(err.response?.data?.detail || 'Failed to load chart data')

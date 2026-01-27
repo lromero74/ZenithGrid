@@ -84,6 +84,7 @@ function Charts() {
   } = useChartsData(selectedPair, selectedInterval, chartType, useHeikinAshi, indicators)
 
   // Update chart data when candles are fetched
+  // Note: 'loading' is included as a dependency to trigger re-run when data fetch completes
   useEffect(() => {
     if (!mainSeriesRef.current || !volumeSeriesRef.current || isCleanedUpRef.current) return
     if (!candleDataRef.current.length) return
@@ -122,7 +123,7 @@ function Charts() {
         }
       }
     }
-  }, [candleDataRef, mainSeriesRef, volumeSeriesRef, isCleanedUpRef, chartRef, chartType, useHeikinAshi, indicators, renderIndicators, lastUpdateRef])
+  }, [candleDataRef, mainSeriesRef, volumeSeriesRef, isCleanedUpRef, chartRef, chartType, useHeikinAshi, indicators, renderIndicators, lastUpdateRef, loading])
 
   // Reset last update when pair or interval changes
   useEffect(() => {
