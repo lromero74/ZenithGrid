@@ -166,6 +166,84 @@ export const unhighlightVideo = (videoId: string): void => {
 }
 
 /**
+ * Crypto/finance acronyms that should be spelled out letter-by-letter
+ * Maps acronym to spaced version for TTS pronunciation
+ */
+const TTS_ACRONYMS: Record<string, string> = {
+  // Crypto terms
+  'NFT': 'N F T',
+  'BTC': 'B T C',
+  'ETH': 'E T H',
+  'DAO': 'D A O',
+  'DEX': 'D E X',
+  'CEX': 'C E X',
+  'ICO': 'I C O',
+  'IDO': 'I D O',
+  'IEO': 'I E O',
+  'DCA': 'D C A',
+  'ATH': 'A T H',
+  'ATL': 'A T L',
+  'TVL': 'T V L',
+  'APY': 'A P Y',
+  'APR': 'A P R',
+  'KYC': 'K Y C',
+  'AML': 'A M L',
+  'FUD': 'F U D',
+  'SOL': 'S O L',
+  'XRP': 'X R P',
+  'LTC': 'L T C',
+  'DOT': 'D O T',
+  'ADA': 'A D A',
+  // Finance/regulatory
+  'SEC': 'S E C',
+  'ETF': 'E T F',
+  'IPO': 'I P O',
+  'CEO': 'C E O',
+  'CFO': 'C F O',
+  'CTO': 'C T O',
+  'GDP': 'G D P',
+  'USD': 'U S D',
+  'EUR': 'E U R',
+  'GBP': 'G B P',
+  'JPY': 'J P Y',
+  'API': 'A P I',
+  'AI': 'A I',
+  'ML': 'M L',
+  'UI': 'U I',
+  'UX': 'U X',
+}
+
+/**
+ * Expand acronyms for consistent TTS pronunciation
+ * Handles plurals (NFTs -> "N F T s") and possessives (NFT's -> "N F T's")
+ * @param text - Text containing acronyms
+ * @returns Text with acronyms expanded for letter-by-letter pronunciation
+ */
+export const expandAcronymsForTTS = (text: string): string => {
+  let result = text
+
+  // Sort by length descending to match longer acronyms first
+  const sortedAcronyms = Object.keys(TTS_ACRONYMS).sort((a, b) => b.length - a.length)
+
+  for (const acronym of sortedAcronyms) {
+    const expanded = TTS_ACRONYMS[acronym]
+
+    // Match acronym with optional plural 's' or possessive "'s"
+    // Word boundary ensures we don't match partial words
+    // Case insensitive matching, preserve original case in output
+    const regex = new RegExp(`\\b(${acronym})(s|'s)?\\b`, 'gi')
+
+    result = result.replace(regex, (match, base, suffix) => {
+      // Use the expanded version, add suffix if present
+      const expandedBase = base === base.toUpperCase() ? expanded : expanded.toLowerCase()
+      return suffix ? `${expandedBase} ${suffix}` : expandedBase
+    })
+  }
+
+  return result
+}
+
+/**
  * Convert markdown to plain text for TTS
  * Strips all markdown formatting while preserving readable content
  * @param markdown - Markdown formatted text

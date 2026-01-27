@@ -20,7 +20,7 @@ import {
 } from '../components/news'
 import { NewsItem, TabType } from './news/types'
 import { useNewsData, useArticleContent, useNewsFilters, useTTS } from './news/hooks'
-import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource, markdownToPlainText } from './news/helpers'
+import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource, markdownToPlainText, expandAcronymsForTTS } from './news/helpers'
 
 export default function News() {
   const [activeTab, setActiveTab] = useState<TabType>('articles')
@@ -908,7 +908,11 @@ export default function News() {
                         </>
                       ) : (
                         <button
-                          onClick={() => speak(markdownToPlainText(articleContent.content || ''))}
+                          onClick={() => {
+                            const plainText = markdownToPlainText(articleContent.content || '')
+                            const ttsText = expandAcronymsForTTS(plainText)
+                            speak(ttsText)
+                          }}
                           className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white transition-colors"
                         >
                           <Volume2 className="w-4 h-4" />
