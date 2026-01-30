@@ -1527,3 +1527,60 @@ async def get_tts_voices():
         ],
         "default": DEFAULT_VOICE,
     }
+
+
+@router.post("/tts-sync")
+async def text_to_speech_with_sync(
+    text: str = Query(..., min_length=1, max_length=50000),
+    voice: str = Query(DEFAULT_VOICE),
+    rate: str = Query("+0%"),
+):
+    """
+    Convert text to speech with word-level timing for synchronized highlighting.
+
+    Returns JSON with:
+    - audio: Base64-encoded MP3 audio
+    - words: Array of {text, startTime, endTime} for each word (times in seconds)
+
+    This enables karaoke-style word highlighting during playback.
+    """
+    import base64
+
+    voice_name = TTS_VOICES.get(voice.lower(), TTS_VOICES[DEFAULT_VOICE])
+
+    if not (rate.startswith("+") or rate.startswith("-")) or not rate.endswith("%"):
+        rate = "+0%"
+
+    try:
+        communicate = edge_tts.Communicate(text, voice_name, rate=rate, boundary="WordBoundary")
+
+        audio_chunks = []
+        word_boundaries = []
+
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_chunks.append(chunk["data"])
+            elif chunk["type"] == "WordBoundary":
+                # Convert 100-nanosecond units to seconds
+                offset_sec = chunk["offset"] / 10_000_000
+                duration_sec = chunk["duration"] / 10_000_000
+                word_boundaries.append({
+                    "text": chunk["text"],
+                    "startTime": round(offset_sec, 3),
+                    "endTime": round(offset_sec + duration_sec, 3),
+                })
+
+        # Combine audio chunks and encode as base64
+        audio_data = b"".join(audio_chunks)
+        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+
+        return {
+            "audio": audio_base64,
+            "words": word_boundaries,
+            "voice": voice,
+            "rate": rate,
+        }
+
+    except Exception as e:
+        logger.error(f"TTS sync generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
