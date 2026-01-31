@@ -1310,6 +1310,13 @@ async def get_article_content(url: str):
     Only allows fetching from domains in the content_sources database table.
 
     Returns clean, readable article content like browser reader mode.
+
+    TODO: Some sites (e.g., The Block) use Cloudflare protection and render content
+    via JavaScript client-side. To support these sites, we'd need to:
+    1. Install Playwright: pip install playwright && playwright install chromium
+    2. Use Playwright to fetch pages that fail with regular HTTP requests
+    3. Memory concern: Playwright uses significant RAM, may not work well on t2.micro (1GB)
+    4. Consider upgrading to t2.small (2GB RAM) before implementing
     """
     # Validate URL
     try:
@@ -1379,8 +1386,9 @@ async def get_article_content(url: str):
                     html_content,
                     include_comments=False,
                     include_tables=True,  # Include tables for structure
+                    include_links=False,  # Don't need links for reading
                     no_fallback=False,
-                    favor_precision=True,
+                    favor_recall=True,  # Favor including more content over precision
                     output_format="markdown"  # Use markdown to preserve headings, lists, etc.
                 )
             )
