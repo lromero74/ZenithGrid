@@ -151,8 +151,7 @@ export function ArticleReaderMiniPlayer() {
     seekToWord(closestIndex)
   }, [duration, words, seekToWord])
 
-  // Build word-highlighted content using timing-based position estimation
-  // This approach estimates text position based on audio timing rather than word matching
+  // Build word-highlighted content by matching TTS words to text words sequentially
   const renderedContent = useMemo(() => {
     // Show placeholder if no content yet
     if (!plainText) {
@@ -168,54 +167,42 @@ export function ArticleReaderMiniPlayer() {
       return <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{plainText}</p>
     }
 
-    // Build a map of character positions to word indices based on timing
-    // This gives us approximate character positions for each word
-    const totalDuration = words.length > 0 ? words[words.length - 1].endTime : 1
-    const charPerSecond = plainText.length / totalDuration
-
-    // Calculate estimated character ranges for each word
-    const wordRanges: Array<{ start: number; end: number; wordIndex: number }> = []
-    words.forEach((word, index) => {
-      const estimatedStart = Math.floor(word.startTime * charPerSecond)
-      const estimatedEnd = Math.floor(word.endTime * charPerSecond)
-      wordRanges.push({
-        start: Math.max(0, estimatedStart),
-        end: Math.min(plainText.length, estimatedEnd),
-        wordIndex: index,
-      })
-    })
-
-    // Find actual word boundaries in the text and map them to TTS words
-    const textWords: Array<{ start: number; end: number; text: string }> = []
-    let pos = 0
-    const wordRegex = /[a-zA-Z0-9]+(?:[''][a-zA-Z0-9]+)*/g
+    // Extract all words from plain text with their positions
+    // Include hyphens and apostrophes as part of words (e.g., "anti-union", "don't")
+    const textWords: Array<{ start: number; end: number; text: string; lower: string }> = []
+    const wordRegex = /[a-zA-Z0-9]+(?:[-–—''][a-zA-Z0-9]+)*/g
     let match
     while ((match = wordRegex.exec(plainText)) !== null) {
       textWords.push({
         start: match.index,
         end: match.index + match[0].length,
         text: match[0],
+        lower: match[0].toLowerCase(),
       })
     }
 
-    // Map each text word to the closest TTS word by position
-    const textWordToTTSWord = new Map<number, number>()
-    textWords.forEach((tw, twIndex) => {
-      const twMid = (tw.start + tw.end) / 2
-      let bestMatch = -1
-      let bestDist = Infinity
+    // Match TTS words to text words sequentially
+    // Each TTS word maps to the next matching text word
+    const ttsToTextMap = new Map<number, number>() // TTS index -> text word index
+    let textWordPtr = 0
 
-      for (let i = 0; i < wordRanges.length; i++) {
-        const wrMid = (wordRanges[i].start + wordRanges[i].end) / 2
-        const dist = Math.abs(twMid - wrMid)
-        if (dist < bestDist) {
-          bestDist = dist
-          bestMatch = i
+    words.forEach((word, ttsIndex) => {
+      // Get alphanumeric lowercase version of TTS word
+      const ttsWordClean = word.text.toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (ttsWordClean.length === 0) return // Skip punctuation-only words
+
+      // Search for matching text word starting from current pointer
+      for (let i = textWordPtr; i < textWords.length; i++) {
+        const textWordClean = textWords[i].lower.replace(/[^a-z0-9]/g, '')
+
+        // Check if they match (exact or one contains the other for contractions/possessives)
+        if (textWordClean === ttsWordClean ||
+            textWordClean.includes(ttsWordClean) ||
+            ttsWordClean.includes(textWordClean)) {
+          ttsToTextMap.set(ttsIndex, i)
+          textWordPtr = i + 1 // Move pointer past this word
+          break
         }
-      }
-
-      if (bestMatch !== -1) {
-        textWordToTTSWord.set(twIndex, bestMatch)
       }
     })
 
@@ -223,8 +210,14 @@ export function ArticleReaderMiniPlayer() {
     const elements: React.ReactElement[] = []
     let lastEnd = 0
 
+    // Create reverse map: text word index -> TTS index
+    const textToTTSMap = new Map<number, number>()
+    ttsToTextMap.forEach((textIdx, ttsIdx) => {
+      textToTTSMap.set(textIdx, ttsIdx)
+    })
+
     textWords.forEach((tw, twIndex) => {
-      // Add any text before this word
+      // Add any text before this word (punctuation, spaces, etc.)
       if (tw.start > lastEnd) {
         elements.push(
           <span key={`between-${twIndex}`} className="text-slate-300">
@@ -233,19 +226,19 @@ export function ArticleReaderMiniPlayer() {
         )
       }
 
-      const ttsWordIndex = textWordToTTSWord.get(twIndex) ?? -1
-      const isCurrentWord = ttsWordIndex === currentWordIndex
+      const ttsWordIndex = textToTTSMap.get(twIndex)
+      const isCurrentWord = ttsWordIndex !== undefined && ttsWordIndex === currentWordIndex
 
       elements.push(
         <span
           key={`word-${twIndex}`}
           ref={(el) => {
-            if (ttsWordIndex >= 0) {
+            if (ttsWordIndex !== undefined) {
               wordRefs.current[ttsWordIndex] = el
             }
           }}
           onClick={() => {
-            if (ttsWordIndex >= 0) {
+            if (ttsWordIndex !== undefined) {
               seekToWord(ttsWordIndex)
             }
           }}
@@ -255,14 +248,14 @@ export function ArticleReaderMiniPlayer() {
               : 'text-slate-300'
           }`}
         >
-          {plainText.slice(tw.start, tw.end)}
+          {tw.text}
         </span>
       )
 
       lastEnd = tw.end
     })
 
-    // Add any remaining text
+    // Add any remaining text after the last word
     if (lastEnd < plainText.length) {
       elements.push(
         <span key="remaining" className="text-slate-300">
