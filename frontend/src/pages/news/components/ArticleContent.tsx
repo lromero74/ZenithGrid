@@ -56,27 +56,31 @@ export function ArticleContent({
     let lastEnd = 0
     let textPointer = 0
 
-    words.forEach((word, index) => {
-      // Find this word in the plain text
-      const wordLower = word.text.toLowerCase()
-      let searchStart = textPointer
+    // Helper to check if character is a word boundary (any non-alphanumeric character)
+    const isWordBoundaryChar = (char: string) => !/[a-zA-Z0-9]/.test(char)
 
-      // Search for the word in the remaining text
-      while (searchStart < plainText.length) {
-        const foundIndex = plainText.toLowerCase().indexOf(wordLower, searchStart)
+    // Helper to normalize text for matching (handle smart quotes)
+    const normalizeForMatch = (text: string) => text.toLowerCase().replace(/['']/g, "'").replace(/[""]/g, '"')
+
+    words.forEach((word, index) => {
+      const wordNormalized = normalizeForMatch(word.text)
+      let searchStart = textPointer
+      let found = false
+
+      // Strategy 1: Try exact match with word boundaries
+      while (searchStart < plainText.length && !found) {
+        const foundIndex = normalizeForMatch(plainText).indexOf(wordNormalized, searchStart)
         if (foundIndex === -1) break
 
-        // Check if it's a word boundary
         const charBefore = foundIndex > 0 ? plainText[foundIndex - 1] : ' '
         const charAfter = foundIndex + word.text.length < plainText.length
           ? plainText[foundIndex + word.text.length]
           : ' '
 
-        const isWordBoundary = /[\s\n.,!?;:'"()\-—]/.test(charBefore) || foundIndex === 0
-        const isWordEnd = /[\s\n.,!?;:'"()\-—]/.test(charAfter) || foundIndex + word.text.length === plainText.length
+        const isWordStart = isWordBoundaryChar(charBefore) || foundIndex === 0
+        const isWordEnd = isWordBoundaryChar(charAfter) || foundIndex + word.text.length === plainText.length
 
-        if (isWordBoundary && isWordEnd) {
-          // Add any text before this word (spaces, punctuation)
+        if (isWordStart && isWordEnd) {
           if (foundIndex > lastEnd) {
             const between = plainText.slice(lastEnd, foundIndex)
             elements.push(
@@ -86,9 +90,8 @@ export function ArticleContent({
             )
           }
 
-          // Add the word with highlighting capability and click-to-seek
           const isCurrentWord = index === currentWordIndex
-          const wordIndex = index  // Capture index for closure
+          const wordIndex = index
           elements.push(
             <span
               key={`word-${index}`}
@@ -106,9 +109,101 @@ export function ArticleContent({
 
           lastEnd = foundIndex + word.text.length
           textPointer = lastEnd
+          found = true
           break
         }
         searchStart = foundIndex + 1
+      }
+
+      // Strategy 2: If not found with boundaries, try lenient match
+      if (!found && wordNormalized.length > 1) {
+        const foundIndex = normalizeForMatch(plainText).indexOf(wordNormalized, textPointer)
+        if (foundIndex !== -1 && foundIndex < textPointer + 200) {
+          if (foundIndex > lastEnd) {
+            const between = plainText.slice(lastEnd, foundIndex)
+            elements.push(
+              <span key={`between-${index}`} className="text-slate-300">
+                {between}
+              </span>
+            )
+          }
+
+          const isCurrentWord = index === currentWordIndex
+          const wordIndex = index
+          elements.push(
+            <span
+              key={`word-${index}`}
+              ref={(el) => { wordRefs.current[index] = el }}
+              onClick={() => onSeekToWord(wordIndex)}
+              className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
+                isCurrentWord
+                  ? 'bg-yellow-500/40 text-white font-medium'
+                  : 'text-slate-300'
+              }`}
+            >
+              {plainText.slice(foundIndex, foundIndex + word.text.length)}
+            </span>
+          )
+
+          lastEnd = foundIndex + word.text.length
+          textPointer = lastEnd
+          found = true
+        }
+      }
+
+      // Strategy 3: If still not found, try to find just the alphanumeric core of the word
+      if (!found && wordNormalized.length > 2) {
+        const alphanumericWord = wordNormalized.replace(/[^a-z0-9]/g, '')
+        if (alphanumericWord.length > 2) {
+          const searchText = normalizeForMatch(plainText)
+          const foundIndex = searchText.indexOf(alphanumericWord, textPointer)
+          if (foundIndex !== -1 && foundIndex < textPointer + 200) {
+            let wordStart = foundIndex
+            let wordEnd = foundIndex + alphanumericWord.length
+
+            while (wordStart > 0 && !isWordBoundaryChar(plainText[wordStart - 1])) {
+              wordStart--
+            }
+            while (wordEnd < plainText.length && !isWordBoundaryChar(plainText[wordEnd])) {
+              wordEnd++
+            }
+
+            if (wordStart > lastEnd) {
+              const between = plainText.slice(lastEnd, wordStart)
+              elements.push(
+                <span key={`between-${index}`} className="text-slate-300">
+                  {between}
+                </span>
+              )
+            }
+
+            const isCurrentWord = index === currentWordIndex
+            const wordIndex = index
+            elements.push(
+              <span
+                key={`word-${index}`}
+                ref={(el) => { wordRefs.current[index] = el }}
+                onClick={() => onSeekToWord(wordIndex)}
+                className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
+                  isCurrentWord
+                    ? 'bg-yellow-500/40 text-white font-medium'
+                    : 'text-slate-300'
+                }`}
+              >
+                {plainText.slice(wordStart, wordEnd)}
+              </span>
+            )
+
+            lastEnd = wordEnd
+            textPointer = lastEnd
+            found = true
+          }
+        }
+      }
+
+      // Strategy 4: If still not found, advance textPointer slightly to avoid getting stuck
+      if (!found) {
+        textPointer = Math.min(textPointer + 5, plainText.length)
       }
     })
 

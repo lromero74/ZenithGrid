@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2 } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2, RefreshCw } from 'lucide-react'
 import { useArticleReader } from '../contexts/ArticleReaderContext'
 import { sourceColors } from './news'
 import { markdownToPlainText } from '../pages/news/helpers'
@@ -48,6 +48,8 @@ export function ArticleReaderMiniPlayer() {
     playbackRate,
     articleContent,
     articleContentLoading,
+    voiceCycleEnabled,
+    toggleVoiceCycle,
     nextArticle,
     previousArticle,
     closeMiniPlayer,
@@ -149,7 +151,8 @@ export function ArticleReaderMiniPlayer() {
     seekToWord(closestIndex)
   }, [duration, words, seekToWord])
 
-  // Build word-highlighted content
+  // Build word-highlighted content using timing-based position estimation
+  // This approach estimates text position based on audio timing rather than word matching
   const renderedContent = useMemo(() => {
     // Show placeholder if no content yet
     if (!plainText) {
@@ -165,61 +168,101 @@ export function ArticleReaderMiniPlayer() {
       return <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{plainText}</p>
     }
 
-    const elements: React.ReactElement[] = []
-    let lastEnd = 0
-    let textPointer = 0
+    // Build a map of character positions to word indices based on timing
+    // This gives us approximate character positions for each word
+    const totalDuration = words.length > 0 ? words[words.length - 1].endTime : 1
+    const charPerSecond = plainText.length / totalDuration
 
+    // Calculate estimated character ranges for each word
+    const wordRanges: Array<{ start: number; end: number; wordIndex: number }> = []
     words.forEach((word, index) => {
-      const wordLower = word.text.toLowerCase()
-      let searchStart = textPointer
+      const estimatedStart = Math.floor(word.startTime * charPerSecond)
+      const estimatedEnd = Math.floor(word.endTime * charPerSecond)
+      wordRanges.push({
+        start: Math.max(0, estimatedStart),
+        end: Math.min(plainText.length, estimatedEnd),
+        wordIndex: index,
+      })
+    })
 
-      while (searchStart < plainText.length) {
-        const foundIndex = plainText.toLowerCase().indexOf(wordLower, searchStart)
-        if (foundIndex === -1) break
+    // Find actual word boundaries in the text and map them to TTS words
+    const textWords: Array<{ start: number; end: number; text: string }> = []
+    let pos = 0
+    const wordRegex = /[a-zA-Z0-9]+(?:[''][a-zA-Z0-9]+)*/g
+    let match
+    while ((match = wordRegex.exec(plainText)) !== null) {
+      textWords.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        text: match[0],
+      })
+    }
 
-        const charBefore = foundIndex > 0 ? plainText[foundIndex - 1] : ' '
-        const charAfter = foundIndex + word.text.length < plainText.length
-          ? plainText[foundIndex + word.text.length]
-          : ' '
+    // Map each text word to the closest TTS word by position
+    const textWordToTTSWord = new Map<number, number>()
+    textWords.forEach((tw, twIndex) => {
+      const twMid = (tw.start + tw.end) / 2
+      let bestMatch = -1
+      let bestDist = Infinity
 
-        const isWordBoundary = /[\s\n.,!?;:'"()\-—]/.test(charBefore) || foundIndex === 0
-        const isWordEnd = /[\s\n.,!?;:'"()\-—]/.test(charAfter) || foundIndex + word.text.length === plainText.length
-
-        if (isWordBoundary && isWordEnd) {
-          if (foundIndex > lastEnd) {
-            const between = plainText.slice(lastEnd, foundIndex)
-            elements.push(
-              <span key={`between-${index}`} className="text-slate-300">
-                {between}
-              </span>
-            )
-          }
-
-          const isCurrentWord = index === currentWordIndex
-          const wordIndex = index
-          elements.push(
-            <span
-              key={`word-${index}`}
-              ref={(el) => { wordRefs.current[index] = el }}
-              onClick={() => seekToWord(wordIndex)}
-              className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
-                isCurrentWord
-                  ? 'bg-yellow-500/40 text-white font-medium'
-                  : 'text-slate-300'
-              }`}
-            >
-              {plainText.slice(foundIndex, foundIndex + word.text.length)}
-            </span>
-          )
-
-          lastEnd = foundIndex + word.text.length
-          textPointer = lastEnd
-          break
+      for (let i = 0; i < wordRanges.length; i++) {
+        const wrMid = (wordRanges[i].start + wordRanges[i].end) / 2
+        const dist = Math.abs(twMid - wrMid)
+        if (dist < bestDist) {
+          bestDist = dist
+          bestMatch = i
         }
-        searchStart = foundIndex + 1
+      }
+
+      if (bestMatch !== -1) {
+        textWordToTTSWord.set(twIndex, bestMatch)
       }
     })
 
+    // Build the rendered content
+    const elements: React.ReactElement[] = []
+    let lastEnd = 0
+
+    textWords.forEach((tw, twIndex) => {
+      // Add any text before this word
+      if (tw.start > lastEnd) {
+        elements.push(
+          <span key={`between-${twIndex}`} className="text-slate-300">
+            {plainText.slice(lastEnd, tw.start)}
+          </span>
+        )
+      }
+
+      const ttsWordIndex = textWordToTTSWord.get(twIndex) ?? -1
+      const isCurrentWord = ttsWordIndex === currentWordIndex
+
+      elements.push(
+        <span
+          key={`word-${twIndex}`}
+          ref={(el) => {
+            if (ttsWordIndex >= 0) {
+              wordRefs.current[ttsWordIndex] = el
+            }
+          }}
+          onClick={() => {
+            if (ttsWordIndex >= 0) {
+              seekToWord(ttsWordIndex)
+            }
+          }}
+          className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
+            isCurrentWord
+              ? 'bg-yellow-500/40 text-white font-medium'
+              : 'text-slate-300'
+          }`}
+        >
+          {plainText.slice(tw.start, tw.end)}
+        </span>
+      )
+
+      lastEnd = tw.end
+    })
+
+    // Add any remaining text
     if (lastEnd < plainText.length) {
       elements.push(
         <span key="remaining" className="text-slate-300">
@@ -478,13 +521,36 @@ export function ArticleReaderMiniPlayer() {
                   {showSettingsDropdown && (
                     <div className="fixed bottom-24 right-20 w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-[60] p-4">
                       <div className="space-y-4">
+                        {/* Voice cycling toggle */}
+                        <div>
+                          <button
+                            onClick={toggleVoiceCycle}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
+                              voiceCycleEnabled
+                                ? 'bg-green-500/20 border border-green-500/30 text-green-400'
+                                : 'bg-slate-700 border border-slate-600 text-slate-400'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <RefreshCw className={`w-4 h-4 ${voiceCycleEnabled ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+                              <span className="text-sm font-medium">Voice Cycling</span>
+                            </div>
+                            <span className="text-xs">{voiceCycleEnabled ? 'ON' : 'OFF'}</span>
+                          </button>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {voiceCycleEnabled
+                              ? 'Different voice for each article'
+                              : 'Same voice for all articles'}
+                          </p>
+                        </div>
+
                         {/* Voice selector */}
                         <div>
                           <label className="text-xs text-slate-400 block mb-1">Voice</label>
                           <select
                             value={currentVoice}
                             onChange={(e) => setVoice(e.target.value)}
-                            disabled={!isPaused && !isReady}
+                            disabled={voiceCycleEnabled || (!isPaused && !isReady)}
                             className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-white disabled:opacity-50"
                           >
                             {Object.entries(VOICES).map(([id, v]) => (
@@ -493,7 +559,11 @@ export function ArticleReaderMiniPlayer() {
                               </option>
                             ))}
                           </select>
-                          <p className="text-xs text-slate-500 mt-1">Change voice while paused</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {voiceCycleEnabled
+                              ? 'Disable cycling to choose voice'
+                              : 'Change voice while paused'}
+                          </p>
                         </div>
 
                         {/* Speed selector */}

@@ -45,7 +45,7 @@ interface UseTTSSyncReturn {
   playbackRate: number
 
   // Actions
-  loadAndPlay: (text: string) => Promise<void>
+  loadAndPlay: (text: string, overrideVoice?: string) => Promise<void>
   play: () => void
   pause: () => void
   resume: () => void
@@ -205,7 +205,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     return audio
   }, [playbackRate, startAnimationLoop, stopAnimationLoop])
 
-  const loadAndPlay = useCallback(async (text: string) => {
+  const loadAndPlay = useCallback(async (text: string, overrideVoice?: string) => {
     // Stop any existing playback
     stopAnimationLoop()
     if (audioRef.current) {
@@ -215,6 +215,14 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
+    }
+
+    // Use override voice if provided, otherwise use current state
+    const voiceToUse = overrideVoice || currentVoice
+
+    // Update the voice state if override was provided
+    if (overrideVoice && overrideVoice !== currentVoice) {
+      setCurrentVoice(overrideVoice)
     }
 
     setError(null)
@@ -227,7 +235,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     // Generate cache key from text + voice + rate
     const ratePercent = Math.round((playbackRate - 1) * 100)
     const rateStr = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`
-    const cacheKey = `${text}|${currentVoice}|${rateStr}`
+    const cacheKey = `${text}|${voiceToUse}|${rateStr}`
 
     // Check cache
     if (cacheRef.current && cacheRef.current.cacheKey === cacheKey) {
@@ -256,7 +264,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
       const params = new URLSearchParams({
         text,
-        voice: currentVoice,
+        voice: voiceToUse,
         rate: rateStr,
       })
 

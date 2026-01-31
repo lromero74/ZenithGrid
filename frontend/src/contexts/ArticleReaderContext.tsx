@@ -50,6 +50,10 @@ interface ArticleReaderContextType {
   articleContent: string | null
   articleContentLoading: boolean
 
+  // Voice cycling
+  voiceCycleEnabled: boolean
+  toggleVoiceCycle: () => void
+
   // Actions
   openArticle: (article: ArticleItem, allArticles?: ArticleItem[]) => void
   startPlaylist: (articles: ArticleItem[], startIndex?: number, startExpanded?: boolean) => void
@@ -91,8 +95,9 @@ interface ArticleReaderProviderProps {
   children: ReactNode
 }
 
-// Storage key for voice cache
+// Storage keys
 const VOICE_CACHE_KEY = 'article-reader-voice-cache'
+const VOICE_CYCLE_ENABLED_KEY = 'article-reader-voice-cycle-enabled'
 
 export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) {
   const [playlist, setPlaylist] = useState<ArticleItem[]>([])
@@ -103,9 +108,8 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const [articleContent, setArticleContent] = useState<string | null>(null)
   const [articleContentLoading, setArticleContentLoading] = useState(false)
   const [voiceCache, setVoiceCache] = useState<ArticleVoiceCache>({})
+  const [voiceCycleEnabled, setVoiceCycleEnabled] = useState(true)
 
-  // Track which voice index to use for cycling
-  const voiceCycleIndexRef = useRef(0)
   const playlistRef = useRef<ArticleItem[]>([])
   const hasPlaybackStartedRef = useRef(false)  // Track if audio ever started for current article
 
@@ -117,16 +121,33 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     playlistRef.current = playlist
   }, [playlist])
 
-  // Load voice cache from localStorage
+  // Load voice cache and cycle preference from localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(VOICE_CACHE_KEY)
-      if (saved) {
-        setVoiceCache(JSON.parse(saved))
+      const savedCache = localStorage.getItem(VOICE_CACHE_KEY)
+      if (savedCache) {
+        setVoiceCache(JSON.parse(savedCache))
+      }
+      const savedCycleEnabled = localStorage.getItem(VOICE_CYCLE_ENABLED_KEY)
+      if (savedCycleEnabled !== null) {
+        setVoiceCycleEnabled(savedCycleEnabled === 'true')
       }
     } catch {
       // Ignore localStorage errors
     }
+  }, [])
+
+  // Toggle voice cycling on/off
+  const toggleVoiceCycle = useCallback(() => {
+    setVoiceCycleEnabled(prev => {
+      const newValue = !prev
+      try {
+        localStorage.setItem(VOICE_CYCLE_ENABLED_KEY, String(newValue))
+      } catch {
+        // Ignore localStorage errors
+      }
+      return newValue
+    })
   }, [])
 
   // Save voice cache to localStorage
@@ -139,28 +160,10 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
   }, [])
 
-  // Get voice for an article (from cache or assign new)
+  // Get voice for an article (from cache for display purposes)
   const getVoiceForArticle = useCallback((articleUrl: string): string | null => {
     return voiceCache[articleUrl] || null
   }, [voiceCache])
-
-  // Get or assign voice for current article
-  const getOrAssignVoice = useCallback((articleUrl: string): string => {
-    // If cached, use cached voice
-    if (voiceCache[articleUrl]) {
-      return voiceCache[articleUrl]
-    }
-
-    // Otherwise, cycle to next voice and cache it
-    const voice = VOICE_CYCLE[voiceCycleIndexRef.current % VOICE_CYCLE.length]
-    voiceCycleIndexRef.current++
-
-    // Cache this voice for the article
-    const newCache = { ...voiceCache, [articleUrl]: voice }
-    saveVoiceCache(newCache)
-
-    return voice
-  }, [voiceCache, saveVoiceCache])
 
   // Get current article
   const currentArticle = playlist.length > 0 && currentIndex < playlist.length
@@ -189,13 +192,22 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   }, [])
 
   // Load and play an article
-  const loadAndPlayArticle = useCallback(async (article: ArticleItem) => {
+  // articleIndex is the position in the playlist (used for voice cycling)
+  const loadAndPlayArticle = useCallback(async (article: ArticleItem, articleIndex: number) => {
     // Reset playback tracking for new article
     hasPlaybackStartedRef.current = false
 
-    // Get or assign voice for this article
-    const voice = getOrAssignVoice(article.url)
-    tts.setVoice(voice)
+    // Determine voice based on cycling preference
+    let voiceToUse: string | undefined
+    if (voiceCycleEnabled) {
+      // Use position-based voice cycling: article 0 = voice 0, article 1 = voice 1, etc.
+      voiceToUse = VOICE_CYCLE[articleIndex % VOICE_CYCLE.length]
+
+      // Also cache this voice for the article (for display purposes)
+      const newCache = { ...voiceCache, [article.url]: voiceToUse }
+      saveVoiceCache(newCache)
+    }
+    // If voice cycling is disabled, voiceToUse is undefined and TTS will use current voice
 
     // Fetch content if not already present
     let content = article.content
@@ -206,15 +218,16 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     if (content) {
       setArticleContent(content)
       const plainText = markdownToPlainText(content)
-      await tts.loadAndPlay(plainText)
+      // Pass voice directly to avoid async state race condition
+      await tts.loadAndPlay(plainText, voiceToUse)
     } else {
       // No content available, try to read summary
       if (article.summary) {
         setArticleContent(article.summary)
-        await tts.loadAndPlay(article.summary)
+        await tts.loadAndPlay(article.summary, voiceToUse)
       }
     }
-  }, [getOrAssignVoice, fetchArticleContent, tts])
+  }, [voiceCycleEnabled, voiceCache, saveVoiceCache, fetchArticleContent, tts])
 
   // Start a new playlist
   const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false) => {
@@ -227,11 +240,8 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setShowMiniPlayer(true)
     setIsExpanded(startExpanded)
 
-    // Reset voice cycle index when starting new playlist
-    voiceCycleIndexRef.current = 0
-
-    // Load and play the first article
-    loadAndPlayArticle(articles[clampedIndex])
+    // Load and play the first article (pass index for voice cycling)
+    loadAndPlayArticle(articles[clampedIndex], clampedIndex)
   }, [loadAndPlayArticle])
 
   // Open a single article (expanded view) - optionally with surrounding articles for navigation
@@ -261,7 +271,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     if (index >= 0 && index < playlistRef.current.length) {
       tts.stop()
       setCurrentIndex(index)
-      loadAndPlayArticle(playlistRef.current[index])
+      loadAndPlayArticle(playlistRef.current[index], index)
     }
   }, [tts, loadAndPlayArticle])
 
@@ -350,6 +360,10 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     // Content state
     articleContent,
     articleContentLoading,
+
+    // Voice cycling
+    voiceCycleEnabled,
+    toggleVoiceCycle,
 
     // Actions
     openArticle,
