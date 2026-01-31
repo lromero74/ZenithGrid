@@ -4,9 +4,9 @@
  * Auto-scrolls to keep the current word visible
  */
 
-import { useEffect, useRef, useMemo } from 'react'
-import { Play, Pause, Square, Loader2, Volume2 } from 'lucide-react'
-import { useTTSSync, WordTiming } from '../hooks/useTTSSync'
+import React, { useEffect, useRef, useMemo } from 'react'
+import { Play, Pause, Square, Loader2, Volume2, RotateCcw, SkipBack, SkipForward } from 'lucide-react'
+import { useTTSSync } from '../hooks/useTTSSync'
 import { markdownToPlainText } from '../helpers'
 
 interface SyncedArticleReaderProps {
@@ -24,7 +24,7 @@ const VOICES = [
   { id: 'andrew', name: 'Andrew', gender: 'Male' },
 ]
 
-export function SyncedArticleReader({ content, onClose }: SyncedArticleReaderProps) {
+export function SyncedArticleReader({ content, onClose: _onClose }: SyncedArticleReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([])
 
@@ -45,9 +45,15 @@ export function SyncedArticleReader({ content, onClose }: SyncedArticleReaderPro
     pause,
     resume,
     stop,
+    replay,
+    seekToWord,
+    skipWords,
     setVoice,
     setRate,
   } = useTTSSync()
+
+  // Number of words to skip with back/forward buttons
+  const SKIP_WORD_COUNT = 10
 
   // Convert markdown to plain text for TTS
   const plainText = useMemo(() => markdownToPlainText(content), [content])
@@ -92,7 +98,7 @@ export function SyncedArticleReader({ content, onClose }: SyncedArticleReaderPro
     }
 
     // Build spans for each word with proper spacing
-    const elements: JSX.Element[] = []
+    const elements: React.ReactElement[] = []
     let lastEnd = 0
     let textPointer = 0
 
@@ -126,13 +132,15 @@ export function SyncedArticleReader({ content, onClose }: SyncedArticleReaderPro
             )
           }
 
-          // Add the word with highlighting capability
+          // Add the word with highlighting capability and click-to-seek
           const isCurrentWord = index === currentWordIndex
+          const wordIndex = index  // Capture index for closure
           elements.push(
             <span
               key={`word-${index}`}
               ref={(el) => { wordRefs.current[index] = el }}
-              className={`transition-all duration-150 rounded px-0.5 ${
+              onClick={() => seekToWord(wordIndex)}
+              className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
                 isCurrentWord
                   ? 'bg-yellow-500/40 text-white font-medium'
                   : 'text-slate-300'
@@ -160,7 +168,7 @@ export function SyncedArticleReader({ content, onClose }: SyncedArticleReaderPro
     }
 
     return <p className="leading-relaxed whitespace-pre-wrap">{elements}</p>
-  }, [words, plainText, currentWordIndex])
+  }, [words, plainText, currentWordIndex, seekToWord])
 
   // Format time as mm:ss
   const formatTime = (seconds: number) => {
@@ -186,11 +194,32 @@ export function SyncedArticleReader({ content, onClose }: SyncedArticleReaderPro
           ) : isPlaying ? (
             <>
               <button
+                onClick={replay}
+                className="p-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-white transition-colors"
+                title="Restart"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => skipWords(-SKIP_WORD_COUNT)}
+                className="p-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-white transition-colors"
+                title={`Back ${SKIP_WORD_COUNT} words`}
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+              <button
                 onClick={pause}
                 className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-white transition-colors"
               >
                 <Pause className="w-4 h-4" />
                 <span>Pause</span>
+              </button>
+              <button
+                onClick={() => skipWords(SKIP_WORD_COUNT)}
+                className="p-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-white transition-colors"
+                title={`Forward ${SKIP_WORD_COUNT} words`}
+              >
+                <SkipForward className="w-4 h-4" />
               </button>
               <button
                 onClick={stop}
@@ -203,11 +232,32 @@ export function SyncedArticleReader({ content, onClose }: SyncedArticleReaderPro
           ) : isPaused ? (
             <>
               <button
+                onClick={replay}
+                className="p-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-white transition-colors"
+                title="Restart"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => skipWords(-SKIP_WORD_COUNT)}
+                className="p-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-white transition-colors"
+                title={`Back ${SKIP_WORD_COUNT} words`}
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+              <button
                 onClick={resume}
                 className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white transition-colors"
               >
                 <Play className="w-4 h-4" />
                 <span>Resume</span>
+              </button>
+              <button
+                onClick={() => skipWords(SKIP_WORD_COUNT)}
+                className="p-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-white transition-colors"
+                title={`Forward ${SKIP_WORD_COUNT} words`}
+              >
+                <SkipForward className="w-4 h-4" />
               </button>
               <button
                 onClick={stop}

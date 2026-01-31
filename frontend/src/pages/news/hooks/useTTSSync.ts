@@ -18,6 +18,13 @@ interface TTSSyncResponse {
   rate: string
 }
 
+interface CachedAudio {
+  cacheKey: string
+  audioUrl: string
+  words: WordTiming[]
+  duration: number
+}
+
 interface UseTTSSyncOptions {
   defaultVoice?: string
   defaultRate?: number
@@ -43,6 +50,9 @@ interface UseTTSSyncReturn {
   pause: () => void
   resume: () => void
   stop: () => void
+  replay: () => void
+  seekToWord: (index: number) => void
+  skipWords: (count: number) => void
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
 }
@@ -65,47 +75,69 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const wordsRef = useRef<WordTiming[]>([])  // Ref to avoid stale closure
+  const isAnimatingRef = useRef(false)  // Track if animation loop should run
+  const cacheRef = useRef<CachedAudio | null>(null)  // Cache audio for re-play
 
-  // Update current word based on playback time
-  const updateCurrentWord = useCallback(() => {
-    if (!audioRef.current || !words.length) return
+  // Keep wordsRef in sync with words state
+  useEffect(() => {
+    wordsRef.current = words
+  }, [words])
 
-    const time = audioRef.current.currentTime
-    setCurrentTime(time)
+  // Animation loop - uses refs to avoid stale closures
+  const startAnimationLoop = useCallback(() => {
+    isAnimatingRef.current = true
 
-    // Find the word that contains the current time
-    let foundIndex = -1
-    for (let i = 0; i < words.length; i++) {
-      if (time >= words[i].startTime && time < words[i].endTime) {
-        foundIndex = i
-        break
+    const animate = () => {
+      if (!isAnimatingRef.current || !audioRef.current) return
+
+      const time = audioRef.current.currentTime
+      setCurrentTime(time)
+
+      // Find the word that contains the current time
+      const wordList = wordsRef.current
+      let foundIndex = -1
+
+      for (let i = 0; i < wordList.length; i++) {
+        if (time >= wordList[i].startTime && time < wordList[i].endTime) {
+          foundIndex = i
+          break
+        }
+        // Also check if we're between words (use the previous word)
+        if (i > 0 && time >= wordList[i - 1].endTime && time < wordList[i].startTime) {
+          foundIndex = i - 1
+          break
+        }
       }
-      // Also check if we're between words (use the previous word)
-      if (i > 0 && time >= words[i - 1].endTime && time < words[i].startTime) {
-        foundIndex = i - 1
-        break
+
+      // If past all words, use last word
+      if (foundIndex === -1 && wordList.length > 0 && time >= wordList[wordList.length - 1].startTime) {
+        foundIndex = wordList.length - 1
+      }
+
+      setCurrentWordIndex(foundIndex)
+
+      // Continue if still animating and audio is playing
+      if (isAnimatingRef.current && audioRef.current && !audioRef.current.paused) {
+        animationFrameRef.current = requestAnimationFrame(animate)
       }
     }
 
-    // If past all words, use last word
-    if (foundIndex === -1 && words.length > 0 && time >= words[words.length - 1].startTime) {
-      foundIndex = words.length - 1
+    animationFrameRef.current = requestAnimationFrame(animate)
+  }, [])
+
+  const stopAnimationLoop = useCallback(() => {
+    isAnimatingRef.current = false
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
     }
+  }, [])
 
-    setCurrentWordIndex(foundIndex)
-
-    // Continue animation if playing
-    if (isPlaying && !audioRef.current.paused) {
-      animationFrameRef.current = requestAnimationFrame(updateCurrentWord)
-    }
-  }, [words, isPlaying])
-
-  // Cleanup
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
+      stopAnimationLoop()
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current.src = ''
@@ -113,37 +145,114 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
+      // Revoke cached audio URL on unmount
+      if (cacheRef.current) {
+        URL.revokeObjectURL(cacheRef.current.audioUrl)
+        cacheRef.current = null
+      }
     }
-  }, [])
+  }, [stopAnimationLoop])
+
+  // Helper to create and setup audio element
+  const setupAudio = useCallback((audioUrl: string, cachedWords: WordTiming[], cachedDuration?: number) => {
+    const audio = new Audio(audioUrl)
+    audio.playbackRate = playbackRate
+    audioRef.current = audio
+
+    // Set words immediately
+    setWords(cachedWords)
+    wordsRef.current = cachedWords
+
+    if (cachedDuration) {
+      setDuration(cachedDuration)
+    }
+
+    audio.onloadedmetadata = () => {
+      setDuration(audio.duration)
+    }
+
+    audio.onplay = () => {
+      setIsPlaying(true)
+      setIsPaused(false)
+      setIsReady(false)
+      setIsLoading(false)
+      startAnimationLoop()
+    }
+
+    audio.onpause = () => {
+      if (!audio.ended) {
+        setIsPaused(true)
+        setIsPlaying(false)
+      }
+      stopAnimationLoop()
+    }
+
+    audio.onended = () => {
+      setIsPlaying(false)
+      setIsPaused(false)
+      setCurrentWordIndex(-1)
+      stopAnimationLoop()
+      // Don't revoke URL - keep in cache for re-play
+    }
+
+    audio.onerror = () => {
+      setError('Audio playback failed')
+      setIsPlaying(false)
+      setIsLoading(false)
+      stopAnimationLoop()
+    }
+
+    return audio
+  }, [playbackRate, startAnimationLoop, stopAnimationLoop])
 
   const loadAndPlay = useCallback(async (text: string) => {
     // Stop any existing playback
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-    }
+    stopAnimationLoop()
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.src = ''
+      audioRef.current = null
     }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
 
-    setIsLoading(true)
     setError(null)
     setIsPlaying(false)
     setIsPaused(false)
     setIsReady(false)
-    setWords([])
     setCurrentWordIndex(-1)
     setCurrentTime(0)
 
+    // Generate cache key from text + voice + rate
+    const ratePercent = Math.round((playbackRate - 1) * 100)
+    const rateStr = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`
+    const cacheKey = `${text}|${currentVoice}|${rateStr}`
+
+    // Check cache
+    if (cacheRef.current && cacheRef.current.cacheKey === cacheKey) {
+      // Use cached audio
+      const audio = setupAudio(cacheRef.current.audioUrl, cacheRef.current.words, cacheRef.current.duration)
+
+      try {
+        await audio.play()
+      } catch (playErr) {
+        if ((playErr as Error).name === 'NotAllowedError') {
+          setIsReady(true)
+        } else {
+          console.error('Cached play failed:', playErr)
+          setError('Failed to play audio')
+        }
+      }
+      return
+    }
+
+    // Need to fetch new audio
+    setIsLoading(true)
+    setWords([])
+
     try {
       abortControllerRef.current = new AbortController()
-
-      // Convert playback rate to percentage
-      const ratePercent = Math.round((playbackRate - 1) * 100)
-      const rateStr = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`
 
       const params = new URLSearchParams({
         text,
@@ -162,55 +271,38 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
       const data: TTSSyncResponse = await response.json()
 
-      // Store word timings
-      setWords(data.words)
-
       // Create audio from base64
       const audioBlob = await fetch(`data:audio/mpeg;base64,${data.audio}`).then(r => r.blob())
       const audioUrl = URL.createObjectURL(audioBlob)
 
-      const audio = new Audio(audioUrl)
-      audio.playbackRate = playbackRate
-      audioRef.current = audio
-
-      audio.onloadedmetadata = () => {
-        setDuration(audio.duration)
+      // Revoke old cache URL if exists
+      if (cacheRef.current) {
+        URL.revokeObjectURL(cacheRef.current.audioUrl)
       }
 
-      audio.onplay = () => {
-        setIsPlaying(true)
-        setIsPaused(false)
-        setIsReady(false)
-        setIsLoading(false)
-        // Start tracking playback
-        animationFrameRef.current = requestAnimationFrame(updateCurrentWord)
-      }
+      const audio = setupAudio(audioUrl, data.words)
 
-      audio.onpause = () => {
-        if (!audio.ended) {
-          setIsPaused(true)
-          setIsPlaying(false)
+      // Wait for duration to be set
+      await new Promise<void>((resolve) => {
+        if (audio.duration) {
+          resolve()
+        } else {
+          const originalOnLoadedMetadata = audio.onloadedmetadata
+          audio.onloadedmetadata = (e) => {
+            if (originalOnLoadedMetadata) {
+              (originalOnLoadedMetadata as EventListener)(e)
+            }
+            resolve()
+          }
         }
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current)
-        }
-      }
+      })
 
-      audio.onended = () => {
-        setIsPlaying(false)
-        setIsPaused(false)
-        setCurrentWordIndex(-1)
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current)
-        }
-        URL.revokeObjectURL(audioUrl)
-      }
-
-      audio.onerror = () => {
-        setError('Audio playback failed')
-        setIsPlaying(false)
-        setIsLoading(false)
-        URL.revokeObjectURL(audioUrl)
+      // Store in cache
+      cacheRef.current = {
+        cacheKey,
+        audioUrl,
+        words: data.words,
+        duration: audio.duration,
       }
 
       // Try to play
@@ -232,7 +324,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       setError((err as Error).message || 'Failed to generate speech')
       setIsLoading(false)
     }
-  }, [currentVoice, playbackRate, updateCurrentWord])
+  }, [currentVoice, playbackRate, setupAudio, stopAnimationLoop])
 
   const play = useCallback(() => {
     if (audioRef.current && isReady) {
@@ -253,16 +345,12 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
   const resume = useCallback(() => {
     if (audioRef.current && audioRef.current.paused && isPaused) {
-      audioRef.current.play().then(() => {
-        animationFrameRef.current = requestAnimationFrame(updateCurrentWord)
-      })
+      audioRef.current.play()
     }
-  }, [isPaused, updateCurrentWord])
+  }, [isPaused])
 
   const stop = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-    }
+    stopAnimationLoop()
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
@@ -279,7 +367,62 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setCurrentWordIndex(-1)
     setCurrentTime(0)
     setError(null)
+  }, [stopAnimationLoop])
+
+  const replay = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0
+      setCurrentTime(0)
+      setCurrentWordIndex(0)
+      if (audioRef.current.paused) {
+        audioRef.current.play().catch(err => {
+          console.error('Replay failed:', err)
+          setError('Failed to replay audio')
+        })
+      }
+    }
   }, [])
+
+  const seekToWord = useCallback((index: number) => {
+    if (!audioRef.current || wordsRef.current.length === 0) return
+
+    const wordList = wordsRef.current
+    const clampedIndex = Math.max(0, Math.min(index, wordList.length - 1))
+    const targetTime = wordList[clampedIndex].startTime
+
+    audioRef.current.currentTime = targetTime
+    setCurrentTime(targetTime)
+    setCurrentWordIndex(clampedIndex)
+
+    // If paused, start playing from the new position
+    if (audioRef.current.paused) {
+      audioRef.current.play().catch(err => {
+        console.error('Seek play failed:', err)
+        setError('Failed to play audio')
+      })
+    }
+  }, [])
+
+  const skipWords = useCallback((count: number) => {
+    if (!audioRef.current || wordsRef.current.length === 0) return
+
+    // Find current word index based on current time
+    const time = audioRef.current.currentTime
+    const wordList = wordsRef.current
+    let currentIdx = 0
+
+    for (let i = 0; i < wordList.length; i++) {
+      if (time >= wordList[i].startTime) {
+        currentIdx = i
+      } else {
+        break
+      }
+    }
+
+    // Calculate target index
+    const targetIndex = Math.max(0, Math.min(currentIdx + count, wordList.length - 1))
+    seekToWord(targetIndex)
+  }, [seekToWord])
 
   const setVoice = useCallback((voice: string) => {
     setCurrentVoice(voice)
@@ -309,6 +452,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     pause,
     resume,
     stop,
+    replay,
+    seekToWord,
+    skipWords,
     setVoice,
     setRate,
   }

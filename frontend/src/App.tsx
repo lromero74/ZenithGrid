@@ -9,9 +9,11 @@ import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { VideoPlayerProvider } from './contexts/VideoPlayerContext'
+import { ArticleReaderProvider } from './contexts/ArticleReaderContext'
 import { useAccount } from './contexts/AccountContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MiniPlayer } from './components/MiniPlayer'
+import { ArticleReaderMiniPlayer } from './components/ArticleReaderMiniPlayer'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
 import { AboutModal } from './components/AboutModal'
 import Login from './pages/Login'
@@ -198,6 +200,7 @@ function AppContent() {
   return (
     <NotificationProvider>
     <VideoPlayerProvider>
+    <ArticleReaderProvider>
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-slate-800">
@@ -520,7 +523,11 @@ function AppContent() {
 
       {/* Persistent Mini Video Player */}
       <MiniPlayer />
+
+      {/* Persistent Article Reader Mini Player */}
+      <ArticleReaderMiniPlayer />
     </div>
+    </ArticleReaderProvider>
     </VideoPlayerProvider>
     </NotificationProvider>
   )

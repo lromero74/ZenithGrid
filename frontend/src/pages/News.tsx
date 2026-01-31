@@ -7,21 +7,23 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair, Volume2 } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
 import { useVideoPlayer, VideoItem as ContextVideoItem } from '../contexts/VideoPlayerContext'
+import { useArticleReader, ArticleItem } from '../contexts/ArticleReaderContext'
 import { SourceSubscriptionsModal } from '../components/news/SourceSubscriptionsModal'
 import {
-  renderMarkdown,
   formatRelativeTime,
   sourceColors,
   videoSourceColors,
 } from '../components/news'
 import { NewsItem, TabType } from './news/types'
 import { useNewsData, useArticleContent, useNewsFilters } from './news/hooks'
-import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource } from './news/helpers'
-import { SyncedArticleReader } from './news/components'
+import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource, cleanupArticleHoverHighlights, scrollToArticle, highlightArticle, unhighlightArticle } from './news/helpers'
+import { ArticleContent, TTSControls } from './news/components'
+import { useTTSSync } from './news/hooks'
+import { markdownToPlainText } from './news/helpers'
 
 export default function News() {
   const [activeTab, setActiveTab] = useState<TabType>('articles')
@@ -34,12 +36,29 @@ export default function News() {
   // Global video player context for "Play All" feature
   const { startPlaylist, isPlaying: isPlaylistPlaying, currentIndex: playlistIndex, playlist, currentVideo } = useVideoPlayer()
 
+  // Global article reader context for "Read All" feature
+  const {
+    openArticle,
+    startPlaylist: startArticlePlaylist,
+    isPlaying: isArticleReaderPlaying,
+    currentIndex: articleReaderIndex,
+    playlist: articlePlaylist,
+    currentArticle,
+  } = useArticleReader()
+
   // Playlist dropdown state (for starting from specific video)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
   const [hoveredPlaylistIndex, setHoveredPlaylistIndex] = useState<number | null>(null)
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const dropdownButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Article playlist dropdown state
+  const [showArticleDropdown, setShowArticleDropdown] = useState(false)
+  const [hoveredArticleIndex, setHoveredArticleIndex] = useState<number | null>(null)
+  const [articleDropdownPosition, setArticleDropdownPosition] = useState<{ top: number; right: number } | null>(null)
+  const articleDropdownRef = useRef<HTMLDivElement>(null)
+  const articleDropdownButtonRef = useRef<HTMLButtonElement>(null)
 
   // Fetch news and video data
   const {
@@ -65,6 +84,12 @@ export default function News() {
     clearContent,
   } = useArticleContent({ previewArticle })
 
+  // TTS for reading articles aloud
+  const tts = useTTSSync()
+
+  // Get plain text for TTS from article content
+  const articlePlainText = articleContent?.content ? markdownToPlainText(articleContent.content) : ''
+
   // Filtering and pagination
   const {
     selectedSource,
@@ -87,18 +112,24 @@ export default function News() {
         setShowPlaylistDropdown(false)
         cleanupHoverHighlights()
       }
+      if (articleDropdownRef.current && !articleDropdownRef.current.contains(e.target as Node)) {
+        setShowArticleDropdown(false)
+        setHoveredArticleIndex(null)
+        cleanupArticleHoverHighlights()
+      }
     }
-    if (showPlaylistDropdown) {
+    if (showPlaylistDropdown || showArticleDropdown) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showPlaylistDropdown])
+  }, [showPlaylistDropdown, showArticleDropdown])
 
-  // Reset reader mode when closing modal (SyncedArticleReader handles TTS cleanup on unmount)
+  // Reset reader mode when closing modal and stop TTS
   const handleCloseModal = useCallback(() => {
+    tts.stop()
     setPreviewArticle(null)
     clearContent()
-  }, [clearContent])
+  }, [clearContent, tts])
 
   // Close article modal on ESC key press
   useEffect(() => {
@@ -256,6 +287,146 @@ export default function News() {
       {/* Articles Tab */}
       {activeTab === 'articles' && (
         <>
+          {/* Read All controls */}
+          <div className="flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+            <Volume2 className="w-5 h-5 text-green-400" />
+
+            {/* Read All button */}
+            <button
+              onClick={() => {
+                const articles: ArticleItem[] = filteredNews.map(item => ({
+                  title: item.title,
+                  url: item.url,
+                  source: item.source,
+                  source_name: item.source_name,
+                  published: item.published,
+                  thumbnail: item.thumbnail,
+                  summary: item.summary,
+                }))
+                startArticlePlaylist(articles, 0)
+              }}
+              disabled={filteredNews.length === 0}
+              className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors"
+            >
+              <Volume2 className="w-4 h-4" />
+              <span>Read All</span>
+            </button>
+
+            {/* Now reading indicator and scroll button */}
+            {isArticleReaderPlaying && (
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 text-sm text-slate-300">
+                  <span className="text-green-400 font-medium">Now reading:</span>
+                  <span>{articleReaderIndex + 1} / {articlePlaylist.length}</span>
+                </div>
+                {currentArticle && (
+                  <>
+                    <span className="text-xs text-slate-400 truncate max-w-[200px]">
+                      {currentArticle.title}
+                    </span>
+                    <button
+                      onClick={() => scrollToArticle(currentArticle.url, true)}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 rounded-lg text-green-400 text-sm transition-colors"
+                      title="Scroll to currently reading article"
+                    >
+                      <Crosshair className="w-4 h-4" />
+                      <span className="hidden sm:inline">Find Reading</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Start from specific article dropdown */}
+            <div className="relative ml-auto" ref={articleDropdownRef}>
+              <button
+                ref={articleDropdownButtonRef}
+                onClick={() => {
+                  if (showArticleDropdown) {
+                    setShowArticleDropdown(false)
+                    setHoveredArticleIndex(null)
+                    cleanupArticleHoverHighlights()
+                  } else {
+                    if (articleDropdownButtonRef.current) {
+                      const rect = articleDropdownButtonRef.current.getBoundingClientRect()
+                      setArticleDropdownPosition({
+                        top: rect.bottom + 8,
+                        right: window.innerWidth - rect.right,
+                      })
+                    }
+                    setShowArticleDropdown(true)
+                  }
+                }}
+                className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
+              >
+                <span>Start from article...</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${showArticleDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showArticleDropdown && articleDropdownPosition && (
+                <div
+                  className="fixed w-80 max-h-[60vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50"
+                  style={{ top: articleDropdownPosition.top, right: articleDropdownPosition.right }}
+                >
+                  <div className="p-2 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
+                    <p className="text-xs text-slate-400">Click to start reading from article</p>
+                  </div>
+                  {filteredNews.map((article, idx) => {
+                    const isCurrentlyReading = isArticleReaderPlaying && currentArticle?.url === article.url
+                    return (
+                      <button
+                        key={`${article.source}-${idx}`}
+                        onClick={() => {
+                          const articles: ArticleItem[] = filteredNews.map(item => ({
+                            title: item.title,
+                            url: item.url,
+                            source: item.source,
+                            source_name: item.source_name,
+                            published: item.published,
+                            thumbnail: item.thumbnail,
+                            summary: item.summary,
+                          }))
+                          startArticlePlaylist(articles, idx, true)
+                          setShowArticleDropdown(false)
+                          setHoveredArticleIndex(null)
+                          cleanupArticleHoverHighlights()
+                        }}
+                        onMouseEnter={() => {
+                          setHoveredArticleIndex(idx)
+                          highlightArticle(article.url)
+                          scrollToArticle(article.url, false)
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredArticleIndex(null)
+                          unhighlightArticle(article.url)
+                        }}
+                        className={`w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left ${
+                          isCurrentlyReading ? 'bg-green-500/20' : hoveredArticleIndex === idx ? 'bg-green-500/10' : ''
+                        }`}
+                      >
+                        {isCurrentlyReading ? (
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-green-500 text-white">
+                            <Volume2 className="w-3 h-3 animate-pulse" />
+                          </span>
+                        ) : (
+                          <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                            hoveredArticleIndex === idx ? 'bg-green-500 text-white' : 'bg-slate-600 text-slate-300'
+                          }`}>
+                            {idx + 1}
+                          </span>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm truncate ${isCurrentlyReading ? 'text-green-400 font-medium' : 'text-white'}`}>{article.title}</p>
+                          <p className="text-xs text-slate-500">{article.source_name}</p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Source filter */}
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
@@ -289,11 +460,25 @@ export default function News() {
 
           {/* News grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginatedNews.map((item, index) => (
+            {paginatedNews.map((item, index) => {
+              const isCurrentlyReading = isArticleReaderPlaying && currentArticle?.url === item.url
+              return (
               <div
                 key={`${item.source}-${index}`}
-                className="group bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-slate-900/50"
+                data-article-url={item.url}
+                className={`group bg-slate-800 border rounded-lg overflow-hidden transition-all hover:shadow-lg hover:shadow-slate-900/50 relative ${
+                  isCurrentlyReading
+                    ? 'border-green-500 ring-2 ring-green-500/30'
+                    : 'border-slate-700 hover:border-slate-600'
+                }`}
               >
+                {/* Now Reading badge */}
+                {isCurrentlyReading && (
+                  <div className="absolute top-2 left-2 z-20 flex items-center space-x-1 px-2 py-1 bg-green-600 rounded-full text-xs font-medium text-white shadow-lg">
+                    <Volume2 className="w-3 h-3 animate-pulse" />
+                    <span>Now Reading</span>
+                  </div>
+                )}
                 {/* Thumbnail with preview/external link buttons */}
                 <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
                   {item.thumbnail && (
@@ -306,9 +491,29 @@ export default function News() {
                       }}
                     />
                   )}
-                  {/* Click overlay to open preview in reader mode */}
+                  {/* Click overlay to open in article reader */}
                   <button
-                    onClick={() => { setPreviewArticle(item); setReaderModeEnabled(true) }}
+                    onClick={() => {
+                      const articleItem: ArticleItem = {
+                        title: item.title,
+                        url: item.url,
+                        source: item.source,
+                        source_name: item.source_name,
+                        published: item.published,
+                        thumbnail: item.thumbnail,
+                        summary: item.summary,
+                      }
+                      const allArticles: ArticleItem[] = filteredNews.map(n => ({
+                        title: n.title,
+                        url: n.url,
+                        source: n.source,
+                        source_name: n.source_name,
+                        published: n.published,
+                        thumbnail: n.thumbnail,
+                        summary: n.summary,
+                      }))
+                      openArticle(articleItem, allArticles)
+                    }}
                     className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/30 transition-colors cursor-pointer"
                   />
                   {/* Open in new tab button */}
@@ -325,7 +530,27 @@ export default function News() {
                 </div>
 
                 <button
-                  onClick={() => { setPreviewArticle(item); setReaderModeEnabled(true) }}
+                  onClick={() => {
+                    const articleItem: ArticleItem = {
+                      title: item.title,
+                      url: item.url,
+                      source: item.source,
+                      source_name: item.source_name,
+                      published: item.published,
+                      thumbnail: item.thumbnail,
+                      summary: item.summary,
+                    }
+                    const allArticles: ArticleItem[] = filteredNews.map(n => ({
+                      title: n.title,
+                      url: n.url,
+                      source: n.source,
+                      source_name: n.source_name,
+                      published: n.published,
+                      thumbnail: n.thumbnail,
+                      summary: n.summary,
+                    }))
+                    openArticle(articleItem, allArticles)
+                  }}
                   className="p-4 space-y-3 text-left w-full cursor-pointer hover:bg-slate-700/30 transition-colors"
                 >
                   {/* Source badge and time */}
@@ -361,7 +586,7 @@ export default function News() {
                   </div>
                 </button>
               </div>
-            ))}
+            )})}
           </div>
 
           {/* Pagination controls (client-side - instant page changes) */}
@@ -851,9 +1076,14 @@ export default function News() {
                       </div>
                     )}
 
-                    {/* Success - Full article content with synced TTS */}
+                    {/* Success - Full article content with word highlighting */}
                     {articleContent?.success && articleContent.content && (
-                      <SyncedArticleReader content={articleContent.content} />
+                      <ArticleContent
+                        content={articleContent.content}
+                        words={tts.words}
+                        currentWordIndex={tts.currentWordIndex}
+                        onSeekToWord={tts.seekToWord}
+                      />
                     )}
                   </>
                 ) : (
@@ -889,23 +1119,55 @@ export default function News() {
               </div>
             </div>
 
-            {/* Modal footer with action button */}
-            <div className="p-4 border-t border-slate-700 flex justify-between items-center">
-              <button
-                onClick={handleCloseModal}
-                className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
-              >
-                Close
-              </button>
-              <a
-                href={previewArticle.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center space-x-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                <span>Read on Website</span>
-              </a>
+            {/* Modal footer with TTS controls and actions */}
+            <div className="p-4 border-t border-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Left side: Close + TTS Controls */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={handleCloseModal}
+                    className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                  >
+                    Close
+                  </button>
+
+                  {/* TTS Controls - only show when reader mode is active with content */}
+                  {readerModeEnabled && articleContent?.success && articleContent.content && (
+                    <TTSControls
+                      isLoading={tts.isLoading}
+                      isPlaying={tts.isPlaying}
+                      isPaused={tts.isPaused}
+                      isReady={tts.isReady}
+                      error={tts.error}
+                      currentTime={tts.currentTime}
+                      duration={tts.duration}
+                      currentVoice={tts.currentVoice}
+                      playbackRate={tts.playbackRate}
+                      onLoadAndPlay={() => tts.loadAndPlay(articlePlainText)}
+                      onPlay={tts.play}
+                      onPause={tts.pause}
+                      onResume={tts.resume}
+                      onStop={tts.stop}
+                      onReplay={tts.replay}
+                      onSkipWords={tts.skipWords}
+                      onSetVoice={tts.setVoice}
+                      onSetRate={tts.setRate}
+                    />
+                  )}
+                </div>
+
+                {/* Right side: Read on Website button */}
+                <a
+                  href={previewArticle.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium transition-colors flex-shrink-0"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span className="hidden sm:inline">Read on Website</span>
+                  <span className="sm:hidden">Website</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>

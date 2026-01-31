@@ -166,6 +166,55 @@ export const unhighlightVideo = (videoId: string): void => {
 }
 
 /**
+ * Clean up hover highlights from article dropdown interactions
+ * Removes visual effects from article elements when dropdown closes
+ */
+export const cleanupArticleHoverHighlights = (): void => {
+  document.querySelectorAll('[data-article-url]').forEach((el) => {
+    el.classList.remove('ring-4', 'ring-green-500/50', 'border-green-500')
+  })
+}
+
+/**
+ * Scroll to an article element by data attribute with smooth animation
+ * @param articleUrl - Article URL to scroll to
+ * @param addPulse - Whether to add pulse animation
+ */
+export const scrollToArticle = (articleUrl: string, addPulse = false): void => {
+  const element = document.querySelector(`[data-article-url="${CSS.escape(articleUrl)}"]`)
+  if (!element) return
+
+  element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  if (addPulse) {
+    element.classList.add('animate-pulse-ring')
+    setTimeout(() => {
+      element.classList.remove('animate-pulse-ring')
+    }, 3000)
+  }
+}
+
+/**
+ * Add green highlight halo to article element
+ * @param articleUrl - Article URL to highlight
+ */
+export const highlightArticle = (articleUrl: string): void => {
+  const element = document.querySelector(`[data-article-url="${CSS.escape(articleUrl)}"]`)
+  if (!element) return
+  element.classList.add('ring-4', 'ring-green-500/50', 'border-green-500')
+}
+
+/**
+ * Remove green highlight halo from article element
+ * @param articleUrl - Article URL to unhighlight
+ */
+export const unhighlightArticle = (articleUrl: string): void => {
+  const element = document.querySelector(`[data-article-url="${CSS.escape(articleUrl)}"]`)
+  if (!element) return
+  element.classList.remove('ring-4', 'ring-green-500/50', 'border-green-500')
+}
+
+/**
  * Convert markdown to plain text for TTS
  * Strips all markdown formatting while preserving readable content
  * @param markdown - Markdown formatted text
