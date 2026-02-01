@@ -1269,6 +1269,10 @@ def initialize_database(project_root):
             ('decrypt', 'Decrypt', 'news', 'https://decrypt.co/feed', 'https://decrypt.co', 'Web3 news & guides', None),
             ('theblock', 'The Block', 'news', 'https://www.theblock.co/rss.xml', 'https://www.theblock.co', 'Institutional crypto news', None),
             ('cryptoslate', 'CryptoSlate', 'news', 'https://cryptoslate.com/feed/', 'https://cryptoslate.com', 'Crypto news & data', None),
+            ('bitcoin_magazine', 'Bitcoin Magazine', 'news', 'https://bitcoinmagazine.com/feed', 'https://bitcoinmagazine.com', 'Original Bitcoin news since 2012', None),
+            ('beincrypto', 'BeInCrypto', 'news', 'https://beincrypto.com/feed/', 'https://beincrypto.com', 'Crypto news & education', None),
+            ('blockworks', 'Blockworks', 'news', 'https://blockworks.co/feed/', 'https://blockworks.co', 'Institutional crypto insights', None),
+            ('unchained', 'Unchained', 'news', 'https://unchainedcrypto.com/feed/', 'https://unchainedcrypto.com', 'Quality crypto journalism', None),
             # Video sources
             ('coin_bureau', 'Coin Bureau', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw', 'https://www.youtube.com/@CoinBureau', 'Educational crypto content & analysis', 'UCqK_GSMbpiV8spgD3ZGloSw'),
             ('benjamin_cowen', 'Benjamin Cowen', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCRvqjQPSeaWn-uEx-w0XOIg', 'https://www.youtube.com/@intothecryptoverse', 'Technical analysis & market cycles', 'UCRvqjQPSeaWn-uEx-w0XOIg'),
