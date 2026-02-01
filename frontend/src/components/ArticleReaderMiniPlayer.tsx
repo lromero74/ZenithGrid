@@ -169,8 +169,9 @@ export function ArticleReaderMiniPlayer() {
 
     // Extract all words from plain text with their positions
     // Include hyphens and apostrophes as part of words (e.g., "anti-union", "don't")
+    // Note: em-dashes (—) are treated as separators, not joiners, since TTS reads them as separate words
     const textWords: Array<{ start: number; end: number; text: string; lower: string }> = []
-    const wordRegex = /[a-zA-Z0-9]+(?:[-–—''][a-zA-Z0-9]+)*/g
+    const wordRegex = /[a-zA-Z0-9]+(?:[-–''][a-zA-Z0-9]+)*/g
     let match
     while ((match = wordRegex.exec(plainText)) !== null) {
       textWords.push({
