@@ -1301,8 +1301,14 @@ async def get_debt_ceiling_history(limit: int = 100):
     )
 
 
-# Sites that require JavaScript rendering (Cloudflare protection, client-side rendering, etc.)
-JS_HEAVY_SITES = {
+# Sites that require JavaScript rendering (client-side rendering)
+# Note: Sites with aggressive bot protection (like The Block's Cloudflare) won't work
+# even with Playwright and are excluded
+JS_HEAVY_SITES: set[str] = set()  # Add domains here that need JS rendering but don't block bots
+
+# Sites known to block automated access (Cloudflare bot protection, etc.)
+# These are skipped for Playwright to avoid wasting resources
+BOT_BLOCKED_SITES = {
     'www.theblock.co',
     'theblock.co',
 }
@@ -1464,7 +1470,8 @@ async def get_article_content(url: str):
             )
 
         # If extraction failed or returned very little, try Playwright as fallback
-        if (not extracted or len(extracted) < 200) and not used_playwright:
+        # Skip for known bot-blocked sites (Cloudflare protection) as Playwright won't help
+        if (not extracted or len(extracted) < 200) and not used_playwright and domain not in BOT_BLOCKED_SITES:
             logger.info(f"Trying Playwright fallback for {domain} (extracted: {len(extracted) if extracted else 0} chars)")
             playwright_html = await fetch_with_playwright(url)
             if playwright_html:
