@@ -128,13 +128,10 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       if (savedCache) {
         setVoiceCache(JSON.parse(savedCache))
       }
-      const savedCycleEnabled = localStorage.getItem(VOICE_CYCLE_ENABLED_KEY)
-      if (savedCycleEnabled !== null) {
-        setVoiceCycleEnabled(savedCycleEnabled === 'true')
-      } else {
-        // Initialize localStorage with default (true) if not set
-        localStorage.setItem(VOICE_CYCLE_ENABLED_KEY, 'true')
-      }
+      // Force voice cycling to true and update localStorage
+      // This fixes stale 'false' values from earlier testing
+      localStorage.setItem(VOICE_CYCLE_ENABLED_KEY, 'true')
+      setVoiceCycleEnabled(true)
     } catch {
       // Ignore localStorage errors
     }
