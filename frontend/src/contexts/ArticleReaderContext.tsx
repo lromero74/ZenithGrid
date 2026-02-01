@@ -131,6 +131,9 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       const savedCycleEnabled = localStorage.getItem(VOICE_CYCLE_ENABLED_KEY)
       if (savedCycleEnabled !== null) {
         setVoiceCycleEnabled(savedCycleEnabled === 'true')
+      } else {
+        // Initialize localStorage with default (true) if not set
+        localStorage.setItem(VOICE_CYCLE_ENABLED_KEY, 'true')
       }
     } catch {
       // Ignore localStorage errors
@@ -198,13 +201,16 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     hasPlaybackStartedRef.current = false
 
     // Determine voice based on cycling preference
-    // Always use voice cycling for now - position-based: article 0 = voice 0, etc.
-    const voiceToUse = VOICE_CYCLE[articleIndex % VOICE_CYCLE.length]
-    console.log(`[Voice Cycling] Article ${articleIndex}, voice: ${voiceToUse}, cycleEnabled: ${voiceCycleEnabled}`)
+    let voiceToUse: string | undefined
+    if (voiceCycleEnabled) {
+      // Use position-based voice cycling: article 0 = voice 0, article 1 = voice 1, etc.
+      voiceToUse = VOICE_CYCLE[articleIndex % VOICE_CYCLE.length]
 
-    // Cache this voice for the article (for display purposes)
-    const newCache = { ...voiceCache, [article.url]: voiceToUse }
-    saveVoiceCache(newCache)
+      // Cache this voice for the article (for display purposes)
+      const newCache = { ...voiceCache, [article.url]: voiceToUse }
+      saveVoiceCache(newCache)
+    }
+    // If voice cycling is disabled, voiceToUse is undefined and TTS will use current voice
 
     // Fetch content if not already present
     let content = article.content
