@@ -1,6 +1,7 @@
 /**
  * Synchronized Text-to-Speech hook with word-level highlighting
  * Fetches audio and word timings, tracks playback for karaoke-style highlighting
+ * Uses a persistent Audio element to preserve autoplay permissions across articles
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
@@ -78,6 +79,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const wordsRef = useRef<WordTiming[]>([])  // Ref to avoid stale closure
   const isAnimatingRef = useRef(false)  // Track if animation loop should run
   const cacheRef = useRef<CachedAudio | null>(null)  // Cache audio for re-play
+  const currentAudioUrlRef = useRef<string | null>(null)  // Track current audio URL for cleanup
 
   // Keep wordsRef in sync with words state
   useEffect(() => {
@@ -134,42 +136,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     }
   }, [])
 
-  // Cleanup on unmount
+  // Initialize persistent audio element once
   useEffect(() => {
-    return () => {
-      stopAnimationLoop()
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.src = ''
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-      // Revoke cached audio URL on unmount
-      if (cacheRef.current) {
-        URL.revokeObjectURL(cacheRef.current.audioUrl)
-        cacheRef.current = null
-      }
-    }
-  }, [stopAnimationLoop])
-
-  // Helper to create and setup audio element
-  const setupAudio = useCallback((audioUrl: string, cachedWords: WordTiming[], cachedDuration?: number) => {
-    const audio = new Audio(audioUrl)
-    audio.playbackRate = playbackRate
+    const audio = new Audio()
     audioRef.current = audio
-
-    // Set words immediately
-    setWords(cachedWords)
-    wordsRef.current = cachedWords
-
-    if (cachedDuration) {
-      setDuration(cachedDuration)
-    }
-
-    audio.onloadedmetadata = () => {
-      setDuration(audio.duration)
-    }
 
     audio.onplay = () => {
       setIsPlaying(true)
@@ -192,7 +162,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       setIsPaused(false)
       setCurrentWordIndex(-1)
       stopAnimationLoop()
-      // Don't revoke URL - keep in cache for re-play
     }
 
     audio.onerror = () => {
@@ -202,20 +171,44 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       stopAnimationLoop()
     }
 
-    return audio
-  }, [playbackRate, startAnimationLoop, stopAnimationLoop])
+    audio.onloadedmetadata = () => {
+      setDuration(audio.duration)
+    }
+
+    // Cleanup on unmount
+    return () => {
+      stopAnimationLoop()
+      audio.pause()
+      audio.src = ''
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+      // Revoke cached audio URL on unmount
+      if (cacheRef.current) {
+        URL.revokeObjectURL(cacheRef.current.audioUrl)
+        cacheRef.current = null
+      }
+      if (currentAudioUrlRef.current) {
+        URL.revokeObjectURL(currentAudioUrlRef.current)
+        currentAudioUrlRef.current = null
+      }
+    }
+  }, [startAnimationLoop, stopAnimationLoop])
+
+  // Update playback rate when it changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate
+    }
+  }, [playbackRate])
 
   const loadAndPlay = useCallback(async (text: string, overrideVoice?: string) => {
+    const audio = audioRef.current
+    if (!audio) return
+
     // Stop any existing playback
     stopAnimationLoop()
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ''
-      audioRef.current = null
-    }
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
+    audio.pause()
 
     // Use override voice if provided, otherwise use current state
     const voiceToUse = overrideVoice || currentVoice
@@ -223,6 +216,11 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     // Update the voice state if override was provided
     if (overrideVoice && overrideVoice !== currentVoice) {
       setCurrentVoice(overrideVoice)
+    }
+
+    // Abort any in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
     }
 
     setError(null)
@@ -240,7 +238,12 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     // Check cache
     if (cacheRef.current && cacheRef.current.cacheKey === cacheKey) {
       // Use cached audio
-      const audio = setupAudio(cacheRef.current.audioUrl, cacheRef.current.words, cacheRef.current.duration)
+      setWords(cacheRef.current.words)
+      wordsRef.current = cacheRef.current.words
+      setDuration(cacheRef.current.duration)
+
+      audio.src = cacheRef.current.audioUrl
+      audio.currentTime = 0
 
       try {
         await audio.play()
@@ -283,25 +286,35 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       const audioBlob = await fetch(`data:audio/mpeg;base64,${data.audio}`).then(r => r.blob())
       const audioUrl = URL.createObjectURL(audioBlob)
 
-      // Revoke old cache URL if exists
-      if (cacheRef.current) {
+      // Revoke old URLs
+      if (cacheRef.current && cacheRef.current.audioUrl !== audioUrl) {
         URL.revokeObjectURL(cacheRef.current.audioUrl)
       }
+      if (currentAudioUrlRef.current && currentAudioUrlRef.current !== audioUrl) {
+        URL.revokeObjectURL(currentAudioUrlRef.current)
+      }
+      currentAudioUrlRef.current = audioUrl
 
-      const audio = setupAudio(audioUrl, data.words)
+      // Set words immediately
+      setWords(data.words)
+      wordsRef.current = data.words
+
+      // Set audio source
+      audio.src = audioUrl
+      audio.currentTime = 0
 
       // Wait for duration to be set
       await new Promise<void>((resolve) => {
-        if (audio.duration) {
+        if (audio.duration && !isNaN(audio.duration)) {
+          setDuration(audio.duration)
           resolve()
         } else {
-          const originalOnLoadedMetadata = audio.onloadedmetadata
-          audio.onloadedmetadata = (e) => {
-            if (originalOnLoadedMetadata) {
-              (originalOnLoadedMetadata as EventListener)(e)
-            }
+          const handleMetadata = () => {
+            setDuration(audio.duration)
+            audio.removeEventListener('loadedmetadata', handleMetadata)
             resolve()
           }
+          audio.addEventListener('loadedmetadata', handleMetadata)
         }
       })
 
@@ -332,7 +345,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       setError((err as Error).message || 'Failed to generate speech')
       setIsLoading(false)
     }
-  }, [currentVoice, playbackRate, setupAudio, stopAnimationLoop])
+  }, [currentVoice, playbackRate, stopAnimationLoop])
 
   const play = useCallback(() => {
     if (audioRef.current && isReady) {
@@ -365,8 +378,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
-      audioRef.current.src = ''
-      audioRef.current = null
     }
     setIsPlaying(false)
     setIsPaused(false)
@@ -438,9 +449,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
   const setRate = useCallback((rate: number) => {
     setPlaybackRate(rate)
-    if (audioRef.current) {
-      audioRef.current.playbackRate = rate
-    }
   }, [])
 
   return {
