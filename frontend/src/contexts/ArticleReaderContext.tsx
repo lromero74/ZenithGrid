@@ -198,16 +198,13 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     hasPlaybackStartedRef.current = false
 
     // Determine voice based on cycling preference
-    let voiceToUse: string | undefined
-    if (voiceCycleEnabled) {
-      // Use position-based voice cycling: article 0 = voice 0, article 1 = voice 1, etc.
-      voiceToUse = VOICE_CYCLE[articleIndex % VOICE_CYCLE.length]
+    // Always use voice cycling for now - position-based: article 0 = voice 0, etc.
+    const voiceToUse = VOICE_CYCLE[articleIndex % VOICE_CYCLE.length]
+    console.log(`[Voice Cycling] Article ${articleIndex}, voice: ${voiceToUse}, cycleEnabled: ${voiceCycleEnabled}`)
 
-      // Also cache this voice for the article (for display purposes)
-      const newCache = { ...voiceCache, [article.url]: voiceToUse }
-      saveVoiceCache(newCache)
-    }
-    // If voice cycling is disabled, voiceToUse is undefined and TTS will use current voice
+    // Cache this voice for the article (for display purposes)
+    const newCache = { ...voiceCache, [article.url]: voiceToUse }
+    saveVoiceCache(newCache)
 
     // Fetch content if not already present
     let content = article.content
