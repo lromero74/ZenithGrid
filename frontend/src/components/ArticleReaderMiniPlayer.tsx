@@ -128,28 +128,20 @@ export function ArticleReaderMiniPlayer() {
     }
   }, [isPaused, isReady, play, pause, resume])
 
-  // Progress bar click handler
+  // Progress bar click handler - word-based to match visual progress
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (duration === 0 || words.length === 0) return
+    if (words.length === 0) return
 
     const rect = e.currentTarget.getBoundingClientRect()
     const clickX = e.clientX - rect.left
     const percentage = clickX / rect.width
-    const targetTime = percentage * duration
 
-    // Find the word closest to this time
-    let closestIndex = 0
-    let closestDiff = Infinity
-    for (let i = 0; i < words.length; i++) {
-      const diff = Math.abs(words[i].startTime - targetTime)
-      if (diff < closestDiff) {
-        closestDiff = diff
-        closestIndex = i
-      }
-    }
+    // Calculate target word index based on percentage
+    const targetIndex = Math.floor(percentage * words.length)
+    const clampedIndex = Math.max(0, Math.min(targetIndex, words.length - 1))
 
-    seekToWord(closestIndex)
-  }, [duration, words, seekToWord])
+    seekToWord(clampedIndex)
+  }, [words, seekToWord])
 
   // Build word-highlighted content by matching TTS words to text words sequentially
   const renderedContent = useMemo(() => {
@@ -418,7 +410,7 @@ export function ArticleReaderMiniPlayer() {
                 >
                   <div
                     className="h-full bg-green-500 rounded-full transition-all duration-100 relative"
-                    style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                    style={{ width: words.length > 0 ? `${((currentWordIndex + 1) / words.length) * 100}%` : '0%' }}
                   >
                     <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
