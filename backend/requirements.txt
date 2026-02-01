@@ -33,3 +33,6 @@ pytest>=9.0.0
 
 # Text-to-speech
 edge-tts>=6.1.0
+
+# Browser automation for JS-rendered sites
+playwright>=1.40.0

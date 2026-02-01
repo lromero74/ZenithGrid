@@ -1301,6 +1301,59 @@ async def get_debt_ceiling_history(limit: int = 100):
     )
 
 
+# Sites that require JavaScript rendering (Cloudflare protection, client-side rendering, etc.)
+JS_HEAVY_SITES = {
+    'www.theblock.co',
+    'theblock.co',
+}
+
+
+async def fetch_with_playwright(url: str, timeout: int = 30) -> Optional[str]:
+    """
+    Fetch page content using Playwright for JS-heavy sites.
+    Loads browser on-demand and closes after use to minimize memory impact.
+    """
+    try:
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            # Launch headless browser with minimal memory footprint
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-gpu',
+                    '--disable-dev-shm-usage',
+                    '--disable-setuid-sandbox',
+                    '--no-sandbox',
+                    '--single-process',  # Reduce memory
+                    '--disable-extensions',
+                ]
+            )
+            try:
+                context = await browser.new_context(
+                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                              "AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/120.0.0.0 Safari/537.36"
+                )
+                page = await context.new_page()
+
+                # Navigate and wait for content to load
+                await page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
+
+                # Wait a bit more for any dynamic content
+                await asyncio.sleep(2)
+
+                # Get the full HTML
+                html_content = await page.content()
+                return html_content
+            finally:
+                await browser.close()
+
+    except Exception as e:
+        logger.error(f"Playwright fetch failed for {url}: {e}")
+        return None
+
+
 @router.get("/article-content", response_model=ArticleContentResponse)
 async def get_article_content(url: str):
     """
@@ -1309,14 +1362,10 @@ async def get_article_content(url: str):
     Uses trafilatura to extract the main article text, title, and metadata.
     Only allows fetching from domains in the content_sources database table.
 
-    Returns clean, readable article content like browser reader mode.
+    For JS-heavy sites (like The Block), uses Playwright to render the page first.
+    Playwright is loaded on-demand and closed after use to minimize memory impact.
 
-    TODO: Some sites (e.g., The Block) use Cloudflare protection and render content
-    via JavaScript client-side. To support these sites, we'd need to:
-    1. Install Playwright: pip install playwright && playwright install chromium
-    2. Use Playwright to fetch pages that fail with regular HTTP requests
-    3. Memory concern: Playwright uses significant RAM, may not work well on t2.micro (1GB)
-    4. Consider upgrading to t2.small (2GB RAM) before implementing
+    Returns clean, readable article content like browser reader mode.
     """
     # Validate URL
     try:
@@ -1346,35 +1395,50 @@ async def get_article_content(url: str):
         )
 
     try:
-        # Fetch the page content with browser-like headers to avoid 403 blocks
-        async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate",
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
-                "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                "Sec-Ch-Ua-Mobile": "?0",
-                "Sec-Ch-Ua-Platform": '"macOS"',
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-                "Upgrade-Insecure-Requests": "1",
-            }
-            async with session.get(url, headers=headers, timeout=15, allow_redirects=True) as response:
-                if response.status != 200:
-                    return ArticleContentResponse(
-                        url=url,
-                        success=False,
-                        error=f"Failed to fetch article: HTTP {response.status}"
-                    )
+        html_content = None
+        used_playwright = False
 
-                html_content = await response.text()
+        # Check if this site requires Playwright (JS rendering)
+        if domain in JS_HEAVY_SITES:
+            logger.info(f"Using Playwright for JS-heavy site: {domain}")
+            html_content = await fetch_with_playwright(url)
+            used_playwright = True
+            if not html_content:
+                return ArticleContentResponse(
+                    url=url,
+                    success=False,
+                    error="Failed to fetch article with browser rendering. Site may be blocking automated access."
+                )
+        else:
+            # Try regular HTTP fetch first
+            async with aiohttp.ClientSession() as session:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                  "Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Cache-Control": "no-cache",
+                    "Pragma": "no-cache",
+                    "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                    "Sec-Ch-Ua-Mobile": "?0",
+                    "Sec-Ch-Ua-Platform": '"macOS"',
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                }
+                async with session.get(url, headers=headers, timeout=15, allow_redirects=True) as response:
+                    if response.status != 200:
+                        return ArticleContentResponse(
+                            url=url,
+                            success=False,
+                            error=f"Failed to fetch article: HTTP {response.status}"
+                        )
+
+                    html_content = await response.text()
 
         # Extract article content using trafilatura
         # Run in executor since trafilatura is synchronous
@@ -1398,6 +1462,33 @@ async def get_article_content(url: str):
                 executor,
                 lambda: trafilatura.extract_metadata(html_content)
             )
+
+        # If extraction failed or returned very little, try Playwright as fallback
+        if (not extracted or len(extracted) < 200) and not used_playwright:
+            logger.info(f"Trying Playwright fallback for {domain} (extracted: {len(extracted) if extracted else 0} chars)")
+            playwright_html = await fetch_with_playwright(url)
+            if playwright_html:
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    playwright_extracted = await asyncio.get_event_loop().run_in_executor(
+                        executor,
+                        lambda: trafilatura.extract(
+                            playwright_html,
+                            include_comments=False,
+                            include_tables=True,
+                            include_links=False,
+                            no_fallback=False,
+                            favor_recall=True,
+                            output_format="markdown"
+                        )
+                    )
+                    if playwright_extracted and len(playwright_extracted) > len(extracted or ''):
+                        extracted = playwright_extracted
+                        # Re-extract metadata from Playwright HTML
+                        metadata = await asyncio.get_event_loop().run_in_executor(
+                            executor,
+                            lambda: trafilatura.extract_metadata(playwright_html)
+                        )
 
         if not extracted:
             return ArticleContentResponse(

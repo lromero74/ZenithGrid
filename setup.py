@@ -67,6 +67,8 @@ REQUIRED_PACKAGES = {
     'feedparser': 'feedparser',
     'trafilatura': 'trafilatura',
     'Pillow': 'PIL',
+    'edge-tts': 'edge_tts',
+    'playwright': 'playwright',
 }
 
 # Color codes for terminal output
