@@ -128,10 +128,20 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       if (savedCache) {
         setVoiceCache(JSON.parse(savedCache))
       }
-      // Force voice cycling to true and update localStorage
-      // This fixes stale 'false' values from earlier testing
-      localStorage.setItem(VOICE_CYCLE_ENABLED_KEY, 'true')
-      setVoiceCycleEnabled(true)
+      // Check if we've migrated the voice cycling setting (v1.20.6 fix)
+      const migrated = localStorage.getItem('voice-cycle-migrated-v1206')
+      if (!migrated) {
+        // One-time migration: reset to true to fix stale 'false' values
+        localStorage.setItem(VOICE_CYCLE_ENABLED_KEY, 'true')
+        localStorage.setItem('voice-cycle-migrated-v1206', 'true')
+        setVoiceCycleEnabled(true)
+      } else {
+        // Normal behavior: load from localStorage
+        const savedCycleEnabled = localStorage.getItem(VOICE_CYCLE_ENABLED_KEY)
+        if (savedCycleEnabled !== null) {
+          setVoiceCycleEnabled(savedCycleEnabled === 'true')
+        }
+      }
     } catch {
       // Ignore localStorage errors
     }
