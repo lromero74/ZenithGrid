@@ -4,6 +4,7 @@
  */
 
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react'
+import { registerVideoPlayer, stopArticleReader } from './mediaCoordinator'
 
 export interface VideoItem {
   title: string
@@ -103,6 +104,8 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
   // Start a new playlist
   const startPlaylist = useCallback((videos: VideoItem[], startIndex: number = 0, startExpanded: boolean = false) => {
     if (videos.length === 0) return
+    // Stop article reader if playing (mutually exclusive)
+    stopArticleReader()
     const clampedIndex = Math.min(Math.max(0, startIndex), videos.length - 1)
     setPlaylist(videos)
     setCurrentIndex(clampedIndex)
@@ -116,6 +119,11 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
     setIsPlaying(false)
     setShowMiniPlayer(false)
   }, [])
+
+  // Register with media coordinator for mutual exclusion with article reader
+  useEffect(() => {
+    registerVideoPlayer(stopPlaylist)
+  }, [stopPlaylist])
 
   // Play specific video in playlist
   const playVideo = useCallback((index: number) => {

@@ -6,6 +6,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react'
 import { useTTSSync, WordTiming } from '../pages/news/hooks/useTTSSync'
 import { markdownToPlainText } from '../pages/news/helpers'
+import { registerArticleReader, stopVideoPlayer } from './mediaCoordinator'
 
 // Available TTS voices for cycling
 const VOICE_CYCLE = ['aria', 'guy', 'jenny', 'brian', 'emma', 'andrew']
@@ -242,6 +243,8 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   // Start a new playlist
   const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false) => {
     if (articles.length === 0) return
+    // Stop video player if playing (mutually exclusive)
+    stopVideoPlayer()
 
     const clampedIndex = Math.min(Math.max(0, startIndex), articles.length - 1)
     setPlaylist(articles)
@@ -275,6 +278,11 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setShowMiniPlayer(false)
     setArticleContent(null)
   }, [tts])
+
+  // Register with media coordinator for mutual exclusion with video player
+  useEffect(() => {
+    registerArticleReader(stopPlaylist)
+  }, [stopPlaylist])
 
   // Play specific article in playlist
   const playArticle = useCallback((index: number) => {
