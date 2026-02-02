@@ -42,9 +42,12 @@ import {
 // Carousel configuration
 const CARDS_VISIBLE = 3
 const AUTO_CYCLE_INTERVAL = 30000 // 30 seconds
+const ANIMATION_DURATION = 625 // ms (25% slower for smoother feel)
+const SWIPE_THRESHOLD = 50 // px minimum swipe distance
 
-// Spring animation: anticipation -> follow-through -> overshoot -> settle
-// Using CSS custom property for dynamic transform
+// Spring animations with CSS custom properties
+// Button/auto: anticipation -> follow-through -> overshoot -> settle
+// Swipe: follow-through -> overshoot -> settle (no anticipation)
 const springKeyframes = `
 @keyframes slideSpringLeft {
   0% { transform: translateX(var(--from-x)); }
@@ -60,16 +63,34 @@ const springKeyframes = `
   75% { transform: translateX(calc(var(--to-x) - 0.5%)); }
   100% { transform: translateX(var(--to-x)); }
 }
+@keyframes slideSwipeLeft {
+  0% { transform: translateX(var(--from-x)); }
+  60% { transform: translateX(calc(var(--to-x) - 1.5%)); }
+  80% { transform: translateX(calc(var(--to-x) + 0.5%)); }
+  100% { transform: translateX(var(--to-x)); }
+}
+@keyframes slideSwipeRight {
+  0% { transform: translateX(var(--from-x)); }
+  60% { transform: translateX(calc(var(--to-x) + 1.5%)); }
+  80% { transform: translateX(calc(var(--to-x) - 0.5%)); }
+  100% { transform: translateX(var(--to-x)); }
+}
 `
 
 export function MarketSentimentCards() {
-  // Carousel state
+  // Carousel state - for infinite scroll, we track position in extended array
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
+  const [animationType, setAnimationType] = useState<'button' | 'swipe'>('button')
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null)
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
+
+  // Swipe tracking
+  const touchStartX = useRef<number>(0)
+  const touchStartY = useRef<number>(0)
+  const isDragging = useRef<boolean>(false)
 
   // Track debt ceiling history modal
   const [showDebtCeilingModal, setShowDebtCeilingModal] = useState(false)
@@ -233,7 +254,7 @@ export function MarketSentimentCards() {
   }, [usDebtData])
 
   // Define all cards (funding rates removed - requires API key)
-  const allCards = [
+  const baseCards = [
     { id: 'fear-greed', component: <FearGreedCard data={fearGreedData} /> },
     { id: 'halving', component: <HalvingCard blockHeight={blockHeight} halvingCountdown={halvingCountdown} liveCountdown={liveCountdown} showExtendedCountdown={showExtendedCountdown} setShowExtendedCountdown={setShowExtendedCountdown} /> },
     { id: 'us-debt', component: <USDebtCard usDebtData={usDebtData} liveDebt={liveDebt} onShowHistory={() => setShowDebtCeilingModal(true)} /> },
@@ -242,8 +263,16 @@ export function MarketSentimentCards() {
     { id: 'stablecoin-mcap', component: <StablecoinMcapCard data={stablecoinData} /> },
   ]
 
-  const totalCards = allCards.length
-  const maxIndex = totalCards - CARDS_VISIBLE
+  const totalCards = baseCards.length
+
+  // For infinite scroll: create extended array with clones at both ends
+  // [clone of last 3] + [all cards] + [clone of first 3]
+  const extendedCards = [
+    ...baseCards.slice(-CARDS_VISIBLE).map((card, i) => ({ ...card, id: `clone-end-${i}` })),
+    ...baseCards,
+    ...baseCards.slice(0, CARDS_VISIBLE).map((card, i) => ({ ...card, id: `clone-start-${i}` })),
+  ]
+  const extendedTotal = extendedCards.length
 
   // Inject keyframes into document (only once)
   useEffect(() => {
@@ -256,44 +285,63 @@ export function MarketSentimentCards() {
     }
   }, [])
 
-  // Animation duration
-  const ANIMATION_DURATION = 500 // ms
-
-  // Auto-cycle logic with animation
-  const nextSlide = useCallback(() => {
+  // Slide functions for infinite carousel
+  const nextSlide = useCallback((isSwipe = false) => {
     if (isAnimating) return
+    setAnimationType(isSwipe ? 'swipe' : 'button')
     setSlideDirection('left')
     setIsAnimating(true)
     setTimeout(() => {
-      setCurrentIndex(prev => (prev >= maxIndex ? 0 : prev + 1))
+      setCurrentIndex(prev => prev + 1)
       setIsAnimating(false)
       setSlideDirection(null)
     }, ANIMATION_DURATION)
-  }, [maxIndex, isAnimating])
+  }, [isAnimating])
 
-  const prevSlide = useCallback(() => {
+  const prevSlide = useCallback((isSwipe = false) => {
     if (isAnimating) return
+    setAnimationType(isSwipe ? 'swipe' : 'button')
     setSlideDirection('right')
     setIsAnimating(true)
     setTimeout(() => {
-      setCurrentIndex(prev => (prev <= 0 ? maxIndex : prev - 1))
+      setCurrentIndex(prev => prev - 1)
       setIsAnimating(false)
       setSlideDirection(null)
     }, ANIMATION_DURATION)
-  }, [maxIndex, isAnimating])
+  }, [isAnimating])
 
-  // Jump to specific index
-  const goToIndex = useCallback((targetIndex: number) => {
-    if (isAnimating || targetIndex === currentIndex) return
-    const direction = targetIndex > currentIndex ? 'left' : 'right'
-    setSlideDirection(direction)
+  // Jump to specific logical index (0 to totalCards-1)
+  const goToIndex = useCallback((targetLogicalIndex: number) => {
+    const currentLogicalIndex = ((currentIndex % totalCards) + totalCards) % totalCards
+    if (isAnimating || targetLogicalIndex === currentLogicalIndex) return
+
+    // Calculate shortest path direction
+    let diff = targetLogicalIndex - currentLogicalIndex
+    if (Math.abs(diff) > totalCards / 2) {
+      diff = diff > 0 ? diff - totalCards : diff + totalCards
+    }
+
+    setAnimationType('button')
+    setSlideDirection(diff > 0 ? 'left' : 'right')
     setIsAnimating(true)
     setTimeout(() => {
-      setCurrentIndex(targetIndex)
+      setCurrentIndex(targetLogicalIndex)
       setIsAnimating(false)
       setSlideDirection(null)
     }, ANIMATION_DURATION)
-  }, [currentIndex, isAnimating])
+  }, [currentIndex, totalCards, isAnimating])
+
+  // Normalize index after animation (for infinite loop)
+  useEffect(() => {
+    if (isAnimating) return
+
+    // If we've scrolled into the clone zones, instantly jump to the real position
+    if (currentIndex < 0) {
+      setCurrentIndex(totalCards + currentIndex)
+    } else if (currentIndex >= totalCards) {
+      setCurrentIndex(currentIndex % totalCards)
+    }
+  }, [currentIndex, isAnimating, totalCards])
 
   // Auto-play effect
   useEffect(() => {
@@ -305,7 +353,7 @@ export function MarketSentimentCards() {
       return
     }
 
-    autoPlayRef.current = setInterval(nextSlide, AUTO_CYCLE_INTERVAL)
+    autoPlayRef.current = setInterval(() => nextSlide(false), AUTO_CYCLE_INTERVAL)
     return () => {
       if (autoPlayRef.current) {
         clearInterval(autoPlayRef.current)
@@ -313,10 +361,44 @@ export function MarketSentimentCards() {
     }
   }, [isPaused, nextSlide])
 
-  // Calculate card width percentage (each card is 1/3 of visible area)
+  // Swipe handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (isAnimating) return
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    touchStartX.current = clientX
+    touchStartY.current = clientY
+    isDragging.current = true
+  }, [isAnimating])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!isDragging.current) return
+    isDragging.current = false
+
+    const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : e.clientX
+    const clientY = 'changedTouches' in e ? e.changedTouches[0].clientY : e.clientY
+    const diffX = touchStartX.current - clientX
+    const diffY = touchStartY.current - clientY
+
+    // Only trigger if horizontal swipe is dominant and exceeds threshold
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > SWIPE_THRESHOLD) {
+      if (diffX > 0) {
+        nextSlide(true) // Swipe left = next
+      } else {
+        prevSlide(true) // Swipe right = prev
+      }
+    }
+  }, [nextSlide, prevSlide])
+
+  // Calculate card width percentage (each card is 1/3 of visible area in the track)
   const cardWidthPercent = 100 / CARDS_VISIBLE
+
   // Calculate the transform for the current position
-  const baseTransform = -(currentIndex * cardWidthPercent)
+  // Account for the prepended clones (offset by CARDS_VISIBLE)
+  const getTransformPercent = (index: number) => {
+    return -((index + CARDS_VISIBLE) * cardWidthPercent)
+  }
+  const baseTransform = getTransformPercent(currentIndex)
 
   // Get animation style
   const getAnimationStyle = (): React.CSSProperties => {
@@ -329,12 +411,20 @@ export function MarketSentimentCards() {
       ? `${baseTransform - cardWidthPercent}%`
       : `${baseTransform + cardWidthPercent}%`
 
+    // Use different animation for swipe vs button
+    const animName = animationType === 'swipe'
+      ? `slideSwipe${slideDirection === 'left' ? 'Left' : 'Right'}`
+      : `slideSpring${slideDirection === 'left' ? 'Left' : 'Right'}`
+
     return {
       '--from-x': fromX,
       '--to-x': toX,
-      animation: `slideSpring${slideDirection === 'left' ? 'Left' : 'Right'} ${ANIMATION_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards`,
+      animation: `${animName} ${ANIMATION_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards`,
     } as React.CSSProperties
   }
+
+  // Current logical index for dot indicators (0 to totalCards-1)
+  const logicalIndex = ((currentIndex % totalCards) + totalCards) % totalCards
 
   return (
     <>
@@ -367,35 +457,42 @@ export function MarketSentimentCards() {
             </button>
           </div>
           <div className="flex items-center gap-1">
-            {Array.from({ length: maxIndex + 1 }).map((_, idx) => (
+            {Array.from({ length: totalCards }).map((_, idx) => (
               <button
                 key={idx}
                 onClick={() => goToIndex(idx)}
                 disabled={isAnimating}
                 className={`w-2 h-2 rounded-full transition-colors disabled:cursor-not-allowed ${
-                  currentIndex === idx ? 'bg-blue-500' : 'bg-slate-600 hover:bg-slate-500'
+                  logicalIndex === idx ? 'bg-blue-500' : 'bg-slate-600 hover:bg-slate-500'
                 }`}
               />
             ))}
           </div>
         </div>
 
-        {/* Cards Carousel - overflow hidden container */}
-        <div className="overflow-hidden">
-          {/* Sliding track containing all cards */}
+        {/* Cards Carousel - overflow hidden container with touch/mouse support */}
+        <div
+          className="overflow-hidden cursor-grab active:cursor-grabbing select-none"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleTouchStart}
+          onMouseUp={handleTouchEnd}
+          onMouseLeave={() => { isDragging.current = false }}
+        >
+          {/* Sliding track containing extended cards (clones + originals + clones) */}
           <div
             ref={carouselRef}
             className="flex gap-4"
             style={{
-              width: `${(totalCards / CARDS_VISIBLE) * 100}%`,
+              width: `${(extendedTotal / CARDS_VISIBLE) * 100}%`,
               ...getAnimationStyle(),
             }}
           >
-            {allCards.map(card => (
+            {extendedCards.map(card => (
               <div
                 key={card.id}
                 className="flex-shrink-0"
-                style={{ width: `calc(${100 / totalCards}% - ${(totalCards - 1) * 16 / totalCards}px)` }}
+                style={{ width: `calc(${100 / extendedTotal}% - ${(extendedTotal - 1) * 16 / extendedTotal}px)` }}
               >
                 {card.component}
               </div>
