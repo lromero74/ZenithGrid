@@ -314,6 +314,40 @@ export interface HalvingCountdown {
   percentComplete: number
 }
 
+// Market Metrics Types
+export interface BTCDominanceResponse {
+  btc_dominance: number
+  eth_dominance: number
+  others_dominance: number
+  total_market_cap: number
+  cached_at: string
+}
+
+export interface AltseasonIndexResponse {
+  altseason_index: number
+  season: 'Altcoin Season' | 'Bitcoin Season' | 'Neutral'
+  outperformers: number
+  total_altcoins: number
+  btc_30d_change: number
+  cached_at: string
+}
+
+export interface FundingRatesResponse {
+  btc_funding_rate: number
+  eth_funding_rate: number
+  sentiment: string
+  cached_at: string
+}
+
+export interface StablecoinMcapResponse {
+  total_stablecoin_mcap: number
+  usdt_mcap: number
+  usdc_mcap: number
+  dai_mcap: number
+  others_mcap: number
+  cached_at: string
+}
+
 export interface DebtCeilingEvent {
   date: string
   amount_trillion: number | null

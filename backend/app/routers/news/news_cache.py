@@ -17,6 +17,12 @@ VIDEO_CACHE_FILE = CACHE_DIR / "video_cache.json"
 FEAR_GREED_CACHE_FILE = CACHE_DIR / "fear_greed_cache.json"
 BLOCK_HEIGHT_CACHE_FILE = CACHE_DIR / "block_height_cache.json"
 US_DEBT_CACHE_FILE = CACHE_DIR / "us_debt_cache.json"
+# New market metrics caches
+BTC_DOMINANCE_CACHE_FILE = CACHE_DIR / "btc_dominance_cache.json"
+ALTSEASON_CACHE_FILE = CACHE_DIR / "altseason_cache.json"
+FUNDING_RATES_CACHE_FILE = CACHE_DIR / "funding_rates_cache.json"
+STABLECOIN_MCAP_CACHE_FILE = CACHE_DIR / "stablecoin_mcap_cache.json"
+EXCHANGE_FLOWS_CACHE_FILE = CACHE_DIR / "exchange_flows_cache.json"
 
 # Cache timing constants (background refresh service handles actual refresh timing)
 NEWS_CACHE_CHECK_MINUTES = 30  # Fallback: check every 30 minutes if no background refresh
@@ -25,6 +31,8 @@ NEWS_ITEM_MAX_AGE_DAYS = 14  # Prune items older than this
 FEAR_GREED_CACHE_MINUTES = 60  # Fear/greed updates daily, no need for frequent checks
 BLOCK_HEIGHT_CACHE_MINUTES = 10  # Keep for halving countdown accuracy
 US_DEBT_CACHE_HOURS = 24  # Update US debt once per day
+# Market metrics cache timing
+MARKET_METRICS_CACHE_MINUTES = 15  # Update market metrics every 15 minutes
 
 # Export constants needed by fetchers
 __all__ = [
@@ -35,6 +43,10 @@ __all__ = [
     "FEAR_GREED_CACHE_FILE",
     "BLOCK_HEIGHT_CACHE_FILE",
     "US_DEBT_CACHE_FILE",
+    "BTC_DOMINANCE_CACHE_FILE",
+    "ALTSEASON_CACHE_FILE",
+    "FUNDING_RATES_CACHE_FILE",
+    "STABLECOIN_MCAP_CACHE_FILE",
     # Timing constants
     "NEWS_CACHE_CHECK_MINUTES",
     "VIDEO_CACHE_CHECK_MINUTES",
@@ -42,6 +54,7 @@ __all__ = [
     "FEAR_GREED_CACHE_MINUTES",
     "BLOCK_HEIGHT_CACHE_MINUTES",
     "US_DEBT_CACHE_HOURS",
+    "MARKET_METRICS_CACHE_MINUTES",
     # Functions
     "load_cache",
     "save_cache",
@@ -53,6 +66,14 @@ __all__ = [
     "save_block_height_cache",
     "load_us_debt_cache",
     "save_us_debt_cache",
+    "load_btc_dominance_cache",
+    "save_btc_dominance_cache",
+    "load_altseason_cache",
+    "save_altseason_cache",
+    "load_funding_rates_cache",
+    "save_funding_rates_cache",
+    "load_stablecoin_mcap_cache",
+    "save_stablecoin_mcap_cache",
     "prune_old_items",
     "merge_news_items",
 ]
@@ -286,3 +307,74 @@ def save_us_debt_cache(data: Dict[str, Any]) -> None:
         logger.info("US debt cache saved")
     except Exception as e:
         logger.error(f"Failed to save US debt cache: {e}")
+
+
+# Generic market metrics cache functions
+def _load_market_metrics_cache(cache_file: Path, name: str) -> Optional[Dict[str, Any]]:
+    """Generic loader for market metrics caches (15 minute expiry)"""
+    if not cache_file.exists():
+        return None
+
+    try:
+        with open(cache_file, "r") as f:
+            cache = json.load(f)
+
+        cached_at = datetime.fromisoformat(cache.get("cached_at", "2000-01-01"))
+        if datetime.now() - cached_at > timedelta(minutes=MARKET_METRICS_CACHE_MINUTES):
+            logger.info(f"{name} cache expired")
+            return None
+
+        return cache
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to load {name} cache: {e}")
+        return None
+
+
+def _save_market_metrics_cache(cache_file: Path, name: str, data: Dict[str, Any]) -> None:
+    """Generic saver for market metrics caches"""
+    try:
+        with open(cache_file, "w") as f:
+            json.dump(data, f, indent=2)
+        logger.info(f"{name} cache saved")
+    except Exception as e:
+        logger.error(f"Failed to save {name} cache: {e}")
+
+
+def load_btc_dominance_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(BTC_DOMINANCE_CACHE_FILE, "BTC dominance")
+
+
+def save_btc_dominance_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(BTC_DOMINANCE_CACHE_FILE, "BTC dominance", data)
+
+
+def load_altseason_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(ALTSEASON_CACHE_FILE, "Altseason index")
+
+
+def save_altseason_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(ALTSEASON_CACHE_FILE, "Altseason index", data)
+
+
+def load_funding_rates_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(FUNDING_RATES_CACHE_FILE, "Funding rates")
+
+
+def save_funding_rates_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(FUNDING_RATES_CACHE_FILE, "Funding rates", data)
+
+
+def load_stablecoin_mcap_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(STABLECOIN_MCAP_CACHE_FILE, "Stablecoin mcap")
+
+
+def save_stablecoin_mcap_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(STABLECOIN_MCAP_CACHE_FILE, "Stablecoin mcap", data)
+
+
+def load_exchange_flows_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(EXCHANGE_FLOWS_CACHE_FILE, "Exchange flows")
+
+
+def save_exchange_flows_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(EXCHANGE_FLOWS_CACHE_FILE, "Exchange flows", data)

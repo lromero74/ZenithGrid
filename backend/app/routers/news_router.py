@@ -68,12 +68,20 @@ from app.routers.news import (
     load_fear_greed_cache,
     load_us_debt_cache,
     load_video_cache,
+    load_btc_dominance_cache,
+    load_altseason_cache,
+    load_funding_rates_cache,
+    load_stablecoin_mcap_cache,
     merge_news_items,
     prune_old_items,
     save_block_height_cache,
     save_fear_greed_cache,
     save_us_debt_cache,
     save_video_cache,
+    save_btc_dominance_cache,
+    save_altseason_cache,
+    save_funding_rates_cache,
+    save_stablecoin_mcap_cache,
 )
 from app.services.news_image_cache import download_image_as_base64
 
@@ -1352,6 +1360,305 @@ async def get_debt_ceiling_history(limit: int = 100):
         total_events=len(DEBT_CEILING_HISTORY),
         last_updated="2025-11-29",  # Update this when adding new ceiling events
     )
+
+
+# ============================================================================
+# MARKET METRICS ENDPOINTS
+# ============================================================================
+
+
+async def fetch_btc_dominance() -> Dict[str, Any]:
+    """Fetch Bitcoin dominance from CoinGecko"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+            url = "https://api.coingecko.com/api/v3/global"
+
+            async with session.get(url, headers=headers, timeout=15) as response:
+                if response.status != 200:
+                    logger.warning(f"CoinGecko global API returned {response.status}")
+                    raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
+
+                data = await response.json()
+                global_data = data.get("data", {})
+
+                btc_dominance = global_data.get("market_cap_percentage", {}).get("btc", 0)
+                eth_dominance = global_data.get("market_cap_percentage", {}).get("eth", 0)
+                total_mcap = global_data.get("total_market_cap", {}).get("usd", 0)
+
+                now = datetime.now()
+                cache_data = {
+                    "btc_dominance": round(btc_dominance, 2),
+                    "eth_dominance": round(eth_dominance, 2),
+                    "others_dominance": round(100 - btc_dominance - eth_dominance, 2),
+                    "total_market_cap": total_mcap,
+                    "cached_at": now.isoformat(),
+                }
+
+                save_btc_dominance_cache(cache_data)
+                return cache_data
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching BTC dominance")
+        raise HTTPException(status_code=503, detail="CoinGecko API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching BTC dominance: {e}")
+        raise HTTPException(status_code=503, detail=f"CoinGecko API error: {str(e)}")
+
+
+async def fetch_altseason_index() -> Dict[str, Any]:
+    """
+    Calculate Altcoin Season Index based on top coins performance vs BTC.
+    Altcoin season = 75%+ of top 50 altcoins outperformed BTC over 30 days.
+    (Using 30-day as 90-day data not available in free CoinGecko API)
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            # Get top 50 coins with 30-day price change data
+            url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=51&sparkline=false&price_change_percentage=30d"
+
+            async with session.get(url, headers=headers, timeout=20) as response:
+                if response.status != 200:
+                    logger.warning(f"CoinGecko markets API returned {response.status}")
+                    raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
+
+                coins = await response.json()
+
+                # Find BTC's 30-day change
+                btc_change = 0
+                altcoins = []
+                for coin in coins:
+                    if coin.get("id") == "bitcoin":
+                        btc_change = coin.get("price_change_percentage_30d_in_currency", 0) or 0
+                    elif coin.get("id") not in ["tether", "usd-coin", "dai", "binance-usd"]:  # Exclude stablecoins
+                        altcoins.append(coin)
+
+                # Count altcoins that outperformed BTC
+                outperformers = 0
+                for coin in altcoins[:50]:  # Top 50 altcoins
+                    coin_change = coin.get("price_change_percentage_30d_in_currency", 0) or 0
+                    if coin_change > btc_change:
+                        outperformers += 1
+
+                # Calculate index (0-100)
+                total_altcoins = min(len(altcoins), 50)
+                altseason_index = round((outperformers / total_altcoins) * 100) if total_altcoins > 0 else 50
+
+                # Determine season
+                if altseason_index >= 75:
+                    season = "Altcoin Season"
+                elif altseason_index <= 25:
+                    season = "Bitcoin Season"
+                else:
+                    season = "Neutral"
+
+                now = datetime.now()
+                cache_data = {
+                    "altseason_index": altseason_index,
+                    "season": season,
+                    "outperformers": outperformers,
+                    "total_altcoins": total_altcoins,
+                    "btc_30d_change": round(btc_change, 2),
+                    "cached_at": now.isoformat(),
+                }
+
+                save_altseason_cache(cache_data)
+                return cache_data
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching altseason index")
+        raise HTTPException(status_code=503, detail="CoinGecko API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching altseason index: {e}")
+        raise HTTPException(status_code=503, detail=f"CoinGecko API error: {str(e)}")
+
+
+async def fetch_funding_rates() -> Dict[str, Any]:
+    """
+    Fetch BTC and ETH perpetual funding rates from CoinGlass public API.
+    Positive = longs pay shorts (bullish overcrowded)
+    Negative = shorts pay longs (bearish overcrowded)
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            # CoinGlass has a public endpoint for aggregate funding rates
+            # Using their open-data endpoint
+            url = "https://open-api.coinglass.com/public/v2/funding"
+
+            async with session.get(url, headers=headers, timeout=15) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    funding_data = data.get("data", [])
+
+                    btc_funding = None
+                    eth_funding = None
+
+                    for item in funding_data:
+                        symbol = item.get("symbol", "").upper()
+                        if symbol == "BTC":
+                            btc_funding = item.get("uMarginList", [{}])[0].get("rate", 0)
+                        elif symbol == "ETH":
+                            eth_funding = item.get("uMarginList", [{}])[0].get("rate", 0)
+
+                    if btc_funding is not None:
+                        now = datetime.now()
+                        cache_data = {
+                            "btc_funding_rate": round(btc_funding * 100, 4),  # Convert to percentage
+                            "eth_funding_rate": round((eth_funding or 0) * 100, 4),
+                            "sentiment": "Overleveraged Longs" if (btc_funding or 0) > 0.01 else (
+                                "Overleveraged Shorts" if (btc_funding or 0) < -0.01 else "Neutral"
+                            ),
+                            "cached_at": now.isoformat(),
+                        }
+                        save_funding_rates_cache(cache_data)
+                        return cache_data
+
+                # Fallback: return neutral data if API fails
+                logger.warning("CoinGlass funding API unavailable, using fallback")
+                now = datetime.now()
+                return {
+                    "btc_funding_rate": 0.01,
+                    "eth_funding_rate": 0.01,
+                    "sentiment": "Data Unavailable",
+                    "cached_at": now.isoformat(),
+                }
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching funding rates")
+        return {"btc_funding_rate": 0, "eth_funding_rate": 0, "sentiment": "Data Unavailable", "cached_at": datetime.now().isoformat()}
+    except Exception as e:
+        logger.error(f"Error fetching funding rates: {e}")
+        return {"btc_funding_rate": 0, "eth_funding_rate": 0, "sentiment": "Data Unavailable", "cached_at": datetime.now().isoformat()}
+
+
+async def fetch_stablecoin_mcap() -> Dict[str, Any]:
+    """Fetch total stablecoin market cap from CoinGecko"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            # Get top stablecoins
+            url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=stablecoins&order=market_cap_desc&per_page=20&sparkline=false"
+
+            async with session.get(url, headers=headers, timeout=15) as response:
+                if response.status != 200:
+                    logger.warning(f"CoinGecko stablecoins API returned {response.status}")
+                    raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
+
+                coins = await response.json()
+
+                total_mcap = sum(coin.get("market_cap", 0) or 0 for coin in coins)
+
+                # Get individual breakdowns
+                usdt_mcap = 0
+                usdc_mcap = 0
+                dai_mcap = 0
+                others_mcap = 0
+
+                for coin in coins:
+                    coin_id = coin.get("id", "")
+                    mcap = coin.get("market_cap", 0) or 0
+                    if coin_id == "tether":
+                        usdt_mcap = mcap
+                    elif coin_id == "usd-coin":
+                        usdc_mcap = mcap
+                    elif coin_id == "dai":
+                        dai_mcap = mcap
+                    else:
+                        others_mcap += mcap
+
+                now = datetime.now()
+                cache_data = {
+                    "total_stablecoin_mcap": total_mcap,
+                    "usdt_mcap": usdt_mcap,
+                    "usdc_mcap": usdc_mcap,
+                    "dai_mcap": dai_mcap,
+                    "others_mcap": others_mcap,
+                    "cached_at": now.isoformat(),
+                }
+
+                save_stablecoin_mcap_cache(cache_data)
+                return cache_data
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching stablecoin mcap")
+        raise HTTPException(status_code=503, detail="CoinGecko API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching stablecoin mcap: {e}")
+        raise HTTPException(status_code=503, detail=f"CoinGecko API error: {str(e)}")
+
+
+@router.get("/btc-dominance")
+async def get_btc_dominance():
+    """
+    Get Bitcoin market dominance percentage.
+
+    Rising dominance = risk-off, altcoins underperforming
+    Falling dominance = alt season potential
+    """
+    cache = load_btc_dominance_cache()
+    if cache:
+        logger.info("Serving BTC dominance from cache")
+        return cache
+
+    logger.info("Fetching fresh BTC dominance data...")
+    return await fetch_btc_dominance()
+
+
+@router.get("/altseason-index")
+async def get_altseason_index():
+    """
+    Get Altcoin Season Index (0-100).
+
+    Index >= 75: Altcoin Season (75%+ of top 50 altcoins outperformed BTC over 90 days)
+    Index <= 25: Bitcoin Season
+    25 < Index < 75: Neutral
+    """
+    cache = load_altseason_cache()
+    if cache:
+        logger.info("Serving altseason index from cache")
+        return cache
+
+    logger.info("Fetching fresh altseason index...")
+    return await fetch_altseason_index()
+
+
+@router.get("/funding-rates")
+async def get_funding_rates():
+    """
+    Get BTC and ETH perpetual futures funding rates.
+
+    Positive rates = longs pay shorts (market overleveraged long, correction risk)
+    Negative rates = shorts pay longs (market overleveraged short, squeeze potential)
+    """
+    cache = load_funding_rates_cache()
+    if cache:
+        logger.info("Serving funding rates from cache")
+        return cache
+
+    logger.info("Fetching fresh funding rates...")
+    return await fetch_funding_rates()
+
+
+@router.get("/stablecoin-mcap")
+async def get_stablecoin_mcap():
+    """
+    Get total stablecoin market cap.
+
+    High/rising stablecoin mcap = "dry powder" waiting to be deployed = bullish
+    Falling stablecoin mcap = capital leaving crypto = bearish
+    """
+    cache = load_stablecoin_mcap_cache()
+    if cache:
+        logger.info("Serving stablecoin mcap from cache")
+        return cache
+
+    logger.info("Fetching fresh stablecoin mcap...")
+    return await fetch_stablecoin_mcap()
 
 
 @router.get("/article-content", response_model=ArticleContentResponse)
