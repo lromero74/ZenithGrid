@@ -81,10 +81,14 @@ interface SeasonInfo {
 /**
  * Determine the current market season based on multiple indicators.
  * Uses a weighted scoring system to classify into one of four phases:
- * - Accumulation (Spring): Bottom forming, smart money buying
+ * - Accumulation (Spring): Bottom forming after extended bear, smart money buying
  * - Bull (Summer): Prices rising, optimism growing
  * - Distribution (Autumn): Peak euphoria, smart money selling
- * - Bear (Winter): Prices falling, capitulation
+ * - Bear (Winter): Prices falling, fear spreading
+ *
+ * KEY DISTINCTION: Bear vs Accumulation
+ * - Bear: Recent drawdown, still falling or early in decline
+ * - Accumulation: Extended time at lows (365+ days since ATH), stabilizing
  */
 function determineMarketSeason(
   fearGreed: number | undefined,
@@ -108,97 +112,171 @@ function determineMarketSeason(
   let distributionScore = 0
   let bearScore = 0
 
-  // Fear & Greed signals
+  // === CRITICAL: Time-based bear vs accumulation distinction ===
+  // If we have significant drawdown but haven't been there long, it's BEAR not accumulation
+  const isRecentDrop = daysSinceATH < 180 && drawdown > 15
+  const isExtendedBear = daysSinceATH >= 365 && drawdown > 30
+
+  // Fear & Greed signals - but context matters!
   if (fg <= 20) {
-    accumulationScore += 30
-    signals.push('Extreme fear (buying opportunity)')
+    if (isRecentDrop) {
+      // Recent crash with extreme fear = bear market panic
+      bearScore += 35
+      signals.push('Extreme fear (capitulation)')
+    } else if (isExtendedBear) {
+      // Extended bear with extreme fear = possible accumulation
+      accumulationScore += 25
+      bearScore += 10
+      signals.push('Extreme fear (potential bottom)')
+    } else {
+      bearScore += 20
+      accumulationScore += 15
+      signals.push('Extreme fear')
+    }
   } else if (fg <= 35) {
-    accumulationScore += 20
-    bearScore += 10
-    signals.push('Fear in market')
+    if (isRecentDrop) {
+      bearScore += 25
+      signals.push('Fear amid recent decline')
+    } else {
+      bearScore += 15
+      accumulationScore += 10
+      signals.push('Fear in market')
+    }
   } else if (fg >= 80) {
-    distributionScore += 30
+    distributionScore += 35
     signals.push('Extreme greed (caution)')
   } else if (fg >= 65) {
-    distributionScore += 15
+    distributionScore += 20
     bullScore += 15
     signals.push('Greed rising')
-  } else if (fg >= 45 && fg <= 55) {
-    // Neutral - could be transitioning
-    bullScore += 10
-    bearScore += 10
-  } else if (fg > 55) {
+  } else if (fg >= 50) {
     bullScore += 20
     signals.push('Optimism building')
   } else {
-    bearScore += 15
-  }
-
-  // ATH/Drawdown signals
-  if (drawdown <= 5) {
-    distributionScore += 25
-    signals.push('At/near all-time high')
-  } else if (drawdown <= 15) {
-    bullScore += 25
-    distributionScore += 10
-    signals.push('Close to ATH')
-  } else if (drawdown >= 60) {
-    accumulationScore += 30
-    signals.push('Deep drawdown (accumulation zone)')
-  } else if (drawdown >= 40) {
-    accumulationScore += 15
-    bearScore += 15
-    signals.push('Significant drawdown')
-  } else if (drawdown >= 20) {
-    bearScore += 20
-    signals.push('Correction territory')
-  } else {
-    bullScore += 15
-  }
-
-  // Days since ATH signals
-  if (daysSinceATH <= 30 && drawdown <= 10) {
-    distributionScore += 20
-    signals.push('Recent ATH')
-  } else if (daysSinceATH >= 365) {
-    accumulationScore += 20
-    signals.push('Extended time below ATH')
-  } else if (daysSinceATH >= 180) {
-    accumulationScore += 10
+    // 35-50: mild fear, could be bear or early recovery
     bearScore += 10
+    bullScore += 5
   }
 
-  // Recovery signals
-  if (recovery >= 90) {
-    bullScore += 15
-    distributionScore += 10
-  } else if (recovery >= 70) {
+  // === Drawdown signals - recency is key ===
+  if (drawdown <= 5) {
+    distributionScore += 30
+    signals.push('At/near all-time high')
+  } else if (drawdown <= 10) {
     bullScore += 20
-    signals.push('Strong recovery underway')
-  } else if (recovery <= 30) {
-    bearScore += 15
-    accumulationScore += 10
+    distributionScore += 15
+    signals.push('Close to ATH')
+  } else if (drawdown <= 20) {
+    bullScore += 15
+    signals.push('Healthy pullback')
+  } else if (drawdown <= 35) {
+    // Correction territory
+    if (daysSinceATH < 90) {
+      bearScore += 30
+      signals.push('Recent correction')
+    } else if (daysSinceATH < 180) {
+      bearScore += 20
+      signals.push('Correction deepening')
+    } else {
+      bearScore += 10
+      accumulationScore += 10
+    }
+  } else if (drawdown <= 50) {
+    // Significant bear market
+    if (daysSinceATH < 180) {
+      bearScore += 35
+      signals.push('Bear market decline')
+    } else if (daysSinceATH < 365) {
+      bearScore += 25
+      accumulationScore += 10
+      signals.push('Extended bear market')
+    } else {
+      accumulationScore += 25
+      bearScore += 10
+      signals.push('Prolonged drawdown (accumulation zone)')
+    }
+  } else {
+    // Deep bear (50%+)
+    if (daysSinceATH < 365) {
+      bearScore += 30
+      signals.push('Deep bear market')
+    } else {
+      accumulationScore += 35
+      signals.push('Deep drawdown (accumulation zone)')
+    }
   }
 
-  // Altseason signals (risk appetite)
+  // === Days since ATH - time context ===
+  if (daysSinceATH <= 30) {
+    if (drawdown <= 10) {
+      distributionScore += 20
+      signals.push('Recent ATH')
+    } else {
+      bearScore += 15
+      signals.push('Fresh decline from ATH')
+    }
+  } else if (daysSinceATH <= 90) {
+    if (drawdown > 20) {
+      bearScore += 20
+      signals.push('Early bear market')
+    }
+  } else if (daysSinceATH >= 500) {
+    // Very extended time below ATH
+    if (drawdown > 40) {
+      accumulationScore += 25
+      signals.push('Extended cycle low')
+    }
+  }
+
+  // === Recovery signals ===
+  if (recovery >= 95) {
+    distributionScore += 15
+    bullScore += 10
+  } else if (recovery >= 80) {
+    bullScore += 25
+    signals.push('Strong recovery')
+  } else if (recovery >= 60) {
+    bullScore += 15
+    signals.push('Recovery underway')
+  } else if (recovery <= 40) {
+    bearScore += 15
+  }
+
+  // === Altseason signals (risk appetite) ===
   if (altseasonIdx >= 75) {
     distributionScore += 15
     bullScore += 10
-    signals.push('Alt season (late cycle)')
+    signals.push('Altcoin season (late cycle)')
   } else if (altseasonIdx <= 25) {
-    accumulationScore += 10
-    bearScore += 10
-    signals.push('BTC dominance (early/late cycle)')
+    // Low altseason can be early bull OR bear
+    if (recovery > 50) {
+      bullScore += 10
+      signals.push('BTC leading (early bull)')
+    } else {
+      bearScore += 10
+      signals.push('Flight to BTC (risk-off)')
+    }
   }
 
-  // BTC Dominance signals
+  // === BTC Dominance signals ===
   if (btcDom >= 60) {
-    accumulationScore += 10
-    bearScore += 5
-    signals.push('High BTC dominance')
+    // High dominance = risk-off, could be bear or early accumulation
+    if (fg < 40) {
+      bearScore += 10
+    } else {
+      accumulationScore += 5
+      bullScore += 5
+    }
   } else if (btcDom <= 40) {
-    distributionScore += 10
+    distributionScore += 15
     signals.push('Low BTC dominance (risk-on)')
+  }
+
+  // === Final adjustments ===
+  // If recent drop with fear, strongly favor bear over accumulation
+  if (isRecentDrop && fg < 40) {
+    bearScore += 15
+    accumulationScore = Math.max(0, accumulationScore - 10)
   }
 
   // Determine winning season
@@ -212,29 +290,32 @@ function determineMarketSeason(
   const maxScore = Math.max(...Object.values(scores))
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0)
 
-  let season: MarketSeason = 'bull'
-  if (accumulationScore === maxScore) season = 'accumulation'
-  else if (bullScore === maxScore) season = 'bull'
-  else if (distributionScore === maxScore) season = 'distribution'
-  else if (bearScore === maxScore) season = 'bear'
+  let season: MarketSeason = 'bear' // Default to bear if uncertain
+  if (maxScore === distributionScore) season = 'distribution'
+  else if (maxScore === bullScore) season = 'bull'
+  else if (maxScore === accumulationScore) season = 'accumulation'
+  else if (maxScore === bearScore) season = 'bear'
 
   // Calculate confidence (how dominant is the winning score)
   const confidence = totalScore > 0 ? Math.round((maxScore / totalScore) * 100) : 50
 
-  // Calculate progress within the season (simplified heuristic)
+  // Calculate progress within the season
   let progress = 50
   if (season === 'accumulation') {
-    // Progress based on fear level (lower fear = later in accumulation)
-    progress = Math.max(0, Math.min(100, 100 - fg))
+    // Progress: early (high fear) -> late (fear subsiding)
+    progress = Math.max(0, Math.min(100, (fg - 10) * 2)) // 10-60 fear maps to 0-100 progress
   } else if (season === 'bull') {
     // Progress based on recovery to ATH
     progress = Math.max(0, Math.min(100, recovery))
   } else if (season === 'distribution') {
     // Progress based on greed level
-    progress = Math.max(0, Math.min(100, fg))
+    progress = Math.max(0, Math.min(100, (fg - 50) * 2)) // 50-100 greed maps to 0-100
   } else if (season === 'bear') {
-    // Progress based on drawdown depth
-    progress = Math.max(0, Math.min(100, drawdown * 1.5))
+    // Progress: early (small drawdown) -> late (deep drawdown)
+    // Also factor in time - longer bear = further along
+    const drawdownProgress = Math.min(drawdown * 2, 70) // Max 70 from drawdown
+    const timeProgress = Math.min(daysSinceATH / 5, 30) // Max 30 from time
+    progress = Math.max(0, Math.min(100, drawdownProgress + timeProgress))
   }
 
   const seasonInfo: Record<MarketSeason, Omit<SeasonInfo, 'progress' | 'confidence' | 'signals'>> = {
