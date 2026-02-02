@@ -31,6 +31,7 @@ from app.routers import trading_router  # Manual trading operations
 from app.services.websocket_manager import ws_manager
 from app.services.shutdown_manager import shutdown_manager
 from app.services.content_refresh_service import content_refresh_service
+from app.services.debt_ceiling_monitor import debt_ceiling_monitor
 from app.cleanup_jobs import cleanup_old_decision_logs, cleanup_failed_condition_logs, cleanup_old_failed_orders
 import asyncio
 
@@ -320,6 +321,10 @@ async def startup_event():
     await content_refresh_service.start()
     print("🚀 Content refresh service started - news every 30min, videos every 60min")
 
+    print("🚀 Starting debt ceiling monitor...")
+    await debt_ceiling_monitor.start()
+    print("🚀 Debt ceiling monitor started - checking for new legislation weekly")
+
     print("🚀 Starting auto-buy BTC monitor...")
     await auto_buy_monitor.start()
     print("🚀 Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
@@ -367,6 +372,9 @@ async def shutdown_event():
 
     if content_refresh_service:
         await content_refresh_service.stop()
+
+    if debt_ceiling_monitor:
+        await debt_ceiling_monitor.stop()
 
     if auto_buy_monitor:
         await auto_buy_monitor.stop()

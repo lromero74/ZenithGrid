@@ -22,6 +22,16 @@ from typing import Any, Dict, List
 DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
     # 2025 - Present
     {
+        "date": "2025-07-04",
+        "amount_trillion": 41.1,
+        "suspended": False,
+        "suspension_end": None,
+        "note": "Raised by $5T (One Big Beautiful Bill)",
+        "legislation": "One Big Beautiful Bill Act (P.L. 119-21)",
+        "political_context": "Largest reconciliation package in history. Passed via budget reconciliation with Republican majority. Extended Trump-era tax cuts, added spending on border security, defense, and energy. CBO estimates $3.4T added to deficits 2025-2034 plus ~$700B interest costs.",
+        "source_url": "https://www.congress.gov/bill/119th-congress/house-bill/1",
+    },
+    {
         "date": "2025-01-02",
         "amount_trillion": 36.1,
         "suspended": False,

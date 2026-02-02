@@ -298,6 +298,11 @@ export interface USDebtResponse {
   record_date: string
   cached_at: string
   cache_expires_at: string
+  // Debt ceiling info
+  debt_ceiling: number | null
+  debt_ceiling_suspended: boolean
+  debt_ceiling_note: string | null
+  headroom: number | null
 }
 
 export interface HalvingCountdown {

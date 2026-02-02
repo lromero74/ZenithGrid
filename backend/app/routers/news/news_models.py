@@ -83,6 +83,11 @@ class USDebtResponse(BaseModel):
     record_date: str  # Date of the debt record
     cached_at: str
     cache_expires_at: str
+    # Debt ceiling info
+    debt_ceiling: Optional[float] = None  # Current ceiling in dollars (None if suspended)
+    debt_ceiling_suspended: bool = False  # True if ceiling is currently suspended
+    debt_ceiling_note: Optional[str] = None  # Brief description of current ceiling status
+    headroom: Optional[float] = None  # How much room before hitting ceiling (debt_ceiling - total_debt)
 
 
 class ArticleContentResponse(BaseModel):

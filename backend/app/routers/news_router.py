@@ -562,6 +562,27 @@ async def fetch_us_debt() -> Dict[str, Any]:
             # Calculate debt-to-GDP ratio
             debt_to_gdp_ratio = (total_debt / gdp * 100) if gdp > 0 else 0
 
+            # Get current debt ceiling from history (most recent non-suspended entry)
+            debt_ceiling = None
+            debt_ceiling_suspended = False
+            debt_ceiling_note = None
+            headroom = None
+
+            if DEBT_CEILING_HISTORY:
+                latest_ceiling = DEBT_CEILING_HISTORY[0]
+                debt_ceiling_suspended = latest_ceiling.get("suspended", False)
+                debt_ceiling_note = latest_ceiling.get("note", "")
+
+                if debt_ceiling_suspended:
+                    suspension_end = latest_ceiling.get("suspension_end")
+                    if suspension_end:
+                        debt_ceiling_note = f"Suspended until {suspension_end}"
+                else:
+                    amount_trillion = latest_ceiling.get("amount_trillion")
+                    if amount_trillion:
+                        debt_ceiling = amount_trillion * 1_000_000_000_000  # Convert to dollars
+                        headroom = debt_ceiling - total_debt
+
             now = datetime.now()
             cache_data = {
                 "total_debt": total_debt,
@@ -571,6 +592,10 @@ async def fetch_us_debt() -> Dict[str, Any]:
                 "record_date": record_date,
                 "cached_at": now.isoformat(),
                 "cache_expires_at": (now + timedelta(hours=US_DEBT_CACHE_HOURS)).isoformat(),
+                "debt_ceiling": debt_ceiling,
+                "debt_ceiling_suspended": debt_ceiling_suspended,
+                "debt_ceiling_note": debt_ceiling_note,
+                "headroom": headroom,
             }
 
             # Save to cache

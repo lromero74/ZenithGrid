@@ -353,8 +353,37 @@ export function MarketSentimentCards() {
                 </div>
               </div>
 
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-500 mb-2">
                 GDP: ${(usDebtData.gdp / 1_000_000_000_000).toFixed(2)}T
+              </div>
+
+              {/* Debt Ceiling Info */}
+              <div className="w-full bg-slate-900/50 rounded-lg p-2 mb-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-slate-500">Debt Ceiling</span>
+                  {usDebtData.debt_ceiling_suspended ? (
+                    <span className="text-xs font-medium text-yellow-400">SUSPENDED</span>
+                  ) : usDebtData.debt_ceiling ? (
+                    <span className="text-xs font-mono text-slate-300">
+                      ${(usDebtData.debt_ceiling / 1_000_000_000_000).toFixed(2)}T
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500">Unknown</span>
+                  )}
+                </div>
+                {!usDebtData.debt_ceiling_suspended && usDebtData.headroom !== null && (
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-[10px] text-slate-600">Headroom</span>
+                    <span className={`text-[10px] font-mono ${usDebtData.headroom > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {usDebtData.headroom > 0 ? '+' : ''}${(usDebtData.headroom / 1_000_000_000_000).toFixed(3)}T
+                    </span>
+                  </div>
+                )}
+                {usDebtData.debt_ceiling_note && (
+                  <div className="text-[10px] text-slate-500 mt-1 truncate" title={usDebtData.debt_ceiling_note}>
+                    {usDebtData.debt_ceiling_note}
+                  </div>
+                )}
               </div>
 
               {(() => {
