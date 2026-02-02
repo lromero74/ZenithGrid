@@ -521,77 +521,12 @@ export function ArticleReaderMiniPlayer() {
 
               {/* Playback controls */}
               <div className="flex items-center gap-1 flex-shrink-0">
-                {/* Replay */}
-                <button
-                  onClick={replay}
-                  disabled={!isAudioActive}
-                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title="Restart article"
-                >
-                  <RotateCcw className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
-                </button>
-
-                {/* Previous article */}
-                <button
-                  onClick={previousArticle}
-                  disabled={currentIndex === 0}
-                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title="Previous article"
-                >
-                  <SkipBack className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
-                </button>
-
-                {/* Play/Pause */}
-                <button
-                  onClick={togglePlayPause}
-                  disabled={isLoading}
-                  className={`flex items-center justify-center rounded-full bg-green-600 hover:bg-green-500 disabled:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
-                  title={isPaused || isReady ? "Play" : "Pause"}
-                >
-                  {isLoading ? (
-                    <div className={`animate-spin border-2 border-white border-t-transparent rounded-full ${isExpanded ? 'w-6 h-6' : 'w-4 h-4'}`} />
-                  ) : isPaused || isReady ? (
-                    <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
-                  ) : (
-                    <Pause className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
-                  )}
-                </button>
-
-                {/* Next article */}
-                <button
-                  onClick={nextArticle}
-                  disabled={currentIndex >= playlist.length - 1}
-                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title="Next article"
-                >
-                  <SkipForward className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
-                </button>
-
-                {/* Speed toggle */}
-                <button
-                  onClick={() => {
-                    const speeds = [1, 1.25, 1.5, 1.75, 2]
-                    const currentIdx = speeds.indexOf(playbackRate)
-                    const nextIdx = (currentIdx + 1) % speeds.length
-                    setRate(speeds[nextIdx])
-                  }}
-                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title="Toggle speed"
-                >
-                  <span className={`font-medium ${isExpanded ? 'text-sm' : 'text-xs'}`}>
-                    {playbackRate}x
-                  </span>
-                </button>
-              </div>
-
-              {/* Secondary controls */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {/* Settings dropdown (voice, speed) */}
+                {/* Voice settings dropdown */}
                 <div className="relative" ref={settingsRef}>
                   <button
                     onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
                     className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                    title="Settings"
+                    title="Voice settings"
                   >
                     <Volume2 className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
                   </button>
@@ -664,12 +599,99 @@ export function ArticleReaderMiniPlayer() {
                   )}
                 </div>
 
-                {/* Playlist dropdown */}
+                {/* Replay */}
+                <button
+                  onClick={replay}
+                  disabled={!isAudioActive}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title="Restart article"
+                >
+                  <RotateCcw className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                </button>
+
+                {/* Previous article */}
+                <button
+                  onClick={previousArticle}
+                  disabled={currentIndex === 0}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title="Previous article"
+                >
+                  <SkipBack className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                </button>
+
+                {/* Play/Pause */}
+                <button
+                  onClick={togglePlayPause}
+                  disabled={isLoading}
+                  className={`flex items-center justify-center rounded-full bg-green-600 hover:bg-green-500 disabled:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
+                  title={isPaused || isReady ? "Play" : "Pause"}
+                >
+                  {isLoading ? (
+                    <div className={`animate-spin border-2 border-white border-t-transparent rounded-full ${isExpanded ? 'w-6 h-6' : 'w-4 h-4'}`} />
+                  ) : isPaused || isReady ? (
+                    <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
+                  ) : (
+                    <Pause className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
+                  )}
+                </button>
+
+                {/* Next article */}
+                <button
+                  onClick={nextArticle}
+                  disabled={currentIndex >= playlist.length - 1}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title="Next article"
+                >
+                  <SkipForward className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                </button>
+
+                {/* Speed toggle */}
+                <button
+                  onClick={() => {
+                    const speeds = [1, 1.25, 1.5, 1.75, 2]
+                    const currentIdx = speeds.indexOf(playbackRate)
+                    const nextIdx = (currentIdx + 1) % speeds.length
+                    setRate(speeds[nextIdx])
+                  }}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title="Toggle speed"
+                >
+                  <span className={`font-medium ${isExpanded ? 'text-sm' : 'text-xs'}`}>
+                    {playbackRate}x
+                  </span>
+                </button>
+              </div>
+
+              {/* Secondary controls */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {/* Open article in new tab */}
+                {isExpanded && (
+                  <a
+                    href={currentArticle.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+                    title="Open on website"
+                  >
+                    <ExternalLink className="w-5 h-5" />
+                  </a>
+                )}
+
+                {/* Expand/Minimize */}
+                <button
+                  onClick={() => setExpanded(!isExpanded)}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title={isExpanded ? "Minimize" : "Expand"}
+                >
+                  {isExpanded ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+
+                {/* Playlist dropdown (reading queue) */}
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setShowPlaylistDropdown(!showPlaylistDropdown)}
                     className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                    title="Playlist"
+                    title="Reading queue"
                   >
                     <ListVideo className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
                   </button>
@@ -706,28 +728,6 @@ export function ArticleReaderMiniPlayer() {
                     </div>
                   )}
                 </div>
-
-                {/* Open article in new tab */}
-                {isExpanded && (
-                  <a
-                    href={currentArticle.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors"
-                    title="Open on website"
-                  >
-                    <ExternalLink className="w-5 h-5" />
-                  </a>
-                )}
-
-                {/* Expand/Minimize */}
-                <button
-                  onClick={() => setExpanded(!isExpanded)}
-                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title={isExpanded ? "Minimize" : "Expand"}
-                >
-                  {isExpanded ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
 
                 {/* Close */}
                 <button
