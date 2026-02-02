@@ -69,6 +69,7 @@ type MarketSeason = 'accumulation' | 'bull' | 'distribution' | 'bear'
 interface SeasonInfo {
   season: MarketSeason
   name: string
+  subtitle: string // Technical term (Accumulation, Bull, Distribution, Bear)
   description: string
   progress: number // 0-100, how far into this season
   confidence: number // 0-100, how confident we are in this classification
@@ -321,7 +322,8 @@ function determineMarketSeason(
   const seasonInfo: Record<MarketSeason, Omit<SeasonInfo, 'progress' | 'confidence' | 'signals'>> = {
     accumulation: {
       season: 'accumulation',
-      name: 'Accumulation',
+      name: 'Spring',
+      subtitle: 'Accumulation Phase',
       description: 'Smart money quietly buying. Fear dominates headlines.',
       icon: Sprout,
       color: 'text-emerald-400',
@@ -329,7 +331,8 @@ function determineMarketSeason(
     },
     bull: {
       season: 'bull',
-      name: 'Bull Market',
+      name: 'Summer',
+      subtitle: 'Bull Market',
       description: 'Prices rising, optimism growing. Momentum building.',
       icon: Sun,
       color: 'text-amber-400',
@@ -337,7 +340,8 @@ function determineMarketSeason(
     },
     distribution: {
       season: 'distribution',
-      name: 'Distribution',
+      name: 'Fall',
+      subtitle: 'Distribution Phase',
       description: 'Peak euphoria. Smart money taking profits.',
       icon: Leaf,
       color: 'text-orange-400',
@@ -345,7 +349,8 @@ function determineMarketSeason(
     },
     bear: {
       season: 'bear',
-      name: 'Bear Market',
+      name: 'Winter',
+      subtitle: 'Bear Market',
       description: 'Prices falling, fear spreading. Patience required.',
       icon: Snowflake,
       color: 'text-blue-400',
@@ -1655,8 +1660,11 @@ function SeasonCard({ seasonInfo }: { seasonInfo: SeasonInfo | null }) {
         </div>
 
         {/* Season name and description */}
-        <div className={`text-xl font-bold ${seasonInfo.color} mb-1`}>
+        <div className={`text-2xl font-bold ${seasonInfo.color}`}>
           {seasonInfo.name}
+        </div>
+        <div className="text-xs text-slate-500 mb-1">
+          {seasonInfo.subtitle}
         </div>
         <div className="text-xs text-slate-400 text-center mb-3 px-2">
           {seasonInfo.description}
