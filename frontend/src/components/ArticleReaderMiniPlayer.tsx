@@ -6,9 +6,10 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2, RefreshCw } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useArticleReader } from '../contexts/ArticleReaderContext'
 import { sourceColors } from './news'
-import { markdownToPlainText } from '../pages/news/helpers'
+import { markdownToPlainText, scrollToArticle } from '../pages/news/helpers'
 
 // Voice options for display
 const VOICES: Record<string, { name: string; gender: string }> = {
@@ -63,6 +64,9 @@ export function ArticleReaderMiniPlayer() {
     setVoice,
     setRate,
   } = useArticleReader()
+
+  const navigate = useNavigate()
+  const location = useLocation()
 
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false)
@@ -127,6 +131,23 @@ export function ArticleReaderMiniPlayer() {
       pause()
     }
   }, [isPaused, isReady, play, pause, resume])
+
+  // Find current article - navigate to news page if needed, then scroll
+  const findCurrentArticle = useCallback(() => {
+    if (!currentArticle) return
+
+    const isOnNewsPage = location.pathname === '/news'
+
+    if (isOnNewsPage) {
+      scrollToArticle(currentArticle.url, true)
+    } else {
+      // Navigate to news page, then scroll after it renders
+      navigate('/news')
+      setTimeout(() => {
+        scrollToArticle(currentArticle.url, true)
+      }, 300)
+    }
+  }, [currentArticle, location.pathname, navigate])
 
   // Progress bar click handler - word-based to match visual progress
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -360,9 +381,13 @@ export function ArticleReaderMiniPlayer() {
             </div>
           )}
 
-          {/* Mini mode: Thumbnail */}
+          {/* Mini mode: Thumbnail (click to find article in news list) */}
           {!isExpanded && currentArticle.thumbnail && (
-            <div className="w-28 h-16 my-auto ml-4 rounded overflow-hidden flex-shrink-0 bg-slate-900">
+            <div
+              className="w-28 h-16 my-auto ml-4 rounded overflow-hidden flex-shrink-0 bg-slate-900 cursor-pointer hover:ring-2 hover:ring-green-500 transition-all"
+              onClick={findCurrentArticle}
+              title="Find article in news list"
+            >
               <img
                 src={currentArticle.thumbnail}
                 alt=""
