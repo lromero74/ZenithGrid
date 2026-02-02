@@ -343,6 +343,16 @@ export function MarketSentimentCards() {
     }
   }, [currentIndex, isAnimating, totalCards])
 
+  // Reset auto-play timer (called on manual interaction)
+  const resetAutoPlay = useCallback(() => {
+    if (autoPlayRef.current) {
+      clearInterval(autoPlayRef.current)
+    }
+    if (!isPaused) {
+      autoPlayRef.current = setInterval(() => nextSlide(false), AUTO_CYCLE_INTERVAL)
+    }
+  }, [isPaused, nextSlide])
+
   // Auto-play effect
   useEffect(() => {
     if (isPaused) {
@@ -387,8 +397,9 @@ export function MarketSentimentCards() {
       } else {
         prevSlide(true) // Swipe right = prev
       }
+      resetAutoPlay() // Reset timer on manual swipe
     }
-  }, [nextSlide, prevSlide])
+  }, [nextSlide, prevSlide, resetAutoPlay])
 
   // Calculate card width as percentage of the TRACK (not viewport)
   // Track contains extendedTotal cards, so each card is 100/extendedTotal % of track
@@ -435,7 +446,7 @@ export function MarketSentimentCards() {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <button
-              onClick={prevSlide}
+              onClick={() => { prevSlide(); resetAutoPlay() }}
               disabled={isAnimating}
               className="p-1.5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Previous"
@@ -443,7 +454,7 @@ export function MarketSentimentCards() {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={nextSlide}
+              onClick={() => { nextSlide(); resetAutoPlay() }}
               disabled={isAnimating}
               className="p-1.5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Next"
@@ -462,7 +473,7 @@ export function MarketSentimentCards() {
             {Array.from({ length: totalCards }).map((_, idx) => (
               <button
                 key={idx}
-                onClick={() => goToIndex(idx)}
+                onClick={() => { goToIndex(idx); resetAutoPlay() }}
                 disabled={isAnimating}
                 className={`w-2 h-2 rounded-full transition-colors disabled:cursor-not-allowed ${
                   logicalIndex === idx ? 'bg-blue-500' : 'bg-slate-600 hover:bg-slate-500'
