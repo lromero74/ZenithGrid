@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X } from 'lucide-react'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout } from 'lucide-react'
+import { useMarketSeason } from './hooks/useMarketSeason'
 import { positionsApi } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
 import { PaperTradingToggle } from './components/PaperTradingToggle'
@@ -43,6 +44,9 @@ function AppContent() {
   const [appVersion, setAppVersion] = useState<string>('...')
   const [latestVersion, setLatestVersion] = useState<string | null>(null)
   const [updateAvailable, setUpdateAvailable] = useState(false)
+
+  // Get market season for header display
+  const { seasonInfo, headerGradient } = useMarketSeason()
 
   // Fetch version from backend root endpoint (runs once on app load)
   // Using root / endpoint since it's guaranteed to work (also serves as health check)
@@ -204,7 +208,7 @@ function AppContent() {
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-slate-800">
-        <div className="border-b border-slate-700">
+        <div className={`border-b border-slate-700 bg-gradient-to-r ${headerGradient} transition-colors duration-1000`}>
           <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
               <div className="flex items-center space-x-2 sm:space-x-3">
@@ -231,6 +235,21 @@ function AppContent() {
                     )}
                   </p>
                 </div>
+                {/* Market Season Indicator */}
+                {seasonInfo && (
+                  <div className={`hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-full border ${
+                    seasonInfo.season === 'accumulation' ? 'bg-emerald-900/30 border-emerald-700/50' :
+                    seasonInfo.season === 'bull' ? 'bg-amber-900/30 border-amber-700/50' :
+                    seasonInfo.season === 'distribution' ? 'bg-orange-900/30 border-orange-700/50' :
+                    'bg-blue-900/30 border-blue-700/50'
+                  }`} title={`${seasonInfo.subtitle}: ${seasonInfo.description}`}>
+                    {seasonInfo.season === 'accumulation' && <Sprout className="w-4 h-4 text-emerald-400" />}
+                    {seasonInfo.season === 'bull' && <Sun className="w-4 h-4 text-amber-400" />}
+                    {seasonInfo.season === 'distribution' && <Leaf className="w-4 h-4 text-orange-400" />}
+                    {seasonInfo.season === 'bear' && <Snowflake className="w-4 h-4 text-blue-400" />}
+                    <span className={`text-sm font-medium ${seasonInfo.color}`}>{seasonInfo.name}</span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
                 {/* Paper Trading Toggle */}
