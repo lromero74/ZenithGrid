@@ -164,6 +164,25 @@ export function ArticleReaderMiniPlayer() {
     seekToWord(clampedIndex)
   }, [words, seekToWord])
 
+  // Number-related words that TTS uses when reading numbers/currency
+  const NUMBER_WORDS = new Set([
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+    'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety',
+    'hundred', 'thousand', 'million', 'billion', 'trillion',
+    'dollar', 'dollars', 'cent', 'cents', 'percent', 'point',
+    'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'
+  ])
+
+  // Contraction suffixes - TTS splits "family's" into "family" + "s", "don't" into "don" + "t", etc.
+  const CONTRACTION_SUFFIXES = new Set(['s', 't', 'll', 're', 've', 'd', 'm', 'nt'])
+
+  // Check if a string contains digits
+  const hasDigits = (s: string) => /\d/.test(s)
+
+  // Check if a string is purely numeric (digits, commas, decimals)
+  const isNumeric = (s: string) => /^[\d,\.]+$/.test(s)
+
   // Build word-highlighted content by matching TTS words to text words sequentially
   const renderedContent = useMemo(() => {
     // Show placeholder if no content yet
@@ -182,41 +201,89 @@ export function ArticleReaderMiniPlayer() {
 
     // Extract all words from plain text with their positions
     // Include hyphens and apostrophes as part of words (e.g., "anti-union", "don't")
+    // Also capture $numbers, numbers%, and acronyms with periods (U.S., U.K.)
     // Note: en-dashes (–) and em-dashes (—) are treated as separators since TTS reads them as separate words
-    const textWords: Array<{ start: number; end: number; text: string; lower: string }> = []
-    const wordRegex = /[a-zA-Z0-9]+(?:[-''][a-zA-Z0-9]+)*/g
+    const textWords: Array<{ start: number; end: number; text: string; lower: string; clean: string; isNumeric: boolean }> = []
+    // Regex patterns: $numbers | numbers% | acronyms (A.B.C.) | regular words (with various apostrophe chars)
+    const wordRegex = /\$[\d,\.]+|\d[\d,\.]*%|(?:[A-Z]\.)+[A-Z]?|[a-zA-Z0-9]+(?:[-'''`ʼ][a-zA-Z0-9]+)*/g
     let match
     while ((match = wordRegex.exec(plainText)) !== null) {
+      const text = match[0]
+      const lower = text.toLowerCase()
       textWords.push({
         start: match.index,
-        end: match.index + match[0].length,
-        text: match[0],
-        lower: match[0].toLowerCase(),
+        end: match.index + text.length,
+        text: text,
+        lower: lower,
+        clean: lower.replace(/[^a-z0-9]/g, ''), // alphanumeric only for matching
+        isNumeric: hasDigits(text),
       })
     }
 
     // Match TTS words to text words sequentially
-    // Each TTS word maps to the next matching text word
+    // Simple strategy: find matches, and if no match found, inherit from previous TTS word
+    // This handles possessives ("Trump's" -> "Trump" + "s") and numbers ("$500" -> "five hundred dollars")
     const ttsToTextMap = new Map<number, number>() // TTS index -> text word index
     let textWordPtr = 0
+    let lastMatchIdx: number | null = null
 
     words.forEach((word, ttsIndex) => {
-      // Get alphanumeric lowercase version of TTS word
-      const ttsWordClean = word.text.toLowerCase().replace(/[^a-z0-9]/g, '')
-      if (ttsWordClean.length === 0) return // Skip punctuation-only words
+      const ttsClean = word.text.toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (ttsClean.length === 0) {
+        // Empty after cleaning - inherit previous match
+        if (lastMatchIdx !== null) ttsToTextMap.set(ttsIndex, lastMatchIdx)
+        return
+      }
 
-      // Search for matching text word starting from current pointer
-      for (let i = textWordPtr; i < textWords.length; i++) {
-        const textWordClean = textWords[i].lower.replace(/[^a-z0-9]/g, '')
+      const isNumberWord = NUMBER_WORDS.has(ttsClean)
+      let matchIdx: number | null = null
 
-        // Check if they match (exact or one contains the other for contractions/possessives)
-        if (textWordClean === ttsWordClean ||
-            textWordClean.includes(ttsWordClean) ||
-            ttsWordClean.includes(textWordClean)) {
-          ttsToTextMap.set(ttsIndex, i)
-          textWordPtr = i + 1 // Move pointer past this word
+      // First pass: look for exact match (prioritize over partial/number matches)
+      for (let i = textWordPtr; i < textWords.length && i < textWordPtr + 10; i++) {
+        if (textWords[i].clean === ttsClean) {
+          matchIdx = i
+          textWordPtr = i + 1
           break
         }
+      }
+
+      // Second pass: if no exact match, look for partial/number matches
+      if (matchIdx === null) {
+        for (let i = textWordPtr; i < textWords.length && i < textWordPtr + 10; i++) {
+          const tw = textWords[i]
+
+          // Text contains TTS word (e.g., "trumps" contains "trump")
+          if (tw.clean.includes(ttsClean) && ttsClean.length > 1) {
+            matchIdx = i
+            // Don't advance - suffix may also match this word
+            break
+          }
+
+          // TTS contains text (abbreviation expansion)
+          if (ttsClean.includes(tw.clean) && tw.clean.length > 1) {
+            matchIdx = i
+            textWordPtr = i + 1
+            break
+          }
+
+          // Number word matches numeric text
+          if (isNumberWord && tw.isNumeric) {
+            matchIdx = i
+            // Don't advance - more number words may match
+            break
+          }
+        }
+      }
+
+      // If no match found, inherit from previous TTS word
+      // This handles: possessive suffixes, number word continuations, etc.
+      if (matchIdx === null && lastMatchIdx !== null) {
+        matchIdx = lastMatchIdx
+      }
+
+      if (matchIdx !== null) {
+        ttsToTextMap.set(ttsIndex, matchIdx)
+        lastMatchIdx = matchIdx
       }
     })
 
@@ -224,10 +291,14 @@ export function ArticleReaderMiniPlayer() {
     const elements: React.ReactElement[] = []
     let lastEnd = 0
 
-    // Create reverse map: text word index -> TTS index
-    const textToTTSMap = new Map<number, number>()
+    // Create reverse map: text word index -> Set of TTS indices
+    // Multiple TTS words can map to the same text word (e.g., "President" and "s" both map to "President's")
+    const textToTTSMap = new Map<number, Set<number>>()
     ttsToTextMap.forEach((textIdx, ttsIdx) => {
-      textToTTSMap.set(textIdx, ttsIdx)
+      if (!textToTTSMap.has(textIdx)) {
+        textToTTSMap.set(textIdx, new Set())
+      }
+      textToTTSMap.get(textIdx)!.add(ttsIdx)
     })
 
     textWords.forEach((tw, twIndex) => {
@@ -240,20 +311,23 @@ export function ArticleReaderMiniPlayer() {
         )
       }
 
-      const ttsWordIndex = textToTTSMap.get(twIndex)
-      const isCurrentWord = ttsWordIndex !== undefined && ttsWordIndex === currentWordIndex
+      const ttsIndices = textToTTSMap.get(twIndex)
+      // Highlight if current TTS word is ANY of the indices that map to this text word
+      const isCurrentWord = ttsIndices !== undefined && ttsIndices.has(currentWordIndex)
+      // Use the first TTS index for seeking/refs
+      const firstTTSIndex = ttsIndices ? Math.min(...ttsIndices) : undefined
 
       elements.push(
         <span
           key={`word-${twIndex}`}
           ref={(el) => {
-            if (ttsWordIndex !== undefined) {
-              wordRefs.current[ttsWordIndex] = el
+            if (firstTTSIndex !== undefined) {
+              wordRefs.current[firstTTSIndex] = el
             }
           }}
           onClick={() => {
-            if (ttsWordIndex !== undefined) {
-              seekToWord(ttsWordIndex)
+            if (firstTTSIndex !== undefined) {
+              seekToWord(firstTTSIndex)
             }
           }}
           className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
