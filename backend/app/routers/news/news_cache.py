@@ -23,6 +23,10 @@ ALTSEASON_CACHE_FILE = CACHE_DIR / "altseason_cache.json"
 FUNDING_RATES_CACHE_FILE = CACHE_DIR / "funding_rates_cache.json"
 STABLECOIN_MCAP_CACHE_FILE = CACHE_DIR / "stablecoin_mcap_cache.json"
 EXCHANGE_FLOWS_CACHE_FILE = CACHE_DIR / "exchange_flows_cache.json"
+MEMPOOL_CACHE_FILE = CACHE_DIR / "mempool_cache.json"
+HASH_RATE_CACHE_FILE = CACHE_DIR / "hash_rate_cache.json"
+LIGHTNING_CACHE_FILE = CACHE_DIR / "lightning_cache.json"
+ATH_CACHE_FILE = CACHE_DIR / "ath_cache.json"
 
 # Cache timing constants (background refresh service handles actual refresh timing)
 NEWS_CACHE_CHECK_MINUTES = 30  # Fallback: check every 30 minutes if no background refresh
@@ -47,6 +51,10 @@ __all__ = [
     "ALTSEASON_CACHE_FILE",
     "FUNDING_RATES_CACHE_FILE",
     "STABLECOIN_MCAP_CACHE_FILE",
+    "MEMPOOL_CACHE_FILE",
+    "HASH_RATE_CACHE_FILE",
+    "LIGHTNING_CACHE_FILE",
+    "ATH_CACHE_FILE",
     # Timing constants
     "NEWS_CACHE_CHECK_MINUTES",
     "VIDEO_CACHE_CHECK_MINUTES",
@@ -74,6 +82,14 @@ __all__ = [
     "save_funding_rates_cache",
     "load_stablecoin_mcap_cache",
     "save_stablecoin_mcap_cache",
+    "load_mempool_cache",
+    "save_mempool_cache",
+    "load_hash_rate_cache",
+    "save_hash_rate_cache",
+    "load_lightning_cache",
+    "save_lightning_cache",
+    "load_ath_cache",
+    "save_ath_cache",
     "prune_old_items",
     "merge_news_items",
 ]
@@ -378,3 +394,35 @@ def load_exchange_flows_cache() -> Optional[Dict[str, Any]]:
 
 def save_exchange_flows_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(EXCHANGE_FLOWS_CACHE_FILE, "Exchange flows", data)
+
+
+def load_mempool_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(MEMPOOL_CACHE_FILE, "Mempool")
+
+
+def save_mempool_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(MEMPOOL_CACHE_FILE, "Mempool", data)
+
+
+def load_hash_rate_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(HASH_RATE_CACHE_FILE, "Hash rate")
+
+
+def save_hash_rate_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(HASH_RATE_CACHE_FILE, "Hash rate", data)
+
+
+def load_lightning_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(LIGHTNING_CACHE_FILE, "Lightning")
+
+
+def save_lightning_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(LIGHTNING_CACHE_FILE, "Lightning", data)
+
+
+def load_ath_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(ATH_CACHE_FILE, "ATH")
+
+
+def save_ath_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(ATH_CACHE_FILE, "ATH", data)

@@ -348,6 +348,58 @@ export interface StablecoinMcapResponse {
   cached_at: string
 }
 
+export interface TotalMarketCapResponse {
+  total_market_cap: number
+  cached_at: string
+}
+
+export interface BTCSupplyResponse {
+  circulating: number
+  max_supply: number
+  remaining: number
+  percent_mined: number
+  current_block: number
+  cached_at: string
+}
+
+export interface MempoolResponse {
+  tx_count: number
+  vsize: number
+  total_fee: number
+  fee_fastest: number
+  fee_half_hour: number
+  fee_hour: number
+  fee_economy: number
+  congestion: 'High' | 'Medium' | 'Low'
+  cached_at: string
+}
+
+export interface HashRateResponse {
+  hash_rate_eh: number
+  difficulty: number
+  difficulty_t: number
+  cached_at: string
+}
+
+export interface LightningResponse {
+  channel_count: number
+  node_count: number
+  total_capacity_btc: number
+  avg_capacity_sats: number
+  avg_fee_rate: number
+  cached_at: string
+}
+
+export interface ATHResponse {
+  current_price: number
+  ath: number
+  ath_date: string
+  days_since_ath: number
+  drawdown_pct: number
+  recovery_pct: number
+  cached_at: string
+}
+
 export interface DebtCeilingEvent {
   date: string
   amount_trillion: number | null

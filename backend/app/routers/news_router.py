@@ -72,6 +72,10 @@ from app.routers.news import (
     load_altseason_cache,
     load_funding_rates_cache,
     load_stablecoin_mcap_cache,
+    load_mempool_cache,
+    load_hash_rate_cache,
+    load_lightning_cache,
+    load_ath_cache,
     merge_news_items,
     prune_old_items,
     save_block_height_cache,
@@ -82,6 +86,10 @@ from app.routers.news import (
     save_altseason_cache,
     save_funding_rates_cache,
     save_stablecoin_mcap_cache,
+    save_mempool_cache,
+    save_hash_rate_cache,
+    save_lightning_cache,
+    save_ath_cache,
 )
 from app.services.news_image_cache import download_image_as_base64
 
@@ -1659,6 +1667,356 @@ async def get_stablecoin_mcap():
 
     logger.info("Fetching fresh stablecoin mcap...")
     return await fetch_stablecoin_mcap()
+
+
+# =============================================================================
+# Additional Market Metrics (Free APIs)
+# =============================================================================
+
+async def fetch_mempool_stats() -> Dict[str, Any]:
+    """
+    Fetch Bitcoin mempool statistics from mempool.space API.
+    Shows network congestion and fee estimates.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            # Fetch mempool stats
+            async with session.get(
+                "https://mempool.space/api/mempool",
+                headers=headers,
+                timeout=15
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=503, detail="Mempool API unavailable")
+                mempool_data = await response.json()
+
+            # Fetch recommended fees
+            async with session.get(
+                "https://mempool.space/api/v1/fees/recommended",
+                headers=headers,
+                timeout=15
+            ) as response:
+                if response.status != 200:
+                    fee_data = {"fastestFee": 0, "halfHourFee": 0, "hourFee": 0, "economyFee": 0}
+                else:
+                    fee_data = await response.json()
+
+            now = datetime.now()
+            cache_data = {
+                "tx_count": mempool_data.get("count", 0),
+                "vsize": mempool_data.get("vsize", 0),  # Virtual size in vbytes
+                "total_fee": mempool_data.get("total_fee", 0),  # Total fees in sats
+                "fee_fastest": fee_data.get("fastestFee", 0),  # sat/vB
+                "fee_half_hour": fee_data.get("halfHourFee", 0),
+                "fee_hour": fee_data.get("hourFee", 0),
+                "fee_economy": fee_data.get("economyFee", 0),
+                "congestion": "High" if mempool_data.get("count", 0) > 50000 else (
+                    "Medium" if mempool_data.get("count", 0) > 20000 else "Low"
+                ),
+                "cached_at": now.isoformat(),
+            }
+
+            save_mempool_cache(cache_data)
+            return cache_data
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching mempool stats")
+        raise HTTPException(status_code=503, detail="Mempool API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching mempool stats: {e}")
+        raise HTTPException(status_code=503, detail=f"Mempool API error: {str(e)}")
+
+
+async def fetch_hash_rate() -> Dict[str, Any]:
+    """
+    Fetch Bitcoin network hash rate from mempool.space API.
+    Higher hash rate = more secure network.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            # Fetch current hash rate from mempool.space (3 day average)
+            async with session.get(
+                "https://mempool.space/api/v1/mining/hashrate/3d",
+                headers=headers,
+                timeout=15
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=503, detail="Mempool API unavailable")
+                data = await response.json()
+                hashrates = data.get("hashrates", [])
+                if hashrates:
+                    # Get latest hash rate (H/s), convert to EH/s
+                    latest = hashrates[-1].get("avgHashrate", 0)
+                    hash_rate_eh = latest / 1e18  # H/s to EH/s
+                else:
+                    hash_rate_eh = 0
+
+            # Fetch difficulty from mempool.space
+            async with session.get(
+                "https://mempool.space/api/v1/difficulty-adjustment",
+                headers=headers,
+                timeout=15
+            ) as response:
+                if response.status != 200:
+                    difficulty = 0
+                else:
+                    diff_data = await response.json()
+                    difficulty = diff_data.get("difficultyChange", 0)
+
+            now = datetime.now()
+            cache_data = {
+                "hash_rate_eh": round(hash_rate_eh, 2),  # Exahashes per second
+                "difficulty": difficulty,  # Difficulty change percentage
+                "difficulty_t": round(difficulty, 2),  # Same value for display
+                "cached_at": now.isoformat(),
+            }
+
+            save_hash_rate_cache(cache_data)
+            return cache_data
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching hash rate")
+        raise HTTPException(status_code=503, detail="Mempool API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching hash rate: {e}")
+        raise HTTPException(status_code=503, detail=f"Mempool API error: {str(e)}")
+
+
+async def fetch_lightning_stats() -> Dict[str, Any]:
+    """
+    Fetch Lightning Network statistics from mempool.space API.
+    Shows LN adoption and capacity.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            async with session.get(
+                "https://mempool.space/api/v1/lightning/statistics/latest",
+                headers=headers,
+                timeout=15
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=503, detail="Lightning API unavailable")
+                response_data = await response.json()
+                # API wraps data in "latest" object
+                data = response_data.get("latest", response_data)
+
+            now = datetime.now()
+            cache_data = {
+                "channel_count": data.get("channel_count", 0),
+                "node_count": data.get("node_count", 0),
+                "total_capacity_btc": round(data.get("total_capacity", 0) / 100_000_000, 2),  # sats to BTC
+                "avg_capacity_sats": data.get("avg_capacity", 0),
+                "avg_fee_rate": data.get("avg_fee_rate", 0),
+                "cached_at": now.isoformat(),
+            }
+
+            save_lightning_cache(cache_data)
+            return cache_data
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching lightning stats")
+        raise HTTPException(status_code=503, detail="Lightning API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching lightning stats: {e}")
+        raise HTTPException(status_code=503, detail=f"Lightning API error: {str(e)}")
+
+
+async def fetch_ath_data() -> Dict[str, Any]:
+    """
+    Fetch Bitcoin ATH (All-Time High) data from CoinGecko.
+    Shows days since ATH and drawdown percentage.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            async with session.get(
+                "https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false",
+                headers=headers,
+                timeout=15
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
+                data = await response.json()
+
+            market_data = data.get("market_data", {})
+            current_price = market_data.get("current_price", {}).get("usd", 0)
+            ath = market_data.get("ath", {}).get("usd", 0)
+            ath_date_str = market_data.get("ath_date", {}).get("usd", "")
+            ath_change_pct = market_data.get("ath_change_percentage", {}).get("usd", 0)
+
+            # Calculate days since ATH
+            days_since_ath = 0
+            if ath_date_str:
+                try:
+                    ath_date = datetime.fromisoformat(ath_date_str.replace("Z", "+00:00"))
+                    days_since_ath = (datetime.now(ath_date.tzinfo) - ath_date).days
+                except Exception:
+                    pass
+
+            now = datetime.now()
+            cache_data = {
+                "current_price": round(current_price, 2),
+                "ath": round(ath, 2),
+                "ath_date": ath_date_str[:10] if ath_date_str else "",  # Just the date part
+                "days_since_ath": days_since_ath,
+                "drawdown_pct": round(ath_change_pct, 2),  # Negative percentage from ATH
+                "recovery_pct": round(100 + ath_change_pct, 2) if ath_change_pct < 0 else 100,
+                "cached_at": now.isoformat(),
+            }
+
+            save_ath_cache(cache_data)
+            return cache_data
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching ATH data")
+        raise HTTPException(status_code=503, detail="CoinGecko API timeout")
+    except Exception as e:
+        logger.error(f"Error fetching ATH data: {e}")
+        raise HTTPException(status_code=503, detail=f"CoinGecko API error: {str(e)}")
+
+
+@router.get("/total-market-cap")
+async def get_total_market_cap():
+    """
+    Get total crypto market capitalization.
+    Uses cached BTC dominance data which includes total market cap.
+    """
+    cache = load_btc_dominance_cache()
+    if cache:
+        return {
+            "total_market_cap": cache.get("total_market_cap", 0),
+            "cached_at": cache.get("cached_at"),
+        }
+
+    # Fetch fresh if no cache
+    fresh_data = await fetch_btc_dominance()
+    return {
+        "total_market_cap": fresh_data.get("total_market_cap", 0),
+        "cached_at": fresh_data.get("cached_at"),
+    }
+
+
+@router.get("/btc-supply")
+async def get_btc_supply():
+    """
+    Get Bitcoin supply progress - how much of the 21M has been mined.
+    Calculated from current block height.
+    """
+    cache = load_block_height_cache()
+    if not cache:
+        # Try to fetch fresh
+        try:
+            async with aiohttp.ClientSession() as session:
+                headers = {"User-Agent": "ZenithGrid/1.0"}
+                async with session.get(
+                    "https://blockchain.info/q/getblockcount",
+                    headers=headers,
+                    timeout=10
+                ) as response:
+                    if response.status == 200:
+                        height = int(await response.text())
+                        cache = {"height": height}
+        except Exception:
+            pass
+
+    if not cache:
+        raise HTTPException(status_code=503, detail="Could not fetch block height")
+
+    height = cache.get("height", 0)
+
+    # Calculate circulating supply based on halving schedule
+    # Block rewards: 50 BTC (0-210000), 25 (210000-420000), 12.5, 6.25, 3.125...
+    circulating = 0
+    remaining_blocks = height
+    reward = 50
+    blocks_per_halving = 210_000
+
+    while remaining_blocks > 0:
+        blocks_in_era = min(remaining_blocks, blocks_per_halving)
+        circulating += blocks_in_era * reward
+        remaining_blocks -= blocks_in_era
+        reward /= 2
+        blocks_per_halving = 210_000
+
+    max_supply = 21_000_000
+    percent_mined = (circulating / max_supply) * 100
+    remaining = max_supply - circulating
+
+    return {
+        "circulating": round(circulating, 2),
+        "max_supply": max_supply,
+        "remaining": round(remaining, 2),
+        "percent_mined": round(percent_mined, 4),
+        "current_block": height,
+        "cached_at": cache.get("timestamp", datetime.now().isoformat()),
+    }
+
+
+@router.get("/mempool")
+async def get_mempool_stats():
+    """
+    Get Bitcoin mempool statistics.
+    Shows pending transactions and fee estimates.
+    """
+    cache = load_mempool_cache()
+    if cache:
+        logger.info("Serving mempool stats from cache")
+        return cache
+
+    logger.info("Fetching fresh mempool stats...")
+    return await fetch_mempool_stats()
+
+
+@router.get("/hash-rate")
+async def get_hash_rate():
+    """
+    Get Bitcoin network hash rate.
+    Higher = more secure network.
+    """
+    cache = load_hash_rate_cache()
+    if cache:
+        logger.info("Serving hash rate from cache")
+        return cache
+
+    logger.info("Fetching fresh hash rate...")
+    return await fetch_hash_rate()
+
+
+@router.get("/lightning")
+async def get_lightning_stats():
+    """
+    Get Lightning Network statistics.
+    Shows nodes, channels, and total capacity.
+    """
+    cache = load_lightning_cache()
+    if cache:
+        logger.info("Serving lightning stats from cache")
+        return cache
+
+    logger.info("Fetching fresh lightning stats...")
+    return await fetch_lightning_stats()
+
+
+@router.get("/ath")
+async def get_ath():
+    """
+    Get Bitcoin ATH (All-Time High) data.
+    Shows days since ATH and current drawdown.
+    """
+    cache = load_ath_cache()
+    if cache:
+        logger.info("Serving ATH data from cache")
+        return cache
+
+    logger.info("Fetching fresh ATH data...")
+    return await fetch_ath_data()
 
 
 @router.get("/article-content", response_model=ArticleContentResponse)

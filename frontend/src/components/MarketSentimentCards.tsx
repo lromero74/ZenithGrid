@@ -16,7 +16,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, Info, X, ExternalLink,
-  ChevronLeft, ChevronRight, Pause, Play, TrendingUp, Coins, PieChart
+  ChevronLeft, ChevronRight, Pause, Play, TrendingUp, Coins, PieChart,
+  Cpu, Zap, Activity, TrendingDown, Database, Globe
 } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 import type {
@@ -27,6 +28,12 @@ import type {
   BTCDominanceResponse,
   AltseasonIndexResponse,
   StablecoinMcapResponse,
+  TotalMarketCapResponse,
+  BTCSupplyResponse,
+  MempoolResponse,
+  HashRateResponse,
+  LightningResponse,
+  ATHResponse,
 } from '../types'
 import {
   NEXT_HALVING_BLOCK,
@@ -185,6 +192,84 @@ export function MarketSentimentCards() {
     refetchOnWindowFocus: false,
   })
 
+  // Fetch Total Market Cap
+  const { data: totalMarketCapData } = useQuery<TotalMarketCapResponse>({
+    queryKey: ['total-market-cap'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/total-market-cap')
+      if (!response.ok) throw new Error('Failed to fetch total market cap')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 15,
+    refetchInterval: 1000 * 60 * 15,
+    refetchOnWindowFocus: false,
+  })
+
+  // Fetch BTC Supply
+  const { data: btcSupplyData } = useQuery<BTCSupplyResponse>({
+    queryKey: ['btc-supply'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/btc-supply')
+      if (!response.ok) throw new Error('Failed to fetch BTC supply')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 10,
+    refetchInterval: 1000 * 60 * 10,
+    refetchOnWindowFocus: false,
+  })
+
+  // Fetch Mempool Stats
+  const { data: mempoolData } = useQuery<MempoolResponse>({
+    queryKey: ['mempool'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/mempool')
+      if (!response.ok) throw new Error('Failed to fetch mempool')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  })
+
+  // Fetch Hash Rate
+  const { data: hashRateData } = useQuery<HashRateResponse>({
+    queryKey: ['hash-rate'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/hash-rate')
+      if (!response.ok) throw new Error('Failed to fetch hash rate')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 15,
+    refetchInterval: 1000 * 60 * 15,
+    refetchOnWindowFocus: false,
+  })
+
+  // Fetch Lightning Stats
+  const { data: lightningData } = useQuery<LightningResponse>({
+    queryKey: ['lightning'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/lightning')
+      if (!response.ok) throw new Error('Failed to fetch lightning stats')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 15,
+    refetchInterval: 1000 * 60 * 15,
+    refetchOnWindowFocus: false,
+  })
+
+  // Fetch ATH Data
+  const { data: athData } = useQuery<ATHResponse>({
+    queryKey: ['ath'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/ath')
+      if (!response.ok) throw new Error('Failed to fetch ATH data')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 15,
+    refetchInterval: 1000 * 60 * 15,
+    refetchOnWindowFocus: false,
+  })
+
   // Calculate halving countdown
   const halvingCountdown = blockHeight ? calculateHalvingCountdown(blockHeight.height) : null
 
@@ -261,6 +346,12 @@ export function MarketSentimentCards() {
     { id: 'btc-dominance', component: <BTCDominanceCard data={btcDominanceData} /> },
     { id: 'altseason', component: <AltseasonCard data={altseasonData} /> },
     { id: 'stablecoin-mcap', component: <StablecoinMcapCard data={stablecoinData} /> },
+    { id: 'total-mcap', component: <TotalMarketCapCard data={totalMarketCapData} /> },
+    { id: 'btc-supply', component: <BTCSupplyCard data={btcSupplyData} /> },
+    { id: 'mempool', component: <MempoolCard data={mempoolData} /> },
+    { id: 'hash-rate', component: <HashRateCard data={hashRateData} /> },
+    { id: 'lightning', component: <LightningCard data={lightningData} /> },
+    { id: 'ath', component: <ATHCard data={athData} /> },
   ]
 
   const totalCards = baseCards.length
@@ -853,6 +944,280 @@ function StablecoinMcapCard({ data }: { data: StablecoinMcapResponse | undefined
 
           <div className="text-[10px] text-slate-600 mt-3 text-center">
             High supply = capital ready to deploy
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner size="sm" text="Loading..." />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TotalMarketCapCard({ data }: { data: TotalMarketCapResponse | undefined }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+      <div className="flex items-center space-x-2 mb-4">
+        <Globe className="w-5 h-5 text-blue-400" />
+        <h3 className="font-medium text-white">Total Crypto Market</h3>
+      </div>
+
+      {data ? (
+        <div className="flex flex-col items-center">
+          <div className="text-4xl font-bold text-blue-400 mb-2">
+            ${(data.total_market_cap / 1_000_000_000_000).toFixed(2)}T
+          </div>
+          <div className="text-xs text-slate-400 mb-4">Total crypto market capitalization</div>
+
+          <div className="w-full bg-slate-900/50 rounded-lg p-3">
+            <div className="text-xs text-slate-500 mb-1 text-center">For reference</div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="text-slate-400">Gold:</div>
+              <div className="text-yellow-400 text-right">~$14T</div>
+              <div className="text-slate-400">S&P 500:</div>
+              <div className="text-green-400 text-right">~$45T</div>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-600 mt-3 text-center">
+            All cryptocurrencies combined
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner size="sm" text="Loading..." />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BTCSupplyCard({ data }: { data: BTCSupplyResponse | undefined }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+      <div className="flex items-center space-x-2 mb-4">
+        <Database className="w-5 h-5 text-orange-400" />
+        <h3 className="font-medium text-white">BTC Supply Progress</h3>
+      </div>
+
+      {data ? (
+        <div className="flex flex-col items-center">
+          <div className="text-3xl font-bold text-orange-400 mb-1">
+            {data.percent_mined.toFixed(2)}%
+          </div>
+          <div className="text-xs text-slate-400 mb-3">of 21M mined</div>
+
+          <div className="w-full mb-3">
+            <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-600 to-yellow-500 transition-all duration-500"
+                style={{ width: `${data.percent_mined}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="w-full grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-slate-900/50 rounded p-2 text-center">
+              <div className="text-slate-500">Circulating</div>
+              <div className="text-orange-400 font-mono">{(data.circulating / 1_000_000).toFixed(2)}M</div>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2 text-center">
+              <div className="text-slate-500">Remaining</div>
+              <div className="text-slate-300 font-mono">{(data.remaining / 1_000_000).toFixed(2)}M</div>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-600 mt-3 text-center">
+            Max supply: 21,000,000 BTC
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner size="sm" text="Loading..." />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MempoolCard({ data }: { data: MempoolResponse | undefined }) {
+  const getCongestionColor = (congestion: string) => {
+    if (congestion === 'High') return { text: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-500/30' }
+    if (congestion === 'Medium') return { text: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-500/30' }
+    return { text: 'text-green-400', bg: 'bg-green-500/20', border: 'border-green-500/30' }
+  }
+
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+      <div className="flex items-center space-x-2 mb-4">
+        <Activity className="w-5 h-5 text-purple-400" />
+        <h3 className="font-medium text-white">Bitcoin Mempool</h3>
+      </div>
+
+      {data ? (
+        <div className="flex flex-col items-center">
+          <div className="text-3xl font-bold text-purple-400 mb-1">
+            {data.tx_count.toLocaleString()}
+          </div>
+          <div className="text-xs text-slate-400 mb-2">pending transactions</div>
+
+          <div className={`px-3 py-1 rounded-full text-sm font-medium mb-3 ${getCongestionColor(data.congestion).bg} ${getCongestionColor(data.congestion).text} border ${getCongestionColor(data.congestion).border}`}>
+            {data.congestion} Congestion
+          </div>
+
+          <div className="w-full space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Fast (~10 min)</span>
+              <span className="text-green-400 font-mono">{data.fee_fastest} sat/vB</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Medium (~30 min)</span>
+              <span className="text-yellow-400 font-mono">{data.fee_half_hour} sat/vB</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Economy (~1 hr)</span>
+              <span className="text-slate-400 font-mono">{data.fee_hour} sat/vB</span>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-600 mt-3 text-center">
+            Recommended fee rates
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner size="sm" text="Loading..." />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HashRateCard({ data }: { data: HashRateResponse | undefined }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+      <div className="flex items-center space-x-2 mb-4">
+        <Cpu className="w-5 h-5 text-cyan-400" />
+        <h3 className="font-medium text-white">Network Hash Rate</h3>
+      </div>
+
+      {data ? (
+        <div className="flex flex-col items-center">
+          <div className="text-3xl font-bold text-cyan-400 mb-1">
+            {data.hash_rate_eh.toFixed(0)} EH/s
+          </div>
+          <div className="text-xs text-slate-400 mb-4">exahashes per second</div>
+
+          <div className="w-full bg-slate-900/50 rounded-lg p-3 mb-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500">Next Difficulty</span>
+              <span className={`text-xs font-mono ${data.difficulty_t >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {data.difficulty_t >= 0 ? '+' : ''}{data.difficulty_t.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-600 to-blue-500"
+              style={{ width: `${Math.min(100, (data.hash_rate_eh / 1000) * 100)}%` }}
+            />
+          </div>
+
+          <div className="text-[10px] text-slate-600 mt-3 text-center">
+            Higher = more secure network
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner size="sm" text="Loading..." />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LightningCard({ data }: { data: LightningResponse | undefined }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+      <div className="flex items-center space-x-2 mb-4">
+        <Zap className="w-5 h-5 text-yellow-400" />
+        <h3 className="font-medium text-white">Lightning Network</h3>
+      </div>
+
+      {data ? (
+        <div className="flex flex-col items-center">
+          <div className="text-3xl font-bold text-yellow-400 mb-1">
+            {data.total_capacity_btc.toLocaleString()} BTC
+          </div>
+          <div className="text-xs text-slate-400 mb-4">total capacity</div>
+
+          <div className="w-full grid grid-cols-2 gap-2 text-xs mb-3">
+            <div className="bg-slate-900/50 rounded p-2 text-center">
+              <div className="text-slate-500">Nodes</div>
+              <div className="text-yellow-400 font-mono">{data.node_count.toLocaleString()}</div>
+            </div>
+            <div className="bg-slate-900/50 rounded p-2 text-center">
+              <div className="text-slate-500">Channels</div>
+              <div className="text-yellow-400 font-mono">{data.channel_count.toLocaleString()}</div>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-600 mt-1 text-center">
+            Bitcoin's Layer 2 scaling solution
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner size="sm" text="Loading..." />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ATHCard({ data }: { data: ATHResponse | undefined }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+      <div className="flex items-center space-x-2 mb-4">
+        <TrendingDown className="w-5 h-5 text-red-400" />
+        <h3 className="font-medium text-white">Days Since ATH</h3>
+      </div>
+
+      {data ? (
+        <div className="flex flex-col items-center">
+          <div className="text-4xl font-bold text-red-400 mb-1">
+            {data.days_since_ath}
+          </div>
+          <div className="text-xs text-slate-400 mb-3">days since all-time high</div>
+
+          <div className="w-full bg-slate-900/50 rounded-lg p-3 mb-2">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs text-slate-500">ATH</span>
+              <span className="text-xs font-mono text-green-400">${data.ath.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs text-slate-500">Current</span>
+              <span className="text-xs font-mono text-slate-300">${data.current_price.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500">Drawdown</span>
+              <span className="text-xs font-mono text-red-400">{data.drawdown_pct.toFixed(1)}%</span>
+            </div>
+          </div>
+
+          <div className="w-full">
+            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+              <span>Recovery</span>
+              <span>{data.recovery_pct.toFixed(0)}%</span>
+            </div>
+            <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-red-600 to-green-500"
+                style={{ width: `${data.recovery_pct}%` }}
+              />
+            </div>
           </div>
         </div>
       ) : (
