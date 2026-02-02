@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, Info, X, ExternalLink,
   ChevronLeft, ChevronRight, Pause, Play, TrendingUp, Coins, PieChart,
-  Cpu, Zap, Activity, TrendingDown, Database, Globe
+  Cpu, Zap, Activity, TrendingDown, Database, Globe, Sun, Snowflake, Leaf, Sprout
 } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 import type {
@@ -45,6 +45,244 @@ import {
   formatExtendedCountdown,
   calculateHalvingCountdown,
 } from '../utils/marketSentiment'
+
+// Info tooltip component for explaining each metric
+// Positioned below the icon to avoid carousel overflow clipping
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <div className="group relative ml-auto">
+      <Info className="w-4 h-4 text-slate-500 hover:text-slate-300 cursor-help transition-colors" />
+      <div className="absolute top-full right-0 mt-2 w-48 p-2 bg-slate-900 border border-slate-600 rounded-lg shadow-xl text-xs text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+        <div className="absolute top-0 right-2 transform -translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900 border-l border-t border-slate-600" />
+        {text}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// Market Season Detection
+// ============================================================================
+
+type MarketSeason = 'accumulation' | 'bull' | 'distribution' | 'bear'
+
+interface SeasonInfo {
+  season: MarketSeason
+  name: string
+  description: string
+  progress: number // 0-100, how far into this season
+  confidence: number // 0-100, how confident we are in this classification
+  icon: typeof Sprout
+  color: string
+  bgGradient: string
+  signals: string[]
+}
+
+/**
+ * Determine the current market season based on multiple indicators.
+ * Uses a weighted scoring system to classify into one of four phases:
+ * - Accumulation (Spring): Bottom forming, smart money buying
+ * - Bull (Summer): Prices rising, optimism growing
+ * - Distribution (Autumn): Peak euphoria, smart money selling
+ * - Bear (Winter): Prices falling, capitulation
+ */
+function determineMarketSeason(
+  fearGreed: number | undefined,
+  athData: ATHResponse | undefined,
+  altseason: AltseasonIndexResponse | undefined,
+  btcDominance: BTCDominanceResponse | undefined
+): SeasonInfo {
+  const signals: string[] = []
+
+  // Default values if data not available
+  const fg = fearGreed ?? 50
+  const drawdown = athData?.drawdown_pct ?? 0
+  const daysSinceATH = athData?.days_since_ath ?? 0
+  const recovery = athData?.recovery_pct ?? 100
+  const altseasonIdx = altseason?.altseason_index ?? 50
+  const btcDom = btcDominance?.btc_dominance ?? 50
+
+  // Score each season (0-100)
+  let accumulationScore = 0
+  let bullScore = 0
+  let distributionScore = 0
+  let bearScore = 0
+
+  // Fear & Greed signals
+  if (fg <= 20) {
+    accumulationScore += 30
+    signals.push('Extreme fear (buying opportunity)')
+  } else if (fg <= 35) {
+    accumulationScore += 20
+    bearScore += 10
+    signals.push('Fear in market')
+  } else if (fg >= 80) {
+    distributionScore += 30
+    signals.push('Extreme greed (caution)')
+  } else if (fg >= 65) {
+    distributionScore += 15
+    bullScore += 15
+    signals.push('Greed rising')
+  } else if (fg >= 45 && fg <= 55) {
+    // Neutral - could be transitioning
+    bullScore += 10
+    bearScore += 10
+  } else if (fg > 55) {
+    bullScore += 20
+    signals.push('Optimism building')
+  } else {
+    bearScore += 15
+  }
+
+  // ATH/Drawdown signals
+  if (drawdown <= 5) {
+    distributionScore += 25
+    signals.push('At/near all-time high')
+  } else if (drawdown <= 15) {
+    bullScore += 25
+    distributionScore += 10
+    signals.push('Close to ATH')
+  } else if (drawdown >= 60) {
+    accumulationScore += 30
+    signals.push('Deep drawdown (accumulation zone)')
+  } else if (drawdown >= 40) {
+    accumulationScore += 15
+    bearScore += 15
+    signals.push('Significant drawdown')
+  } else if (drawdown >= 20) {
+    bearScore += 20
+    signals.push('Correction territory')
+  } else {
+    bullScore += 15
+  }
+
+  // Days since ATH signals
+  if (daysSinceATH <= 30 && drawdown <= 10) {
+    distributionScore += 20
+    signals.push('Recent ATH')
+  } else if (daysSinceATH >= 365) {
+    accumulationScore += 20
+    signals.push('Extended time below ATH')
+  } else if (daysSinceATH >= 180) {
+    accumulationScore += 10
+    bearScore += 10
+  }
+
+  // Recovery signals
+  if (recovery >= 90) {
+    bullScore += 15
+    distributionScore += 10
+  } else if (recovery >= 70) {
+    bullScore += 20
+    signals.push('Strong recovery underway')
+  } else if (recovery <= 30) {
+    bearScore += 15
+    accumulationScore += 10
+  }
+
+  // Altseason signals (risk appetite)
+  if (altseasonIdx >= 75) {
+    distributionScore += 15
+    bullScore += 10
+    signals.push('Alt season (late cycle)')
+  } else if (altseasonIdx <= 25) {
+    accumulationScore += 10
+    bearScore += 10
+    signals.push('BTC dominance (early/late cycle)')
+  }
+
+  // BTC Dominance signals
+  if (btcDom >= 60) {
+    accumulationScore += 10
+    bearScore += 5
+    signals.push('High BTC dominance')
+  } else if (btcDom <= 40) {
+    distributionScore += 10
+    signals.push('Low BTC dominance (risk-on)')
+  }
+
+  // Determine winning season
+  const scores = {
+    accumulation: accumulationScore,
+    bull: bullScore,
+    distribution: distributionScore,
+    bear: bearScore
+  }
+
+  const maxScore = Math.max(...Object.values(scores))
+  const totalScore = Object.values(scores).reduce((a, b) => a + b, 0)
+
+  let season: MarketSeason = 'bull'
+  if (accumulationScore === maxScore) season = 'accumulation'
+  else if (bullScore === maxScore) season = 'bull'
+  else if (distributionScore === maxScore) season = 'distribution'
+  else if (bearScore === maxScore) season = 'bear'
+
+  // Calculate confidence (how dominant is the winning score)
+  const confidence = totalScore > 0 ? Math.round((maxScore / totalScore) * 100) : 50
+
+  // Calculate progress within the season (simplified heuristic)
+  let progress = 50
+  if (season === 'accumulation') {
+    // Progress based on fear level (lower fear = later in accumulation)
+    progress = Math.max(0, Math.min(100, 100 - fg))
+  } else if (season === 'bull') {
+    // Progress based on recovery to ATH
+    progress = Math.max(0, Math.min(100, recovery))
+  } else if (season === 'distribution') {
+    // Progress based on greed level
+    progress = Math.max(0, Math.min(100, fg))
+  } else if (season === 'bear') {
+    // Progress based on drawdown depth
+    progress = Math.max(0, Math.min(100, drawdown * 1.5))
+  }
+
+  const seasonInfo: Record<MarketSeason, Omit<SeasonInfo, 'progress' | 'confidence' | 'signals'>> = {
+    accumulation: {
+      season: 'accumulation',
+      name: 'Accumulation',
+      description: 'Smart money quietly buying. Fear dominates headlines.',
+      icon: Sprout,
+      color: 'text-emerald-400',
+      bgGradient: 'from-emerald-900/30 to-green-900/20'
+    },
+    bull: {
+      season: 'bull',
+      name: 'Bull Market',
+      description: 'Prices rising, optimism growing. Momentum building.',
+      icon: Sun,
+      color: 'text-amber-400',
+      bgGradient: 'from-amber-900/30 to-orange-900/20'
+    },
+    distribution: {
+      season: 'distribution',
+      name: 'Distribution',
+      description: 'Peak euphoria. Smart money taking profits.',
+      icon: Leaf,
+      color: 'text-orange-400',
+      bgGradient: 'from-orange-900/30 to-red-900/20'
+    },
+    bear: {
+      season: 'bear',
+      name: 'Bear Market',
+      description: 'Prices falling, fear spreading. Patience required.',
+      icon: Snowflake,
+      color: 'text-blue-400',
+      bgGradient: 'from-blue-900/30 to-slate-900/20'
+    }
+  }
+
+  return {
+    ...seasonInfo[season],
+    progress,
+    confidence,
+    signals: signals.slice(0, 3) // Top 3 signals
+  }
+}
+
+// Export season for header background (will be used by parent component)
+export { determineMarketSeason }
+export type { MarketSeason, SeasonInfo }
 
 // Carousel configuration
 const CARDS_VISIBLE = 3
@@ -338,8 +576,19 @@ export function MarketSentimentCards() {
     return () => clearInterval(interval)
   }, [usDebtData])
 
+  // Calculate market season based on available metrics
+  const seasonInfo = fearGreedData || athData || altseasonData || btcDominanceData
+    ? determineMarketSeason(
+        fearGreedData?.data?.value,
+        athData,
+        altseasonData,
+        btcDominanceData
+      )
+    : null
+
   // Define all cards (funding rates removed - requires API key)
   const baseCards = [
+    { id: 'season', component: <SeasonCard seasonInfo={seasonInfo} /> },
     { id: 'fear-greed', component: <FearGreedCard data={fearGreedData} /> },
     { id: 'halving', component: <HalvingCard blockHeight={blockHeight} halvingCountdown={halvingCountdown} liveCountdown={liveCountdown} showExtendedCountdown={showExtendedCountdown} setShowExtendedCountdown={setShowExtendedCountdown} /> },
     { id: 'us-debt', component: <USDebtCard usDebtData={usDebtData} liveDebt={liveDebt} onShowHistory={() => setShowDebtCeilingModal(true)} /> },
@@ -626,6 +875,7 @@ function FearGreedCard({ data }: { data: FearGreedResponse | undefined }) {
       <div className="flex items-center space-x-2 mb-4">
         <Gauge className="w-5 h-5 text-slate-400" />
         <h3 className="font-medium text-white">Fear & Greed Index</h3>
+        <InfoTooltip text="Measures market sentiment from 0 (extreme fear) to 100 (extreme greed). Extreme fear often signals buying opportunities; extreme greed may indicate overheated markets." />
       </div>
 
       {data ? (
@@ -687,6 +937,7 @@ function HalvingCard({
         <div className="flex items-center space-x-2">
           <Timer className="w-5 h-5 text-orange-400" />
           <h3 className="font-medium text-white">Next BTC Halving</h3>
+          <InfoTooltip text="Bitcoin's block reward halves every ~4 years. Historically, halvings reduce new supply and often precede bull runs. Next halving cuts reward from 3.125 to 1.5625 BTC." />
         </div>
         <button
           onClick={() => setShowExtendedCountdown(!showExtendedCountdown)}
@@ -746,6 +997,7 @@ function USDebtCard({
       <div className="flex items-center space-x-2 mb-4">
         <DollarSign className="w-5 h-5 text-green-400" />
         <h3 className="font-medium text-white">US National Debt</h3>
+        <InfoTooltip text="Massive debt expansion often leads to currency debasement. Bitcoin is seen as a hedge against this. Watch debt-to-GDP ratio and ceiling debates for macro signals." />
       </div>
 
       {usDebtData ? (
@@ -809,6 +1061,7 @@ function BTCDominanceCard({ data }: { data: BTCDominanceResponse | undefined }) 
       <div className="flex items-center space-x-2 mb-4">
         <PieChart className="w-5 h-5 text-orange-500" />
         <h3 className="font-medium text-white">BTC Dominance</h3>
+        <InfoTooltip text="Bitcoin's share of total crypto market cap. High dominance suggests BTC strength; falling dominance often signals altcoin season or risk-on sentiment." />
       </div>
 
       {data ? (
@@ -865,6 +1118,7 @@ function AltseasonCard({ data }: { data: AltseasonIndexResponse | undefined }) {
       <div className="flex items-center space-x-2 mb-4">
         <TrendingUp className="w-5 h-5 text-purple-400" />
         <h3 className="font-medium text-white">Altcoin Season Index</h3>
+        <InfoTooltip text="Measures if altcoins are outperforming Bitcoin. Above 75 = Alt Season (consider taking altcoin profits). Below 25 = BTC Season (rotate to BTC or accumulate alts)." />
       </div>
 
       {data ? (
@@ -914,6 +1168,7 @@ function StablecoinMcapCard({ data }: { data: StablecoinMcapResponse | undefined
       <div className="flex items-center space-x-2 mb-4">
         <Coins className="w-5 h-5 text-green-500" />
         <h3 className="font-medium text-white">Stablecoin Supply</h3>
+        <InfoTooltip text="Total stablecoins in circulation - 'dry powder' waiting to deploy. Rising supply often precedes market rallies as capital is ready to buy the dip." />
       </div>
 
       {data ? (
@@ -961,6 +1216,7 @@ function TotalMarketCapCard({ data }: { data: TotalMarketCapResponse | undefined
       <div className="flex items-center space-x-2 mb-4">
         <Globe className="w-5 h-5 text-blue-400" />
         <h3 className="font-medium text-white">Total Crypto Market</h3>
+        <InfoTooltip text="Combined market cap of all cryptocurrencies. Compare to gold (~$14T) and stocks (~$45T) to gauge crypto's overall adoption and growth potential." />
       </div>
 
       {data ? (
@@ -999,6 +1255,7 @@ function BTCSupplyCard({ data }: { data: BTCSupplyResponse | undefined }) {
       <div className="flex items-center space-x-2 mb-4">
         <Database className="w-5 h-5 text-orange-400" />
         <h3 className="font-medium text-white">BTC Supply Progress</h3>
+        <InfoTooltip text="Bitcoin's fixed 21M supply creates scarcity. Over 93% already mined. As remaining supply shrinks, each halving has greater supply shock potential." />
       </div>
 
       {data ? (
@@ -1053,6 +1310,7 @@ function MempoolCard({ data }: { data: MempoolResponse | undefined }) {
       <div className="flex items-center space-x-2 mb-4">
         <Activity className="w-5 h-5 text-purple-400" />
         <h3 className="font-medium text-white">Bitcoin Mempool</h3>
+        <InfoTooltip text="Pending Bitcoin transactions awaiting confirmation. High congestion = high demand and fees. Low congestion = cheap transactions, possibly less activity." />
       </div>
 
       {data ? (
@@ -1100,6 +1358,7 @@ function HashRateCard({ data }: { data: HashRateResponse | undefined }) {
       <div className="flex items-center space-x-2 mb-4">
         <Cpu className="w-5 h-5 text-cyan-400" />
         <h3 className="font-medium text-white">Network Hash Rate</h3>
+        <InfoTooltip text="Total mining power securing Bitcoin. Higher hash rate = stronger security and miner confidence. Dropping hash rate can signal miner capitulation." />
       </div>
 
       {data ? (
@@ -1144,6 +1403,7 @@ function LightningCard({ data }: { data: LightningResponse | undefined }) {
       <div className="flex items-center space-x-2 mb-4">
         <Zap className="w-5 h-5 text-yellow-400" />
         <h3 className="font-medium text-white">Lightning Network</h3>
+        <InfoTooltip text="Bitcoin's Layer 2 for instant, low-fee payments. Growing capacity shows real-world adoption and scaling progress. Key infrastructure for BTC as money." />
       </div>
 
       {data ? (
@@ -1183,6 +1443,7 @@ function ATHCard({ data }: { data: ATHResponse | undefined }) {
       <div className="flex items-center space-x-2 mb-4">
         <TrendingDown className="w-5 h-5 text-red-400" />
         <h3 className="font-medium text-white">Days Since ATH</h3>
+        <InfoTooltip text="Days since Bitcoin's all-time high. Long periods below ATH often mark accumulation zones. Breaking ATH typically triggers FOMO and price discovery." />
       </div>
 
       {data ? (
@@ -1225,6 +1486,137 @@ function ATHCard({ data }: { data: ATHResponse | undefined }) {
           <LoadingSpinner size="sm" text="Loading..." />
         </div>
       )}
+    </div>
+  )
+}
+
+function SeasonCard({ seasonInfo }: { seasonInfo: SeasonInfo | null }) {
+  if (!seasonInfo) {
+    return (
+      <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+        <div className="flex items-center space-x-2 mb-4">
+          <Sun className="w-5 h-5 text-slate-400" />
+          <h3 className="font-medium text-white">Market Season</h3>
+        </div>
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner size="sm" text="Analyzing..." />
+        </div>
+      </div>
+    )
+  }
+
+  const IconComponent = seasonInfo.icon
+
+  // Season cycle visualization positions (clockwise: accumulation, bull, distribution, bear)
+  const seasonPositions: Record<MarketSeason, number> = {
+    accumulation: 0,
+    bull: 90,
+    distribution: 180,
+    bear: 270
+  }
+
+  const currentAngle = seasonPositions[seasonInfo.season] + (seasonInfo.progress * 0.9) // 90° per season
+
+  return (
+    <div className={`bg-gradient-to-br ${seasonInfo.bgGradient} border border-slate-700 rounded-lg p-4 h-full`}>
+      <div className="flex items-center space-x-2 mb-4">
+        <IconComponent className={`w-5 h-5 ${seasonInfo.color}`} />
+        <h3 className="font-medium text-white">Market Season</h3>
+        <InfoTooltip text="Crypto markets move in cycles: Accumulation (bottom), Bull (rising), Distribution (top), Bear (falling). Understanding the current phase helps inform strategy." />
+      </div>
+
+      <div className="flex flex-col items-center">
+        {/* Season cycle wheel */}
+        <div className="relative w-32 h-32 mb-3">
+          <svg viewBox="0 0 100 100" className="w-full h-full">
+            {/* Background circle segments */}
+            <circle cx="50" cy="50" r="40" fill="none" stroke="#334155" strokeWidth="8" />
+
+            {/* Season segments */}
+            <path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#10b981" strokeWidth="8" opacity="0.3" />
+            <path d="M 90 50 A 40 40 0 0 1 50 90" fill="none" stroke="#f59e0b" strokeWidth="8" opacity="0.3" />
+            <path d="M 50 90 A 40 40 0 0 1 10 50" fill="none" stroke="#f97316" strokeWidth="8" opacity="0.3" />
+            <path d="M 10 50 A 40 40 0 0 1 50 10" fill="none" stroke="#3b82f6" strokeWidth="8" opacity="0.3" />
+
+            {/* Active segment highlight */}
+            {seasonInfo.season === 'accumulation' && (
+              <path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#10b981" strokeWidth="8" />
+            )}
+            {seasonInfo.season === 'bull' && (
+              <path d="M 90 50 A 40 40 0 0 1 50 90" fill="none" stroke="#f59e0b" strokeWidth="8" />
+            )}
+            {seasonInfo.season === 'distribution' && (
+              <path d="M 50 90 A 40 40 0 0 1 10 50" fill="none" stroke="#f97316" strokeWidth="8" />
+            )}
+            {seasonInfo.season === 'bear' && (
+              <path d="M 10 50 A 40 40 0 0 1 50 10" fill="none" stroke="#3b82f6" strokeWidth="8" />
+            )}
+
+            {/* Position indicator */}
+            <g transform={`rotate(${currentAngle}, 50, 50)`}>
+              <circle cx="50" cy="14" r="5" fill="white" />
+              <circle cx="50" cy="14" r="3" className={seasonInfo.color.replace('text-', 'fill-')} />
+            </g>
+
+            {/* Season labels */}
+            <text x="70" y="25" fontSize="6" fill="#10b981" textAnchor="middle">🌱</text>
+            <text x="85" y="55" fontSize="6" fill="#f59e0b" textAnchor="middle">☀️</text>
+            <text x="70" y="85" fontSize="6" fill="#f97316" textAnchor="middle">🍂</text>
+            <text x="30" y="85" fontSize="6" fill="#3b82f6" textAnchor="middle">❄️</text>
+
+            {/* Center icon */}
+            <foreignObject x="35" y="35" width="30" height="30">
+              <div className="flex items-center justify-center w-full h-full">
+                <IconComponent className={`w-6 h-6 ${seasonInfo.color}`} />
+              </div>
+            </foreignObject>
+          </svg>
+        </div>
+
+        {/* Season name and description */}
+        <div className={`text-xl font-bold ${seasonInfo.color} mb-1`}>
+          {seasonInfo.name}
+        </div>
+        <div className="text-xs text-slate-400 text-center mb-3 px-2">
+          {seasonInfo.description}
+        </div>
+
+        {/* Progress and confidence */}
+        <div className="w-full space-y-2">
+          <div className="flex justify-between text-[10px] text-slate-500">
+            <span>Cycle Progress</span>
+            <span>{seasonInfo.progress.toFixed(0)}%</span>
+          </div>
+          <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 ${
+                seasonInfo.season === 'accumulation' ? 'bg-emerald-500' :
+                seasonInfo.season === 'bull' ? 'bg-amber-500' :
+                seasonInfo.season === 'distribution' ? 'bg-orange-500' :
+                'bg-blue-500'
+              }`}
+              style={{ width: `${seasonInfo.progress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Key signals */}
+        {seasonInfo.signals.length > 0 && (
+          <div className="w-full mt-3 space-y-1">
+            {seasonInfo.signals.map((signal, idx) => (
+              <div key={idx} className="text-[10px] text-slate-500 flex items-center gap-1">
+                <span className={seasonInfo.color}>•</span>
+                {signal}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Confidence indicator */}
+        <div className="text-[10px] text-slate-600 mt-2">
+          {seasonInfo.confidence}% confidence
+        </div>
+      </div>
     </div>
   )
 }

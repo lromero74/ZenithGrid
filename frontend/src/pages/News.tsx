@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair, Volume2 } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
+import { useMarketSeason } from '../hooks/useMarketSeason'
 import { useVideoPlayer, VideoItem as ContextVideoItem } from '../contexts/VideoPlayerContext'
 import { useArticleReader, ArticleItem } from '../contexts/ArticleReaderContext'
 import { SourceSubscriptionsModal } from '../components/news/SourceSubscriptionsModal'
@@ -86,6 +87,9 @@ export default function News() {
 
   // TTS for reading articles aloud
   const tts = useTTSSync()
+
+  // Get market season for header styling
+  const { seasonInfo, headerGradient } = useMarketSeason()
 
   // Get plain text for TTS from article content
   const articlePlainText = articleContent?.content ? markdownToPlainText(articleContent.content) : ''
@@ -235,11 +239,16 @@ export default function News() {
         </div>
       </div>
 
-      {/* Market Sentiment Section */}
-      <div className="space-y-4">
+      {/* Market Sentiment Section with season-based gradient */}
+      <div className={`space-y-4 rounded-xl p-4 -mx-4 bg-gradient-to-r ${headerGradient} transition-colors duration-1000`}>
         <div className="flex items-center space-x-3">
-          <TrendingUp className="w-6 h-6 text-green-400" />
+          <TrendingUp className={`w-6 h-6 ${seasonInfo?.color || 'text-green-400'}`} />
           <h2 className="text-xl font-bold text-white">Market Sentiment</h2>
+          {seasonInfo && (
+            <span className={`text-sm ${seasonInfo.color} opacity-70`}>
+              • {seasonInfo.name}
+            </span>
+          )}
         </div>
         <MarketSentimentCards />
       </div>
