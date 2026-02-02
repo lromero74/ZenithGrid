@@ -43,11 +43,33 @@ import {
 const CARDS_VISIBLE = 3
 const AUTO_CYCLE_INTERVAL = 30000 // 30 seconds
 
+// Spring animation: anticipation -> follow-through -> overshoot -> settle
+// Using CSS custom property for dynamic transform
+const springKeyframes = `
+@keyframes slideSpringLeft {
+  0% { transform: translateX(var(--from-x)); }
+  15% { transform: translateX(calc(var(--from-x) + 2%)); }
+  50% { transform: translateX(calc(var(--to-x) - 1.5%)); }
+  75% { transform: translateX(calc(var(--to-x) + 0.5%)); }
+  100% { transform: translateX(var(--to-x)); }
+}
+@keyframes slideSpringRight {
+  0% { transform: translateX(var(--from-x)); }
+  15% { transform: translateX(calc(var(--from-x) - 2%)); }
+  50% { transform: translateX(calc(var(--to-x) + 1.5%)); }
+  75% { transform: translateX(calc(var(--to-x) - 0.5%)); }
+  100% { transform: translateX(var(--to-x)); }
+}
+`
+
 export function MarketSentimentCards() {
   // Carousel state
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null)
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null)
+  const carouselRef = useRef<HTMLDivElement>(null)
 
   // Track debt ceiling history modal
   const [showDebtCeilingModal, setShowDebtCeilingModal] = useState(false)
@@ -223,14 +245,55 @@ export function MarketSentimentCards() {
   const totalCards = allCards.length
   const maxIndex = totalCards - CARDS_VISIBLE
 
-  // Auto-cycle logic
+  // Inject keyframes into document (only once)
+  useEffect(() => {
+    const styleId = 'carousel-spring-keyframes'
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style')
+      style.id = styleId
+      style.textContent = springKeyframes
+      document.head.appendChild(style)
+    }
+  }, [])
+
+  // Animation duration
+  const ANIMATION_DURATION = 500 // ms
+
+  // Auto-cycle logic with animation
   const nextSlide = useCallback(() => {
-    setCurrentIndex(prev => (prev >= maxIndex ? 0 : prev + 1))
-  }, [maxIndex])
+    if (isAnimating) return
+    setSlideDirection('left')
+    setIsAnimating(true)
+    setTimeout(() => {
+      setCurrentIndex(prev => (prev >= maxIndex ? 0 : prev + 1))
+      setIsAnimating(false)
+      setSlideDirection(null)
+    }, ANIMATION_DURATION)
+  }, [maxIndex, isAnimating])
 
   const prevSlide = useCallback(() => {
-    setCurrentIndex(prev => (prev <= 0 ? maxIndex : prev - 1))
-  }, [maxIndex])
+    if (isAnimating) return
+    setSlideDirection('right')
+    setIsAnimating(true)
+    setTimeout(() => {
+      setCurrentIndex(prev => (prev <= 0 ? maxIndex : prev - 1))
+      setIsAnimating(false)
+      setSlideDirection(null)
+    }, ANIMATION_DURATION)
+  }, [maxIndex, isAnimating])
+
+  // Jump to specific index
+  const goToIndex = useCallback((targetIndex: number) => {
+    if (isAnimating || targetIndex === currentIndex) return
+    const direction = targetIndex > currentIndex ? 'left' : 'right'
+    setSlideDirection(direction)
+    setIsAnimating(true)
+    setTimeout(() => {
+      setCurrentIndex(targetIndex)
+      setIsAnimating(false)
+      setSlideDirection(null)
+    }, ANIMATION_DURATION)
+  }, [currentIndex, isAnimating])
 
   // Auto-play effect
   useEffect(() => {
@@ -250,8 +313,28 @@ export function MarketSentimentCards() {
     }
   }, [isPaused, nextSlide])
 
-  // Get visible cards
-  const visibleCards = allCards.slice(currentIndex, currentIndex + CARDS_VISIBLE)
+  // Calculate card width percentage (each card is 1/3 of visible area)
+  const cardWidthPercent = 100 / CARDS_VISIBLE
+  // Calculate the transform for the current position
+  const baseTransform = -(currentIndex * cardWidthPercent)
+
+  // Get animation style
+  const getAnimationStyle = (): React.CSSProperties => {
+    if (!isAnimating || !slideDirection) {
+      return { transform: `translateX(${baseTransform}%)` }
+    }
+
+    const fromX = `${baseTransform}%`
+    const toX = slideDirection === 'left'
+      ? `${baseTransform - cardWidthPercent}%`
+      : `${baseTransform + cardWidthPercent}%`
+
+    return {
+      '--from-x': fromX,
+      '--to-x': toX,
+      animation: `slideSpring${slideDirection === 'left' ? 'Left' : 'Right'} ${ANIMATION_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards`,
+    } as React.CSSProperties
+  }
 
   return (
     <>
@@ -261,14 +344,16 @@ export function MarketSentimentCards() {
           <div className="flex items-center gap-2">
             <button
               onClick={prevSlide}
-              className="p-1.5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+              disabled={isAnimating}
+              className="p-1.5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Previous"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={nextSlide}
-              className="p-1.5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+              disabled={isAnimating}
+              className="p-1.5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Next"
             >
               <ChevronRight className="w-4 h-4" />
@@ -282,25 +367,40 @@ export function MarketSentimentCards() {
             </button>
           </div>
           <div className="flex items-center gap-1">
-            {Array.from({ length: Math.ceil(totalCards / CARDS_VISIBLE) }).map((_, idx) => (
+            {Array.from({ length: maxIndex + 1 }).map((_, idx) => (
               <button
                 key={idx}
-                onClick={() => setCurrentIndex(idx * CARDS_VISIBLE > maxIndex ? maxIndex : idx * CARDS_VISIBLE)}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  Math.floor(currentIndex / CARDS_VISIBLE) === idx ? 'bg-blue-500' : 'bg-slate-600 hover:bg-slate-500'
+                onClick={() => goToIndex(idx)}
+                disabled={isAnimating}
+                className={`w-2 h-2 rounded-full transition-colors disabled:cursor-not-allowed ${
+                  currentIndex === idx ? 'bg-blue-500' : 'bg-slate-600 hover:bg-slate-500'
                 }`}
               />
             ))}
           </div>
         </div>
 
-        {/* Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleCards.map(card => (
-            <div key={card.id} className="transition-all duration-300">
-              {card.component}
-            </div>
-          ))}
+        {/* Cards Carousel - overflow hidden container */}
+        <div className="overflow-hidden">
+          {/* Sliding track containing all cards */}
+          <div
+            ref={carouselRef}
+            className="flex gap-4"
+            style={{
+              width: `${(totalCards / CARDS_VISIBLE) * 100}%`,
+              ...getAnimationStyle(),
+            }}
+          >
+            {allCards.map(card => (
+              <div
+                key={card.id}
+                className="flex-shrink-0"
+                style={{ width: `calc(${100 / totalCards}% - ${(totalCards - 1) * 16 / totalCards}px)` }}
+              >
+                {card.component}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
