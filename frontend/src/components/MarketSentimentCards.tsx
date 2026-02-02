@@ -390,13 +390,15 @@ export function MarketSentimentCards() {
     }
   }, [nextSlide, prevSlide])
 
-  // Calculate card width percentage (each card is 1/3 of visible area in the track)
-  const cardWidthPercent = 100 / CARDS_VISIBLE
+  // Calculate card width as percentage of the TRACK (not viewport)
+  // Track contains extendedTotal cards, so each card is 100/extendedTotal % of track
+  const cardWidthInTrack = 100 / extendedTotal
 
   // Calculate the transform for the current position
   // Account for the prepended clones (offset by CARDS_VISIBLE)
+  // currentIndex 0 should show real cards starting at position CARDS_VISIBLE in extended array
   const getTransformPercent = (index: number) => {
-    return -((index + CARDS_VISIBLE) * cardWidthPercent)
+    return -((index + CARDS_VISIBLE) * cardWidthInTrack)
   }
   const baseTransform = getTransformPercent(currentIndex)
 
@@ -408,8 +410,8 @@ export function MarketSentimentCards() {
 
     const fromX = `${baseTransform}%`
     const toX = slideDirection === 'left'
-      ? `${baseTransform - cardWidthPercent}%`
-      : `${baseTransform + cardWidthPercent}%`
+      ? `${baseTransform - cardWidthInTrack}%`
+      : `${baseTransform + cardWidthInTrack}%`
 
     // Use different animation for swipe vs button
     const animName = animationType === 'swipe'
