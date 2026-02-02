@@ -239,7 +239,7 @@ function AppContent() {
 
               {/* Market Season Indicator - separate from title for better spacing */}
               {seasonInfo && (
-                <div className={`hidden lg:flex items-center space-x-1.5 px-3 py-1.5 rounded-full border ${
+                <div className={`hidden lg:flex items-center space-x-1.5 px-3 py-1.5 mr-6 rounded-full border ${
                   seasonInfo.season === 'accumulation' ? 'bg-emerald-900/30 border-emerald-700/50' :
                   seasonInfo.season === 'bull' ? 'bg-amber-900/30 border-amber-700/50' :
                   seasonInfo.season === 'distribution' ? 'bg-orange-900/30 border-orange-700/50' :
