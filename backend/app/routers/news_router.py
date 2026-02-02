@@ -459,11 +459,11 @@ async def fetch_us_debt() -> Dict[str, Any]:
         async with aiohttp.ClientSession() as session:
             headers = {"User-Agent": "ZenithGrid/1.0"}
 
-            # Get most recent debt data (last 2 records to calculate rate)
+            # Get last 8 records to calculate 7-day weighted average rate
             debt_url = (
                 "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/"
                 "v2/accounting/od/debt_to_penny"
-                "?sort=-record_date&page[size]=2"
+                "?sort=-record_date&page[size]=8"
             )
 
             # Fetch debt data
@@ -483,32 +483,60 @@ async def fetch_us_debt() -> Dict[str, Any]:
                 total_debt = float(latest.get("tot_pub_debt_out_amt", 0))
                 record_date = latest.get("record_date", "")
 
-                # Calculate rate of change per second
+                # Calculate rate of change per second using 7-day weighted average
                 # Default: ~$1T/year = ~$31,710/second (debt always grows long-term)
                 default_rate = 31710.0
                 debt_per_second = default_rate
 
+                # Calculate daily rates and apply weighted average
+                # Weights: oldest days (1-4) get weight 1, recent days (5-6) get weight 2, most recent (7) gets weight 3
+                # This gives preference to last 3 days while still smoothing with older data
                 if len(records) >= 2:
-                    prev = records[1]
-                    prev_debt = float(prev.get("tot_pub_debt_out_amt", 0))
-                    prev_date = prev.get("record_date", "")
+                    daily_rates = []
+                    for i in range(len(records) - 1):
+                        curr = records[i]
+                        prev = records[i + 1]
+                        curr_debt = float(curr.get("tot_pub_debt_out_amt", 0))
+                        prev_debt = float(prev.get("tot_pub_debt_out_amt", 0))
+                        curr_date = curr.get("record_date", "")
+                        prev_date = prev.get("record_date", "")
 
-                    if prev_date and record_date:
-                        date1 = datetime.strptime(record_date, "%Y-%m-%d")
-                        date2 = datetime.strptime(prev_date, "%Y-%m-%d")
-                        days_diff = (date1 - date2).days
+                        if prev_date and curr_date:
+                            date1 = datetime.strptime(curr_date, "%Y-%m-%d")
+                            date2 = datetime.strptime(prev_date, "%Y-%m-%d")
+                            days_diff = (date1 - date2).days
 
-                        if days_diff > 0:
-                            debt_change = total_debt - prev_debt
-                            seconds_diff = days_diff * 24 * 60 * 60
-                            calculated_rate = debt_change / seconds_diff
-                            # Only use calculated rate if positive (debt normally grows)
-                            # Negative rates can occur due to temporary accounting adjustments
-                            if calculated_rate > 0:
-                                debt_per_second = calculated_rate
-                            else:
-                                logger.info("Treasury data shows temporary debt decrease, using default rate")
-                                debt_per_second = default_rate
+                            if days_diff > 0:
+                                debt_change = curr_debt - prev_debt
+                                seconds_diff = days_diff * 24 * 60 * 60
+                                rate = debt_change / seconds_diff
+                                # Only include positive rates (debt normally grows)
+                                if rate > 0:
+                                    daily_rates.append(rate)
+
+                    if daily_rates:
+                        # Apply weights: most recent gets highest weight
+                        # For 7 rates: weights are [1, 1, 1, 1, 2, 2, 3] (oldest to newest)
+                        # For fewer rates, use available with proportional weighting
+                        num_rates = len(daily_rates)
+                        weights = []
+                        for i in range(num_rates):
+                            # Position 0 is most recent, position num_rates-1 is oldest
+                            if i < 1:  # Most recent day
+                                weights.append(3)
+                            elif i < 3:  # Next 2 days
+                                weights.append(2)
+                            else:  # Older days
+                                weights.append(1)
+
+                        # Calculate weighted average
+                        weighted_sum = sum(r * w for r, w in zip(daily_rates, weights))
+                        total_weight = sum(weights)
+                        debt_per_second = weighted_sum / total_weight
+                        logger.info(f"Calculated debt rate from {num_rates} days: ${debt_per_second:.2f}/sec (weighted avg)")
+                    else:
+                        logger.info("No positive debt rates found, using default rate")
+                        debt_per_second = default_rate
 
             # Fetch GDP from FRED (Federal Reserve) - no API key needed for this endpoint
             gdp = 28_000_000_000_000.0  # Default ~$28T fallback

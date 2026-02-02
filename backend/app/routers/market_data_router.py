@@ -142,14 +142,16 @@ async def get_candles(
     Args:
         product_id: Trading pair (default: ETH-BTC)
         granularity: Candle interval - ONE_MINUTE, FIVE_MINUTE, FIFTEEN_MINUTE,
-                     THIRTY_MINUTE, ONE_HOUR, TWO_HOUR, SIX_HOUR, ONE_DAY
+                     THIRTY_MINUTE, ONE_HOUR, TWO_HOUR, SIX_HOUR, ONE_DAY,
+                     THREE_MINUTE*, TWO_DAY*, THREE_DAY*, ONE_WEEK*, TWO_WEEK*, ONE_MONTH*
+                     (* = synthetic, aggregated from native intervals)
         limit: Number of candles to fetch (default: 300)
     """
     try:
         interval = granularity or settings.candle_interval
 
-        # Calculate start time based on limit and granularity
-        interval_seconds = {
+        # Native Coinbase intervals (in seconds)
+        native_intervals = {
             "ONE_MINUTE": 60,
             "FIVE_MINUTE": 300,
             "FIFTEEN_MINUTE": 900,
@@ -160,28 +162,82 @@ async def get_candles(
             "ONE_DAY": 86400,
         }
 
-        seconds = interval_seconds.get(interval, 300)
-        end_time = int(time.time())
-        start_time = end_time - (seconds * limit)
+        # Synthetic intervals that need aggregation
+        synthetic_intervals = {
+            "THREE_MINUTE": {"base": "ONE_MINUTE", "factor": 3},
+            "TWO_DAY": {"base": "ONE_DAY", "factor": 2},
+            "THREE_DAY": {"base": "ONE_DAY", "factor": 3},
+            "ONE_WEEK": {"base": "ONE_DAY", "factor": 7},
+            "TWO_WEEK": {"base": "ONE_DAY", "factor": 14},
+            "ONE_MONTH": {"base": "ONE_DAY", "factor": 30},
+        }
 
-        candles = await coinbase.get_candles(
-            product_id=product_id, start=start_time, end=end_time, granularity=interval
-        )
+        # Check if this is a synthetic interval
+        if interval in synthetic_intervals:
+            synth = synthetic_intervals[interval]
+            base_interval = synth["base"]
+            factor = synth["factor"]
+            base_seconds = native_intervals[base_interval]
 
-        # Coinbase returns candles in reverse chronological order
-        # Format: {"start": timestamp, "low": str, "high": str, "open": str, "close": str, "volume": str}
-        formatted_candles = []
-        for candle in reversed(candles):  # Reverse to get chronological order
-            formatted_candles.append(
-                {
-                    "time": int(candle["start"]),
-                    "open": float(candle["open"]),
-                    "high": float(candle["high"]),
-                    "low": float(candle["low"]),
-                    "close": float(candle["close"]),
-                    "volume": float(candle["volume"]),
-                }
+            # Coinbase max is ~300 candles per request
+            # Cap synthetic candle count based on what we can fetch in one request
+            max_base_candles = 300
+            max_synthetic_candles = max_base_candles // factor
+            effective_limit = min(limit, max_synthetic_candles)
+
+            # Fetch base candles
+            fetch_count = effective_limit * factor + factor
+            end_time = int(time.time())
+            start_time = end_time - (base_seconds * fetch_count)
+
+            base_candles = await coinbase.get_candles(
+                product_id=product_id, start=start_time, end=end_time, granularity=base_interval
             )
+
+            # Sort chronologically for aggregation
+            base_candles = list(reversed(base_candles))
+
+            # Aggregate candles
+            aggregated = []
+            for i in range(0, len(base_candles) - factor + 1, factor):
+                chunk = base_candles[i:i + factor]
+                if len(chunk) == factor:
+                    aggregated.append({
+                        "time": int(chunk[0]["start"]),
+                        "open": float(chunk[0]["open"]),
+                        "high": max(float(c["high"]) for c in chunk),
+                        "low": min(float(c["low"]) for c in chunk),
+                        "close": float(chunk[-1]["close"]),
+                        "volume": sum(float(c["volume"]) for c in chunk),
+                    })
+
+            # Return only the effective limit
+            formatted_candles = aggregated[-effective_limit:] if len(aggregated) > effective_limit else aggregated
+
+        else:
+            # Native interval - fetch directly
+            seconds = native_intervals.get(interval, 300)
+            end_time = int(time.time())
+            start_time = end_time - (seconds * limit)
+
+            candles = await coinbase.get_candles(
+                product_id=product_id, start=start_time, end=end_time, granularity=interval
+            )
+
+            # Coinbase returns candles in reverse chronological order
+            # Format: {"start": timestamp, "low": str, "high": str, "open": str, "close": str, "volume": str}
+            formatted_candles = []
+            for candle in reversed(candles):  # Reverse to get chronological order
+                formatted_candles.append(
+                    {
+                        "time": int(candle["start"]),
+                        "open": float(candle["open"]),
+                        "high": float(candle["high"]),
+                        "low": float(candle["low"]),
+                        "close": float(candle["close"]),
+                        "volume": float(candle["volume"]),
+                    }
+                )
 
         return {"candles": formatted_candles, "interval": interval, "product_id": product_id}
     except Exception as e:
