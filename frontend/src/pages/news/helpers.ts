@@ -238,6 +238,18 @@ export const markdownToPlainText = (markdown: string): string => {
   // Remove heading markers (# ## ### etc) but keep the text
   text = text.replace(/^#{1,6}\s+/gm, '')
 
+  // Remove stray # characters that aren't proper headings (artifacts like "Sponsored##")
+  text = text.replace(/#{2,}/g, '')
+
+  // Remove common promotional/ad artifacts that slip through content extraction
+  // Handle concatenated cases like "SponsoredCustomers" -> "Customers"
+  text = text.replace(/\bSponsored(?=[A-Z])/g, '')
+  text = text.replace(/\bAdvertisement(?=[A-Z])/g, '')
+  text = text.replace(/\bPromoted(?=[A-Z])/g, '')
+  // Handle standalone cases at line boundaries
+  text = text.replace(/\b(Sponsored|Advertisement|Promoted|Ad)\s*$/gim, '')
+  text = text.replace(/^\s*(Sponsored|Advertisement|Promoted|Ad)\b/gim, '')
+
   // Remove bold/italic markers
   text = text.replace(/\*\*\*([^*]+)\*\*\*/g, '$1')  // ***bold italic***
   text = text.replace(/\*\*([^*]+)\*\*/g, '$1')      // **bold**

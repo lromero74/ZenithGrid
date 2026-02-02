@@ -60,7 +60,6 @@ export function ArticleReaderMiniPlayer() {
     resume,
     replay,
     seekToWord,
-    skipWords,
     setVoice,
     setRate,
   } = useArticleReader()
@@ -527,17 +526,17 @@ export function ArticleReaderMiniPlayer() {
                   onClick={replay}
                   disabled={!isAudioActive}
                   className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title="Restart"
+                  title="Restart article"
                 >
                   <RotateCcw className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
                 </button>
 
-                {/* Skip back 10 words */}
+                {/* Previous article */}
                 <button
-                  onClick={() => skipWords(-10)}
-                  disabled={!isAudioActive}
+                  onClick={previousArticle}
+                  disabled={currentIndex === 0}
                   className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title="Back 10 words"
+                  title="Previous article"
                 >
                   <SkipBack className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
                 </button>
@@ -558,27 +557,6 @@ export function ArticleReaderMiniPlayer() {
                   )}
                 </button>
 
-                {/* Skip forward 10 words */}
-                <button
-                  onClick={() => skipWords(10)}
-                  disabled={!isAudioActive}
-                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title="Forward 10 words"
-                >
-                  <SkipForward className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
-                </button>
-
-                {/* Previous article */}
-                <button
-                  onClick={previousArticle}
-                  disabled={currentIndex === 0}
-                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
-                  title="Previous article"
-                >
-                  <SkipBack className={`${isExpanded ? 'w-5 h-5' : 'w-4 h-4'}`} />
-                  <SkipBack className={`${isExpanded ? 'w-5 h-5' : 'w-4 h-4'} -ml-3`} />
-                </button>
-
                 {/* Next article */}
                 <button
                   onClick={nextArticle}
@@ -586,8 +564,23 @@ export function ArticleReaderMiniPlayer() {
                   className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
                   title="Next article"
                 >
-                  <SkipForward className={`${isExpanded ? 'w-5 h-5' : 'w-4 h-4'}`} />
-                  <SkipForward className={`${isExpanded ? 'w-5 h-5' : 'w-4 h-4'} -ml-3`} />
+                  <SkipForward className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                </button>
+
+                {/* Speed toggle */}
+                <button
+                  onClick={() => {
+                    const speeds = [1, 1.25, 1.5, 1.75, 2]
+                    const currentIdx = speeds.indexOf(playbackRate)
+                    const nextIdx = (currentIdx + 1) % speeds.length
+                    setRate(speeds[nextIdx])
+                  }}
+                  className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title="Toggle speed"
+                >
+                  <span className={`font-medium ${isExpanded ? 'text-sm' : 'text-xs'}`}>
+                    {playbackRate}x
+                  </span>
                 </button>
               </div>
 
