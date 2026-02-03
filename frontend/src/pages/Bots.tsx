@@ -6,6 +6,7 @@ import AIBotLogs from '../components/AIBotLogs'
 import IndicatorLogs from '../components/IndicatorLogs'
 import ScannerLogs from '../components/ScannerLogs'
 import { PnLChart, TimeRange } from '../components/PnLChart'
+import { SeasonalityToggle } from '../components/SeasonalityToggle'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import {
   type BotFormData,
@@ -415,6 +416,9 @@ function Bots() {
           </button>
         </div>
       </div>
+
+      {/* Seasonality Toggle */}
+      <SeasonalityToggle />
 
       {/* P&L Chart - 3Commas-style (filtered by account) */}
       <div className="mb-6">

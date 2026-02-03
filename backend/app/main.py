@@ -28,6 +28,7 @@ from app.routers import coin_icons_router  # Proxied coin icons to avoid CORS
 from app.routers import paper_trading_router  # Paper trading account management
 from app.routers import account_value_router  # Account value history tracking
 from app.routers import trading_router  # Manual trading operations
+from app.routers import seasonality_router  # Seasonality-based bot management
 from app.services.websocket_manager import ws_manager
 from app.services.shutdown_manager import shutdown_manager
 from app.services.content_refresh_service import content_refresh_service
@@ -95,6 +96,7 @@ app.include_router(coin_icons_router.router)  # Proxied coin icons to avoid CORS
 app.include_router(paper_trading_router.router)  # Paper trading account management
 app.include_router(account_value_router.router)  # Account value history tracking
 app.include_router(trading_router.router)  # Manual trading operations
+app.include_router(seasonality_router.router)  # Seasonality-based bot management
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
