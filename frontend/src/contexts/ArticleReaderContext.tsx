@@ -261,6 +261,8 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     if (articles.length === 0) return
     // Stop video player if playing (mutually exclusive)
     stopVideoPlayer()
+    // Clear any previous TTS state (error, loading, etc.) before showing mini player
+    tts.stop()
 
     const clampedIndex = Math.min(Math.max(0, startIndex), articles.length - 1)
     setPlaylist(articles)
@@ -271,7 +273,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
     // Load and play the first article (pass index for voice cycling)
     loadAndPlayArticle(articles[clampedIndex], clampedIndex)
-  }, [loadAndPlayArticle])
+  }, [loadAndPlayArticle, tts])
 
   // Open a single article (expanded view) - optionally with surrounding articles for navigation
   const openArticle = useCallback((article: ArticleItem, allArticles?: ArticleItem[]) => {
