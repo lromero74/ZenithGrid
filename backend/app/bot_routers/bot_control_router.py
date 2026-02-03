@@ -2,6 +2,7 @@
 Bot Control Router
 
 Handles bot activation, deactivation, and force-run operations.
+Respects seasonality restrictions when enabled.
 """
 
 import logging
@@ -13,11 +14,41 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot, Position, User
+from app.models import Bot, Position, Settings, User
 from app.routers.auth_dependencies import get_current_user_optional
+from app.services.season_detector import get_seasonality_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def check_seasonality_allows_bot(db: AsyncSession, bot: Bot) -> tuple[bool, str | None]:
+    """
+    Check if seasonality restrictions allow this bot to be enabled.
+
+    Returns (allowed, reason) tuple.
+    """
+    # Check if seasonality is enabled
+    result = await db.execute(select(Settings).where(Settings.key == "seasonality_enabled"))
+    setting = result.scalars().first()
+    enabled = setting and setting.value == "true"
+
+    if not enabled:
+        return True, None
+
+    # Get current seasonality status
+    status = await get_seasonality_status()
+    quote_currency = bot.get_quote_currency()
+
+    if quote_currency == "BTC" and not status.btc_bots_allowed:
+        mode_str = status.mode.replace('_', '-')
+        return False, f"BTC bots blocked during {mode_str} mode ({status.season_info.name})"
+
+    if quote_currency == "USD" and not status.usd_bots_allowed:
+        mode_str = status.mode.replace('_', '-')
+        return False, f"USD bots blocked during {mode_str} mode ({status.season_info.name})"
+
+    return True, None
 
 
 @router.post("/{bot_id}/start")
@@ -26,7 +57,7 @@ async def start_bot(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Activate a bot to start trading"""
+    """Activate a bot to start trading (respects seasonality restrictions)"""
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
     if current_user:
@@ -39,6 +70,14 @@ async def start_bot(
 
     if bot.is_active:
         return {"message": f"Bot '{bot.name}' is already active"}
+
+    # Check seasonality restrictions
+    allowed, reason = await check_seasonality_allows_bot(db, bot)
+    if not allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot start bot: {reason}. Disable seasonality tracking to override."
+        )
 
     bot.is_active = True
     bot.updated_at = datetime.utcnow()

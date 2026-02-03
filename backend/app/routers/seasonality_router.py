@@ -4,6 +4,10 @@ Seasonality Management Router
 Handles seasonality toggle feature for automatic bot management based on market cycles.
 - GET /api/seasonality - Get current seasonality status
 - POST /api/seasonality - Toggle seasonality on/off
+
+When enabled:
+- Risk-Off (Fall/early Winter): BTC bots auto-disabled, USD bots allowed
+- Risk-On (late Winter/Spring/Summer): BTC bots allowed, USD bots auto-disabled
 """
 
 import logging
@@ -16,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Settings, User
+from app.models import Bot, Settings, User
 from app.routers.auth_dependencies import get_current_user_optional
 from app.services.season_detector import get_seasonality_status, SeasonalityStatus
 
@@ -116,6 +120,45 @@ async def get_seasonality(
     )
 
 
+async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus) -> dict:
+    """
+    Auto-enable/disable bots based on seasonality mode.
+
+    Risk-Off mode: Disable BTC bots, keep USD bots
+    Risk-On mode: Disable USD bots, keep BTC bots
+
+    Returns counts of bots affected.
+    """
+    # Get all active bots
+    result = await db.execute(select(Bot).where(Bot.is_active.is_(True)))
+    active_bots = result.scalars().all()
+
+    disabled_btc = 0
+    disabled_usd = 0
+
+    for bot in active_bots:
+        quote_currency = bot.get_quote_currency()
+
+        if status.mode == "risk_off" and quote_currency == "BTC":
+            # Risk-Off: Disable BTC bots
+            bot.is_active = False
+            bot.updated_at = datetime.utcnow()
+            disabled_btc += 1
+            logger.info(f"Seasonality: Auto-disabled BTC bot '{bot.name}' (ID: {bot.id}) - Risk-Off mode")
+
+        elif status.mode == "risk_on" and quote_currency == "USD":
+            # Risk-On: Disable USD bots
+            bot.is_active = False
+            bot.updated_at = datetime.utcnow()
+            disabled_usd += 1
+            logger.info(f"Seasonality: Auto-disabled USD bot '{bot.name}' (ID: {bot.id}) - Risk-On mode")
+
+    if disabled_btc > 0 or disabled_usd > 0:
+        await db.commit()
+
+    return {"disabled_btc": disabled_btc, "disabled_usd": disabled_usd}
+
+
 @router.post("", response_model=SeasonalityResponse)
 async def toggle_seasonality(
     request: SeasonalityToggleRequest,
@@ -128,6 +171,8 @@ async def toggle_seasonality(
     When enabled, bots will be automatically managed based on market cycle:
     - Risk-On (Winter 80% through Summer 80%): BTC bots allowed, USD bots blocked
     - Risk-Off (Summer 80% through Winter 80%): USD bots allowed, BTC bots blocked
+
+    Enabling will immediately disable restricted bot types based on current mode.
     """
     # Update the enabled setting
     await set_setting(
@@ -138,7 +183,7 @@ async def toggle_seasonality(
         "Whether seasonality-based bot management is enabled"
     )
 
-    # If enabling, record the current mode
+    # If enabling, record the current mode and auto-manage bots
     if request.enabled:
         status = await get_seasonality_status()
         await set_setting(
@@ -155,7 +200,14 @@ async def toggle_seasonality(
             "string",
             "Timestamp of last mode transition"
         )
-        logger.info(f"Seasonality enabled - current mode: {status.mode}")
+
+        # Auto-disable restricted bots
+        counts = await auto_manage_bots(db, status)
+
+        logger.info(
+            f"Seasonality enabled - mode: {status.mode}, "
+            f"disabled {counts['disabled_btc']} BTC bots, {counts['disabled_usd']} USD bots"
+        )
     else:
         logger.info("Seasonality disabled - all bot restrictions removed")
 
