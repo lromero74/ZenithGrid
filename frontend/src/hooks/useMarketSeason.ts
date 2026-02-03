@@ -76,8 +76,8 @@ export function useMarketSeason(): {
 
   // Generate a subtle header gradient based on season
   const headerGradients: Record<MarketSeason, string> = {
-    accumulation: 'from-emerald-950/20 via-slate-900 to-slate-900',
-    bull: 'from-amber-950/20 via-slate-900 to-slate-900',
+    accumulation: 'from-pink-950/20 via-slate-900 to-slate-900',
+    bull: 'from-green-950/20 via-slate-900 to-slate-900',
     distribution: 'from-orange-950/20 via-slate-900 to-slate-900',
     bear: 'from-blue-950/20 via-slate-900 to-slate-900',
   }

@@ -1,0 +1,107 @@
+# Seasonality Toggle Feature Plan
+# Status: IN PROGRESS
+# Created: 2026-02-02
+
+## Overview
+Add a "Track Seasonality" toggle to the Bots page that automatically manages bot
+activity based on market cycle position. This implements a risk-on/risk-off strategy
+tied to the crypto market seasons.
+
+## Behavior Summary
+
+### Risk-Off Mode (Summer 80% → Winter 80%)
+When market is late Summer through early/mid Winter (distribution/early bear):
+- [ ] BTC-based bots: AUTO DISABLED
+- [ ] USD-based bots: AUTO ENABLED
+- [ ] USD→BTC auto-conversion: DISABLED and LOCKED
+- [ ] Manual enable of BTC bots: BLOCKED
+- [ ] Manual disable of USD→BTC conversion lock: BLOCKED
+
+### Risk-On Mode (Winter 80% → Summer 80%)
+When market is late Winter through early/mid Summer (late bear/accumulation/bull):
+- [ ] BTC-based bots: AUTO ENABLED
+- [ ] USD-based bots: AUTO DISABLED
+- [ ] USD→BTC auto-conversion: AUTO ENABLED (user can manually disable)
+- [ ] Manual enable of USD bots: BLOCKED
+
+## Implementation Tasks
+
+### Phase 1: Backend - Settings & Models
+- [ ] Add `seasonality_enabled` boolean to user preferences/settings
+- [ ] Add `seasonality_mode` to track current mode ('risk_on' | 'risk_off' | null)
+- [ ] Add `seasonality_last_transition` timestamp to prevent repeated actions
+
+### Phase 2: Backend - Season Detection
+- [ ] Create `backend/app/services/season_detector.py`
+- [ ] Port season detection algorithm from frontend TypeScript to Python
+- [ ] Function: `get_current_season()` returns {season, progress, confidence, signals}
+- [ ] Function: `get_seasonality_mode()` returns 'risk_on' | 'risk_off' based on 80% thresholds
+
+### Phase 3: Backend - API Endpoints
+- [ ] GET `/api/settings/seasonality` - Get current seasonality status
+  - Returns: {enabled, current_season, progress, mode, btc_bots_allowed, usd_bots_allowed}
+- [ ] POST `/api/settings/seasonality` - Toggle seasonality on/off
+  - Body: {enabled: boolean}
+- [ ] Modify bot enable/disable endpoints to check seasonality restrictions
+
+### Phase 4: Backend - Auto-Management Logic
+- [ ] Add seasonality check to bot monitor background task
+- [ ] On season transition (crossing 80% threshold):
+  - Log the transition
+  - Disable/enable appropriate bots
+  - Update USD→BTC conversion setting
+- [ ] Prevent bot enable if seasonality blocks it (return 403 with reason)
+
+### Phase 5: Frontend - Bots Page UI
+- [ ] Add "Track Seasonality" toggle card at top of Bots page
+- [ ] Show current season with icon (Winter/Spring/Summer/Fall)
+- [ ] Show progress bar with 80% threshold markers
+- [ ] Show active mode: "Risk-On (BTC)" or "Risk-Off (USD)"
+- [ ] Show which bot types are currently allowed/blocked
+
+### Phase 6: Frontend - Bot Cards
+- [ ] Add visual indicator on bot cards when seasonality-controlled
+- [ ] Disable enable/disable toggle when seasonality blocks it
+- [ ] Show tooltip explaining why toggle is disabled
+
+### Phase 7: Frontend - Settings Page
+- [ ] Lock USD→BTC conversion toggle when in Risk-Off mode
+- [ ] Show indicator that seasonality is controlling this setting
+
+### Phase 8: Testing & Polish
+- [ ] Test season transitions
+- [ ] Test manual override attempts (should be blocked)
+- [ ] Test toggle on/off behavior
+- [ ] Add appropriate logging
+
+## Files to Create/Modify
+
+### New Files:
+- backend/app/services/season_detector.py
+- backend/app/routers/seasonality_router.py (or add to settings_router)
+
+### Modified Files:
+- backend/app/routers/bots_router.py (add seasonality checks)
+- backend/app/routers/settings_router.py (add seasonality endpoints)
+- backend/app/models/ (add seasonality fields)
+- frontend/src/pages/Bots.tsx (add toggle UI)
+- frontend/src/components/BotCard.tsx (add seasonality indicators)
+- frontend/src/pages/Settings.tsx (lock conversion toggle)
+
+## Season Thresholds
+
+```
+Season Cycle (clockwise):
+  Spring (Accumulation) → Summer (Bull) → Fall (Distribution) → Winter (Bear)
+
+Risk-Off triggers at: Summer progress >= 80% (late bull, entering distribution)
+Risk-On triggers at: Winter progress >= 80% (late bear, entering accumulation)
+
+Progress is 0-100 within each season.
+```
+
+## Notes
+- Seasonality toggle state persists across sessions (stored in DB)
+- When toggled OFF, all restrictions are removed immediately
+- When toggled ON, current season is evaluated and appropriate mode applied
+- User is warned before enabling if it will disable active bots

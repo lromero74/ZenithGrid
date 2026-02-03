@@ -240,13 +240,13 @@ function AppContent() {
               {/* Market Season Indicator - separate from title for better spacing */}
               {seasonInfo && (
                 <div className={`hidden lg:flex items-center space-x-1.5 px-3 py-1.5 mr-6 rounded-full border ${
-                  seasonInfo.season === 'accumulation' ? 'bg-emerald-900/30 border-emerald-700/50' :
-                  seasonInfo.season === 'bull' ? 'bg-amber-900/30 border-amber-700/50' :
+                  seasonInfo.season === 'accumulation' ? 'bg-pink-900/30 border-pink-700/50' :
+                  seasonInfo.season === 'bull' ? 'bg-green-900/30 border-green-700/50' :
                   seasonInfo.season === 'distribution' ? 'bg-orange-900/30 border-orange-700/50' :
                   'bg-blue-900/30 border-blue-700/50'
                 }`} title={`${seasonInfo.subtitle}: ${seasonInfo.description}`}>
-                  {seasonInfo.season === 'accumulation' && <Sprout className="w-4 h-4 text-emerald-400" />}
-                  {seasonInfo.season === 'bull' && <Sun className="w-4 h-4 text-amber-400" />}
+                  {seasonInfo.season === 'accumulation' && <Sprout className="w-4 h-4 text-pink-400" />}
+                  {seasonInfo.season === 'bull' && <Sun className="w-4 h-4 text-green-400" />}
                   {seasonInfo.season === 'distribution' && <Leaf className="w-4 h-4 text-orange-400" />}
                   {seasonInfo.season === 'bear' && <Snowflake className="w-4 h-4 text-blue-400" />}
                   <span className={`text-sm font-medium ${seasonInfo.color}`}>{seasonInfo.name}</span>

@@ -7,13 +7,15 @@ interface UseBotMutationsProps {
   bots: Bot[] | undefined
   setShowModal: (show: boolean) => void
   resetForm: () => void
+  onCloneSuccess?: (clonedBot: Bot) => void
 }
 
 export function useBotMutations({
   selectedAccount,
   bots,
   setShowModal,
-  resetForm
+  resetForm,
+  onCloneSuccess
 }: UseBotMutationsProps) {
   const queryClient = useQueryClient()
 
@@ -119,8 +121,12 @@ export function useBotMutations({
   // Clone bot mutation
   const cloneBot = useMutation({
     mutationFn: (id: number) => botsApi.clone(id),
-    onSuccess: () => {
+    onSuccess: (clonedBot) => {
       queryClient.invalidateQueries({ queryKey: ['bots'] })
+      // Open the cloned bot in edit modal if callback provided
+      if (onCloneSuccess) {
+        onCloneSuccess(clonedBot)
+      }
     },
   })
 

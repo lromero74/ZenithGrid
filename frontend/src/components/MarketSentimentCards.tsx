@@ -326,8 +326,8 @@ function determineMarketSeason(
       subtitle: 'Accumulation Phase',
       description: 'Smart money quietly buying. Fear dominates headlines.',
       icon: Sprout,
-      color: 'text-emerald-400',
-      bgGradient: 'from-emerald-900/30 to-green-900/20'
+      color: 'text-pink-400',
+      bgGradient: 'from-pink-900/30 to-rose-900/20'
     },
     bull: {
       season: 'bull',
@@ -335,8 +335,8 @@ function determineMarketSeason(
       subtitle: 'Bull Market',
       description: 'Prices rising, optimism growing. Momentum building.',
       icon: Sun,
-      color: 'text-amber-400',
-      bgGradient: 'from-amber-900/30 to-orange-900/20'
+      color: 'text-green-400',
+      bgGradient: 'from-green-900/30 to-emerald-900/20'
     },
     distribution: {
       season: 'distribution',
@@ -1618,18 +1618,18 @@ function SeasonCard({ seasonInfo }: { seasonInfo: SeasonInfo | null }) {
             {/* Background circle segments */}
             <circle cx="50" cy="50" r="40" fill="none" stroke="#334155" strokeWidth="8" />
 
-            {/* Season segments */}
-            <path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#10b981" strokeWidth="8" opacity="0.3" />
-            <path d="M 90 50 A 40 40 0 0 1 50 90" fill="none" stroke="#f59e0b" strokeWidth="8" opacity="0.3" />
+            {/* Season segments - colors: Spring=pink, Summer=green, Fall=orange, Winter=blue */}
+            <path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#ec4899" strokeWidth="8" opacity="0.3" />
+            <path d="M 90 50 A 40 40 0 0 1 50 90" fill="none" stroke="#22c55e" strokeWidth="8" opacity="0.3" />
             <path d="M 50 90 A 40 40 0 0 1 10 50" fill="none" stroke="#f97316" strokeWidth="8" opacity="0.3" />
             <path d="M 10 50 A 40 40 0 0 1 50 10" fill="none" stroke="#3b82f6" strokeWidth="8" opacity="0.3" />
 
             {/* Active segment highlight */}
             {seasonInfo.season === 'accumulation' && (
-              <path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#10b981" strokeWidth="8" />
+              <path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#ec4899" strokeWidth="8" />
             )}
             {seasonInfo.season === 'bull' && (
-              <path d="M 90 50 A 40 40 0 0 1 50 90" fill="none" stroke="#f59e0b" strokeWidth="8" />
+              <path d="M 90 50 A 40 40 0 0 1 50 90" fill="none" stroke="#22c55e" strokeWidth="8" />
             )}
             {seasonInfo.season === 'distribution' && (
               <path d="M 50 90 A 40 40 0 0 1 10 50" fill="none" stroke="#f97316" strokeWidth="8" />
@@ -1644,11 +1644,11 @@ function SeasonCard({ seasonInfo }: { seasonInfo: SeasonInfo | null }) {
               <circle cx="50" cy="14" r="3" className={seasonInfo.color.replace('text-', 'fill-')} />
             </g>
 
-            {/* Season labels */}
-            <text x="70" y="25" fontSize="6" fill="#10b981" textAnchor="middle">🌱</text>
-            <text x="85" y="55" fontSize="6" fill="#f59e0b" textAnchor="middle">☀️</text>
-            <text x="70" y="85" fontSize="6" fill="#f97316" textAnchor="middle">🍂</text>
-            <text x="30" y="85" fontSize="6" fill="#3b82f6" textAnchor="middle">❄️</text>
+            {/* Season labels - positioned at center of each arc quadrant */}
+            <text x="78" y="24" fontSize="8" fill="#ec4899" textAnchor="middle" dominantBaseline="middle">🌱</text>
+            <text x="78" y="78" fontSize="8" fill="#22c55e" textAnchor="middle" dominantBaseline="middle">☀️</text>
+            <text x="22" y="78" fontSize="8" fill="#f97316" textAnchor="middle" dominantBaseline="middle">🍂</text>
+            <text x="22" y="24" fontSize="8" fill="#3b82f6" textAnchor="middle" dominantBaseline="middle">❄️</text>
 
             {/* Center icon */}
             <foreignObject x="35" y="35" width="30" height="30">
@@ -1679,8 +1679,8 @@ function SeasonCard({ seasonInfo }: { seasonInfo: SeasonInfo | null }) {
           <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
             <div
               className={`h-full transition-all duration-500 ${
-                seasonInfo.season === 'accumulation' ? 'bg-emerald-500' :
-                seasonInfo.season === 'bull' ? 'bg-amber-500' :
+                seasonInfo.season === 'accumulation' ? 'bg-pink-500' :
+                seasonInfo.season === 'bull' ? 'bg-green-500' :
                 seasonInfo.season === 'distribution' ? 'bg-orange-500' :
                 'bg-blue-500'
               }`}

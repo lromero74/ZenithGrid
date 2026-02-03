@@ -108,6 +108,28 @@ function Bots() {
     setEditingBot(null)
   }
 
+  // Handle opening cloned bot in edit modal
+  const handleCloneSuccess = (clonedBot: Bot) => {
+    // Open the cloned bot in edit modal so user can review/modify
+    const productIds = (clonedBot as any).product_ids || (clonedBot.product_id ? [clonedBot.product_id] : [])
+    setEditingBot(clonedBot)
+    setFormData({
+      name: clonedBot.name,
+      description: clonedBot.description || '',
+      reserved_btc_balance: clonedBot.reserved_btc_balance || 0,
+      reserved_usd_balance: clonedBot.reserved_usd_balance || 0,
+      budget_percentage: clonedBot.budget_percentage || 0,
+      check_interval_seconds: (clonedBot as any).check_interval_seconds || 300,
+      strategy_type: clonedBot.strategy_type,
+      product_id: clonedBot.product_id,
+      product_ids: productIds,
+      split_budget_across_pairs: (clonedBot as any).split_budget_across_pairs || false,
+      strategy_config: clonedBot.strategy_config,
+      exchange_type: clonedBot.exchange_type || 'cex',
+    })
+    setShowModal(true)
+  }
+
   // Use mutations hook
   const {
     createBot,
@@ -120,7 +142,7 @@ function Bots() {
     forceRunBot,
     cancelAllPositions,
     sellAllPositions
-  } = useBotMutations({ selectedAccount, bots, setShowModal, resetForm })
+  } = useBotMutations({ selectedAccount, bots, setShowModal, resetForm, onCloneSuccess: handleCloneSuccess })
 
   // Get selected strategy definition
   const selectedStrategy = strategies.find((s) => s.id === formData.strategy_type)
