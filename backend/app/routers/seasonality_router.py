@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -188,17 +188,21 @@ async def check_bot_allowed(
         if status.btc_bots_allowed:
             return {"allowed": True, "reason": None}
         else:
+            mode_str = status.mode.replace('_', '-')
+            season_str = f"{status.season_info.name} at {status.season_info.progress:.0f}%"
             return {
                 "allowed": False,
-                "reason": f"BTC bots are blocked during {status.mode.replace('_', '-')} mode ({status.season_info.name} at {status.season_info.progress:.0f}%)"
+                "reason": f"BTC bots are blocked during {mode_str} mode ({season_str})"
             }
     elif bot_type.lower() == 'usd':
         if status.usd_bots_allowed:
             return {"allowed": True, "reason": None}
         else:
+            mode_str = status.mode.replace('_', '-')
+            season_str = f"{status.season_info.name} at {status.season_info.progress:.0f}%"
             return {
                 "allowed": False,
-                "reason": f"USD bots are blocked during {status.mode.replace('_', '-')} mode ({status.season_info.name} at {status.season_info.progress:.0f}%)"
+                "reason": f"USD bots are blocked during {mode_str} mode ({season_str})"
             }
     else:
         return {"allowed": True, "reason": None}  # Unknown type, allow by default

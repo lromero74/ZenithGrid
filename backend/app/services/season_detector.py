@@ -416,9 +416,6 @@ def get_seasonality_mode(season_info: SeasonInfo) -> tuple[SeasonalityMode, bool
     season = season_info.season
     progress = season_info.progress
 
-    # Check if we're past the 80% threshold
-    threshold_crossed = progress >= 80
-
     if season == "bull":  # Summer
         # Before 80%: Risk-On, After 80%: transition to Risk-Off
         if progress >= 80:
