@@ -167,10 +167,14 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     }
 
     audio.onerror = () => {
-      setError('Audio playback failed')
-      setIsPlaying(false)
-      setIsLoading(false)
-      stopAnimationLoop()
+      // Only set error if we have a valid blob URL audio source
+      // Ignore errors from clearing src (audio.src = '') which can trigger spurious errors
+      if (audio.src && audio.src.startsWith('blob:')) {
+        setError('Audio playback failed')
+        setIsPlaying(false)
+        setIsLoading(false)
+        stopAnimationLoop()
+      }
     }
 
     audio.onloadedmetadata = () => {
