@@ -8,8 +8,24 @@ import { useTTSSync, WordTiming } from '../pages/news/hooks/useTTSSync'
 import { markdownToPlainText } from '../pages/news/helpers'
 import { registerArticleReader, stopVideoPlayer } from './mediaCoordinator'
 
-// Available TTS voices for cycling
-const VOICE_CYCLE = ['aria', 'guy', 'jenny', 'brian', 'emma', 'andrew']
+// Available TTS voices for cycling (curated mix of accents and genders)
+const VOICE_CYCLE = [
+  // US voices
+  'aria', 'guy', 'jenny', 'brian', 'emma', 'andrew',
+  'ava', 'christopher', 'michelle', 'roger',
+  // British voices
+  'libby', 'ryan', 'sonia', 'thomas',
+  // Australian voices
+  'natasha', 'william',
+  // Canadian voices
+  'clara', 'liam',
+  // Irish voices
+  'emily', 'connor',
+  // Other English locales
+  'neerja', 'prabhat',    // Indian
+  'molly', 'mitchell',    // New Zealand
+  'leah', 'luke',         // South African
+]
 
 export interface ArticleItem {
   title: string

@@ -11,14 +11,64 @@ import { useArticleReader } from '../contexts/ArticleReaderContext'
 import { sourceColors } from './news'
 import { markdownToPlainText, scrollToArticle } from '../pages/news/helpers'
 
-// Voice options for display
-const VOICES: Record<string, { name: string; gender: string }> = {
-  aria: { name: 'Aria', gender: 'Female' },
-  guy: { name: 'Guy', gender: 'Male' },
-  jenny: { name: 'Jenny', gender: 'Female' },
-  brian: { name: 'Brian', gender: 'Male' },
-  emma: { name: 'Emma', gender: 'Female' },
-  andrew: { name: 'Andrew', gender: 'Male' },
+// Voice options for display (all English locales)
+const VOICES: Record<string, { name: string; gender: string; locale?: string }> = {
+  // US voices
+  aria: { name: 'Aria', gender: 'Female', locale: 'US' },
+  guy: { name: 'Guy', gender: 'Male', locale: 'US' },
+  jenny: { name: 'Jenny', gender: 'Female', locale: 'US' },
+  brian: { name: 'Brian', gender: 'Male', locale: 'US' },
+  emma: { name: 'Emma', gender: 'Female', locale: 'US' },
+  andrew: { name: 'Andrew', gender: 'Male', locale: 'US' },
+  ava: { name: 'Ava', gender: 'Female', locale: 'US' },
+  ana: { name: 'Ana', gender: 'Female', locale: 'US' },
+  christopher: { name: 'Christopher', gender: 'Male', locale: 'US' },
+  eric: { name: 'Eric', gender: 'Male', locale: 'US' },
+  michelle: { name: 'Michelle', gender: 'Female', locale: 'US' },
+  roger: { name: 'Roger', gender: 'Male', locale: 'US' },
+  steffan: { name: 'Steffan', gender: 'Male', locale: 'US' },
+  // British voices
+  libby: { name: 'Libby', gender: 'Female', locale: 'UK' },
+  sonia: { name: 'Sonia', gender: 'Female', locale: 'UK' },
+  ryan: { name: 'Ryan', gender: 'Male', locale: 'UK' },
+  thomas: { name: 'Thomas', gender: 'Male', locale: 'UK' },
+  maisie: { name: 'Maisie', gender: 'Female', locale: 'UK' },
+  // Australian voices
+  natasha: { name: 'Natasha', gender: 'Female', locale: 'AU' },
+  william: { name: 'William', gender: 'Male', locale: 'AU' },
+  // Canadian voices
+  clara: { name: 'Clara', gender: 'Female', locale: 'CA' },
+  liam: { name: 'Liam', gender: 'Male', locale: 'CA' },
+  // Irish voices
+  connor: { name: 'Connor', gender: 'Male', locale: 'IE' },
+  emily: { name: 'Emily', gender: 'Female', locale: 'IE' },
+  // Indian English voices
+  neerja: { name: 'Neerja', gender: 'Female', locale: 'IN' },
+  prabhat: { name: 'Prabhat', gender: 'Male', locale: 'IN' },
+  // New Zealand voices
+  mitchell: { name: 'Mitchell', gender: 'Male', locale: 'NZ' },
+  molly: { name: 'Molly', gender: 'Female', locale: 'NZ' },
+  // South African voices
+  leah: { name: 'Leah', gender: 'Female', locale: 'ZA' },
+  luke: { name: 'Luke', gender: 'Male', locale: 'ZA' },
+  // Singapore voices
+  luna: { name: 'Luna', gender: 'Female', locale: 'SG' },
+  wayne: { name: 'Wayne', gender: 'Male', locale: 'SG' },
+  // Hong Kong voices
+  sam: { name: 'Sam', gender: 'Male', locale: 'HK' },
+  yan: { name: 'Yan', gender: 'Female', locale: 'HK' },
+  // Kenya voices
+  asilia: { name: 'Asilia', gender: 'Female', locale: 'KE' },
+  chilemba: { name: 'Chilemba', gender: 'Male', locale: 'KE' },
+  // Nigeria voices
+  abeo: { name: 'Abeo', gender: 'Male', locale: 'NG' },
+  ezinne: { name: 'Ezinne', gender: 'Female', locale: 'NG' },
+  // Philippines voices
+  james: { name: 'James', gender: 'Male', locale: 'PH' },
+  rosa: { name: 'Rosa', gender: 'Female', locale: 'PH' },
+  // Tanzania voices
+  elimu: { name: 'Elimu', gender: 'Male', locale: 'TZ' },
+  imani: { name: 'Imani', gender: 'Female', locale: 'TZ' },
 }
 
 // Format seconds to MM:SS

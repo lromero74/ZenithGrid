@@ -2166,14 +2166,64 @@ async def get_article_content(url: str):
 # Text-to-Speech Endpoint
 # =============================================================================
 
-# Available voices for TTS (high-quality neural voices)
+# Available voices for TTS (high-quality neural voices from all English locales)
 TTS_VOICES = {
-    "aria": "en-US-AriaNeural",      # Female, News - default
-    "guy": "en-US-GuyNeural",        # Male, News
-    "jenny": "en-US-JennyNeural",    # Female, General
-    "brian": "en-US-BrianNeural",    # Male, Conversational
-    "emma": "en-US-EmmaMultilingualNeural",  # Female, Conversational
-    "andrew": "en-US-AndrewNeural",  # Male, Conversational
+    # US voices
+    "aria": "en-US-AriaNeural",        # Female - default
+    "guy": "en-US-GuyNeural",          # Male
+    "jenny": "en-US-JennyNeural",      # Female
+    "brian": "en-US-BrianNeural",      # Male
+    "emma": "en-US-EmmaNeural",        # Female
+    "andrew": "en-US-AndrewNeural",    # Male
+    "ava": "en-US-AvaNeural",          # Female, Expressive
+    "ana": "en-US-AnaNeural",          # Female, Cute
+    "christopher": "en-US-ChristopherNeural",  # Male, Reliable
+    "eric": "en-US-EricNeural",        # Male, Rational
+    "michelle": "en-US-MichelleNeural",  # Female, Friendly
+    "roger": "en-US-RogerNeural",      # Male, Lively
+    "steffan": "en-US-SteffanNeural",  # Male, Rational
+    # British voices
+    "libby": "en-GB-LibbyNeural",      # Female
+    "sonia": "en-GB-SoniaNeural",      # Female
+    "ryan": "en-GB-RyanNeural",        # Male
+    "thomas": "en-GB-ThomasNeural",    # Male
+    "maisie": "en-GB-MaisieNeural",    # Female (child)
+    # Australian voices
+    "natasha": "en-AU-NatashaNeural",  # Female
+    "william": "en-AU-WilliamNeural",  # Male
+    # Canadian voices
+    "clara": "en-CA-ClaraNeural",      # Female
+    "liam": "en-CA-LiamNeural",        # Male
+    # Irish voices
+    "connor": "en-IE-ConnorNeural",    # Male
+    "emily": "en-IE-EmilyNeural",      # Female
+    # Indian English voices
+    "neerja": "en-IN-NeerjaNeural",    # Female
+    "prabhat": "en-IN-PrabhatNeural",  # Male
+    # New Zealand voices
+    "mitchell": "en-NZ-MitchellNeural",  # Male
+    "molly": "en-NZ-MollyNeural",      # Female
+    # South African voices
+    "leah": "en-ZA-LeahNeural",        # Female
+    "luke": "en-ZA-LukeNeural",        # Male
+    # Singapore voices
+    "luna": "en-SG-LunaNeural",        # Female
+    "wayne": "en-SG-WayneNeural",      # Male
+    # Hong Kong voices
+    "sam": "en-HK-SamNeural",          # Male
+    "yan": "en-HK-YanNeural",          # Female
+    # Kenya voices
+    "asilia": "en-KE-AsiliaNeural",    # Female
+    "chilemba": "en-KE-ChilembaNeural",  # Male
+    # Nigeria voices
+    "abeo": "en-NG-AbeoNeural",        # Male
+    "ezinne": "en-NG-EzinneNeural",    # Female
+    # Philippines voices
+    "james": "en-PH-JamesNeural",      # Male
+    "rosa": "en-PH-RosaNeural",        # Female
+    # Tanzania voices
+    "elimu": "en-TZ-ElimuNeural",      # Male
+    "imani": "en-TZ-ImaniNeural",      # Female
 }
 
 DEFAULT_VOICE = "aria"
