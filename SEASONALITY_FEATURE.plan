@@ -26,21 +26,21 @@ When market is late Winter through early/mid Summer (late bear/accumulation/bull
 
 ## Implementation Tasks
 
-### Phase 1: Backend - Settings & Models
-- [ ] Add `seasonality_enabled` boolean to user preferences/settings
-- [ ] Add `seasonality_mode` to track current mode ('risk_on' | 'risk_off' | null)
-- [ ] Add `seasonality_last_transition` timestamp to prevent repeated actions
+### Phase 1: Backend - Settings & Models (DONE)
+- [x] Add `seasonality_enabled` boolean to user preferences/settings
+- [x] Add `seasonality_mode` to track current mode ('risk_on' | 'risk_off' | null)
+- [x] Add `seasonality_last_transition` timestamp to prevent repeated actions
 
-### Phase 2: Backend - Season Detection
-- [ ] Create `backend/app/services/season_detector.py`
-- [ ] Port season detection algorithm from frontend TypeScript to Python
-- [ ] Function: `get_current_season()` returns {season, progress, confidence, signals}
-- [ ] Function: `get_seasonality_mode()` returns 'risk_on' | 'risk_off' based on 80% thresholds
+### Phase 2: Backend - Season Detection (DONE)
+- [x] Create `backend/app/services/season_detector.py`
+- [x] Port season detection algorithm from frontend TypeScript to Python
+- [x] Function: `get_current_season()` returns {season, progress, confidence, signals}
+- [x] Function: `get_seasonality_mode()` returns 'risk_on' | 'risk_off' based on 80% thresholds
 
-### Phase 3: Backend - API Endpoints
-- [ ] GET `/api/settings/seasonality` - Get current seasonality status
+### Phase 3: Backend - API Endpoints (DONE)
+- [x] GET `/api/seasonality` - Get current seasonality status
   - Returns: {enabled, current_season, progress, mode, btc_bots_allowed, usd_bots_allowed}
-- [ ] POST `/api/settings/seasonality` - Toggle seasonality on/off
+- [x] POST `/api/seasonality` - Toggle seasonality on/off
   - Body: {enabled: boolean}
 - [ ] Modify bot enable/disable endpoints to check seasonality restrictions
 
@@ -52,12 +52,12 @@ When market is late Winter through early/mid Summer (late bear/accumulation/bull
   - Update USD→BTC conversion setting
 - [ ] Prevent bot enable if seasonality blocks it (return 403 with reason)
 
-### Phase 5: Frontend - Bots Page UI
-- [ ] Add "Track Seasonality" toggle card at top of Bots page
-- [ ] Show current season with icon (Winter/Spring/Summer/Fall)
-- [ ] Show progress bar with 80% threshold markers
-- [ ] Show active mode: "Risk-On (BTC)" or "Risk-Off (USD)"
-- [ ] Show which bot types are currently allowed/blocked
+### Phase 5: Frontend - Bots Page UI (DONE)
+- [x] Add "Track Seasonality" toggle card at top of Bots page
+- [x] Show current season with icon (Winter/Spring/Summer/Fall)
+- [x] Show progress bar with 80% threshold markers
+- [x] Show active mode: "Risk-On (BTC)" or "Risk-Off (USD)"
+- [x] Show which bot types are currently allowed/blocked
 
 ### Phase 6: Frontend - Bot Cards
 - [ ] Add visual indicator on bot cards when seasonality-controlled

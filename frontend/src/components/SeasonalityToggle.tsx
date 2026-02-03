@@ -28,6 +28,8 @@ interface SeasonalityStatus {
   usd_bots_allowed: boolean
   threshold_crossed: boolean
   last_transition: string | null
+  halving_days: number
+  cycle_position: string
 }
 
 const seasonIcons = {
@@ -127,6 +129,9 @@ export function SeasonalityToggle() {
                 <span className="text-slate-500 text-sm">({status.subtitle})</span>
               </div>
               <p className="text-slate-400 text-sm">{status.description}</p>
+              <p className="text-slate-500 text-xs mt-1">
+                {status.halving_days} days post-halving (Cycle anchored)
+              </p>
             </div>
           </div>
 

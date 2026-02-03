@@ -44,6 +44,8 @@ class SeasonalityResponse(BaseModel):
     usd_bots_allowed: bool
     threshold_crossed: bool
     last_transition: Optional[str]
+    halving_days: int  # Days since last halving
+    cycle_position: str  # Human-readable cycle position
 
 
 async def get_setting(db: AsyncSession, key: str) -> Optional[str]:
@@ -108,7 +110,9 @@ async def get_seasonality(
         btc_bots_allowed=status.btc_bots_allowed if enabled else True,  # Always allowed if disabled
         usd_bots_allowed=status.usd_bots_allowed if enabled else True,
         threshold_crossed=status.threshold_crossed,
-        last_transition=last_transition
+        last_transition=last_transition,
+        halving_days=status.season_info.halving_days,
+        cycle_position=status.season_info.cycle_position
     )
 
 
