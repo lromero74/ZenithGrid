@@ -206,9 +206,11 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     const audio = audioRef.current
     if (!audio) return
 
-    // Stop any existing playback
+    // Stop any existing playback and CLEAR the audio source
+    // This prevents stale audio from being playable via media controls
     stopAnimationLoop()
     audio.pause()
+    audio.src = ''  // Clear old audio immediately
 
     // Use override voice if provided, otherwise use current state
     const voiceToUse = overrideVoice || currentVoice
@@ -229,6 +231,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setIsReady(false)
     setCurrentWordIndex(-1)
     setCurrentTime(0)
+    setDuration(0)
+    setWords([])  // Clear words immediately to prevent stale state
+    wordsRef.current = []
 
     // Generate cache key from text + voice + rate
     const ratePercent = Math.round((playbackRate - 1) * 100)
@@ -260,10 +265,14 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
     // Need to fetch new audio
     setIsLoading(true)
-    setWords([])
 
     try {
       abortControllerRef.current = new AbortController()
+
+      // Add timeout - abort if TTS takes longer than 45 seconds
+      const timeoutId = setTimeout(() => {
+        abortControllerRef.current?.abort()
+      }, 45000)
 
       const params = new URLSearchParams({
         text,
@@ -275,6 +284,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         method: 'POST',
         signal: abortControllerRef.current.signal,
       })
+
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
         throw new Error(`TTS request failed: ${response.status}`)
@@ -303,13 +314,19 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       audio.src = audioUrl
       audio.currentTime = 0
 
-      // Wait for duration to be set
-      await new Promise<void>((resolve) => {
+      // Wait for duration to be set (with timeout)
+      await new Promise<void>((resolve, reject) => {
+        const metadataTimeout = setTimeout(() => {
+          reject(new Error('Audio metadata load timeout'))
+        }, 10000)
+
         if (audio.duration && !isNaN(audio.duration)) {
+          clearTimeout(metadataTimeout)
           setDuration(audio.duration)
           resolve()
         } else {
           const handleMetadata = () => {
+            clearTimeout(metadataTimeout)
             setDuration(audio.duration)
             audio.removeEventListener('loadedmetadata', handleMetadata)
             resolve()
@@ -339,6 +356,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
+        // Request was aborted (either by user action or timeout)
+        setError('TTS request timed out. Try again.')
+        setIsLoading(false)
         return
       }
       console.error('TTS sync error:', err)
@@ -378,6 +398,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
+      // CRITICAL: Clear the audio source to fully release the old audio
+      // This prevents AirPods/media controls from playing stale audio
+      audioRef.current.src = ''
     }
     setIsPlaying(false)
     setIsPaused(false)
@@ -385,6 +408,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setIsReady(false)
     setCurrentWordIndex(-1)
     setCurrentTime(0)
+    setDuration(0)
+    setWords([])  // Clear words to prevent stale state
+    wordsRef.current = []
     setError(null)
   }, [stopAnimationLoop])
 

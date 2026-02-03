@@ -41,6 +41,7 @@ export function ArticleReaderMiniPlayer() {
     isLoading,
     isPaused,
     isReady,
+    error,
     words,
     currentWordIndex,
     currentTime,
@@ -120,16 +121,20 @@ export function ArticleReaderMiniPlayer() {
     }
   }, [currentWordIndex, isExpanded])
 
-  // Toggle play/pause
+  // Toggle play/pause - also handles retry on error
   const togglePlayPause = useCallback(() => {
-    if (isPaused) {
+    if (error) {
+      // On error, retry the current article
+      playArticle(currentIndex)
+    } else if (isPaused) {
       resume()
     } else if (isReady) {
       play()
-    } else {
+    } else if (isPlaying) {
       pause()
     }
-  }, [isPaused, isReady, play, pause, resume])
+    // If not playing, paused, ready, or error, do nothing (prevents weird state issues)
+  }, [error, isPaused, isReady, isPlaying, play, pause, resume, playArticle, currentIndex])
 
   // Find current article - navigate to news page if needed, then scroll
   const findCurrentArticle = useCallback(() => {
@@ -619,19 +624,23 @@ export function ArticleReaderMiniPlayer() {
                   <SkipBack className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
                 </button>
 
-                {/* Play/Pause */}
+                {/* Play/Pause/Retry */}
                 <button
                   onClick={togglePlayPause}
                   disabled={isLoading}
-                  className={`flex items-center justify-center rounded-full bg-green-600 hover:bg-green-500 disabled:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
-                  title={isPaused || isReady ? "Play" : "Pause"}
+                  className={`flex items-center justify-center rounded-full ${error ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500'} disabled:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
+                  title={error ? "Retry" : isPaused || isReady ? "Play" : "Pause"}
                 >
                   {isLoading ? (
                     <div className={`animate-spin border-2 border-white border-t-transparent rounded-full ${isExpanded ? 'w-6 h-6' : 'w-4 h-4'}`} />
+                  ) : error ? (
+                    <RefreshCw className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
                   ) : isPaused || isReady ? (
                     <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
-                  ) : (
+                  ) : isPlaying ? (
                     <Pause className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
+                  ) : (
+                    <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
                   )}
                 </button>
 
