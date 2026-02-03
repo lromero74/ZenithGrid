@@ -80,6 +80,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const isAnimatingRef = useRef(false)  // Track if animation loop should run
   const cacheRef = useRef<CachedAudio | null>(null)  // Cache audio for re-play
   const currentAudioUrlRef = useRef<string | null>(null)  // Track current audio URL for cleanup
+  const requestIdRef = useRef(0)  // Counter to track current request, ignore errors from stale requests
 
   // Keep wordsRef in sync with words state
   useEffect(() => {
@@ -203,18 +204,23 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     }
   }, [playbackRate])
 
-  // Track if current request was cancelled by user (vs timeout)
-  const userCancelledRef = useRef(false)
-
   const loadAndPlay = useCallback(async (text: string, overrideVoice?: string) => {
     const audio = audioRef.current
     if (!audio) return
+
+    // Increment request ID - any errors from previous requests will be ignored
+    const thisRequestId = ++requestIdRef.current
 
     // Stop any existing playback and CLEAR the audio source
     // This prevents stale audio from being playable via media controls
     stopAnimationLoop()
     audio.pause()
     audio.src = ''  // Clear old audio immediately
+
+    // Abort any in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
 
     // Use override voice if provided, otherwise use current state
     const voiceToUse = overrideVoice || currentVoice
@@ -223,14 +229,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     if (overrideVoice && overrideVoice !== currentVoice) {
       setCurrentVoice(overrideVoice)
     }
-
-    // Mark any in-flight request as user-cancelled before aborting
-    userCancelledRef.current = true
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    // Reset for new request
-    userCancelledRef.current = false
 
     setError(null)
     setIsPlaying(false)
@@ -277,19 +275,16 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     const BACKOFF_BASE_MS = 1000  // 1s, 2s, 4s backoff
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      // Check if user cancelled while we were retrying
-      if (userCancelledRef.current) {
-        setIsLoading(false)
-        return
+      // Check if a newer request has started - if so, exit silently
+      if (thisRequestId !== requestIdRef.current) {
+        return  // Don't update any state - newer request owns it now
       }
 
       try {
         abortControllerRef.current = new AbortController()
-        let timedOut = false
 
         // Add timeout - abort if TTS takes longer than 45 seconds
         const timeoutId = setTimeout(() => {
-          timedOut = true
           abortControllerRef.current?.abort()
         }, 45000)
 
@@ -306,15 +301,27 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
         clearTimeout(timeoutId)
 
+        // Check again after async operation
+        if (thisRequestId !== requestIdRef.current) return
+
         if (!response.ok) {
           throw new Error(`TTS request failed: ${response.status}`)
         }
 
         const data: TTSSyncResponse = await response.json()
 
+        // Check again after async operation
+        if (thisRequestId !== requestIdRef.current) return
+
         // Create audio from base64
         const audioBlob = await fetch(`data:audio/mpeg;base64,${data.audio}`).then(r => r.blob())
         const audioUrl = URL.createObjectURL(audioBlob)
+
+        // Check again after async operation
+        if (thisRequestId !== requestIdRef.current) {
+          URL.revokeObjectURL(audioUrl)  // Clean up since we won't use it
+          return
+        }
 
         // Revoke old URLs
         if (cacheRef.current && cacheRef.current.audioUrl !== audioUrl) {
@@ -354,6 +361,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
           }
         })
 
+        // Check again after async operation
+        if (thisRequestId !== requestIdRef.current) return
+
         // Store in cache
         cacheRef.current = {
           cacheKey,
@@ -369,21 +379,22 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
           return
         } catch (playErr) {
           if ((playErr as Error).name === 'NotAllowedError') {
-            setIsLoading(false)
-            setIsReady(true)
+            if (thisRequestId === requestIdRef.current) {
+              setIsLoading(false)
+              setIsReady(true)
+            }
             return  // Not an error, just needs user interaction
           } else {
             throw playErr
           }
         }
       } catch (err) {
-        const isAbort = (err as Error).name === 'AbortError'
-
-        // If user cancelled (switched articles), exit silently
-        if (isAbort && userCancelledRef.current) {
-          setIsLoading(false)
+        // If a newer request started, exit silently without setting error
+        if (thisRequestId !== requestIdRef.current) {
           return
         }
+
+        const isAbort = (err as Error).name === 'AbortError'
 
         // If this was the last attempt, show error
         if (attempt === MAX_RETRIES - 1) {
@@ -426,8 +437,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
   const stop = useCallback(() => {
     stopAnimationLoop()
-    // Mark as user-cancelled so retry loop exits silently
-    userCancelledRef.current = true
+    // Increment request ID to invalidate any in-flight requests
+    requestIdRef.current++
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
