@@ -678,8 +678,14 @@ export function ArticleReaderMiniPlayer() {
                 <button
                   onClick={togglePlayPause}
                   disabled={isLoading}
-                  className={`flex items-center justify-center rounded-full ${error ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500'} disabled:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
-                  title={error ? "Retry" : isPaused || isReady ? "Play" : "Pause"}
+                  className={`flex items-center justify-center rounded-full ${
+                    isLoading
+                      ? 'bg-slate-600'  // Grey while loading
+                      : error
+                        ? 'bg-red-600 hover:bg-red-500'  // Red only when showing retry
+                        : 'bg-green-600 hover:bg-green-500'  // Green for play/pause
+                  } text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
+                  title={isLoading ? "Loading..." : error ? "Retry" : isPaused || isReady ? "Play" : "Pause"}
                 >
                   {isLoading ? (
                     <div className={`animate-spin border-2 border-white border-t-transparent rounded-full ${isExpanded ? 'w-6 h-6' : 'w-4 h-4'}`} />
