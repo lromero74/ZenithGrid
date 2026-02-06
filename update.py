@@ -9,6 +9,7 @@ Handles:
 - Service shutdown (backend and frontend)
 - Database backup
 - Running all migrations
+- pip install (when requirements.txt changes)
 - npm install (when package.json/package-lock.json changes)
 - Service restart (backend and frontend)
 
@@ -472,6 +473,23 @@ def check_npm_changes(changed_files):
     return False
 
 
+def check_pip_changes(changed_files):
+    """Check if pip dependencies need to be reinstalled.
+
+    Args:
+        changed_files: List of file paths that changed
+
+    Returns:
+        bool: True if requirements.txt changed
+    """
+    pip_files = {'backend/requirements.txt', 'requirements.txt'}
+    for filepath in changed_files:
+        filepath = filepath.replace('\\', '/')
+        if filepath in pip_files:
+            return True
+    return False
+
+
 def install_npm_dependencies(project_root, dry_run=False):
     """Install npm dependencies in the frontend directory.
 
@@ -509,6 +527,59 @@ def install_npm_dependencies(project_root, dry_run=False):
         return True
     except subprocess.CalledProcessError as e:
         print_error(f"npm install failed: {e.stderr if e.stderr else str(e)}")
+        return False
+
+
+def install_pip_dependencies(project_root, dry_run=False):
+    """Install pip dependencies in the backend virtual environment.
+
+    Args:
+        project_root: Path to project root
+        dry_run: If True, only show what would be done
+
+    Returns:
+        bool: True if successful
+    """
+    backend_dir = project_root / 'backend'
+    if not backend_dir.exists():
+        print_warning("Backend directory not found - skipping pip install")
+        return True
+
+    requirements_txt = backend_dir / 'requirements.txt'
+    if not requirements_txt.exists():
+        print_warning("requirements.txt not found - skipping pip install")
+        return True
+
+    # Find the Python interpreter in venv
+    venv_pip = backend_dir / 'venv' / 'bin' / 'pip'
+    if not venv_pip.exists():
+        print_error("Virtual environment not found. Run setup.py first.")
+        return False
+
+    if dry_run:
+        print_info("DRY RUN: Would run 'pip install -r requirements.txt' in backend/")
+        return True
+
+    try:
+        print_info("Running pip install -r requirements.txt...")
+        result = run_command(
+            f'{venv_pip} install -r requirements.txt',
+            cwd=backend_dir,
+            capture_output=True
+        )
+        if result.stdout:
+            # Show relevant lines (filter out "Requirement already satisfied")
+            lines = result.stdout.strip().split('\n')
+            new_installs = [l for l in lines if 'Successfully installed' in l or 'Installing' in l]
+            if new_installs:
+                for line in new_installs:
+                    print_info(f"  {line.strip()}")
+            else:
+                print_info("  All requirements already satisfied")
+        print_success("pip dependencies installed")
+        return True
+    except subprocess.CalledProcessError as e:
+        print_error(f"pip install failed: {e.stderr if e.stderr else str(e)}")
         return False
 
 
@@ -576,13 +647,13 @@ def git_pull(project_root, dry_run=False):
     """Pull latest changes from git.
 
     Returns:
-        tuple: (success: bool, has_changes: bool, services_to_restart: set, npm_changed: bool)
+        tuple: (success: bool, has_changes: bool, services_to_restart: set, npm_changed: bool, pip_changed: bool)
     """
     print_step(1, "Pulling latest changes from git...")
 
     if dry_run:
         print_info("DRY RUN: Would run 'git pull origin main'")
-        return True, True, {'backend', 'frontend'}, True  # Assume all in dry run
+        return True, True, {'backend', 'frontend'}, True, True  # Assume all in dry run
 
     try:
         # First fetch to see what's available
@@ -597,7 +668,7 @@ def git_pull(project_root, dry_run=False):
 
         if 'Already up to date' in result.stdout:
             print_success("Already up to date - no changes pulled")
-            return True, False, set(), False  # Success but no changes, no services to restart
+            return True, False, set(), False, False  # Success but no changes, no services to restart
 
         print_success("Successfully pulled latest changes")
         if result.stdout:
@@ -620,6 +691,9 @@ def git_pull(project_root, dry_run=False):
         # Check if npm dependencies changed
         npm_changed = check_npm_changes(changed_files)
 
+        # Check if pip dependencies changed
+        pip_changed = check_pip_changes(changed_files)
+
         if services:
             print_info(f"Services requiring restart: {', '.join(sorted(services))}")
         else:
@@ -628,11 +702,14 @@ def git_pull(project_root, dry_run=False):
         if npm_changed:
             print_info("npm dependencies changed - will run npm install")
 
-        return True, True, services, npm_changed
+        if pip_changed:
+            print_info("pip dependencies changed - will run pip install")
+
+        return True, True, services, npm_changed, pip_changed
 
     except subprocess.CalledProcessError as e:
         print_error(f"Git pull failed: {e.stderr if e.stderr else str(e)}")
-        return False, False, set(), False
+        return False, False, set(), False, False
 
 
 def stop_services(os_type, project_root, dry_run=False, services_to_stop=None):
@@ -939,12 +1016,13 @@ Examples:
     # Step 1: Git pull (unless --skip-pull)
     services_to_restart = {'backend', 'frontend'}  # Default to both
     npm_changed = True  # Default to True if skipping pull
+    pip_changed = True  # Default to True if skipping pull
     if args.skip_pull:
         print_step(1, "Skipping git pull (--skip-pull)")
         print_info("Assuming changes were already pulled manually - will restart all services")
         has_changes = True  # Assume there are changes to process
     else:
-        success, has_changes, services_to_restart, npm_changed = git_pull(project_root, args.dry_run)
+        success, has_changes, services_to_restart, npm_changed, pip_changed = git_pull(project_root, args.dry_run)
         if not success:
             print_error("Update failed at git pull step")
             sys.exit(1)
@@ -984,16 +1062,27 @@ Examples:
     else:
         print_step(4, "Skipping migrations (no backend changes)")
 
-    # Step 4.5: Install npm dependencies (only if package.json/lock changed)
+    # Step 4.5: Install pip dependencies (only if requirements.txt changed)
+    if pip_changed and 'backend' in services_to_restart:
+        print_step("4.5", "Installing pip dependencies...")
+        if not install_pip_dependencies(project_root, args.dry_run):
+            print_error("Update failed at pip install step")
+            # Try to restart services before exiting
+            start_services(os_type, project_root, args.dry_run, services_to_restart)
+            sys.exit(1)
+    elif 'backend' in services_to_restart:
+        print_step("4.5", "Skipping pip install (no requirements changes)")
+
+    # Step 4.6: Install npm dependencies (only if package.json/lock changed)
     if npm_changed and 'frontend' in services_to_restart:
-        print_step("4.5", "Installing npm dependencies...")
+        print_step("4.6", "Installing npm dependencies...")
         if not install_npm_dependencies(project_root, args.dry_run):
             print_error("Update failed at npm install step")
             # Try to restart services before exiting
             start_services(os_type, project_root, args.dry_run, services_to_restart)
             sys.exit(1)
     elif 'frontend' in services_to_restart:
-        print_step("4.5", "Skipping npm install (no package changes)")
+        print_step("4.6", "Skipping npm install (no package changes)")
 
     # Step 5: Start services (only those that need restart)
     if not start_services(os_type, project_root, args.dry_run, services_to_restart):
