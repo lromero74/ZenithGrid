@@ -827,6 +827,18 @@ class IndicatorBasedStrategy(TradingStrategy):
         max_safety_orders = self.config.get("max_safety_orders", 0)
         auto_calculate = self.config.get("auto_calculate_order_sizes", False)
 
+        # DEBUG (2026-02-06): Investigating RSI Runner Bot placing 2x base orders vs other bots
+        # RSI Runner: ~0.0002 BTC base orders (62% of budget)
+        # AI Bot Test: ~0.0001 BTC base orders (31% of budget, hitting minimum)
+        # Both have identical config: auto_calc=True, max_so=2, so_type=percentage_of_base, so_pct=100, vol_scale=2
+        # Expected multiplier=4.0, expected result=budget/4 → 0.00008 → bumped to 0.0001 minimum
+        # REMOVE THIS DEBUG LOGGING once issue is resolved
+        logger.info(f"🔍 calc_base_order_size: balance={balance:.8f}, order_type={order_type}, "
+                    f"auto_calc={auto_calculate}, max_so={max_safety_orders}, "
+                    f"so_type={self.config.get('safety_order_type')}, "
+                    f"so_pct={self.config.get('safety_order_percentage')}, "
+                    f"vol_scale={self.config.get('safety_order_volume_scale')}")
+
         if order_type == "percentage":
             # For percentage-based with auto-calculate, compute the optimal percentage
             # that ensures full budget utilization when all safety orders execute
@@ -877,9 +889,14 @@ class IndicatorBasedStrategy(TradingStrategy):
 
                     # Solve for X: total_multiplier * X = balance
                     base_order_size = balance / total_multiplier
+                    result = max(base_order_size, 0.0001)
+
+                    # DEBUG: Log result for RSI Runner 2x issue
+                    logger.info(f"🔍 calc_base_order_size RESULT (fixed SO path): "
+                                f"multiplier={total_multiplier:.2f}, raw={base_order_size:.8f}, final={result:.8f}")
 
                     # Ensure minimum order size (0.0001 BTC for Coinbase)
-                    return max(base_order_size, 0.0001)
+                    return result
                 else:
                     # Safety orders are percentage_of_base - calculate base to fit budget
                     # Calculate the total multiplier (base + all safety orders)
@@ -897,9 +914,14 @@ class IndicatorBasedStrategy(TradingStrategy):
                     # Calculate base order size that fits within budget
                     # budget = base * total_multiplier → base = budget / total_multiplier
                     base_order_size = balance / total_multiplier
+                    result = max(base_order_size, 0.0001)
+
+                    # DEBUG: Log result for RSI Runner 2x issue
+                    logger.info(f"🔍 calc_base_order_size RESULT (pct_of_base path): "
+                                f"multiplier={total_multiplier:.2f}, raw={base_order_size:.8f}, final={result:.8f}")
 
                     # Ensure minimum order size (0.0001 BTC for Coinbase)
-                    return max(base_order_size, 0.0001)
+                    return result
             else:
                 # No safety orders or no balance - use configured fixed amount
                 # FIXED: Prioritize base_order_btc over base_order_fixed for better auto-calculate support

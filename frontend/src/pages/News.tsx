@@ -159,6 +159,20 @@ export default function News() {
     return () => clearInterval(interval)
   }, [])
 
+  // Navigate to the page containing an article, then scroll to it
+  const findArticle = useCallback((articleUrl: string, addPulse = false) => {
+    const idx = filteredNews.findIndex(n => n.url === articleUrl)
+    if (idx === -1) return
+    const targetPage = Math.floor(idx / PAGE_SIZE) + 1
+    if (targetPage !== currentPage) {
+      setCurrentPage(targetPage)
+      // Wait for re-render then scroll
+      setTimeout(() => scrollToArticle(articleUrl, addPulse), 100)
+    } else {
+      scrollToArticle(articleUrl, addPulse)
+    }
+  }, [filteredNews, currentPage, setCurrentPage])
+
   // Scroll to currently playing video (centered in viewport) with pulse effect
   const scrollToPlayingVideo = () => {
     if (!currentVideo) return
@@ -340,7 +354,7 @@ export default function News() {
                       {currentArticle.title}
                     </span>
                     <button
-                      onClick={() => scrollToArticle(currentArticle.url, true)}
+                      onClick={() => findArticle(currentArticle.url, true)}
                       className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 rounded-lg text-green-400 text-sm transition-colors"
                       title="Scroll to currently reading article"
                     >
@@ -409,7 +423,7 @@ export default function News() {
                         onMouseEnter={() => {
                           setHoveredArticleIndex(idx)
                           highlightArticle(article.url)
-                          scrollToArticle(article.url, false)
+                          findArticle(article.url, false)
                         }}
                         onMouseLeave={() => {
                           setHoveredArticleIndex(null)
