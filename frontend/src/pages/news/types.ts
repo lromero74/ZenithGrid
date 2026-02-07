@@ -10,6 +10,7 @@ export interface NewsItem {
   published: string | null
   summary: string | null
   thumbnail: string | null
+  category: string
 }
 
 export interface VideoItem {
@@ -22,6 +23,42 @@ export interface VideoItem {
   published: string | null
   thumbnail: string | null
   description: string | null
+  category: string
+}
+
+export type NewsCategory =
+  | 'CryptoCurrency'
+  | 'World'
+  | 'Nation'
+  | 'Business'
+  | 'Technology'
+  | 'Entertainment'
+  | 'Sports'
+  | 'Science'
+  | 'Health'
+
+export const NEWS_CATEGORIES: NewsCategory[] = [
+  'CryptoCurrency',
+  'World',
+  'Nation',
+  'Business',
+  'Technology',
+  'Entertainment',
+  'Sports',
+  'Science',
+  'Health',
+]
+
+export const CATEGORY_COLORS: Record<string, string> = {
+  CryptoCurrency: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  World: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  Nation: 'bg-red-500/20 text-red-400 border-red-500/30',
+  Business: 'bg-green-500/20 text-green-400 border-green-500/30',
+  Technology: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  Entertainment: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  Sports: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  Science: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  Health: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
 }
 
 export interface NewsSource {

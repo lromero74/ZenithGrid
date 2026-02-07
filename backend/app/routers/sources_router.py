@@ -41,6 +41,7 @@ class SourceResponse(BaseModel):
     is_system: bool
     is_enabled: bool
     is_subscribed: bool = True  # Default to subscribed if no preference set
+    category: str = "CryptoCurrency"
 
 
 class SourceListResponse(BaseModel):
@@ -166,6 +167,7 @@ async def list_sources(
             is_system=source.is_system,
             is_enabled=source.is_enabled,
             is_subscribed=is_subscribed,
+            category=getattr(source, 'category', 'CryptoCurrency'),
         ))
 
     return SourceListResponse(sources=source_list, total=len(source_list))

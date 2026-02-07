@@ -49,6 +49,7 @@ from app.routers.news import (
     DEBT_CEILING_HISTORY,
     FEAR_GREED_CACHE_MINUTES,
     NEWS_CACHE_CHECK_MINUTES,
+    NEWS_CATEGORIES,
     NEWS_ITEM_MAX_AGE_DAYS,
     VIDEO_CACHE_CHECK_MINUTES,
     NEWS_SOURCES,
@@ -154,6 +155,7 @@ async def get_news_sources_from_db() -> Dict[str, Dict]:
             "url": s.url,
             "type": "reddit" if "reddit" in s.source_key else "rss",
             "website": s.website,
+            "category": getattr(s, 'category', 'CryptoCurrency'),
         }
         for s in sources
     }
@@ -176,6 +178,7 @@ async def get_video_sources_from_db() -> Dict[str, Dict]:
             "url": s.url,
             "website": s.website,
             "description": s.description or "",
+            "category": getattr(s, 'category', 'CryptoCurrency'),
         }
         for s in sources
     }
@@ -217,9 +220,15 @@ async def get_all_sources_from_db() -> Dict[str, List[Dict]]:
 
 
 async def get_articles_from_db(
-    db: AsyncSession, page: int = 1, page_size: int = 50
+    db: AsyncSession, page: int = 1, page_size: int = 50, category: Optional[str] = None
 ) -> tuple[List[NewsArticle], int]:
     """Get paginated news articles from database, sorted by published date.
+
+    Args:
+        db: Database session
+        page: Page number (1-indexed)
+        page_size: Number of items per page
+        category: Optional category filter (e.g., "CryptoCurrency", "Technology")
 
     Returns:
         Tuple of (articles list, total count)
@@ -228,29 +237,33 @@ async def get_articles_from_db(
 
     cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
+    # Build base query conditions
+    conditions = [NewsArticle.published_at >= cutoff]
+    if category:
+        conditions.append(NewsArticle.category == category)
+
     # Get total count
-    count_result = await db.execute(
-        select(func.count(NewsArticle.id))
-        .where(NewsArticle.published_at >= cutoff)
-    )
+    count_query = select(func.count(NewsArticle.id))
+    for condition in conditions:
+        count_query = count_query.where(condition)
+    count_result = await db.execute(count_query)
     total_count = count_result.scalar() or 0
 
     # Get paginated results
     offset = (page - 1) * page_size
-    result = await db.execute(
-        select(NewsArticle)
-        .where(NewsArticle.published_at >= cutoff)
-        .order_by(desc(NewsArticle.published_at))
-        .offset(offset)
-        .limit(page_size)
-    )
+    query = select(NewsArticle)
+    for condition in conditions:
+        query = query.where(condition)
+    query = query.order_by(desc(NewsArticle.published_at)).offset(offset).limit(page_size)
+    result = await db.execute(query)
     return list(result.scalars().all()), total_count
 
 
 async def store_article_in_db(
     db: AsyncSession,
     item: NewsItem,
-    image_data: Optional[str] = None
+    image_data: Optional[str] = None,
+    category: str = "CryptoCurrency"
 ) -> Optional[NewsArticle]:
     """Store a news article in the database. Returns None if already exists."""
     # Check if article already exists by URL
@@ -278,6 +291,7 @@ async def store_article_in_db(
         summary=item.summary,
         original_thumbnail_url=item.thumbnail,
         image_data=image_data,  # Base64 data URI
+        category=category,
         fetched_at=datetime.utcnow(),
     )
     db.add(article)
@@ -316,6 +330,7 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
         "published": article.published_at.isoformat() + "Z" if article.published_at else None,
         "summary": article.summary,
         "thumbnail": thumbnail,
+        "category": getattr(article, 'category', 'CryptoCurrency'),
     }
 
 
@@ -327,6 +342,7 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
 async def store_video_in_db(
     db: AsyncSession,
     item: VideoItem,
+    category: str = "CryptoCurrency"
 ) -> Optional[VideoArticle]:
     """Store a video article in the database. Returns None if already exists."""
     # Check if video already exists by URL
@@ -355,20 +371,31 @@ async def store_video_in_db(
         published_at=published_at,
         description=item.description,
         thumbnail_url=item.thumbnail,
+        category=category,
         fetched_at=datetime.utcnow(),
     )
     db.add(video)
     return video
 
 
-async def get_videos_from_db_list(db: AsyncSession) -> List[VideoArticle]:
-    """Get all recent videos from database within max age, sorted by published date."""
+async def get_videos_from_db_list(db: AsyncSession, category: Optional[str] = None) -> List[VideoArticle]:
+    """Get all recent videos from database within max age, sorted by published date.
+
+    Args:
+        db: Database session
+        category: Optional category filter (e.g., "CryptoCurrency")
+    """
     cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
-    result = await db.execute(
-        select(VideoArticle)
-        .where(VideoArticle.published_at >= cutoff)
-        .order_by(desc(VideoArticle.published_at))
-    )
+    conditions = [VideoArticle.published_at >= cutoff]
+    if category:
+        conditions.append(VideoArticle.category == category)
+
+    query = select(VideoArticle)
+    for condition in conditions:
+        query = query.where(condition)
+    query = query.order_by(desc(VideoArticle.published_at))
+
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
@@ -399,17 +426,22 @@ def video_to_item(video: VideoArticle, sources: Optional[Dict[str, Dict]] = None
         "published": video.published_at.isoformat() + "Z" if video.published_at else None,
         "thumbnail": video.thumbnail_url,
         "description": video.description,
+        "category": getattr(video, 'category', 'CryptoCurrency'),
     }
 
 
-async def get_videos_from_db() -> Dict[str, Any]:
-    """Get videos from database and format for API response."""
+async def get_videos_from_db(category: Optional[str] = None) -> Dict[str, Any]:
+    """Get videos from database and format for API response.
+
+    Args:
+        category: Optional category filter (e.g., "CryptoCurrency")
+    """
     # Get sources from database for name mapping
     db_sources = await get_video_sources_from_db()
     sources_to_use = db_sources if db_sources else VIDEO_SOURCES
 
     async with async_session_maker() as db:
-        videos = await get_videos_from_db_list(db)
+        videos = await get_videos_from_db_list(db, category=category)
 
     # Convert to API response format
     video_items = [video_to_item(video, sources_to_use) for video in videos]
@@ -721,6 +753,7 @@ async def fetch_youtube_videos(session: aiohttp.ClientSession, source_id: str, c
                     published=published,
                     thumbnail=thumbnail,
                     description=description,
+                    category=config.get("category", "CryptoCurrency"),
                 ))
     except asyncio.TimeoutError:
         logger.warning(f"Timeout fetching videos from {source_id}")
@@ -763,7 +796,7 @@ async def fetch_all_videos() -> Dict[str, Any]:
     new_count = 0
     async with async_session_maker() as db:
         for item in fresh_items:
-            video = await store_video_in_db(db, item)
+            video = await store_video_in_db(db, item, category=item.category)
             if video:
                 new_count += 1
         await db.commit()
@@ -836,6 +869,7 @@ async def fetch_reddit_news(session: aiohttp.ClientSession, source_id: str, conf
                     published=datetime.utcfromtimestamp(post_data.get("created_utc", 0)).isoformat() + "Z",
                     summary=post_data.get("selftext", "")[:200] if post_data.get("selftext") else None,
                     thumbnail=thumbnail,
+                    category=config.get("category", "CryptoCurrency"),
                 ))
     except asyncio.TimeoutError:
         logger.warning(f"Timeout fetching {source_id}")
@@ -945,6 +979,7 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
                     published=published,
                     summary=summary,
                     thumbnail=thumbnail,
+                    category=config.get("category", "CryptoCurrency"),
                 ))
 
             # Fetch og:image for items without thumbnails (e.g., Blockworks)
@@ -963,6 +998,7 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
                             published=item.published,
                             summary=item.summary,
                             thumbnail=og_url,
+                            category=item.category,
                         )
 
     except asyncio.TimeoutError:
@@ -1016,7 +1052,7 @@ async def fetch_all_news() -> None:
                     image_data = await download_image_as_base64(session, item.thumbnail)
 
                 # Store in database (returns None if already exists)
-                article = await store_article_in_db(db, item, image_data)
+                article = await store_article_in_db(db, item, image_data, category=item.category)
                 if article:
                     new_articles_count += 1
 
@@ -1028,8 +1064,14 @@ async def fetch_all_news() -> None:
     _last_news_refresh = datetime.utcnow()
 
 
-async def get_news_from_db(page: int = 1, page_size: int = 50) -> Dict[str, Any]:
-    """Get paginated news articles from database and format for API response."""
+async def get_news_from_db(page: int = 1, page_size: int = 50, category: Optional[str] = None) -> Dict[str, Any]:
+    """Get paginated news articles from database and format for API response.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of items per page
+        category: Optional category filter (e.g., "CryptoCurrency", "Technology")
+    """
     import math
 
     # Get sources from database for name mapping
@@ -1037,7 +1079,7 @@ async def get_news_from_db(page: int = 1, page_size: int = 50) -> Dict[str, Any]
     sources_to_use = db_sources if db_sources else NEWS_SOURCES
 
     async with async_session_maker() as db:
-        articles, total_count = await get_articles_from_db(db, page=page, page_size=page_size)
+        articles, total_count = await get_articles_from_db(db, page=page, page_size=page_size, category=category)
 
     # Convert to API response format (pass sources for name mapping)
     news_items = [article_to_news_item(article, sources_to_use) for article in articles]
@@ -1064,9 +1106,14 @@ async def get_news_from_db(page: int = 1, page_size: int = 50) -> Dict[str, Any]
 
 
 @router.get("/", response_model=NewsResponse)
-async def get_news(force_refresh: bool = False, page: int = 1, page_size: int = 50):
+async def get_news(
+    force_refresh: bool = False,
+    page: int = 1,
+    page_size: int = 50,
+    category: Optional[str] = Query(None, description="Filter by category (e.g., CryptoCurrency, Technology)")
+):
     """
-    Get crypto news from database cache with pagination.
+    Get news from database cache with pagination.
 
     News is fetched from multiple sources by background service and stored in database.
     Returns immediately from database. Background refresh runs every 30 minutes.
@@ -1075,6 +1122,7 @@ async def get_news(force_refresh: bool = False, page: int = 1, page_size: int = 
     Query params:
     - page: Page number (default: 1)
     - page_size: Items per page (default: 50, max: 100)
+    - category: Filter by category (e.g., CryptoCurrency, World, Technology)
     """
     global _last_news_refresh
 
@@ -1089,7 +1137,7 @@ async def get_news(force_refresh: bool = False, page: int = 1, page_size: int = 
 
     # Try to serve from database first (fast path)
     try:
-        data = await get_news_from_db(page=page, page_size=page_size)
+        data = await get_news_from_db(page=page, page_size=page_size, category=category)
         if data["news"] or data["total_items"] > 0:
             logger.debug(f"Serving page {page} with {len(data['news'])} news articles from database")
             return NewsResponse(**data)
@@ -1127,6 +1175,27 @@ async def get_sources():
         ],
         "note": "TikTok is not included as it lacks a public API for content. "
                 "These sources provide reliable crypto news via RSS feeds or public APIs."
+    }
+
+
+@router.get("/categories")
+async def get_categories():
+    """Get list of available news categories.
+
+    Categories:
+    - CryptoCurrency: Crypto-specific news (default)
+    - World: International news
+    - Nation: US national news
+    - Business: Business and finance
+    - Technology: Tech industry news
+    - Entertainment: Movies, TV, music
+    - Sports: Sports news
+    - Science: Scientific discoveries
+    - Health: Health and medical news
+    """
+    return {
+        "categories": NEWS_CATEGORIES,
+        "default": "CryptoCurrency",
     }
 
 
@@ -1217,13 +1286,19 @@ async def cleanup_cache():
 
 
 @router.get("/videos", response_model=VideoResponse)
-async def get_videos(force_refresh: bool = False):
+async def get_videos(
+    force_refresh: bool = False,
+    category: Optional[str] = Query(None, description="Filter by category (e.g., CryptoCurrency)")
+):
     """
-    Get crypto video news from database cache.
+    Get video news from database cache.
 
     Videos are fetched from YouTube channels by background service and stored in database.
     Returns immediately from database. Background refresh runs every 60 minutes.
     Use force_refresh=true to trigger immediate refresh (runs in background).
+
+    Query params:
+    - category: Filter by category (e.g., CryptoCurrency)
     """
     global _last_video_refresh
 
@@ -1234,7 +1309,7 @@ async def get_videos(force_refresh: bool = False):
 
     # Try to serve from database first (fast path)
     try:
-        data = await get_videos_from_db()
+        data = await get_videos_from_db(category=category)
         if data["videos"]:
             logger.debug(f"Serving {len(data['videos'])} videos from database")
             return VideoResponse(**data)

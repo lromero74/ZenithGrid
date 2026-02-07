@@ -835,6 +835,9 @@ class NewsArticle(Base):
     cached_thumbnail_path = Column(String, nullable=True)  # Deprecated: was local path
     image_data = Column(Text, nullable=True)  # Base64 data URI (e.g., "data:image/jpeg;base64,...")
 
+    # Category for filtering (like Newsmap: World, Nation, Business, Technology, etc.)
+    category = Column(String, nullable=False, default="CryptoCurrency", index=True)
+
     # Metadata
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -865,6 +868,9 @@ class VideoArticle(Base):
     description = Column(Text, nullable=True)  # Video description/summary
     thumbnail_url = Column(String, nullable=True)  # YouTube thumbnail URL (CDN)
 
+    # Category for filtering (like Newsmap: World, Nation, Business, Technology, etc.)
+    category = Column(String, nullable=False, default="CryptoCurrency", index=True)
+
     # Metadata
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -890,6 +896,7 @@ class ContentSource(Base):
     channel_id = Column(String, nullable=True)  # YouTube channel ID (null for news)
     is_system = Column(Boolean, default=True)  # System sources can't be deleted
     is_enabled = Column(Boolean, default=True, index=True)  # Globally enabled
+    category = Column(String, nullable=False, default="CryptoCurrency", index=True)  # News category
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

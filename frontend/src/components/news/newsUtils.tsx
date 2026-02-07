@@ -228,13 +228,50 @@ export function formatRelativeTime(isoString: string | null): string {
 
 // Source colors for visual distinction
 export const sourceColors: Record<string, string> = {
+  // CryptoCurrency
+  reddit_crypto: 'bg-orange-600/20 text-orange-400 border-orange-600/30',
+  reddit_bitcoin: 'bg-amber-600/20 text-amber-400 border-amber-600/30',
   bitcoin_magazine: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   beincrypto: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  blockworks: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
   coindesk: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   cointelegraph: 'bg-green-500/20 text-green-400 border-green-500/30',
   decrypt: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   theblock: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   cryptoslate: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  // World
+  reuters_world: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  bbc_world: 'bg-red-500/20 text-red-400 border-red-500/30',
+  al_jazeera: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  // Nation
+  npr_news: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  pbs_newshour: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  ap_news: 'bg-red-500/20 text-red-400 border-red-500/30',
+  // Business
+  cnbc_business: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
+  marketwatch: 'bg-green-500/20 text-green-400 border-green-500/30',
+  wsj_markets: 'bg-slate-400/20 text-slate-300 border-slate-400/30',
+  // Technology
+  techcrunch: 'bg-green-600/20 text-green-400 border-green-600/30',
+  ars_technica: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  the_verge: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  wired: 'bg-slate-300/20 text-slate-300 border-slate-300/30',
+  // Entertainment
+  variety: 'bg-red-500/20 text-red-400 border-red-500/30',
+  hollywood_reporter: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  ew: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  // Sports
+  espn: 'bg-red-600/20 text-red-400 border-red-600/30',
+  bleacher_report: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  sports_illustrated: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  // Science
+  science_daily: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  nasa: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
+  new_scientist: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+  // Health
+  medical_news: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  health_news: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  webmd: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
 }
 
 // Video channel colors
@@ -251,4 +288,6 @@ export const videoSourceColors: Record<string, string> = {
   digital_asset_news: 'bg-lime-500/20 text-lime-400 border-lime-500/30',
   paul_barron: 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30',
   lark_davis: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
+  pompliano: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
+  whiteboard_crypto: 'bg-slate-300/20 text-slate-300 border-slate-300/30',
 }

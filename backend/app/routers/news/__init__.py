@@ -67,7 +67,7 @@ from .news_models import (
     VideoItem,
     VideoResponse,
 )
-from .news_sources import NEWS_SOURCES, VIDEO_SOURCES
+from .news_sources import NEWS_CATEGORIES, NEWS_SOURCES, VIDEO_SOURCES
 
 __all__ = [
     # Data

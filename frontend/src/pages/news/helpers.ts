@@ -35,6 +35,24 @@ export const filterNewsBySource = (
 }
 
 /**
+ * Filter news items by selected category
+ * @param news - Array of news items
+ * @param category - Category to filter by ('all' shows all categories)
+ * @returns Filtered news array
+ */
+export const filterNewsByCategory = (
+  news: NewsItem[],
+  category: string | Set<string>
+): NewsItem[] => {
+  if (category instanceof Set) {
+    if (category.size === 0) return []
+    return news.filter((item) => category.has(item.category))
+  }
+  if (category === 'all' || category === 'All') return news
+  return news.filter((item) => item.category === category)
+}
+
+/**
  * Filter videos by selected source
  * @param videos - Array of video items
  * @param source - Source ID to filter by ('all' shows all sources)
@@ -46,6 +64,24 @@ export const filterVideosBySource = (
 ): VideoItem[] => {
   if (source === 'all') return videos
   return videos.filter((item) => item.source === source)
+}
+
+/**
+ * Filter videos by selected category
+ * @param videos - Array of video items
+ * @param category - Category to filter by ('all' shows all categories)
+ * @returns Filtered videos array
+ */
+export const filterVideosByCategory = (
+  videos: VideoItem[],
+  category: string | Set<string>
+): VideoItem[] => {
+  if (category instanceof Set) {
+    if (category.size === 0) return []
+    return videos.filter((item) => category.has(item.category))
+  }
+  if (category === 'all' || category === 'All') return videos
+  return videos.filter((item) => item.category === category)
 }
 
 /**

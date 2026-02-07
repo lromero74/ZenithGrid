@@ -18,7 +18,7 @@ import {
   sourceColors,
   videoSourceColors,
 } from '../components/news'
-import { NewsItem, TabType } from './news/types'
+import { NewsItem, TabType, NEWS_CATEGORIES, CATEGORY_COLORS } from './news/types'
 import { useNewsData, useArticleContent, useNewsFilters } from './news/hooks'
 import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource, cleanupArticleHoverHighlights, scrollToArticle, highlightArticle, unhighlightArticle } from './news/helpers'
 import { ArticleContent, TTSControls } from './news/components'
@@ -94,8 +94,16 @@ export default function News() {
   const {
     selectedSource,
     setSelectedSource,
+    selectedCategories,
+    toggleCategory,
+    toggleAllCategories,
+    allCategoriesSelected,
     selectedVideoSource,
     setSelectedVideoSource,
+    selectedVideoCategories,
+    toggleVideoCategory,
+    toggleAllVideoCategories,
+    allVideoCategoriesSelected,
     currentPage,
     setCurrentPage,
     filteredNews,
@@ -195,9 +203,9 @@ export default function News() {
         <div className="flex items-center space-x-3">
           <Newspaper className="w-8 h-8 text-blue-400" />
           <div>
-            <h1 className="text-2xl font-bold">Crypto News</h1>
+            <h1 className="text-2xl font-bold">News</h1>
             <p className="text-sm text-slate-400">
-              Aggregated from {availableSources.length + availableVideoSources.length} trusted sources
+              Browse {NEWS_CATEGORIES.length} categories from {availableSources.length + availableVideoSources.length} trusted sources
             </p>
           </div>
         </div>
@@ -244,11 +252,18 @@ export default function News() {
         <MarketSentimentCards />
       </div>
 
-      {/* Crypto News Section */}
+      {/* News Section */}
       <div className="space-y-4">
         <div className="flex items-center space-x-3">
           <Newspaper className="w-6 h-6 text-blue-400" />
-          <h2 className="text-xl font-bold text-white">Crypto News</h2>
+          <h2 className="text-xl font-bold text-white">
+            {allCategoriesSelected
+              ? 'All'
+              : selectedCategories.size === 1
+                ? Array.from(selectedCategories)[0]
+                : `${selectedCategories.size} Categories`
+            } News
+          </h2>
         </div>
       </div>
 
@@ -427,6 +442,34 @@ export default function News() {
             </div>
           </div>
 
+          {/* Category filter (multi-select) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-slate-400">Category:</span>
+            <button
+              onClick={toggleAllCategories}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                allCategoriesSelected
+                  ? 'bg-white/20 text-white border-white/30'
+                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
+              }`}
+            >
+              All
+            </button>
+            {NEWS_CATEGORIES.map((category) => (
+              <button
+                key={category}
+                onClick={() => toggleCategory(category)}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                  selectedCategories.has(category)
+                    ? CATEGORY_COLORS[category]
+                    : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
           {/* Source filter */}
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
@@ -438,10 +481,17 @@ export default function News() {
                   : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
               }`}
             >
-              All ({newsData?.total_items || 0})
+              All ({filteredNews.length})
             </button>
-            {availableSources.map((source) => {
-              const count = countItemsBySource(newsData?.news || [], source.id)
+            {availableSources
+              .filter(source => {
+                // Only show sources that have articles in the selected categories
+                const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
+                return categoryNews.some(n => n.source === source.id)
+              })
+              .map((source) => {
+              const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
+              const count = countItemsBySource(categoryNews, source.id)
               return (
                 <button
                   key={source.id}
@@ -665,6 +715,34 @@ export default function News() {
       {/* Videos Tab */}
       {activeTab === 'videos' && (
         <>
+          {/* Video category filter (multi-select) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-slate-400">Category:</span>
+            <button
+              onClick={toggleAllVideoCategories}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                allVideoCategoriesSelected
+                  ? 'bg-white/20 text-white border-white/30'
+                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
+              }`}
+            >
+              All
+            </button>
+            {NEWS_CATEGORIES.map((category) => (
+              <button
+                key={category}
+                onClick={() => toggleVideoCategory(category)}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                  selectedVideoCategories.has(category)
+                    ? CATEGORY_COLORS[category]
+                    : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
           {/* Video source filter */}
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
@@ -676,10 +754,16 @@ export default function News() {
                   : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
               }`}
             >
-              All ({videoData?.total_items || 0})
+              All ({filteredVideos.length})
             </button>
-            {availableVideoSources.map((source) => {
-              const count = countItemsBySource(videoData?.videos || [], source.id)
+            {availableVideoSources
+              .filter(source => {
+                const categoryVideos = (videoData?.videos || []).filter(v => selectedVideoCategories.has(v.category))
+                return categoryVideos.some(v => v.source === source.id)
+              })
+              .map((source) => {
+              const categoryVideos = (videoData?.videos || []).filter(v => selectedVideoCategories.has(v.category))
+              const count = countItemsBySource(categoryVideos, source.id)
               return (
                 <button
                   key={source.id}

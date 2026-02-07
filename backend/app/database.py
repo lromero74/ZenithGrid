@@ -32,60 +32,113 @@ async def get_db():
 
 
 # Default content sources for news and videos
+# Format: (source_key, name, type, url, website, description, channel_id, category)
 DEFAULT_CONTENT_SOURCES = [
-    # News sources
-    ('bitcoin_magazine', 'Bitcoin Magazine', 'news', 'https://bitcoinmagazine.com/feed', 'https://bitcoinmagazine.com', 'Bitcoin news, analysis & culture', None),
-    ('beincrypto', 'BeInCrypto', 'news', 'https://beincrypto.com/feed/', 'https://beincrypto.com', 'Crypto news, guides & price analysis', None),
-    ('coindesk', 'CoinDesk', 'news', 'https://www.coindesk.com/arc/outboundfeeds/rss/', 'https://www.coindesk.com', 'Crypto news & analysis', None),
-    ('cointelegraph', 'CoinTelegraph', 'news', 'https://cointelegraph.com/rss', 'https://cointelegraph.com', 'Blockchain & crypto news', None),
-    ('decrypt', 'Decrypt', 'news', 'https://decrypt.co/feed', 'https://decrypt.co', 'Web3 news & guides', None),
-    ('theblock', 'The Block', 'news', 'https://www.theblock.co/rss.xml', 'https://www.theblock.co', 'Institutional crypto news', None),
-    ('cryptoslate', 'CryptoSlate', 'news', 'https://cryptoslate.com/feed/', 'https://cryptoslate.com', 'Crypto news & data', None),
-    # Video sources
-    ('coin_bureau', 'Coin Bureau', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw', 'https://www.youtube.com/@CoinBureau', 'Educational crypto content & analysis', 'UCqK_GSMbpiV8spgD3ZGloSw'),
-    ('benjamin_cowen', 'Benjamin Cowen', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCRvqjQPSeaWn-uEx-w0XOIg', 'https://www.youtube.com/@intothecryptoverse', 'Technical analysis & market cycles', 'UCRvqjQPSeaWn-uEx-w0XOIg'),
-    ('altcoin_daily', 'Altcoin Daily', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCbLhGKVY-bJPcawebgtNfbw', 'https://www.youtube.com/@AltcoinDaily', 'Daily crypto news & updates', 'UCbLhGKVY-bJPcawebgtNfbw'),
-    ('bankless', 'Bankless', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCAl9Ld79qaZxp9JzEOwd3aA', 'https://www.youtube.com/@Bankless', 'Ethereum & DeFi ecosystem', 'UCAl9Ld79qaZxp9JzEOwd3aA'),
-    ('the_defiant', 'The Defiant', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCL0J4MLEdLP0-UyLu0hCktg', 'https://www.youtube.com/@TheDefiant', 'DeFi news & interviews', 'UCL0J4MLEdLP0-UyLu0hCktg'),
-    ('crypto_banter', 'Crypto Banter', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCN9Nj4tjXbVTLYWN0EKly_Q', 'https://www.youtube.com/@CryptoBanter', 'Live crypto shows & trading', 'UCN9Nj4tjXbVTLYWN0EKly_Q'),
-    ('datadash', 'DataDash', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCCatR7nWbYrkVXdxXb4cGXw', 'https://www.youtube.com/@DataDash', 'Macro markets & crypto analysis', 'UCCatR7nWbYrkVXdxXb4cGXw'),
-    ('cryptosrus', 'CryptosRUs', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCI7M65p3A-D3P4v5qW8POxQ', 'https://www.youtube.com/@CryptosRUs', 'Market analysis & project reviews', 'UCI7M65p3A-D3P4v5qW8POxQ'),
-    ('the_moon', 'The Moon', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCc4Rz_T9Sb1w5rqqo9pL1Og', 'https://www.youtube.com/@TheMoonCarl', 'Daily Bitcoin analysis & news', 'UCc4Rz_T9Sb1w5rqqo9pL1Og'),
-    ('digital_asset_news', 'Digital Asset News', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCJgHxpqfhWEEjYH9cLXqhIQ', 'https://www.youtube.com/@DigitalAssetNews', 'Bite-sized crypto news updates', 'UCJgHxpqfhWEEjYH9cLXqhIQ'),
-    ('paul_barron', 'Paul Barron Network', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC4VPa7EOvObpyCRI4YKRQRw', 'https://www.youtube.com/@paulbarronnetwork', 'Tech, AI & crypto intersection', 'UC4VPa7EOvObpyCRI4YKRQRw'),
-    ('lark_davis', 'Lark Davis', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCl2oCaw8hdR_kbqyqd2klIA', 'https://www.youtube.com/@TheCryptoLark', 'Altcoin analysis & opportunities', 'UCl2oCaw8hdR_kbqyqd2klIA'),
+    # ===== CryptoCurrency =====
+    ('reddit_crypto', 'Reddit r/CryptoCurrency', 'news', 'https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15', 'https://www.reddit.com/r/CryptoCurrency', 'Community-driven crypto discussion', None, 'CryptoCurrency'),
+    ('reddit_bitcoin', 'Reddit r/Bitcoin', 'news', 'https://www.reddit.com/r/Bitcoin/hot.json?limit=10', 'https://www.reddit.com/r/Bitcoin', 'Bitcoin-focused community news', None, 'CryptoCurrency'),
+    ('bitcoin_magazine', 'Bitcoin Magazine', 'news', 'https://bitcoinmagazine.com/feed', 'https://bitcoinmagazine.com', 'Bitcoin news, analysis & culture', None, 'CryptoCurrency'),
+    ('beincrypto', 'BeInCrypto', 'news', 'https://beincrypto.com/feed/', 'https://beincrypto.com', 'Crypto news, guides & price analysis', None, 'CryptoCurrency'),
+    ('blockworks', 'Blockworks', 'news', 'https://blockworks.co/feed', 'https://blockworks.co', 'Crypto & DeFi institutional news', None, 'CryptoCurrency'),
+    ('coindesk', 'CoinDesk', 'news', 'https://www.coindesk.com/arc/outboundfeeds/rss/', 'https://www.coindesk.com', 'Crypto news & analysis', None, 'CryptoCurrency'),
+    ('cointelegraph', 'CoinTelegraph', 'news', 'https://cointelegraph.com/rss', 'https://cointelegraph.com', 'Blockchain & crypto news', None, 'CryptoCurrency'),
+    ('decrypt', 'Decrypt', 'news', 'https://decrypt.co/feed', 'https://decrypt.co', 'Web3 news & guides', None, 'CryptoCurrency'),
+    ('theblock', 'The Block', 'news', 'https://www.theblock.co/rss.xml', 'https://www.theblock.co', 'Institutional crypto news', None, 'CryptoCurrency'),
+    ('cryptoslate', 'CryptoSlate', 'news', 'https://cryptoslate.com/feed/', 'https://cryptoslate.com', 'Crypto news & data', None, 'CryptoCurrency'),
+    # CryptoCurrency video sources
+    ('coin_bureau', 'Coin Bureau', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw', 'https://www.youtube.com/@CoinBureau', 'Educational crypto content & analysis', 'UCqK_GSMbpiV8spgD3ZGloSw', 'CryptoCurrency'),
+    ('benjamin_cowen', 'Benjamin Cowen', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCRvqjQPSeaWn-uEx-w0XOIg', 'https://www.youtube.com/@intothecryptoverse', 'Technical analysis & market cycles', 'UCRvqjQPSeaWn-uEx-w0XOIg', 'CryptoCurrency'),
+    ('altcoin_daily', 'Altcoin Daily', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCbLhGKVY-bJPcawebgtNfbw', 'https://www.youtube.com/@AltcoinDaily', 'Daily crypto news & updates', 'UCbLhGKVY-bJPcawebgtNfbw', 'CryptoCurrency'),
+    ('bankless', 'Bankless', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCAl9Ld79qaZxp9JzEOwd3aA', 'https://www.youtube.com/@Bankless', 'Ethereum & DeFi ecosystem', 'UCAl9Ld79qaZxp9JzEOwd3aA', 'CryptoCurrency'),
+    ('the_defiant', 'The Defiant', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCL0J4MLEdLP0-UyLu0hCktg', 'https://www.youtube.com/@TheDefiant', 'DeFi news & interviews', 'UCL0J4MLEdLP0-UyLu0hCktg', 'CryptoCurrency'),
+    ('crypto_banter', 'Crypto Banter', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCN9Nj4tjXbVTLYWN0EKly_Q', 'https://www.youtube.com/@CryptoBanter', 'Live crypto shows & trading', 'UCN9Nj4tjXbVTLYWN0EKly_Q', 'CryptoCurrency'),
+    ('datadash', 'DataDash', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCCatR7nWbYrkVXdxXb4cGXw', 'https://www.youtube.com/@DataDash', 'Macro markets & crypto analysis', 'UCCatR7nWbYrkVXdxXb4cGXw', 'CryptoCurrency'),
+    ('cryptosrus', 'CryptosRUs', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCI7M65p3A-D3P4v5qW8POxQ', 'https://www.youtube.com/@CryptosRUs', 'Market analysis & project reviews', 'UCI7M65p3A-D3P4v5qW8POxQ', 'CryptoCurrency'),
+    ('the_moon', 'The Moon', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCc4Rz_T9Sb1w5rqqo9pL1Og', 'https://www.youtube.com/@TheMoonCarl', 'Daily Bitcoin analysis & news', 'UCc4Rz_T9Sb1w5rqqo9pL1Og', 'CryptoCurrency'),
+    ('digital_asset_news', 'Digital Asset News', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCJgHxpqfhWEEjYH9cLXqhIQ', 'https://www.youtube.com/@DigitalAssetNews', 'Bite-sized crypto news updates', 'UCJgHxpqfhWEEjYH9cLXqhIQ', 'CryptoCurrency'),
+    ('paul_barron', 'Paul Barron Network', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC4VPa7EOvObpyCRI4YKRQRw', 'https://www.youtube.com/@paulbarronnetwork', 'Tech, AI & crypto intersection', 'UC4VPa7EOvObpyCRI4YKRQRw', 'CryptoCurrency'),
+    ('lark_davis', 'Lark Davis', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCl2oCaw8hdR_kbqyqd2klIA', 'https://www.youtube.com/@TheCryptoLark', 'Altcoin analysis & opportunities', 'UCl2oCaw8hdR_kbqyqd2klIA', 'CryptoCurrency'),
+    ('pompliano', 'Anthony Pompliano', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCevXpeL8cNyAnww-NqJ4m2w', 'https://www.youtube.com/@AnthonyPompliano', 'Bitcoin advocate & market commentary', 'UCevXpeL8cNyAnww-NqJ4m2w', 'CryptoCurrency'),
+    ('whiteboard_crypto', 'Whiteboard Crypto', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCsYYksPHiGqXHPoHI-fm5sg', 'https://www.youtube.com/@WhiteboardCrypto', 'Educational crypto explainers', 'UCsYYksPHiGqXHPoHI-fm5sg', 'CryptoCurrency'),
+    # ===== World =====
+    ('reuters_world', 'Reuters World', 'news', 'https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best', 'https://www.reuters.com/world', 'International breaking news', None, 'World'),
+    ('bbc_world', 'BBC World', 'news', 'https://feeds.bbci.co.uk/news/world/rss.xml', 'https://www.bbc.com/news/world', 'Global news from BBC', None, 'World'),
+    ('al_jazeera', 'Al Jazeera', 'news', 'https://www.aljazeera.com/xml/rss/all.xml', 'https://www.aljazeera.com', 'International news coverage', None, 'World'),
+    # ===== Nation (US) =====
+    ('npr_news', 'NPR News', 'news', 'https://feeds.npr.org/1001/rss.xml', 'https://www.npr.org', 'US national public radio news', None, 'Nation'),
+    ('pbs_newshour', 'PBS NewsHour', 'news', 'https://www.pbs.org/newshour/feeds/rss/headlines', 'https://www.pbs.org/newshour', 'In-depth US news', None, 'Nation'),
+    ('ap_news', 'AP News', 'news', 'https://apnews.com/apf-topnews/feed', 'https://apnews.com', 'Associated Press top stories', None, 'Nation'),
+    # ===== Business =====
+    ('cnbc_business', 'CNBC', 'news', 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147', 'https://www.cnbc.com', 'Business & financial news', None, 'Business'),
+    ('marketwatch', 'MarketWatch', 'news', 'https://www.marketwatch.com/rss/topstories', 'https://www.marketwatch.com', 'Financial markets & investing', None, 'Business'),
+    ('wsj_markets', 'WSJ Markets', 'news', 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml', 'https://www.wsj.com/news/markets', 'Wall Street Journal market news', None, 'Business'),
+    # ===== Technology =====
+    ('techcrunch', 'TechCrunch', 'news', 'https://techcrunch.com/feed/', 'https://techcrunch.com', 'Startup & technology news', None, 'Technology'),
+    ('ars_technica', 'Ars Technica', 'news', 'https://feeds.arstechnica.com/arstechnica/index', 'https://arstechnica.com', 'Technology news & analysis', None, 'Technology'),
+    ('the_verge', 'The Verge', 'news', 'https://www.theverge.com/rss/index.xml', 'https://www.theverge.com', 'Tech, science & culture', None, 'Technology'),
+    ('wired', 'Wired', 'news', 'https://www.wired.com/feed/rss', 'https://www.wired.com', 'Technology & future trends', None, 'Technology'),
+    # ===== Entertainment =====
+    ('variety', 'Variety', 'news', 'https://variety.com/feed/', 'https://variety.com', 'Entertainment industry news', None, 'Entertainment'),
+    ('hollywood_reporter', 'Hollywood Reporter', 'news', 'https://www.hollywoodreporter.com/feed/', 'https://www.hollywoodreporter.com', 'Movies, TV & entertainment', None, 'Entertainment'),
+    ('ew', 'Entertainment Weekly', 'news', 'https://ew.com/feed/', 'https://ew.com', 'Pop culture & entertainment', None, 'Entertainment'),
+    # ===== Sports =====
+    ('espn', 'ESPN', 'news', 'https://www.espn.com/espn/rss/news', 'https://www.espn.com', 'Sports news & scores', None, 'Sports'),
+    ('bleacher_report', 'Bleacher Report', 'news', 'https://bleacherreport.com/articles/feed', 'https://bleacherreport.com', 'Sports news & highlights', None, 'Sports'),
+    ('sports_illustrated', 'Sports Illustrated', 'news', 'https://www.si.com/rss/si_topstories.rss', 'https://www.si.com', 'Sports journalism', None, 'Sports'),
+    # ===== Science =====
+    ('science_daily', 'Science Daily', 'news', 'https://www.sciencedaily.com/rss/all.xml', 'https://www.sciencedaily.com', 'Breaking science news', None, 'Science'),
+    ('nasa', 'NASA', 'news', 'https://www.nasa.gov/rss/dyn/breaking_news.rss', 'https://www.nasa.gov', 'Space & science updates', None, 'Science'),
+    ('new_scientist', 'New Scientist', 'news', 'https://www.newscientist.com/feed/home/', 'https://www.newscientist.com', 'Science & technology news', None, 'Science'),
+    # ===== Health =====
+    ('medical_news', 'Medical News Today', 'news', 'https://www.medicalnewstoday.com/rss', 'https://www.medicalnewstoday.com', 'Health & medical news', None, 'Health'),
+    ('health_news', 'Healthline', 'news', 'https://www.healthline.com/rss', 'https://www.healthline.com', 'Health information & wellness', None, 'Health'),
+    ('webmd', 'WebMD', 'news', 'https://rssfeeds.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC', 'https://www.webmd.com', 'Health news & advice', None, 'Health'),
 ]
 
 
 async def seed_default_sources():
-    """Seed default content sources if table is empty."""
+    """Seed default content sources, adding any missing sources."""
     from app.models import ContentSource
 
     async with async_session_maker() as db:
-        # Check if any sources exist
-        result = await db.execute(select(ContentSource).limit(1))
-        if result.scalars().first():
-            return  # Already seeded
+        # Get existing source keys
+        result = await db.execute(select(ContentSource.source_key))
+        existing_keys = set(result.scalars().all())
 
-        # Insert default sources
+        # Insert missing sources and update category on existing ones
         added = 0
-        for source_key, name, source_type, url, website, description, channel_id in DEFAULT_CONTENT_SOURCES:
-            source = ContentSource(
-                source_key=source_key,
-                name=name,
-                type=source_type,
-                url=url,
-                website=website,
-                description=description,
-                channel_id=channel_id,
-                is_system=True,
-                is_enabled=True,
-            )
-            db.add(source)
-            added += 1
+        updated = 0
+        for source_key, name, source_type, url, website, description, channel_id, category in DEFAULT_CONTENT_SOURCES:
+            if source_key not in existing_keys:
+                source = ContentSource(
+                    source_key=source_key,
+                    name=name,
+                    type=source_type,
+                    url=url,
+                    website=website,
+                    description=description,
+                    channel_id=channel_id,
+                    is_system=True,
+                    is_enabled=True,
+                    category=category,
+                )
+                db.add(source)
+                added += 1
+            else:
+                # Update category on existing sources
+                result = await db.execute(
+                    select(ContentSource).where(ContentSource.source_key == source_key)
+                )
+                existing = result.scalars().first()
+                if existing and existing.category != category:
+                    existing.category = category
+                    updated += 1
 
         await db.commit()
-        logger.info(f"Seeded {added} default content sources")
+        if added > 0:
+            logger.info(f"Seeded {added} new content sources")
+        if updated > 0:
+            logger.info(f"Updated category on {updated} existing sources")
 
 
 # Default coin categories from AI review (352 coins)

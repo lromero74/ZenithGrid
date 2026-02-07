@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
-import { X, Newspaper, Video, Check, Loader2, ExternalLink } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { X, Newspaper, Video, Check, Loader2, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react'
 import { sourceColors, videoSourceColors } from './newsUtils'
 import { useAuth } from '../../contexts/AuthContext'
+import { CATEGORY_COLORS, NewsCategory } from '../../pages/news/types'
 
 interface ContentSource {
   id: number
@@ -15,6 +16,7 @@ interface ContentSource {
   is_system: boolean
   is_enabled: boolean
   is_subscribed: boolean
+  category: string
 }
 
 interface SourceSubscriptionsModalProps {
@@ -29,6 +31,7 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
   const [error, setError] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<'news' | 'video'>('news')
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
 
   // Fetch sources on mount
   useEffect(() => {
@@ -82,11 +85,66 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
     }
   }
 
+  const toggleCategoryCollapse = (category: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(category)) {
+        next.delete(category)
+      } else {
+        next.add(category)
+      }
+      return next
+    })
+  }
+
+  const toggleAllInCategory = async (category: string, subscribe: boolean) => {
+    const categorySources = currentSources.filter(s => s.category === category)
+    const toToggle = categorySources.filter(s => s.is_subscribed !== subscribe)
+    if (toToggle.length === 0) return
+
+    const token = getAccessToken()
+    for (const source of toToggle) {
+      try {
+        const endpoint = subscribe
+          ? `/api/sources/${source.id}/subscribe`
+          : `/api/sources/${source.id}/unsubscribe`
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        })
+        if (response.ok) {
+          setSources(prev => prev.map(s =>
+            s.id === source.id ? { ...s, is_subscribed: subscribe } : s
+          ))
+        }
+      } catch {
+        // Continue with remaining sources
+      }
+    }
+  }
+
   if (!isOpen) return null
 
   const newsSources = sources.filter(s => s.type === 'news')
   const videoSources = sources.filter(s => s.type === 'video')
   const currentSources = activeTab === 'news' ? newsSources : videoSources
+
+  // Group sources by category
+  const groupedSources = useMemo(() => {
+    const groups: Record<string, ContentSource[]> = {}
+    for (const source of currentSources) {
+      const cat = source.category || 'CryptoCurrency'
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(source)
+    }
+    // Sort categories: CryptoCurrency first, then alphabetically
+    const sortedCategories = Object.keys(groups).sort((a, b) => {
+      if (a === 'CryptoCurrency') return -1
+      if (b === 'CryptoCurrency') return 1
+      return a.localeCompare(b)
+    })
+    return sortedCategories.map(cat => ({ category: cat, sources: groups[cat] }))
+  }, [currentSources])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -155,63 +213,116 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
               </button>
             </div>
           ) : (
-            <div className="space-y-2">
-              {currentSources.map(source => {
-                const colorClass = activeTab === 'news'
-                  ? sourceColors[source.source_key] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
-                  : videoSourceColors[source.source_key] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+            <div className="space-y-4">
+              {groupedSources.map(({ category, sources: categorySources }) => {
+                const isCollapsed = collapsedCategories.has(category)
+                const subscribedCount = categorySources.filter(s => s.is_subscribed).length
+                const allSubscribed = subscribedCount === categorySources.length
+                const noneSubscribed = subscribedCount === 0
+                const categoryColor = CATEGORY_COLORS[category as NewsCategory] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
 
                 return (
-                  <div
-                    key={source.id}
-                    className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"
-                  >
-                    <div className="flex items-center space-x-3 flex-1 min-w-0">
-                      <div className={`px-2 py-1 rounded text-xs border ${colorClass}`}>
-                        {source.name}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        {source.description && (
-                          <p className="text-sm text-slate-400 truncate">
-                            {source.description}
-                          </p>
-                        )}
-                      </div>
-                      {source.website && (
-                        <a
-                          href={source.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 hover:bg-slate-600 rounded transition-colors"
-                          onClick={(e) => e.stopPropagation()}
+                  <div key={category} className="rounded-lg border border-slate-700 overflow-hidden">
+                    {/* Category header */}
+                    <div className="flex items-center justify-between px-3 py-2.5 bg-slate-700/50">
+                      <button
+                        onClick={() => toggleCategoryCollapse(category)}
+                        className="flex items-center space-x-2 flex-1 text-left"
+                      >
+                        {isCollapsed
+                          ? <ChevronRight className="w-4 h-4 text-slate-400" />
+                          : <ChevronDown className="w-4 h-4 text-slate-400" />
+                        }
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium border ${categoryColor}`}>
+                          {category}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {subscribedCount}/{categorySources.length} subscribed
+                        </span>
+                      </button>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => toggleAllInCategory(category, true)}
+                          disabled={allSubscribed}
+                          className="px-2 py-1 text-xs text-green-400 hover:bg-green-500/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                         >
-                          <ExternalLink className="w-4 h-4 text-slate-400" />
-                        </a>
-                      )}
+                          All
+                        </button>
+                        <span className="text-slate-600">|</span>
+                        <button
+                          onClick={() => toggleAllInCategory(category, false)}
+                          disabled={noneSubscribed}
+                          className="px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          None
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Toggle Switch */}
-                    <button
-                      onClick={() => toggleSubscription(source)}
-                      disabled={togglingId === source.id}
-                      className={`relative w-12 h-6 rounded-full transition-colors ${
-                        source.is_subscribed
-                          ? 'bg-green-500'
-                          : 'bg-slate-600'
-                      } ${togglingId === source.id ? 'opacity-50' : ''}`}
-                    >
-                      <div
-                        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                          source.is_subscribed ? 'left-6' : 'left-0.5'
-                        } flex items-center justify-center`}
-                      >
-                        {togglingId === source.id ? (
-                          <Loader2 className="w-3 h-3 text-slate-400 animate-spin" />
-                        ) : source.is_subscribed ? (
-                          <Check className="w-3 h-3 text-green-500" />
-                        ) : null}
+                    {/* Category sources */}
+                    {!isCollapsed && (
+                      <div className="divide-y divide-slate-700/50">
+                        {categorySources.map(source => {
+                          const colorClass = activeTab === 'news'
+                            ? sourceColors[source.source_key] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+                            : videoSourceColors[source.source_key] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+
+                          return (
+                            <div
+                              key={source.id}
+                              className="flex items-center justify-between px-3 py-2.5 hover:bg-slate-700/30 transition-colors"
+                            >
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                <div className={`px-2 py-0.5 rounded text-xs border whitespace-nowrap ${colorClass}`}>
+                                  {source.name}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  {source.description && (
+                                    <p className="text-xs text-slate-400 truncate">
+                                      {source.description}
+                                    </p>
+                                  )}
+                                </div>
+                                {source.website && (
+                                  <a
+                                    href={source.website}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1 hover:bg-slate-600 rounded transition-colors flex-shrink-0"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                                  </a>
+                                )}
+                              </div>
+
+                              {/* Toggle Switch */}
+                              <button
+                                onClick={() => toggleSubscription(source)}
+                                disabled={togglingId === source.id}
+                                className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-2 ${
+                                  source.is_subscribed
+                                    ? 'bg-green-500'
+                                    : 'bg-slate-600'
+                                } ${togglingId === source.id ? 'opacity-50' : ''}`}
+                              >
+                                <div
+                                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                                    source.is_subscribed ? 'left-5' : 'left-0.5'
+                                  } flex items-center justify-center`}
+                                >
+                                  {togglingId === source.id ? (
+                                    <Loader2 className="w-2.5 h-2.5 text-slate-400 animate-spin" />
+                                  ) : source.is_subscribed ? (
+                                    <Check className="w-2.5 h-2.5 text-green-500" />
+                                  ) : null}
+                                </div>
+                              </button>
+                            </div>
+                          )
+                        })}
                       </div>
-                    </button>
+                    )}
                   </div>
                 )
               })}

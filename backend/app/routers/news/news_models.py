@@ -16,6 +16,7 @@ class NewsItem(BaseModel):
     published: Optional[str] = None
     summary: Optional[str] = None
     thumbnail: Optional[str] = None
+    category: str = "CryptoCurrency"
 
 
 class VideoItem(BaseModel):
@@ -29,6 +30,7 @@ class VideoItem(BaseModel):
     published: Optional[str] = None
     thumbnail: Optional[str] = None
     description: Optional[str] = None
+    category: str = "CryptoCurrency"
 
 
 class NewsResponse(BaseModel):
