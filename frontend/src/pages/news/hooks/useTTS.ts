@@ -4,14 +4,9 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { TTS_VOICES, TTSVoice } from '../../../constants/voices'
 
-export interface TTSVoice {
-  id: string
-  name: string
-  gender: string
-  style: string
-  desc: string
-}
+export type { TTSVoice }
 
 interface UseTTSOptions {
   defaultVoice?: string
@@ -39,14 +34,6 @@ interface UseTTSReturn {
   setRate: (rate: number) => void
 }
 
-const DEFAULT_VOICES: TTSVoice[] = [
-  { id: 'aria', name: 'Aria', gender: 'Female', style: 'News', desc: 'Clear' },
-  { id: 'guy', name: 'Guy', gender: 'Male', style: 'News', desc: 'Authoritative' },
-  { id: 'jenny', name: 'Jenny', gender: 'Female', style: 'General', desc: 'Friendly' },
-  { id: 'brian', name: 'Brian', gender: 'Male', style: 'Casual', desc: 'Approachable' },
-  { id: 'emma', name: 'Emma', gender: 'Female', style: 'Casual', desc: 'Cheerful' },
-  { id: 'andrew', name: 'Andrew', gender: 'Male', style: 'Casual', desc: 'Warm' },
-]
 
 export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
   const { defaultVoice = 'aria', defaultRate = 1.0 } = options
@@ -58,7 +45,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
   const [error, setError] = useState<string | null>(null)
   const [currentVoice, setCurrentVoice] = useState(defaultVoice)
   const [playbackRate, setPlaybackRate] = useState(defaultRate)
-  const [voices] = useState<TTSVoice[]>(DEFAULT_VOICES)
+  const [voices] = useState<TTSVoice[]>(TTS_VOICES)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)

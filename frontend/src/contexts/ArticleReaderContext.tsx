@@ -7,25 +7,7 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect, Re
 import { useTTSSync, WordTiming } from '../pages/news/hooks/useTTSSync'
 import { markdownToPlainText } from '../pages/news/helpers'
 import { registerArticleReader, stopVideoPlayer } from './mediaCoordinator'
-
-// Available TTS voices for cycling (curated mix of accents and genders)
-const VOICE_CYCLE = [
-  // US voices
-  'aria', 'guy', 'jenny', 'brian', 'emma', 'andrew',
-  'ava', 'christopher', 'michelle', 'roger',
-  // British voices
-  'libby', 'ryan', 'sonia', 'thomas',
-  // Australian voices
-  'natasha', 'william',
-  // Canadian voices
-  'clara', 'liam',
-  // Irish voices
-  'emily', 'connor',
-  // Other English locales
-  'neerja', 'prabhat',    // Indian
-  'molly', 'mitchell',    // New Zealand
-  'leah', 'luke',         // South African
-]
+import { VOICE_CYCLE_IDS } from '../constants/voices'
 
 export interface ArticleItem {
   title: string
@@ -228,7 +210,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     let voiceToUse: string | undefined
     if (voiceCycleEnabled) {
       // Use position-based voice cycling: article 0 = voice 0, article 1 = voice 1, etc.
-      voiceToUse = VOICE_CYCLE[articleIndex % VOICE_CYCLE.length]
+      voiceToUse = VOICE_CYCLE_IDS[articleIndex % VOICE_CYCLE_IDS.length]
 
       // Cache this voice for the article (for display purposes)
       const newCache = { ...voiceCache, [article.url]: voiceToUse }

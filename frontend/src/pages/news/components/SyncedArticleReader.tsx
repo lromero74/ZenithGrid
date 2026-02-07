@@ -8,21 +8,12 @@ import React, { useEffect, useRef, useMemo } from 'react'
 import { Play, Pause, Square, Loader2, Volume2, RotateCcw, SkipBack, SkipForward } from 'lucide-react'
 import { useTTSSync } from '../hooks/useTTSSync'
 import { markdownToPlainText } from '../helpers'
+import { TTS_VOICES } from '../../../constants/voices'
 
 interface SyncedArticleReaderProps {
   content: string  // Markdown content
   onClose?: () => void
 }
-
-// Voice options
-const VOICES = [
-  { id: 'aria', name: 'Aria', gender: 'Female' },
-  { id: 'guy', name: 'Guy', gender: 'Male' },
-  { id: 'jenny', name: 'Jenny', gender: 'Female' },
-  { id: 'brian', name: 'Brian', gender: 'Male' },
-  { id: 'emma', name: 'Emma', gender: 'Female' },
-  { id: 'andrew', name: 'Andrew', gender: 'Male' },
-]
 
 export function SyncedArticleReader({ content, onClose: _onClose }: SyncedArticleReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -318,9 +309,9 @@ export function SyncedArticleReader({ content, onClose: _onClose }: SyncedArticl
             disabled={isPlaying || isPaused}
             className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white disabled:opacity-50"
           >
-            {VOICES.map((v) => (
+            {TTS_VOICES.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.name} ({v.gender})
+                {v.name} ({v.gender}, {v.locale})
               </option>
             ))}
           </select>
