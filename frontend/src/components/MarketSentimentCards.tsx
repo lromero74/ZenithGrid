@@ -1012,6 +1012,45 @@ function USDebtCard({
               <div className={`h-full transition-all duration-500 ${usDebtData.debt_to_gdp_ratio > 100 ? 'bg-gradient-to-r from-red-600 to-red-400' : 'bg-gradient-to-r from-yellow-600 to-yellow-400'}`} style={{ width: `${Math.min(150, usDebtData.debt_to_gdp_ratio)}%` }} />
             </div>
           </div>
+
+          {/* Projected Milestones */}
+          {(() => {
+            const m1T = calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 1)
+            const m5T = calculateDebtMilestone(liveDebt, usDebtData.debt_per_second, 5)
+            return (
+              <div className="w-full bg-slate-900/50 rounded-lg p-2 mt-2">
+                <div className="text-[10px] text-slate-500 mb-1.5 font-medium">Projected Milestones</div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-400">
+                      ${(m1T.milestone / 1_000_000_000_000).toFixed(0)}T
+                    </span>
+                    <div className="text-right">
+                      <span className="text-xs font-mono text-orange-400">
+                        {formatDebtCountdown(m1T.secondsUntil)}
+                      </span>
+                      <span className="text-[10px] text-slate-500 ml-2">
+                        {m1T.estimatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-400">
+                      ${(m5T.milestone / 1_000_000_000_000).toFixed(0)}T
+                    </span>
+                    <div className="text-right">
+                      <span className="text-xs font-mono text-orange-400">
+                        {formatDebtCountdown(m5T.secondsUntil)}
+                      </span>
+                      <span className="text-[10px] text-slate-500 ml-2">
+                        {m5T.estimatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       ) : (
         <div className="flex items-center justify-center h-32">
