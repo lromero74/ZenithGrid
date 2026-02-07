@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Bot } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
 import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard, CheckCircle } from 'lucide-react'
@@ -52,6 +52,29 @@ export function BotListItem({
   const botPairs = ((bot as any).product_ids || [bot.product_id])
   const strategyName = strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
   const aiProvider = bot.strategy_config?.ai_provider
+
+  // Ref and position for fixed-position dropdown menu
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null)
+
+  // Calculate menu position when menu opens
+  useEffect(() => {
+    if (openMenuId === bot.id && menuButtonRef.current) {
+      const rect = menuButtonRef.current.getBoundingClientRect()
+      const menuWidth = 192 // w-48 = 12rem = 192px
+      const menuHeight = 320 // approximate max height
+      const spaceBelow = window.innerHeight - rect.bottom
+      const top = spaceBelow < menuHeight
+        ? rect.top - menuHeight // flip upward
+        : rect.bottom + 4 // normal downward
+      setMenuPosition({
+        top,
+        left: rect.right - menuWidth,
+      })
+    } else {
+      setMenuPosition(null)
+    }
+  }, [openMenuId, bot.id])
 
   // State for projected PnL carousel
   const [currentTimeframeIndex, setCurrentTimeframeIndex] = useState(0)
@@ -395,6 +418,7 @@ export function BotListItem({
           {/* More Actions Menu */}
           <div className="relative">
             <button
+              ref={menuButtonRef}
               onClick={() => setOpenMenuId(openMenuId === bot.id ? null : bot.id)}
               className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
               title="More actions"
@@ -402,9 +426,12 @@ export function BotListItem({
               <MoreVertical className="w-4 h-4" />
             </button>
 
-            {/* Dropdown Menu */}
-            {openMenuId === bot.id && (
-              <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-10">
+            {/* Dropdown Menu - fixed positioning to escape overflow:hidden */}
+            {openMenuId === bot.id && menuPosition && (
+              <div
+                className="fixed w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-50"
+                style={{ top: menuPosition.top, left: menuPosition.left }}
+              >
                 <button
                   onClick={() => {
                     handleOpenEdit(bot)
