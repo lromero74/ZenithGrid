@@ -11,7 +11,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Sun, Snowflake, Leaf, Sprout, ToggleLeft, ToggleRight, AlertTriangle, TrendingUp, DollarSign } from 'lucide-react'
+import { Sun, Snowflake, Leaf, Sprout, ToggleLeft, ToggleRight, AlertTriangle, TrendingUp, DollarSign, Info } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 
 interface SeasonalityStatus {
@@ -44,6 +44,18 @@ const seasonColors = {
   bull: { text: 'text-green-400', bg: 'bg-green-500', border: 'border-green-500/50', bgMuted: 'bg-green-900/30' },
   distribution: { text: 'text-orange-400', bg: 'bg-orange-500', border: 'border-orange-500/50', bgMuted: 'bg-orange-900/30' },
   bear: { text: 'text-blue-400', bg: 'bg-blue-500', border: 'border-blue-500/50', bgMuted: 'bg-blue-900/30' },
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <div className="group relative">
+      <Info className="w-4 h-4 text-slate-500 hover:text-slate-300 cursor-help transition-colors" />
+      <div className="absolute top-full right-0 mt-2 w-64 p-2.5 bg-slate-900 border border-slate-600 rounded-lg shadow-xl text-xs text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+        <div className="absolute top-0 right-2 transform -translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900 border-l border-t border-slate-600" />
+        {text}
+      </div>
+    </div>
+  )
 }
 
 export function SeasonalityToggle() {
@@ -125,6 +137,10 @@ export function SeasonalityToggle() {
             {/* Season Details */}
             <div>
               <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-400">Cycle-Based Bot Management</span>
+                <InfoTooltip text="Automatically manages which bot types can trade based on the Bitcoin halving cycle. In Risk-On seasons (accumulation → bull), BTC-pair bots are allowed and USD conversions are paused. In Risk-Off seasons (distribution → bear), USD-pair bots are allowed and BTC bots are paused. This prevents trading against the macro trend." />
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
                 <span className={`text-lg font-semibold ${colors.text}`}>{status.season_name}</span>
                 <span className="text-slate-500 text-sm">({status.subtitle})</span>
               </div>

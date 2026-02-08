@@ -751,7 +751,7 @@ export function BotFormModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Check Interval (seconds)
+                  AI Analysis Interval (seconds)
                 </label>
                 <input
                   type="number"
@@ -772,7 +772,7 @@ export function BotFormModal({
                   placeholder="300"
                 />
                 <p className="text-xs text-slate-400 mt-1.5">
-                  How often to monitor positions<br/>
+                  How often to run AI analysis (technical checks use candle interval)<br/>
                   <span className="text-slate-500">Default: 300s (5 min) • Gemini: 1800s (30 min)</span>
                 </p>
               </div>
