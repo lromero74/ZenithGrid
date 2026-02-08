@@ -48,16 +48,51 @@ interface UseNewsFiltersProps {
 /**
  * Hook to manage news/video filtering and pagination
  */
+const STORAGE_KEY = 'zenith-news-filters'
+
+function loadSavedFilters() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function saveFilters(state: Record<string, unknown>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch { /* ignore quota errors */ }
+}
+
 export const useNewsFilters = ({
   newsData,
   videoData,
   pageSize,
 }: UseNewsFiltersProps): UseNewsFiltersReturn => {
-  const [selectedSource, setSelectedSource] = useState<string>('all')
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(() => new Set(['CryptoCurrency']))
-  const [selectedVideoSource, setSelectedVideoSource] = useState<string>('all')
-  const [selectedVideoCategories, setSelectedVideoCategories] = useState<Set<string>>(() => new Set(['CryptoCurrency']))
-  const [currentPage, setCurrentPage] = useState(1)
+  const saved = useMemo(() => loadSavedFilters(), [])
+
+  const [selectedSource, setSelectedSource] = useState<string>(saved?.selectedSource ?? 'all')
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    () => new Set(saved?.selectedCategories?.length ? saved.selectedCategories : ['CryptoCurrency'])
+  )
+  const [selectedVideoSource, setSelectedVideoSource] = useState<string>(saved?.selectedVideoSource ?? 'all')
+  const [selectedVideoCategories, setSelectedVideoCategories] = useState<Set<string>>(
+    () => new Set(saved?.selectedVideoCategories?.length ? saved.selectedVideoCategories : ['CryptoCurrency'])
+  )
+  const [currentPage, setCurrentPage] = useState(saved?.currentPage ?? 1)
+
+  // Persist filter state to localStorage
+  useEffect(() => {
+    saveFilters({
+      selectedSource,
+      selectedCategories: Array.from(selectedCategories),
+      selectedVideoSource,
+      selectedVideoCategories: Array.from(selectedVideoCategories),
+      currentPage,
+    })
+  }, [selectedSource, selectedCategories, selectedVideoSource, selectedVideoCategories, currentPage])
 
   const allCategoriesSelected = selectedCategories.size === NEWS_CATEGORIES.length
   const allVideoCategoriesSelected = selectedVideoCategories.size === NEWS_CATEGORIES.length

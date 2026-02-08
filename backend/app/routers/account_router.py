@@ -617,7 +617,8 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
         pnl_today_btc = 0.0
         pnl_today_usdc = 0.0
 
-        today = datetime.utcnow().date()
+        now = datetime.utcnow()
+        start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         for position in closed_positions:
             if position.profit_quote is not None:
@@ -632,7 +633,7 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
                     pnl_all_time_btc += position.profit_quote
 
                 # Today's PnL
-                if position.closed_at and position.closed_at.date() == today:
+                if position.closed_at and position.closed_at >= start_of_today:
                     if quote == "USD":
                         pnl_today_usd += position.profit_quote
                     elif quote == "USDC":

@@ -294,7 +294,8 @@ async def get_cex_portfolio(
 
     pnl_all_time = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
     pnl_today = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
-    today = datetime.utcnow().date()
+    now = datetime.utcnow()
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     for position in closed_positions:
         if position.profit_quote is not None:
@@ -303,7 +304,7 @@ async def get_cex_portfolio(
 
             pnl_all_time[quote_key] += position.profit_quote
 
-            if position.closed_at and position.closed_at.date() == today:
+            if position.closed_at and position.closed_at >= start_of_today:
                 pnl_today[quote_key] += position.profit_quote
 
     return {

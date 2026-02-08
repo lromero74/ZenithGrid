@@ -36,8 +36,8 @@ export const useNewsData = (): UseNewsDataReturn => {
   } = useQuery<NewsResponse>({
     queryKey: ['crypto-news'],
     queryFn: async () => {
-      // Fetch all articles (large page_size), paginate client-side for instant transitions
-      const response = await fetch('/api/news/?page=1&page_size=1000')
+      // Fetch all articles, paginate client-side for instant transitions
+      const response = await fetch('/api/news/?page=1&page_size=10000')
       if (!response.ok) throw new Error('Failed to fetch news')
       return response.json()
     },

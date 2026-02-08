@@ -26,9 +26,20 @@ import { useTTSSync } from './news/hooks'
 import { markdownToPlainText } from './news/helpers'
 
 export default function News() {
-  const [activeTab, setActiveTab] = useState<TabType>('articles')
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    try {
+      const saved = localStorage.getItem('zenith-news-active-tab')
+      if (saved === 'articles' || saved === 'videos') return saved
+    } catch { /* ignore */ }
+    return 'articles'
+  })
   const [showSourceSettings, setShowSourceSettings] = useState(false)
   const PAGE_SIZE = 50
+
+  // Persist active tab
+  useEffect(() => {
+    try { localStorage.setItem('zenith-news-active-tab', activeTab) } catch { /* ignore */ }
+  }, [activeTab])
 
   // Track which article is being previewed (null means none)
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)

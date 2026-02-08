@@ -1157,8 +1157,8 @@ async def get_news(
     """
     global _last_news_refresh
 
-    # Clamp page_size to reasonable range (allow up to 1000 for client-side pagination)
-    page_size = max(10, min(page_size, 1000))
+    # Clamp page_size minimum (no upper cap - we already prune old articles)
+    page_size = max(10, page_size)
     page = max(1, page)
 
     # If force refresh requested, trigger background fetch
