@@ -142,18 +142,18 @@ NEWS_SOURCES = {
         "website": "https://www.ft.com/markets",
         "category": "Finance",
     },
-    "yahoo_finance_news": {
-        "name": "Yahoo Finance",
-        "url": "https://finance.yahoo.com/news/rssindex",
+    "motley_fool": {
+        "name": "Motley Fool",
+        "url": "https://www.fool.com/feeds/index.aspx",
         "type": "rss",
-        "website": "https://finance.yahoo.com",
+        "website": "https://www.fool.com",
         "category": "Finance",
     },
-    "investing_com": {
-        "name": "Investing.com",
-        "url": "https://www.investing.com/rss/news.rss",
+    "the_economist_finance": {
+        "name": "The Economist",
+        "url": "https://www.economist.com/finance-and-economics/rss.xml",
         "type": "rss",
-        "website": "https://www.investing.com",
+        "website": "https://www.economist.com",
         "category": "Finance",
     },
 

@@ -1307,6 +1307,21 @@ def initialize_database(project_root):
             ('lark_davis', 'Lark Davis', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCl2oCaw8hdR_kbqyqd2klIA', 'https://www.youtube.com/@TheCryptoLark', 'Altcoin analysis & opportunities', 'UCl2oCaw8hdR_kbqyqd2klIA', 'CryptoCurrency'),
             ('pompliano', 'Anthony Pompliano', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCevXpeL8cNyAnww-NqJ4m2w', 'https://www.youtube.com/@AnthonyPompliano', 'Bitcoin advocate & market commentary', 'UCevXpeL8cNyAnww-NqJ4m2w', 'CryptoCurrency'),
             ('whiteboard_crypto', 'Whiteboard Crypto', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCsYYksPHiGqXHPoHI-fm5sg', 'https://www.youtube.com/@WhiteboardCrypto', 'Educational crypto explainers', 'UCsYYksPHiGqXHPoHI-fm5sg', 'CryptoCurrency'),
+            # ===== AI =====
+            ('reddit_artificial', 'Reddit r/artificial', 'news', 'https://www.reddit.com/r/artificial/hot.json?limit=15', 'https://www.reddit.com/r/artificial', 'AI community discussion', None, 'AI'),
+            ('openai_blog', 'OpenAI Blog', 'news', 'https://openai.com/blog/rss.xml', 'https://openai.com/blog', 'OpenAI research & announcements', None, 'AI'),
+            ('mit_tech_ai', 'MIT Tech Review AI', 'news', 'https://www.technologyreview.com/topic/artificial-intelligence/feed', 'https://www.technologyreview.com/topic/artificial-intelligence', 'MIT AI research coverage', None, 'AI'),
+            ('the_ai_beat', 'VentureBeat AI', 'news', 'https://venturebeat.com/category/ai/feed/', 'https://venturebeat.com/category/ai', 'Enterprise AI news', None, 'AI'),
+            ('two_minute_papers', 'Two Minute Papers', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg', 'https://www.youtube.com/@TwoMinutePapers', 'AI research explained in short videos', 'UCbfYPyITQ-7l4upoX8nvctg', 'AI'),
+            ('ai_explained', 'AI Explained', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw', 'https://www.youtube.com/@aiaborz', 'Clear AI news and explanations', 'UCNJ1Ymd5yFuUPtn21xtRbbw', 'AI'),
+            ('matt_wolfe', 'Matt Wolfe', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCJtUOos_MwJa_Ewii-R3cJA', 'https://www.youtube.com/@maborz', 'AI tools, news & tutorials', 'UCJtUOos_MwJa_Ewii-R3cJA', 'AI'),
+            # ===== Finance =====
+            ('reuters_finance', 'Bloomberg Markets', 'news', 'https://feeds.bloomberg.com/markets/news.rss', 'https://www.bloomberg.com/markets', 'Bloomberg financial news', None, 'Finance'),
+            ('ft_markets', 'Financial Times', 'news', 'https://www.ft.com/markets?format=rss', 'https://www.ft.com/markets', 'Financial Times market coverage', None, 'Finance'),
+            ('motley_fool', 'Motley Fool', 'news', 'https://www.fool.com/feeds/index.aspx', 'https://www.fool.com', 'Investing analysis & stock picks', None, 'Finance'),
+            ('the_economist_finance', 'The Economist', 'news', 'https://www.economist.com/finance-and-economics/rss.xml', 'https://www.economist.com', 'Finance & economics analysis', None, 'Finance'),
+            ('financial_times', 'Financial Times', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw', 'https://www.youtube.com/@FinancialTimes', 'Financial news and analysis', 'UCoUxsWakJucWg46KW5RsvPw', 'Finance'),
+            ('graham_stephan', 'Graham Stephan', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCV6KDgJskWaEckne5aPA0aQ', 'https://www.youtube.com/@GrahamStephan', 'Personal finance & investing', 'UCV6KDgJskWaEckne5aPA0aQ', 'Finance'),
             # ===== World =====
             ('guardian_world', 'The Guardian World', 'news', 'https://www.theguardian.com/world/rss', 'https://www.theguardian.com/world', 'International news coverage', None, 'World'),
             ('bbc_world', 'BBC World', 'news', 'https://feeds.bbci.co.uk/news/world/rss.xml', 'https://www.bbc.com/news/world', 'Global news from BBC', None, 'World'),

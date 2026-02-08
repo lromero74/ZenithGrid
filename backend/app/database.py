@@ -72,8 +72,8 @@ DEFAULT_CONTENT_SOURCES = [
     # ===== Finance =====
     ('reuters_finance', 'Bloomberg Markets', 'news', 'https://feeds.bloomberg.com/markets/news.rss', 'https://www.bloomberg.com/markets', 'Bloomberg financial news', None, 'Finance'),
     ('ft_markets', 'Financial Times', 'news', 'https://www.ft.com/markets?format=rss', 'https://www.ft.com/markets', 'Financial Times market coverage', None, 'Finance'),
-    ('yahoo_finance_news', 'Yahoo Finance', 'news', 'https://finance.yahoo.com/news/rssindex', 'https://finance.yahoo.com', 'Financial news & market data', None, 'Finance'),
-    ('investing_com', 'Investing.com', 'news', 'https://www.investing.com/rss/news.rss', 'https://www.investing.com', 'Markets, stocks & investing news', None, 'Finance'),
+    ('motley_fool', 'Motley Fool', 'news', 'https://www.fool.com/feeds/index.aspx', 'https://www.fool.com', 'Investing analysis & stock picks', None, 'Finance'),
+    ('the_economist_finance', 'The Economist', 'news', 'https://www.economist.com/finance-and-economics/rss.xml', 'https://www.economist.com', 'Finance & economics analysis', None, 'Finance'),
     # Finance video sources
     ('financial_times', 'Financial Times', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw', 'https://www.youtube.com/@FinancialTimes', 'Financial news and analysis', 'UCoUxsWakJucWg46KW5RsvPw', 'Finance'),
     ('graham_stephan', 'Graham Stephan', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCV6KDgJskWaEckne5aPA0aQ', 'https://www.youtube.com/@GrahamStephan', 'Personal finance & investing', 'UCV6KDgJskWaEckne5aPA0aQ', 'Finance'),
