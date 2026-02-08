@@ -256,27 +256,30 @@ export type { MarketSeason, SeasonInfo }
 // Carousel configuration
 const CARDS_VISIBLE = 3
 const AUTO_CYCLE_INTERVAL = 30000 // 30 seconds
-const ANIMATION_DURATION = 1050 // ms - slower for bowstring feel
+const ANIMATION_DURATION = 1200 // ms - bowstring feel
 const SWIPE_THRESHOLD = 50 // px minimum swipe distance
 
 // Spring animations with CSS custom properties
-// Button/auto: slow drawback -> hold tension -> snap release -> settle
+// Button/auto: slow draw (~50%) -> hold tension (~15%) -> snap release + settle (~35%)
+// Modeled on real archery: slow deliberate draw, brief anchor hold, instant release
 // Swipe: follow-through -> overshoot -> settle (no anticipation)
 const springKeyframes = `
 @keyframes slideSpringLeft {
   0% { transform: translateX(var(--from-x)); }
-  17% { transform: translateX(calc(var(--from-x) + 3.5%)); }
-  34% { transform: translateX(calc(var(--from-x) + 3.5%)); }
-  60% { transform: translateX(calc(var(--to-x) - 2%)); }
-  80% { transform: translateX(calc(var(--to-x) + 0.5%)); }
+  15% { transform: translateX(calc(var(--from-x) + 1.5%)); }
+  40% { transform: translateX(calc(var(--from-x) + 3.5%)); }
+  52% { transform: translateX(calc(var(--from-x) + 3.5%)); }
+  72% { transform: translateX(calc(var(--to-x) - 2%)); }
+  86% { transform: translateX(calc(var(--to-x) + 0.5%)); }
   100% { transform: translateX(var(--to-x)); }
 }
 @keyframes slideSpringRight {
   0% { transform: translateX(var(--from-x)); }
-  17% { transform: translateX(calc(var(--from-x) - 3.5%)); }
-  34% { transform: translateX(calc(var(--from-x) - 3.5%)); }
-  60% { transform: translateX(calc(var(--to-x) + 2%)); }
-  80% { transform: translateX(calc(var(--to-x) - 0.5%)); }
+  15% { transform: translateX(calc(var(--from-x) - 1.5%)); }
+  40% { transform: translateX(calc(var(--from-x) - 3.5%)); }
+  52% { transform: translateX(calc(var(--from-x) - 3.5%)); }
+  72% { transform: translateX(calc(var(--to-x) + 2%)); }
+  86% { transform: translateX(calc(var(--to-x) - 0.5%)); }
   100% { transform: translateX(var(--to-x)); }
 }
 @keyframes slideSwipeLeft {
@@ -776,7 +779,7 @@ export function MarketSentimentCards() {
     return {
       '--from-x': fromX,
       '--to-x': toX,
-      animation: `${animName} ${ANIMATION_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`,
+      animation: `${animName} ${ANIMATION_DURATION}ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards`,
     } as React.CSSProperties
   }
 
