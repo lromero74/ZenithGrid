@@ -28,10 +28,10 @@ export const cleanupHoverHighlights = (): void => {
  */
 export const filterNewsBySource = (
   news: NewsItem[],
-  source: string
+  sources: Set<string>
 ): NewsItem[] => {
-  if (source === 'all') return news
-  return news.filter((item) => item.source === source)
+  if (sources.size === 0) return news
+  return news.filter((item) => sources.has(item.source))
 }
 
 /**
@@ -60,10 +60,10 @@ export const filterNewsByCategory = (
  */
 export const filterVideosBySource = (
   videos: VideoItem[],
-  source: string
+  sources: Set<string>
 ): VideoItem[] => {
-  if (source === 'all') return videos
-  return videos.filter((item) => item.source === source)
+  if (sources.size === 0) return videos
+  return videos.filter((item) => sources.has(item.source))
 }
 
 /**

@@ -103,14 +103,18 @@ export default function News() {
 
   // Filtering and pagination
   const {
-    selectedSource,
-    setSelectedSource,
+    selectedSources,
+    toggleSource,
+    toggleAllSources,
+    allSourcesSelected,
     selectedCategories,
     toggleCategory,
     toggleAllCategories,
     allCategoriesSelected,
-    selectedVideoSource,
-    setSelectedVideoSource,
+    selectedVideoSources,
+    toggleVideoSource,
+    toggleAllVideoSources,
+    allVideoSourcesSelected,
     selectedVideoCategories,
     toggleVideoCategory,
     toggleAllVideoCategories,
@@ -495,18 +499,18 @@ export default function News() {
             ))}
           </div>
 
-          {/* Source filter */}
+          {/* Source filter (multi-select) */}
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
             <button
-              onClick={() => { setSelectedSource('all'); setCurrentPage(1) }}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                selectedSource === 'all'
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+              onClick={() => toggleAllSources()}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                allSourcesSelected
+                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
               }`}
             >
-              All ({filteredNews.length})
+              All
             </button>
             {availableSources
               .filter(source => {
@@ -520,11 +524,11 @@ export default function News() {
               return (
                 <button
                   key={source.id}
-                  onClick={() => { setSelectedSource(source.id); setCurrentPage(1) }}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                    selectedSource === source.id
-                      ? sourceColors[source.id] || 'bg-slate-600 text-white'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                  onClick={() => toggleSource(source.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                    selectedSources.has(source.id)
+                      ? sourceColors[source.id] || 'bg-slate-600 text-white border-slate-500'
+                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
                   }`}
                 >
                   {source.name.replace('Reddit ', 'r/')} ({count})
@@ -724,9 +728,9 @@ export default function News() {
             <div className="text-center py-12">
               <Newspaper className="w-12 h-12 text-slate-600 mx-auto mb-4" />
               <p className="text-slate-400">No news articles found</p>
-              {selectedSource !== 'all' && (
+              {!allSourcesSelected && (
                 <button
-                  onClick={() => setSelectedSource('all')}
+                  onClick={() => toggleAllSources()}
                   className="mt-2 text-blue-400 hover:text-blue-300"
                 >
                   Show all sources
@@ -768,18 +772,18 @@ export default function News() {
             ))}
           </div>
 
-          {/* Video source filter */}
+          {/* Video source filter (multi-select) */}
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
             <button
-              onClick={() => setSelectedVideoSource('all')}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                selectedVideoSource === 'all'
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+              onClick={() => toggleAllVideoSources()}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                allVideoSourcesSelected
+                  ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
               }`}
             >
-              All ({filteredVideos.length})
+              All
             </button>
             {availableVideoSources
               .filter(source => {
@@ -792,11 +796,11 @@ export default function News() {
               return (
                 <button
                   key={source.id}
-                  onClick={() => setSelectedVideoSource(source.id)}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                    selectedVideoSource === source.id
-                      ? videoSourceColors[source.id] || 'bg-slate-600 text-white'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                  onClick={() => toggleVideoSource(source.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                    selectedVideoSources.has(source.id)
+                      ? videoSourceColors[source.id] || 'bg-slate-600 text-white border-slate-500'
+                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
                   }`}
                 >
                   {source.name} ({count})
@@ -1023,9 +1027,9 @@ export default function News() {
             <div className="text-center py-12">
               <Video className="w-12 h-12 text-slate-600 mx-auto mb-4" />
               <p className="text-slate-400">No videos found</p>
-              {selectedVideoSource !== 'all' && (
+              {!allVideoSourcesSelected && (
                 <button
-                  onClick={() => setSelectedVideoSource('all')}
+                  onClick={() => toggleAllVideoSources()}
                   className="mt-2 text-red-400 hover:text-red-300"
                 >
                   Show all channels

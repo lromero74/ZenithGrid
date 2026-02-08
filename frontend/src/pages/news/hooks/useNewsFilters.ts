@@ -18,14 +18,18 @@ import {
 } from '../helpers'
 
 export interface UseNewsFiltersReturn {
-  selectedSource: string
-  setSelectedSource: (source: string) => void
+  selectedSources: Set<string>
+  toggleSource: (source: string) => void
+  toggleAllSources: () => void
+  allSourcesSelected: boolean
   selectedCategories: Set<string>
   toggleCategory: (category: string) => void
   toggleAllCategories: () => void
   allCategoriesSelected: boolean
-  selectedVideoSource: string
-  setSelectedVideoSource: (source: string) => void
+  selectedVideoSources: Set<string>
+  toggleVideoSource: (source: string) => void
+  toggleAllVideoSources: () => void
+  allVideoSourcesSelected: boolean
   selectedVideoCategories: Set<string>
   toggleVideoCategory: (category: string) => void
   toggleAllVideoCategories: () => void
@@ -73,11 +77,15 @@ export const useNewsFilters = ({
 }: UseNewsFiltersProps): UseNewsFiltersReturn => {
   const saved = useMemo(() => loadSavedFilters(), [])
 
-  const [selectedSource, setSelectedSource] = useState<string>(saved?.selectedSource ?? 'all')
+  const [selectedSources, setSelectedSources] = useState<Set<string>>(
+    () => new Set(saved?.selectedSources?.length ? saved.selectedSources : [])
+  )
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     () => new Set(saved?.selectedCategories?.length ? saved.selectedCategories : ['CryptoCurrency'])
   )
-  const [selectedVideoSource, setSelectedVideoSource] = useState<string>(saved?.selectedVideoSource ?? 'all')
+  const [selectedVideoSources, setSelectedVideoSources] = useState<Set<string>>(
+    () => new Set(saved?.selectedVideoSources?.length ? saved.selectedVideoSources : [])
+  )
   const [selectedVideoCategories, setSelectedVideoCategories] = useState<Set<string>>(
     () => new Set(saved?.selectedVideoCategories?.length ? saved.selectedVideoCategories : ['CryptoCurrency'])
   )
@@ -86,13 +94,13 @@ export const useNewsFilters = ({
   // Persist filter state to localStorage
   useEffect(() => {
     saveFilters({
-      selectedSource,
+      selectedSources: Array.from(selectedSources),
       selectedCategories: Array.from(selectedCategories),
-      selectedVideoSource,
+      selectedVideoSources: Array.from(selectedVideoSources),
       selectedVideoCategories: Array.from(selectedVideoCategories),
       currentPage,
     })
-  }, [selectedSource, selectedCategories, selectedVideoSource, selectedVideoCategories, currentPage])
+  }, [selectedSources, selectedCategories, selectedVideoSources, selectedVideoCategories, currentPage])
 
   const allCategoriesSelected = selectedCategories.size === NEWS_CATEGORIES.length
   const allVideoCategoriesSelected = selectedVideoCategories.size === NEWS_CATEGORIES.length
@@ -108,21 +116,39 @@ export const useNewsFilters = ({
       }
       return next
     })
-    setSelectedSource('all')
+    setSelectedSources(new Set())
     setCurrentPage(1)
   }, [])
 
   const toggleAllCategories = useCallback(() => {
     setSelectedCategories(prev => {
       if (prev.size === NEWS_CATEGORIES.length) {
-        // All selected -> select only CryptoCurrency
         return new Set(['CryptoCurrency'])
       } else {
-        // Not all selected -> select all
         return new Set(NEWS_CATEGORIES)
       }
     })
-    setSelectedSource('all')
+    setSelectedSources(new Set())
+    setCurrentPage(1)
+  }, [])
+
+  const allSourcesSelected = selectedSources.size === 0
+
+  const toggleSource = useCallback((sourceId: string) => {
+    setSelectedSources(prev => {
+      const next = new Set(prev)
+      if (next.has(sourceId)) {
+        next.delete(sourceId)
+      } else {
+        next.add(sourceId)
+      }
+      return next
+    })
+    setCurrentPage(1)
+  }, [])
+
+  const toggleAllSources = useCallback(() => {
+    setSelectedSources(new Set())
     setCurrentPage(1)
   }, [])
 
@@ -136,7 +162,7 @@ export const useNewsFilters = ({
       }
       return next
     })
-    setSelectedVideoSource('all')
+    setSelectedVideoSources(new Set())
   }, [])
 
   const toggleAllVideoCategories = useCallback(() => {
@@ -147,20 +173,38 @@ export const useNewsFilters = ({
         return new Set(NEWS_CATEGORIES)
       }
     })
-    setSelectedVideoSource('all')
+    setSelectedVideoSources(new Set())
+  }, [])
+
+  const allVideoSourcesSelected = selectedVideoSources.size === 0
+
+  const toggleVideoSource = useCallback((sourceId: string) => {
+    setSelectedVideoSources(prev => {
+      const next = new Set(prev)
+      if (next.has(sourceId)) {
+        next.delete(sourceId)
+      } else {
+        next.add(sourceId)
+      }
+      return next
+    })
+  }, [])
+
+  const toggleAllVideoSources = useCallback(() => {
+    setSelectedVideoSources(new Set())
   }, [])
 
   // Filter news by selected categories first, then by source
   const filteredNews = useMemo(() => {
     const byCategory = filterNewsByCategory(newsData?.news || [], selectedCategories)
-    return filterNewsBySource(byCategory, selectedSource)
-  }, [newsData?.news, selectedCategories, selectedSource])
+    return filterNewsBySource(byCategory, selectedSources)
+  }, [newsData?.news, selectedCategories, selectedSources])
 
   // Filter videos by selected categories first, then by source
   const filteredVideos = useMemo(() => {
     const byCategory = filterVideosByCategory(videoData?.videos || [], selectedVideoCategories)
-    return filterVideosBySource(byCategory, selectedVideoSource)
-  }, [videoData?.videos, selectedVideoCategories, selectedVideoSource])
+    return filterVideosBySource(byCategory, selectedVideoSources)
+  }, [videoData?.videos, selectedVideoCategories, selectedVideoSources])
 
   // Client-side pagination - slice filtered news for current page (instant page changes)
   const totalFilteredItems = filteredNews.length
@@ -182,14 +226,18 @@ export const useNewsFilters = ({
   }, [currentPage, totalPages])
 
   return {
-    selectedSource,
-    setSelectedSource,
+    selectedSources,
+    toggleSource,
+    toggleAllSources,
+    allSourcesSelected,
     selectedCategories,
     toggleCategory,
     toggleAllCategories,
     allCategoriesSelected,
-    selectedVideoSource,
-    setSelectedVideoSource,
+    selectedVideoSources,
+    toggleVideoSource,
+    toggleAllVideoSources,
+    allVideoSourcesSelected,
     selectedVideoCategories,
     toggleVideoCategory,
     toggleAllVideoCategories,
