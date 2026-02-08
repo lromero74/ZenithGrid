@@ -305,7 +305,6 @@ export const videoSourceColors: Record<string, string> = {
   ai_explained: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   matt_wolfe: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   // Finance
-  bloomberg_yt: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
   financial_times: 'bg-pink-600/20 text-pink-400 border-pink-600/30',
   graham_stephan: 'bg-green-500/20 text-green-400 border-green-500/30',
 }

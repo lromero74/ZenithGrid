@@ -129,10 +129,10 @@ NEWS_SOURCES = {
 
     # ===== Finance =====
     "reuters_finance": {
-        "name": "Reuters Finance",
-        "url": "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best",
+        "name": "Bloomberg Markets",
+        "url": "https://feeds.bloomberg.com/markets/news.rss",
         "type": "rss",
-        "website": "https://www.reuters.com/finance",
+        "website": "https://www.bloomberg.com/markets",
         "category": "Finance",
     },
     "ft_markets": {
@@ -540,26 +540,18 @@ VIDEO_SOURCES = {
     },
 
     # ===== Finance =====
-    "bloomberg_yt": {
-        "name": "Bloomberg Television",
-        "channel_id": "UCIALMKvObZNtJ6AmdCLP7Lg",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg",
-        "website": "https://www.youtube.com/@bloombergtv",
-        "description": "Global financial news & markets",
-        "category": "Finance",
-    },
     "financial_times": {
         "name": "Financial Times",
-        "channel_id": "UCGlBYUjwtpvCsUdp8lYbBsQ",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCGlBYUjwtpvCsUdp8lYbBsQ",
+        "channel_id": "UCoUxsWakJucWg46KW5RsvPw",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw",
         "website": "https://www.youtube.com/@FinancialTimes",
         "description": "Financial news and analysis",
         "category": "Finance",
     },
     "graham_stephan": {
         "name": "Graham Stephan",
-        "channel_id": "UCa-ckGGGA-v4UaVb2RP-aJQ",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCa-ckGGGA-v4UaVb2RP-aJQ",
+        "channel_id": "UCV6KDgJskWaEckne5aPA0aQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCV6KDgJskWaEckne5aPA0aQ",
         "website": "https://www.youtube.com/@GrahamStephan",
         "description": "Personal finance & investing",
         "category": "Finance",

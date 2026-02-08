@@ -70,14 +70,13 @@ DEFAULT_CONTENT_SOURCES = [
     ('ai_explained', 'AI Explained', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw', 'https://www.youtube.com/@aiaborz', 'Clear AI news and explanations', 'UCNJ1Ymd5yFuUPtn21xtRbbw', 'AI'),
     ('matt_wolfe', 'Matt Wolfe', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCJtUOos_MwJa_Ewii-R3cJA', 'https://www.youtube.com/@maborz', 'AI tools, news & tutorials', 'UCJtUOos_MwJa_Ewii-R3cJA', 'AI'),
     # ===== Finance =====
-    ('reuters_finance', 'Reuters Finance', 'news', 'https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best', 'https://www.reuters.com/finance', 'Reuters financial news', None, 'Finance'),
+    ('reuters_finance', 'Bloomberg Markets', 'news', 'https://feeds.bloomberg.com/markets/news.rss', 'https://www.bloomberg.com/markets', 'Bloomberg financial news', None, 'Finance'),
     ('ft_markets', 'Financial Times', 'news', 'https://www.ft.com/markets?format=rss', 'https://www.ft.com/markets', 'Financial Times market coverage', None, 'Finance'),
     ('yahoo_finance_news', 'Yahoo Finance', 'news', 'https://finance.yahoo.com/news/rssindex', 'https://finance.yahoo.com', 'Financial news & market data', None, 'Finance'),
     ('investing_com', 'Investing.com', 'news', 'https://www.investing.com/rss/news.rss', 'https://www.investing.com', 'Markets, stocks & investing news', None, 'Finance'),
     # Finance video sources
-    ('bloomberg_yt', 'Bloomberg Television', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg', 'https://www.youtube.com/@bloombergtv', 'Global financial news & markets', 'UCIALMKvObZNtJ6AmdCLP7Lg', 'Finance'),
-    ('financial_times', 'Financial Times', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCGlBYUjwtpvCsUdp8lYbBsQ', 'https://www.youtube.com/@FinancialTimes', 'Financial news and analysis', 'UCGlBYUjwtpvCsUdp8lYbBsQ', 'Finance'),
-    ('graham_stephan', 'Graham Stephan', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCa-ckGGGA-v4UaVb2RP-aJQ', 'https://www.youtube.com/@GrahamStephan', 'Personal finance & investing', 'UCa-ckGGGA-v4UaVb2RP-aJQ', 'Finance'),
+    ('financial_times', 'Financial Times', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw', 'https://www.youtube.com/@FinancialTimes', 'Financial news and analysis', 'UCoUxsWakJucWg46KW5RsvPw', 'Finance'),
+    ('graham_stephan', 'Graham Stephan', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCV6KDgJskWaEckne5aPA0aQ', 'https://www.youtube.com/@GrahamStephan', 'Personal finance & investing', 'UCV6KDgJskWaEckne5aPA0aQ', 'Finance'),
     # ===== World =====
     ('guardian_world', 'The Guardian World', 'news', 'https://www.theguardian.com/world/rss', 'https://www.theguardian.com/world', 'International news coverage', None, 'World'),
     ('bbc_world', 'BBC World', 'news', 'https://feeds.bbci.co.uk/news/world/rss.xml', 'https://www.bbc.com/news/world', 'Global news from BBC', None, 'World'),
