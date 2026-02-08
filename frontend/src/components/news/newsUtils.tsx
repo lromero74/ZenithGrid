@@ -239,6 +239,16 @@ export const sourceColors: Record<string, string> = {
   decrypt: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   theblock: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   cryptoslate: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  // AI
+  reddit_artificial: 'bg-violet-600/20 text-violet-400 border-violet-600/30',
+  openai_blog: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  mit_tech_ai: 'bg-red-500/20 text-red-400 border-red-500/30',
+  the_ai_beat: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  // Finance
+  reuters_finance: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  ft_markets: 'bg-pink-600/20 text-pink-400 border-pink-600/30',
+  yahoo_finance_news: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  investing_com: 'bg-green-600/20 text-green-400 border-green-600/30',
   // World
   reuters_world: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   bbc_world: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -290,4 +300,12 @@ export const videoSourceColors: Record<string, string> = {
   lark_davis: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
   pompliano: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
   whiteboard_crypto: 'bg-slate-300/20 text-slate-300 border-slate-300/30',
+  // AI
+  two_minute_papers: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+  ai_explained: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  matt_wolfe: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  // Finance
+  bloomberg_yt: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
+  financial_times: 'bg-pink-600/20 text-pink-400 border-pink-600/30',
+  graham_stephan: 'bg-green-500/20 text-green-400 border-green-500/30',
 }

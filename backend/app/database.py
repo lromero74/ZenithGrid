@@ -60,6 +60,24 @@ DEFAULT_CONTENT_SOURCES = [
     ('lark_davis', 'Lark Davis', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCl2oCaw8hdR_kbqyqd2klIA', 'https://www.youtube.com/@TheCryptoLark', 'Altcoin analysis & opportunities', 'UCl2oCaw8hdR_kbqyqd2klIA', 'CryptoCurrency'),
     ('pompliano', 'Anthony Pompliano', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCevXpeL8cNyAnww-NqJ4m2w', 'https://www.youtube.com/@AnthonyPompliano', 'Bitcoin advocate & market commentary', 'UCevXpeL8cNyAnww-NqJ4m2w', 'CryptoCurrency'),
     ('whiteboard_crypto', 'Whiteboard Crypto', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCsYYksPHiGqXHPoHI-fm5sg', 'https://www.youtube.com/@WhiteboardCrypto', 'Educational crypto explainers', 'UCsYYksPHiGqXHPoHI-fm5sg', 'CryptoCurrency'),
+    # ===== AI =====
+    ('reddit_artificial', 'Reddit r/artificial', 'news', 'https://www.reddit.com/r/artificial/hot.json?limit=15', 'https://www.reddit.com/r/artificial', 'Community-driven AI discussion', None, 'AI'),
+    ('openai_blog', 'OpenAI Blog', 'news', 'https://openai.com/blog/rss.xml', 'https://openai.com/blog', 'OpenAI announcements & research', None, 'AI'),
+    ('mit_tech_ai', 'MIT Tech Review AI', 'news', 'https://www.technologyreview.com/topic/artificial-intelligence/feed', 'https://www.technologyreview.com/topic/artificial-intelligence', 'AI research & industry analysis', None, 'AI'),
+    ('the_ai_beat', 'VentureBeat AI', 'news', 'https://venturebeat.com/category/ai/feed/', 'https://venturebeat.com/category/ai', 'Enterprise AI news & analysis', None, 'AI'),
+    # AI video sources
+    ('two_minute_papers', 'Two Minute Papers', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg', 'https://www.youtube.com/@TwoMinutePapers', 'AI research explained in short videos', 'UCbfYPyITQ-7l4upoX8nvctg', 'AI'),
+    ('ai_explained', 'AI Explained', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw', 'https://www.youtube.com/@aiaborz', 'Clear AI news and explanations', 'UCNJ1Ymd5yFuUPtn21xtRbbw', 'AI'),
+    ('matt_wolfe', 'Matt Wolfe', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCJtUOos_MwJa_Ewii-R3cJA', 'https://www.youtube.com/@maborz', 'AI tools, news & tutorials', 'UCJtUOos_MwJa_Ewii-R3cJA', 'AI'),
+    # ===== Finance =====
+    ('reuters_finance', 'Reuters Finance', 'news', 'https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best', 'https://www.reuters.com/finance', 'Reuters financial news', None, 'Finance'),
+    ('ft_markets', 'Financial Times', 'news', 'https://www.ft.com/markets?format=rss', 'https://www.ft.com/markets', 'Financial Times market coverage', None, 'Finance'),
+    ('yahoo_finance_news', 'Yahoo Finance', 'news', 'https://finance.yahoo.com/news/rssindex', 'https://finance.yahoo.com', 'Financial news & market data', None, 'Finance'),
+    ('investing_com', 'Investing.com', 'news', 'https://www.investing.com/rss/news.rss', 'https://www.investing.com', 'Markets, stocks & investing news', None, 'Finance'),
+    # Finance video sources
+    ('bloomberg_yt', 'Bloomberg Television', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg', 'https://www.youtube.com/@bloombergtv', 'Global financial news & markets', 'UCIALMKvObZNtJ6AmdCLP7Lg', 'Finance'),
+    ('financial_times', 'Financial Times', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCGlBYUjwtpvCsUdp8lYbBsQ', 'https://www.youtube.com/@FinancialTimes', 'Financial news and analysis', 'UCGlBYUjwtpvCsUdp8lYbBsQ', 'Finance'),
+    ('graham_stephan', 'Graham Stephan', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCa-ckGGGA-v4UaVb2RP-aJQ', 'https://www.youtube.com/@GrahamStephan', 'Personal finance & investing', 'UCa-ckGGGA-v4UaVb2RP-aJQ', 'Finance'),
     # ===== World =====
     ('guardian_world', 'The Guardian World', 'news', 'https://www.theguardian.com/world/rss', 'https://www.theguardian.com/world', 'International news coverage', None, 'World'),
     ('bbc_world', 'BBC World', 'news', 'https://feeds.bbci.co.uk/news/world/rss.xml', 'https://www.bbc.com/news/world', 'Global news from BBC', None, 'World'),

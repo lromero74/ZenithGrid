@@ -3,6 +3,8 @@ News and video source configurations.
 
 Categories:
 - CryptoCurrency: Crypto-specific news and videos
+- AI: Artificial intelligence news and research
+- Finance: Traditional finance, markets, and investing
 - World: International news
 - Nation: US national news
 - Business: Business and finance
@@ -16,6 +18,8 @@ Categories:
 # Available news categories
 NEWS_CATEGORIES = [
     "CryptoCurrency",
+    "AI",
+    "Finance",
     "World",
     "Nation",
     "Business",
@@ -91,6 +95,66 @@ NEWS_SOURCES = {
         "type": "rss",
         "website": "https://blockworks.co",
         "category": "CryptoCurrency",
+    },
+
+    # ===== AI =====
+    "reddit_artificial": {
+        "name": "Reddit r/artificial",
+        "url": "https://www.reddit.com/r/artificial/hot.json?limit=15",
+        "type": "reddit",
+        "website": "https://www.reddit.com/r/artificial",
+        "category": "AI",
+    },
+    "openai_blog": {
+        "name": "OpenAI Blog",
+        "url": "https://openai.com/blog/rss.xml",
+        "type": "rss",
+        "website": "https://openai.com/blog",
+        "category": "AI",
+    },
+    "mit_tech_ai": {
+        "name": "MIT Tech Review AI",
+        "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+        "type": "rss",
+        "website": "https://www.technologyreview.com/topic/artificial-intelligence",
+        "category": "AI",
+    },
+    "the_ai_beat": {
+        "name": "VentureBeat AI",
+        "url": "https://venturebeat.com/category/ai/feed/",
+        "type": "rss",
+        "website": "https://venturebeat.com/category/ai",
+        "category": "AI",
+    },
+
+    # ===== Finance =====
+    "reuters_finance": {
+        "name": "Reuters Finance",
+        "url": "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best",
+        "type": "rss",
+        "website": "https://www.reuters.com/finance",
+        "category": "Finance",
+    },
+    "ft_markets": {
+        "name": "Financial Times",
+        "url": "https://www.ft.com/markets?format=rss",
+        "type": "rss",
+        "website": "https://www.ft.com/markets",
+        "category": "Finance",
+    },
+    "yahoo_finance_news": {
+        "name": "Yahoo Finance",
+        "url": "https://finance.yahoo.com/news/rssindex",
+        "type": "rss",
+        "website": "https://finance.yahoo.com",
+        "category": "Finance",
+    },
+    "investing_com": {
+        "name": "Investing.com",
+        "url": "https://www.investing.com/rss/news.rss",
+        "type": "rss",
+        "website": "https://www.investing.com",
+        "category": "Finance",
     },
 
     # ===== World =====
@@ -447,6 +511,58 @@ VIDEO_SOURCES = {
         "website": "https://www.youtube.com/@WhiteboardCrypto",
         "description": "Educational crypto explainers",
         "category": "CryptoCurrency",
+    },
+
+    # ===== AI =====
+    "two_minute_papers": {
+        "name": "Two Minute Papers",
+        "channel_id": "UCbfYPyITQ-7l4upoX8nvctg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg",
+        "website": "https://www.youtube.com/@TwoMinutePapers",
+        "description": "AI research explained in short videos",
+        "category": "AI",
+    },
+    "ai_explained": {
+        "name": "AI Explained",
+        "channel_id": "UCNJ1Ymd5yFuUPtn21xtRbbw",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw",
+        "website": "https://www.youtube.com/@aiaborz",
+        "description": "Clear AI news and explanations",
+        "category": "AI",
+    },
+    "matt_wolfe": {
+        "name": "Matt Wolfe",
+        "channel_id": "UCJtUOos_MwJa_Ewii-R3cJA",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCJtUOos_MwJa_Ewii-R3cJA",
+        "website": "https://www.youtube.com/@maborz",
+        "description": "AI tools, news & tutorials",
+        "category": "AI",
+    },
+
+    # ===== Finance =====
+    "bloomberg_yt": {
+        "name": "Bloomberg Television",
+        "channel_id": "UCIALMKvObZNtJ6AmdCLP7Lg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg",
+        "website": "https://www.youtube.com/@bloombergtv",
+        "description": "Global financial news & markets",
+        "category": "Finance",
+    },
+    "financial_times": {
+        "name": "Financial Times",
+        "channel_id": "UCGlBYUjwtpvCsUdp8lYbBsQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCGlBYUjwtpvCsUdp8lYbBsQ",
+        "website": "https://www.youtube.com/@FinancialTimes",
+        "description": "Financial news and analysis",
+        "category": "Finance",
+    },
+    "graham_stephan": {
+        "name": "Graham Stephan",
+        "channel_id": "UCa-ckGGGA-v4UaVb2RP-aJQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCa-ckGGGA-v4UaVb2RP-aJQ",
+        "website": "https://www.youtube.com/@GrahamStephan",
+        "description": "Personal finance & investing",
+        "category": "Finance",
     },
 
     # ===== World =====
