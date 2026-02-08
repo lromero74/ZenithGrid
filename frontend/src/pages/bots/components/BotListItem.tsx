@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Bot } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
-import { Edit, Trash2, Copy, Brain, MoreVertical, FastForward, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard, CheckCircle } from 'lucide-react'
+import { Edit, Trash2, Copy, Brain, MoreVertical, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
 import { useNotifications } from '../../../contexts/NotificationContext'
 
@@ -399,21 +399,6 @@ export function BotListItem({
             </button>
           )}
 
-          {/* Force Run Button - show for active bots OR stopped bots with open positions */}
-          {(bot.is_active || (bot.open_positions_count ?? 0) > 0) && (
-            <button
-              onClick={() => forceRunBot.mutate(bot.id)}
-              disabled={forceRunBot.isPending}
-              className={`p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                bot.is_active
-                  ? 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400'
-                  : 'bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400'
-              }`}
-              title={bot.is_active ? "Force Run Now" : "Force Run (check DCA/Exit for open positions)"}
-            >
-              <FastForward className="w-4 h-4" />
-            </button>
-          )}
 
           {/* More Actions Menu */}
           <div className="relative">

@@ -4,6 +4,9 @@ Auto-Buy BTC Monitor Service
 Automatically converts stablecoins (USD, USDC, USDT) to BTC when balances
 exceed configured minimums. Supports both market and limit orders with
 automatic re-pricing for unfilled limit orders.
+
+IMPORTANT: Respects bot reservations - only converts funds that are truly free
+(not reserved by any bot's budget or tied up in open positions).
 """
 import asyncio
 import logging
@@ -14,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import Account, PendingOrder
+from app.models import Account, Bot, Position, PendingOrder
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -120,6 +123,42 @@ class AutoBuyMonitor:
         except Exception as e:
             logger.error(f"Auto-buy failed for account {account.id}: {e}", exc_info=True)
 
+    async def _calculate_reserved_usd(self, db: AsyncSession, account_id: int) -> float:
+        """
+        Calculate total USD reserved by bots and open positions for an account.
+        This amount must NOT be auto-converted.
+        """
+        # Sum bot reservations (legacy fixed amounts)
+        bots_result = await db.execute(
+            select(Bot).where(Bot.account_id == account_id, Bot.is_active == True)
+        )
+        active_bots = bots_result.scalars().all()
+
+        reserved = 0.0
+        for bot in active_bots:
+            quote = bot.get_quote_currency()
+            if quote == "USD":
+                # Budget percentage-based or legacy fixed reservation
+                reserved += bot.reserved_usd_balance or 0.0
+            # Bidirectional bot long-side USD reservation
+            reserved += bot.reserved_usd_for_longs or 0.0
+
+        # Sum open position values in USD
+        positions_result = await db.execute(
+            select(Position).where(
+                Position.status == "open",
+                Position.account_id == account_id,
+            )
+        )
+        open_positions = positions_result.scalars().all()
+
+        for position in open_positions:
+            pos_quote = position.get_quote_currency()
+            if pos_quote in ("USD", "USDC", "USDT"):
+                reserved += position.total_cost or 0.0
+
+        return reserved
+
     async def _check_and_buy(
         self,
         client,
@@ -129,17 +168,27 @@ class AutoBuyMonitor:
         product_id: str,
         db: AsyncSession
     ):
-        """Check balance and buy BTC if above minimum"""
+        """Check balance and buy BTC if above minimum, respecting bot reservations"""
         try:
             # Get available balance
             balance_data = await client.get_balance(currency)
-            available = float(balance_data.get('available', 0))
+            raw_available = float(balance_data.get('available', 0))
+
+            # Subtract bot reservations and open position values
+            reserved = await self._calculate_reserved_usd(db, account.id)
+            available = max(0.0, raw_available - reserved)
 
             if available < min_amount:
-                logger.debug(f"Account {account.name}: {currency} balance {available} below minimum {min_amount}")
+                logger.debug(
+                    f"Account {account.name}: {currency} free balance {available:.2f} "
+                    f"(raw: {raw_available:.2f}, reserved: {reserved:.2f}) below minimum {min_amount}"
+                )
                 return
 
-            logger.info(f"🎯 Auto-buy triggered for {account.name}: {available} {currency} → BTC")
+            logger.info(
+                f"🎯 Auto-buy triggered for {account.name}: {available:.2f} {currency} → BTC "
+                f"(raw: {raw_available:.2f}, reserved: {reserved:.2f})"
+            )
 
             # Determine order type
             order_type = account.auto_buy_order_type or "market"
