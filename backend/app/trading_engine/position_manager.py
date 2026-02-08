@@ -114,6 +114,63 @@ def calculate_expected_position_budget(config: dict, aggregate_value: float) -> 
     return 0.0
 
 
+def calculate_max_deal_cost(config: dict, base_order_size: float) -> float:
+    """
+    Calculate the true max cost of a deal: base order + all safety orders with volume scaling.
+
+    Use this when calculate_expected_position_budget() returns 0 (percentage-based or auto-calc modes)
+    and we need to derive the max cost from the position's actual first buy size.
+
+    Args:
+        config: Bot strategy config with safety order parameters
+        base_order_size: The actual base order size (e.g. from the position's first trade)
+
+    Returns:
+        Total max cost (base + all safety orders)
+    """
+    if base_order_size <= 0:
+        return 0.0
+
+    total = base_order_size
+    max_safety_orders = config.get("max_safety_orders", 0)
+
+    if max_safety_orders <= 0:
+        return total
+
+    # Check for manual sizing mode (DCA orders)
+    if config.get("use_manual_sizing", False):
+        dca_order_type = config.get("dca_order_type", "percentage")
+        dca_order_value = config.get("dca_order_value", 0.0)
+        dca_multiplier = config.get("dca_order_multiplier", 1.0)
+        max_dca_orders = config.get("manual_max_dca_orders", max_safety_orders)
+
+        for i in range(max_dca_orders):
+            order_size = dca_order_value * (dca_multiplier ** i)
+            if dca_order_type == "percentage":
+                # percentage of base order
+                total += base_order_size * (order_size / 100.0)
+            else:
+                total += order_size
+        return total
+
+    # Standard safety order calculation (matches lines 92-109 logic)
+    safety_order_type = config.get("safety_order_type", "percentage_of_base")
+    volume_scale = config.get("safety_order_volume_scale", 1.0)
+
+    for order_num in range(1, max_safety_orders + 1):
+        if safety_order_type == "percentage_of_base":
+            base_safety_size = base_order_size * (config.get("safety_order_percentage", 50.0) / 100.0)
+        elif safety_order_type in ["fixed", "fixed_btc"]:
+            base_safety_size = config.get("safety_order_btc", 0.0001)
+        else:
+            base_safety_size = config.get("safety_order_fixed", 0.0005)
+
+        safety_order_size = base_safety_size * (volume_scale ** (order_num - 1))
+        total += safety_order_size
+
+    return total
+
+
 async def get_active_position(db: AsyncSession, bot: Bot, product_id: str) -> Optional[Position]:
     """Get currently active position for this bot/pair combination"""
     query = (

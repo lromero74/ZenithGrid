@@ -91,6 +91,14 @@ export const positionsApi = {
       losing_trades: number;
       average_profit_usd: number;
     }>('/positions/completed/stats', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),
+  resizeBudget: (id: number) =>
+    api.post<{ message: string; position_id: number; old_max: number; new_max: number; quote_currency: string }>(
+      `/positions/${id}/resize-budget`
+    ).then((res) => res.data),
+  resizeAllBudgets: () =>
+    api.post<{ message: string; updated_count: number; total_count: number; results: { id: number; pair: string; old_max: number; new_max: number; skipped?: string }[] }>(
+      '/positions/resize-all-budgets'
+    ).then((res) => res.data),
   getRealizedPnL: (accountId?: number) =>
     api.get<{
       daily_profit_btc: number;

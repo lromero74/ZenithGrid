@@ -1,4 +1,4 @@
-import { AlertCircle, BarChart2, Settings, TrendingUp, TrendingDown } from 'lucide-react'
+import { AlertCircle, BarChart2, Scale, Settings, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
 import type { Position, Bot } from '../../../types'
 import CoinIcon from '../../../components/CoinIcon'
@@ -392,6 +392,23 @@ export const PositionCard = ({
             }}
           >
             <Settings size={12} /> Edit deal
+          </button>
+          <button
+            className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
+            title="Recalculate budget to base order + all safety orders with volume scaling"
+            onClick={async (e) => {
+              e.stopPropagation()
+              try {
+                const result = await axios.post(`${API_BASE_URL}/api/positions/${position.id}/resize-budget`)
+                const d = result.data
+                alert(`Budget resized: ${d.old_max.toFixed(8)} → ${d.new_max.toFixed(8)} ${d.quote_currency}`)
+                onRefetch()
+              } catch (err: any) {
+                alert(`Error: ${err.response?.data?.detail || err.message}`)
+              }
+            }}
+          >
+            <Scale size={12} /> Resize budget
           </button>
           <button
             className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"

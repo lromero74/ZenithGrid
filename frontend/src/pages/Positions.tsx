@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart3, Building2, Wallet } from 'lucide-react'
+import { BarChart3, Building2, Wallet, Scale } from 'lucide-react'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import type { Position } from '../types'
 import PositionLogsModal from '../components/PositionLogsModal'
@@ -209,6 +209,25 @@ export default function Positions() {
             <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-medium">
               {openPositions.length} Active
             </div>
+            {openPositions.length > 0 && (
+              <button
+                className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-3 py-1 rounded-full text-sm font-medium transition-colors"
+                title="Recalculates each deal's budget to include base order + all safety orders with volume scaling. May result in overallocation if total exceeds available balance."
+                onClick={async () => {
+                  if (!confirm('Resize all deal budgets to their true max potential (base + all safety orders)?\n\nThis may result in overallocation if total exceeds available balance.')) return
+                  try {
+                    const result = await positionsApi.resizeAllBudgets()
+                    alert(`${result.message}\n\n${result.results.map(r => `${r.pair}: ${r.old_max.toFixed(8)} → ${r.new_max.toFixed(8)}${r.skipped ? ' (skipped)' : ''}`).join('\n')}`)
+                    refetchPositions()
+                  } catch (err: any) {
+                    alert(`Error: ${err.response?.data?.detail || err.message}`)
+                  }
+                }}
+              >
+                <Scale size={14} />
+                Resize All Budgets
+              </button>
+            )}
           </div>
         </div>
 
