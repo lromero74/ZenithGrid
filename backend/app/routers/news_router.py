@@ -2139,10 +2139,14 @@ VALID_METRIC_NAMES = {
 
 
 @router.get("/metric-history/{metric_name}")
-async def get_metric_history(metric_name: str, days: int = Query(default=30, ge=1, le=90)):
+async def get_metric_history(
+    metric_name: str,
+    days: int = Query(default=30, ge=1, le=90),
+    max_points: int = Query(default=30, ge=5, le=500),
+):
     """
     Get historical snapshots for a metric (for sparkline charts).
-    Returns downsampled data (~1 point per 4 hours for 30 days).
+    Returns averaged/downsampled data (default: 30 points over 14 days).
     """
     if metric_name not in VALID_METRIC_NAMES:
         raise HTTPException(status_code=400, detail=f"Invalid metric: {metric_name}")
@@ -2157,10 +2161,17 @@ async def get_metric_history(metric_name: str, days: int = Query(default=30, ge=
         )
         rows = result.all()
 
-    # Downsample: keep ~1 point per 4 hours (max ~180 points for 30 days)
-    if len(rows) > 180:
-        step = len(rows) / 180
-        sampled = [rows[int(i * step)] for i in range(180)]
+    # Downsample by averaging into buckets for smooth sparklines
+    if len(rows) > max_points:
+        bucket_size = len(rows) / max_points
+        sampled = []
+        for i in range(max_points):
+            start = int(i * bucket_size)
+            end = int((i + 1) * bucket_size)
+            bucket = rows[start:end]
+            avg_value = sum(r.value for r in bucket) / len(bucket)
+            # Use the last timestamp in the bucket as representative
+            sampled.append(type('Row', (), {'value': avg_value, 'recorded_at': bucket[-1].recorded_at})())
     else:
         sampled = rows
 

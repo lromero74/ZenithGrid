@@ -36,6 +36,10 @@ async def check_seasonality_allows_bot(db: AsyncSession, bot: Bot) -> tuple[bool
     if not enabled:
         return True, None
 
+    # Grid bots are exempt from seasonality restrictions
+    if bot.strategy_type == "grid_trading":
+        return True, None
+
     # Get current seasonality status
     status = await get_seasonality_status()
     quote_currency = bot.get_quote_currency()

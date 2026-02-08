@@ -486,7 +486,7 @@ export function MarketSentimentCards() {
   const metricHistoryQuery = (name: string) => ({
     queryKey: ['metric-history', name],
     queryFn: async () => {
-      const response = await fetch(`/api/news/metric-history/${name}?days=30`)
+      const response = await fetch(`/api/news/metric-history/${name}?days=30&max_points=30`)
       if (!response.ok) return { metric_name: name, data: [] }
       return response.json() as Promise<MetricHistoryResponse>
     },

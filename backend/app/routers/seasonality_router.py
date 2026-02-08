@@ -137,6 +137,10 @@ async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus) -> dict:
     disabled_usd = 0
 
     for bot in active_bots:
+        # Grid bots are exempt from seasonality restrictions
+        if bot.strategy_type == "grid_trading":
+            continue
+
         quote_currency = bot.get_quote_currency()
 
         if status.mode == "risk_off" and quote_currency == "BTC":
