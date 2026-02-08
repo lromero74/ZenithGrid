@@ -43,7 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
 
 from app.database import async_session_maker
-from app.models import ContentSource, NewsArticle, VideoArticle
+from app.models import ContentSource, MetricSnapshot, NewsArticle, VideoArticle
 from app.routers.news import (
     CACHE_FILE,
     DEBT_CEILING_HISTORY,
@@ -101,6 +101,36 @@ _last_news_refresh: Optional[datetime] = None
 _last_video_refresh: Optional[datetime] = None
 
 router = APIRouter(prefix="/api/news", tags=["news"])
+
+METRIC_SNAPSHOT_PRUNE_DAYS = 90
+
+
+async def record_metric_snapshot(metric_name: str, value: float) -> None:
+    """Record a metric value for sparkline history. Non-blocking, errors are logged."""
+    try:
+        async with async_session_maker() as db:
+            db.add(MetricSnapshot(
+                metric_name=metric_name,
+                value=value,
+                recorded_at=datetime.utcnow(),
+            ))
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to record metric snapshot {metric_name}: {e}")
+
+
+async def prune_old_snapshots() -> None:
+    """Delete metric snapshots older than 90 days."""
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=METRIC_SNAPSHOT_PRUNE_DAYS)
+        async with async_session_maker() as db:
+            from sqlalchemy import delete
+            await db.execute(
+                delete(MetricSnapshot).where(MetricSnapshot.recorded_at < cutoff)
+            )
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to prune old snapshots: {e}")
 
 
 # =============================================================================
@@ -689,6 +719,7 @@ async def fetch_fear_greed_index() -> Dict[str, Any]:
 
                 # Save to cache
                 save_fear_greed_cache(cache_data)
+                asyncio.create_task(record_metric_snapshot("fear_greed", cache_data["data"]["value"]))
 
                 return cache_data
     except asyncio.TimeoutError:
@@ -1479,6 +1510,8 @@ async def fetch_btc_dominance() -> Dict[str, Any]:
                 }
 
                 save_btc_dominance_cache(cache_data)
+                asyncio.create_task(record_metric_snapshot("btc_dominance", cache_data["btc_dominance"]))
+                asyncio.create_task(record_metric_snapshot("total_market_cap", cache_data["total_market_cap"]))
                 return cache_data
 
     except asyncio.TimeoutError:
@@ -1548,6 +1581,7 @@ async def fetch_altseason_index() -> Dict[str, Any]:
                 }
 
                 save_altseason_cache(cache_data)
+                asyncio.create_task(record_metric_snapshot("altseason_index", cache_data["altseason_index"]))
                 return cache_data
 
     except asyncio.TimeoutError:
@@ -1665,6 +1699,7 @@ async def fetch_stablecoin_mcap() -> Dict[str, Any]:
                 }
 
                 save_stablecoin_mcap_cache(cache_data)
+                asyncio.create_task(record_metric_snapshot("stablecoin_mcap", cache_data["total_stablecoin_mcap"]))
                 return cache_data
 
     except asyncio.TimeoutError:
@@ -1794,6 +1829,7 @@ async def fetch_mempool_stats() -> Dict[str, Any]:
             }
 
             save_mempool_cache(cache_data)
+            asyncio.create_task(record_metric_snapshot("mempool_tx_count", cache_data["tx_count"]))
             return cache_data
 
     except asyncio.TimeoutError:
@@ -1851,6 +1887,7 @@ async def fetch_hash_rate() -> Dict[str, Any]:
             }
 
             save_hash_rate_cache(cache_data)
+            asyncio.create_task(record_metric_snapshot("hash_rate", cache_data["hash_rate_eh"]))
             return cache_data
 
     except asyncio.TimeoutError:
@@ -1892,6 +1929,7 @@ async def fetch_lightning_stats() -> Dict[str, Any]:
             }
 
             save_lightning_cache(cache_data)
+            asyncio.create_task(record_metric_snapshot("lightning_capacity", cache_data["total_capacity_btc"]))
             return cache_data
 
     except asyncio.TimeoutError:
@@ -2092,6 +2130,48 @@ async def get_ath():
 
     logger.info("Fetching fresh ATH data...")
     return await fetch_ath_data()
+
+
+VALID_METRIC_NAMES = {
+    "fear_greed", "btc_dominance", "altseason_index", "stablecoin_mcap",
+    "total_market_cap", "hash_rate", "lightning_capacity", "mempool_tx_count",
+}
+
+
+@router.get("/metric-history/{metric_name}")
+async def get_metric_history(metric_name: str, days: int = Query(default=30, ge=1, le=90)):
+    """
+    Get historical snapshots for a metric (for sparkline charts).
+    Returns downsampled data (~1 point per 4 hours for 30 days).
+    """
+    if metric_name not in VALID_METRIC_NAMES:
+        raise HTTPException(status_code=400, detail=f"Invalid metric: {metric_name}")
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(MetricSnapshot.value, MetricSnapshot.recorded_at)
+            .where(MetricSnapshot.metric_name == metric_name)
+            .where(MetricSnapshot.recorded_at >= cutoff)
+            .order_by(MetricSnapshot.recorded_at)
+        )
+        rows = result.all()
+
+    # Downsample: keep ~1 point per 4 hours (max ~180 points for 30 days)
+    if len(rows) > 180:
+        step = len(rows) / 180
+        sampled = [rows[int(i * step)] for i in range(180)]
+    else:
+        sampled = rows
+
+    # Also prune old data periodically (piggyback on reads)
+    if len(rows) > 0:
+        asyncio.create_task(prune_old_snapshots())
+
+    return {
+        "metric_name": metric_name,
+        "data": [{"value": r.value, "recorded_at": r.recorded_at.isoformat()} for r in sampled],
+    }
 
 
 @router.get("/article-content", response_model=ArticleContentResponse)

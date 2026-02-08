@@ -416,3 +416,13 @@ export interface DebtCeilingHistoryResponse {
   total_events: number
   last_updated: string
 }
+
+export interface MetricHistoryPoint {
+  value: number
+  recorded_at: string
+}
+
+export interface MetricHistoryResponse {
+  metric_name: string
+  data: MetricHistoryPoint[]
+}

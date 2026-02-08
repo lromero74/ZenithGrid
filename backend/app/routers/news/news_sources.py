@@ -94,11 +94,11 @@ NEWS_SOURCES = {
     },
 
     # ===== World =====
-    "reuters_world": {
-        "name": "Reuters World",
-        "url": "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best",
+    "guardian_world": {
+        "name": "The Guardian World",
+        "url": "https://www.theguardian.com/world/rss",
         "type": "rss",
-        "website": "https://www.reuters.com/world",
+        "website": "https://www.theguardian.com/world",
         "category": "World",
     },
     "bbc_world": {
@@ -133,7 +133,7 @@ NEWS_SOURCES = {
     },
     "ap_news": {
         "name": "AP News",
-        "url": "https://apnews.com/apf-topnews/feed",
+        "url": "https://feedx.net/rss/ap.xml",
         "type": "rss",
         "website": "https://apnews.com",
         "category": "Nation",
@@ -163,11 +163,11 @@ NEWS_SOURCES = {
     },
 
     # ===== Technology =====
-    "techcrunch": {
-        "name": "TechCrunch",
-        "url": "https://techcrunch.com/feed/",
+    "engadget": {
+        "name": "Engadget",
+        "url": "https://www.engadget.com/rss.xml",
         "type": "rss",
-        "website": "https://techcrunch.com",
+        "website": "https://www.engadget.com",
         "category": "Technology",
     },
     "ars_technica": {
@@ -207,11 +207,11 @@ NEWS_SOURCES = {
         "website": "https://www.hollywoodreporter.com",
         "category": "Entertainment",
     },
-    "ew": {
-        "name": "Entertainment Weekly",
-        "url": "https://ew.com/feed/",
+    "deadline": {
+        "name": "Deadline",
+        "url": "https://deadline.com/feed/",
         "type": "rss",
-        "website": "https://ew.com",
+        "website": "https://deadline.com",
         "category": "Entertainment",
     },
 
@@ -223,18 +223,18 @@ NEWS_SOURCES = {
         "website": "https://www.espn.com",
         "category": "Sports",
     },
-    "bleacher_report": {
-        "name": "Bleacher Report",
-        "url": "https://bleacherreport.com/articles/feed",
+    "cbs_sports": {
+        "name": "CBS Sports",
+        "url": "https://www.cbssports.com/rss/headlines/",
         "type": "rss",
-        "website": "https://bleacherreport.com",
+        "website": "https://www.cbssports.com",
         "category": "Sports",
     },
-    "sports_illustrated": {
-        "name": "Sports Illustrated",
-        "url": "https://www.si.com/rss/si_topstories.rss",
+    "yahoo_sports": {
+        "name": "Yahoo Sports",
+        "url": "https://sports.yahoo.com/rss/",
         "type": "rss",
-        "website": "https://www.si.com",
+        "website": "https://sports.yahoo.com",
         "category": "Sports",
     },
 
@@ -262,25 +262,74 @@ NEWS_SOURCES = {
     },
 
     # ===== Health =====
-    "medical_news": {
-        "name": "Medical News Today",
-        "url": "https://www.medicalnewstoday.com/rss",
+    "stat_news": {
+        "name": "STAT News",
+        "url": "https://www.statnews.com/feed/",
         "type": "rss",
-        "website": "https://www.medicalnewstoday.com",
+        "website": "https://www.statnews.com",
         "category": "Health",
     },
-    "health_news": {
-        "name": "Healthline",
-        "url": "https://www.healthline.com/rss",
+    "npr_health": {
+        "name": "NPR Health",
+        "url": "https://feeds.npr.org/103537970/rss.xml",
         "type": "rss",
-        "website": "https://www.healthline.com",
+        "website": "https://www.npr.org/sections/health",
         "category": "Health",
     },
-    "webmd": {
-        "name": "WebMD",
-        "url": "https://rssfeeds.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC",
+    "science_daily_health": {
+        "name": "Science Daily Health",
+        "url": "https://www.sciencedaily.com/rss/health_medicine.xml",
         "type": "rss",
-        "website": "https://www.webmd.com",
+        "website": "https://www.sciencedaily.com",
+        "category": "Health",
+    },
+    "medical_xpress": {
+        "name": "Medical Xpress",
+        "url": "https://medicalxpress.com/rss-feed/",
+        "type": "rss",
+        "website": "https://medicalxpress.com",
+        "category": "Health",
+    },
+    "the_lancet": {
+        "name": "The Lancet",
+        "url": "https://www.thelancet.com/rssfeed/lancet_online.xml",
+        "type": "rss",
+        "website": "https://www.thelancet.com",
+        "category": "Health",
+    },
+    "nature_medicine": {
+        "name": "Nature Medicine",
+        "url": "https://www.nature.com/nm.rss",
+        "type": "rss",
+        "website": "https://www.nature.com/nm",
+        "category": "Health",
+    },
+    "genetic_engineering_news": {
+        "name": "Genetic Engineering News",
+        "url": "https://www.genengnews.com/feed/",
+        "type": "rss",
+        "website": "https://www.genengnews.com",
+        "category": "Health",
+    },
+    "who_news": {
+        "name": "WHO News",
+        "url": "https://www.who.int/rss-feeds/news-english.xml",
+        "type": "rss",
+        "website": "https://www.who.int",
+        "category": "Health",
+    },
+    "nutrition_org": {
+        "name": "Nutrition.org",
+        "url": "https://nutrition.org/feed/",
+        "type": "rss",
+        "website": "https://nutrition.org",
+        "category": "Health",
+    },
+    "self_wellness": {
+        "name": "SELF",
+        "url": "https://www.self.com/feed/rss",
+        "type": "rss",
+        "website": "https://www.self.com",
         "category": "Health",
     },
 }
@@ -398,5 +447,213 @@ VIDEO_SOURCES = {
         "website": "https://www.youtube.com/@WhiteboardCrypto",
         "description": "Educational crypto explainers",
         "category": "CryptoCurrency",
+    },
+
+    # ===== World =====
+    "wion": {
+        "name": "WION",
+        "channel_id": "UCWEIPvoxRwn6llPOIn555rQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCWEIPvoxRwn6llPOIn555rQ",
+        "website": "https://www.youtube.com/@WIONews",
+        "description": "World Is One News - international coverage",
+        "category": "World",
+    },
+    "dw_news": {
+        "name": "DW News",
+        "channel_id": "UCknLrEdhRCp1aegoMqRaCZg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCknLrEdhRCp1aegoMqRaCZg",
+        "website": "https://www.youtube.com/@daborintv",
+        "description": "Deutsche Welle international news",
+        "category": "World",
+    },
+    "channel4_news": {
+        "name": "Channel 4 News",
+        "channel_id": "UCTrQ7HXWRRxr7OsOtodr2_w",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCTrQ7HXWRRxr7OsOtodr2_w",
+        "website": "https://www.youtube.com/@Channel4News",
+        "description": "UK-based international news coverage",
+        "category": "World",
+    },
+
+    # ===== Nation (US) =====
+    "pbs_newshour_yt": {
+        "name": "PBS NewsHour",
+        "channel_id": "UC6ZFN9Tx6xh-skXCuRHCDpQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC6ZFN9Tx6xh-skXCuRHCDpQ",
+        "website": "https://www.youtube.com/@PBSNewsHour",
+        "description": "In-depth US national news",
+        "category": "Nation",
+    },
+    "nbc_news": {
+        "name": "NBC News",
+        "channel_id": "UCeY0bbntWzzVIaj2z3QigXg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCeY0bbntWzzVIaj2z3QigXg",
+        "website": "https://www.youtube.com/@NBCNews",
+        "description": "Major US network news",
+        "category": "Nation",
+    },
+    "abc_news": {
+        "name": "ABC News",
+        "channel_id": "UCBi2mrWuNuyYy4gbM6fU18Q",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCBi2mrWuNuyYy4gbM6fU18Q",
+        "website": "https://www.youtube.com/@ABCNews",
+        "description": "Major US network news",
+        "category": "Nation",
+    },
+
+    # ===== Business =====
+    "cnbc_yt": {
+        "name": "CNBC",
+        "channel_id": "UCvJJ_dzjViJCoLf5uKUTwoA",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCvJJ_dzjViJCoLf5uKUTwoA",
+        "website": "https://www.youtube.com/@CNBC",
+        "description": "Business and financial news",
+        "category": "Business",
+    },
+    "bloomberg": {
+        "name": "Bloomberg Television",
+        "channel_id": "UCIALMKvObZNtJ6AmdCLP7Lg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg",
+        "website": "https://www.youtube.com/@bloombergtv",
+        "description": "Global business and financial news",
+        "category": "Business",
+    },
+    "yahoo_finance": {
+        "name": "Yahoo Finance",
+        "channel_id": "UCEAZeUIeJs0IjQiqTCdVSIg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCEAZeUIeJs0IjQiqTCdVSIg",
+        "website": "https://www.youtube.com/@YahooFinance",
+        "description": "Financial news and market analysis",
+        "category": "Business",
+    },
+
+    # ===== Technology =====
+    "mkbhd": {
+        "name": "Marques Brownlee",
+        "channel_id": "UCBJycsmduvYEL83R_U4JriQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCBJycsmduvYEL83R_U4JriQ",
+        "website": "https://www.youtube.com/@mkbhd",
+        "description": "Tech reviews and commentary",
+        "category": "Technology",
+    },
+    "linus_tech_tips": {
+        "name": "Linus Tech Tips",
+        "channel_id": "UCXuqSBlHAE6Xw-yeJA0Tunw",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCXuqSBlHAE6Xw-yeJA0Tunw",
+        "website": "https://www.youtube.com/@LinusTechTips",
+        "description": "Tech reviews and builds",
+        "category": "Technology",
+    },
+    "the_verge_yt": {
+        "name": "The Verge",
+        "channel_id": "UCddiUEpeqJcYeBxX1IVBKvQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ",
+        "website": "https://www.youtube.com/@TheVerge",
+        "description": "Technology news and reviews",
+        "category": "Technology",
+    },
+
+    # ===== Entertainment =====
+    "screen_junkies": {
+        "name": "Screen Junkies",
+        "channel_id": "UCOpcACMWblDls9Z6GERVi1A",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A",
+        "website": "https://www.youtube.com/@ScreenJunkies",
+        "description": "Movie commentary and Honest Trailers",
+        "category": "Entertainment",
+    },
+    "collider": {
+        "name": "Collider",
+        "channel_id": "UC5hX0jtOEAobccb2dvSnYbw",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC5hX0jtOEAobccb2dvSnYbw",
+        "website": "https://www.youtube.com/@Collider",
+        "description": "Movies and TV discussion",
+        "category": "Entertainment",
+    },
+    "ign": {
+        "name": "IGN",
+        "channel_id": "UCKy1dAqELo0zrOtPkf0eTMw",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw",
+        "website": "https://www.youtube.com/@IGN",
+        "description": "Gaming and entertainment news",
+        "category": "Entertainment",
+    },
+
+    # ===== Sports =====
+    "espn_yt": {
+        "name": "ESPN",
+        "channel_id": "UCiWLfSweyRNmLpgEHekhoAg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg",
+        "website": "https://www.youtube.com/@espn",
+        "description": "Sports news and highlights",
+        "category": "Sports",
+    },
+    "cbs_sports_yt": {
+        "name": "CBS Sports",
+        "channel_id": "UCja8sZ2T4ylIqjggA1Zuukg",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCja8sZ2T4ylIqjggA1Zuukg",
+        "website": "https://www.youtube.com/@CBSSports",
+        "description": "Sports coverage and analysis",
+        "category": "Sports",
+    },
+    "pat_mcafee": {
+        "name": "The Pat McAfee Show",
+        "channel_id": "UCxcTeAKWJca6XyJ37_ZoKIQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCxcTeAKWJca6XyJ37_ZoKIQ",
+        "website": "https://www.youtube.com/@ThePatMcAfeeShow",
+        "description": "Sports talk and commentary",
+        "category": "Sports",
+    },
+
+    # ===== Science =====
+    "veritasium": {
+        "name": "Veritasium",
+        "channel_id": "UCHnyfMqiRRG1u-2MsSQLbXA",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCHnyfMqiRRG1u-2MsSQLbXA",
+        "website": "https://www.youtube.com/@veritasium",
+        "description": "Science education and experiments",
+        "category": "Science",
+    },
+    "kurzgesagt": {
+        "name": "Kurzgesagt",
+        "channel_id": "UCsXVk37bltHxD1rDPwtNM8Q",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCsXVk37bltHxD1rDPwtNM8Q",
+        "website": "https://www.youtube.com/@kurzgesagt",
+        "description": "Animated science explainers",
+        "category": "Science",
+    },
+    "smarter_every_day": {
+        "name": "SmarterEveryDay",
+        "channel_id": "UC6107grRI4m0o2-emgoDnAA",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC6107grRI4m0o2-emgoDnAA",
+        "website": "https://www.youtube.com/@smartereveryday",
+        "description": "Science and engineering exploration",
+        "category": "Science",
+    },
+
+    # ===== Health =====
+    "doctor_mike": {
+        "name": "Doctor Mike",
+        "channel_id": "UC0QHWhjbe5fGJEPz3sVb6nw",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC0QHWhjbe5fGJEPz3sVb6nw",
+        "website": "https://www.youtube.com/@DoctorMike",
+        "description": "Medical education and health advice",
+        "category": "Health",
+    },
+    "medlife_crisis": {
+        "name": "Medlife Crisis",
+        "channel_id": "UCgRBRE1DUP2w7HTH9j_L4OQ",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCgRBRE1DUP2w7HTH9j_L4OQ",
+        "website": "https://www.youtube.com/@MedlifeCrisis",
+        "description": "Medical topics from a cardiologist",
+        "category": "Health",
+    },
+    "dr_eric_berg": {
+        "name": "Dr. Eric Berg DC",
+        "channel_id": "UC3w193M5tYPJqF0Hi-7U-2g",
+        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC3w193M5tYPJqF0Hi-7U-2g",
+        "website": "https://www.youtube.com/@drberg",
+        "description": "Health and nutrition advice",
+        "category": "Health",
     },
 }

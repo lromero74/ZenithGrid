@@ -950,3 +950,18 @@ class AccountValueSnapshot(Base):
     # Relationships
     account = relationship("Account")
     user = relationship("User")
+
+
+class MetricSnapshot(Base):
+    """
+    Rolling history of market metric values for sparkline charts.
+
+    Records a snapshot each time a metric is fetched (~every 15 min).
+    Pruned to 90 days to keep the table small.
+    """
+    __tablename__ = "metric_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    metric_name = Column(String, nullable=False, index=True)
+    value = Column(Float, nullable=False)
+    recorded_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

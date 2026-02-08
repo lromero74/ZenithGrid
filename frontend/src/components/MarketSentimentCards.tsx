@@ -12,8 +12,9 @@
  * Shows 3 cards at a time, auto-cycles every 30 seconds with pause/manual controls.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Sparkline } from './Sparkline'
 import {
   Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, Info, X, ExternalLink,
   ChevronLeft, ChevronRight, Pause, Play, TrendingUp, Coins, PieChart,
@@ -34,6 +35,7 @@ import type {
   HashRateResponse,
   LightningResponse,
   ATHResponse,
+  MetricHistoryResponse,
 } from '../types'
 import {
   NEXT_HALVING_BLOCK,
@@ -475,6 +477,39 @@ export function MarketSentimentCards() {
     refetchOnWindowFocus: false,
   })
 
+  // Fetch metric histories for sparklines
+  const metricHistoryQuery = (name: string) => ({
+    queryKey: ['metric-history', name],
+    queryFn: async () => {
+      const response = await fetch(`/api/news/metric-history/${name}?days=30`)
+      if (!response.ok) return { metric_name: name, data: [] }
+      return response.json() as Promise<MetricHistoryResponse>
+    },
+    staleTime: 1000 * 60 * 15,
+    refetchInterval: 1000 * 60 * 15,
+    refetchOnWindowFocus: false,
+  })
+
+  const { data: fearGreedHistory } = useQuery(metricHistoryQuery('fear_greed'))
+  const { data: btcDomHistory } = useQuery(metricHistoryQuery('btc_dominance'))
+  const { data: altseasonHistory } = useQuery(metricHistoryQuery('altseason_index'))
+  const { data: stablecoinHistory } = useQuery(metricHistoryQuery('stablecoin_mcap'))
+  const { data: totalMcapHistory } = useQuery(metricHistoryQuery('total_market_cap'))
+  const { data: hashRateHistory } = useQuery(metricHistoryQuery('hash_rate'))
+  const { data: lightningHistory } = useQuery(metricHistoryQuery('lightning_capacity'))
+  const { data: mempoolHistory } = useQuery(metricHistoryQuery('mempool_tx_count'))
+
+  const sparkData = useMemo(() => ({
+    fear_greed: fearGreedHistory?.data?.map(d => d.value) || [],
+    btc_dominance: btcDomHistory?.data?.map(d => d.value) || [],
+    altseason_index: altseasonHistory?.data?.map(d => d.value) || [],
+    stablecoin_mcap: stablecoinHistory?.data?.map(d => d.value) || [],
+    total_market_cap: totalMcapHistory?.data?.map(d => d.value) || [],
+    hash_rate: hashRateHistory?.data?.map(d => d.value) || [],
+    lightning_capacity: lightningHistory?.data?.map(d => d.value) || [],
+    mempool_tx_count: mempoolHistory?.data?.map(d => d.value) || [],
+  }), [fearGreedHistory, btcDomHistory, altseasonHistory, stablecoinHistory, totalMcapHistory, hashRateHistory, lightningHistory, mempoolHistory])
+
   // Calculate halving countdown
   const halvingCountdown = blockHeight ? calculateHalvingCountdown(blockHeight.height) : null
 
@@ -556,17 +591,17 @@ export function MarketSentimentCards() {
   // Define all cards (funding rates removed - requires API key)
   const baseCards = [
     { id: 'season', component: <SeasonCard seasonInfo={seasonInfo} /> },
-    { id: 'fear-greed', component: <FearGreedCard data={fearGreedData} /> },
+    { id: 'fear-greed', component: <FearGreedCard data={fearGreedData} spark={sparkData.fear_greed} /> },
     { id: 'halving', component: <HalvingCard blockHeight={blockHeight} halvingCountdown={halvingCountdown} liveCountdown={liveCountdown} showExtendedCountdown={showExtendedCountdown} setShowExtendedCountdown={setShowExtendedCountdown} /> },
     { id: 'us-debt', component: <USDebtCard usDebtData={usDebtData} liveDebt={liveDebt} onShowHistory={() => setShowDebtCeilingModal(true)} /> },
-    { id: 'btc-dominance', component: <BTCDominanceCard data={btcDominanceData} /> },
-    { id: 'altseason', component: <AltseasonCard data={altseasonData} /> },
-    { id: 'stablecoin-mcap', component: <StablecoinMcapCard data={stablecoinData} /> },
-    { id: 'total-mcap', component: <TotalMarketCapCard data={totalMarketCapData} /> },
+    { id: 'btc-dominance', component: <BTCDominanceCard data={btcDominanceData} spark={sparkData.btc_dominance} /> },
+    { id: 'altseason', component: <AltseasonCard data={altseasonData} spark={sparkData.altseason_index} /> },
+    { id: 'stablecoin-mcap', component: <StablecoinMcapCard data={stablecoinData} spark={sparkData.stablecoin_mcap} /> },
+    { id: 'total-mcap', component: <TotalMarketCapCard data={totalMarketCapData} spark={sparkData.total_market_cap} /> },
     { id: 'btc-supply', component: <BTCSupplyCard data={btcSupplyData} /> },
-    { id: 'mempool', component: <MempoolCard data={mempoolData} /> },
-    { id: 'hash-rate', component: <HashRateCard data={hashRateData} /> },
-    { id: 'lightning', component: <LightningCard data={lightningData} /> },
+    { id: 'mempool', component: <MempoolCard data={mempoolData} spark={sparkData.mempool_tx_count} /> },
+    { id: 'hash-rate', component: <HashRateCard data={hashRateData} spark={sparkData.hash_rate} /> },
+    { id: 'lightning', component: <LightningCard data={lightningData} spark={sparkData.lightning_capacity} /> },
     { id: 'ath', component: <ATHCard data={athData} /> },
   ]
 
@@ -836,7 +871,7 @@ export function MarketSentimentCards() {
 // Individual Card Components
 // ============================================================================
 
-function FearGreedCard({ data }: { data: FearGreedResponse | undefined }) {
+function FearGreedCard({ data, spark }: { data: FearGreedResponse | undefined; spark: number[] }) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
       <div className="flex items-center space-x-2 mb-4">
@@ -875,6 +910,7 @@ function FearGreedCard({ data }: { data: FearGreedResponse | undefined }) {
             <span>Neutral</span>
             <span>Extreme Greed</span>
           </div>
+          <Sparkline data={spark} color="#eab308" height={36} />
         </div>
       ) : (
         <div className="flex items-center justify-center h-32">
@@ -1061,7 +1097,7 @@ function USDebtCard({
   )
 }
 
-function BTCDominanceCard({ data }: { data: BTCDominanceResponse | undefined }) {
+function BTCDominanceCard({ data, spark }: { data: BTCDominanceResponse | undefined; spark: number[] }) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
       <div className="flex items-center space-x-2 mb-4">
@@ -1099,7 +1135,8 @@ function BTCDominanceCard({ data }: { data: BTCDominanceResponse | undefined }) 
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-600 mt-3">
+          <Sparkline data={spark} color="#f97316" height={36} />
+          <div className="text-[10px] text-slate-600">
             Total MCap: ${(data.total_market_cap / 1_000_000_000_000).toFixed(2)}T
           </div>
         </div>
@@ -1112,7 +1149,7 @@ function BTCDominanceCard({ data }: { data: BTCDominanceResponse | undefined }) 
   )
 }
 
-function AltseasonCard({ data }: { data: AltseasonIndexResponse | undefined }) {
+function AltseasonCard({ data, spark }: { data: AltseasonIndexResponse | undefined; spark: number[] }) {
   const getSeasonColor = (season: string) => {
     if (season === 'Altcoin Season') return { text: 'text-purple-400', bg: 'bg-purple-500/20', border: 'border-purple-500/30' }
     if (season === 'Bitcoin Season') return { text: 'text-orange-400', bg: 'bg-orange-500/20', border: 'border-orange-500/30' }
@@ -1155,7 +1192,8 @@ function AltseasonCard({ data }: { data: AltseasonIndexResponse | undefined }) {
             </div>
           </div>
 
-          <div className="text-xs text-slate-500 mt-3">
+          <Sparkline data={spark} color="#a855f7" height={36} />
+          <div className="text-xs text-slate-500">
             {data.outperformers}/{data.total_altcoins} alts beat BTC (30d)
           </div>
         </div>
@@ -1168,7 +1206,7 @@ function AltseasonCard({ data }: { data: AltseasonIndexResponse | undefined }) {
   )
 }
 
-function StablecoinMcapCard({ data }: { data: StablecoinMcapResponse | undefined }) {
+function StablecoinMcapCard({ data, spark }: { data: StablecoinMcapResponse | undefined; spark: number[] }) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
       <div className="flex items-center space-x-2 mb-4">
@@ -1203,7 +1241,8 @@ function StablecoinMcapCard({ data }: { data: StablecoinMcapResponse | undefined
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-600 mt-3 text-center">
+          <Sparkline data={spark} color="#22c55e" height={36} />
+          <div className="text-[10px] text-slate-600 text-center">
             High supply = capital ready to deploy
           </div>
         </div>
@@ -1216,7 +1255,7 @@ function StablecoinMcapCard({ data }: { data: StablecoinMcapResponse | undefined
   )
 }
 
-function TotalMarketCapCard({ data }: { data: TotalMarketCapResponse | undefined }) {
+function TotalMarketCapCard({ data, spark }: { data: TotalMarketCapResponse | undefined; spark: number[] }) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
       <div className="flex items-center space-x-2 mb-4">
@@ -1242,7 +1281,8 @@ function TotalMarketCapCard({ data }: { data: TotalMarketCapResponse | undefined
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-600 mt-3 text-center">
+          <Sparkline data={spark} color="#60a5fa" height={36} />
+          <div className="text-[10px] text-slate-600 text-center">
             All cryptocurrencies combined
           </div>
         </div>
@@ -1304,7 +1344,7 @@ function BTCSupplyCard({ data }: { data: BTCSupplyResponse | undefined }) {
   )
 }
 
-function MempoolCard({ data }: { data: MempoolResponse | undefined }) {
+function MempoolCard({ data, spark }: { data: MempoolResponse | undefined; spark: number[] }) {
   const getCongestionColor = (congestion: string) => {
     if (congestion === 'High') return { text: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-500/30' }
     if (congestion === 'Medium') return { text: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-500/30' }
@@ -1345,7 +1385,8 @@ function MempoolCard({ data }: { data: MempoolResponse | undefined }) {
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-600 mt-3 text-center">
+          <Sparkline data={spark} color="#a855f7" height={36} />
+          <div className="text-[10px] text-slate-600 text-center">
             Recommended fee rates
           </div>
         </div>
@@ -1358,7 +1399,7 @@ function MempoolCard({ data }: { data: MempoolResponse | undefined }) {
   )
 }
 
-function HashRateCard({ data }: { data: HashRateResponse | undefined }) {
+function HashRateCard({ data, spark }: { data: HashRateResponse | undefined; spark: number[] }) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
       <div className="flex items-center space-x-2 mb-4">
@@ -1390,7 +1431,8 @@ function HashRateCard({ data }: { data: HashRateResponse | undefined }) {
             />
           </div>
 
-          <div className="text-[10px] text-slate-600 mt-3 text-center">
+          <Sparkline data={spark} color="#22d3ee" height={36} />
+          <div className="text-[10px] text-slate-600 text-center">
             Higher = more secure network
           </div>
         </div>
@@ -1403,7 +1445,7 @@ function HashRateCard({ data }: { data: HashRateResponse | undefined }) {
   )
 }
 
-function LightningCard({ data }: { data: LightningResponse | undefined }) {
+function LightningCard({ data, spark }: { data: LightningResponse | undefined; spark: number[] }) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
       <div className="flex items-center space-x-2 mb-4">
@@ -1430,7 +1472,8 @@ function LightningCard({ data }: { data: LightningResponse | undefined }) {
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-600 mt-1 text-center">
+          <Sparkline data={spark} color="#eab308" height={36} />
+          <div className="text-[10px] text-slate-600 text-center">
             Bitcoin's Layer 2 scaling solution
           </div>
         </div>
