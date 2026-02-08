@@ -128,18 +128,11 @@ NEWS_SOURCES = {
     },
 
     # ===== Finance =====
-    "reuters_finance": {
-        "name": "Bloomberg Markets",
-        "url": "https://feeds.bloomberg.com/markets/news.rss",
+    "yahoo_finance_news": {
+        "name": "Yahoo Finance",
+        "url": "https://finance.yahoo.com/news/rssindex",
         "type": "rss",
-        "website": "https://www.bloomberg.com/markets",
-        "category": "Finance",
-    },
-    "ft_markets": {
-        "name": "Financial Times",
-        "url": "https://www.ft.com/markets?format=rss",
-        "type": "rss",
-        "website": "https://www.ft.com/markets",
+        "website": "https://finance.yahoo.com",
         "category": "Finance",
     },
     "motley_fool": {
@@ -149,11 +142,11 @@ NEWS_SOURCES = {
         "website": "https://www.fool.com",
         "category": "Finance",
     },
-    "the_economist_finance": {
-        "name": "The Economist",
-        "url": "https://www.economist.com/finance-and-economics/rss.xml",
+    "kiplinger": {
+        "name": "Kiplinger",
+        "url": "https://www.kiplinger.com/feed/all",
         "type": "rss",
-        "website": "https://www.economist.com",
+        "website": "https://www.kiplinger.com",
         "category": "Finance",
     },
 
@@ -211,18 +204,11 @@ NEWS_SOURCES = {
         "website": "https://www.cnbc.com",
         "category": "Business",
     },
-    "marketwatch": {
-        "name": "MarketWatch",
-        "url": "https://www.marketwatch.com/rss/topstories",
+    "business_insider": {
+        "name": "Business Insider",
+        "url": "https://www.businessinsider.com/rss",
         "type": "rss",
-        "website": "https://www.marketwatch.com",
-        "category": "Business",
-    },
-    "wsj_markets": {
-        "name": "WSJ Markets",
-        "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
-        "type": "rss",
-        "website": "https://www.wsj.com/news/markets",
+        "website": "https://www.businessinsider.com",
         "category": "Business",
     },
 

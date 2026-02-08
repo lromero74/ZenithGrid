@@ -226,85 +226,79 @@ export function formatRelativeTime(isoString: string | null): string {
   return date.toLocaleDateString()
 }
 
-// Source colors for visual distinction
-export const sourceColors: Record<string, string> = {
+// Source-to-category mapping (used to color sources by their category)
+import { CATEGORY_COLORS } from '../../pages/news/types'
+
+const SOURCE_CATEGORY: Record<string, string> = {
   // CryptoCurrency
-  reddit_crypto: 'bg-orange-600/20 text-orange-400 border-orange-600/30',
-  reddit_bitcoin: 'bg-amber-600/20 text-amber-400 border-amber-600/30',
-  bitcoin_magazine: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  beincrypto: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  blockworks: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
-  coindesk: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  cointelegraph: 'bg-green-500/20 text-green-400 border-green-500/30',
-  decrypt: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  theblock: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  cryptoslate: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  reddit_crypto: 'CryptoCurrency', reddit_bitcoin: 'CryptoCurrency',
+  bitcoin_magazine: 'CryptoCurrency', beincrypto: 'CryptoCurrency',
+  blockworks: 'CryptoCurrency', coindesk: 'CryptoCurrency',
+  cointelegraph: 'CryptoCurrency', decrypt: 'CryptoCurrency',
+  theblock: 'CryptoCurrency', cryptoslate: 'CryptoCurrency',
+  unchained: 'CryptoCurrency',
   // AI
-  reddit_artificial: 'bg-violet-600/20 text-violet-400 border-violet-600/30',
-  openai_blog: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  mit_tech_ai: 'bg-red-500/20 text-red-400 border-red-500/30',
-  the_ai_beat: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  reddit_artificial: 'AI', openai_blog: 'AI',
+  mit_tech_ai: 'AI', the_ai_beat: 'AI',
   // Finance
-  reuters_finance: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  ft_markets: 'bg-pink-600/20 text-pink-400 border-pink-600/30',
-  yahoo_finance_news: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  investing_com: 'bg-green-600/20 text-green-400 border-green-600/30',
+  yahoo_finance_news: 'Finance', motley_fool: 'Finance', kiplinger: 'Finance',
   // World
-  reuters_world: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  bbc_world: 'bg-red-500/20 text-red-400 border-red-500/30',
-  al_jazeera: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  guardian_world: 'World', bbc_world: 'World', al_jazeera: 'World',
   // Nation
-  npr_news: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  pbs_newshour: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
-  ap_news: 'bg-red-500/20 text-red-400 border-red-500/30',
+  npr_news: 'Nation', pbs_newshour: 'Nation', ap_news: 'Nation',
   // Business
-  cnbc_business: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
-  marketwatch: 'bg-green-500/20 text-green-400 border-green-500/30',
-  wsj_markets: 'bg-slate-400/20 text-slate-300 border-slate-400/30',
+  cnbc_business: 'Business', business_insider: 'Business',
   // Technology
-  techcrunch: 'bg-green-600/20 text-green-400 border-green-600/30',
-  ars_technica: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  the_verge: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  wired: 'bg-slate-300/20 text-slate-300 border-slate-300/30',
+  engadget: 'Technology', ars_technica: 'Technology',
+  the_verge: 'Technology', wired: 'Technology',
   // Entertainment
-  variety: 'bg-red-500/20 text-red-400 border-red-500/30',
-  hollywood_reporter: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  ew: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  variety: 'Entertainment', hollywood_reporter: 'Entertainment',
+  deadline: 'Entertainment',
   // Sports
-  espn: 'bg-red-600/20 text-red-400 border-red-600/30',
-  bleacher_report: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  sports_illustrated: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  espn: 'Sports', cbs_sports: 'Sports', yahoo_sports: 'Sports',
   // Science
-  science_daily: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  nasa: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
-  new_scientist: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+  science_daily: 'Science', nasa: 'Science', new_scientist: 'Science',
   // Health
-  medical_news: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  health_news: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  webmd: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  stat_news: 'Health', npr_health: 'Health', science_daily_health: 'Health',
+  medical_xpress: 'Health', medical_news: 'Health', health_news: 'Health',
+  genetic_engineering_news: 'Health', nature_medicine: 'Health',
+  the_lancet: 'Health', who_news: 'Health', nutrition_org: 'Health',
+  self_wellness: 'Health',
 }
 
-// Video channel colors
-export const videoSourceColors: Record<string, string> = {
-  coin_bureau: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  benjamin_cowen: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  altcoin_daily: 'bg-red-500/20 text-red-400 border-red-500/30',
-  bankless: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  the_defiant: 'bg-green-500/20 text-green-400 border-green-500/30',
-  crypto_banter: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  datadash: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  cryptosrus: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  the_moon: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
-  digital_asset_news: 'bg-lime-500/20 text-lime-400 border-lime-500/30',
-  paul_barron: 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30',
-  lark_davis: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
-  pompliano: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
-  whiteboard_crypto: 'bg-slate-300/20 text-slate-300 border-slate-300/30',
+const VIDEO_SOURCE_CATEGORY: Record<string, string> = {
+  // CryptoCurrency
+  coin_bureau: 'CryptoCurrency', benjamin_cowen: 'CryptoCurrency',
+  altcoin_daily: 'CryptoCurrency', bankless: 'CryptoCurrency',
+  the_defiant: 'CryptoCurrency', crypto_banter: 'CryptoCurrency',
+  datadash: 'CryptoCurrency', cryptosrus: 'CryptoCurrency',
+  the_moon: 'CryptoCurrency', digital_asset_news: 'CryptoCurrency',
+  paul_barron: 'CryptoCurrency', lark_davis: 'CryptoCurrency',
+  pompliano: 'CryptoCurrency', whiteboard_crypto: 'CryptoCurrency',
   // AI
-  two_minute_papers: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
-  ai_explained: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  matt_wolfe: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  two_minute_papers: 'AI', ai_explained: 'AI', matt_wolfe: 'AI',
   // Finance
-  financial_times: 'bg-pink-600/20 text-pink-400 border-pink-600/30',
-  graham_stephan: 'bg-green-500/20 text-green-400 border-green-500/30',
+  financial_times: 'Finance', graham_stephan: 'Finance',
+  // Business
+  cnbc_tv: 'Business', bloomberg: 'Business', yahoo_finance: 'Business',
+  // World
+  wion: 'World', dw_news: 'World', channel4_news: 'World',
+  // Nation
+  pbs_newshour_tv: 'Nation', nbc_news: 'Nation',
+  // Technology
+  mkbhd: 'Technology', linus_tech: 'Technology',
+  // Science
+  veritasium: 'Science', kurzgesagt: 'Science',
 }
+
+// Build source color maps from category colors
+function buildColorMap(mapping: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [source, category] of Object.entries(mapping)) {
+    result[source] = CATEGORY_COLORS[category] || 'bg-slate-600 text-slate-300 border-slate-500'
+  }
+  return result
+}
+
+export const sourceColors: Record<string, string> = buildColorMap(SOURCE_CATEGORY)
+export const videoSourceColors: Record<string, string> = buildColorMap(VIDEO_SOURCE_CATEGORY)

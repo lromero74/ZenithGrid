@@ -504,7 +504,7 @@ export function ArticleReaderMiniPlayer() {
                 >
                   <div
                     className="h-full bg-green-500 rounded-full transition-all duration-100 relative"
-                    style={{ width: words.length > 0 ? `${((currentWordIndex + 1) / words.length) * 100}%` : '0%' }}
+                    style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
                   >
                     <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>

@@ -2332,6 +2332,13 @@ async def get_article_content(url: str):
     4. Consider upgrading to t2.small (2GB RAM) before implementing
     """
     # Validate URL
+    # Known paywalled domains where content extraction just returns subscription prompts
+    PAYWALLED_DOMAINS = {
+        'www.ft.com', 'ft.com',
+        'www.wsj.com', 'wsj.com',
+        'www.barrons.com', 'barrons.com',
+    }
+
     try:
         parsed = urlparse(url)
         if not parsed.scheme or not parsed.netloc:
@@ -2350,6 +2357,14 @@ async def get_article_content(url: str):
                 url=url,
                 success=False,
                 error=f"Domain not allowed. Supported: {', '.join(sorted(allowed_domains))}"
+            )
+
+        # Early reject known paywalled sites - extraction just returns subscription ads
+        if domain in PAYWALLED_DOMAINS:
+            return ArticleContentResponse(
+                url=url,
+                success=False,
+                error="This source requires a subscription. Open on the website to read the full article."
             )
     except Exception as e:
         return ArticleContentResponse(
@@ -2417,6 +2432,22 @@ async def get_article_content(url: str):
                 url=url,
                 success=False,
                 error="Could not extract article content. The page may be paywalled or use dynamic loading."
+            )
+
+        # Detect paywall content: if the extracted text is short and contains
+        # subscription/paywall phrases, it's likely just the paywall prompt
+        extracted_lower = extracted.lower()
+        paywall_phrases = [
+            'subscribe to read', 'subscription required', 'sign in to read',
+            'premium content', 'become a member', 'start your free trial',
+            'already a subscriber', 'subscribe for full access',
+        ]
+        paywall_hits = sum(1 for phrase in paywall_phrases if phrase in extracted_lower)
+        if paywall_hits >= 2 and len(extracted) < 1500:
+            return ArticleContentResponse(
+                url=url,
+                success=False,
+                error="This source requires a subscription. Open on the website to read the full article."
             )
 
         # Build response with metadata if available

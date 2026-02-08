@@ -526,7 +526,7 @@ export default function News() {
                   key={source.id}
                   onClick={() => toggleSource(source.id)}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                    selectedSources.has(source.id)
+                    (allSourcesSelected || selectedSources.has(source.id))
                       ? sourceColors[source.id] || 'bg-slate-600 text-white border-slate-500'
                       : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
                   }`}
@@ -798,7 +798,7 @@ export default function News() {
                   key={source.id}
                   onClick={() => toggleVideoSource(source.id)}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                    selectedVideoSources.has(source.id)
+                    (allVideoSourcesSelected || selectedVideoSources.has(source.id))
                       ? videoSourceColors[source.id] || 'bg-slate-600 text-white border-slate-500'
                       : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
                   }`}

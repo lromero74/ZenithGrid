@@ -78,6 +78,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const abortControllerRef = useRef<AbortController | null>(null)
   const wordsRef = useRef<WordTiming[]>([])  // Ref to avoid stale closure
   const isAnimatingRef = useRef(false)  // Track if animation loop should run
+  const lastFoundIndexRef = useRef(0)  // Track last word index for O(1) search
+  const animationEpochRef = useRef(0)  // Epoch counter to kill stale animation loops
+  const lastWordIndexRef = useRef(-1)  // Avoid redundant setCurrentWordIndex calls
   const cacheRef = useRef<CachedAudio | null>(null)  // Cache audio for re-play
   const currentAudioUrlRef = useRef<string | null>(null)  // Track current audio URL for cleanup
   const requestIdRef = useRef(0)  // Counter to track current request, ignore errors from stale requests
@@ -87,47 +90,83 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     wordsRef.current = words
   }, [words])
 
-  // Animation loop - uses refs to avoid stale closures
+  // Find the word index for a given time (O(1) typical case, O(n) worst case)
+  const findWordIndex = useCallback((time: number): number => {
+    const wordList = wordsRef.current
+    if (wordList.length === 0) return -1
+
+    const startIdx = Math.max(0, lastFoundIndexRef.current)
+
+    // Check current and forward positions first (most common case)
+    for (let i = startIdx; i < wordList.length; i++) {
+      if (time >= wordList[i].startTime && time < wordList[i].endTime) {
+        return i
+      }
+      if (time < wordList[i].startTime) {
+        return Math.max(0, i - 1)
+      }
+    }
+
+    // If past all words, use last word
+    if (time >= wordList[wordList.length - 1].startTime) {
+      return wordList.length - 1
+    }
+
+    // Seek backward case - search from beginning
+    for (let i = 0; i < startIdx; i++) {
+      if (time >= wordList[i].startTime && time < wordList[i].endTime) {
+        return i
+      }
+    }
+
+    return -1
+  }, [])
+
+  // Animation loop - uses epoch counter to prevent duplicate loops
   const startAnimationLoop = useCallback(() => {
+    // Cancel any pending frame from a previous loop
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+
     isAnimatingRef.current = true
+    const epoch = ++animationEpochRef.current  // New epoch kills any stale loops
 
     const animate = () => {
+      // Stale loop check - a newer startAnimationLoop call supersedes this one
+      if (epoch !== animationEpochRef.current) return
       if (!isAnimatingRef.current || !audioRef.current) return
 
-      const time = audioRef.current.currentTime
-      setCurrentTime(time)
+      try {
+        const time = audioRef.current.currentTime
+        setCurrentTime(time)
 
-      // Find the word that contains the current time
-      const wordList = wordsRef.current
-      let foundIndex = -1
+        const foundIndex = findWordIndex(time)
 
-      for (let i = 0; i < wordList.length; i++) {
-        if (time >= wordList[i].startTime && time < wordList[i].endTime) {
-          foundIndex = i
-          break
+        if (foundIndex >= 0) {
+          lastFoundIndexRef.current = foundIndex
         }
-        // Also check if we're between words (use the previous word)
-        if (i > 0 && time >= wordList[i - 1].endTime && time < wordList[i].startTime) {
-          foundIndex = i - 1
-          break
+
+        // Only update React state when the word actually changes
+        if (foundIndex !== lastWordIndexRef.current) {
+          lastWordIndexRef.current = foundIndex
+          setCurrentWordIndex(foundIndex)
         }
+      } catch (err) {
+        console.error('TTS animation loop error:', err)
+        // Don't let exceptions kill the loop - just skip this frame
       }
-
-      // If past all words, use last word
-      if (foundIndex === -1 && wordList.length > 0 && time >= wordList[wordList.length - 1].startTime) {
-        foundIndex = wordList.length - 1
-      }
-
-      setCurrentWordIndex(foundIndex)
 
       // Continue if still animating and audio is playing
-      if (isAnimatingRef.current && audioRef.current && !audioRef.current.paused) {
+      if (epoch === animationEpochRef.current && isAnimatingRef.current &&
+          audioRef.current && !audioRef.current.paused) {
         animationFrameRef.current = requestAnimationFrame(animate)
       }
     }
 
     animationFrameRef.current = requestAnimationFrame(animate)
-  }, [])
+  }, [findWordIndex])
 
   const stopAnimationLoop = useCallback(() => {
     isAnimatingRef.current = false
@@ -179,6 +218,15 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
     audio.onloadedmetadata = () => {
       setDuration(audio.duration)
+    }
+
+    // Safety net: timeupdate fires ~4Hz from the browser reliably.
+    // If the rAF animation loop died (exception, tab throttle, etc.),
+    // this restarts it so word tracking recovers automatically.
+    audio.ontimeupdate = () => {
+      if (!audio.paused && !isAnimatingRef.current) {
+        startAnimationLoop()
+      }
     }
 
     // Cleanup on unmount
@@ -239,6 +287,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setIsPaused(false)
     setIsReady(false)
     setCurrentWordIndex(-1)
+    lastFoundIndexRef.current = 0
+    lastWordIndexRef.current = -1
     setCurrentTime(0)
     setDuration(0)
     setWords([])  // Clear words immediately to prevent stale state
@@ -458,6 +508,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setIsLoading(false)
     setIsReady(false)
     setCurrentWordIndex(-1)
+    lastFoundIndexRef.current = 0
+    lastWordIndexRef.current = -1
     setCurrentTime(0)
     setDuration(0)
     setWords([])  // Clear words to prevent stale state
@@ -470,6 +522,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       audioRef.current.currentTime = 0
       setCurrentTime(0)
       setCurrentWordIndex(0)
+      lastFoundIndexRef.current = 0
+      lastWordIndexRef.current = 0
       if (audioRef.current.paused) {
         audioRef.current.play().catch(err => {
           console.error('Replay failed:', err)
@@ -489,6 +543,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     audioRef.current.currentTime = targetTime
     setCurrentTime(targetTime)
     setCurrentWordIndex(clampedIndex)
+    lastFoundIndexRef.current = clampedIndex
+    lastWordIndexRef.current = clampedIndex
 
     // If paused, start playing from the new position
     if (audioRef.current.paused) {

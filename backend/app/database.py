@@ -70,10 +70,9 @@ DEFAULT_CONTENT_SOURCES = [
     ('ai_explained', 'AI Explained', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw', 'https://www.youtube.com/@aiaborz', 'Clear AI news and explanations', 'UCNJ1Ymd5yFuUPtn21xtRbbw', 'AI'),
     ('matt_wolfe', 'Matt Wolfe', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCJtUOos_MwJa_Ewii-R3cJA', 'https://www.youtube.com/@maborz', 'AI tools, news & tutorials', 'UCJtUOos_MwJa_Ewii-R3cJA', 'AI'),
     # ===== Finance =====
-    ('reuters_finance', 'Bloomberg Markets', 'news', 'https://feeds.bloomberg.com/markets/news.rss', 'https://www.bloomberg.com/markets', 'Bloomberg financial news', None, 'Finance'),
-    ('ft_markets', 'Financial Times', 'news', 'https://www.ft.com/markets?format=rss', 'https://www.ft.com/markets', 'Financial Times market coverage', None, 'Finance'),
+    ('yahoo_finance_news', 'Yahoo Finance', 'news', 'https://finance.yahoo.com/news/rssindex', 'https://finance.yahoo.com', 'Financial news & market analysis', None, 'Finance'),
     ('motley_fool', 'Motley Fool', 'news', 'https://www.fool.com/feeds/index.aspx', 'https://www.fool.com', 'Investing analysis & stock picks', None, 'Finance'),
-    ('the_economist_finance', 'The Economist', 'news', 'https://www.economist.com/finance-and-economics/rss.xml', 'https://www.economist.com', 'Finance & economics analysis', None, 'Finance'),
+    ('kiplinger', 'Kiplinger', 'news', 'https://www.kiplinger.com/feed/all', 'https://www.kiplinger.com', 'Personal finance & investing advice', None, 'Finance'),
     # Finance video sources
     ('financial_times', 'Financial Times', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw', 'https://www.youtube.com/@FinancialTimes', 'Financial news and analysis', 'UCoUxsWakJucWg46KW5RsvPw', 'Finance'),
     ('graham_stephan', 'Graham Stephan', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCV6KDgJskWaEckne5aPA0aQ', 'https://www.youtube.com/@GrahamStephan', 'Personal finance & investing', 'UCV6KDgJskWaEckne5aPA0aQ', 'Finance'),
@@ -87,8 +86,7 @@ DEFAULT_CONTENT_SOURCES = [
     ('ap_news', 'AP News', 'news', 'https://feedx.net/rss/ap.xml', 'https://apnews.com', 'Associated Press top stories', None, 'Nation'),
     # ===== Business =====
     ('cnbc_business', 'CNBC', 'news', 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147', 'https://www.cnbc.com', 'Business & financial news', None, 'Business'),
-    ('marketwatch', 'MarketWatch', 'news', 'https://www.marketwatch.com/rss/topstories', 'https://www.marketwatch.com', 'Financial markets & investing', None, 'Business'),
-    ('wsj_markets', 'WSJ Markets', 'news', 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml', 'https://www.wsj.com/news/markets', 'Wall Street Journal market news', None, 'Business'),
+    ('business_insider', 'Business Insider', 'news', 'https://www.businessinsider.com/rss', 'https://www.businessinsider.com', 'Business & tech news', None, 'Business'),
     # ===== Technology =====
     ('engadget', 'Engadget', 'news', 'https://www.engadget.com/rss.xml', 'https://www.engadget.com', 'Consumer tech news & reviews', None, 'Technology'),
     ('ars_technica', 'Ars Technica', 'news', 'https://feeds.arstechnica.com/arstechnica/index', 'https://arstechnica.com', 'Technology news & analysis', None, 'Technology'),
