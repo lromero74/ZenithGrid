@@ -400,6 +400,13 @@ export interface ATHResponse {
   cached_at: string
 }
 
+export interface BTCRSIResponse {
+  rsi: number
+  zone: string
+  cached_at: string
+  cache_expires_at: string
+}
+
 export interface DebtCeilingEvent {
   date: string
   amount_trillion: number | null

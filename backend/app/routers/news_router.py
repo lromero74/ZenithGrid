@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
 
 from app.database import async_session_maker
+from app.indicator_calculator import IndicatorCalculator
 from app.models import ContentSource, MetricSnapshot, NewsArticle, VideoArticle
 from app.routers.news import (
     CACHE_FILE,
@@ -77,6 +78,7 @@ from app.routers.news import (
     load_hash_rate_cache,
     load_lightning_cache,
     load_ath_cache,
+    load_btc_rsi_cache,
     merge_news_items,
     prune_old_items,
     save_block_height_cache,
@@ -91,6 +93,7 @@ from app.routers.news import (
     save_hash_rate_cache,
     save_lightning_cache,
     save_ath_cache,
+    save_btc_rsi_cache,
 )
 from app.services.news_image_cache import download_image_as_base64
 
@@ -2132,9 +2135,91 @@ async def get_ath():
     return await fetch_ath_data()
 
 
+async def fetch_btc_rsi() -> Dict[str, Any]:
+    """Fetch BTC-USD daily candles from Coinbase and calculate RSI(14)."""
+    try:
+        now = int(datetime.now().timestamp())
+        # Need ~20 daily candles for RSI-14 calculation
+        start = now - (25 * 24 * 60 * 60)
+
+        async with aiohttp.ClientSession() as session:
+            url = (
+                f"https://api.coinbase.com/api/v3/brokerage/market/products/BTC-USD/candles"
+                f"?start={start}&end={now}&granularity=ONE_DAY"
+            )
+            headers = {"User-Agent": "ZenithGrid/1.0"}
+
+            async with session.get(url, headers=headers, timeout=15) as response:
+                if response.status != 200:
+                    logger.warning(f"Coinbase candles API returned {response.status}")
+                    raise HTTPException(status_code=503, detail="Coinbase API unavailable")
+
+                data = await response.json()
+                candles = data.get("candles", [])
+
+                if len(candles) < 15:
+                    raise HTTPException(status_code=503, detail="Not enough candle data for RSI")
+
+                # Coinbase returns newest first; reverse for chronological order
+                candles.sort(key=lambda c: int(c["start"]))
+                closes = [float(c["close"]) for c in candles]
+
+                calc = IndicatorCalculator()
+                rsi = calc.calculate_rsi(closes, 14)
+
+                if rsi is None:
+                    raise HTTPException(status_code=503, detail="RSI calculation failed")
+
+                rsi = round(rsi, 2)
+
+                if rsi < 30:
+                    zone = "oversold"
+                elif rsi > 70:
+                    zone = "overbought"
+                else:
+                    zone = "neutral"
+
+                now_dt = datetime.now()
+                cache_data = {
+                    "rsi": rsi,
+                    "zone": zone,
+                    "cached_at": now_dt.isoformat(),
+                    "cache_expires_at": (now_dt + timedelta(minutes=15)).isoformat(),
+                }
+
+                save_btc_rsi_cache(cache_data)
+                asyncio.create_task(record_metric_snapshot("btc_rsi", rsi))
+                return cache_data
+
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching BTC RSI candles")
+        raise HTTPException(status_code=503, detail="Coinbase API timeout")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching BTC RSI: {e}")
+        raise HTTPException(status_code=503, detail=f"BTC RSI error: {str(e)}")
+
+
+@router.get("/btc-rsi")
+async def get_btc_rsi():
+    """
+    Get BTC RSI(14) based on daily candles.
+    RSI < 30 = oversold, RSI > 70 = overbought.
+    """
+    cache = load_btc_rsi_cache()
+    if cache:
+        logger.info("Serving BTC RSI from cache")
+        return cache
+
+    logger.info("Fetching fresh BTC RSI data...")
+    return await fetch_btc_rsi()
+
+
 VALID_METRIC_NAMES = {
     "fear_greed", "btc_dominance", "altseason_index", "stablecoin_mcap",
     "total_market_cap", "hash_rate", "lightning_capacity", "mempool_tx_count",
+    "btc_rsi",
 }
 
 

@@ -35,6 +35,7 @@ import type {
   HashRateResponse,
   LightningResponse,
   ATHResponse,
+  BTCRSIResponse,
   MetricHistoryResponse,
 } from '../types'
 import {
@@ -482,6 +483,19 @@ export function MarketSentimentCards() {
     refetchOnWindowFocus: false,
   })
 
+  // Fetch BTC RSI
+  const { data: btcRsiData } = useQuery<BTCRSIResponse>({
+    queryKey: ['btc-rsi'],
+    queryFn: async () => {
+      const response = await fetch('/api/news/btc-rsi')
+      if (!response.ok) throw new Error('Failed to fetch BTC RSI')
+      return response.json()
+    },
+    staleTime: 1000 * 60 * 15,
+    refetchInterval: 1000 * 60 * 15,
+    refetchOnWindowFocus: false,
+  })
+
   // Fetch metric histories for sparklines
   const metricHistoryQuery = (name: string) => ({
     queryKey: ['metric-history', name],
@@ -503,6 +517,7 @@ export function MarketSentimentCards() {
   const { data: hashRateHistory } = useQuery(metricHistoryQuery('hash_rate'))
   const { data: lightningHistory } = useQuery(metricHistoryQuery('lightning_capacity'))
   const { data: mempoolHistory } = useQuery(metricHistoryQuery('mempool_tx_count'))
+  const { data: btcRsiHistory } = useQuery(metricHistoryQuery('btc_rsi'))
 
   const sparkData = useMemo(() => ({
     fear_greed: fearGreedHistory?.data?.map(d => d.value) || [],
@@ -513,7 +528,8 @@ export function MarketSentimentCards() {
     hash_rate: hashRateHistory?.data?.map(d => d.value) || [],
     lightning_capacity: lightningHistory?.data?.map(d => d.value) || [],
     mempool_tx_count: mempoolHistory?.data?.map(d => d.value) || [],
-  }), [fearGreedHistory, btcDomHistory, altseasonHistory, stablecoinHistory, totalMcapHistory, hashRateHistory, lightningHistory, mempoolHistory])
+    btc_rsi: btcRsiHistory?.data?.map(d => d.value) || [],
+  }), [fearGreedHistory, btcDomHistory, altseasonHistory, stablecoinHistory, totalMcapHistory, hashRateHistory, lightningHistory, mempoolHistory, btcRsiHistory])
 
   // Calculate halving countdown
   const halvingCountdown = blockHeight ? calculateHalvingCountdown(blockHeight.height) : null
@@ -608,6 +624,7 @@ export function MarketSentimentCards() {
     { id: 'hash-rate', component: <HashRateCard data={hashRateData} spark={sparkData.hash_rate} /> },
     { id: 'lightning', component: <LightningCard data={lightningData} spark={sparkData.lightning_capacity} /> },
     { id: 'ath', component: <ATHCard data={athData} /> },
+    { id: 'btc-rsi', component: <BTCRSICard data={btcRsiData} spark={sparkData.btc_rsi} /> },
   ]
 
   const totalCards = baseCards.length
@@ -1534,6 +1551,81 @@ function ATHCard({ data }: { data: ATHResponse | undefined }) {
               />
             </div>
           </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner size="sm" text="Loading..." />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BTCRSICard({ data, spark }: { data: BTCRSIResponse | undefined; spark: number[] }) {
+  const getZoneColor = (zone: string) => {
+    if (zone === 'oversold') return 'text-green-400'
+    if (zone === 'overbought') return 'text-red-400'
+    return 'text-slate-300'
+  }
+
+  const getZoneLabel = (zone: string) => {
+    if (zone === 'oversold') return 'Oversold'
+    if (zone === 'overbought') return 'Overbought'
+    return 'Neutral'
+  }
+
+  const getSparkColor = (zone: string) => {
+    if (zone === 'oversold') return '#4ade80'
+    if (zone === 'overbought') return '#f87171'
+    return '#94a3b8'
+  }
+
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+      <div className="flex items-center space-x-2 mb-4">
+        <Activity className="w-5 h-5 text-yellow-500" />
+        <h3 className="font-medium text-white">BTC RSI (14)</h3>
+        <InfoTooltip text="Relative Strength Index measures momentum on daily candles. RSI below 30 suggests BTC is oversold (potential buying opportunity); above 70 suggests overbought (potential correction ahead)." />
+      </div>
+
+      {data ? (
+        <div className="flex flex-col items-center">
+          <div className={`text-4xl font-bold mb-1 ${getZoneColor(data.zone)}`}>
+            {data.rsi.toFixed(1)}
+          </div>
+          <div className={`text-xs mb-3 px-2 py-0.5 rounded ${
+            data.zone === 'oversold' ? 'bg-green-500/20 text-green-400' :
+            data.zone === 'overbought' ? 'bg-red-500/20 text-red-400' :
+            'bg-slate-500/20 text-slate-400'
+          }`}>
+            {getZoneLabel(data.zone)}
+          </div>
+
+          <div className="w-full mb-3">
+            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+              <span>Oversold</span>
+              <span>Overbought</span>
+            </div>
+            <div className="relative h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div className="absolute inset-0 flex">
+                <div className="w-[30%] bg-green-900/40" />
+                <div className="w-[40%] bg-slate-700" />
+                <div className="w-[30%] bg-red-900/40" />
+              </div>
+              <div
+                className="absolute top-0 w-1.5 h-full bg-white rounded-full shadow-lg"
+                style={{ left: `calc(${Math.min(Math.max(data.rsi, 0), 100)}% - 3px)` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-600 mt-0.5">
+              <span>0</span>
+              <span>30</span>
+              <span>70</span>
+              <span>100</span>
+            </div>
+          </div>
+
+          <Sparkline data={spark} color={getSparkColor(data.zone)} height={36} />
         </div>
       ) : (
         <div className="flex items-center justify-center h-32">

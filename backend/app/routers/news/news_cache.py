@@ -27,6 +27,7 @@ MEMPOOL_CACHE_FILE = CACHE_DIR / "mempool_cache.json"
 HASH_RATE_CACHE_FILE = CACHE_DIR / "hash_rate_cache.json"
 LIGHTNING_CACHE_FILE = CACHE_DIR / "lightning_cache.json"
 ATH_CACHE_FILE = CACHE_DIR / "ath_cache.json"
+BTC_RSI_CACHE_FILE = CACHE_DIR / "btc_rsi_cache.json"
 
 # Cache timing constants (background refresh service handles actual refresh timing)
 NEWS_CACHE_CHECK_MINUTES = 30  # Fallback: check every 30 minutes if no background refresh
@@ -55,6 +56,7 @@ __all__ = [
     "HASH_RATE_CACHE_FILE",
     "LIGHTNING_CACHE_FILE",
     "ATH_CACHE_FILE",
+    "BTC_RSI_CACHE_FILE",
     # Timing constants
     "NEWS_CACHE_CHECK_MINUTES",
     "VIDEO_CACHE_CHECK_MINUTES",
@@ -90,6 +92,8 @@ __all__ = [
     "save_lightning_cache",
     "load_ath_cache",
     "save_ath_cache",
+    "load_btc_rsi_cache",
+    "save_btc_rsi_cache",
     "prune_old_items",
     "merge_news_items",
 ]
@@ -426,3 +430,11 @@ def load_ath_cache() -> Optional[Dict[str, Any]]:
 
 def save_ath_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(ATH_CACHE_FILE, "ATH", data)
+
+
+def load_btc_rsi_cache() -> Optional[Dict[str, Any]]:
+    return _load_market_metrics_cache(BTC_RSI_CACHE_FILE, "BTC RSI")
+
+
+def save_btc_rsi_cache(data: Dict[str, Any]) -> None:
+    _save_market_metrics_cache(BTC_RSI_CACHE_FILE, "BTC RSI", data)

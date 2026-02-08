@@ -39,6 +39,7 @@ from .news_cache import (
     load_hash_rate_cache,
     load_lightning_cache,
     load_ath_cache,
+    load_btc_rsi_cache,
     merge_news_items,
     prune_old_items,
     save_block_height_cache,
@@ -54,6 +55,7 @@ from .news_cache import (
     save_hash_rate_cache,
     save_lightning_cache,
     save_ath_cache,
+    save_btc_rsi_cache,
 )
 from .news_models import (
     ArticleContentResponse,
@@ -123,6 +125,8 @@ __all__ = [
     "save_lightning_cache",
     "load_ath_cache",
     "save_ath_cache",
+    "load_btc_rsi_cache",
+    "save_btc_rsi_cache",
     "prune_old_items",
     "merge_news_items",
     # Models
