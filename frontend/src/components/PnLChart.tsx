@@ -576,18 +576,10 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
       currentDateStr = addDays(currentDateStr, 1)
     }
 
-    // Calculate starting cumulative PnL (for timeframes, include P&L from before the window)
+    // For non-"all" timeframes, start at 0 to show relative gains/losses within the window
+    // For "all", start at 0 naturally (no prior data)
     let cumulativePnLUSD = 0
     let cumulativePnLBTC = 0
-    if (timeRange !== 'all' && data) {
-      // Sum all profits from before the timeframe start date
-      data.summary.forEach((point) => {
-        if (point.date < firstDateStr) {
-          cumulativePnLUSD += point.profit_usd
-          cumulativePnLBTC += point.profit_btc
-        }
-      })
-    }
 
     // Build chart data with all dates, using 0 profit for missing days
     const chartDataUSD = allDates.map((date) => {
