@@ -38,6 +38,7 @@ interface OverallStatsPanelProps {
   stats: {
     activeTrades: number
     reservedByQuote: Record<string, number>
+    totalBudgetByQuote: Record<string, number>
     uPnL: number
     uPnLUSD: number
   }
@@ -207,6 +208,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             <div className="flex justify-between text-slate-400 text-xs">
               <span>Currency</span>
               <div className="flex gap-3">
+                <span className="w-20 text-right" title="Total assigned budget (sum of max budget per deal)">Total Budget</span>
                 <span className="w-20 text-right" title="Locked in open positions">In Positions</span>
                 <span className="w-20 text-right" title="Locked in pending orders (grids)">In Grids</span>
                 <span className="w-20 text-right" title="Available for new bots">Available</span>
@@ -216,6 +218,9 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">BTC</span>
               <div className="flex gap-3">
+                <span className="text-blue-400 w-20 text-right font-mono text-xs">
+                  {(stats.totalBudgetByQuote.BTC || 0).toFixed(8)}
+                </span>
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   {balances ? balances.reserved_in_positions.BTC.toFixed(8) : '...'}
                 </span>
@@ -231,6 +236,9 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">ETH</span>
               <div className="flex gap-3">
+                <span className="text-blue-400 w-20 text-right font-mono text-xs">
+                  {(stats.totalBudgetByQuote.ETH || 0).toFixed(6)}
+                </span>
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   {balances ? balances.reserved_in_positions.ETH.toFixed(6) : '...'}
                 </span>
@@ -246,6 +254,9 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">USD</span>
               <div className="flex gap-3">
+                <span className="text-blue-400 w-20 text-right font-mono text-xs">
+                  ${(stats.totalBudgetByQuote.USD || 0).toFixed(2)}
+                </span>
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USD.toFixed(2) : '...'}
                 </span>
@@ -261,6 +272,9 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">USDC</span>
               <div className="flex gap-3">
+                <span className="text-blue-400 w-20 text-right font-mono text-xs">
+                  ${(stats.totalBudgetByQuote.USDC || 0).toFixed(2)}
+                </span>
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USDC.toFixed(2) : '...'}
                 </span>
@@ -276,6 +290,9 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">USDT</span>
               <div className="flex gap-3">
+                <span className="text-blue-400 w-20 text-right font-mono text-xs">
+                  ${(stats.totalBudgetByQuote.USDT || 0).toFixed(2)}
+                </span>
                 <span className="text-amber-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USDT.toFixed(2) : '...'}
                 </span>
