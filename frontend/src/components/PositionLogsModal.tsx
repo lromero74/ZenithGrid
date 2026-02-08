@@ -24,18 +24,23 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
       const lookbackDate = new Date(openedDate.getTime() - 300000) // 5 minutes before to be safe
       const since = lookbackDate.toISOString()
 
-      const allLogs = await botsApi.getDecisionLogs(botId, 200, 0, productId, since)
+      const allLogs = await botsApi.getDecisionLogs(botId, 1000, 0, productId, since)
+
+      // Only keep full condition matches:
+      // - AI logs: always keep (each is a full decision)
+      // - Indicator logs: only keep where conditions_met === true
+      const matchedLogs = allLogs.filter((log: any) =>
+        log.log_type === 'ai' || (log.log_type === 'indicator' && log.conditions_met)
+      )
 
       // Find the most recent "buy" decision near the position opened time
-      // For AI logs, look for decision === 'buy'
-      // For indicator logs, look for phase === 'base_order' with conditions_met === true
       const positionTime = openedDate.getTime()
       const toleranceMs = 1000 // 1 second tolerance for log timing
       let buyIndex = -1
 
-      for (let i = allLogs.length - 1; i >= 0; i--) {
-        const logTime = new Date(allLogs[i].timestamp).getTime()
-        const log = allLogs[i]
+      for (let i = matchedLogs.length - 1; i >= 0; i--) {
+        const logTime = new Date(matchedLogs[i].timestamp).getTime()
+        const log = matchedLogs[i]
 
         // Accept buy signals from 5 minutes before to 1 second after position opened time
         if (logTime <= positionTime + toleranceMs) {
@@ -51,8 +56,8 @@ function PositionLogsModal({ botId, productId, positionOpenedAt, isOpen, onClose
       }
 
       // If we found a buy decision, return logs from that point onwards
-      // Otherwise return all logs (shouldn't happen, but safer)
-      return buyIndex >= 0 ? allLogs.slice(buyIndex) : allLogs
+      // Otherwise return all matched logs (shouldn't happen, but safer)
+      return buyIndex >= 0 ? matchedLogs.slice(buyIndex) : matchedLogs
     },
     enabled: isOpen,
     refetchInterval: isOpen ? 10000 : false, // Refresh every 10 seconds when open

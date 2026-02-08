@@ -40,7 +40,10 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
 
   const { data: logs = [], isLoading, refetch } = useQuery({
     queryKey: ['indicator-logs', botId],
-    queryFn: () => botsApi.getIndicatorLogs(botId, 100, 0),
+    queryFn: () => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      return botsApi.getIndicatorLogs(botId, 1000, 0, undefined, undefined, undefined, since)
+    },
     enabled: isOpen,
     refetchInterval: isOpen ? 10000 : false,
   })

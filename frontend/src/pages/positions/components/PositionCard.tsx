@@ -1,4 +1,4 @@
-import { AlertCircle, BarChart2, Scale, Settings, TrendingUp, TrendingDown } from 'lucide-react'
+import { AlertCircle, BarChart2, Brain, Scale, Settings, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
 import type { Position, Bot } from '../../../types'
 import CoinIcon from '../../../components/CoinIcon'
@@ -367,13 +367,13 @@ export const PositionCard = ({
             </>
           )}
           <button
-            className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
+            className="text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/50 hover:text-purple-200 rounded flex items-center gap-1 transition-colors"
             onClick={(e) => {
               e.stopPropagation()
               onOpenLogs(position)
             }}
           >
-            <span>📊</span> AI Reasoning
+            <Brain size={12} /> Decision History
           </button>
           <button
             className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
