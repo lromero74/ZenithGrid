@@ -76,7 +76,7 @@ class IndicatorCalculator:
         closes = [float(c["close"]) for c in closed_candles]
         highs = [float(c["high"]) for c in closed_candles]
         lows = [float(c["low"]) for c in closed_candles]
-        _volumes = [float(c["volume"]) for c in closed_candles]  # Reserved for future volume-based indicators
+        volumes = [float(c["volume"]) for c in closed_candles]
 
         # Calculate indicators based on what's required
         for indicator_key in required_indicators:
@@ -135,6 +135,12 @@ class IndicatorCalculator:
                     if k_value is not None:
                         indicators[f"stoch_k_{k_period}_{d_period}"] = k_value
                         indicators[f"stoch_d_{k_period}_{d_period}"] = d_value
+
+            elif indicator_key.startswith("volume_rsi_"):
+                period = int(indicator_key.split("_")[2])
+                value = self.calculate_rsi(volumes, period)
+                if value is not None:
+                    indicators[indicator_key] = value
 
         # Calculate indicators for the previous CLOSED candle (for crossing detection)
         # We need at least 4 candles total: 3 closed + 1 incomplete
@@ -366,6 +372,9 @@ class IndicatorCalculator:
             return "price"
         elif indicator == "volume":
             return "volume"
+        elif indicator == "volume_rsi":
+            period = params.get("period", 14)
+            return f"volume_rsi_{period}"
         elif indicator == "rsi":
             period = params.get("period", 14)
             return f"rsi_{period}"

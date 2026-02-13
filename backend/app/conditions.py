@@ -48,6 +48,7 @@ class IndicatorType(str, Enum):
     STOCHASTIC_K = "stochastic_k"
     STOCHASTIC_D = "stochastic_d"
     VOLUME = "volume"
+    VOLUME_RSI = "volume_rsi"
 
     # Aggregate indicators (return 0 or 1)
     AI_BUY = "ai_buy"  # Multi-timeframe confluence buy signal
@@ -324,6 +325,10 @@ class ConditionEvaluator:
 
         if indicator_type == IndicatorType.VOLUME:
             return indicators.get("volume")
+
+        if indicator_type == IndicatorType.VOLUME_RSI:
+            period = params.get("period", 14)
+            return indicators.get(f"volume_rsi_{period}")
 
         # Aggregate indicators (return 0 or 1)
         if indicator_type == IndicatorType.AI_BUY:

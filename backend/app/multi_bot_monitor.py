@@ -686,6 +686,8 @@ class MultiBotMonitor:
                         one_min_candles = await self.get_candles_cached(product_id, "ONE_MINUTE", 300)
                         # THREE_MINUTE is synthetic (aggregated from 1-min) but now supported
                         three_min_candles = await self.get_candles_cached(product_id, "THREE_MINUTE", 100)
+                        # TEN_MINUTE is synthetic (aggregated from 5-min)
+                        ten_min_candles = await self.get_candles_cached(product_id, "TEN_MINUTE", 100)
                         # ONE_HOUR candles for hourly MACD/RSI conditions
                         one_hour_candles = await self.get_candles_cached(product_id, "ONE_HOUR", 100)
                         # Higher timeframes for multi-timeframe indicator conditions
@@ -727,6 +729,12 @@ class MultiBotMonitor:
                             logger.warning(
                                 f"  ⚠️ THREE_MINUTE insufficient for {product_id}: "
                                 f"have {three_min_count}/20 candles after gap-filling (very low volume pair)"
+                            )
+                        # Add TEN_MINUTE candles for multi-timeframe conditions
+                        if ten_min_candles and len(ten_min_candles) >= 36:
+                            candles_by_timeframe["TEN_MINUTE"] = ten_min_candles
+                            logger.debug(
+                                f"  ✅ TEN_MINUTE OK for {product_id}: {len(ten_min_candles)} candles"
                             )
                         # Add ONE_HOUR candles for hourly MACD/RSI conditions
                         if one_hour_candles and len(one_hour_candles) >= 36:
@@ -1109,11 +1117,14 @@ class MultiBotMonitor:
                     # Stay conservative to ensure we get data
                     lookback_map = {
                         "ONE_MINUTE": 200,
+                        "THREE_MINUTE": 200,
                         "FIVE_MINUTE": 200,
+                        "TEN_MINUTE": 150,
                         "FIFTEEN_MINUTE": 150,
                         "THIRTY_MINUTE": 100,  # 100 candles = 50 hours
                         "ONE_HOUR": 100,  # 100 candles = 4 days
                         "TWO_HOUR": 100,
+                        "FOUR_HOUR": 100,
                         "SIX_HOUR": 100,
                         "ONE_DAY": 100,
                     }

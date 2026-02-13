@@ -15,10 +15,12 @@ TIMEFRAME_MAP = {
     "ONE_MINUTE": 60,
     "THREE_MINUTE": 180,    # Synthetic - aggregated from 1-minute candles
     "FIVE_MINUTE": 300,
+    "TEN_MINUTE": 600,       # Synthetic - aggregated from 5-minute candles
     "FIFTEEN_MINUTE": 900,
     "THIRTY_MINUTE": 1800,
     "ONE_HOUR": 3600,
     "TWO_HOUR": 7200,
+    "FOUR_HOUR": 14400,
     "SIX_HOUR": 21600,
     "ONE_DAY": 86400,
     "TWO_DAY": 172800,      # Synthetic - aggregated from 1-day candles (2 days)
@@ -32,6 +34,8 @@ TIMEFRAME_MAP = {
 # Maps synthetic timeframe -> (base_timeframe, aggregation_factor)
 SYNTHETIC_TIMEFRAMES = {
     "THREE_MINUTE": ("ONE_MINUTE", 3),
+    "TEN_MINUTE": ("FIVE_MINUTE", 2),
+    "FOUR_HOUR": ("ONE_HOUR", 4),
     "TWO_DAY": ("ONE_DAY", 2),
     "THREE_DAY": ("ONE_DAY", 3),
     "ONE_WEEK": ("ONE_DAY", 7),

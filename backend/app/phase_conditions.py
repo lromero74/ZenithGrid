@@ -411,6 +411,10 @@ class PhaseConditionEvaluator:
         elif condition_type == "volume":
             return indicators.get(f"{timeframe}_volume")
 
+        elif condition_type == "volume_rsi":
+            period = condition.get("period", 14)
+            return indicators.get(f"{timeframe}_volume_rsi_{period}")
+
         elif condition_type in ["ai_buy", "ai_sell", "bull_flag"]:
             # Aggregate indicators don't use timeframe prefix
             return indicators.get(condition_type)
@@ -481,6 +485,10 @@ class PhaseConditionEvaluator:
 
         elif condition_type == "volume":
             return indicators.get(f"prev_{timeframe}_volume")
+
+        elif condition_type == "volume_rsi":
+            period = condition.get("period", 14)
+            return indicators.get(f"prev_{timeframe}_volume_rsi_{period}")
 
         elif condition_type in ["ai_buy", "ai_sell", "bull_flag"]:
             # Aggregate indicators - prev values not typically needed for crossing
@@ -559,6 +567,10 @@ class PhaseConditionEvaluator:
 
             elif condition_type == "volume":
                 required.add(f"{timeframe}_volume")
+
+            elif condition_type == "volume_rsi":
+                period = condition.get("period", 14)
+                required.add(f"{timeframe}_volume_rsi_{period}")
 
             # Aggregate indicators (ai_buy, ai_sell, bull_flag) don't need
             # specific indicator values - they're evaluated separately

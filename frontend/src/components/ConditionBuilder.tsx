@@ -24,6 +24,7 @@ export type IndicatorType =
   | 'stochastic_k'
   | 'stochastic_d'
   | 'volume'
+  | 'volume_rsi'
   // Aggregate indicators (return 0 or 1)
   | 'ai_buy'
   | 'ai_sell'
@@ -59,6 +60,7 @@ interface ConditionBuilderProps {
 const INDICATORS: Record<IndicatorType, { label: string; params: string[]; isAggregate?: boolean; description?: string }> = {
   price: { label: 'Price', params: [] },
   volume: { label: 'Volume', params: [] },
+  volume_rsi: { label: 'Volume RSI', params: ['period'] },
   rsi: { label: 'RSI', params: ['period'] },
   macd: { label: 'MACD Line', params: ['fast_period', 'slow_period', 'signal_period'] },
   macd_signal: { label: 'MACD Signal', params: ['fast_period', 'slow_period', 'signal_period'] },

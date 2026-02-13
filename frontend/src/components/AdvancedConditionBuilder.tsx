@@ -16,6 +16,7 @@ export type ConditionType =
   | 'price_change'
   | 'stochastic'
   | 'volume'
+  | 'volume_rsi'
   | 'ai_buy'
   | 'ai_sell'
   | 'bull_flag'
@@ -26,10 +27,12 @@ export type Timeframe =
   | 'ONE_MINUTE'
   | 'THREE_MINUTE'
   | 'FIVE_MINUTE'
+  | 'TEN_MINUTE'
   | 'FIFTEEN_MINUTE'
   | 'THIRTY_MINUTE'
   | 'ONE_HOUR'
   | 'TWO_HOUR'
+  | 'FOUR_HOUR'
   | 'SIX_HOUR'
   | 'ONE_DAY'
 
@@ -114,6 +117,7 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
   price_change: { label: 'Price Change %', description: '% change from previous candle' },
   stochastic: { label: 'Stochastic', description: 'Stochastic oscillator (0-100)' },
   volume: { label: 'Volume', description: 'Trading volume' },
+  volume_rsi: { label: 'Volume RSI', description: 'RSI applied to volume (0-100). >70 = volume surging, <30 = volume drying up' },
   ai_buy: { label: 'AI Buy', description: 'AI buy signal = 1', isAggregate: true },
   ai_sell: { label: 'AI Sell', description: 'AI sell signal = 1', isAggregate: true },
   bull_flag: { label: 'Bull Flag', description: 'Pattern detected = 1', isAggregate: true },
@@ -131,9 +135,11 @@ const TIMEFRAMES: Record<Timeframe, string> = {
   ONE_MINUTE: '1m',
   THREE_MINUTE: '3m',
   FIVE_MINUTE: '5m',
+  TEN_MINUTE: '10m',
   FIFTEEN_MINUTE: '15m',
   THIRTY_MINUTE: '30m',
   ONE_HOUR: '1h',
+  FOUR_HOUR: '4h',
   TWO_HOUR: '2h',
   SIX_HOUR: '6h',
   ONE_DAY: '1d',
@@ -302,6 +308,11 @@ function AdvancedConditionBuilder({
                       newCond.operator = 'less_than'
                       newCond.value = 20
                       break
+                    case 'volume_rsi':
+                      newCond.period = 14
+                      newCond.operator = 'greater_than'
+                      newCond.value = 70
+                      break
                     case 'ai_buy':
                     case 'ai_sell':
                       newCond.operator = 'equal'
@@ -461,7 +472,7 @@ function AdvancedConditionBuilder({
           )}
 
           {/* Period (for indicators that use it) */}
-          {['rsi', 'bb_percent', 'stochastic', 'ema_cross', 'sma_cross'].includes(condition.type) && (
+          {['rsi', 'bb_percent', 'stochastic', 'ema_cross', 'sma_cross', 'volume_rsi'].includes(condition.type) && (
             <div className="flex items-center gap-1">
               <span className="text-xs text-slate-400">P:</span>
               <input
