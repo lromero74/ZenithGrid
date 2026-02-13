@@ -180,6 +180,15 @@ class ConditionEvaluator:
             else:
                 previous_compare = compare_value  # Static value doesn't change
 
+            # Filter floating-point noise: require at least one side of the crossing
+            # to be meaningfully away from the threshold (avoids false crossings on
+            # near-zero MACD histogram values like 1e-8 on BTC pairs)
+            crossing_epsilon = 1e-7
+            prev_meaningful = abs(previous_value - previous_compare) > crossing_epsilon
+            curr_meaningful = abs(current_value - compare_value) > crossing_epsilon
+            if not prev_meaningful and not curr_meaningful:
+                return False
+
             # Crossing above: was below, now above
             if condition.operator == ComparisonOperator.CROSSING_ABOVE:
                 return previous_value <= previous_compare and current_value > compare_value

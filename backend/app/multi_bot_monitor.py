@@ -1162,16 +1162,19 @@ class MultiBotMonitor:
                 signal_data = pre_analyzed_signal
             elif skip_ai_analysis:
                 # Skip AI analysis for technical-only check
-                # For indicator-based strategies: Still evaluate conditions
-                # conditional_dca doesn't use AI, indicator_based uses cached AI values
+                # Pass previous_indicators_cache for crossing detection on ALL strategies
+                cache_key = (bot.id, product_id)
+                previous_indicators_from_cache = self._previous_indicators_cache.get(cache_key)
                 if bot.strategy_type in ("conditional_dca", "indicator_based"):
                     print("  ⏭️  Technical check: Analyzing indicator-based signals")
-                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id, product_id=product_id)
+                    signal_data = await strategy.analyze_signal(
+                        candles, current_price, candles_by_timeframe,
+                        position=existing_position,
+                        previous_indicators_cache=previous_indicators_from_cache,
+                        db=db, user_id=bot.user_id, product_id=product_id
+                    )
                 else:
                     logger.info("  ⏭️  Technical check: Evaluating conditions with cached AI values")
-                    # For indicator_based strategy, pass the previous_indicators_cache for crossing detection
-                    cache_key = (bot.id, product_id)
-                    previous_indicators_from_cache = self._previous_indicators_cache.get(cache_key)
                     signal_data = await strategy.analyze_signal(
                         candles, current_price,
                         position=existing_position,
@@ -1183,15 +1186,18 @@ class MultiBotMonitor:
                     )
             else:
                 # Analyze signal using strategy
-                # For indicator-based strategies, pass the candles_by_timeframe dict
+                # Pass previous_indicators_cache for crossing detection on ALL strategies
+                cache_key = (bot.id, product_id)
+                previous_indicators_from_cache = self._previous_indicators_cache.get(cache_key)
                 if bot.strategy_type in ("conditional_dca", "indicator_based"):
                     print("  📊 Analyzing indicator-based signals...")
-                    signal_data = await strategy.analyze_signal(candles, current_price, candles_by_timeframe, position=existing_position, db=db, user_id=bot.user_id, product_id=product_id)
+                    signal_data = await strategy.analyze_signal(
+                        candles, current_price, candles_by_timeframe,
+                        position=existing_position,
+                        previous_indicators_cache=previous_indicators_from_cache,
+                        db=db, user_id=bot.user_id, product_id=product_id
+                    )
                 else:
-                    # For indicator_based strategy, pass the previous_indicators_cache for crossing detection
-                    # This enables crossing_above/crossing_below operators for ENTRY conditions (no position yet)
-                    cache_key = (bot.id, product_id)
-                    previous_indicators_from_cache = self._previous_indicators_cache.get(cache_key)
                     signal_data = await strategy.analyze_signal(
                         candles, current_price,
                         position=existing_position,
@@ -1200,10 +1206,12 @@ class MultiBotMonitor:
                         user_id=bot.user_id,
                         product_id=product_id
                     )
-                    # Update cache with current indicators for next check cycle
-                    if signal_data and "indicators" in signal_data:
-                        self._previous_indicators_cache[cache_key] = signal_data["indicators"].copy()
-                        logger.debug(f"    Updated previous_indicators cache for {cache_key}")
+
+            # Update previous_indicators cache for ALL strategies (crossing detection)
+            if signal_data and "indicators" in signal_data:
+                cache_key = (bot.id, product_id)
+                self._previous_indicators_cache[cache_key] = signal_data["indicators"].copy()
+                logger.debug(f"    Updated previous_indicators cache for {cache_key}")
 
             # Commit any position changes (e.g., previous_indicators for crossing detection)
             if existing_position is not None:

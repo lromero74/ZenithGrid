@@ -285,6 +285,25 @@ class PhaseConditionEvaluator:
 
             print(f"[DEBUG] Crossing check: previous={previous_val}, current={current_val}, threshold={value}")
 
+            # Minimum crossing magnitude to filter floating-point noise.
+            # For BTC pairs, MACD histogram values like 1e-8 are numerical artifacts,
+            # not real momentum shifts. Require at least one side of the crossing to
+            # be meaningfully away from the threshold to count as a real crossing.
+            crossing_epsilon = 1e-7
+            prev_meaningful = abs(previous_val - value) > crossing_epsilon
+            curr_meaningful = abs(current_val - value) > crossing_epsilon
+
+            if not prev_meaningful and not curr_meaningful:
+                print(
+                    f"[DEBUG] Crossing filtered: both values within noise threshold "
+                    f"(prev={previous_val}, curr={current_val}, threshold={value}, epsilon={crossing_epsilon})"
+                )
+                if capture_details:
+                    detail["result"] = False
+                    detail["filtered"] = "crossing_noise"
+                    return False, detail
+                return False
+
             if operator == "crossing_above":
                 result = previous_val <= value and current_val > value
                 print(
