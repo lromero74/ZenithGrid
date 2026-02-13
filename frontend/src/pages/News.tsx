@@ -71,6 +71,12 @@ export default function News() {
   const articleDropdownRef = useRef<HTMLDivElement>(null)
   const articleDropdownButtonRef = useRef<HTMLButtonElement>(null)
 
+  // TTS for reading articles aloud
+  const tts = useTTSSync()
+
+  // Suppress auto-refetch when user is actively engaged (reading, listening)
+  const isUserEngaged = !!previewArticle || tts.isPlaying || isArticleReaderPlaying || isPlaylistPlaying
+
   // Fetch news and video data
   const {
     newsData,
@@ -84,7 +90,7 @@ export default function News() {
     refetchNews,
     refetchVideos,
     handleForceRefresh,
-  } = useNewsData()
+  } = useNewsData({ isUserEngaged })
 
   // Article content for reader mode
   const {
@@ -94,9 +100,6 @@ export default function News() {
     setReaderModeEnabled,
     clearContent,
   } = useArticleContent({ previewArticle })
-
-  // TTS for reading articles aloud
-  const tts = useTTSSync()
 
   // Get plain text for TTS from article content
   const articlePlainText = articleContent?.content ? markdownToPlainText(articleContent.content) : ''
@@ -166,13 +169,15 @@ export default function News() {
   }, [previewArticle, handleCloseModal])
 
   // Force re-render every minute to update relative timestamps
+  // Paused when user is engaged (reading/listening) to avoid disrupting the view
   const [, setTimeTick] = useState(0)
   useEffect(() => {
+    if (isUserEngaged) return
     const interval = setInterval(() => {
       setTimeTick((t) => t + 1)
     }, 60000) // Update every minute
     return () => clearInterval(interval)
-  }, [])
+  }, [isUserEngaged])
 
   // Navigate to the page containing an article, then scroll to it
   const findArticle = useCallback((articleUrl: string, addPulse = false) => {

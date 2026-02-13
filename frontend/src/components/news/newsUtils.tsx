@@ -232,11 +232,10 @@ import { CATEGORY_COLORS } from '../../pages/news/types'
 const SOURCE_CATEGORY: Record<string, string> = {
   // CryptoCurrency
   reddit_crypto: 'CryptoCurrency', reddit_bitcoin: 'CryptoCurrency',
-  bitcoin_magazine: 'CryptoCurrency', beincrypto: 'CryptoCurrency',
-  blockworks: 'CryptoCurrency', coindesk: 'CryptoCurrency',
-  cointelegraph: 'CryptoCurrency', decrypt: 'CryptoCurrency',
-  theblock: 'CryptoCurrency', cryptoslate: 'CryptoCurrency',
-  unchained: 'CryptoCurrency',
+  bitcoin_magazine: 'CryptoCurrency', blockworks: 'CryptoCurrency',
+  coindesk: 'CryptoCurrency', cointelegraph: 'CryptoCurrency',
+  decrypt: 'CryptoCurrency', theblock: 'CryptoCurrency',
+  cryptoslate: 'CryptoCurrency',
   // AI
   reddit_artificial: 'AI', openai_blog: 'AI',
   mit_tech_ai: 'AI', the_ai_beat: 'AI',
@@ -260,10 +259,9 @@ const SOURCE_CATEGORY: Record<string, string> = {
   science_daily: 'Science', nasa: 'Science', new_scientist: 'Science',
   // Health
   stat_news: 'Health', npr_health: 'Health', science_daily_health: 'Health',
-  medical_xpress: 'Health', medical_news: 'Health', health_news: 'Health',
-  genetic_engineering_news: 'Health', nature_medicine: 'Health',
-  the_lancet: 'Health', who_news: 'Health', nutrition_org: 'Health',
-  self_wellness: 'Health',
+  medical_xpress: 'Health', genetic_engineering_news: 'Health',
+  nature_medicine: 'Health', the_lancet: 'Health', who_news: 'Health',
+  nutrition_org: 'Health', self_wellness: 'Health',
 }
 
 const VIDEO_SOURCE_CATEGORY: Record<string, string> = {
@@ -280,15 +278,21 @@ const VIDEO_SOURCE_CATEGORY: Record<string, string> = {
   // Finance
   financial_times: 'Finance', graham_stephan: 'Finance',
   // Business
-  cnbc_tv: 'Business', bloomberg: 'Business', yahoo_finance: 'Business',
+  cnbc_yt: 'Business', bloomberg: 'Business', yahoo_finance: 'Business',
   // World
   wion: 'World', dw_news: 'World', channel4_news: 'World',
   // Nation
-  pbs_newshour_tv: 'Nation', nbc_news: 'Nation',
+  pbs_newshour_yt: 'Nation', nbc_news: 'Nation', abc_news: 'Nation',
   // Technology
-  mkbhd: 'Technology', linus_tech: 'Technology',
+  mkbhd: 'Technology', linus_tech_tips: 'Technology', the_verge_yt: 'Technology',
+  // Entertainment
+  screen_junkies: 'Entertainment', collider: 'Entertainment', ign: 'Entertainment',
+  // Sports
+  espn_yt: 'Sports', cbs_sports_yt: 'Sports', pat_mcafee: 'Sports',
   // Science
-  veritasium: 'Science', kurzgesagt: 'Science',
+  veritasium: 'Science', kurzgesagt: 'Science', smarter_every_day: 'Science',
+  // Health
+  doctor_mike: 'Health', medlife_crisis: 'Health', dr_eric_berg: 'Health',
 }
 
 // Build source color maps from category colors

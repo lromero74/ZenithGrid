@@ -8,6 +8,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { NewsResponse, VideoResponse } from '../types'
 
+interface UseNewsDataOptions {
+  /** When true, suppresses auto-refetch to avoid disrupting the user */
+  isUserEngaged?: boolean
+}
+
 export interface UseNewsDataReturn {
   newsData: NewsResponse | undefined
   videoData: VideoResponse | undefined
@@ -22,10 +27,15 @@ export interface UseNewsDataReturn {
   handleForceRefresh: (activeTab: 'articles' | 'videos') => Promise<void>
 }
 
+const REFETCH_INTERVAL = 1000 * 60 * 15 // 15 minutes
+
 /**
- * Hook to fetch news articles and videos with caching
+ * Hook to fetch news articles and videos with caching.
+ * Auto-refetch is suppressed when user is engaged (reading/listening).
  */
-export const useNewsData = (): UseNewsDataReturn => {
+export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => {
+  const isUserEngaged = options?.isUserEngaged ?? false
+
   // Fetch ALL news articles once (client-side pagination for instant page changes)
   const {
     data: newsData,
@@ -42,7 +52,7 @@ export const useNewsData = (): UseNewsDataReturn => {
       return response.json()
     },
     staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
-    refetchInterval: 1000 * 60 * 15, // Auto-refresh every 15 minutes
+    refetchInterval: isUserEngaged ? false : REFETCH_INTERVAL,
     refetchOnWindowFocus: false,
   })
 
@@ -61,7 +71,7 @@ export const useNewsData = (): UseNewsDataReturn => {
       return response.json()
     },
     staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
-    refetchInterval: 1000 * 60 * 15, // Auto-refresh every 15 minutes
+    refetchInterval: isUserEngaged ? false : REFETCH_INTERVAL,
     refetchOnWindowFocus: false,
   })
 

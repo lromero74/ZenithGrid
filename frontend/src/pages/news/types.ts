@@ -28,29 +28,29 @@ export interface VideoItem {
 
 export type NewsCategory =
   | 'CryptoCurrency'
-  | 'AI'
   | 'Finance'
-  | 'World'
-  | 'Nation'
   | 'Business'
+  | 'AI'
   | 'Technology'
-  | 'Entertainment'
-  | 'Sports'
   | 'Science'
   | 'Health'
+  | 'World'
+  | 'Nation'
+  | 'Entertainment'
+  | 'Sports'
 
 export const NEWS_CATEGORIES: NewsCategory[] = [
   'CryptoCurrency',
-  'AI',
   'Finance',
-  'World',
-  'Nation',
   'Business',
+  'AI',
   'Technology',
-  'Entertainment',
-  'Sports',
   'Science',
   'Health',
+  'World',
+  'Nation',
+  'Entertainment',
+  'Sports',
 ]
 
 export const CATEGORY_COLORS: Record<string, string> = {
