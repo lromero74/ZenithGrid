@@ -4,7 +4,7 @@ Coordinates buy/sell decisions based on strategy analysis
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -360,75 +360,96 @@ async def process_signal(
                 buy_reason = f"Max concurrent deals limit reached ({open_positions_count}/{max_deals})"
                 print(f"🔍 Should buy: FALSE - {buy_reason}")
             else:
-                # Check if coin is blacklisted before considering a buy
-                base_symbol = product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
-                blacklist_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == base_symbol)
-                blacklist_result = await db.execute(blacklist_query)
-                blacklisted_entry = blacklist_result.scalars().first()
+                # Check deal cooldown for this pair
+                deal_cooldown = strategy.config.get("deal_cooldown_seconds", 0) or 0
+                if deal_cooldown > 0:
+                    cooldown_cutoff = datetime.utcnow() - timedelta(seconds=deal_cooldown)
+                    recent_close_query = select(Position).where(
+                        Position.bot_id == bot.id,
+                        Position.product_id == product_id,
+                        Position.status == "closed",
+                        Position.closed_at >= cooldown_cutoff
+                    )
+                    recent_result = await db.execute(recent_close_query)
+                    recently_closed = recent_result.scalars().first()
+                    if recently_closed:
+                        elapsed = (datetime.utcnow() - recently_closed.closed_at).total_seconds()
+                        remaining = deal_cooldown - elapsed
+                        should_buy = False
+                        buy_reason = f"Deal cooldown active for {product_id} ({int(remaining)}s remaining)"
+                        print(f"🔍 Should buy: FALSE - {buy_reason}")
+                        logger.info(f"  ⏳ {buy_reason}")
 
-                if blacklisted_entry:
-                    # Determine coin's category from reason prefix
-                    reason = blacklisted_entry.reason or ''
-                    if reason.startswith('[APPROVED]'):
-                        coin_category = 'APPROVED'
-                    elif reason.startswith('[BORDERLINE]'):
-                        coin_category = 'BORDERLINE'
-                    elif reason.startswith('[QUESTIONABLE]'):
-                        coin_category = 'QUESTIONABLE'
+                # Check if coin is blacklisted before considering a buy (skip if cooldown blocked)
+                if not buy_reason:
+                    base_symbol = product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
+                    blacklist_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == base_symbol)
+                    blacklist_result = await db.execute(blacklist_query)
+                    blacklisted_entry = blacklist_result.scalars().first()
+
+                    if blacklisted_entry:
+                        # Determine coin's category from reason prefix
+                        reason = blacklisted_entry.reason or ''
+                        if reason.startswith('[APPROVED]'):
+                            coin_category = 'APPROVED'
+                        elif reason.startswith('[BORDERLINE]'):
+                            coin_category = 'BORDERLINE'
+                        elif reason.startswith('[QUESTIONABLE]'):
+                            coin_category = 'QUESTIONABLE'
+                        else:
+                            coin_category = 'BLACKLISTED'
+
+                        # Get allowed categories from settings
+                        import json
+                        allowed_query = select(Settings).where(Settings.key == "allowed_coin_categories")
+                        allowed_result = await db.execute(allowed_query)
+                        allowed_setting = allowed_result.scalars().first()
+                        allowed_categories = ['APPROVED']  # Default
+                        if allowed_setting and allowed_setting.value:
+                            try:
+                                allowed_categories = json.loads(allowed_setting.value)
+                            except json.JSONDecodeError:
+                                pass
+
+                        if coin_category in allowed_categories:
+                            # Category is allowed to trade
+                            print(f"🔍 {base_symbol} is {coin_category} (allowed): {reason}")
+                            logger.info(f"  ✅ {coin_category}: {base_symbol} - allowed to trade")
+                            agg_str = f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
+                            print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}, aggregate={agg_str}")
+                            should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
+                            print(f"🔍 Should buy result: {should_buy}, amount: {(quote_amount if quote_amount else 0):.8f}, reason: {buy_reason}")
+                        else:
+                            should_buy = False
+                            buy_reason = f"{base_symbol} is {coin_category}: {reason.replace(f'[{coin_category}] ', '')}"
+                            print(f"🔍 Should buy: FALSE - {buy_reason}")
+                            logger.info(f"  🚫 {coin_category} (blocked): {buy_reason}")
                     else:
-                        coin_category = 'BLACKLISTED'
-
-                    # Get allowed categories from settings
-                    import json
-                    allowed_query = select(Settings).where(Settings.key == "allowed_coin_categories")
-                    allowed_result = await db.execute(allowed_query)
-                    allowed_setting = allowed_result.scalars().first()
-                    allowed_categories = ['APPROVED']  # Default
-                    if allowed_setting and allowed_setting.value:
-                        try:
-                            allowed_categories = json.loads(allowed_setting.value)
-                        except json.JSONDecodeError:
-                            pass
-
-                    if coin_category in allowed_categories:
-                        # Category is allowed to trade
-                        print(f"🔍 {base_symbol} is {coin_category} (allowed): {reason}")
-                        logger.info(f"  ✅ {coin_category}: {base_symbol} - allowed to trade")
                         agg_str = f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
                         print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}, aggregate={agg_str}")
                         should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
                         print(f"🔍 Should buy result: {should_buy}, amount: {(quote_amount if quote_amount else 0):.8f}, reason: {buy_reason}")
-                    else:
-                        should_buy = False
-                        buy_reason = f"{base_symbol} is {coin_category}: {reason.replace(f'[{coin_category}] ', '')}"
-                        print(f"🔍 Should buy: FALSE - {buy_reason}")
-                        logger.info(f"  🚫 {coin_category} (blocked): {buy_reason}")
-                else:
-                    agg_str = f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
-                    print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}, aggregate={agg_str}")
-                    should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
-                    print(f"🔍 Should buy result: {should_buy}, amount: {(quote_amount if quote_amount else 0):.8f}, reason: {buy_reason}")
 
-                    # Log budget blockers to indicator_logs so they show in GUI
-                    if not should_buy and ("insufficient" in buy_reason.lower() or "budget" in buy_reason.lower()):
-                        await log_indicator_evaluation(
-                            db=db,
-                            bot_id=bot.id,
-                            product_id=product_id,
-                            phase="budget_check",
-                            conditions_met=False,
-                            conditions_detail=[{
-                                "type": "budget",
-                                "indicator": "Available Balance",
-                                "operator": "sufficient_for",
-                                "threshold": quote_amount if quote_amount else 0,
-                                "actual_value": quote_balance,
-                                "result": False,
-                                "reason": buy_reason
-                            }],
-                            indicators_snapshot=signal_data.get("indicators", {}),
-                            current_price=current_price
-                        )
+                        # Log budget blockers to indicator_logs so they show in GUI
+                        if not should_buy and ("insufficient" in buy_reason.lower() or "budget" in buy_reason.lower()):
+                            await log_indicator_evaluation(
+                                db=db,
+                                bot_id=bot.id,
+                                product_id=product_id,
+                                phase="budget_check",
+                                conditions_met=False,
+                                conditions_detail=[{
+                                    "type": "budget",
+                                    "indicator": "Available Balance",
+                                    "operator": "sufficient_for",
+                                    "threshold": quote_amount if quote_amount else 0,
+                                    "actual_value": quote_balance,
+                                    "result": False,
+                                    "reason": buy_reason
+                                }],
+                                indicators_snapshot=signal_data.get("indicators", {}),
+                                current_price=current_price
+                            )
         else:
             # Position already exists for this pair - check for DCA
             should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)

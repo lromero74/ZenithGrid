@@ -66,6 +66,16 @@ class IndicatorBasedStrategy(TradingStrategy):
                     max_value=20,
                     group="Deal Management",
                 ),
+                StrategyParameter(
+                    name="deal_cooldown_seconds",
+                    display_name="Deal Cooldown (seconds)",
+                    description="Wait time before opening a new deal on the same pair after the previous deal closes. 0 or empty = no cooldown.",
+                    type="int",
+                    default=0,
+                    min_value=0,
+                    max_value=86400,
+                    group="Deal Management",
+                ),
                 # ========================================
                 # BASE ORDER SETTINGS
                 # ========================================
