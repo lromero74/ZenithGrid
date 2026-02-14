@@ -7,7 +7,7 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect, Re
 import { useTTSSync, WordTiming } from '../pages/news/hooks/useTTSSync'
 import { markdownToPlainText } from '../pages/news/helpers'
 import { registerArticleReader, stopVideoPlayer } from './mediaCoordinator'
-import { VOICE_CYCLE_IDS } from '../constants/voices'
+import { VOICE_CYCLE_IDS, CHILD_VOICE_IDS, containsAdultContent } from '../constants/voices'
 
 export interface ArticleItem {
   title: string
@@ -211,10 +211,6 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     if (voiceCycleEnabled) {
       // Use position-based voice cycling: article 0 = voice 0, article 1 = voice 1, etc.
       voiceToUse = VOICE_CYCLE_IDS[articleIndex % VOICE_CYCLE_IDS.length]
-
-      // Cache this voice for the article (for display purposes)
-      const newCache = { ...voiceCache, [article.url]: voiceToUse }
-      saveVoiceCache(newCache)
     }
     // If voice cycling is disabled, voiceToUse is undefined and TTS will use current voice
 
@@ -222,6 +218,33 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     let content = article.content
     if (!content) {
       content = await fetchArticleContent(article.url) || undefined
+    }
+
+    // Child voice content filter: if a child voice would read adult content,
+    // skip to the next non-child voice in the cycle
+    const textToCheck = content || article.summary || article.title || ''
+    const currentVoiceId = voiceToUse || tts.currentVoice
+    if (CHILD_VOICE_IDS.has(currentVoiceId) && containsAdultContent(textToCheck)) {
+      if (voiceCycleEnabled) {
+        // Find the next non-child voice in the cycle after this index
+        for (let offset = 1; offset < VOICE_CYCLE_IDS.length; offset++) {
+          const candidate = VOICE_CYCLE_IDS[(articleIndex + offset) % VOICE_CYCLE_IDS.length]
+          if (!CHILD_VOICE_IDS.has(candidate)) {
+            voiceToUse = candidate
+            break
+          }
+        }
+      } else {
+        // Manual voice selection — pick the default adult voice
+        voiceToUse = 'aria'
+      }
+      console.log(`[TTS] Child voice skipped for adult content, using ${voiceToUse} instead`)
+    }
+
+    // Cache voice for display purposes
+    if (voiceCycleEnabled && voiceToUse) {
+      const newCache = { ...voiceCache, [article.url]: voiceToUse }
+      saveVoiceCache(newCache)
     }
 
     if (content) {

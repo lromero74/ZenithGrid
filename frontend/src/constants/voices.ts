@@ -5,6 +5,7 @@ export interface TTSVoice {
   locale: string
   style?: string
   desc?: string
+  child?: boolean  // True for child/minor voices (content filtering)
 }
 
 export const TTS_VOICES: TTSVoice[] = [
@@ -16,7 +17,7 @@ export const TTS_VOICES: TTSVoice[] = [
   { id: 'emma', name: 'Emma', gender: 'Female', locale: 'US', style: 'Casual', desc: 'Cheerful' },
   { id: 'andrew', name: 'Andrew', gender: 'Male', locale: 'US', style: 'Casual', desc: 'Warm' },
   { id: 'ava', name: 'Ava', gender: 'Female', locale: 'US' },
-  { id: 'ana', name: 'Ana', gender: 'Female', locale: 'US' },
+  { id: 'ana', name: 'Ana', gender: 'Female', locale: 'US', child: true },
   { id: 'christopher', name: 'Christopher', gender: 'Male', locale: 'US' },
   { id: 'eric', name: 'Eric', gender: 'Male', locale: 'US' },
   { id: 'michelle', name: 'Michelle', gender: 'Female', locale: 'US' },
@@ -27,7 +28,7 @@ export const TTS_VOICES: TTSVoice[] = [
   { id: 'sonia', name: 'Sonia', gender: 'Female', locale: 'UK' },
   { id: 'ryan', name: 'Ryan', gender: 'Male', locale: 'UK' },
   { id: 'thomas', name: 'Thomas', gender: 'Male', locale: 'UK' },
-  { id: 'maisie', name: 'Maisie', gender: 'Female', locale: 'UK' },
+  { id: 'maisie', name: 'Maisie', gender: 'Female', locale: 'UK', child: true },
   // Australian voices
   { id: 'natasha', name: 'Natasha', gender: 'Female', locale: 'AU' },
   { id: 'william', name: 'William', gender: 'Male', locale: 'AU' },
@@ -73,3 +74,42 @@ export const TTS_VOICES_BY_ID: Record<string, TTSVoice> = Object.fromEntries(
 export const VOICE_CYCLE_IDS: string[] = TTS_VOICES
   .filter(v => ['US', 'UK', 'AU', 'CA', 'IE', 'IN', 'NZ', 'ZA'].includes(v.locale))
   .map(v => v.id)
+
+// Child voice IDs — used for adult content filtering
+export const CHILD_VOICE_IDS: Set<string> = new Set(
+  TTS_VOICES.filter(v => v.child).map(v => v.id)
+)
+
+// Keywords that flag content as unsuitable for child voices (case-insensitive)
+export const ADULT_CONTENT_KEYWORDS: string[] = [
+  'murder', 'murdered', 'murderer', 'murders',
+  'rape', 'raped', 'rapist', 'raping',
+  'sexual assault', 'sexually assaulted',
+  'molestation', 'molested', 'molester',
+  'pedophile', 'paedophile', 'pedophilia',
+  'trafficking', 'sex trafficking',
+  'prostitution', 'prostitute',
+  'pornography', 'pornographic',
+  'transsexual', 'transexual',
+  'genocide', 'ethnic cleansing',
+  'torture', 'tortured',
+  'dismember', 'dismembered', 'dismemberment',
+  'decapitate', 'decapitated', 'beheading',
+  'suicide bombing', 'mass shooting',
+  'serial killer', 'homicide',
+  'manslaughter', 'infanticide',
+  'child abuse', 'domestic violence',
+  'stabbing', 'stabbed to death',
+  'execution', 'executed',
+]
+
+// Precompiled regex for efficient matching
+const _adultPattern = new RegExp(
+  '\\b(' + ADULT_CONTENT_KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
+  'i'
+)
+
+/** Returns true if text contains adult content keywords */
+export function containsAdultContent(text: string): boolean {
+  return _adultPattern.test(text)
+}
