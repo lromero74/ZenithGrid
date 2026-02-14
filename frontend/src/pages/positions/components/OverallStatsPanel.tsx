@@ -32,6 +32,8 @@ interface RealizedPnL {
   qtd_profit_usd: number
   ytd_profit_btc: number
   ytd_profit_usd: number
+  alltime_profit_btc: number
+  alltime_profit_usd: number
 }
 
 interface OverallStatsPanelProps {
@@ -51,6 +53,7 @@ interface OverallStatsPanelProps {
 export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
   const [selectedHistorical, setSelectedHistorical] = useState<'yesterday' | 'last_week' | 'last_month' | 'last_quarter' | 'last_year'>('last_week')
   const [selectedToDate, setSelectedToDate] = useState<'wtd' | 'mtd' | 'qtd' | 'ytd'>('ytd')
+  const [selectedCumulative, setSelectedCumulative] = useState<'alltime' | 'net'>('alltime')
 
   // Get the selected historical period's data
   const getHistoricalData = () => {
@@ -84,12 +87,28 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
     }
   }
 
+  // Get cumulative (all-time or net) data
+  const getCumulativeData = () => {
+    if (!realizedPnL) return { btc: 0, usd: 0 }
+    const allBtc = realizedPnL.alltime_profit_btc ?? 0
+    const allUsd = realizedPnL.alltime_profit_usd ?? 0
+    if (selectedCumulative === 'alltime') {
+      return { btc: allBtc, usd: allUsd }
+    }
+    // Net = all-time realized + current uPnL
+    return {
+      btc: allBtc + stats.uPnL,
+      usd: allUsd + stats.uPnLUSD
+    }
+  }
+
   const historicalData = getHistoricalData()
   const toDateData = getToDateData()
+  const cumulativeData = getCumulativeData()
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-[2fr_1.2fr_2fr] gap-6">
         {/* Overall Stats */}
         <div>
           <h3 className="text-sm font-semibold text-slate-300 mb-3">Overall stats</h3>
@@ -149,6 +168,22 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
                   </span>
                   <span className={`font-medium text-xs ${toDateData.btc >= 0 ? 'text-green-400' : 'text-red-400'} whitespace-nowrap`}>
                     {toDateData.btc >= 0 ? '+' : ''}{toDateData.btc.toFixed(8)} BTC / {toDateData.usd >= 0 ? '+' : ''}${toDateData.usd.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-baseline gap-2">
+                  <span className="text-slate-400 text-xs flex items-center gap-1 flex-shrink-0">
+                    <select
+                      value={selectedCumulative}
+                      onChange={(e) => setSelectedCumulative(e.target.value as 'alltime' | 'net')}
+                      className="bg-slate-700 text-slate-300 border border-slate-600 rounded px-1 py-0.5 text-xs cursor-pointer hover:bg-slate-600"
+                    >
+                      <option value="alltime">All-Time</option>
+                      <option value="net">Net (All-Time + uPnL)</option>
+                    </select>
+                    :
+                  </span>
+                  <span className={`font-medium text-xs ${cumulativeData.btc >= 0 ? 'text-green-400' : 'text-red-400'} whitespace-nowrap`}>
+                    {cumulativeData.btc >= 0 ? '+' : ''}{cumulativeData.btc.toFixed(8)} BTC / {cumulativeData.usd >= 0 ? '+' : ''}${cumulativeData.usd.toFixed(2)}
                   </span>
                 </div>
               </>

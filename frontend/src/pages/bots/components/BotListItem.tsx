@@ -204,7 +204,7 @@ export function BotListItem({
             {(bot as any).closed_positions_count || 0} closed
           </div>
           <div className="text-xs text-slate-500">
-            {((bot as any).trades_per_day || 0).toFixed(2)}/day
+            {((bot as any).trades_per_day || 0).toFixed(2)} trades/day
           </div>
         </div>
       </td>
@@ -231,6 +231,7 @@ export function BotListItem({
         {(() => {
           const pnlUsd = (bot as any).total_pnl_usd || 0
           const pnlBtc = (bot as any).total_pnl_btc || 0
+          const pnlPct = (bot as any).total_pnl_percentage || 0
           const isPositive = pnlUsd > 0
           const isNegative = pnlUsd < 0
           const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
@@ -241,6 +242,9 @@ export function BotListItem({
               </span>
               <span className={colorClass}>
                 ${pnlUsd.toFixed(2)}
+              </span>
+              <span className={colorClass}>
+                {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
               </span>
             </div>
           )

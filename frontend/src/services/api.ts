@@ -120,6 +120,8 @@ export const positionsApi = {
       qtd_profit_usd: number;
       ytd_profit_btc: number;
       ytd_profit_usd: number;
+      alltime_profit_btc: number;
+      alltime_profit_usd: number;
     }>('/positions/realized-pnl', { params: accountId ? { account_id: accountId } : {} }).then((res) => res.data),
 };
 

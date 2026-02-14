@@ -78,6 +78,14 @@ async def get_positions(
     blacklisted_coins = blacklist_result.scalars().all()
     blacklist_map = {coin.symbol: coin.reason for coin in blacklisted_coins}
 
+    # Pre-load bots for open positions (needed for computed_max_budget)
+    from app.position_routers.position_actions_router import _compute_resize_budget
+    open_bot_ids = {pos.bot_id for pos in positions if pos.bot_id and pos.status == "open"}
+    bots_map = {}
+    if open_bot_ids:
+        bots_result = await db.execute(select(Bot).where(Bot.id.in_(open_bot_ids)))
+        bots_map = {b.id: b for b in bots_result.scalars().all()}
+
     response = []
     for pos in positions:
         # Use eager-loaded data instead of separate queries
@@ -105,6 +113,13 @@ async def get_positions(
         if base_symbol in blacklist_map:
             pos_response.is_blacklisted = True
             pos_response.blacklist_reason = blacklist_map[base_symbol]
+
+        # Compute resize budget for open positions
+        if pos.status == "open":
+            bot = bots_map.get(pos.bot_id) if pos.bot_id else None
+            computed = _compute_resize_budget(pos, bot)
+            if computed > 0:
+                pos_response.computed_max_budget = computed
 
         # If position is closing via limit, fetch order details (already loaded)
         if pos.closing_via_limit and pos.limit_close_order_id:
@@ -515,6 +530,8 @@ async def get_realized_pnl(
                 "qtd_profit_usd": 0.0,
                 "ytd_profit_btc": 0.0,
                 "ytd_profit_usd": 0.0,
+                "alltime_profit_btc": 0.0,
+                "alltime_profit_usd": 0.0,
             }
 
     # Filter by account_id if provided
@@ -545,6 +562,8 @@ async def get_realized_pnl(
     qtd_profit_usd = 0.0
     ytd_profit_btc = 0.0
     ytd_profit_usd = 0.0
+    alltime_profit_btc = 0.0
+    alltime_profit_usd = 0.0
 
     for pos in positions:
         if not pos.closed_at:
@@ -562,6 +581,10 @@ async def get_realized_pnl(
                 profit_btc = pos.profit_usd / pos.btc_usd_price_at_close
 
         profit_usd = pos.profit_usd if pos.profit_usd is not None else 0.0
+
+        # All-time (every closed position)
+        alltime_profit_btc += profit_btc
+        alltime_profit_usd += profit_usd
 
         # Check if closed today
         if pos.closed_at >= start_of_today:
@@ -634,6 +657,8 @@ async def get_realized_pnl(
         "qtd_profit_usd": round(qtd_profit_usd, 2),
         "ytd_profit_btc": round(ytd_profit_btc, 8),
         "ytd_profit_usd": round(ytd_profit_usd, 2),
+        "alltime_profit_btc": round(alltime_profit_btc, 8),
+        "alltime_profit_usd": round(alltime_profit_usd, 2),
     }
 
 

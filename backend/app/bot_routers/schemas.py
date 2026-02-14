@@ -59,6 +59,7 @@ class BotResponse(BaseModel):
     trades_per_day: float = 0.0
     total_pnl_usd: float = 0.0
     total_pnl_btc: float = 0.0
+    total_pnl_percentage: float = 0.0
     avg_daily_pnl_usd: float = 0.0
     avg_daily_pnl_btc: float = 0.0
     insufficient_funds: bool = False

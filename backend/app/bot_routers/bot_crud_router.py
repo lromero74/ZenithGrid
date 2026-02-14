@@ -366,7 +366,6 @@ async def list_bots(
         if timeframe_days is None:
             # Use all-time for 'all' or unknown timeframes
             recent_closed_positions = closed_positions
-            max_days = timeframe_days  # None means no cap
         else:
             # Filter to positions closed within the timeframe
             cutoff_date = datetime.utcnow() - timedelta(days=timeframe_days)
@@ -374,7 +373,6 @@ async def list_bots(
                 p for p in closed_positions
                 if p.closed_at and p.closed_at >= cutoff_date
             ]
-            max_days = timeframe_days
 
         recent_pnl_usd = sum(p.profit_usd for p in recent_closed_positions if p.profit_usd)
 
@@ -396,18 +394,14 @@ async def list_bots(
                     profit_btc = 0.0
             recent_pnl_btc += profit_btc
 
-        # Calculate days in period: min of timeframe_days or actual time since first recent trade
-        if recent_closed_positions:
-            first_recent_close = min(p.closed_at for p in recent_closed_positions if p.closed_at)
-            days_in_recent_period = max(1, (datetime.utcnow() - first_recent_close).total_seconds() / 86400)
-            if max_days is not None:
-                days_in_recent_period = min(max_days, days_in_recent_period)  # Cap at timeframe
+        # Calculate days in period using the full timeframe window (not time since first trade)
+        # This prevents inflated PnL/day when few trades happened recently
+        if timeframe_days is None:
+            # All-time: use bot age as denominator
+            days_in_recent_period = max(1, (datetime.utcnow() - bot.created_at).total_seconds() / 86400)
         else:
-            # No trades in timeframe - use full timeframe or bot age for all-time
-            if max_days is not None:
-                days_in_recent_period = max_days
-            else:
-                days_in_recent_period = max(1, (datetime.utcnow() - bot.created_at).total_seconds() / 86400)
+            # Specific timeframe: always use the full timeframe window
+            days_in_recent_period = timeframe_days
 
         avg_daily_pnl_usd = recent_pnl_usd / days_in_recent_period
         avg_daily_pnl_btc = recent_pnl_btc / days_in_recent_period
@@ -471,6 +465,18 @@ async def list_bots(
             insufficient_funds = False
             budget_utilization_percentage = 0.0
 
+        # Calculate PnL percentage (total_pnl_usd / total capital deployed)
+        total_capital_deployed_usd = 0.0
+        for pos in closed_positions:
+            quote_spent = pos.total_quote_spent or 0.0
+            if pos.product_id and "-BTC" in pos.product_id:
+                # BTC pair: convert BTC spent to USD
+                btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+                total_capital_deployed_usd += quote_spent * btc_price
+            else:
+                total_capital_deployed_usd += quote_spent
+        total_pnl_percentage = (total_pnl_usd / total_capital_deployed_usd * 100) if total_capital_deployed_usd > 0 else 0.0
+
         bot_response = BotResponse.model_validate(bot)
         bot_response.open_positions_count = len(open_positions)
         bot_response.total_positions_count = len(all_positions)
@@ -478,6 +484,7 @@ async def list_bots(
         bot_response.trades_per_day = trades_per_day
         bot_response.total_pnl_usd = total_pnl_usd
         bot_response.total_pnl_btc = total_pnl_btc
+        bot_response.total_pnl_percentage = total_pnl_percentage
         bot_response.avg_daily_pnl_usd = avg_daily_pnl_usd
         bot_response.avg_daily_pnl_btc = avg_daily_pnl_btc
         bot_response.insufficient_funds = insufficient_funds
