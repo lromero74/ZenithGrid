@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi, orderHistoryApi } from '../services/api'
-import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp, Building2, Wallet, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp, Building2, Wallet, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
 import type { Trade, AIBotLog, Position, Bot } from '../types'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { formatDateTime } from '../utils/dateFormat'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
+import { FilterPanel } from './positions/components/FilterPanel'
 
 function ClosedPositions() {
   const { selectedAccount } = useAccount()
@@ -15,6 +16,12 @@ function ClosedPositions() {
   const [expandedPositionId, setExpandedPositionId] = useState<number | null>(null)
   const [positionTrades, setPositionTrades] = useState<Record<number, Trade[]>>({})
   const [positionAILogs, setPositionAILogs] = useState<Record<number, AIBotLog[]>>({})
+
+  // Filter state
+  const [filterBot, setFilterBot] = useState<number | 'all'>('all')
+  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>('all')
+  const [filterPair, setFilterPair] = useState<string>('all')
+  const [showFilters, setShowFilters] = useState(false)
 
   // Pagination state
   const [failedPage, setFailedPage] = useState(1)
@@ -104,14 +111,72 @@ function ClosedPositions() {
   // API returns closed positions already sorted by closed_at DESC
   const allClosedPositions = allPositions || []
 
-  // Client-side pagination for closed positions
-  const closedTotalPages = Math.ceil(allClosedPositions.length / pageSize) || 1
-  const closedPositions = allClosedPositions.slice(
+  // Compute unique pairs from all closed positions + failed orders
+  const uniquePairs = useMemo(() => {
+    const pairSet = new Set<string>()
+    allClosedPositions.forEach((p: Position) => {
+      if (p.product_id) pairSet.add(p.product_id)
+    })
+    failedOrders.forEach((o: any) => {
+      if (o.product_id) pairSet.add(o.product_id)
+    })
+    return Array.from(pairSet).sort()
+  }, [allClosedPositions, failedOrders])
+
+  // Filter closed positions
+  const filteredClosedPositions = useMemo(() => {
+    return allClosedPositions.filter((p: Position) => {
+      if (filterBot !== 'all' && p.bot_id !== filterBot) return false
+      if (filterMarket !== 'all') {
+        const quote = p.product_id?.split('-')[1] || ''
+        if (filterMarket === 'USD' && quote !== 'USD') return false
+        if (filterMarket === 'BTC' && quote !== 'BTC') return false
+      }
+      if (filterPair !== 'all' && p.product_id !== filterPair) return false
+      return true
+    })
+  }, [allClosedPositions, filterBot, filterMarket, filterPair])
+
+  // Filter failed orders (client-side on current page data)
+  const filteredFailedOrders = useMemo(() => {
+    return failedOrders.filter((o: any) => {
+      if (filterBot !== 'all') {
+        const botName = bots?.find(b => b.id === filterBot)?.name
+        if (botName && o.bot_name !== botName) return false
+        if (!botName) return false
+      }
+      if (filterMarket !== 'all') {
+        const quote = o.product_id?.split('-')[1] || ''
+        if (filterMarket === 'USD' && quote !== 'USD') return false
+        if (filterMarket === 'BTC' && quote !== 'BTC') return false
+      }
+      if (filterPair !== 'all' && o.product_id !== filterPair) return false
+      return true
+    })
+  }, [failedOrders, filterBot, filterMarket, filterPair, bots])
+
+  const clearFilters = () => {
+    setFilterBot('all')
+    setFilterMarket('all')
+    setFilterPair('all')
+  }
+
+  const hasActiveFilters = filterBot !== 'all' || filterMarket !== 'all' || filterPair !== 'all'
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setClosedPage(1)
+    setFailedPage(1)
+  }, [filterBot, filterMarket, filterPair])
+
+  // Client-side pagination for closed positions (use filtered)
+  const closedTotalPages = Math.ceil(filteredClosedPositions.length / pageSize) || 1
+  const closedPositions = filteredClosedPositions.slice(
     (closedPage - 1) * pageSize,
     closedPage * pageSize
   )
 
-  // Calculate badge counts for each tab (use total counts, not paginated)
+  // Calculate badge counts for each tab (use UNFILTERED total counts)
   const currentClosedCount = allClosedPositions.length
   const currentFailedCount = failedTotal
   const newClosedCount = Math.max(0, currentClosedCount - lastSeenClosedCount)
@@ -273,8 +338,9 @@ function ClosedPositions() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex space-x-2 mb-6 border-b border-slate-700">
+        {/* Tabs + Filter Toggle */}
+        <div className="flex items-center justify-between mb-2 border-b border-slate-700">
+          <div className="flex space-x-2">
           <button
             onClick={() => setActiveTab('closed')}
             className={`px-4 py-2 font-medium transition-colors relative ${
@@ -284,7 +350,7 @@ function ClosedPositions() {
             }`}
           >
             <span className="flex items-center space-x-2">
-              <span>Closed Positions ({currentClosedCount})</span>
+              <span>Closed Positions ({hasActiveFilters ? `${filteredClosedPositions.length}/` : ''}{currentClosedCount})</span>
               {newClosedCount > 0 && (
                 <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                   {newClosedCount > 9 ? '9+' : newClosedCount}
@@ -301,7 +367,7 @@ function ClosedPositions() {
             }`}
           >
             <span className="flex items-center space-x-2">
-              <span>Failed Orders ({failedTotal})</span>
+              <span>Failed Orders ({hasActiveFilters ? `${filteredFailedOrders.length}/` : ''}{failedTotal})</span>
               {newFailedCount > 0 && (
                 <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                   {newFailedCount > 9 ? '9+' : newFailedCount}
@@ -309,14 +375,46 @@ function ClosedPositions() {
               )}
             </span>
           </button>
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1.5 mb-1 ${
+              showFilters || hasActiveFilters
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600'
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+            Filters
+            {hasActiveFilters && (
+              <span className="bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                {(filterBot !== 'all' ? 1 : 0) + (filterMarket !== 'all' ? 1 : 0) + (filterPair !== 'all' ? 1 : 0)}
+              </span>
+            )}
+          </button>
         </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <FilterPanel
+            filterBot={filterBot}
+            setFilterBot={setFilterBot}
+            filterMarket={filterMarket}
+            setFilterMarket={setFilterMarket}
+            filterPair={filterPair}
+            setFilterPair={setFilterPair}
+            bots={bots}
+            uniquePairs={uniquePairs}
+            onClearFilters={clearFilters}
+          />
+        )}
 
         {/* Closed Positions Tab */}
         {activeTab === 'closed' && (
           <>
             {closedPositions.length === 0 ? (
           <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center">
-            <p className="text-slate-400">No closed positions yet</p>
+            <p className="text-slate-400">{hasActiveFilters ? 'No closed positions match your filters' : 'No closed positions yet'}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -521,7 +619,7 @@ function ClosedPositions() {
           {closedTotalPages > 1 && (
             <div className="flex items-center justify-between mt-6 px-2">
               <p className="text-sm text-slate-400">
-                Page {closedPage} of {closedTotalPages} ({allClosedPositions.length} total)
+                Page {closedPage} of {closedTotalPages} ({filteredClosedPositions.length} total)
               </p>
               <div className="flex items-center gap-1">
                 <button
@@ -572,14 +670,14 @@ function ClosedPositions() {
               <div className="flex justify-center py-12">
                 <LoadingSpinner size="lg" text="Loading failed orders..." />
               </div>
-            ) : failedOrders.length === 0 ? (
+            ) : filteredFailedOrders.length === 0 ? (
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center">
-                <p className="text-slate-400">No failed orders</p>
+                <p className="text-slate-400">{hasActiveFilters ? 'No failed orders match your filters' : 'No failed orders'}</p>
               </div>
             ) : (
               <>
                 <div className="space-y-3">
-                  {failedOrders.map((order: any) => (
+                  {filteredFailedOrders.map((order: any) => (
                     <div key={order.id} className="bg-slate-800 rounded-lg border border-red-900/30 p-4">
                       <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                         <div>
@@ -645,7 +743,7 @@ function ClosedPositions() {
                 {failedTotalPages > 1 && (
                   <div className="flex items-center justify-between mt-6 px-2">
                     <p className="text-sm text-slate-400">
-                      Page {failedPage} of {failedTotalPages} ({failedTotal} total)
+                      Page {failedPage} of {failedTotalPages} ({filteredFailedOrders.length} total)
                     </p>
                     <div className="flex items-center gap-1">
                       <button

@@ -39,7 +39,7 @@ export const FilterPanel = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Account Filter (Market in our case) */}
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">Account</label>
+          <label className="block text-sm font-medium text-slate-400 mb-2">Market</label>
           <select
             value={filterMarket}
             onChange={(e) => setFilterMarket(e.target.value as 'all' | 'USD' | 'BTC')}
