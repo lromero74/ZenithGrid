@@ -13,7 +13,7 @@ export function Sparkline({ data, color, height = 40, timeLabel }: SparklineProp
   const chartData = data.map((value, i) => ({ v: value, i }))
 
   return (
-    <div>
+    <div className="w-full">
       <div className="w-full opacity-60 hover:opacity-100 transition-opacity" style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
