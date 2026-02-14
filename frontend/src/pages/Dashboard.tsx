@@ -32,17 +32,21 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [showStoppedBots, setShowStoppedBots] = useState(() => {
     try { return localStorage.getItem('zenith-show-stopped-bots') !== 'false' } catch { return true }
   })
-  useEffect(() => { try { localStorage.setItem('zenith-show-stopped-bots', String(showStoppedBots)) } catch {} }, [showStoppedBots])
+  useEffect(() => { try { localStorage.setItem('zenith-show-stopped-bots', String(showStoppedBots)) } catch { /* ignored */ } }, [showStoppedBots])
 
-  // Fetch all bots (filtered by account if selected)
+  const [projectionBasis, setProjectionBasis] = useState<string>(() => {
+    try { return localStorage.getItem('zenith-bots-projection-basis') || '7d' } catch { return '7d' }
+  })
+  useEffect(() => { try { localStorage.setItem('zenith-bots-projection-basis', projectionBasis) } catch { /* ignored */ } }, [projectionBasis])
+
+  // Fetch all bots with projection data (filtered by account if selected)
   const { data: bots = [] } = useQuery({
-    queryKey: ['bots', selectedAccount?.id],
-    queryFn: () => botsApi.getAll(),
-    refetchInterval: 30000, // 30 seconds - API takes time due to Coinbase calls
-    staleTime: 15000, // Consider fresh for 15 seconds
+    queryKey: ['dashboard-bots', selectedAccount?.id, projectionBasis],
+    queryFn: () => botsApi.getAll(projectionBasis),
+    refetchInterval: 30000,
+    staleTime: 15000,
     select: (data) => {
       if (!selectedAccount) return data
-      // Filter by account_id
       return data.filter((bot: Bot) => bot.account_id === selectedAccount.id)
     },
   })
@@ -252,6 +256,106 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           )}
         </div>
       </div>
+
+      {/* Portfolio Totals - Projected PnL */}
+      {bots.length > 0 && (() => {
+        const filteredBots = bots.filter((b: Bot) => showStoppedBots || b.is_active)
+        const totalDailyPnl = filteredBots.reduce((sum: number, bot: Bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
+        const portfolioUsd = portfolio?.total_usd_value || 0
+        const dailyRate = portfolioUsd > 0 ? totalDailyPnl / portfolioUsd : 0
+        const projectPnl = (days: number) => totalDailyPnl * days
+        const totalWeeklyPnl = projectPnl(7)
+        const totalMonthlyPnl = projectPnl(30)
+        const totalYearlyPnl = projectPnl(365)
+        const isPositive = totalDailyPnl > 0
+        const isNegative = totalDailyPnl < 0
+        const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
+        const prefix = isPositive ? '+' : ''
+        const dailyPct = dailyRate * 100
+        const weeklyPct = portfolioUsd > 0 ? (totalWeeklyPnl / portfolioUsd) * 100 : 0
+        const monthlyPct = portfolioUsd > 0 ? (totalMonthlyPnl / portfolioUsd) * 100 : 0
+        const yearlyPct = portfolioUsd > 0 ? (totalYearlyPnl / portfolioUsd) * 100 : 0
+        const pctPrefix = isPositive ? '+' : ''
+        const fmtPct = (pct: number) => portfolioUsd === 0 ? '--' : `${pctPrefix}${pct.toFixed(2)}`
+        const compoundReturn = (days: number) => portfolioUsd > 0 ? portfolioUsd * (Math.pow(1 + dailyRate, days) - 1) : 0
+        const compWeekly = compoundReturn(7)
+        const compMonthly = compoundReturn(30)
+        const compYearly = compoundReturn(365)
+        const compWeeklyPct = portfolioUsd > 0 ? (compWeekly / portfolioUsd) * 100 : 0
+        const compMonthlyPct = portfolioUsd > 0 ? (compMonthly / portfolioUsd) * 100 : 0
+        const compYearlyPct = portfolioUsd > 0 ? (compYearly / portfolioUsd) * 100 : 0
+
+        return (
+          <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-slate-900">
+                <tr>
+                  <th className="text-left px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">
+                    <div className="flex items-center space-x-2">
+                      <span>Portfolio Totals</span>
+                      <select
+                        value={projectionBasis}
+                        onChange={(e) => setProjectionBasis(e.target.value)}
+                        className="bg-slate-700 text-xs text-slate-300 px-2 py-1 rounded border border-slate-600 font-normal"
+                        title="Projection basis period"
+                      >
+                        <option value="7d">7d basis</option>
+                        <option value="14d">14d basis</option>
+                        <option value="30d">30d basis</option>
+                        <option value="3m">3m basis</option>
+                        <option value="6m">6m basis</option>
+                        <option value="1y">1y basis</option>
+                        <option value="all">All-time basis</option>
+                      </select>
+                    </div>
+                  </th>
+                  <th className="text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Daily</th>
+                  <th className="text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Weekly</th>
+                  <th className="text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Monthly</th>
+                  <th className="text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Yearly</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="px-2 sm:px-4 py-2 text-sm font-semibold text-slate-300">Projected PnL</td>
+                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
+                    {prefix}${totalDailyPnl.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-400">({fmtPct(dailyPct)}%)</span>
+                  </td>
+                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
+                    {prefix}${totalWeeklyPnl.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-400">({fmtPct(weeklyPct)}%)</span>
+                  </td>
+                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
+                    {prefix}${totalMonthlyPnl.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-400">({fmtPct(monthlyPct)}%)</span>
+                  </td>
+                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
+                    {prefix}${totalYearlyPnl.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-400">({fmtPct(yearlyPct)}%)</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-2 sm:px-4 py-1 text-sm text-slate-400">Compounded</td>
+                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>—</td>
+                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
+                    {prefix}${compWeekly.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-500">({fmtPct(compWeeklyPct)}%)</span>
+                  </td>
+                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
+                    {prefix}${compMonthly.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-500">({fmtPct(compMonthlyPct)}%)</span>
+                  </td>
+                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
+                    {prefix}${compYearly.toFixed(2)}
+                    <span className="text-xs ml-1 text-slate-500">({fmtPct(compYearlyPct)}%)</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
 
       {/* Account Value Chart */}
       <AccountValueChart />

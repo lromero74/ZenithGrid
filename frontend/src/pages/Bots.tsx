@@ -151,7 +151,7 @@ function Bots() {
     forceRunBot,
     cancelAllPositions,
     sellAllPositions
-  } = useBotMutations({ selectedAccount, bots, setShowModal, resetForm, onCloneSuccess: handleCloneSuccess })
+  } = useBotMutations({ selectedAccount, bots, setShowModal, resetForm, onCloneSuccess: handleCloneSuccess, projectionTimeframe: projectionBasis })
 
   // Get selected strategy definition
   const selectedStrategy = strategies.find((s) => s.id === formData.strategy_type)

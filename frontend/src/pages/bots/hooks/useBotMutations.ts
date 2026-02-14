@@ -8,6 +8,7 @@ interface UseBotMutationsProps {
   setShowModal: (show: boolean) => void
   resetForm: () => void
   onCloneSuccess?: (clonedBot: Bot) => void
+  projectionTimeframe?: string
 }
 
 export function useBotMutations({
@@ -15,7 +16,8 @@ export function useBotMutations({
   bots,
   setShowModal,
   resetForm,
-  onCloneSuccess
+  onCloneSuccess,
+  projectionTimeframe
 }: UseBotMutationsProps) {
   const queryClient = useQueryClient()
 
@@ -78,8 +80,10 @@ export function useBotMutations({
   const startBot = useMutation({
     mutationFn: (id: number) => botsApi.start(id),
     onMutate: async (id) => {
-      const queryKey = ['bots', selectedAccount?.id]
-      await queryClient.cancelQueries({ queryKey })
+      // Cancel all bot queries to prevent overwrites
+      await queryClient.cancelQueries({ queryKey: ['bots'] })
+      // Update all matching bot query cache entries optimistically
+      const queryKey = ['bots', selectedAccount?.id, projectionTimeframe]
       const previousBots = queryClient.getQueryData(queryKey)
       queryClient.setQueryData(queryKey, (old: Bot[] | undefined) =>
         old?.map(bot => bot.id === id ? { ...bot, is_active: true } : bot)
@@ -100,8 +104,8 @@ export function useBotMutations({
   const stopBot = useMutation({
     mutationFn: (id: number) => botsApi.stop(id),
     onMutate: async (id) => {
-      const queryKey = ['bots', selectedAccount?.id]
-      await queryClient.cancelQueries({ queryKey })
+      await queryClient.cancelQueries({ queryKey: ['bots'] })
+      const queryKey = ['bots', selectedAccount?.id, projectionTimeframe]
       const previousBots = queryClient.getQueryData(queryKey)
       queryClient.setQueryData(queryKey, (old: Bot[] | undefined) =>
         old?.map(bot => bot.id === id ? { ...bot, is_active: false } : bot)

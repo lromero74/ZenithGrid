@@ -373,6 +373,35 @@ function ThreeCommasStyleForm({
               Maximum positions that can be open at the same time
             </p>
           </div>
+
+          {/* Max Simultaneous Same Pair */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1 flex items-center gap-1">
+              Max Simultaneous Deals (Same Pair)
+              <span className="text-slate-400 text-xs ml-1">
+                (1 - {config.max_concurrent_deals || 1})
+              </span>
+              <span
+                className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-600 text-slate-300 text-xs cursor-help"
+                title="Controls how many positions can be open on the SAME trading pair simultaneously. A new deal for the same pair only opens after ALL existing deals on that pair have exhausted their safety orders."
+              >i</span>
+            </label>
+            <input
+              type="number"
+              value={getNumericValue(config.max_simultaneous_same_pair, 1)}
+              onChange={(e) => {
+                const val = safeParseInt(e.target.value) ?? 1
+                const maxDeals = config.max_concurrent_deals || 1
+                updateConfig('max_simultaneous_same_pair', Math.min(val, maxDeals))
+              }}
+              min="1"
+              max={config.max_concurrent_deals || 1}
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              New deals for the same pair open only after all existing deals have exhausted their safety orders
+            </p>
+          </div>
         </div>
       </div>
 
