@@ -450,38 +450,10 @@ function Portfolio() {
           </div>
         </div>
 
-        {/* PnL Stats & Balance - Organized by Currency */}
+        {/* Balance Breakdowns - Organized by Currency */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* BTC Column */}
           <div className="space-y-4">
-            {/* Today PnL (BTC) */}
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={20} className={(portfolio.pnl?.today?.btc ?? 0) >= 0 ? "text-green-400" : "text-red-400"} />
-                <p className="text-slate-400 text-sm font-medium">Today PnL (BTC)</p>
-              </div>
-              <p className={`text-3xl font-bold ${(portfolio.pnl?.today?.btc ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(portfolio.pnl?.today?.btc ?? 0) >= 0 ? '+' : ''}{formatCrypto(portfolio.pnl?.today?.btc || 0)} BTC
-              </p>
-              <p className="text-sm text-slate-400 mt-1">
-                ({(portfolio.pnl?.today?.btc ?? 0) >= 0 ? '+' : ''}{formatCurrency((portfolio.pnl?.today?.btc || 0) * portfolio.btc_usd_price)})
-              </p>
-            </div>
-
-            {/* All-Time PnL (BTC) */}
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={20} className={(portfolio.pnl?.all_time?.btc ?? 0) >= 0 ? "text-green-400" : "text-red-400"} />
-                <p className="text-slate-400 text-sm font-medium">All-Time PnL (BTC)</p>
-              </div>
-              <p className={`text-3xl font-bold ${(portfolio.pnl?.all_time?.btc ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(portfolio.pnl?.all_time?.btc ?? 0) >= 0 ? '+' : ''}{formatCrypto(portfolio.pnl?.all_time?.btc || 0)} BTC
-              </p>
-              <p className="text-sm text-slate-400 mt-1">
-                ({(portfolio.pnl?.all_time?.btc ?? 0) >= 0 ? '+' : ''}{formatCurrency((portfolio.pnl?.all_time?.btc || 0) * portfolio.btc_usd_price)})
-              </p>
-            </div>
-
             {/* BTC Balance Breakdown (CEX only) */}
             {portfolio.balance_breakdown?.btc && (
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
@@ -541,34 +513,6 @@ function Portfolio() {
 
           {/* USD Column */}
           <div className="space-y-4">
-            {/* Today PnL (USD) */}
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={20} className={(portfolio.pnl?.today?.usd ?? 0) >= 0 ? "text-green-400" : "text-red-400"} />
-                <p className="text-slate-400 text-sm font-medium">Today PnL (USD)</p>
-              </div>
-              <p className={`text-3xl font-bold ${(portfolio.pnl?.today?.usd ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(portfolio.pnl?.today?.usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.today?.usd || 0)}
-              </p>
-              <p className="text-sm text-slate-400 mt-1">
-                ({(portfolio.pnl?.today?.usd ?? 0) >= 0 ? '+' : ''}{formatCrypto((portfolio.pnl?.today?.usd || 0) / portfolio.btc_usd_price)} BTC)
-              </p>
-            </div>
-
-            {/* All-Time PnL (USD) */}
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={20} className={(portfolio.pnl?.all_time?.usd ?? 0) >= 0 ? "text-green-400" : "text-red-400"} />
-                <p className="text-slate-400 text-sm font-medium">All-Time PnL (USD)</p>
-              </div>
-              <p className={`text-3xl font-bold ${(portfolio.pnl?.all_time?.usd ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(portfolio.pnl?.all_time?.usd ?? 0) >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.all_time?.usd || 0)}
-              </p>
-              <p className="text-sm text-slate-400 mt-1">
-                ({(portfolio.pnl?.all_time?.usd ?? 0) >= 0 ? '+' : ''}{formatCrypto((portfolio.pnl?.all_time?.usd || 0) / portfolio.btc_usd_price)} BTC)
-              </p>
-            </div>
-
             {/* USD Balance Breakdown (CEX only) */}
             {portfolio.balance_breakdown?.usd && (
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
@@ -600,34 +544,6 @@ function Portfolio() {
 
           {/* USDC Column */}
           <div className="space-y-4">
-            {/* Today PnL (USDC) */}
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={20} className={(portfolio.pnl?.today?.usdc ?? 0) >= 0 ? "text-green-400" : "text-red-400"} />
-                <p className="text-slate-400 text-sm font-medium">Today PnL (USDC)</p>
-              </div>
-              <p className={`text-3xl font-bold ${(portfolio.pnl?.today?.usdc ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(portfolio.pnl?.today?.usdc ?? 0) >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.today?.usdc || 0)}
-              </p>
-              <p className="text-sm text-slate-400 mt-1">
-                ({(portfolio.pnl?.today?.usdc ?? 0) >= 0 ? '+' : ''}{formatCrypto((portfolio.pnl?.today?.usdc || 0) / portfolio.btc_usd_price)} BTC)
-              </p>
-            </div>
-
-            {/* All-Time PnL (USDC) */}
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={20} className={(portfolio.pnl?.all_time?.usdc ?? 0) >= 0 ? "text-green-400" : "text-red-400"} />
-                <p className="text-slate-400 text-sm font-medium">All-Time PnL (USDC)</p>
-              </div>
-              <p className={`text-3xl font-bold ${(portfolio.pnl?.all_time?.usdc ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(portfolio.pnl?.all_time?.usdc ?? 0) >= 0 ? '+' : ''}{formatCurrency(portfolio.pnl?.all_time?.usdc || 0)}
-              </p>
-              <p className="text-sm text-slate-400 mt-1">
-                ({(portfolio.pnl?.all_time?.usdc ?? 0) >= 0 ? '+' : ''}{formatCrypto((portfolio.pnl?.all_time?.usdc || 0) / portfolio.btc_usd_price)} BTC)
-              </p>
-            </div>
-
             {/* USDC Balance Breakdown */}
             {portfolio.balance_breakdown && portfolio.balance_breakdown.usdc && (
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
