@@ -52,6 +52,7 @@ export function ArticleReaderMiniPlayer() {
     resume,
     replay,
     seekToWord,
+    seekToTime,
     setVoice,
     setRate,
   } = useArticleReader()
@@ -144,20 +145,18 @@ export function ArticleReaderMiniPlayer() {
     }
   }, [currentArticle, location.pathname, navigate])
 
-  // Progress bar click handler - word-based to match visual progress
+  // Progress bar click handler - time-based to match the time-driven progress bar
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (words.length === 0) return
+    if (duration <= 0) return
 
     const rect = e.currentTarget.getBoundingClientRect()
     const clickX = e.clientX - rect.left
-    const percentage = clickX / rect.width
+    const percentage = Math.max(0, Math.min(1, clickX / rect.width))
 
-    // Calculate target word index based on percentage
-    const targetIndex = Math.floor(percentage * words.length)
-    const clampedIndex = Math.max(0, Math.min(targetIndex, words.length - 1))
-
-    seekToWord(clampedIndex)
-  }, [words, seekToWord])
+    // Convert click position to a target time, then seek to the nearest word
+    const targetTime = percentage * duration
+    seekToTime(targetTime)
+  }, [duration, seekToTime])
 
   // Number-related words that TTS uses when reading numbers/currency
   const NUMBER_WORDS = new Set([

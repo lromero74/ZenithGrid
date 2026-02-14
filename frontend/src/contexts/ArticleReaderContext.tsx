@@ -71,6 +71,7 @@ interface ArticleReaderContextType {
   stop: () => void
   replay: () => void
   seekToWord: (index: number) => void
+  seekToTime: (time: number) => void
   skipWords: (count: number) => void
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
@@ -424,6 +425,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     stop: tts.stop,
     replay: tts.replay,
     seekToWord: tts.seekToWord,
+    seekToTime: tts.seekToTime,
     skipWords: tts.skipWords,
     setVoice: tts.setVoice,
     setRate: tts.setRate,

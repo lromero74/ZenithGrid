@@ -53,6 +53,7 @@ interface UseTTSSyncReturn {
   stop: () => void
   replay: () => void
   seekToWord: (index: number) => void
+  seekToTime: (time: number) => void
   skipWords: (count: number) => void
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
@@ -220,10 +221,11 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       setDuration(audio.duration)
     }
 
-    // Safety net: timeupdate fires ~4Hz from the browser reliably.
-    // If the rAF animation loop died (exception, tab throttle, etc.),
-    // this restarts it so word tracking recovers automatically.
+    // Safety net: timeupdate fires ~4Hz from the browser reliably,
+    // even when the tab is backgrounded and rAF is throttled/stopped.
+    // Always push currentTime here so the progress bar never gets stuck.
     audio.ontimeupdate = () => {
+      setCurrentTime(audio.currentTime)
       if (!audio.paused && !isAnimatingRef.current) {
         startAnimationLoop()
       }
@@ -555,6 +557,28 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     }
   }, [])
 
+  // Seek to a specific time (seconds) - finds the nearest word and seeks there
+  const seekToTime = useCallback((targetTime: number) => {
+    if (!audioRef.current) return
+    const wordList = wordsRef.current
+    if (wordList.length === 0) {
+      // No words, just seek the audio directly
+      audioRef.current.currentTime = targetTime
+      setCurrentTime(targetTime)
+      return
+    }
+    // Find the word that contains or is nearest to targetTime
+    let bestIdx = 0
+    for (let i = 0; i < wordList.length; i++) {
+      if (targetTime >= wordList[i].startTime) {
+        bestIdx = i
+      } else {
+        break
+      }
+    }
+    seekToWord(bestIdx)
+  }, [seekToWord])
+
   const skipWords = useCallback((count: number) => {
     if (!audioRef.current || wordsRef.current.length === 0) return
 
@@ -603,6 +627,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     stop,
     replay,
     seekToWord,
+    seekToTime,
     skipWords,
     setVoice,
     setRate,
