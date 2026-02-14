@@ -53,6 +53,7 @@ export function ArticleReaderMiniPlayer() {
     replay,
     seekToWord,
     seekToTime,
+    getPlaybackState,
     setVoice,
     setRate,
   } = useArticleReader()
@@ -67,6 +68,31 @@ export function ArticleReaderMiniPlayer() {
   const settingsRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const progressBarRef = useRef<HTMLDivElement>(null)
+  const progressRafRef = useRef<number | null>(null)
+
+  // Smooth progress bar via direct DOM updates (bypasses React state for 60fps)
+  useEffect(() => {
+    if (!isPlaying && !isPaused) {
+      // Not active — reset bar
+      if (progressBarRef.current) progressBarRef.current.style.width = '0%'
+      return
+    }
+
+    const updateBar = () => {
+      if (progressBarRef.current) {
+        const state = getPlaybackState()
+        const pct = state.duration > 0 ? (state.currentTime / state.duration) * 100 : 0
+        progressBarRef.current.style.width = `${pct}%`
+      }
+      progressRafRef.current = requestAnimationFrame(updateBar)
+    }
+
+    progressRafRef.current = requestAnimationFrame(updateBar)
+    return () => {
+      if (progressRafRef.current) cancelAnimationFrame(progressRafRef.current)
+    }
+  }, [isPlaying, isPaused, getPlaybackState])
 
   // Convert article content to plain text for word matching
   const plainText = useMemo(() => {
@@ -502,8 +528,9 @@ export function ArticleReaderMiniPlayer() {
                   onClick={handleProgressClick}
                 >
                   <div
-                    className="h-full bg-green-500 rounded-full transition-all duration-100 relative"
-                    style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                    ref={progressBarRef}
+                    className="h-full bg-green-500 rounded-full relative"
+                    style={{ width: '0%' }}
                   >
                     <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>

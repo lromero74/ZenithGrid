@@ -76,6 +76,9 @@ interface ArticleReaderContextType {
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
 
+  // Direct audio access (for smooth progress bar animation)
+  getPlaybackState: () => { currentTime: number; duration: number }
+
   // Voice cache
   getVoiceForArticle: (articleUrl: string) => string | null
 }
@@ -429,6 +432,9 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     skipWords: tts.skipWords,
     setVoice: tts.setVoice,
     setRate: tts.setRate,
+
+    // Direct audio access
+    getPlaybackState: tts.getPlaybackState,
 
     // Voice cache
     getVoiceForArticle,

@@ -45,6 +45,9 @@ interface UseTTSSyncReturn {
   currentVoice: string
   playbackRate: number
 
+  // Direct audio access (bypasses React state for smooth animations)
+  getPlaybackState: () => { currentTime: number; duration: number }
+
   // Actions
   loadAndPlay: (text: string, overrideVoice?: string) => Promise<void>
   play: () => void
@@ -608,6 +611,15 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setPlaybackRate(rate)
   }, [])
 
+  // Direct audio element access — reads currentTime/duration without React state delay
+  const getPlaybackState = useCallback(() => {
+    const audio = audioRef.current
+    return {
+      currentTime: audio ? audio.currentTime : 0,
+      duration: (audio && !isNaN(audio.duration)) ? audio.duration : 0,
+    }
+  }, [])
+
   return {
     isLoading,
     isPlaying,
@@ -620,6 +632,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     duration,
     currentVoice,
     playbackRate,
+    getPlaybackState,
     loadAndPlay,
     play,
     pause,
