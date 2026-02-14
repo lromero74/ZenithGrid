@@ -111,45 +111,79 @@ function ClosedPositions() {
   // API returns closed positions already sorted by closed_at DESC
   const allClosedPositions = allPositions || []
 
-  // Compute unique pairs from all closed positions + failed orders
+  // Helper: check if a product_id matches the market filter
+  const matchesMarket = (productId: string, market: 'all' | 'USD' | 'BTC') => {
+    if (market === 'all') return true
+    const quote = productId?.split('-')[1] || ''
+    return quote === market
+  }
+
+  // Cascading filters: each dropdown's options are filtered by the OTHER selections
+  // uniquePairs = pairs available given current bot + market selection
   const uniquePairs = useMemo(() => {
     const pairSet = new Set<string>()
-    allClosedPositions.forEach((p: Position) => {
-      if (p.product_id) pairSet.add(p.product_id)
-    })
-    failedOrders.forEach((o: any) => {
-      if (o.product_id) pairSet.add(o.product_id)
-    })
+    if (activeTab === 'closed') {
+      allClosedPositions.forEach((p: Position) => {
+        if (!p.product_id) return
+        if (filterBot !== 'all' && p.bot_id !== filterBot) return
+        if (!matchesMarket(p.product_id, filterMarket)) return
+        pairSet.add(p.product_id)
+      })
+    } else {
+      failedOrders.forEach((o: any) => {
+        if (!o.product_id) return
+        if (filterBot !== 'all') {
+          const botName = bots?.find(b => b.id === filterBot)?.name
+          if (!botName || o.bot_name !== botName) return
+        }
+        if (!matchesMarket(o.product_id, filterMarket)) return
+        pairSet.add(o.product_id)
+      })
+    }
     return Array.from(pairSet).sort()
-  }, [allClosedPositions, failedOrders])
+  }, [allClosedPositions, failedOrders, activeTab, filterBot, filterMarket, bots])
 
-  // Filter closed positions
+  // availableBots = bots that have data given current market + pair selection
+  const availableBots = useMemo(() => {
+    if (!bots) return undefined
+    const botIdSet = new Set<number>()
+    if (activeTab === 'closed') {
+      allClosedPositions.forEach((p: Position) => {
+        if (!p.bot_id) return
+        if (filterPair !== 'all' && p.product_id !== filterPair) return
+        if (!matchesMarket(p.product_id || '', filterMarket)) return
+        botIdSet.add(p.bot_id)
+      })
+    } else {
+      failedOrders.forEach((o: any) => {
+        if (!o.bot_name) return
+        if (filterPair !== 'all' && o.product_id !== filterPair) return
+        if (!matchesMarket(o.product_id || '', filterMarket)) return
+        const bot = bots.find(b => b.name === o.bot_name)
+        if (bot) botIdSet.add(bot.id)
+      })
+    }
+    return bots.filter(b => botIdSet.has(b.id))
+  }, [bots, allClosedPositions, failedOrders, activeTab, filterPair, filterMarket])
+
+  // Filter closed positions (all three filters applied)
   const filteredClosedPositions = useMemo(() => {
     return allClosedPositions.filter((p: Position) => {
       if (filterBot !== 'all' && p.bot_id !== filterBot) return false
-      if (filterMarket !== 'all') {
-        const quote = p.product_id?.split('-')[1] || ''
-        if (filterMarket === 'USD' && quote !== 'USD') return false
-        if (filterMarket === 'BTC' && quote !== 'BTC') return false
-      }
+      if (!matchesMarket(p.product_id || '', filterMarket)) return false
       if (filterPair !== 'all' && p.product_id !== filterPair) return false
       return true
     })
   }, [allClosedPositions, filterBot, filterMarket, filterPair])
 
-  // Filter failed orders (client-side on current page data)
+  // Filter failed orders (all three filters applied)
   const filteredFailedOrders = useMemo(() => {
     return failedOrders.filter((o: any) => {
       if (filterBot !== 'all') {
         const botName = bots?.find(b => b.id === filterBot)?.name
-        if (botName && o.bot_name !== botName) return false
-        if (!botName) return false
+        if (!botName || o.bot_name !== botName) return false
       }
-      if (filterMarket !== 'all') {
-        const quote = o.product_id?.split('-')[1] || ''
-        if (filterMarket === 'USD' && quote !== 'USD') return false
-        if (filterMarket === 'BTC' && quote !== 'BTC') return false
-      }
+      if (!matchesMarket(o.product_id || '', filterMarket)) return false
       if (filterPair !== 'all' && o.product_id !== filterPair) return false
       return true
     })
@@ -162,6 +196,19 @@ function ClosedPositions() {
   }
 
   const hasActiveFilters = filterBot !== 'all' || filterMarket !== 'all' || filterPair !== 'all'
+
+  // Auto-reset stale selections when options change
+  useEffect(() => {
+    if (filterPair !== 'all' && !uniquePairs.includes(filterPair)) {
+      setFilterPair('all')
+    }
+  }, [uniquePairs, filterPair])
+
+  useEffect(() => {
+    if (filterBot !== 'all' && availableBots && !availableBots.some(b => b.id === filterBot)) {
+      setFilterBot('all')
+    }
+  }, [availableBots, filterBot])
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -403,7 +450,7 @@ function ClosedPositions() {
             setFilterMarket={setFilterMarket}
             filterPair={filterPair}
             setFilterPair={setFilterPair}
-            bots={bots}
+            bots={availableBots}
             uniquePairs={uniquePairs}
             onClearFilters={clearFilters}
           />
