@@ -576,7 +576,17 @@ function Bots() {
                   return `${pctPrefix}${pct.toFixed(2)}`
                 }
 
+                // Compounded projections: (1 + dailyRate)^days - 1
+                const compoundReturn = (days: number) => portfolioUsd > 0 ? portfolioUsd * (Math.pow(1 + dailyRate, days) - 1) : 0
+                const compWeekly = compoundReturn(7)
+                const compMonthly = compoundReturn(30)
+                const compYearly = compoundReturn(365)
+                const compWeeklyPct = portfolioUsd > 0 ? (compWeekly / portfolioUsd) * 100 : 0
+                const compMonthlyPct = portfolioUsd > 0 ? (compMonthly / portfolioUsd) * 100 : 0
+                const compYearlyPct = portfolioUsd > 0 ? (compYearly / portfolioUsd) * 100 : 0
+
                 return (
+                  <>
                   <tr>
                     <td className="px-1 sm:px-2 py-2 text-sm font-semibold text-slate-300">Projected PnL</td>
                     <td className={`px-1 sm:px-2 py-2 text-right text-lg font-bold ${colorClass}`}>
@@ -604,6 +614,31 @@ function Bots() {
                       </span>
                     </td>
                   </tr>
+                  <tr>
+                    <td className="px-1 sm:px-2 py-1 text-sm text-slate-400">Compounded</td>
+                    <td className={`px-1 sm:px-2 py-1 text-right text-sm ${colorClass}`}>
+                      —
+                    </td>
+                    <td className={`px-1 sm:px-2 py-1 text-right text-sm ${colorClass}`}>
+                      {prefix}${compWeekly.toFixed(2)}
+                      <span className="text-xs ml-1 text-slate-500">
+                        ({formatPct(compWeeklyPct)}%)
+                      </span>
+                    </td>
+                    <td className={`px-1 sm:px-2 py-1 text-right text-sm ${colorClass}`}>
+                      {prefix}${compMonthly.toFixed(2)}
+                      <span className="text-xs ml-1 text-slate-500">
+                        ({formatPct(compMonthlyPct)}%)
+                      </span>
+                    </td>
+                    <td className={`px-1 sm:px-2 py-1 text-right text-sm ${colorClass}`}>
+                      {prefix}${compYearly.toFixed(2)}
+                      <span className="text-xs ml-1 text-slate-500">
+                        ({formatPct(compYearlyPct)}%)
+                      </span>
+                    </td>
+                  </tr>
+                  </>
                 )
               })()}
             </tbody>
