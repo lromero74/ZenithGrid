@@ -235,12 +235,14 @@ const SOURCE_CATEGORY: Record<string, string> = {
   bitcoin_magazine: 'CryptoCurrency', blockworks: 'CryptoCurrency',
   coindesk: 'CryptoCurrency', cointelegraph: 'CryptoCurrency',
   decrypt: 'CryptoCurrency', theblock: 'CryptoCurrency',
-  cryptoslate: 'CryptoCurrency',
+  cryptoslate: 'CryptoCurrency', beincrypto: 'CryptoCurrency',
+  unchained: 'CryptoCurrency',
   // AI
   reddit_artificial: 'AI', openai_blog: 'AI',
   mit_tech_ai: 'AI', the_ai_beat: 'AI',
   // Finance
   yahoo_finance_news: 'Finance', motley_fool: 'Finance', kiplinger: 'Finance',
+  ft_markets: 'Finance', marketwatch: 'Finance', reuters_finance: 'Finance',
   // World
   guardian_world: 'World', bbc_world: 'World', al_jazeera: 'World',
   // Nation
@@ -249,7 +251,7 @@ const SOURCE_CATEGORY: Record<string, string> = {
   cnbc_business: 'Business', business_insider: 'Business',
   // Technology
   engadget: 'Technology', ars_technica: 'Technology',
-  the_verge: 'Technology', wired: 'Technology',
+  the_verge: 'Technology', wired: 'Technology', techcrunch: 'Technology',
   // Entertainment
   variety: 'Entertainment', hollywood_reporter: 'Entertainment',
   deadline: 'Entertainment',
