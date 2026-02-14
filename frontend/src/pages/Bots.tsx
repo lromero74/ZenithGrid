@@ -32,7 +32,9 @@ function Bots() {
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [formData, setFormData] = useState<BotFormData>(getDefaultFormData())
-  const [projectionTimeframe, setProjectionTimeframe] = useState<TimeRange>('all')
+  const [projectionBasis, setProjectionBasis] = useState<TimeRange>(() => {
+    try { const saved = localStorage.getItem('zenith-bots-projection-basis'); return (saved as TimeRange) || '7d' } catch { return '7d' }
+  })
   const [showImportModal, setShowImportModal] = useState(false)
   const [importMode, setImportMode] = useState<'file' | 'paste'>('file')
   const [pasteInput, setPasteInput] = useState('')
@@ -47,7 +49,8 @@ function Bots() {
   const [showStoppedBots, setShowStoppedBots] = useState(() => {
     try { return localStorage.getItem('zenith-show-stopped-bots') !== 'false' } catch { return true }
   })
-  useEffect(() => { try { localStorage.setItem('zenith-show-stopped-bots', String(showStoppedBots)) } catch {} }, [showStoppedBots])
+  useEffect(() => { try { localStorage.setItem('zenith-show-stopped-bots', String(showStoppedBots)) } catch { /* ignored */ } }, [showStoppedBots])
+  useEffect(() => { try { localStorage.setItem('zenith-bots-projection-basis', projectionBasis) } catch { /* ignored */ } }, [projectionBasis])
 
   // Fetch all data
   const {
@@ -59,7 +62,7 @@ function Bots() {
     aggregateData,
     templates,
     TRADING_PAIRS
-  } = useBotsData({ selectedAccount, projectionTimeframe })
+  } = useBotsData({ selectedAccount, projectionTimeframe: projectionBasis })
 
   // Use validation hook
   const { validateBotConfig, validateManualOrderSizing } = useValidation({
@@ -429,7 +432,7 @@ function Bots() {
       <div className="mb-6">
         <PnLChart
           accountId={selectedAccount?.id}
-          onTimeRangeChange={setProjectionTimeframe}
+          onTimeRangeChange={() => {}}
         />
       </div>
 
@@ -533,7 +536,25 @@ function Bots() {
           <table className="w-full">
             <thead className="bg-slate-900">
               <tr>
-                <th className="text-left px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Portfolio Totals</th>
+                <th className="text-left px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">
+                  <div className="flex items-center space-x-2">
+                    <span>Portfolio Totals</span>
+                    <select
+                      value={projectionBasis}
+                      onChange={(e) => setProjectionBasis(e.target.value as TimeRange)}
+                      className="bg-slate-700 text-xs text-slate-300 px-2 py-1 rounded border border-slate-600 font-normal"
+                      title="Projection basis period"
+                    >
+                      <option value="7d">7d basis</option>
+                      <option value="14d">14d basis</option>
+                      <option value="30d">30d basis</option>
+                      <option value="3m">3m basis</option>
+                      <option value="6m">6m basis</option>
+                      <option value="1y">1y basis</option>
+                      <option value="all">All-time basis</option>
+                    </select>
+                  </div>
+                </th>
                 <th className="text-right px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Daily</th>
                 <th className="text-right px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Weekly</th>
                 <th className="text-right px-1 sm:px-2 py-2 text-sm font-medium text-slate-400">Monthly</th>

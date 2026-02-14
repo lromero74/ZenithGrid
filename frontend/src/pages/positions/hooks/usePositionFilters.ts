@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { Position } from '../../../types'
 
 interface UsePositionFiltersProps {
@@ -6,12 +6,29 @@ interface UsePositionFiltersProps {
 }
 
 export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps) => {
-  // Filtering and sorting state (like 3Commas)
-  const [filterBot, setFilterBot] = useState<number | 'all'>('all')
-  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>('all')
-  const [filterPair, setFilterPair] = useState<string>('all')
-  const [sortBy, setSortBy] = useState<'created' | 'pnl' | 'invested' | 'pair' | 'bot'>('created')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  // Filtering and sorting state (like 3Commas) - persisted to localStorage
+  const [filterBot, setFilterBot] = useState<number | 'all'>(() => {
+    try { const v = localStorage.getItem('zenith-positions-filter-bot'); return v && v !== 'all' ? Number(v) : 'all' } catch { return 'all' }
+  })
+  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>(() => {
+    try { return (localStorage.getItem('zenith-positions-filter-market') as 'all' | 'USD' | 'BTC') || 'all' } catch { return 'all' }
+  })
+  const [filterPair, setFilterPair] = useState<string>(() => {
+    try { return localStorage.getItem('zenith-positions-filter-pair') || 'all' } catch { return 'all' }
+  })
+  const [sortBy, setSortBy] = useState<'created' | 'pnl' | 'invested' | 'pair' | 'bot'>(() => {
+    try { return (localStorage.getItem('zenith-positions-sort-by') as 'created' | 'pnl' | 'invested' | 'pair' | 'bot') || 'created' } catch { return 'created' }
+  })
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() => {
+    try { return (localStorage.getItem('zenith-positions-sort-order') as 'asc' | 'desc') || 'desc' } catch { return 'desc' }
+  })
+
+  // Persist filter/sort state
+  useEffect(() => { try { localStorage.setItem('zenith-positions-filter-bot', String(filterBot)) } catch { /* ignored */ } }, [filterBot])
+  useEffect(() => { try { localStorage.setItem('zenith-positions-filter-market', filterMarket) } catch { /* ignored */ } }, [filterMarket])
+  useEffect(() => { try { localStorage.setItem('zenith-positions-filter-pair', filterPair) } catch { /* ignored */ } }, [filterPair])
+  useEffect(() => { try { localStorage.setItem('zenith-positions-sort-by', sortBy) } catch { /* ignored */ } }, [sortBy])
+  useEffect(() => { try { localStorage.setItem('zenith-positions-sort-order', sortOrder) } catch { /* ignored */ } }, [sortOrder])
 
   // Apply filters and sorting (like 3Commas)
   // Use memoized positionsWithPnL instead of recalculating

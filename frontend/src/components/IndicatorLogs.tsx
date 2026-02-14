@@ -12,14 +12,16 @@ interface IndicatorLogsProps {
 
 interface ConditionDetail {
   type: string
-  timeframe: string
-  operator: string
-  threshold: number
+  timeframe?: string
+  operator?: string
+  threshold?: number
   actual_value: number | null
   result: boolean
   negated?: boolean
   error?: string
+  reason?: string
   previous_value?: number
+  indicator?: string
 }
 
 interface IndicatorLog {
@@ -119,6 +121,7 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
       ai_sell: 'AI Sell',
       bull_flag: 'Bull Flag',
       price_drop: 'Price Drop',
+      budget: 'Budget',
     }
     return labels[type] || type
   }
@@ -284,7 +287,7 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
                 <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
                   <p className="text-sm font-medium text-cyan-300 mb-2">Condition Evaluations:</p>
                   <div className="space-y-2">
-                    {log.conditions_detail.map((cond, idx) => (
+                    {(log.conditions_detail || []).map((cond, idx) => (
                       <div
                         key={idx}
                         className={`flex items-center justify-between p-2 rounded text-sm ${
@@ -305,7 +308,7 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
                             {getIndicatorLabel(cond.type)}
                           </span>
                           <span className="text-slate-400 text-xs">
-                            ({cond.timeframe.replace('_', ' ')})
+                            ({(cond.timeframe || '').replace('_', ' ') || 'n/a'})
                           </span>
                           {cond.negated && (
                             <span className="px-1 py-0.5 bg-yellow-600/20 border border-yellow-600/50 rounded text-xs text-yellow-400">
@@ -314,12 +317,12 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
                           )}
                         </div>
                         <div className="flex items-center space-x-3 text-xs">
-                          {cond.error ? (
-                            <span className="text-yellow-400">{cond.error}</span>
+                          {cond.error || cond.reason ? (
+                            <span className="text-yellow-400">{cond.error || cond.reason}</span>
                           ) : (
                             <>
                               <span className="text-slate-400">
-                                {formatValue(cond.actual_value, cond.type)} {getOperatorSymbol(cond.operator)} {cond.threshold}
+                                {formatValue(cond.actual_value, cond.type)} {getOperatorSymbol(cond.operator || '')} {cond.threshold ?? ''}
                               </span>
                               {cond.previous_value !== undefined && (
                                 <span className="text-slate-500">

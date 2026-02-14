@@ -12,16 +12,30 @@ import { FilterPanel } from './positions/components/FilterPanel'
 function ClosedPositions() {
   const { selectedAccount } = useAccount()
   const { getAccessToken } = useAuth()
-  const [activeTab, setActiveTab] = useState<'closed' | 'failed'>('closed')
+  const [activeTab, setActiveTab] = useState<'closed' | 'failed'>(() => {
+    try { return (localStorage.getItem('zenith-history-tab') as 'closed' | 'failed') || 'closed' } catch { return 'closed' }
+  })
   const [expandedPositionId, setExpandedPositionId] = useState<number | null>(null)
   const [positionTrades, setPositionTrades] = useState<Record<number, Trade[]>>({})
   const [positionAILogs, setPositionAILogs] = useState<Record<number, AIBotLog[]>>({})
 
-  // Filter state
-  const [filterBot, setFilterBot] = useState<number | 'all'>('all')
-  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>('all')
-  const [filterPair, setFilterPair] = useState<string>('all')
+  // Filter state - persisted to localStorage
+  const [filterBot, setFilterBot] = useState<number | 'all'>(() => {
+    try { const v = localStorage.getItem('zenith-history-filter-bot'); return v && v !== 'all' ? Number(v) : 'all' } catch { return 'all' }
+  })
+  const [filterMarket, setFilterMarket] = useState<'all' | 'USD' | 'BTC'>(() => {
+    try { return (localStorage.getItem('zenith-history-filter-market') as 'all' | 'USD' | 'BTC') || 'all' } catch { return 'all' }
+  })
+  const [filterPair, setFilterPair] = useState<string>(() => {
+    try { return localStorage.getItem('zenith-history-filter-pair') || 'all' } catch { return 'all' }
+  })
   const [showFilters, setShowFilters] = useState(false)
+
+  // Persist filter/tab state
+  useEffect(() => { try { localStorage.setItem('zenith-history-tab', activeTab) } catch { /* ignored */ } }, [activeTab])
+  useEffect(() => { try { localStorage.setItem('zenith-history-filter-bot', String(filterBot)) } catch { /* ignored */ } }, [filterBot])
+  useEffect(() => { try { localStorage.setItem('zenith-history-filter-market', filterMarket) } catch { /* ignored */ } }, [filterMarket])
+  useEffect(() => { try { localStorage.setItem('zenith-history-filter-pair', filterPair) } catch { /* ignored */ } }, [filterPair])
 
   // Pagination state
   const [failedPage, setFailedPage] = useState(1)
