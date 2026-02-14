@@ -38,13 +38,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear auth data and let the app redirect to login
+      // Clear auth data and dispatch event so AuthContext can update without page reload
       localStorage.removeItem('auth_access_token');
       localStorage.removeItem('auth_refresh_token');
       localStorage.removeItem('auth_token_expiry');
       localStorage.removeItem('auth_user');
-      // Trigger a page reload to show login screen
-      window.location.reload();
+      window.dispatchEvent(new Event('auth-logout'));
     }
     return Promise.reject(error);
   }

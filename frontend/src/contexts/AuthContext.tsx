@@ -259,6 +259,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetch(`${API_BASE}/logout`, { method: 'POST' }).catch(() => {})
   }, [])
 
+  // Listen for auth-logout events from API interceptor (avoids full page reload)
+  useEffect(() => {
+    const handleLogout = () => logout()
+    window.addEventListener('auth-logout', handleLogout)
+    return () => window.removeEventListener('auth-logout', handleLogout)
+  }, [logout])
+
   // Change password function
   const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
     const token = getAccessToken()

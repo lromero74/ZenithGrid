@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { botsApi, positionsApi } from '../services/api'
 import {
   TrendingUp,
@@ -27,6 +28,11 @@ interface DashboardProps {
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const { selectedAccount } = useAccount()
+
+  const [showStoppedBots, setShowStoppedBots] = useState(() => {
+    try { return localStorage.getItem('zenith-show-stopped-bots') !== 'false' } catch { return true }
+  })
+  useEffect(() => { try { localStorage.setItem('zenith-show-stopped-bots', String(showStoppedBots)) } catch {} }, [showStoppedBots])
 
   // Fetch all bots (filtered by account if selected)
   const { data: bots = [] } = useQuery({
@@ -322,10 +328,27 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       {/* Active Bots */}
       {activeBots.length > 0 && (
         <div>
-          <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
-            <Play className="w-5 h-5 text-green-500" />
-            Active Bots ({activeBots.length})
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Play className="w-5 h-5 text-green-500" />
+              Active Bots ({activeBots.length})
+            </h3>
+            {bots.filter(b => !b.is_active).length > 0 && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <span className="text-sm text-slate-400">Show stopped</span>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={showStoppedBots}
+                    onChange={() => setShowStoppedBots(!showStoppedBots)}
+                    className="peer sr-only"
+                  />
+                  <div className="w-9 h-5 bg-slate-600 rounded-full peer-checked:bg-blue-600 transition-colors" />
+                  <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4" />
+                </div>
+              </label>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeBots.map((bot) => (
               <BotCard key={bot.id} bot={bot} onNavigate={onNavigate} />
@@ -335,7 +358,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       )}
 
       {/* Inactive Bots */}
-      {bots.filter(b => !b.is_active).length > 0 && (
+      {showStoppedBots && bots.filter(b => !b.is_active).length > 0 && (
         <div>
           <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
             <Square className="w-5 h-5 text-slate-500" />
@@ -366,6 +389,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 // Enhanced Bot Card Component
 function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: stats } = useQuery({
     queryKey: ['bot-stats', bot.id],
     queryFn: () => botsApi.getStats(bot.id),
@@ -383,8 +407,9 @@ function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page
       } else {
         await botsApi.start(bot.id)
       }
-      // Trigger refetch
-      window.location.reload()
+      // Refresh bot data without full page reload
+      queryClient.invalidateQueries({ queryKey: ['bots'] })
+      queryClient.invalidateQueries({ queryKey: ['bot-stats', bot.id] })
     } catch (err) {
       alert(`Error: ${err}`)
     }
