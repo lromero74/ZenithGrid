@@ -366,6 +366,9 @@ async def resize_all_budgets(
             new_max = _compute_resize_budget(position, bot)
 
             if new_max > 0:
+                # Skip if budget is effectively unchanged (within 1 satoshi)
+                if abs(old_max - new_max) < 0.000000015:
+                    continue
                 position.max_quote_allowed = new_max
                 updated_count += 1
                 results.append({
@@ -387,8 +390,13 @@ async def resize_all_budgets(
 
         logger.info(f"Resized budgets for {updated_count}/{len(positions)} open positions")
 
+        if updated_count == 0 and not results:
+            message = f"All {len(positions)} positions already have correct budgets"
+        else:
+            message = f"Resized {updated_count} of {len(positions)} open positions"
+
         return {
-            "message": f"Resized {updated_count} of {len(positions)} open positions",
+            "message": message,
             "updated_count": updated_count,
             "total_count": len(positions),
             "results": results,

@@ -46,6 +46,7 @@ export interface Position {
   limit_order_details?: LimitOrderDetails | null;  // Details of the limit close order
   is_blacklisted?: boolean;  // Whether the coin is on the blacklist
   blacklist_reason?: string | null;  // Reason the coin is blacklisted
+  computed_max_budget?: number | null;  // Pre-computed resize budget
 }
 
 export interface LimitOrderDetails {

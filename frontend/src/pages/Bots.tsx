@@ -44,6 +44,11 @@ function Bots() {
   }>({ isValid: null, errors: [], warnings: [], parsedData: null })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [showStoppedBots, setShowStoppedBots] = useState(() => {
+    try { return localStorage.getItem('zenith-show-stopped-bots') !== 'false' } catch { return true }
+  })
+  useEffect(() => { try { localStorage.setItem('zenith-show-stopped-bots', String(showStoppedBots)) } catch {} }, [showStoppedBots])
+
   // Fetch all data
   const {
     bots,
@@ -457,6 +462,24 @@ function Bots() {
         </div>
       ) : (
         <>
+        {/* Toggle for stopped bots */}
+        {bots.some(b => !b.is_active) && (
+          <div className="flex justify-end mb-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <span className="text-sm text-slate-400">Show stopped</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={showStoppedBots}
+                  onChange={() => setShowStoppedBots(!showStoppedBots)}
+                  className="peer sr-only"
+                />
+                <div className="w-9 h-5 bg-slate-600 rounded-full peer-checked:bg-blue-600 transition-colors" />
+                <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4" />
+              </div>
+            </label>
+          </div>
+        )}
         <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -476,7 +499,7 @@ function Bots() {
                 </tr>
               </thead>
               <tbody>
-                {bots.map((bot) => (
+                {bots.filter(b => showStoppedBots || b.is_active).map((bot) => (
                   <BotListItem
                     key={bot.id}
                     bot={bot}
@@ -519,7 +542,8 @@ function Bots() {
             </thead>
             <tbody>
               {(() => {
-                const totalDailyPnl = bots.reduce((sum, bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
+                const filteredBots = bots.filter(b => showStoppedBots || b.is_active)
+                const totalDailyPnl = filteredBots.reduce((sum, bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
                 const portfolioUsd = portfolio?.total_usd_value || 0
 
                 // Calculate daily rate as a decimal (e.g., 0.0009 for 0.09%)

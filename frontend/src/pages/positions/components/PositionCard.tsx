@@ -393,6 +393,7 @@ export const PositionCard = ({
           >
             <Settings size={12} /> Edit deal
           </button>
+          {position.computed_max_budget != null && position.computed_max_budget > (position.max_quote_allowed || 0) && (
           <button
             className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
             title="Recalculate budget to base order + all safety orders with volume scaling"
@@ -410,6 +411,7 @@ export const PositionCard = ({
           >
             <Scale size={12} /> Resize budget
           </button>
+          )}
           <button
             className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
             onClick={(e) => {
