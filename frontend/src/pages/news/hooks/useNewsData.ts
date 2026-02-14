@@ -54,6 +54,7 @@ export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => 
     staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
     refetchInterval: isUserEngaged ? false : REFETCH_INTERVAL,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: !isUserEngaged,
   })
 
   // Fetch video news
@@ -73,6 +74,7 @@ export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => 
     staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
     refetchInterval: isUserEngaged ? false : REFETCH_INTERVAL,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: !isUserEngaged,
   })
 
   /**
