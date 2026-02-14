@@ -67,6 +67,16 @@ class IndicatorBasedStrategy(TradingStrategy):
                     group="Deal Management",
                 ),
                 StrategyParameter(
+                    name="max_simultaneous_same_pair",
+                    display_name="Max Simultaneous Deals (Same Pair)",
+                    description="Maximum concurrent positions allowed on the same trading pair. New deals open only after all existing deals have used all their safety orders.",
+                    type="int",
+                    default=1,
+                    min_value=1,
+                    max_value=20,
+                    group="Deal Management",
+                ),
+                StrategyParameter(
                     name="deal_cooldown_seconds",
                     display_name="Deal Cooldown (seconds)",
                     description="Wait time before opening a new deal on the same pair after the previous deal closes. 0 or empty = no cooldown.",

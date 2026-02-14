@@ -8,7 +8,7 @@ Handles position CRUD operations:
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -186,6 +186,34 @@ async def get_active_position(db: AsyncSession, bot: Bot, product_id: str) -> Op
 
     result = await db.execute(query)
     return result.scalars().first()
+
+
+async def get_active_positions_for_pair(db: AsyncSession, bot: Bot, product_id: str) -> List[Position]:
+    """Get ALL open positions for this bot/pair combination, ordered oldest first"""
+    query = (
+        select(Position)
+        .options(selectinload(Position.trades))
+        .where(
+            Position.bot_id == bot.id,
+            Position.product_id == product_id,
+            Position.status == "open",
+        )
+        .order_by(Position.opened_at)  # oldest first
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+def all_positions_exhausted_safety_orders(positions: List[Position], max_safety_orders: int) -> bool:
+    """Check if every position has used all its safety orders"""
+    if not positions:
+        return True  # No positions = allowed to open first one
+    for pos in positions:
+        buy_trades = [t for t in pos.trades if t.side == "buy"] if pos.trades else []
+        safety_count = max(0, len(buy_trades) - 1)
+        if safety_count < max_safety_orders:
+            return False
+    return True
 
 
 async def get_open_positions_count(db: AsyncSession, bot: Bot) -> int:

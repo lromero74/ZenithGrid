@@ -136,6 +136,9 @@ def _calculate_market_context_with_indicators(
     return result
 
 
+_POSITION_NOT_SET = object()  # sentinel to distinguish None from not-provided
+
+
 async def process_signal(
     db: AsyncSession,
     exchange: ExchangeClient,
@@ -147,6 +150,7 @@ async def process_signal(
     current_price: float,
     pre_analyzed_signal: Optional[Dict[str, Any]] = None,
     candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    position_override: Any = _POSITION_NOT_SET,
 ) -> Dict[str, Any]:
     """
     Process market data with bot's strategy
@@ -169,7 +173,11 @@ async def process_signal(
     quote_currency = get_quote_currency(product_id)
 
     # Get current state FIRST (needed for web search context)
-    position = await get_active_position(db, bot, product_id)
+    # If position_override is provided, use it (supports simultaneous same-pair deals)
+    if position_override is not _POSITION_NOT_SET:
+        position = position_override
+    else:
+        position = await get_active_position(db, bot, product_id)
 
     # Determine action context for web search
     action_context = "hold"  # Default for positions that exist

@@ -189,6 +189,7 @@ class StrategyTradingEngine:
         current_price: float,
         pre_analyzed_signal: Optional[Dict[str, Any]] = None,
         candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        position_override: Any = signal_processor._POSITION_NOT_SET,
     ) -> Dict[str, Any]:
         """Delegate to signal_processor module"""
         return await signal_processor.process_signal(
@@ -202,4 +203,5 @@ class StrategyTradingEngine:
             current_price,
             pre_analyzed_signal,
             candles_by_timeframe,
+            position_override=position_override,
         )

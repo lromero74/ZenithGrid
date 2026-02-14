@@ -159,11 +159,28 @@ export function BotFormModal({
   }
 
   const handleParamChange = (paramName: string, value: any) => {
+    const updates: Record<string, any> = { [paramName]: value }
+
+    // When max_concurrent_deals changes, cap max_simultaneous_same_pair
+    if (paramName === 'max_concurrent_deals') {
+      const maxSim = formData.strategy_config.max_simultaneous_same_pair || 1
+      if (maxSim > value) {
+        updates.max_simultaneous_same_pair = value
+      }
+    }
+    // When max_simultaneous_same_pair changes, cap at max_concurrent_deals
+    if (paramName === 'max_simultaneous_same_pair') {
+      const maxDeals = formData.strategy_config.max_concurrent_deals || 1
+      if (value > maxDeals) {
+        updates.max_simultaneous_same_pair = maxDeals
+      }
+    }
+
     setFormData({
       ...formData,
       strategy_config: {
         ...formData.strategy_config,
-        [paramName]: value,
+        ...updates,
       },
     })
   }
@@ -947,7 +964,7 @@ export function BotFormModal({
               const useManualSizing = formData.strategy_config.use_manual_sizing === true
 
               // Parameters to render separately in the custom budget section
-              const customBudgetParams = ['use_manual_sizing', 'max_concurrent_deals']
+              const customBudgetParams = ['use_manual_sizing', 'max_concurrent_deals', 'max_simultaneous_same_pair']
 
               // Group parameters by group property
               // Exclude params we render in custom budget section
@@ -963,6 +980,7 @@ export function BotFormModal({
 
               // Get max_concurrent_deals param for custom rendering
               const maxConcurrentDealsParam = selectedStrategy.parameters.find((p: StrategyParameter) => p.name === 'max_concurrent_deals')
+              const maxSimSamePairParam = selectedStrategy.parameters.find((p: StrategyParameter) => p.name === 'max_simultaneous_same_pair')
 
               // Define group display order - separated into always-show and conditional groups
               const alwaysShowGroups = [
@@ -1126,6 +1144,26 @@ export function BotFormModal({
                             {maxConcurrentDealsParam.description}
                           </p>
                           {renderParameterInput(maxConcurrentDealsParam)}
+                        </div>
+                      )}
+
+                      {/* Max Simultaneous Same Pair */}
+                      {maxSimSamePairParam && (
+                        <div>
+                          <label className="block text-sm font-medium mb-2 flex items-center gap-1">
+                            {maxSimSamePairParam.display_name || 'Max Simultaneous Deals (Same Pair)'}
+                            <span className="text-slate-400 text-xs ml-1">
+                              (1 - {formData.strategy_config.max_concurrent_deals || 1})
+                            </span>
+                            <span
+                              className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-600 text-slate-300 text-xs cursor-help"
+                              title="Controls how many positions can be open on the SAME trading pair simultaneously. A new deal for the same pair only opens after ALL existing deals on that pair have exhausted their safety orders."
+                            >i</span>
+                          </label>
+                          <p className="text-xs text-slate-400 mb-2">
+                            {maxSimSamePairParam.description}
+                          </p>
+                          {renderParameterInput(maxSimSamePairParam)}
                         </div>
                       )}
 

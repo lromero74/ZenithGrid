@@ -1006,22 +1006,14 @@ class MultiBotMonitor:
 
             # Get strategy instance for this bot
             try:
-                # Check if there's an existing position for this pair
-                # If yes, use frozen config snapshot (like 3Commas)
-                # If no, use current bot config (will be frozen when position is created)
-                from sqlalchemy import desc, select
-                from sqlalchemy.orm import selectinload
-
-                from app.models import Position
-
-                query = (
-                    select(Position)
-                    .options(selectinload(Position.trades))
-                    .where(Position.bot_id == bot.id, Position.product_id == product_id, Position.status == "open")
-                    .order_by(desc(Position.opened_at))
+                # Get ALL open positions for this pair (supports simultaneous same-pair deals)
+                from app.trading_engine.position_manager import (
+                    get_active_positions_for_pair,
+                    all_positions_exhausted_safety_orders,
                 )
-                result = await db.execute(query)
-                existing_position = result.scalars().first()
+
+                all_pair_positions = await get_active_positions_for_pair(db, bot, product_id)
+                existing_position = all_pair_positions[0] if all_pair_positions else None
 
                 if existing_position and existing_position.strategy_config_snapshot:
                     # Use frozen config from position (like 3Commas)
@@ -1088,14 +1080,26 @@ class MultiBotMonitor:
                     current_price = await self.exchange.get_current_price(product_id)
                     logger.info(f"    Current {product_id} price (from ticker): {current_price:.8f}")
 
+            # Simultaneous same-pair deal settings (used for all strategy types)
+            max_same_pair = strategy_config.get("max_simultaneous_same_pair", 1)
+            max_safety = strategy_config.get("max_safety_orders", 5)
+            same_pair_count = len(all_pair_positions)
+
             # For indicator-based strategies, extract timeframes from conditions
             if bot.strategy_type in ("conditional_dca", "indicator_based"):
                 # Phase 3 Optimization: Lazy fetching - only fetch timeframes for current phase
                 # Determine which phases we need to check based on position status
                 if existing_position:
-                    # Open position: check safety orders (DCA) + take profit (exit)
-                    phases_to_check = ["safety_order_conditions", "take_profit_conditions"]
-                    print("  📊 Open position detected - checking DCA + exit phases only")
+                    # Check if a simultaneous deal might be possible (need entry phases too)
+                    if (same_pair_count < max_same_pair
+                            and all_positions_exhausted_safety_orders(all_pair_positions, max_safety)):
+                        # Need both DCA/exit for existing AND entry for potential new deal
+                        phases_to_check = ["base_order_conditions", "safety_order_conditions", "take_profit_conditions"]
+                        print(f"  📊 {same_pair_count} position(s), all SOs exhausted - checking entry + DCA + exit phases")
+                    else:
+                        # Open position: check safety orders (DCA) + take profit (exit)
+                        phases_to_check = ["safety_order_conditions", "take_profit_conditions"]
+                        print("  📊 Open position detected - checking DCA + exit phases only")
                 else:
                     # No position: check base order (entry) conditions only
                     phases_to_check = ["base_order_conditions"]
@@ -1363,19 +1367,52 @@ class MultiBotMonitor:
                 if logged_any:
                     logger.info(f"  📊 Logged indicator evaluation for {product_id}")
 
-            # Create trading engine for this bot/pair combination
-            engine = StrategyTradingEngine(
-                db=db,
-                exchange=self.exchange,
-                bot=bot,
-                strategy=strategy,
-                product_id=product_id,  # Specify which pair this engine instance trades
-            )
+            # Process each existing position for DCA/sell
+            result = {"action": "none", "reason": "No signal"}
+            for pos in all_pair_positions:
+                # For each position, use ITS frozen config if available
+                pos_strategy_config = pos.strategy_config_snapshot.copy() if pos.strategy_config_snapshot else bot.strategy_config.copy()
+                pos_strategy_config["user_id"] = bot.user_id
+                pos_strategy = StrategyRegistry.get_strategy(bot.strategy_type, pos_strategy_config)
 
-            # Process the signal (pass pre_analyzed_signal if available from batch mode)
-            result = await engine.process_signal(
-                candles, current_price, pre_analyzed_signal=pre_analyzed_signal, candles_by_timeframe=candles_by_timeframe
-            )
+                pos_engine = StrategyTradingEngine(
+                    db=db, exchange=self.exchange, bot=bot, strategy=pos_strategy, product_id=product_id,
+                )
+                pos_result = await pos_engine.process_signal(
+                    candles, current_price, pre_analyzed_signal=pre_analyzed_signal,
+                    candles_by_timeframe=candles_by_timeframe, position_override=pos,
+                )
+                logger.info(f"  Position #{pos.id} result: {pos_result['action']} - {pos_result['reason']}")
+                # Keep track of most interesting result
+                if pos_result.get("action") not in ("none", "hold"):
+                    result = pos_result
+
+            # Check if a new simultaneous deal can be opened
+            if (bot.is_active
+                    and same_pair_count > 0
+                    and same_pair_count < max_same_pair
+                    and all_positions_exhausted_safety_orders(all_pair_positions, max_safety)):
+                # Open new simultaneous deal - pass position=None
+                logger.info(f"  🔄 All {same_pair_count} position(s) exhausted SOs — evaluating new simultaneous deal")
+                new_engine = StrategyTradingEngine(
+                    db=db, exchange=self.exchange, bot=bot, strategy=strategy, product_id=product_id,
+                )
+                new_result = await new_engine.process_signal(
+                    candles, current_price, pre_analyzed_signal=pre_analyzed_signal,
+                    candles_by_timeframe=candles_by_timeframe, position_override=None,
+                )
+                logger.info(f"  New simultaneous deal result: {new_result['action']} - {new_result['reason']}")
+                if new_result.get("action") not in ("none", "hold"):
+                    result = new_result
+            elif same_pair_count == 0:
+                # No existing positions - normal flow (process_signal handles base order check)
+                engine = StrategyTradingEngine(
+                    db=db, exchange=self.exchange, bot=bot, strategy=strategy, product_id=product_id,
+                )
+                result = await engine.process_signal(
+                    candles, current_price, pre_analyzed_signal=pre_analyzed_signal,
+                    candles_by_timeframe=candles_by_timeframe,
+                )
 
             logger.info(f"  Result: {result['action']} - {result['reason']}")
 
