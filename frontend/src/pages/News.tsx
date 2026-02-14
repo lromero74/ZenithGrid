@@ -17,6 +17,9 @@ import {
   formatRelativeTime,
   sourceColors,
   videoSourceColors,
+  sortSourcesByCategory,
+  SOURCE_CATEGORY,
+  VIDEO_SOURCE_CATEGORY,
 } from '../components/news'
 import { NewsItem, TabType, NEWS_CATEGORIES, CATEGORY_COLORS } from './news/types'
 import { useNewsData, useArticleContent, useNewsFilters } from './news/hooks'
@@ -517,13 +520,14 @@ export default function News() {
             >
               All
             </button>
-            {availableSources
-              .filter(source => {
+            {sortSourcesByCategory(
+              availableSources.filter(source => {
                 // Only show sources that have articles in the selected categories
                 const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
                 return categoryNews.some(n => n.source === source.id)
-              })
-              .map((source) => {
+              }),
+              SOURCE_CATEGORY,
+            ).map((source) => {
               const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
               const count = countItemsBySource(categoryNews, source.id)
               return (
@@ -790,12 +794,13 @@ export default function News() {
             >
               All
             </button>
-            {availableVideoSources
-              .filter(source => {
+            {sortSourcesByCategory(
+              availableVideoSources.filter(source => {
                 const categoryVideos = (videoData?.videos || []).filter(v => selectedVideoCategories.has(v.category))
                 return categoryVideos.some(v => v.source === source.id)
-              })
-              .map((source) => {
+              }),
+              VIDEO_SOURCE_CATEGORY,
+            ).map((source) => {
               const categoryVideos = (videoData?.videos || []).filter(v => selectedVideoCategories.has(v.category))
               const count = countItemsBySource(categoryVideos, source.id)
               return (

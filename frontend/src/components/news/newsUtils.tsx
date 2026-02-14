@@ -227,9 +227,9 @@ export function formatRelativeTime(isoString: string | null): string {
 }
 
 // Source-to-category mapping (used to color sources by their category)
-import { CATEGORY_COLORS } from '../../pages/news/types'
+import { CATEGORY_COLORS, NEWS_CATEGORIES } from '../../pages/news/types'
 
-const SOURCE_CATEGORY: Record<string, string> = {
+export const SOURCE_CATEGORY: Record<string, string> = {
   // CryptoCurrency
   reddit_crypto: 'CryptoCurrency', reddit_bitcoin: 'CryptoCurrency',
   bitcoin_magazine: 'CryptoCurrency', blockworks: 'CryptoCurrency',
@@ -266,7 +266,7 @@ const SOURCE_CATEGORY: Record<string, string> = {
   nutrition_org: 'Health', self_wellness: 'Health',
 }
 
-const VIDEO_SOURCE_CATEGORY: Record<string, string> = {
+export const VIDEO_SOURCE_CATEGORY: Record<string, string> = {
   // CryptoCurrency
   coin_bureau: 'CryptoCurrency', benjamin_cowen: 'CryptoCurrency',
   altcoin_daily: 'CryptoCurrency', bankless: 'CryptoCurrency',
@@ -308,3 +308,23 @@ function buildColorMap(mapping: Record<string, string>): Record<string, string> 
 
 export const sourceColors: Record<string, string> = buildColorMap(SOURCE_CATEGORY)
 export const videoSourceColors: Record<string, string> = buildColorMap(VIDEO_SOURCE_CATEGORY)
+
+// Build a category-order index for fast sorting (lower index = earlier in list)
+const _categoryOrder: Record<string, number> = Object.fromEntries(
+  NEWS_CATEGORIES.map((cat, i) => [cat, i])
+)
+
+/** Sort sources by their category order (matching NEWS_CATEGORIES), then alphabetically within a category */
+export function sortSourcesByCategory<T extends { id: string }>(
+  sources: T[],
+  categoryMap: Record<string, string>,
+): T[] {
+  return [...sources].sort((a, b) => {
+    const catA = categoryMap[a.id] || 'zzz'
+    const catB = categoryMap[b.id] || 'zzz'
+    const orderA = _categoryOrder[catA] ?? 999
+    const orderB = _categoryOrder[catB] ?? 999
+    if (orderA !== orderB) return orderA - orderB
+    return a.id.localeCompare(b.id)
+  })
+}
