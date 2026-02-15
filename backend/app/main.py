@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pathlib import Path
 
@@ -7,37 +8,40 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+from app.cleanup_jobs import cleanup_failed_condition_logs, cleanup_old_decision_logs, cleanup_old_failed_orders
 from app.config import settings
 from app.database import init_db
 from app.multi_bot_monitor import MultiBotMonitor
-from app.services.limit_order_monitor import LimitOrderMonitor
-from app.services.delisted_pair_monitor import TradingPairMonitor
-from app.routers import bots_router, order_history_router, templates_router
-from app.routers import positions_router
 from app.position_routers import perps_router
-from app.routers import account_router
+from app.routers import account_value_router  # Account value history tracking
 from app.routers import accounts_router  # Multi-account management (CEX + DEX)
-from app.routers import market_data_router
-from app.routers import settings_router
-from app.routers import system_router
-from app.routers import strategies_router
-from app.routers.system_router import set_trading_pair_monitor, build_changelog_cache
-from app.routers import blacklist_router
-from app.routers import news_router
-from app.routers import sources_router  # Content source subscriptions
-from app.routers import auth_router  # User authentication
 from app.routers import ai_credentials_router  # Per-user AI provider keys
+from app.routers import auth_router  # User authentication
 from app.routers import coin_icons_router  # Proxied coin icons to avoid CORS
 from app.routers import paper_trading_router  # Paper trading account management
-from app.routers import account_value_router  # Account value history tracking
-from app.routers import trading_router  # Manual trading operations
 from app.routers import seasonality_router  # Seasonality-based bot management
-from app.services.websocket_manager import ws_manager
-from app.services.shutdown_manager import shutdown_manager
+from app.routers import sources_router  # Content source subscriptions
+from app.routers import trading_router  # Manual trading operations
+from app.routers import (
+    account_router,
+    blacklist_router,
+    bots_router,
+    market_data_router,
+    news_router,
+    order_history_router,
+    positions_router,
+    settings_router,
+    strategies_router,
+    system_router,
+    templates_router,
+)
+from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
 from app.services.content_refresh_service import content_refresh_service
 from app.services.debt_ceiling_monitor import debt_ceiling_monitor
-from app.cleanup_jobs import cleanup_old_decision_logs, cleanup_failed_condition_logs, cleanup_old_failed_orders
-import asyncio
+from app.services.delisted_pair_monitor import TradingPairMonitor
+from app.services.limit_order_monitor import LimitOrderMonitor
+from app.services.shutdown_manager import shutdown_manager
+from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response
 
+
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Multi-bot monitor - monitors all active bots with their strategies
@@ -75,11 +80,13 @@ trading_pair_monitor = TradingPairMonitor(check_interval_seconds=86400)  # 24 ho
 set_trading_pair_monitor(trading_pair_monitor)  # Make accessible via API
 
 # Auto-buy BTC monitor - converts stablecoins to BTC based on account settings
-from app.services.auto_buy_monitor import AutoBuyMonitor
+from app.services.auto_buy_monitor import AutoBuyMonitor  # noqa: E402
+
 auto_buy_monitor = AutoBuyMonitor()
 
 # Perpetual futures position monitor - syncs open perps positions with exchange
-from app.services.perps_monitor import PerpsMonitor
+from app.services.perps_monitor import PerpsMonitor  # noqa: E402
+
 perps_monitor = PerpsMonitor(interval_seconds=60)
 
 # Background task handles
@@ -130,10 +137,11 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 # Now works with per-position exchange clients from accounts
 async def run_limit_order_monitor():
     """Background task that monitors pending limit orders"""
-    from app.database import async_session_maker
-    from app.services.exchange_service import get_exchange_client_for_account
-    from app.models import Position
     from sqlalchemy import select
+
+    from app.database import async_session_maker
+    from app.models import Position
+    from app.services.exchange_service import get_exchange_client_for_account
 
     # Run startup reconciliation once
     print("🔄 Running startup reconciliation for limit orders...")
@@ -205,11 +213,12 @@ async def run_limit_order_monitor():
 # Background task for order reconciliation
 async def run_order_reconciliation_monitor():
     """Background task that auto-fixes positions with missing fill data"""
-    from app.database import async_session_maker
-    from app.services.order_reconciliation_monitor import OrderReconciliationMonitor
-    from app.services.exchange_service import get_exchange_client_for_account
-    from app.models import Position
     from sqlalchemy import select
+
+    from app.database import async_session_maker
+    from app.models import Position
+    from app.services.exchange_service import get_exchange_client_for_account
+    from app.services.order_reconciliation_monitor import OrderReconciliationMonitor
 
     while True:
         try:
@@ -244,11 +253,12 @@ async def run_order_reconciliation_monitor():
 # Background task for detecting missing orders
 async def run_missing_order_detector():
     """Background task that detects orders on Coinbase not recorded in our DB"""
-    from app.database import async_session_maker
-    from app.services.order_reconciliation_monitor import MissingOrderDetector
-    from app.services.exchange_service import get_exchange_client_for_account
-    from app.models import Account
     from sqlalchemy import select
+
+    from app.database import async_session_maker
+    from app.models import Account
+    from app.services.exchange_service import get_exchange_client_for_account
+    from app.services.order_reconciliation_monitor import MissingOrderDetector
 
     # Wait 2 minutes after startup before first check
     await asyncio.sleep(120)
@@ -275,10 +285,11 @@ async def run_missing_order_detector():
 # Background task for capturing daily account value snapshots
 async def run_account_snapshot_capture():
     """Background task that captures account value snapshots once per day"""
-    from app.database import async_session_maker
-    from app.services import account_snapshot_service
-    from app.models import User
     from sqlalchemy import select
+
+    from app.database import async_session_maker
+    from app.models import User
+    from app.services import account_snapshot_service
 
     # Wait 5 minutes after startup before first check
     await asyncio.sleep(300)
@@ -287,7 +298,7 @@ async def run_account_snapshot_capture():
         try:
             async with async_session_maker() as db:
                 # Get all active users
-                result = await db.execute(select(User).where(User.is_active == True))
+                result = await db.execute(select(User).where(User.is_active.is_(True)))
                 users = result.scalars().all()
 
                 for user in users:
@@ -389,8 +400,6 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task, failed_condition_cleanup_task, failed_order_cleanup_task, account_snapshot_task
-
     logger.info("🛑 Shutting down - waiting for in-flight orders...")
 
     # Wait for any in-flight orders to complete (up to 60 seconds)
@@ -480,8 +489,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
         return
 
     try:
-        from app.routers.auth_router import decode_token, get_user_by_id
         from app.database import async_session_maker
+        from app.routers.auth_router import decode_token, get_user_by_id
 
         payload = decode_token(token)
         if payload.get("type") != "access":

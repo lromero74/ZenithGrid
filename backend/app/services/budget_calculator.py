@@ -5,10 +5,10 @@ Calculates available capital considering bidirectional bot reservations.
 Ensures that BTC acquired from longs and USD from shorts remain reserved.
 """
 
-from typing import List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 import logging
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Bot
 
@@ -54,7 +54,7 @@ async def calculate_available_usd(
         select(Bot)
         .join(Account, Bot.account_id == Account.id)
         .where(
-            Bot.is_active == True,
+            Bot.is_active.is_(True),
             Bot.account_id == account_id,  # CRITICAL: Same account only
             Bot.strategy_config.op('->>')('enable_bidirectional') == 'true'
         )
@@ -124,7 +124,7 @@ async def calculate_available_btc(
         select(Bot)
         .join(Account, Bot.account_id == Account.id)
         .where(
-            Bot.is_active == True,
+            Bot.is_active.is_(True),
             Bot.account_id == account_id,  # CRITICAL: Same account only
             Bot.strategy_config.op('->>')('enable_bidirectional') == 'true'
         )

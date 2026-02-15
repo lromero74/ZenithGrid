@@ -16,12 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import PendingOrder, Position, User
-from app.routers.auth_dependencies import get_current_user
-from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import LimitCloseRequest, UpdateLimitCloseRequest
+from app.routers.auth_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -51,8 +51,9 @@ async def limit_close_position(
             raise HTTPException(status_code=400, detail="Position already has a pending limit close order")
 
         # Round size to proper precision using product precision data
-        from app.order_validation import get_product_minimums
         from decimal import Decimal
+
+        from app.order_validation import get_product_minimums
 
         minimums = await get_product_minimums(coinbase, position.product_id)
         base_increment = Decimal(minimums.get('base_increment', '0.00000001'))
@@ -176,7 +177,7 @@ async def get_position_ticker(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -237,7 +238,7 @@ async def check_market_close_slippage(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -279,7 +280,7 @@ async def cancel_limit_close(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 

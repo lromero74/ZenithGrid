@@ -19,7 +19,6 @@ Key Features:
 """
 
 import logging
-import math
 import statistics
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -846,7 +845,7 @@ class GridTradingStrategy(TradingStrategy):
                     should_run_ai = True
 
             if should_run_ai:
-                logger.info(f"🤖 AI optimization scheduled for next bot cycle")
+                logger.info("🤖 AI optimization scheduled for next bot cycle")
                 ai_optimization_signal = "due"
 
         return {
@@ -1000,7 +999,7 @@ If the auto-calculated range is already good, return the same values with high c
                 if json_match:
                     json_str = json_match.group(0)
                 else:
-                    logger.warning(f"AI response did not contain valid JSON")
+                    logger.warning("AI response did not contain valid JSON")
                     return None
 
             suggestions = json.loads(json_str)

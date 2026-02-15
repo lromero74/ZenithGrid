@@ -9,14 +9,14 @@ Includes support for paper trading accounts.
 import logging
 from typing import Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Account
 from app.encryption import decrypt_value, is_encrypted
-from app.exchange_clients.factory import create_exchange_client
 from app.exchange_clients.base import ExchangeClient
+from app.exchange_clients.factory import create_exchange_client
 from app.exchange_clients.paper_trading_client import PaperTradingClient
+from app.models import Account
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,6 @@ _exchange_client_cache: dict[int, ExchangeClient] = {}
 
 def clear_exchange_client_cache(account_id: Optional[int] = None):
     """Clear cached exchange clients (call when credentials change)"""
-    global _exchange_client_cache
     if account_id is not None:
         _exchange_client_cache.pop(account_id, None)
     else:
@@ -50,8 +49,6 @@ async def get_exchange_client_for_account(
     Returns:
         ExchangeClient or None if account not found or credentials missing
     """
-    global _exchange_client_cache
-
     # Check cache first
     if use_cache and account_id in _exchange_client_cache:
         return _exchange_client_cache[account_id]
@@ -80,7 +77,7 @@ async def get_exchange_client_for_account(
             cex_result = await db.execute(
                 select(Account).where(
                     Account.type == "cex",
-                    Account.is_active == True,
+                    Account.is_active.is_(True),
                     Account.api_key_name.isnot(None),
                     Account.api_private_key.isnot(None)
                 ).order_by(Account.is_default.desc(), Account.created_at)

@@ -18,9 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
-from app.models import Account, Settings, User
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
+from app.models import Account, Settings, User
 from app.routers.auth_dependencies import get_current_user
 from app.schemas import SettingsUpdate, TestConnectionRequest
 
@@ -203,7 +203,7 @@ async def test_connection(request: TestConnectionRequest, current_user: User = D
                 raise HTTPException(status_code=400, detail=f"Connection failed: {error_msg}")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 

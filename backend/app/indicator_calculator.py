@@ -114,7 +114,7 @@ class IndicatorCalculator:
                 # bb_upper_20_2, bb_middle_20_2, bb_lower_20_2
                 parts = indicator_key.split("_")
                 if len(parts) >= 4:
-                    _band_type = parts[1]  # upper, middle, lower (parsed but not used - returns all bands)
+                    _band_type = parts[1]  # upper, middle, lower (parsed but not used - returns all bands)  # noqa: F841
                     period = int(parts[2])
                     std_dev_str = parts[3]  # Keep original format for key (avoids 2.0 vs 2 mismatch)
                     std_dev = float(std_dev_str)
@@ -128,7 +128,7 @@ class IndicatorCalculator:
                 # stoch_k_14_3, stoch_d_14_3
                 parts = indicator_key.split("_")
                 if len(parts) >= 4:
-                    _line_type = parts[1]  # k or d (parsed but not used - returns both k and d)
+                    _line_type = parts[1]  # k or d (parsed but not used - returns both k and d)  # noqa: F841
                     k_period = int(parts[2])
                     d_period = int(parts[3])
                     k_value, d_value = self.calculate_stochastic(highs, lows, closes, k_period, d_period)
@@ -306,8 +306,8 @@ class IndicatorCalculator:
         for i in range(max(k_period, len(closes) - d_period), len(closes)):
             if i < k_period:
                 continue
-            period_highs = highs[i - k_period : i]
-            period_lows = lows[i - k_period : i]
+            period_highs = highs[i - k_period:i]
+            period_lows = lows[i - k_period:i]
             period_close = closes[i]
 
             h_high = max(period_highs)

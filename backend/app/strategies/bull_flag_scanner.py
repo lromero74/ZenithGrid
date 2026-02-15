@@ -91,8 +91,6 @@ async def calculate_volume_sma_50(
     Returns:
         50-day average daily volume, or None if unable to calculate
     """
-    global _volume_sma_cache
-
     # Check cache
     cache_key = product_id
     if not force_refresh and cache_key in _volume_sma_cache:
@@ -358,7 +356,7 @@ def detect_bull_flag_pattern(
         _, high, low, close_price = get_ohlc(candle)
 
         # Pole should be upward trending
-        if is_green(candle) or (i > 0 and close_price > get_ohlc(candles[i-1])[3]):
+        if is_green(candle) or (i > 0 and close_price > get_ohlc(candles[i - 1])[3]):
             pole_high = max(pole_high, high)
             pole_low = min(pole_low, low)
             pole_candle_count += 1

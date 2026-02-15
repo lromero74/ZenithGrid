@@ -11,17 +11,17 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
-from app.models import Bot, Position, Account, User, PendingOrder
 from app.exchange_clients.factory import create_exchange_client
+from app.models import Account, Bot, PendingOrder, Position, User
 from app.routers.auth_dependencies import get_current_user
 from app.services import portfolio_conversion_service as pcs
 
@@ -187,7 +187,7 @@ async def get_balances(
             account_result = await db.execute(
                 select(Account).where(
                     Account.type == "cex",
-                    Account.is_active == True
+                    Account.is_active.is_(True)
                 ).order_by(Account.is_default.desc(), Account.created_at)
             )
             account = account_result.scalar_one_or_none()
@@ -338,7 +338,7 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
             "aggregate_usd_value": aggregate_usd,
             "btc_usd_price": btc_usd_price,
         }
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -681,7 +681,7 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
                 "all_time": {"usd": pnl_all_time_usd, "btc": pnl_all_time_btc, "usdc": pnl_all_time_usdc},
             },
         }
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -786,7 +786,7 @@ async def _run_portfolio_conversion(
                         # Try BTC pair first, fallback to USD
                         product_id = f"{currency}-BTC"
                         try:
-                            result = await exchange.create_market_order(
+                            await exchange.create_market_order(
                                 product_id=product_id,
                                 side="SELL",
                                 size=str(available),
@@ -798,7 +798,7 @@ async def _run_portfolio_conversion(
                         except Exception as direct_error:
                             if "403" in str(direct_error) or "400" in str(direct_error):
                                 usd_product_id = f"{currency}-USD"
-                                sell_result = await exchange.create_market_order(
+                                await exchange.create_market_order(
                                     product_id=usd_product_id,
                                     side="SELL",
                                     size=str(available),
@@ -814,7 +814,7 @@ async def _run_portfolio_conversion(
                         # Try USD pair first, fallback to BTC
                         product_id = f"{currency}-USD"
                         try:
-                            result = await exchange.create_market_order(
+                            await exchange.create_market_order(
                                 product_id=product_id,
                                 side="SELL",
                                 size=str(available),
@@ -826,7 +826,7 @@ async def _run_portfolio_conversion(
                         except Exception as direct_error:
                             if "403" in str(direct_error) or "400" in str(direct_error):
                                 btc_product_id = f"{currency}-BTC"
-                                sell_result = await exchange.create_market_order(
+                                await exchange.create_market_order(
                                     product_id=btc_product_id,
                                     side="SELL",
                                     size=str(available),
@@ -868,7 +868,7 @@ async def _run_portfolio_conversion(
                     if usd_account:
                         usd_available = float(usd_account.get("available_balance", {}).get("value", "0"))
                         if usd_available > 1.0:
-                            btc_result = await exchange.create_market_order(
+                            await exchange.create_market_order(
                                 product_id="BTC-USD",
                                 side="BUY",
                                 funds=str(usd_available),
@@ -889,7 +889,7 @@ async def _run_portfolio_conversion(
                     if btc_account:
                         btc_available = float(btc_account.get("available_balance", {}).get("value", "0"))
                         if btc_available > 0.00001:
-                            usd_result = await exchange.create_market_order(
+                            await exchange.create_market_order(
                                 product_id="BTC-USD",
                                 side="SELL",
                                 size=str(btc_available),
@@ -951,7 +951,7 @@ async def sell_portfolio_to_base_currency(
     else:
         account_query = select(Account).where(
             Account.user_id == current_user.id,
-            Account.is_default == True
+            Account.is_default.is_(True)
         )
     account_result = await db.execute(account_query)
     account = account_result.scalars().first()
@@ -964,7 +964,7 @@ async def sell_portfolio_to_base_currency(
 
     # Generate task ID and start background task
     task_id = str(uuid.uuid4())
-    
+
     # Start the conversion in the background
     background_tasks.add_task(
         _run_portfolio_conversion,

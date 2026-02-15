@@ -194,14 +194,8 @@ export function ArticleReaderMiniPlayer() {
     'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'
   ])
 
-  // Contraction suffixes - TTS splits "family's" into "family" + "s", "don't" into "don" + "t", etc.
-  const CONTRACTION_SUFFIXES = new Set(['s', 't', 'll', 're', 've', 'd', 'm', 'nt'])
-
   // Check if a string contains digits
   const hasDigits = (s: string) => /\d/.test(s)
-
-  // Check if a string is purely numeric (digits, commas, decimals)
-  const isNumeric = (s: string) => /^[\d,\.]+$/.test(s)
 
   // Build word-highlighted content by matching TTS words to text words sequentially
   const renderedContent = useMemo(() => {

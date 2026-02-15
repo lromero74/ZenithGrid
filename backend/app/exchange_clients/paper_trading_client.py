@@ -9,10 +9,9 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
 
 from app.exchange_clients.base import ExchangeClient
 from app.models import Account
@@ -85,38 +84,6 @@ class PaperTradingClient(ExchangeClient):
             api_secret=settings.coinbase_api_secret
         )
         return await real_client.get_price(product_id)
-
-    async def get_candles(
-        self,
-        product_id: str,
-        granularity: int = 300,
-        start: Optional[str] = None,
-        end: Optional[str] = None
-    ) -> List[Dict]:
-        """Get candle data from real exchange (paper trading uses real market data)."""
-        if self.real_client:
-            return await self.real_client.get_candles(product_id, granularity, start, end)
-
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_candles(product_id, granularity, start, end)
-
-    async def get_balance(self, currency: str) -> float:
-        """
-        Get virtual balance for a currency.
-
-        Args:
-            currency: Currency code (BTC, ETH, USD, etc.)
-
-        Returns:
-            Virtual balance for that currency
-        """
-        return self.balances.get(currency.upper(), 0.0)
 
     async def get_all_balances(self) -> Dict[str, float]:
         """Get all virtual balances."""

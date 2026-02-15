@@ -10,12 +10,12 @@ from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.currency_utils import get_quote_currency
 from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
-from app.trading_client import TradingClient
-from app.currency_utils import get_quote_currency
 from app.product_precision import get_base_precision
 from app.services.shutdown_manager import shutdown_manager
+from app.trading_client import TradingClient
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +57,8 @@ async def execute_sell_short(
         Trade record (for market orders only; limit orders return None)
     """
     from app.order_validation import validate_order_size
-    from app.trading_engine.order_logger import log_order_to_history
     from app.services.websocket_manager import ws_manager
-
-    quote_currency = get_quote_currency(product_id)
+    from app.trading_engine.order_logger import log_order_to_history
 
     # Check if shutdown is in progress - reject new orders
     if shutdown_manager.is_shutting_down:
@@ -125,11 +123,7 @@ async def execute_sell_short(
 
         if not order_id:
             logger.error(f"Full Coinbase response: {order_response}")
-            raise ValueError(f"No order_id in successful Coinbase response")
-
-        # Get filled price and amount from response
-        order_config = success_response.get("order_configuration", {})
-        market_config = order_config.get("market_market_ioc", {})
+            raise ValueError("No order_id in successful Coinbase response")
 
         # Calculate filled amounts
         quote_received = base_amount_rounded * current_price  # USD received from selling BTC
@@ -382,7 +376,7 @@ async def execute_sell(
 
             # Place limit order and return - position stays open until filled
             # TODO: _pending_order is currently unused but reserved for future limit order tracking/monitoring
-            _pending_order = await execute_limit_sell(
+            _pending_order = await execute_limit_sell(  # noqa: F841
                 db=db,
                 exchange=exchange,
                 trading_client=trading_client,

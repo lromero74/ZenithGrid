@@ -5,7 +5,7 @@ Handles opening and closing INTX perpetual futures positions with bracket TP/SL
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 

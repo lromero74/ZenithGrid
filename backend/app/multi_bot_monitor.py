@@ -12,11 +12,17 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import (
+    BOT_PROCESSING_DELAY_SECONDS,
+    CANDLE_CACHE_DEFAULT_TTL,
+    CANDLE_CACHE_TTL,
+    PAIR_PROCESSING_DELAY_SECONDS,
+)
 from app.database import async_session_maker
 from app.exchange_clients.base import ExchangeClient
 from app.models import Bot
-from app.strategies import StrategyRegistry
 from app.services.indicator_log_service import log_indicator_evaluation
+from app.strategies import StrategyRegistry
 from app.strategies.bull_flag_scanner import log_scanner_decision, scan_for_bull_flag_opportunities
 from app.trading_engine.trailing_stops import (
     check_bull_flag_exit_conditions,
@@ -24,6 +30,7 @@ from app.trading_engine.trailing_stops import (
 )
 from app.trading_engine_v2 import StrategyTradingEngine
 from app.utils.candle_utils import (
+    SYNTHETIC_TIMEFRAMES,
     aggregate_candles,
     calculate_bot_check_interval,
     fill_candle_gaps,
@@ -31,9 +38,7 @@ from app.utils.candle_utils import (
     next_check_time_aligned,
     prepare_market_context,
     timeframe_to_seconds,
-    SYNTHETIC_TIMEFRAMES,
 )
-from app.constants import CANDLE_CACHE_TTL, CANDLE_CACHE_DEFAULT_TTL, PAIR_PROCESSING_DELAY_SECONDS, BOT_PROCESSING_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -441,7 +446,7 @@ class MultiBotMonitor:
                 batch_size = 5
 
                 for i in range(0, len(trading_pairs), batch_size):
-                    batch = trading_pairs[i : i + batch_size]
+                    batch = trading_pairs[i:i + batch_size]
                     logger.info(f"  Processing batch {i // batch_size + 1} ({len(batch)} pairs): {batch}")
 
                     # Process batch sequentially to avoid DB session conflicts
@@ -926,6 +931,7 @@ class MultiBotMonitor:
         """Log AI decision to database and return the log entry"""
         try:
             import traceback
+
             from app.models import AIBotLog
 
             # DEBUG: Log stack trace to find duplicate calls
@@ -1008,8 +1014,8 @@ class MultiBotMonitor:
             try:
                 # Get ALL open positions for this pair (supports simultaneous same-pair deals)
                 from app.trading_engine.position_manager import (
-                    get_active_positions_for_pair,
                     all_positions_exhausted_safety_orders,
+                    get_active_positions_for_pair,
                 )
 
                 all_pair_positions = await get_active_positions_for_pair(db, bot, product_id)

@@ -15,9 +15,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Bot, PendingOrder, Position
 from app.exchange_clients.base import ExchangeClient
-from app.order_validation import validate_order_size, get_product_minimums
+from app.models import Bot, PendingOrder, Position
+from app.order_validation import validate_order_size
 
 logger = logging.getLogger(__name__)
 
@@ -383,7 +383,7 @@ async def handle_grid_order_fill(
             # Buy filled → place sell order above
             # Find next sell level from grid_state
             levels = grid_state.get("grid_levels", [])
-            sell_levels = [l for l in levels if l["order_type"] == "sell" and l["price"] > filled_price and l["status"] == "pending"]
+            sell_levels = [level for level in levels if level["order_type"] == "sell" and level["price"] > filled_price and level["status"] == "pending"]
 
             if sell_levels:
                 # Place sell at next available level
@@ -436,7 +436,7 @@ async def handle_grid_order_fill(
         elif filled_side == "SELL":
             # Sell filled → place buy order below
             levels = grid_state.get("grid_levels", [])
-            buy_levels = [l for l in levels if l["order_type"] == "buy" and l["price"] < filled_price and l["status"] == "pending"]
+            buy_levels = [level for level in levels if level["order_type"] == "buy" and level["price"] < filled_price and level["status"] == "pending"]
 
             if buy_levels:
                 target_level = max(buy_levels, key=lambda x: x["price"])
@@ -546,7 +546,7 @@ async def rebalance_grid_on_breakout(
     grid_type = bot.bot_config.get("grid_type", "arithmetic")
 
     # Keep same investment amount
-    total_investment = bot.bot_config.get("total_investment_quote", 0)
+    _total_investment = bot.bot_config.get("total_investment_quote", 0)  # noqa: F841
 
     # Build new grid config
     new_grid_config = {

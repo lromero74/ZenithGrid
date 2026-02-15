@@ -4,13 +4,14 @@ Strategies Router
 Exposes available trading strategies and their parameter definitions to the frontend.
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.models import User
 from app.routers.auth_dependencies import get_current_user
-from app.strategies import StrategyRegistry, StrategyDefinition
+from app.strategies import StrategyRegistry
 
 router = APIRouter(prefix="/api/strategies", tags=["strategies"])
 
@@ -65,7 +66,7 @@ async def list_strategies(current_user: User = Depends(get_current_user)):
 
         return strategies
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -107,7 +108,7 @@ async def get_strategy(strategy_id: str, current_user: User = Depends(get_curren
             ]
         )
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(status_code=404, detail="Not found")
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")

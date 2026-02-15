@@ -186,7 +186,7 @@ async def authenticated_request(
                     try:
                         error_body = e.response.json()
                         logger.error(f"❌ Coinbase API error {e.response.status_code} on {method} {endpoint}: {error_body}")
-                    except:
+                    except Exception:
                         logger.error(f"❌ Coinbase API error {e.response.status_code} on {method} {endpoint}: {e.response.text}")
                     raise
 

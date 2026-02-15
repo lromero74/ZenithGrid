@@ -6,9 +6,10 @@ Used by grid trading and other AI-powered features.
 """
 
 import logging
-from typing import Optional, Dict, Any
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
 

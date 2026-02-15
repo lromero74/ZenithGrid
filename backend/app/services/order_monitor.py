@@ -13,9 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.models import Bot, PendingOrder, Position, Trade
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
+from app.models import Bot, PendingOrder, Position, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -209,14 +209,13 @@ class OrderMonitor:
         bot = bot_result.scalar_one_or_none()
 
         if bot and bot.strategy == "grid_trading":
-            logger.info(f"   Grid trading order filled - handling grid logic")
+            logger.info("   Grid trading order filled - handling grid logic")
 
             try:
-                from app.services.grid_trading_service import handle_grid_order_fill
-
                 # Get exchange client for this bot
                 # TODO: Support multiple exchange accounts per user
                 from app.models import Account
+                from app.services.grid_trading_service import handle_grid_order_fill
                 account_query = select(Account).where(
                     Account.type == "cex",
                     Account.is_active.is_(True)

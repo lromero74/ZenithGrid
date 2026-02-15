@@ -13,14 +13,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.models import Account, Bot, Position, User
-from app.strategies import StrategyDefinition, StrategyRegistry
+from app.bot_routers.schemas import BotCreate, BotResponse, BotStats, BotUpdate
 from app.coinbase_unified_client import CoinbaseClient
+from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
-from app.bot_routers.schemas import BotCreate, BotUpdate, BotResponse, BotStats
+from app.models import Account, Bot, Position, User
 from app.routers.auth_dependencies import get_current_user
+from app.strategies import StrategyDefinition, StrategyRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ async def get_strategy_definition(strategy_id: str):
     """Get detailed definition for a specific strategy"""
     try:
         return StrategyRegistry.get_definition(strategy_id)
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(status_code=404, detail="Not found")
 
 
@@ -86,7 +86,7 @@ async def create_bot(
     # Validate strategy config (create temporary instance to validate)
     try:
         StrategyRegistry.get_strategy(bot_data.strategy_type, bot_data.strategy_config)
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid strategy configuration")
 
     # Check if name is unique
@@ -160,7 +160,7 @@ async def create_bot(
         # Get exchange client for this bot's account
         try:
             exchange = await create_exchange_client(db, bot.account_id)
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=400, detail="Failed to connect to exchange")
 
         # Get raw balances
@@ -168,7 +168,7 @@ async def create_bot(
             balances = await exchange.get_account()
             raw_usd = balances.get("USD", 0.0) + balances.get("USDC", 0.0) + balances.get("USDT", 0.0)
             raw_btc = balances.get("BTC", 0.0)
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=400, detail="Failed to fetch account balances")
 
         # Calculate aggregate values
@@ -183,7 +183,7 @@ async def create_bot(
 
             # Get current BTC price for validation
             current_btc_price = await exchange.get_btc_usd_price()
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=400, detail="Failed to calculate aggregate values")
 
         # Calculate bot's total budget
@@ -569,7 +569,7 @@ async def update_bot(
         # Validate new config
         try:
             StrategyRegistry.get_strategy(bot.strategy_type, bot_update.strategy_config)
-        except ValueError as e:
+        except ValueError:
             raise HTTPException(status_code=400, detail="Invalid strategy configuration")
         bot.strategy_config = bot_update.strategy_config
 
@@ -643,7 +643,7 @@ async def update_bot(
         # Get exchange client
         try:
             exchange = await create_exchange_client(db, bot.account_id)
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=400, detail="Failed to connect to exchange")
 
         # Get raw balances and aggregate values
@@ -658,7 +658,7 @@ async def update_bot(
                 aggregate_usd_value = balances.get("USD", 0.0) + balances.get("USDC", 0.0) + balances.get("USDT", 0.0)
 
             current_btc_price = await exchange.get_btc_usd_price()
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=400, detail="Failed to calculate aggregate values")
 
         # Calculate new reservations
@@ -864,11 +864,11 @@ async def copy_bot_to_account(
         raise HTTPException(status_code=404, detail="Target account not found or not accessible")
 
     # Get source account to determine type
-    source_account = None
+    _source_account = None  # noqa: F841
     if original_bot.account_id:
         source_account_query = select(Account).where(Account.id == original_bot.account_id)
         source_account_result = await db.execute(source_account_query)
-        source_account = source_account_result.scalars().first()
+        _source_account = source_account_result.scalars().first()  # noqa: F841
 
     # Generate new name with account type suffix
     new_name = original_bot.name
@@ -989,7 +989,7 @@ async def get_bot_stats(
                 current_price = await coinbase.get_current_price(position.product_id)
                 position_value = position.total_base_acquired * current_price
                 total_in_positions_value += position_value
-            except Exception as _:
+            except Exception as _:  # noqa: F841
                 # Fallback to quote spent if can't get current price
                 logger.warning(f"Could not get current price for position {position.id}, using quote spent")
                 total_in_positions_value += position.total_quote_spent

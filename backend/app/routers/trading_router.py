@@ -4,16 +4,17 @@ Trading Router - Manual trading operations
 Handles user-initiated buy/sell orders for portfolio management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from pydantic import BaseModel
-from typing import Dict, Any
 import logging
+from typing import Any, Dict
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import Account, User
 from app.routers.auth_dependencies import get_current_user
-from app.models import User, Account
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -43,14 +44,14 @@ async def market_sell(
         # Get user's active trading account
         query = select(Account).where(
             Account.user_id == current_user.id,
-            Account.is_active == True,
+            Account.is_active.is_(True),
             Account.type == 'cex'
         )
 
         if request.account_id:
             query = query.where(Account.id == request.account_id)
         else:
-            query = query.where(Account.is_default == True)
+            query = query.where(Account.is_default.is_(True))
 
         result = await db.execute(query)
         account = result.scalar_one_or_none()

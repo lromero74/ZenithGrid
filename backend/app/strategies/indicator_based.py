@@ -22,7 +22,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.indicator_calculator import IndicatorCalculator
-from app.indicators import AISpotOpinionEvaluator, AISpotOpinionParams, BullFlagIndicatorEvaluator, RISK_PRESETS
+from app.indicators import AISpotOpinionEvaluator, AISpotOpinionParams, BullFlagIndicatorEvaluator
 from app.indicators.bull_flag_indicator import BullFlagParams
 from app.phase_conditions import PhaseConditionEvaluator
 from app.strategies import (
@@ -539,9 +539,9 @@ class IndicatorBasedStrategy(TradingStrategy):
 
         # Flatten all conditions from potentially grouped format
         all_conditions = (
-            self._flatten_conditions(self.base_order_conditions) +
-            self._flatten_conditions(self.safety_order_conditions) +
-            self._flatten_conditions(self.take_profit_conditions)
+            self._flatten_conditions(self.base_order_conditions)
+            + self._flatten_conditions(self.safety_order_conditions)
+            + self._flatten_conditions(self.take_profit_conditions)
         )
 
         for condition in all_conditions:
@@ -1110,7 +1110,7 @@ class IndicatorBasedStrategy(TradingStrategy):
                     amount = self.calculate_base_order_size(balance)
 
                 if amount <= 0:
-                    logger.warning(f"💰 BUDGET BLOCKER: Calculated amount is zero or negative")
+                    logger.warning("💰 BUDGET BLOCKER: Calculated amount is zero or negative")
                     logger.warning(f"   Per-position budget: {per_position_budget if 'per_position_budget' in locals() else balance:.8f} BTC")
                     logger.warning(f"   Calculated amount: {amount:.8f} BTC")
                     return False, 0.0, f"Calculated {direction} entry amount is invalid ({amount:.8f} BTC)"
@@ -1136,13 +1136,13 @@ class IndicatorBasedStrategy(TradingStrategy):
                 amount = self.calculate_base_order_size(balance)
 
                 if amount <= 0:
-                    logger.warning(f"💰 BUDGET BLOCKER: Calculated base order amount is zero or negative")
+                    logger.warning("💰 BUDGET BLOCKER: Calculated base order amount is zero or negative")
                     logger.warning(f"   Available balance: {balance:.8f} BTC")
                     logger.warning(f"   Calculated amount: {amount:.8f} BTC")
                     return False, 0.0, f"Calculated base order amount is invalid ({amount:.8f} BTC)"
 
                 if amount > balance:
-                    logger.warning(f"💰 BUDGET BLOCKER: Insufficient balance for base order")
+                    logger.warning("💰 BUDGET BLOCKER: Insufficient balance for base order")
                     logger.warning(f"   Available balance: {balance:.8f} BTC")
                     logger.warning(f"   Required amount: {amount:.8f} BTC")
                     logger.warning(f"   Shortfall: {(amount - balance):.8f} BTC ({((amount - balance) / amount * 100):.1f}%)")

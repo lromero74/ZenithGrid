@@ -4,7 +4,7 @@ Handles portfolio management, positions, and balances for INTX perpetual contrac
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from app.cache import api_cache
 
