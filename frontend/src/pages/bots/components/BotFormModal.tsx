@@ -416,7 +416,7 @@ export function BotFormModal({
           )}
 
           {/* ============================================ */}
-          {/* SECTION 1: BASIC INFORMATION */}
+          {/* SECTION: BASIC INFORMATION */}
           {/* ============================================ */}
           <div className="border-b border-slate-700 pb-6">
             <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -564,7 +564,7 @@ export function BotFormModal({
           </div>
 
           {/* ============================================ */}
-          {/* SECTION 2: EXCHANGE CONFIGURATION */}
+          {/* SECTION: EXCHANGE CONFIGURATION */}
           {/* ============================================ */}
           <DexConfigSection
             config={{
@@ -578,7 +578,7 @@ export function BotFormModal({
           />
 
           {/* ============================================ */}
-          {/* SECTION 3: STRATEGY */}
+          {/* SECTION: STRATEGY */}
           {/* ============================================ */}
           <div className="border-b border-slate-700 pb-6">
             <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -608,7 +608,7 @@ export function BotFormModal({
           </div>
 
           {/* ============================================ */}
-          {/* SECTION 3: MARKETS & PAIRS */}
+          {/* SECTION: MARKETS & PAIRS */}
           {/* ============================================ */}
           <div className="border-b border-slate-700 pb-6">
             <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -871,7 +871,7 @@ export function BotFormModal({
           </div>
 
           {/* ============================================ */}
-          {/* SECTION 4: MONITORING & TIMING */}
+          {/* SECTION: MONITORING & TIMING */}
           {/* ============================================ */}
           <div className="border-b border-slate-700 pb-6">
             <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -910,7 +910,7 @@ export function BotFormModal({
           </div>
 
           {/* ============================================ */}
-          {/* SECTION 5: BUDGET & RISK MANAGEMENT */}
+          {/* SECTION: BUDGET & RISK MANAGEMENT */}
           {/* Only show for non-AI strategies (AI strategies have this in Strategy Parameters) */}
           {/* ============================================ */}
           {formData.strategy_type !== 'ai_autonomous' && (
@@ -1047,8 +1047,7 @@ export function BotFormModal({
           )}
 
           {/* ============================================ */}
-          {/* SECTION 6: STRATEGY CONFIGURATION */}
-          {/* Section number is 6 for AI strategies (Budget section hidden), 7 for others */}
+          {/* SECTION: STRATEGY CONFIGURATION */}
           {/* ============================================ */}
           {selectedStrategy && (selectedStrategy.id === 'conditional_dca' || selectedStrategy.id === 'indicator_based' || selectedStrategy.parameters.length > 0) && (
           <div className="border-b border-slate-700 pb-6">

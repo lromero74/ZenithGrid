@@ -7,23 +7,8 @@ Cache behavior:
 - Merges new items with existing cache (new items at top)
 - Prunes items older than 7 days
 
-Sources:
-- Reddit r/cryptocurrency and r/bitcoin (JSON API)
-- CoinDesk (RSS)
-- CoinTelegraph (RSS)
-- Decrypt (RSS)
-- The Block (RSS)
-- CryptoSlate (RSS)
-
-Video Sources (YouTube RSS):
-- Coin Bureau - Educational crypto content
-- Benjamin Cowen - Technical analysis
-- Altcoin Daily - Daily crypto news
-- Bankless - Ethereum/DeFi focused
-- The Defiant - DeFi news
-
-Note: TikTok doesn't have a public API for content, so we focus on
-established crypto news sources with RSS feeds or public APIs.
+News and video sources are dynamically configured in news_sources.py
+and managed via the admin UI (Settings > News Sources).
 """
 
 import asyncio

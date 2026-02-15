@@ -60,6 +60,9 @@ interface DCABudgetBreakdown {
   minimumEnforced: boolean  // True if any order was bumped to minimum
 }
 
+// 3Commas-style DCA ladder calculation: divides the bot's budget equally among
+// max concurrent deals, then within each deal splits budget across a base order
+// plus exponentially scaled safety orders (each SO_i = base * scale^i).
 function calculateDCABudget(
   aggregateValue: number,
   budgetPercentage: number,

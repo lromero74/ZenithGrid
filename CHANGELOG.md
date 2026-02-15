@@ -5,6 +5,20 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.4] - 2026-02-15
+
+### Changed
+- Removed dead commented-out code: `AuthTokens` interface in AuthContext.tsx, GALA mapping in dex_wallet_service.py
+- Updated news_router.py docstring to reference dynamic news_sources.py config instead of hardcoded source list
+- Fixed stale TODO comments in buy_executor.py and sell_executor.py (limit order tracking is implemented)
+- Clarified TODO comments for short order limit logic (buy_executor, sell_executor)
+- Removed obsolete `TODO: Support multiple exchange accounts per user` from order_monitor.py (Account model exists)
+- Fixed inconsistent section numbering in BotFormModal.tsx (dropped numbers, kept descriptive names)
+- Added explanatory comment for 3Commas-style DCA ladder calculation in ThreeCommasStyleForm.tsx
+- Added explanatory comment for PnL carousel infinite-scroll pattern in BotListItem.tsx
+- Added BUG comment flagging broken user credential lookup in ai_service.py (uses nonexistent User attrs)
+- No behavioral changes — all fixes are comment/docstring only
+
 ## [v1.31.3] - 2026-02-15
 
 ### Changed

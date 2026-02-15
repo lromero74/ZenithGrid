@@ -34,10 +34,7 @@ PRICE_CACHE_TTL = 60  # seconds
 # the old tokens aren't directly tradeable - they need migration first.
 # Showing the "potential" value after migration would be misleading.
 # Instead, show $0 and let the UI indicate migration is needed.
-LEGACY_TOKEN_PRICE_MAP = {
-    # GALA v1 is deprecated - don't price it as v2, it needs migration first
-    # "0x15D4c048F83bd7e37d49eA4C83a07267Ec4203dA".lower(): "0xd1d2Eb1B1e90B638588728b4130137D262C87cae".lower(),
-}
+LEGACY_TOKEN_PRICE_MAP = {}
 
 # Tokens that require migration (for UI to show migration prompts)
 DEPRECATED_TOKENS = {

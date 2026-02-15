@@ -76,7 +76,7 @@ async def execute_sell_short(
 
         logger.info(f"  📋 Placing limit short sell order: {base_amount:.8f} BTC @ {limit_price:.8f}")
 
-        # TODO: Implement limit order logic for short safety orders
+        # TODO: Short safety orders use market orders only; limit logic not yet implemented
         # For now, fall through to market order
         logger.warning("  ⚠️ Limit short safety orders not yet implemented - using market order")
 
@@ -375,7 +375,7 @@ async def execute_sell(
             logger.info(f"  📊 Placing LIMIT close order @ {limit_price:.8f} (mark price)")
 
             # Place limit order and return - position stays open until filled
-            # TODO: _pending_order is currently unused but reserved for future limit order tracking/monitoring
+            # Limit order placed; fill tracking handled by limit_order_monitor service
             _pending_order = await execute_limit_sell(  # noqa: F841
                 db=db,
                 exchange=exchange,

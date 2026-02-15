@@ -213,7 +213,6 @@ class OrderMonitor:
 
             try:
                 # Get exchange client for this bot
-                # TODO: Support multiple exchange accounts per user
                 from app.models import Account
                 from app.services.grid_trading_service import handle_grid_order_fill
                 account_query = select(Account).where(
