@@ -374,6 +374,26 @@ function ThreeCommasStyleForm({
             </p>
           </div>
 
+          {/* Min 24h Volume Filter */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Min 24h Volume ({isFiatQuote ? quoteCurrency : 'BTC'})
+            </label>
+            <input
+              type="number"
+              value={getNumericValue(config.min_daily_volume, 0)}
+              onChange={(e) => updateConfig('min_daily_volume', safeParseFloat(e.target.value) ?? 0)}
+              min="0"
+              step={isFiatQuote ? 1000 : 0.1}
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              {config.min_daily_volume && config.min_daily_volume > 0
+                ? `Skip pairs with less than ${config.min_daily_volume} ${isFiatQuote ? quoteCurrency : 'BTC'} daily volume`
+                : 'No volume filter (0 = disabled)'}
+            </p>
+          </div>
+
           {/* Max Simultaneous Same Pair */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1 flex items-center gap-1">

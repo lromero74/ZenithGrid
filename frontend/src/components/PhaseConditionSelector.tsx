@@ -15,7 +15,7 @@ export type ConditionType =
   | 'ai_sell'
   | 'bull_flag'
 
-export type Operator = 'greater_than' | 'less_than' | 'greater_equal' | 'less_equal' | 'crossing_above' | 'crossing_below'
+export type Operator = 'greater_than' | 'less_than' | 'greater_equal' | 'less_equal' | 'crossing_above' | 'crossing_below' | 'increasing' | 'decreasing'
 
 export type Timeframe =
   | 'ONE_MINUTE'
@@ -115,7 +115,19 @@ const OPERATORS: Record<Operator, string> = {
   less_equal: '≤',
   crossing_above: 'Crossing Above',
   crossing_below: 'Crossing Below',
+  increasing: 'Increasing',
+  decreasing: 'Decreasing',
 }
+
+// Strength presets for increasing/decreasing operators
+const STRENGTH_LEVELS: Record<string, { label: string; value: number }> = {
+  any: { label: 'Any', value: 0 },
+  mild: { label: 'Mild+ (>1%)', value: 1 },
+  medium: { label: 'Medium+ (>2%)', value: 2 },
+  strong: { label: 'Strong+ (>5%)', value: 5 },
+  very_strong: { label: 'Very Strong (>10%)', value: 10 },
+}
+
 
 const TIMEFRAMES: Record<Timeframe, string> = {
   ONE_MINUTE: '1m',
@@ -249,7 +261,15 @@ function PhaseConditionSelector({
             <div className="flex items-center gap-2">
               <select
                 value={condition.operator}
-                onChange={(e) => updateCondition(condition.id, { operator: e.target.value as Operator })}
+                onChange={(e) => {
+                  const newOp = e.target.value as Operator
+                  const updates: Partial<PhaseCondition> = { operator: newOp }
+                  if ((newOp === 'increasing' || newOp === 'decreasing') &&
+                      condition.operator !== 'increasing' && condition.operator !== 'decreasing') {
+                    updates.value = 0
+                  }
+                  updateCondition(condition.id, updates)
+                }}
                 className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
               >
                 <option value="greater_than">&gt;</option>
@@ -258,16 +278,31 @@ function PhaseConditionSelector({
                 <option value="less_equal">≤</option>
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
+                <option value="increasing">Increasing</option>
+                <option value="decreasing">Decreasing</option>
               </select>
-              <input
-                type="number"
-                value={condition.value}
-                onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
-                min="0"
-                max="100"
-                step="1"
-                className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
-              />
+              {condition.operator === 'increasing' || condition.operator === 'decreasing' ? (
+                <select
+                  value={condition.value || 0}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                  title="Minimum % change strength"
+                >
+                  {Object.entries(STRENGTH_LEVELS).map(([key, { label, value }]) => (
+                    <option key={key} value={value}>{label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  value={condition.value}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  min="0"
+                  max="100"
+                  step="1"
+                  className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+              )}
             </div>
           </>
         )
@@ -320,7 +355,15 @@ function PhaseConditionSelector({
               <span className="text-sm text-slate-300">Histogram</span>
               <select
                 value={condition.operator}
-                onChange={(e) => updateCondition(condition.id, { operator: e.target.value as Operator })}
+                onChange={(e) => {
+                  const newOp = e.target.value as Operator
+                  const updates: Partial<PhaseCondition> = { operator: newOp }
+                  if ((newOp === 'increasing' || newOp === 'decreasing') &&
+                      condition.operator !== 'increasing' && condition.operator !== 'decreasing') {
+                    updates.value = 0
+                  }
+                  updateCondition(condition.id, updates)
+                }}
                 className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
               >
                 <option value="crossing_above">Crossing Above</option>
@@ -329,14 +372,29 @@ function PhaseConditionSelector({
                 <option value="greater_equal">≥</option>
                 <option value="less_than">&lt;</option>
                 <option value="less_equal">≤</option>
+                <option value="increasing">Increasing</option>
+                <option value="decreasing">Decreasing</option>
               </select>
-              <input
-                type="number"
-                value={condition.value}
-                onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
-                step="0.0001"
-                className="w-24 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
-              />
+              {condition.operator === 'increasing' || condition.operator === 'decreasing' ? (
+                <select
+                  value={condition.value || 0}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                  title="Minimum % change strength"
+                >
+                  {Object.entries(STRENGTH_LEVELS).map(([key, { label, value }]) => (
+                    <option key={key} value={value}>{label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  value={condition.value}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  step="0.0001"
+                  className="w-24 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+              )}
             </div>
           </>
         )
@@ -372,7 +430,15 @@ function PhaseConditionSelector({
             <div className="flex items-center gap-2">
               <select
                 value={condition.operator}
-                onChange={(e) => updateCondition(condition.id, { operator: e.target.value as Operator })}
+                onChange={(e) => {
+                  const newOp = e.target.value as Operator
+                  const updates: Partial<PhaseCondition> = { operator: newOp }
+                  if ((newOp === 'increasing' || newOp === 'decreasing') &&
+                      condition.operator !== 'increasing' && condition.operator !== 'decreasing') {
+                    updates.value = 0
+                  }
+                  updateCondition(condition.id, updates)
+                }}
                 className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
               >
                 <option value="greater_than">&gt;</option>
@@ -381,17 +447,34 @@ function PhaseConditionSelector({
                 <option value="less_equal">≤</option>
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
+                <option value="increasing">Increasing</option>
+                <option value="decreasing">Decreasing</option>
               </select>
-              <input
-                type="number"
-                value={condition.value ?? ''}
-                onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
-                min="0"
-                max="100"
-                step="1"
-                className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
-              />
-              <span className="text-xs text-slate-400">%</span>
+              {condition.operator === 'increasing' || condition.operator === 'decreasing' ? (
+                <select
+                  value={condition.value || 0}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                  title="Minimum % change strength"
+                >
+                  {Object.entries(STRENGTH_LEVELS).map(([key, { label, value }]) => (
+                    <option key={key} value={value}>{label}</option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input
+                    type="number"
+                    value={condition.value ?? ''}
+                    onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                    min="0"
+                    max="100"
+                    step="1"
+                    className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                  />
+                  <span className="text-xs text-slate-400">%</span>
+                </>
+              )}
             </div>
           </>
         )
@@ -447,7 +530,15 @@ function PhaseConditionSelector({
             <div className="flex items-center gap-2">
               <select
                 value={condition.operator}
-                onChange={(e) => updateCondition(condition.id, { operator: e.target.value as Operator })}
+                onChange={(e) => {
+                  const newOp = e.target.value as Operator
+                  const updates: Partial<PhaseCondition> = { operator: newOp }
+                  if ((newOp === 'increasing' || newOp === 'decreasing') &&
+                      condition.operator !== 'increasing' && condition.operator !== 'decreasing') {
+                    updates.value = 0
+                  }
+                  updateCondition(condition.id, updates)
+                }}
                 className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
               >
                 <option value="greater_than">&gt;</option>
@@ -456,16 +547,31 @@ function PhaseConditionSelector({
                 <option value="less_equal">≤</option>
                 <option value="crossing_above">Crossing Above</option>
                 <option value="crossing_below">Crossing Below</option>
+                <option value="increasing">Increasing</option>
+                <option value="decreasing">Decreasing</option>
               </select>
-              <input
-                type="number"
-                value={condition.value}
-                onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
-                min="0"
-                max="100"
-                step="1"
-                className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
-              />
+              {condition.operator === 'increasing' || condition.operator === 'decreasing' ? (
+                <select
+                  value={condition.value || 0}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                  title="Minimum % change strength"
+                >
+                  {Object.entries(STRENGTH_LEVELS).map(([key, { label, value }]) => (
+                    <option key={key} value={value}>{label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  value={condition.value}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  min="0"
+                  max="100"
+                  step="1"
+                  className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+              )}
             </div>
           </>
         )
@@ -476,7 +582,15 @@ function PhaseConditionSelector({
             <span className="text-sm text-slate-300">Price change</span>
             <select
               value={condition.operator}
-              onChange={(e) => updateCondition(condition.id, { operator: e.target.value as Operator })}
+              onChange={(e) => {
+                const newOp = e.target.value as Operator
+                const updates: Partial<PhaseCondition> = { operator: newOp }
+                if ((newOp === 'increasing' || newOp === 'decreasing') &&
+                    condition.operator !== 'increasing' && condition.operator !== 'decreasing') {
+                  updates.value = 0
+                }
+                updateCondition(condition.id, updates)
+              }}
               className="bg-slate-600 text-white px-3 py-1 rounded text-sm border border-slate-500"
             >
               <option value="greater_than">&gt;</option>
@@ -485,15 +599,32 @@ function PhaseConditionSelector({
               <option value="less_equal">≤</option>
               <option value="crossing_above">Crossing Above</option>
               <option value="crossing_below">Crossing Below</option>
+              <option value="increasing">Increasing</option>
+              <option value="decreasing">Decreasing</option>
             </select>
-            <input
-              type="number"
-              value={condition.value}
-              onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
-              step="0.1"
-              className="w-24 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
-            />
-            <span className="text-xs text-slate-400">%</span>
+            {condition.operator === 'increasing' || condition.operator === 'decreasing' ? (
+              <select
+                value={condition.value || 0}
+                onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                title="Minimum % change strength"
+              >
+                {Object.entries(STRENGTH_LEVELS).map(([key, { label, value }]) => (
+                  <option key={key} value={value}>{label}</option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <input
+                  type="number"
+                  value={condition.value}
+                  onChange={(e) => updateCondition(condition.id, { value: parseFloat(e.target.value) })}
+                  step="0.1"
+                  className="w-24 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+                />
+                <span className="text-xs text-slate-400">%</span>
+              </>
+            )}
           </div>
         )
 
@@ -546,22 +677,34 @@ function PhaseConditionSelector({
   const getReadableCondition = (condition: PhaseCondition): string => {
     const op = OPERATORS[condition.operator]
     const tf = TIMEFRAMES[condition.timeframe || 'FIVE_MINUTE']
+    const isDirectional = condition.operator === 'increasing' || condition.operator === 'decreasing'
+    const strengthLabel = isDirectional && condition.value > 0 ? ` (>${condition.value}%)` : ''
 
     switch (condition.type) {
       case 'rsi':
-        return `[${tf}] RSI(${condition.period || 14}) ${op} ${condition.value}`
+        return isDirectional
+          ? `[${tf}] RSI(${condition.period || 14}) ${op}${strengthLabel}`
+          : `[${tf}] RSI(${condition.period || 14}) ${op} ${condition.value}`
       case 'macd':
-        return `[${tf}] MACD Histogram(${condition.fast_period},${condition.slow_period},${condition.signal_period}) ${op} ${condition.value}`
+        return isDirectional
+          ? `[${tf}] MACD Histogram(${condition.fast_period},${condition.slow_period},${condition.signal_period}) ${op}${strengthLabel}`
+          : `[${tf}] MACD Histogram(${condition.fast_period},${condition.slow_period},${condition.signal_period}) ${op} ${condition.value}`
       case 'bb_percent':
-        return `[${tf}] BB%(${condition.period},${condition.std_dev}) ${op} ${condition.value}%`
+        return isDirectional
+          ? `[${tf}] BB%(${condition.period},${condition.std_dev}) ${op}${strengthLabel}`
+          : `[${tf}] BB%(${condition.period},${condition.std_dev}) ${op} ${condition.value}%`
       case 'ema_cross':
         return `[${tf}] Price ${op} EMA(${condition.period})`
       case 'sma_cross':
         return `[${tf}] Price ${op} SMA(${condition.period})`
       case 'stochastic':
-        return `[${tf}] Stochastic(${condition.period}) ${op} ${condition.value}`
+        return isDirectional
+          ? `[${tf}] Stochastic(${condition.period}) ${op}${strengthLabel}`
+          : `[${tf}] Stochastic(${condition.period}) ${op} ${condition.value}`
       case 'price_change':
-        return `[${tf}] Price Change ${op} ${condition.value}%`
+        return isDirectional
+          ? `[${tf}] Price Change ${op}${strengthLabel}`
+          : `[${tf}] Price Change ${op} ${condition.value}%`
       case 'volume':
         return `[${tf}] Volume ${op} ${condition.value}`
       // Aggregate indicators

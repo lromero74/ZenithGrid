@@ -9,6 +9,8 @@ Allows mixing and matching indicators with comparison operators:
 - Equal (==)
 - Crossing above (crosses up)
 - Crossing below (crosses down)
+- Increasing (current > previous, with optional strength %)
+- Decreasing (current < previous, with optional strength %)
 
 Conditions can be combined with AND/OR logic.
 """
@@ -29,6 +31,8 @@ class ComparisonOperator(str, Enum):
     EQUAL = "equal"  # ==
     CROSSING_ABOVE = "crossing_above"  # Crosses from below to above
     CROSSING_BELOW = "crossing_below"  # Crosses from above to below
+    INCREASING = "increasing"  # Current value > previous value
+    DECREASING = "decreasing"  # Current value < previous value
 
 
 class IndicatorType(str, Enum):
@@ -159,6 +163,35 @@ class ConditionEvaluator:
 
         if compare_value is None:
             return False
+
+        # Handle increasing/decreasing operators (need previous values)
+        if condition.operator in [ComparisonOperator.INCREASING, ComparisonOperator.DECREASING]:
+            if previous_indicators is None:
+                return False
+
+            previous_value = self._get_indicator_value(
+                condition.indicator, condition.indicator_params, previous_indicators
+            )
+
+            if previous_value is None:
+                return False
+
+            # static_value stores minimum % change threshold (0 = any change)
+            min_pct_change = condition.static_value or 0
+
+            if previous_value == 0:
+                # Avoid division by zero; only pass if current is non-zero
+                if condition.operator == ComparisonOperator.INCREASING:
+                    return current_value > 0
+                else:
+                    return current_value < 0
+
+            pct_change = ((current_value - previous_value) / abs(previous_value)) * 100
+
+            if condition.operator == ComparisonOperator.INCREASING:
+                return pct_change >= min_pct_change if min_pct_change > 0 else current_value > previous_value
+            else:  # DECREASING
+                return pct_change <= -min_pct_change if min_pct_change > 0 else current_value < previous_value
 
         # Handle crossing operators (need previous values)
         if condition.operator in [ComparisonOperator.CROSSING_ABOVE, ComparisonOperator.CROSSING_BELOW]:

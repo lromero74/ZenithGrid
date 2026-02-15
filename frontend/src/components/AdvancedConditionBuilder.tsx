@@ -21,7 +21,7 @@ export type ConditionType =
   | 'ai_sell'
   | 'bull_flag'
 
-export type Operator = 'greater_than' | 'less_than' | 'crossing_above' | 'crossing_below' | 'equal'
+export type Operator = 'greater_than' | 'less_than' | 'crossing_above' | 'crossing_below' | 'equal' | 'increasing' | 'decreasing'
 
 export type Timeframe =
   | 'ONE_MINUTE'
@@ -129,7 +129,23 @@ const OPERATORS: Record<Operator, string> = {
   crossing_above: 'X Above',
   crossing_below: 'X Below',
   equal: '=',
+  increasing: 'Increasing',
+  decreasing: 'Decreasing',
 }
+
+// Strength presets for increasing/decreasing operators (min % change)
+const STRENGTH_LEVELS: Record<string, { label: string; value: number }> = {
+  any: { label: 'Any', value: 0 },
+  mild: { label: 'Mild+ (>1%)', value: 1 },
+  medium: { label: 'Medium+ (>2%)', value: 2 },
+  strong: { label: 'Strong+ (>5%)', value: 5 },
+  very_strong: { label: 'Very Strong (>10%)', value: 10 },
+}
+
+// Indicators that support increasing/decreasing
+const DIRECTIONAL_INDICATORS: ConditionType[] = [
+  'rsi', 'volume_rsi', 'macd', 'stochastic', 'bb_percent', 'price_change',
+]
 
 const TIMEFRAMES: Record<Timeframe, string> = {
   ONE_MINUTE: '1m',
@@ -420,17 +436,34 @@ function AdvancedConditionBuilder({
           {!isAggregate && (
             <select
               value={condition.operator}
-              onChange={(e) => updateCondition(group.id, condition.id, { operator: e.target.value as Operator })}
+              onChange={(e) => {
+                const newOp = e.target.value as Operator
+                const updates: Partial<Condition> = { operator: newOp }
+                // When switching to increasing/decreasing, set value to 0 (any strength)
+                if ((newOp === 'increasing' || newOp === 'decreasing') &&
+                    condition.operator !== 'increasing' && condition.operator !== 'decreasing') {
+                  updates.value = 0
+                }
+                updateCondition(group.id, condition.id, updates)
+              }}
               className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
             >
-              {Object.entries(OPERATORS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
+              {Object.entries(OPERATORS)
+                .filter(([value]) => {
+                  // Only show increasing/decreasing for directional indicators
+                  if (value === 'increasing' || value === 'decreasing') {
+                    return DIRECTIONAL_INDICATORS.includes(condition.type)
+                  }
+                  return true
+                })
+                .map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
             </select>
           )}
 
-          {/* Value (not for aggregates) */}
-          {!isAggregate && (
+          {/* Value (not for aggregates, not for increasing/decreasing) */}
+          {!isAggregate && condition.operator !== 'increasing' && condition.operator !== 'decreasing' && (
             <input
               type="number"
               value={condition.value}
@@ -438,6 +471,20 @@ function AdvancedConditionBuilder({
               className="w-20 bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
               step={condition.type === 'macd' ? '0.0001' : '1'}
             />
+          )}
+
+          {/* Strength selector for increasing/decreasing */}
+          {(condition.operator === 'increasing' || condition.operator === 'decreasing') && (
+            <select
+              value={condition.value || 0}
+              onChange={(e) => updateCondition(group.id, condition.id, { value: parseFloat(e.target.value) })}
+              className="bg-slate-600 text-white px-2 py-1 rounded text-sm border border-slate-500"
+              title="Minimum % change strength"
+            >
+              {Object.entries(STRENGTH_LEVELS).map(([key, { label, value }]) => (
+                <option key={key} value={value}>{label}</option>
+              ))}
+            </select>
           )}
 
           {/* Aggregate indicator shows = Active */}
@@ -583,7 +630,13 @@ function AdvancedConditionBuilder({
         } else if (CONDITION_TYPES[c.type]?.isAggregate) {
           condStr = `${c.type.toUpperCase()}=1`
         } else {
-          condStr = `${c.type}${c.operator === 'greater_than' ? '>' : c.operator === 'less_than' ? '<' : c.operator === 'equal' ? '=' : c.operator}${c.value}`
+          if (c.operator === 'increasing' || c.operator === 'decreasing') {
+            const dir = c.operator === 'increasing' ? '↑' : '↓'
+            const strength = c.value > 0 ? ` (>${c.value}%)` : ''
+            condStr = `${c.type}${dir}${strength}`
+          } else {
+            condStr = `${c.type}${c.operator === 'greater_than' ? '>' : c.operator === 'less_than' ? '<' : c.operator === 'equal' ? '=' : c.operator}${c.value}`
+          }
         }
         const connector = ci > 0 ? ` ${group.logic.toUpperCase()} ` : ''
         return `${connector}${negateStr}[${tf}]${condStr}`
