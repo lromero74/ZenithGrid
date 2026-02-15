@@ -47,6 +47,16 @@ export interface Position {
   is_blacklisted?: boolean;  // Whether the coin is on the blacklist
   blacklist_reason?: string | null;  // Reason the coin is blacklisted
   computed_max_budget?: number | null;  // Pre-computed resize budget
+
+  // Perpetual futures fields
+  product_type?: 'spot' | 'future';
+  leverage?: number | null;
+  perps_margin_type?: 'CROSS' | 'ISOLATED' | null;
+  liquidation_price?: number | null;
+  funding_fees_total?: number;
+  tp_price?: number | null;
+  sl_price?: number | null;
+  unrealized_pnl?: number | null;
 }
 
 export interface LimitOrderDetails {
@@ -210,6 +220,7 @@ export interface Bot {
   id: number;
   name: string;
   description: string | null;
+  market_type?: 'spot' | 'perps';  // "spot" or "perps"
   strategy_type: string;
   strategy_config: Record<string, any>;
   product_id: string;
@@ -232,12 +243,48 @@ export interface Bot {
 export interface BotCreate {
   name: string;
   description?: string;
+  market_type?: 'spot' | 'perps';
   strategy_type: string;
   strategy_config: Record<string, any>;
   product_id: string;
   reserved_btc_balance?: number;
   reserved_usd_balance?: number;
   budget_percentage?: number;
+}
+
+export interface PerpsProduct {
+  product_id: string;
+  display_name: string;
+  base_currency: string;
+  quote_currency: string;
+  status: string;
+  price: string;
+  volume_24h: string;
+}
+
+export interface PerpsPosition {
+  id: number;
+  product_id: string;
+  direction: string;
+  status: string;
+  leverage: number;
+  margin_type: string;
+  entry_price: number;
+  current_size: number;
+  notional_usdc: number;
+  unrealized_pnl: number | null;
+  liquidation_price: number | null;
+  tp_price: number | null;
+  sl_price: number | null;
+  funding_fees_total: number;
+  opened_at: string;
+  trade_count: number;
+}
+
+export interface PerpsPortfolio {
+  portfolio_uuid: string;
+  summary: Record<string, any>;
+  balances: Record<string, any>;
 }
 
 export interface BotStats {

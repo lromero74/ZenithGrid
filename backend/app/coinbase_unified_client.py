@@ -15,6 +15,7 @@ from app.coinbase_api import auth
 from app.coinbase_api import account_balance_api
 from app.coinbase_api import market_data_api
 from app.coinbase_api import order_api
+from app.coinbase_api import perpetuals_api
 
 logger = logging.getLogger(__name__)
 
@@ -321,6 +322,79 @@ class CoinbaseClient:
     async def sell_for_usd(self, base_amount: float, product_id: str) -> Dict[str, Any]:
         """Sell crypto for USD"""
         return await order_api.sell_for_usd(self._request, base_amount, product_id)
+
+    # ===== Perpetual Futures (INTX) Methods =====
+
+    async def get_perps_portfolio_summary(self, portfolio_uuid: str) -> Dict[str, Any]:
+        """Get perpetuals portfolio summary (margin, balances, positions)"""
+        return await perpetuals_api.get_perps_portfolio_summary(self._request, portfolio_uuid)
+
+    async def list_perps_positions(self, portfolio_uuid: str) -> List[Dict[str, Any]]:
+        """List all open perpetual futures positions"""
+        return await perpetuals_api.list_perps_positions(self._request, portfolio_uuid)
+
+    async def get_perps_position(self, portfolio_uuid: str, symbol: str) -> Dict[str, Any]:
+        """Get a specific perpetual futures position"""
+        return await perpetuals_api.get_perps_position(self._request, portfolio_uuid, symbol)
+
+    async def get_perps_balances(self, portfolio_uuid: str) -> Dict[str, Any]:
+        """Get perpetuals portfolio balances"""
+        return await perpetuals_api.get_perps_portfolio_balances(self._request, portfolio_uuid)
+
+    async def list_perps_products(self) -> List[Dict[str, Any]]:
+        """List available INTX perpetual products (e.g., BTC-PERP-INTX)"""
+        return await perpetuals_api.list_perpetual_products(self._request)
+
+    async def create_perps_order(
+        self,
+        product_id: str,
+        side: str,
+        base_size: str,
+        leverage: Optional[str] = None,
+        margin_type: Optional[str] = None,
+        tp_price: Optional[str] = None,
+        sl_price: Optional[str] = None,
+        limit_price: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a perpetual futures order with optional bracket TP/SL.
+
+        Args:
+            product_id: e.g., "BTC-PERP-INTX"
+            side: "BUY" (long) or "SELL" (short)
+            base_size: Position size in base currency
+            leverage: Leverage multiplier (e.g., "3")
+            margin_type: "CROSS" or "ISOLATED"
+            tp_price: Take profit limit price
+            sl_price: Stop loss trigger price
+            limit_price: Entry limit price (None = market)
+        """
+        return await order_api.create_bracket_order(
+            self._request,
+            product_id=product_id,
+            side=side,
+            base_size=base_size,
+            limit_price=limit_price,
+            tp_price=tp_price,
+            sl_price=sl_price,
+            leverage=leverage,
+            margin_type=margin_type,
+        )
+
+    async def close_perps_position(
+        self, product_id: str, base_size: str, side: str
+    ) -> Dict[str, Any]:
+        """
+        Close a perpetual futures position with a market order.
+
+        Args:
+            product_id: e.g., "BTC-PERP-INTX"
+            base_size: Size to close
+            side: Opposite side of position ("SELL" to close long, "BUY" to close short)
+        """
+        return await order_api.create_market_order(
+            self._request, product_id=product_id, side=side, size=base_size
+        )
 
     # ===== Connection Test =====
 

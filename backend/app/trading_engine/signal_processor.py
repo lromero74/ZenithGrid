@@ -19,6 +19,7 @@ from app.trading_engine.position_manager import get_active_position, get_open_po
 from app.trading_engine.order_logger import save_ai_log
 from app.trading_engine.buy_executor import execute_buy
 from app.trading_engine.sell_executor import execute_sell
+from app.trading_engine.perps_executor import execute_perps_open, execute_perps_close
 from app.indicator_calculator import IndicatorCalculator
 from app.services.indicator_log_service import log_indicator_evaluation
 
@@ -564,8 +565,44 @@ async def process_signal(
                 )
                 logger.info(f"  ✅ Position created: ID={position.id} direction={direction} (pending trade execution)")
 
-            # Execute the actual trade (direction-aware)
-            if is_short:
+            # Route perps bots to perps executor
+            if getattr(bot, 'market_type', 'spot') == 'perps':
+                from app.coinbase_unified_client import CoinbaseClient
+                perps_config = bot.strategy_config or {}
+                perps_leverage = perps_config.get("leverage", 1)
+                perps_margin = perps_config.get("margin_type", "CROSS")
+                perps_tp_pct = perps_config.get("default_tp_pct")
+                perps_sl_pct = perps_config.get("default_sl_pct")
+                perps_side = "SELL" if is_short else "BUY"
+
+                # Get the underlying CoinbaseClient from the exchange adapter
+                coinbase_client = getattr(exchange, '_client', None) or getattr(exchange, 'client', None)
+                if coinbase_client is None:
+                    logger.error("Cannot get CoinbaseClient for perps order")
+                    raise RuntimeError("Perps trading requires CoinbaseClient")
+
+                position, trade = await execute_perps_open(
+                    db=db,
+                    client=coinbase_client,
+                    bot=bot,
+                    product_id=product_id,
+                    side=perps_side,
+                    size_usdc=quote_amount,
+                    current_price=current_price,
+                    leverage=perps_leverage,
+                    margin_type=perps_margin,
+                    tp_pct=perps_tp_pct,
+                    sl_pct=perps_sl_pct,
+                    user_id=bot.user_id,
+                )
+
+                if position is None:
+                    raise RuntimeError("Perps order failed")
+
+                logger.info(f"  ✅ Perps position opened: #{position.id}")
+
+            # Execute the actual trade (direction-aware) — spot path
+            elif is_short:
                 # SHORT ORDER: Sell BTC for USD
                 # Calculate how much BTC to sell based on quote_amount (USD value)
                 base_amount = quote_amount / current_price
@@ -753,9 +790,27 @@ async def process_signal(
                 }
 
             # Execute close order (direction-aware)
+            # Route perps positions to perps executor
+            if getattr(position, 'product_type', 'spot') == 'future':
+                coinbase_client = getattr(exchange, '_client', None) or getattr(exchange, 'client', None)
+                if coinbase_client is None:
+                    logger.error("Cannot get CoinbaseClient for perps close")
+                    raise RuntimeError("Perps trading requires CoinbaseClient")
+
+                success, profit_quote, profit_pct = await execute_perps_close(
+                    db=db,
+                    client=coinbase_client,
+                    position=position,
+                    current_price=current_price,
+                    reason="signal",
+                )
+                if not success:
+                    raise RuntimeError("Perps close order failed")
+                trade = None  # Trade record created inside execute_perps_close
+
             # For long positions: sell the BTC we bought
             # For short positions: buy back the BTC we sold
-            if position.direction == "short":
+            elif position.direction == "short":
                 # CLOSE SHORT: Buy back BTC (opposite of opening short)
                 from app.trading_engine.buy_executor import execute_buy_close_short
 

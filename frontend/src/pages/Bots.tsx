@@ -81,6 +81,7 @@ function Bots() {
       setFormData({
         name: bot.name,
         description: bot.description || '',
+        market_type: bot.market_type || 'spot',
         reserved_btc_balance: bot.reserved_btc_balance || 0,
         reserved_usd_balance: bot.reserved_usd_balance || 0,
         budget_percentage: bot.budget_percentage || 0,
@@ -122,6 +123,7 @@ function Bots() {
     setFormData({
       name: clonedBot.name,
       description: clonedBot.description || '',
+      market_type: clonedBot.market_type || 'spot',
       reserved_btc_balance: clonedBot.reserved_btc_balance || 0,
       reserved_usd_balance: clonedBot.reserved_usd_balance || 0,
       budget_percentage: clonedBot.budget_percentage || 0,
@@ -197,6 +199,7 @@ function Bots() {
     setFormData({
       name: bot.name,
       description: bot.description || '',
+      market_type: bot.market_type || 'spot',
       reserved_btc_balance: bot.reserved_btc_balance || 0,
       reserved_usd_balance: bot.reserved_usd_balance || 0,
       budget_percentage: bot.budget_percentage || 0,
@@ -344,6 +347,7 @@ function Bots() {
     setFormData({
       name: importedData.name ? `${importedData.name} (Imported)` : 'Imported Bot',
       description: importedData.description || '',
+      market_type: importedData.market_type || 'spot',
       strategy_type: importedData.strategy_type,
       strategy_config: importedData.strategy_config || {},
       product_id: productIds[0],

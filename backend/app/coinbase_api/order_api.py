@@ -266,6 +266,126 @@ async def list_orders(
     return result.get("orders", [])
 
 
+# ===== Bracket / Stop Orders (Perpetual Futures) =====
+
+
+async def create_bracket_order(
+    request_func: Callable,
+    product_id: str,
+    side: str,  # "BUY" or "SELL"
+    base_size: str,
+    limit_price: Optional[str] = None,  # None for market entry
+    tp_price: Optional[str] = None,  # Take profit limit price
+    sl_price: Optional[str] = None,  # Stop loss trigger price
+    leverage: Optional[str] = None,
+    margin_type: Optional[str] = None,  # "CROSS" or "ISOLATED"
+) -> Dict[str, Any]:
+    """
+    Create an order with attached bracket (TP + SL) for perpetual futures.
+
+    Market entry with attached take-profit and stop-loss orders that are placed
+    atomically on the exchange.
+
+    Args:
+        request_func: Authenticated request function
+        product_id: Perpetual product (e.g., "BTC-PERP-INTX")
+        side: "BUY" (long) or "SELL" (short)
+        base_size: Position size in base currency
+        limit_price: Limit price for entry (None = market order)
+        tp_price: Take profit limit price
+        sl_price: Stop loss trigger price
+        leverage: Leverage multiplier (e.g., "3")
+        margin_type: "CROSS" or "ISOLATED"
+
+    Returns:
+        Order response with order_id and attached order IDs
+    """
+    # Build entry order configuration
+    if limit_price:
+        order_config = {
+            "limit_limit_gtc": {
+                "base_size": base_size,
+                "limit_price": limit_price,
+                "post_only": False,
+            }
+        }
+    else:
+        order_config = {
+            "market_market_ioc": {
+                "base_size": base_size,
+            }
+        }
+
+    data: Dict[str, Any] = {
+        "client_order_id": f"{int(time.time() * 1000)}",
+        "product_id": product_id,
+        "side": side,
+        "order_configuration": order_config,
+    }
+
+    # Add leverage and margin for perps
+    if leverage:
+        data["leverage"] = leverage
+    if margin_type:
+        data["margin_type"] = margin_type
+
+    # Attach bracket TP/SL
+    if tp_price or sl_price:
+        bracket_config: Dict[str, str] = {}
+        if tp_price:
+            bracket_config["limit_price"] = tp_price
+        if sl_price:
+            bracket_config["stop_trigger_price"] = sl_price
+
+        data["attached_order_configuration"] = {
+            "trigger_bracket_gtc": bracket_config,
+        }
+
+    result = await request_func("POST", "/api/v3/brokerage/orders", data=data)
+    return result
+
+
+async def create_stop_limit_order(
+    request_func: Callable,
+    product_id: str,
+    side: str,
+    base_size: str,
+    stop_price: str,
+    limit_price: str,
+) -> Dict[str, Any]:
+    """
+    Create a standalone stop-limit order (for adjusting TP/SL after entry).
+
+    Args:
+        request_func: Authenticated request function
+        product_id: Trading pair (e.g., "BTC-PERP-INTX")
+        side: "BUY" or "SELL"
+        base_size: Size in base currency
+        stop_price: Trigger price
+        limit_price: Limit price after trigger
+
+    Returns:
+        Order response
+    """
+    order_config = {
+        "stop_limit_stop_limit_gtc": {
+            "base_size": base_size,
+            "limit_price": limit_price,
+            "stop_price": stop_price,
+        }
+    }
+
+    data = {
+        "client_order_id": f"{int(time.time() * 1000)}",
+        "product_id": product_id,
+        "side": side,
+        "order_configuration": order_config,
+    }
+
+    result = await request_func("POST", "/api/v3/brokerage/orders", data=data)
+    return result
+
+
 # ===== Convenience Trading Methods =====
 
 

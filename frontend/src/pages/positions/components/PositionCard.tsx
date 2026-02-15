@@ -98,6 +98,17 @@ export const PositionCard = ({
                   <span>LONG</span>
                 </div>
               )}
+              {/* Perpetual futures badges */}
+              {position.product_type === 'future' && position.leverage && (
+                <div className="px-1.5 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded text-[9px] font-semibold text-purple-400">
+                  {position.leverage}x
+                </div>
+              )}
+              {position.product_type === 'future' && (
+                <div className="px-1.5 py-0.5 bg-yellow-500/20 border border-yellow-500/30 rounded text-[9px] font-semibold text-yellow-400">
+                  PERP
+                </div>
+              )}
             </div>
             <div className="text-[10px] text-slate-400 space-y-0.5">
               {bot?.strategy_type && (
@@ -312,6 +323,44 @@ export const PositionCard = ({
             />
           </div>
         </div>
+
+        {/* Perpetual Futures Info Row */}
+        {position.product_type === 'future' && (
+          <div className="mt-2 px-4 py-2 bg-purple-500/5 border-t border-purple-500/20 grid grid-cols-4 gap-2 text-[10px]">
+            {position.liquidation_price != null && (
+              <div>
+                <span className="text-slate-500">Liq Price</span>
+                <div className="text-red-400 font-medium">${position.liquidation_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+              </div>
+            )}
+            {position.tp_price != null && (
+              <div>
+                <span className="text-slate-500">TP</span>
+                <div className="text-green-400">${position.tp_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+              </div>
+            )}
+            {position.sl_price != null && (
+              <div>
+                <span className="text-slate-500">SL</span>
+                <div className="text-red-400">${position.sl_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+              </div>
+            )}
+            {position.unrealized_pnl != null && (
+              <div>
+                <span className="text-slate-500">uPnL</span>
+                <div className={position.unrealized_pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  {position.unrealized_pnl >= 0 ? '+' : ''}{position.unrealized_pnl.toFixed(2)} USDC
+                </div>
+              </div>
+            )}
+            {(position.funding_fees_total ?? 0) > 0 && (
+              <div>
+                <span className="text-slate-500">Funding</span>
+                <div className="text-yellow-400">-{position.funding_fees_total?.toFixed(4)} USDC</div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Action Buttons Row */}
         <div className="mt-3 px-4 flex items-center gap-3">

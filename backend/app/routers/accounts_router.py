@@ -845,3 +845,96 @@ async def update_auto_buy_settings(
         usdt_enabled=account.auto_buy_usdt_enabled or False,
         usdt_min=account.auto_buy_usdt_min or 10.0,
     )
+
+
+# =============================================================================
+# Perpetual Futures Portfolio Linking
+# =============================================================================
+
+
+@router.post("/{account_id}/link-perps-portfolio")
+async def link_perps_portfolio(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """
+    Discover and link the INTX perpetuals portfolio for a CEX account.
+
+    Queries Coinbase for the user's perpetuals portfolio UUID and saves it
+    to the account record.
+    """
+    account = await db.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    if current_user and account.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if account.type != "cex":
+        raise HTTPException(status_code=400, detail="Perps portfolio only available for CEX accounts")
+
+    # Get exchange client
+    coinbase_client = await get_coinbase_for_account(db, account_id)
+
+    try:
+        # Try to get portfolios and find the INTX perpetuals portfolio
+        portfolios = await coinbase_client.get_portfolios()
+
+        perps_uuid = None
+        for portfolio in portfolios:
+            ptype = portfolio.get("type", "")
+            if ptype in ("PERPETUALS", "INTX", "DEFAULT"):
+                # Try to query perps positions to confirm it's a perps portfolio
+                uuid = portfolio.get("uuid", "")
+                if uuid:
+                    try:
+                        await coinbase_client.get_perps_portfolio_summary(uuid)
+                        perps_uuid = uuid
+                        break
+                    except Exception:
+                        continue
+
+        if not perps_uuid:
+            raise HTTPException(
+                status_code=404,
+                detail="No INTX perpetuals portfolio found. Please enable perpetual futures on Coinbase first."
+            )
+
+        # Save to account
+        account.perps_portfolio_uuid = perps_uuid
+        await db.commit()
+
+        return {
+            "success": True,
+            "portfolio_uuid": perps_uuid,
+            "message": "Perpetuals portfolio linked successfully",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to discover perps portfolio: {str(e)}")
+
+
+@router.get("/{account_id}/perps-portfolio")
+async def get_perps_portfolio_status(
+    account_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Get the perps portfolio linking status for an account"""
+    account = await db.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    if current_user and account.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return {
+        "account_id": account_id,
+        "perps_portfolio_uuid": account.perps_portfolio_uuid,
+        "default_leverage": account.default_leverage,
+        "margin_type": account.margin_type,
+        "linked": account.perps_portfolio_uuid is not None,
+    }
