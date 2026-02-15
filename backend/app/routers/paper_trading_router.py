@@ -7,12 +7,12 @@ Provides API endpoints for managing virtual paper trading accounts:
 - Reset account to default amounts
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Dict, Any
 import json
 import logging
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Account
@@ -46,7 +46,7 @@ async def get_paper_balance(
     result = await db.execute(
         select(Account).where(
             Account.user_id == current_user.id,
-            Account.is_paper_trading == True
+            Account.is_paper_trading.is_(True)
         )
     )
     paper_account = result.scalar_one_or_none()
@@ -103,7 +103,7 @@ async def deposit_to_paper_account(
     result = await db.execute(
         select(Account).where(
             Account.user_id == current_user.id,
-            Account.is_paper_trading == True
+            Account.is_paper_trading.is_(True)
         )
     )
     paper_account = result.scalar_one_or_none()
@@ -164,13 +164,13 @@ async def reset_paper_account(
 
     Returns updated balances.
     """
-    from app.models import Position, Trade, PendingOrder, Bot
+    from app.models import Bot, PendingOrder, Position
 
     # Fetch paper trading account
     result = await db.execute(
         select(Account).where(
             Account.user_id == current_user.id,
-            Account.is_paper_trading == True
+            Account.is_paper_trading.is_(True)
         )
     )
     paper_account = result.scalar_one_or_none()
@@ -263,7 +263,7 @@ async def withdraw_from_paper_account(
     result = await db.execute(
         select(Account).where(
             Account.user_id == current_user.id,
-            Account.is_paper_trading == True
+            Account.is_paper_trading.is_(True)
         )
     )
     paper_account = result.scalar_one_or_none()

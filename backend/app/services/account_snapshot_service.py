@@ -7,13 +7,12 @@ Runs once per day via scheduled task.
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.models import Account, AccountValueSnapshot, User
+from app.models import Account, AccountValueSnapshot
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -113,7 +112,7 @@ async def capture_all_account_snapshots(db: AsyncSession, user_id: int) -> Dict[
     result = await db.execute(
         select(Account.id, Account.name, Account).where(
             Account.user_id == user_id,
-            Account.is_active == True
+            Account.is_active.is_(True)
         )
     )
     account_tuples = result.all()
@@ -196,7 +195,7 @@ async def get_account_value_history(
 
         # Filter out paper trading accounts unless explicitly requested
         if not include_paper_trading:
-            query = query.where(Account.is_paper_trading == False)
+            query = query.where(Account.is_paper_trading.is_(False))
 
         query = query.group_by(AccountValueSnapshot.snapshot_date).order_by(AccountValueSnapshot.snapshot_date)
 
@@ -238,7 +237,7 @@ async def get_latest_snapshot(db: AsyncSession, user_id: int, include_paper_trad
 
     # Filter out paper trading accounts unless explicitly requested
     if not include_paper_trading:
-        query = query.where(Account.is_paper_trading == False)
+        query = query.where(Account.is_paper_trading.is_(False))
 
     query = query.group_by(AccountValueSnapshot.snapshot_date).order_by(AccountValueSnapshot.snapshot_date.desc()).limit(1)
 

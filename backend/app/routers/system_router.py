@@ -23,10 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
-from app.models import Account, MarketData, Position, Signal, Trade, User
-from app.multi_bot_monitor import MultiBotMonitor
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
+from app.models import Account, MarketData, Position, Signal, Trade, User
+from app.multi_bot_monitor import MultiBotMonitor
+from app.routers.auth_dependencies import get_current_user
 from app.schemas import (
     DashboardStats,
     MarketDataResponse,
@@ -34,7 +35,6 @@ from app.schemas import (
     SignalResponse,
     TradeResponse,
 )
-from app.routers.auth_dependencies import get_current_user
 from app.services.shutdown_manager import shutdown_manager
 
 logger = logging.getLogger(__name__)
@@ -208,8 +208,6 @@ async def get_changelog(limit: int = Query(20, ge=1, le=100), offset: int = 0, r
     Supports pagination with limit and offset.
     Uses caching - rebuilds cache only on first call, when refresh=true, or when new tags detected.
     """
-    global _changelog_cache
-
     # Check if cache needs rebuilding
     needs_rebuild = not _changelog_cache["versions"] or refresh
 
@@ -372,7 +370,7 @@ async def get_status(
         monitor_status = await price_monitor.get_status()
 
         return {"api_connected": connection_ok, "monitor": monitor_status, "timestamp": datetime.utcnow().isoformat()}
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -440,7 +438,7 @@ async def get_dashboard(
             monitor_running=monitor_status["running"],
         )
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 

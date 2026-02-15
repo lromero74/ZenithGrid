@@ -5,14 +5,15 @@ Uses AI to continuously analyze grid performance and optimize parameters.
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from datetime import datetime
+from typing import Any, Dict, Optional
 
-from app.models import Bot, Position, PendingOrder, Trade
-from app.exchange_clients.base import ExchangeClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.ai_service import get_ai_client
+from app.exchange_clients.base import ExchangeClient
+from app.models import Bot, PendingOrder, Position, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ async def calculate_market_metrics(
 
         # Calculate volatility (standard deviation of returns)
         prices = [float(c["close"]) for c in candles]
-        returns = [(prices[i] - prices[i-1]) / prices[i-1] for i in range(1, len(prices))]
+        returns = [(prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))]
 
         import statistics
         volatility = statistics.stdev(returns) * 100 if len(returns) > 1 else 0

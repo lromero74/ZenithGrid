@@ -10,15 +10,15 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.currency_utils import get_quote_currency
 from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
-from app.trading_client import TradingClient
 from app.order_validation import validate_order_size
-from app.currency_utils import get_quote_currency
-from app.trading_engine.order_logger import log_order_to_history
-from app.services.websocket_manager import ws_manager
-from app.services.shutdown_manager import shutdown_manager
 from app.product_precision import get_base_precision
+from app.services.shutdown_manager import shutdown_manager
+from app.services.websocket_manager import ws_manager
+from app.trading_client import TradingClient
+from app.trading_engine.order_logger import log_order_to_history
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ async def execute_buy(
         logger.info(f"  📋 Placing limit buy order: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
 
         # TODO: _pending_order is currently unused but reserved for future limit order tracking/monitoring
-        _pending_order = await execute_limit_buy(
+        _pending_order = await execute_limit_buy(  # noqa: F841
             db=db,
             exchange=exchange,
             trading_client=trading_client,

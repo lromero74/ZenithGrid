@@ -10,15 +10,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.coinbase_unified_client import CoinbaseClient
+from app.currency_utils import get_quote_currency
 from app.database import get_db
 from app.models import Position, User
-from app.routers.auth_dependencies import get_current_user
-from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import AddFundsRequest, UpdateNotesRequest
+from app.routers.auth_dependencies import get_current_user
 from app.trading_client import TradingClient
 from app.trading_engine.buy_executor import execute_buy
-from app.currency_utils import get_quote_currency
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -93,7 +93,7 @@ async def add_funds_to_position(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -116,5 +116,5 @@ async def update_position_notes(position_id: int, request: UpdateNotesRequest, d
         return {"message": f"Notes updated for position {position_id}", "notes": position.notes}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")

@@ -7,7 +7,6 @@ Respects seasonality restrictions when enabled.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select

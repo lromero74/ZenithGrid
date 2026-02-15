@@ -30,14 +30,13 @@ Usage:
     }
 """
 
-import logging
 import asyncio
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
 import json
+import logging
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from app.config import settings
 from app.indicator_calculator import IndicatorCalculator
 
 logger = logging.getLogger(__name__)
@@ -127,8 +126,8 @@ class AISpotOpinionEvaluator:
 
         # Extract OHLCV data
         closes = [float(c['close']) for c in candles]
-        highs = [float(c['high']) for c in candles]
-        lows = [float(c['low']) for c in candles]
+        _highs = [float(c['high']) for c in candles]  # noqa: F841
+        _lows = [float(c['low']) for c in candles]  # noqa: F841
         volumes = [float(c['volume']) for c in candles]
 
         current_price = closes[-1]

@@ -15,13 +15,13 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
-from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
-from app.schemas.position import LimitOrderDetails, LimitOrderFill
-from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
 from app.routers.auth_dependencies import get_current_user
+from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
+from app.schemas.position import LimitOrderDetails, LimitOrderFill
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -355,14 +355,14 @@ async def get_completed_trades_stats(
         query = query.where(Position.account_id.in_(user_account_ids))
     else:
         return {
-    "total_profit_btc": 0.0,
-    "total_profit_usd": 0.0,
-    "win_rate": 0.0,
-    "total_trades": 0,
-    "winning_trades": 0,
-    "losing_trades": 0,
-    "average_profit_usd": 0.0,
-    }
+            "total_profit_btc": 0.0,
+            "total_profit_usd": 0.0,
+            "win_rate": 0.0,
+            "total_trades": 0,
+            "winning_trades": 0,
+            "losing_trades": 0,
+            "average_profit_usd": 0.0,
+        }
 
     # Filter by account_id if provided
     if account_id is not None:
@@ -502,29 +502,29 @@ async def get_realized_pnl(
         query = query.where(Position.account_id.in_(user_account_ids))
     else:
         return {
-    "daily_profit_btc": 0.0,
-    "daily_profit_usd": 0.0,
-    "yesterday_profit_btc": 0.0,
-    "yesterday_profit_usd": 0.0,
-    "last_week_profit_btc": 0.0,
-    "last_week_profit_usd": 0.0,
-    "last_month_profit_btc": 0.0,
-    "last_month_profit_usd": 0.0,
-    "last_quarter_profit_btc": 0.0,
-    "last_quarter_profit_usd": 0.0,
-    "last_year_profit_btc": 0.0,
-    "last_year_profit_usd": 0.0,
-    "wtd_profit_btc": 0.0,
-    "wtd_profit_usd": 0.0,
-    "mtd_profit_btc": 0.0,
-    "mtd_profit_usd": 0.0,
-    "qtd_profit_btc": 0.0,
-    "qtd_profit_usd": 0.0,
-    "ytd_profit_btc": 0.0,
-    "ytd_profit_usd": 0.0,
-    "alltime_profit_btc": 0.0,
-    "alltime_profit_usd": 0.0,
-    }
+            "daily_profit_btc": 0.0,
+            "daily_profit_usd": 0.0,
+            "yesterday_profit_btc": 0.0,
+            "yesterday_profit_usd": 0.0,
+            "last_week_profit_btc": 0.0,
+            "last_week_profit_usd": 0.0,
+            "last_month_profit_btc": 0.0,
+            "last_month_profit_usd": 0.0,
+            "last_quarter_profit_btc": 0.0,
+            "last_quarter_profit_usd": 0.0,
+            "last_year_profit_btc": 0.0,
+            "last_year_profit_usd": 0.0,
+            "wtd_profit_btc": 0.0,
+            "wtd_profit_usd": 0.0,
+            "mtd_profit_btc": 0.0,
+            "mtd_profit_usd": 0.0,
+            "qtd_profit_btc": 0.0,
+            "qtd_profit_usd": 0.0,
+            "ytd_profit_btc": 0.0,
+            "ytd_profit_usd": 0.0,
+            "alltime_profit_btc": 0.0,
+            "alltime_profit_usd": 0.0,
+        }
 
     # Filter by account_id if provided
     if account_id is not None:

@@ -21,9 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
-from app.models import Account
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
+from app.models import Account
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ async def get_ticker(product_id: str, coinbase: CoinbaseClient = Depends(get_coi
             "price": current_price,
             "time": datetime.utcnow().isoformat(),
         }
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -129,7 +129,7 @@ async def get_prices_batch(products: str, coinbase: CoinbaseClient = Depends(get
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -293,7 +293,7 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
         filtered_products.sort(key=sort_key)
 
         return {"products": filtered_products, "count": len(filtered_products)}
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 

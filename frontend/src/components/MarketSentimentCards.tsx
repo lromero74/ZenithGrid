@@ -304,7 +304,7 @@ export function MarketSentimentCards() {
   const [isAnimating, setIsAnimating] = useState(false)
   const [animationType, setAnimationType] = useState<'button' | 'swipe'>('button')
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null)
-  const autoPlayRef = useRef<NodeJS.Timeout | null>(null)
+  const autoPlayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
 
   // Swipe tracking

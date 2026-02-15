@@ -31,16 +31,16 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import aiohttp
+import edge_tts
 import feedparser
 import trafilatura
-import edge_tts
 from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from urllib.parse import urlparse
 
 from app.database import async_session_maker
 from app.indicator_calculator import IndicatorCalculator
@@ -52,9 +52,9 @@ from app.routers.news import (
     NEWS_CACHE_CHECK_MINUTES,
     NEWS_CATEGORIES,
     NEWS_ITEM_MAX_AGE_DAYS,
-    VIDEO_CACHE_CHECK_MINUTES,
     NEWS_SOURCES,
     US_DEBT_CACHE_HOURS,
+    VIDEO_CACHE_CHECK_MINUTES,
     VIDEO_SOURCES,
     ArticleContentResponse,
     BlockHeightResponse,
@@ -66,34 +66,34 @@ from app.routers.news import (
     USDebtResponse,
     VideoItem,
     VideoResponse,
-    load_block_height_cache,
-    load_fear_greed_cache,
-    load_us_debt_cache,
-    load_video_cache,
-    load_btc_dominance_cache,
     load_altseason_cache,
+    load_ath_cache,
+    load_block_height_cache,
+    load_btc_dominance_cache,
+    load_btc_rsi_cache,
+    load_fear_greed_cache,
     load_funding_rates_cache,
-    load_stablecoin_mcap_cache,
-    load_mempool_cache,
     load_hash_rate_cache,
     load_lightning_cache,
-    load_ath_cache,
-    load_btc_rsi_cache,
+    load_mempool_cache,
+    load_stablecoin_mcap_cache,
+    load_us_debt_cache,
+    load_video_cache,
     merge_news_items,
     prune_old_items,
-    save_block_height_cache,
-    save_fear_greed_cache,
-    save_us_debt_cache,
-    save_video_cache,
-    save_btc_dominance_cache,
     save_altseason_cache,
+    save_ath_cache,
+    save_block_height_cache,
+    save_btc_dominance_cache,
+    save_btc_rsi_cache,
+    save_fear_greed_cache,
     save_funding_rates_cache,
-    save_stablecoin_mcap_cache,
-    save_mempool_cache,
     save_hash_rate_cache,
     save_lightning_cache,
-    save_ath_cache,
-    save_btc_rsi_cache,
+    save_mempool_cache,
+    save_stablecoin_mcap_cache,
+    save_us_debt_cache,
+    save_video_cache,
 )
 from app.services.news_image_cache import download_image_as_base64
 
@@ -1202,8 +1202,6 @@ async def get_news(
     - page_size: Items per page (default: 50, max: 100)
     - category: Filter by category (e.g., CryptoCurrency, World, Technology)
     """
-    global _last_news_refresh
-
     # Clamp page_size minimum (no upper cap - we already prune old articles)
     page_size = max(10, page_size)
     page = max(1, page)
@@ -1378,8 +1376,6 @@ async def get_videos(
     Query params:
     - category: Filter by category (e.g., CryptoCurrency)
     """
-    global _last_video_refresh
-
     # If force refresh requested, trigger background fetch
     if force_refresh:
         logger.info("Force refresh requested - triggering video fetch...")

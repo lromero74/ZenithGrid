@@ -149,8 +149,7 @@ DEFAULT_CONTENT_SOURCES = [
     ('dr_eric_berg', 'Dr. Eric Berg DC', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC3w193M5tYPJqF0Hi-7U-2g', 'https://www.youtube.com/@drberg', 'Health and nutrition advice', 'UC3w193M5tYPJqF0Hi-7U-2g', 'Health'),
 ]
 
-
-    # Dead sources to remove on startup (replaced with working alternatives)
+# Dead sources to remove on startup (replaced with working alternatives)
 DEAD_SOURCES = [
     'reuters_world', 'techcrunch', 'ew', 'bleacher_report',
     'sports_illustrated', 'medical_news_today', 'healthline', 'webmd',

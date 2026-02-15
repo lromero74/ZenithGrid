@@ -10,18 +10,17 @@ debt ceiling changes.
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from app.config import settings
 from app.routers.news import DEBT_CEILING_HISTORY
 from app.services.coin_review_service import (
-    get_ai_review_provider_from_db,
     _call_claude,
-    _call_openai,
     _call_gemini,
     _call_grok,
+    _call_openai,
+    get_ai_review_provider_from_db,
 )
 
 logger = logging.getLogger(__name__)

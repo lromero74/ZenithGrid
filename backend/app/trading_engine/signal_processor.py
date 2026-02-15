@@ -12,16 +12,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.currency_utils import format_with_usd, get_quote_currency
 from app.exchange_clients.base import ExchangeClient
+from app.indicator_calculator import IndicatorCalculator
 from app.models import BlacklistedCoin, Bot, Position, Settings, Signal
+from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
-from app.trading_engine.position_manager import get_active_position, get_open_positions_count, create_position
-from app.trading_engine.order_logger import save_ai_log
 from app.trading_engine.buy_executor import execute_buy
+from app.trading_engine.order_logger import save_ai_log
+from app.trading_engine.perps_executor import execute_perps_close, execute_perps_open
+from app.trading_engine.position_manager import create_position, get_active_position, get_open_positions_count
 from app.trading_engine.sell_executor import execute_sell
-from app.trading_engine.perps_executor import execute_perps_open, execute_perps_close
-from app.indicator_calculator import IndicatorCalculator
-from app.services.indicator_log_service import log_indicator_evaluation
 
 logger = logging.getLogger(__name__)
 
@@ -567,7 +567,6 @@ async def process_signal(
 
             # Route perps bots to perps executor
             if getattr(bot, 'market_type', 'spot') == 'perps':
-                from app.coinbase_unified_client import CoinbaseClient
                 perps_config = bot.strategy_config or {}
                 perps_leverage = perps_config.get("leverage", 1)
                 perps_margin = perps_config.get("margin_type", "CROSS")
@@ -784,7 +783,7 @@ async def process_signal(
                 await db.commit()
                 return {
                     "action": "hold",
-                    "reason": f"Limit close order already pending",
+                    "reason": "Limit close order already pending",
                     "signal": signal_data,
                     "position": position,
                 }

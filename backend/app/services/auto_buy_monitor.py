@@ -10,14 +10,14 @@ IMPORTANT: Respects bot reservations - only converts funds that are truly free
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, Optional
+from datetime import datetime
+from typing import Dict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import Account, Bot, Position, PendingOrder
+from app.models import Account, Bot, PendingOrder, Position
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class AutoBuyMonitor:
         """Check which accounts need processing based on their intervals"""
         async with async_session_maker() as db:
             # Get all accounts with auto_buy_enabled=True
-            query = select(Account).where(Account.auto_buy_enabled == True)
+            query = select(Account).where(Account.auto_buy_enabled.is_(True))
             result = await db.execute(query)
             accounts = result.scalars().all()
 
@@ -130,7 +130,7 @@ class AutoBuyMonitor:
         """
         # Sum bot reservations (legacy fixed amounts)
         bots_result = await db.execute(
-            select(Bot).where(Bot.account_id == account_id, Bot.is_active == True)
+            select(Bot).where(Bot.account_id == account_id, Bot.is_active.is_(True))
         )
         active_bots = bots_result.scalars().all()
 

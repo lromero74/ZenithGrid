@@ -9,8 +9,11 @@ The interface is designed to match the existing CoinbaseClient API to minimize r
 while still being generic enough to support DEX implementations.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ExchangeClient(ABC):

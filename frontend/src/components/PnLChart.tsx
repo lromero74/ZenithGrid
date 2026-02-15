@@ -283,7 +283,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
     if (timeRange !== 'all') {
       for (const day of data.by_day) {
         if (day.date < cutoffStr) {
-          runningCumulativePnL = day.cumulative_pnl
+          runningCumulativePnL = day.cumulative_pnl_usd
         }
       }
     }
@@ -292,14 +292,16 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
       const existingData = dailyMap.get(currentDateStr)
 
       if (existingData && existingData.date >= cutoffStr) {
-        runningCumulativePnL = existingData.cumulative_pnl
+        runningCumulativePnL = existingData.cumulative_pnl_usd
         filledData.push(existingData)
       } else {
         // No trade on this day - show 0 daily PnL, maintain cumulative
         filledData.push({
           date: currentDateStr,
-          daily_pnl: 0,
-          cumulative_pnl: runningCumulativePnL
+          daily_pnl_usd: 0,
+          daily_pnl_btc: 0,
+          cumulative_pnl_usd: runningCumulativePnL,
+          cumulative_pnl_btc: 0
         })
       }
       currentDateStr = addDays(currentDateStr, 1)

@@ -12,14 +12,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, Bot, Position, User
-from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
-from app.trading_engine_v2 import StrategyTradingEngine
 from app.routers.auth_dependencies import get_current_user
 from app.schemas.position import UpdatePositionSettingsRequest
 from app.trading_engine.position_manager import calculate_expected_position_budget, calculate_max_deal_cost
+from app.trading_engine_v2 import StrategyTradingEngine
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -61,7 +61,7 @@ async def cancel_position(
         return {"message": f"Position {position_id} cancelled successfully"}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
@@ -124,7 +124,7 @@ async def force_close_position(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 

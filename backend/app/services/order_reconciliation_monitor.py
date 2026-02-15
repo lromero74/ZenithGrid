@@ -10,11 +10,11 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Position, Trade
 from app.coinbase_unified_client import CoinbaseClient
+from app.models import Position, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -199,8 +199,8 @@ class MissingOrderDetector:
             seven_days_ago = datetime.utcnow() - timedelta(days=7)
 
             query = select(Position).where(
-                (Position.status == "open") |
-                ((Position.status == "closed") & (Position.closed_at >= seven_days_ago))
+                (Position.status == "open")
+                | ((Position.status == "closed") & (Position.closed_at >= seven_days_ago))
             )
             result = await self.db.execute(query)
             positions = result.scalars().all()

@@ -5,10 +5,10 @@ Ensures orders meet minimum size requirements before submission.
 """
 
 import json
+import logging
 import os
 from decimal import Decimal
 from typing import Dict, Optional, Tuple
-import logging
 
 from app.cache import api_cache
 
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Load product precision data from JSON file
 _PRODUCT_PRECISION = None
+
 
 def _load_product_precision():
     """Load product precision data from product_precision.json"""
@@ -30,6 +31,7 @@ def _load_product_precision():
             logger.error(f"Failed to load product_precision.json: {e}")
             _PRODUCT_PRECISION = {}
     return _PRODUCT_PRECISION
+
 
 # Common minimum order sizes for BTC pairs (fallback if API call fails)
 # Based on Coinbase documentation and empirical testing

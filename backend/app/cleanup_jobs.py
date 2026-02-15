@@ -5,11 +5,12 @@ Background cleanup jobs for database maintenance
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from sqlalchemy import select, and_, delete
+
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import AIBotLog, IndicatorLog, Position, Settings, OrderHistory
+from app.models import AIBotLog, IndicatorLog, OrderHistory, Position, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ async def cleanup_failed_condition_logs():
                 indicator_delete_query = delete(IndicatorLog).where(
                     and_(
                         IndicatorLog.timestamp < cutoff_time,
-                        IndicatorLog.conditions_met == False
+                        IndicatorLog.conditions_met.is_(False)
                     )
                 )
                 indicator_result = await db.execute(indicator_delete_query)

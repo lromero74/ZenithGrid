@@ -39,7 +39,7 @@ export function BotListItem({
   copyToAccount,
   accounts,
   currentAccountId,
-  forceRunBot,
+  forceRunBot: _forceRunBot,
   cancelAllPositions,
   sellAllPositions,
   openMenuId,

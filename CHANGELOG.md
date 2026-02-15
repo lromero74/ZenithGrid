@@ -5,6 +5,21 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.3] - 2026-02-15
+
+### Changed
+- Fixed all 175+ Python flake8 lint issues across 50 files (zero remaining)
+- Fixed all 7 frontend TypeScript errors (zero remaining)
+- Sorted imports with isort on all modified files
+- Removed dead code: shadowed method definitions in PaperTradingClient, unused variables, unused imports
+- Replaced bare `except:` with `except Exception:` (E722)
+- Changed SQLAlchemy `== True/False` comparisons to idiomatic `.is_(True)/.is_(False)` (E712)
+- Fixed f-strings without placeholders, ambiguous variable names, whitespace formatting
+- Removed unused `global` declarations that only read (never assigned) module-level variables
+- Added `logger` definition to exchange_clients/base.py (was undefined)
+- Fixed PnLChart.tsx to use correct field names (`cumulative_pnl_usd` instead of `cumulative_pnl`)
+- No behavioral changes — all fixes are mechanical/cosmetic
+
 ## [v1.31.2] - 2026-02-15
 
 ### Changed
