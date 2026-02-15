@@ -144,14 +144,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     const token = localStorage.getItem('auth_access_token')
     const wsUrl = token ? `${protocol}//${host}/ws?token=${encodeURIComponent(token)}` : `${protocol}//${host}/ws`
 
-    console.log('🔌 Connecting to notification WebSocket')
+    console.debug('Connecting to notification WebSocket')
 
     try {
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => {
-        console.log('✅ Notification WebSocket connected')
+        console.debug('WebSocket connected')
         setIsConnected(true)
         // Clear any pending reconnect
         if (reconnectTimeoutRef.current) {
@@ -178,13 +178,13 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       }
 
       ws.onclose = () => {
-        console.log('🔌 WebSocket disconnected')
+        console.debug('WebSocket disconnected')
         setIsConnected(false)
         wsRef.current = null
 
         // Attempt to reconnect after 5 seconds
         reconnectTimeoutRef.current = window.setTimeout(() => {
-          console.log('🔄 Attempting WebSocket reconnection...')
+          console.debug('Attempting WebSocket reconnection...')
           connect()
         }, 5000)
       }

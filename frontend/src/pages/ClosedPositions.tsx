@@ -249,7 +249,7 @@ function ClosedPositions() {
       // Only set timer if there are new items to mark as seen
       if (currentClosedCount > lastSeenClosedCount) {
         const timer = setTimeout(async () => {
-          console.log('✅ Marking closed positions as viewed:', currentClosedCount)
+          // Mark closed positions as viewed
           setLastSeenClosedCount(currentClosedCount)
 
           // Save to server
@@ -274,7 +274,7 @@ function ClosedPositions() {
       // Only set timer if there are new items to mark as seen
       if (currentFailedCount > lastSeenFailedCount) {
         const timer = setTimeout(async () => {
-          console.log('✅ Marking failed orders as viewed:', currentFailedCount)
+          // Mark failed orders as viewed
           setLastSeenFailedCount(currentFailedCount)
 
           // Save to server

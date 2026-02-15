@@ -10,24 +10,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.models import Account
+from app.models import Account, User
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
+from app.routers.auth_dependencies import get_current_user
 
 
-async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
+async def get_coinbase(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CoinbaseClient:
     """
-    Get Coinbase client from the first active CEX account in the database.
-
-    TODO: Once authentication is wired up, this should get the exchange
-    client for the currently logged-in user's account.
+    Get Coinbase client for the authenticated user's active CEX account.
     """
-    # Get first active CEX account (excluding paper trading)
+    # Get user's active CEX account (excluding paper trading)
     result = await db.execute(
         select(Account).where(
+            Account.user_id == current_user.id,
             Account.type == "cex",
             Account.is_active.is_(True),
-            Account.is_paper_trading.is_not(True)  # Exclude paper trading accounts
+            Account.is_paper_trading.is_not(True),
         ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
     )
     account = result.scalar_one_or_none()

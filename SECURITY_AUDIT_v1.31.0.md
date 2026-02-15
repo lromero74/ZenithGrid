@@ -46,10 +46,20 @@
 
 ---
 
-## Known Limitations (Accepted / Out of Scope)
+## Pending Security TODOs (Evaluate Before Multi-User Launch)
 
-- **HTTPS/TLS**: Requires nginx/Caddy reverse proxy — separate infrastructure task
-- **Bind to 127.0.0.1**: Dependent on reverse proxy being set up first
-- **Production frontend build**: Requires build pipeline changes (currently Vite dev server)
-- **CORS localhost origins**: Default in config, actual origins set via .env in production
-- **JWT in localStorage**: Standard SPA pattern, acceptable tradeoff vs cookie-based auth
+These items were deferred from v1.31.x. Before opening the app to internet users
+beyond the single admin, evaluate which (if any) actually make sense to implement.
+For a single-user setup accessed only by the owner, some of these may be unnecessary overhead.
+
+- **HTTPS/TLS**: Requires nginx/Caddy reverse proxy. Essential if exposing to the public
+  internet, but may be overkill if only accessed via SSH tunnel or VPN.
+- **Bind to 127.0.0.1**: Only matters if a reverse proxy is set up — keeps the backend
+  off the public interface. If no reverse proxy, backend needs to stay on 0.0.0.0.
+- **Production frontend build**: Currently running Vite dev server. A production build
+  (served by nginx or similar) would be faster and more secure, but the dev server works
+  fine for a single user.
+- **CORS localhost origins**: Defaults include localhost for development. In production
+  the actual origins come from .env. Only matters if the app is served on a real domain.
+- **JWT in localStorage**: Standard SPA pattern. Moving to httpOnly cookies would add
+  XSS protection but adds complexity. Low priority for single-user setup.

@@ -117,14 +117,8 @@ export function useIndicators({
   // Render indicators
   const renderIndicators = (candles: CandleData[]) => {
     if (!chartRef.current || !candles.length) {
-      console.log('renderIndicators: missing requirements', {
-        hasChart: !!chartRef.current,
-        candlesLength: candles.length
-      })
       return
     }
-
-    console.log('renderIndicators: rendering', indicators.length, 'indicators')
 
     const priceFormat = getPriceFormat(selectedPair)
 
@@ -134,8 +128,6 @@ export function useIndicators({
 
     indicators.forEach(indicator => {
       if (!indicator.enabled) return
-
-      console.log('Rendering indicator:', indicator.type, indicator.id)
 
       // Remove old series for this indicator
       const oldSeries = indicatorSeriesRef.current.get(indicator.id)
@@ -252,12 +244,7 @@ export function useIndicators({
 
       if (indicator.type === 'rsi') {
         const indicatorChart = indicatorChartsRef.current.get(indicator.id)
-        if (!indicatorChart) {
-          console.log(`Chart not found for RSI indicator ${indicator.id}`)
-          return
-        }
-
-        console.log('RSI: Chart found, calculating values...')
+        if (!indicatorChart) return
 
         const rsiValues = calculateRSI(closes, indicator.settings.period)
         const rsiData: LineData<Time>[] = []
@@ -266,8 +253,6 @@ export function useIndicators({
             rsiData.push({ time: c.time as Time, value: rsiValues[i]! })
           }
         })
-
-        console.log('RSI data points:', rsiData.length, 'Sample values:', rsiData.slice(0, 3).map(d => d.value))
 
         // Add overbought zone shading (70-100)
         const overboughtFillData: any[] = candles.map(c => ({
@@ -340,18 +325,12 @@ export function useIndicators({
         obSeries.setData(overboughtData)
         osSeries.setData(oversoldData)
 
-        console.log('RSI: All series created and data set')
         newSeries.push(overboughtFillSeries, oversoldFillSeries, rsiSeries, obSeries, osSeries)
       }
 
       if (indicator.type === 'macd') {
         const indicatorChart = indicatorChartsRef.current.get(indicator.id)
-        if (!indicatorChart) {
-          console.log(`Chart not found for MACD indicator ${indicator.id}`)
-          return
-        }
-
-        console.log('MACD: Chart found, calculating values...')
+        if (!indicatorChart) return
 
         const { macd, signal, histogram } = calculateMACD(
           closes,
@@ -398,16 +377,12 @@ export function useIndicators({
         signalSeries.setData(signalData)
         histSeries.setData(histogramData)
 
-        console.log('MACD: All series created and data set. MACD points:', macdData.length, 'Signal points:', signalData.length, 'Histogram points:', histogramData.length)
         newSeries.push(macdSeries, signalSeries, histSeries)
       }
 
       if (indicator.type === 'stochastic') {
         const indicatorChart = indicatorChartsRef.current.get(indicator.id)
-        if (!indicatorChart) {
-          console.log(`Chart not found for Stochastic indicator ${indicator.id}`)
-          return
-        }
+        if (!indicatorChart) return
 
         const { k, d } = calculateStochastic(
           highs,
@@ -449,13 +424,9 @@ export function useIndicators({
       // Save series to ref
       if (newSeries.length > 0) {
         indicatorSeriesRef.current.set(indicator.id, newSeries)
-        console.log(`Saved ${newSeries.length} series for ${indicator.type} ${indicator.id}`)
-      } else {
-        console.warn(`No series created for ${indicator.type} ${indicator.id}`)
       }
     })
 
-    console.log('renderIndicators: Complete. Total indicators rendered:', indicators.length)
   }
 
   // Create and manage charts for oscillator indicators
@@ -468,12 +439,7 @@ export function useIndicators({
 
       // Get container element
       const container = document.getElementById(`indicator-chart-${indicator.id}`)
-      if (!container) {
-        console.log(`Container not found for indicator ${indicator.id}`)
-        return
-      }
-
-      console.log(`Creating chart for ${indicator.type} indicator ${indicator.id}`)
+      if (!container) return
 
       // Create chart
       const chart = createChart(container, {
@@ -519,7 +485,6 @@ export function useIndicators({
     const existingOscillatorIds = new Set(oscillators.map(i => i.id))
     indicatorChartsRef.current.forEach((chart, id) => {
       if (!existingOscillatorIds.has(id)) {
-        console.log(`Removing chart for indicator ${id}`)
         // Unsubscribe from time scale changes
         const callback = syncCallbacksRef.current.get(id)
         if (callback) {

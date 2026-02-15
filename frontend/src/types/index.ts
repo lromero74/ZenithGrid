@@ -380,13 +380,6 @@ export interface AltseasonIndexResponse {
   cached_at: string
 }
 
-export interface FundingRatesResponse {
-  btc_funding_rate: number
-  eth_funding_rate: number
-  sentiment: string
-  cached_at: string
-}
-
 export interface StablecoinMcapResponse {
   total_stablecoin_mcap: number
   usdt_mcap: number

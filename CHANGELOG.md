@@ -5,6 +5,21 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.2] - 2026-02-15
+
+### Changed
+- Codebase housekeeping: deleted 16 stale markdown docs, 17 duplicate/obsolete scripts from backend
+- Removed unused arbitrage package (stat_arb_analyzer, triangular_detector) and empty bot_monitoring module
+- Removed unused FundingRatesResponse type from frontend
+- Replaced duplicate SELL_FEE_RATE constant in TradingViewChartModal with import from positionUtils
+- Removed ~20 debug console.log statements from frontend (useIndicators, DealChart, Charts, ClosedPositions)
+- Downgraded WebSocket lifecycle logs from console.log to console.debug in NotificationContext
+- Moved 4 useful scripts (clean_slate, sell_all_simple, check_all_accounts, update_trade_fills) to backend/scripts/
+
+### Fixed
+- get_coinbase() in dependencies.py, settings_router.py, and system_router.py now filters by authenticated user's account (was grabbing first account in DB regardless of user — critical for multi-user support)
+- Removed stale "TODO: Once authentication is wired up" comments (auth has been wired up since v1.31.0)
+
 ## [v1.31.1] - 2026-02-15
 
 ### Changed

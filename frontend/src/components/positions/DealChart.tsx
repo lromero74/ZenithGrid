@@ -622,8 +622,6 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
           Math.abs(Number(curr.time) - openedTime) < Math.abs(Number(prev.time) - openedTime) ? curr : prev
         )
 
-        console.log(`Entry arrow: openedTime=${openedTime}, nearestCandle.time=${nearestCandle?.time}, diff=${Math.abs(Number(nearestCandle?.time || 0) - openedTime)}s, price=${nearestCandle?.close}`)
-
         if (nearestCandle) {
           markers.push({
             time: nearestCandle.time as Time,

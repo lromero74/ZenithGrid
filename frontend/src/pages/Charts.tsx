@@ -108,7 +108,6 @@ function Charts() {
 
           // Render indicators with the new candle data
           if (indicators.length > 0) {
-            console.log('Fetched candles, now rendering indicators...')
             renderIndicators(candles)
           }
 

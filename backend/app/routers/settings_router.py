@@ -29,18 +29,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["settings"])
 
 
-async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
+async def get_coinbase(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CoinbaseClient:
     """
-    Get Coinbase client from the first active CEX account in the database.
-
-    TODO: Once authentication is wired up, this should get the exchange
-    client for the currently logged-in user's account.
+    Get Coinbase client for the authenticated user's active CEX account.
     """
-    # Get first active CEX account
+    # Get user's active CEX account
     result = await db.execute(
         select(Account).where(
+            Account.user_id == current_user.id,
             Account.type == "cex",
-            Account.is_active.is_(True)
+            Account.is_active.is_(True),
         ).order_by(Account.is_default.desc(), Account.created_at)
     )
     account = result.scalar_one_or_none()

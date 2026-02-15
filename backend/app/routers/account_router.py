@@ -107,10 +107,7 @@ async def calculate_available_balance(
 async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> CoinbaseClient:
     """
     Get Coinbase client from the first active CEX account in the database.
-    Excludes paper trading accounts.
-
-    TODO: Once authentication is wired up, this should get the exchange
-    client for the currently logged-in user's account.
+    Excludes paper trading accounts. Filters by user_id if provided.
     """
     # Get first active CEX account for this user (excluding paper trading)
     query = select(Account).where(

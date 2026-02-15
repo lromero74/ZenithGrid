@@ -1,10 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-
-// Fee adjustment for profit targets
-// Coinbase Advanced Trade taker fee is ~0.6% (0.006)
-// To achieve X% NET profit after sell fees: gross_target = (1 + X%) / (1 - sell_fee)
-const SELL_FEE_RATE = 0.006 // 0.6% Coinbase taker fee
+import { SELL_FEE_RATE } from './positions/positionUtils'
 
 // Helper to calculate fee-adjusted profit target multiplier
 const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
@@ -124,7 +120,7 @@ export default function TradingViewChartModal({
           }
         } catch (error) {
           // Silently ignore cleanup errors
-          console.log('TradingView widget cleanup skipped')
+          // TradingView widget cleanup skipped
         }
         widgetRef.current = null
       }
