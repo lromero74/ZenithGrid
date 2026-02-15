@@ -5,6 +5,13 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.8] - 2026-02-15
+
+### Fixed
+- Updated `docs/architecture.json` version from v1.31.4 to v1.31.8
+- Added missing `routers/auth_dependencies.py` to architecture.json routers section
+- Added missing `components/news/newsUtils.tsx` to architecture.json sub_components section
+
 ## [v1.31.7] - 2026-02-15
 
 ### Fixed

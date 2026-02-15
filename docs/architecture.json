@@ -1,6 +1,6 @@
 {
   "project": "ZenithGrid",
-  "version": "v1.31.4",
+  "version": "v1.31.8",
   "updated": "2026-02-15",
   "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -51,7 +51,8 @@
       { "file": "routers/strategies_router.py", "prefix": "/api/strategies", "purpose": "Available trading strategies and parameter definitions" },
       { "file": "routers/system_router.py", "prefix": "/api", "purpose": "Health check, dashboard stats, monitor control, system status" },
       { "file": "routers/templates.py", "prefix": "/api/templates", "purpose": "Bot template CRUD" },
-      { "file": "routers/trading_router.py", "prefix": "/api/trading", "purpose": "Manual buy/sell orders for portfolio management" }
+      { "file": "routers/trading_router.py", "prefix": "/api/trading", "purpose": "Manual buy/sell orders for portfolio management" },
+      { "file": "routers/auth_dependencies.py", "prefix": null, "purpose": "Shared authentication dependencies for protecting routes" }
     ],
 
     "sub_routers": {
@@ -374,6 +375,9 @@
       "sub_components": {
         "bots": [
           { "file": "components/bots/botUtils.ts", "purpose": "BotFormData type, defaults, parameter validation, pair conversion" }
+        ],
+        "news": [
+          { "file": "components/news/newsUtils.tsx", "purpose": "Lightweight markdown renderer for article content display" }
         ],
         "positions": [
           { "file": "components/positions/AISentimentIcon.tsx", "purpose": "AI sentiment indicator with tooltip" },
