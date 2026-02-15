@@ -1385,7 +1385,7 @@ class MultiBotMonitor:
                     db=db, exchange=self.exchange, bot=bot, strategy=pos_strategy, product_id=product_id,
                 )
                 pos_result = await pos_engine.process_signal(
-                    candles, current_price, pre_analyzed_signal=pre_analyzed_signal,
+                    candles, current_price, pre_analyzed_signal=signal_data,
                     candles_by_timeframe=candles_by_timeframe, position_override=pos,
                 )
                 logger.info(f"  Position #{pos.id} result: {pos_result['action']} - {pos_result['reason']}")
@@ -1404,7 +1404,7 @@ class MultiBotMonitor:
                     db=db, exchange=self.exchange, bot=bot, strategy=strategy, product_id=product_id,
                 )
                 new_result = await new_engine.process_signal(
-                    candles, current_price, pre_analyzed_signal=pre_analyzed_signal,
+                    candles, current_price, pre_analyzed_signal=signal_data,
                     candles_by_timeframe=candles_by_timeframe, position_override=None,
                 )
                 logger.info(f"  New simultaneous deal result: {new_result['action']} - {new_result['reason']}")
@@ -1416,7 +1416,7 @@ class MultiBotMonitor:
                     db=db, exchange=self.exchange, bot=bot, strategy=strategy, product_id=product_id,
                 )
                 result = await engine.process_signal(
-                    candles, current_price, pre_analyzed_signal=pre_analyzed_signal,
+                    candles, current_price, pre_analyzed_signal=signal_data,
                     candles_by_timeframe=candles_by_timeframe,
                 )
 

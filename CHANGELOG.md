@@ -5,6 +5,11 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.10] - 2026-02-15
+
+### Fixed
+- Fixed crossing conditions (bb_percent, MACD, etc.) being detected but not triggering trades — `analyze_signal()` results were discarded and conditions re-evaluated after previous indicators had already been updated, causing crossing events to be consumed before `process_signal()` could act on them
+
 ## [v1.31.9] - 2026-02-15
 
 ### Fixed
