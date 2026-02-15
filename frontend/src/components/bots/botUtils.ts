@@ -3,6 +3,7 @@ import { StrategyParameter } from '../../types'
 export interface BotFormData {
   name: string
   description: string
+  market_type: 'spot' | 'perps'  // Spot or perpetual futures
   strategy_type: string
   product_id: string  // Legacy - kept for backward compatibility
   product_ids: string[]  // Multi-pair support
@@ -45,6 +46,7 @@ export interface TradingPair {
 export const getDefaultFormData = (): BotFormData => ({
   name: '',
   description: '',
+  market_type: 'spot',
   strategy_type: '',
   product_id: 'ETH-BTC',  // Legacy fallback
   product_ids: [],  // Start with empty array, user will select

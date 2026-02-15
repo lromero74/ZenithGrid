@@ -14,6 +14,7 @@ class BotCreate(BaseModel):
     name: str
     description: Optional[str] = None
     account_id: Optional[int] = None  # Link bot to an account
+    market_type: str = "spot"  # "spot" or "perps"
     strategy_type: str
     strategy_config: dict
     product_id: str = "ETH-BTC"  # Legacy - kept for backward compatibility
@@ -28,6 +29,7 @@ class BotUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     account_id: Optional[int] = None
+    market_type: Optional[str] = None  # "spot" or "perps"
     strategy_config: Optional[dict] = None
     product_id: Optional[str] = None
     product_ids: Optional[List[str]] = None
@@ -43,6 +45,7 @@ class BotResponse(BaseModel):
     description: Optional[str]
     strategy_type: str
     strategy_config: dict
+    market_type: str = "spot"  # "spot" or "perps"
     product_id: Optional[str] = None  # Optional for multi-pair strategies like bull_flag
     product_ids: Optional[List[str]] = None
     split_budget_across_pairs: bool = False

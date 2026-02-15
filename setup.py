@@ -845,7 +845,10 @@ def initialize_database(project_root):
                 auto_buy_usdt_enabled BOOLEAN DEFAULT 0,
                 auto_buy_usdt_min REAL DEFAULT 0.0,
                 is_paper_trading BOOLEAN DEFAULT 0,
-                paper_balances TEXT
+                paper_balances TEXT,
+                perps_portfolio_uuid TEXT,
+                default_leverage INTEGER DEFAULT 1,
+                margin_type TEXT DEFAULT 'CROSS'
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_accounts_user_id ON accounts(user_id)")
@@ -859,6 +862,7 @@ def initialize_database(project_root):
                 description TEXT,
                 account_id INTEGER REFERENCES accounts(id),
                 exchange_type TEXT DEFAULT 'cex',
+                market_type TEXT DEFAULT 'spot',
                 chain_id INTEGER,
                 dex_router TEXT,
                 wallet_private_key TEXT,
@@ -953,7 +957,17 @@ def initialize_database(project_root):
                 pattern_data TEXT,
                 exit_reason TEXT,
                 previous_indicators TEXT,
-                user_attempt_number INTEGER
+                user_attempt_number INTEGER,
+                product_type TEXT DEFAULT 'spot',
+                leverage INTEGER,
+                perps_margin_type TEXT,
+                liquidation_price REAL,
+                funding_fees_total REAL DEFAULT 0.0,
+                tp_order_id TEXT,
+                sl_order_id TEXT,
+                tp_price REAL,
+                sl_price REAL,
+                unrealized_pnl REAL
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_positions_user_id ON positions(user_id)")

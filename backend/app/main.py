@@ -12,6 +12,7 @@ from app.services.limit_order_monitor import LimitOrderMonitor
 from app.services.delisted_pair_monitor import TradingPairMonitor
 from app.routers import bots_router, order_history_router, templates_router
 from app.routers import positions_router
+from app.position_routers import perps_router
 from app.routers import account_router
 from app.routers import accounts_router  # Multi-account management (CEX + DEX)
 from app.routers import market_data_router
@@ -62,6 +63,10 @@ set_trading_pair_monitor(trading_pair_monitor)  # Make accessible via API
 from app.services.auto_buy_monitor import AutoBuyMonitor
 auto_buy_monitor = AutoBuyMonitor()
 
+# Perpetual futures position monitor - syncs open perps positions with exchange
+from app.services.perps_monitor import PerpsMonitor
+perps_monitor = PerpsMonitor(interval_seconds=60)
+
 # Background task handles
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
@@ -97,6 +102,7 @@ app.include_router(paper_trading_router.router)  # Paper trading account managem
 app.include_router(account_value_router.router)  # Account value history tracking
 app.include_router(trading_router.router)  # Manual trading operations
 app.include_router(seasonality_router.router)  # Seasonality-based bot management
+app.include_router(perps_router.router)  # Perpetual futures (INTX) management
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -331,6 +337,10 @@ async def startup_event():
     await auto_buy_monitor.start()
     print("🚀 Auto-buy BTC monitor started - converting stablecoins to BTC per account settings")
 
+    print("🚀 Starting perps position monitor...")
+    await perps_monitor.start()
+    print("🚀 Perps monitor started - syncing futures positions every 60s")
+
     print("🚀 Building changelog cache...")
     build_changelog_cache()
     print("🚀 Changelog cache built")
@@ -380,6 +390,9 @@ async def shutdown_event():
 
     if auto_buy_monitor:
         await auto_buy_monitor.stop()
+
+    if perps_monitor:
+        await perps_monitor.stop()
 
     if limit_order_monitor_task:
         limit_order_monitor_task.cancel()

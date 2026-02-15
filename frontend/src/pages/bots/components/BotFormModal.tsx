@@ -128,6 +128,7 @@ export function BotFormModal({
     setFormData({
       name: `${template.name} (Copy)`,  // Prefix to avoid name conflicts
       description: template.description || '',
+      market_type: template.market_type || 'spot',
       strategy_type: template.strategy_type,
       product_id: template.product_ids?.[0] || 'ETH-BTC',
       product_ids: template.product_ids || [],
@@ -210,6 +211,7 @@ export function BotFormModal({
       name: formData.name,
       description: formData.description || undefined,
       account_id: selectedAccount?.id,  // Link bot to selected account
+      market_type: formData.market_type || 'spot',
       strategy_type: formData.strategy_type,
       product_id: formData.product_ids[0],  // Legacy - use first pair
       product_ids: formData.product_ids,  // Multi-pair support
@@ -448,6 +450,120 @@ export function BotFormModal({
                 rows={2}
               />
             </div>
+          </div>
+
+          {/* Market Type Toggle */}
+          <div className="border-b border-slate-700 pb-6">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <span className="text-blue-400">2.</span> Market Type
+            </h3>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, market_type: 'spot' })}
+                className={`flex-1 py-2 px-4 rounded border text-sm font-medium transition-colors ${
+                  formData.market_type === 'spot'
+                    ? 'border-blue-500 bg-blue-500/20 text-blue-400'
+                    : 'border-slate-600 bg-slate-700 text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                Spot Trading
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, market_type: 'perps' })}
+                className={`flex-1 py-2 px-4 rounded border text-sm font-medium transition-colors ${
+                  formData.market_type === 'perps'
+                    ? 'border-purple-500 bg-purple-500/20 text-purple-400'
+                    : 'border-slate-600 bg-slate-700 text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                Perpetual Futures
+              </button>
+            </div>
+
+            {/* Perps-specific config */}
+            {formData.market_type === 'perps' && (
+              <div className="mt-4 space-y-3 p-4 bg-purple-500/5 border border-purple-500/20 rounded">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Leverage (1-10x)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={formData.strategy_config.leverage || 1}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        strategy_config: { ...formData.strategy_config, leverage: parseInt(e.target.value) || 1 }
+                      })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Margin Type</label>
+                    <select
+                      value={formData.strategy_config.margin_type || 'CROSS'}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        strategy_config: { ...formData.strategy_config, margin_type: e.target.value }
+                      })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white text-sm"
+                    >
+                      <option value="CROSS">Cross</option>
+                      <option value="ISOLATED">Isolated</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Take Profit %</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      value={formData.strategy_config.default_tp_pct || ''}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        strategy_config: { ...formData.strategy_config, default_tp_pct: parseFloat(e.target.value) || undefined }
+                      })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white text-sm"
+                      placeholder="e.g. 5.0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Stop Loss %</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      value={formData.strategy_config.default_sl_pct || ''}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        strategy_config: { ...formData.strategy_config, default_sl_pct: parseFloat(e.target.value) || undefined }
+                      })}
+                      className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white text-sm"
+                      placeholder="e.g. 3.0"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Direction</label>
+                  <select
+                    value={formData.strategy_config.direction || 'long_only'}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      strategy_config: { ...formData.strategy_config, direction: e.target.value }
+                    })}
+                    className="w-full rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white text-sm"
+                  >
+                    <option value="long_only">Long Only</option>
+                    <option value="short_only">Short Only</option>
+                    <option value="both">Both (Long + Short)</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ============================================ */}

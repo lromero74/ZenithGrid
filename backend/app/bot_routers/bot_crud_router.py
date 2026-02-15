@@ -125,6 +125,7 @@ async def create_bot(
         name=bot_data.name,
         description=bot_data.description,
         account_id=bot_data.account_id,
+        market_type=getattr(bot_data, 'market_type', 'spot') or 'spot',
         strategy_type=bot_data.strategy_type,
         strategy_config=bot_data.strategy_config,
         product_id=bot_data.product_id,
@@ -558,6 +559,9 @@ async def update_bot(
 
     if bot_update.description is not None:
         bot.description = bot_update.description
+
+    if bot_update.market_type is not None:
+        bot.market_type = bot_update.market_type
 
     if bot_update.strategy_config is not None:
         # Validate new config

@@ -130,6 +130,11 @@ class Account(Base):
     is_paper_trading = Column(Boolean, default=False)  # True for simulated trading accounts
     paper_balances = Column(String, nullable=True)  # JSON: {"BTC": 1.0, "ETH": 10.0, "USD": 100000.0, ...}
 
+    # Perpetual futures (INTX) configuration
+    perps_portfolio_uuid = Column(String, nullable=True)  # INTX perpetuals portfolio UUID
+    default_leverage = Column(Integer, default=1)  # Default leverage for new perps positions (1-10)
+    margin_type = Column(String, default="CROSS")  # "CROSS" or "ISOLATED"
+
     # Relationships
     user = relationship("User", back_populates="accounts")
     bots = relationship("Bot", back_populates="account")
@@ -164,6 +169,9 @@ class Bot(Base):
     wallet_private_key = Column(String, nullable=True)  # Encrypted wallet private key for DEX trading (sensitive!)
     rpc_url = Column(String, nullable=True)  # RPC endpoint URL for blockchain connection
     wallet_address = Column(String, nullable=True)  # Derived wallet address (computed from private key)
+
+    # Market type (spot or perpetual futures)
+    market_type = Column(String, default="spot")  # "spot" or "perps"
 
     # Strategy configuration
     strategy_type = Column(String, index=True)  # e.g., "macd_dca", "rsi", "bollinger_bands"
@@ -430,6 +438,18 @@ class Position(Base):
 
     # Exit reason tracking
     exit_reason = Column(String, nullable=True)  # "trailing_stop_loss", "trailing_take_profit", "manual", etc.
+
+    # Perpetual futures fields
+    product_type = Column(String, default="spot")  # "spot" or "future"
+    leverage = Column(Integer, nullable=True)  # Leverage used (1-10x)
+    perps_margin_type = Column(String, nullable=True)  # "CROSS" or "ISOLATED"
+    liquidation_price = Column(Float, nullable=True)
+    funding_fees_total = Column(Float, default=0.0)  # Accumulated funding fees (USDC)
+    tp_order_id = Column(String, nullable=True)  # Take profit bracket order ID
+    sl_order_id = Column(String, nullable=True)  # Stop loss bracket order ID
+    tp_price = Column(Float, nullable=True)  # Take profit trigger price
+    sl_price = Column(Float, nullable=True)  # Stop loss trigger price
+    unrealized_pnl = Column(Float, nullable=True)  # Latest unrealized PnL from exchange
 
     # Crossing detection - store previous indicators for crossing_above/crossing_below operators
     previous_indicators = Column(JSON, nullable=True)  # JSON: Previous check's indicator values
