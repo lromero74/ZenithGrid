@@ -5,6 +5,11 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.30.1] - 2026-02-15
+
+### Fixed
+- Widen bot edit modal (max-w-2xl → max-w-4xl) to fit volume/RSI indicator fields without horizontal scrolling
+
 ## [v1.30.0] - 2026-02-15
 
 ### Added

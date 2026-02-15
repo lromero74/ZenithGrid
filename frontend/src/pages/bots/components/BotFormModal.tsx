@@ -381,7 +381,7 @@ export function BotFormModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className={`bg-slate-800 rounded-lg w-full max-h-[90vh] overflow-y-auto ${
-        formData.strategy_type === 'conditional_dca' ? 'max-w-6xl' : 'max-w-2xl'
+        formData.strategy_type === 'conditional_dca' ? 'max-w-6xl' : 'max-w-4xl'
       }`}>
         <div className="p-6 border-b border-slate-700">
           <h3 className="text-xl font-bold">
