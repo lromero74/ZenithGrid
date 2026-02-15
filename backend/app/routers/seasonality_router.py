@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Bot, Settings, User
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 from app.services.season_detector import get_seasonality_status, SeasonalityStatus
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ async def set_setting(db: AsyncSession, key: str, value: str, value_type: str = 
 @router.get("", response_model=SeasonalityResponse)
 async def get_seasonality(
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get current seasonality status.
@@ -167,7 +167,7 @@ async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus) -> dict:
 async def toggle_seasonality(
     request: SeasonalityToggleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Toggle seasonality tracking on or off.

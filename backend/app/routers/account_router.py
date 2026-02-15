@@ -19,9 +19,10 @@ from typing import Optional
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
+from app.encryption import decrypt_value, is_encrypted
 from app.models import Bot, Position, Account, User, PendingOrder
 from app.exchange_clients.factory import create_exchange_client
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 from app.services import portfolio_conversion_service as pcs
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ async def calculate_available_balance(
     return max(0, available)
 
 
-async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
+async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> CoinbaseClient:
     """
     Get Coinbase client from the first active CEX account in the database.
     Excludes paper trading accounts.
@@ -111,14 +112,16 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
     TODO: Once authentication is wired up, this should get the exchange
     client for the currently logged-in user's account.
     """
-    # Get first active CEX account (excluding paper trading)
-    result = await db.execute(
-        select(Account).where(
-            Account.type == "cex",
-            Account.is_active.is_(True),
-            Account.is_paper_trading.is_not(True)  # Exclude paper trading accounts
-        ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
+    # Get first active CEX account for this user (excluding paper trading)
+    query = select(Account).where(
+        Account.type == "cex",
+        Account.is_active.is_(True),
+        Account.is_paper_trading.is_not(True)
     )
+    if user_id:
+        query = query.where(Account.user_id == user_id)
+    query = query.order_by(Account.is_default.desc(), Account.created_at).limit(1)
+    result = await db.execute(query)
     account = result.scalar_one_or_none()
 
     if not account:
@@ -133,11 +136,16 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
             detail="Coinbase account missing API credentials. Please update in Settings."
         )
 
+    # Decrypt private key if encrypted
+    private_key = account.api_private_key
+    if is_encrypted(private_key):
+        private_key = decrypt_value(private_key)
+
     # Create and return the client
     client = create_exchange_client(
         exchange_type="cex",
         coinbase_key_name=account.api_key_name,
-        coinbase_private_key=account.api_private_key,
+        coinbase_private_key=private_key,
     )
 
     if not client:
@@ -152,7 +160,8 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
 @router.get("/balances")
 async def get_balances(
     account_id: Optional[int] = Query(None, description="Account ID (defaults to first active CEX account)"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get current account balances for all quote currencies with capital reservation tracking.
@@ -203,12 +212,12 @@ async def get_balances(
             usdt_balance = balances.get("USDT", 0.0)
 
             # Still need real prices for calculations
-            coinbase = await get_coinbase_from_db(db)
+            coinbase = await get_coinbase_from_db(db, current_user.id)
             current_price = await coinbase.get_current_price()
             btc_usd_price = await coinbase.get_btc_usd_price()
         else:
             # Live account - fetch from Coinbase
-            coinbase = await get_coinbase_from_db(db)
+            coinbase = await get_coinbase_from_db(db, current_user.id)
 
             # Get account balances from Coinbase
             btc_balance = await coinbase.get_btc_balance()
@@ -315,14 +324,14 @@ async def get_balances(
         }
     except Exception as e:
         logger.error(f"Error getting balances: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/aggregate-value")
-async def get_aggregate_value(db: AsyncSession = Depends(get_db)):
+async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get aggregate portfolio value (BTC + USD) for bot budgeting"""
     try:
-        coinbase = await get_coinbase_from_db(db)
+        coinbase = await get_coinbase_from_db(db, current_user.id)
         aggregate_btc = await coinbase.calculate_aggregate_btc_value()
         aggregate_usd = await coinbase.calculate_aggregate_usd_value()
         btc_usd_price = await coinbase.get_btc_usd_price()
@@ -333,14 +342,14 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db)):
             "btc_usd_price": btc_usd_price,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/portfolio")
-async def get_portfolio(db: AsyncSession = Depends(get_db)):
+async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get full portfolio breakdown (all coins like 3Commas)"""
     try:
-        coinbase = await get_coinbase_from_db(db)
+        coinbase = await get_coinbase_from_db(db, current_user.id)
         # Get portfolio breakdown with all holdings
         breakdown = await coinbase.get_portfolio_breakdown()
         spot_positions = breakdown.get("spot_positions", [])
@@ -676,7 +685,7 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
             },
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/conversion-status/{task_id}")
@@ -923,7 +932,7 @@ async def sell_portfolio_to_base_currency(
     confirm: bool = Query(False, description="Must be true to execute"),
     account_id: Optional[int] = Query(None, description="Account ID to convert (defaults to default account)"),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Start portfolio conversion to BTC or USD (runs in background).

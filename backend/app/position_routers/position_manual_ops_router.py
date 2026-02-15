@@ -92,7 +92,7 @@ async def add_funds_to_position(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.patch("/{position_id}/notes")
@@ -115,4 +115,4 @@ async def update_position_notes(position_id: int, request: UpdateNotesRequest, d
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")

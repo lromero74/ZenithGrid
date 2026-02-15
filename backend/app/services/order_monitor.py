@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Bot, PendingOrder, Position, Trade
+from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 
 logger = logging.getLogger(__name__)
@@ -224,10 +225,13 @@ class OrderMonitor:
                 account = account_result.scalar_one_or_none()
 
                 if account:
+                    private_key = account.api_private_key
+                    if private_key and is_encrypted(private_key):
+                        private_key = decrypt_value(private_key)
                     exchange_client = create_exchange_client(
                         exchange_type="cex",
                         coinbase_key_name=account.api_key_name,
-                        coinbase_private_key=account.api_private_key,
+                        coinbase_private_key=private_key,
                     )
 
                     # Handle grid order fill (may place opposite order)

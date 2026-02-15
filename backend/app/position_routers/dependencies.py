@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account
+from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 
 
@@ -43,11 +44,16 @@ async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
             detail="Coinbase account missing API credentials. Please update in Settings."
         )
 
+    # Decrypt private key if encrypted
+    private_key = account.api_private_key
+    if private_key and is_encrypted(private_key):
+        private_key = decrypt_value(private_key)
+
     # Create and return the client
     client = create_exchange_client(
         exchange_type="cex",
         coinbase_key_name=account.api_key_name,
-        coinbase_private_key=account.api_private_key,
+        coinbase_private_key=private_key,
     )
 
     if not client:

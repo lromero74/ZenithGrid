@@ -21,7 +21,7 @@ from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails, LimitOrderFill
 from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -34,7 +34,7 @@ async def get_positions(
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
     """Get positions with optional status filter"""
     # Prevent browser HTTP caching of position data (force fresh data on every request)
@@ -47,17 +47,15 @@ async def get_positions(
         selectinload(Position.pending_orders)
     )
 
-    # Filter by user's accounts if authenticated
-    if current_user:
-        # Get user's account IDs
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
-        if user_account_ids:
-            query = query.where(Position.account_id.in_(user_account_ids))
-        else:
-            # User has no accounts, return empty
-            return []
+    # Get user's account IDs
+    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_result = await db.execute(accounts_query)
+    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    if user_account_ids:
+        query = query.where(Position.account_id.in_(user_account_ids))
+    else:
+        # User has no accounts, return empty
+        return []
 
     if status:
         query = query.where(Position.status == status)
@@ -155,7 +153,7 @@ async def get_positions(
 async def get_pnl_timeseries(
     account_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get P&L time series data for cumulative profit chart (3Commas-style).
@@ -170,15 +168,13 @@ async def get_pnl_timeseries(
         Position.profit_usd is not None
     )
 
-    # Filter by user's accounts if authenticated
-    if current_user:
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
-        if user_account_ids:
-            query = query.where(Position.account_id.in_(user_account_ids))
-        else:
-            return {"summary": [], "by_day": [], "by_pair": [], "active_trades": 0, "most_profitable_bot": None}
+    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_result = await db.execute(accounts_query)
+    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    if user_account_ids:
+        query = query.where(Position.account_id.in_(user_account_ids))
+    else:
+        return {"summary": [], "by_day": [], "by_pair": [], "active_trades": 0, "most_profitable_bot": None}
 
     # Filter by account_id if provided (must be owned by user)
     if account_id is not None:
@@ -335,7 +331,7 @@ async def get_pnl_timeseries(
 async def get_completed_trades_stats(
     account_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get completed trades profit statistics.
@@ -352,23 +348,21 @@ async def get_completed_trades_stats(
         Position.closed_at is not None
     )
 
-    # Filter by user's accounts if authenticated
-    if current_user:
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
-        if user_account_ids:
-            query = query.where(Position.account_id.in_(user_account_ids))
-        else:
-            return {
-                "total_profit_btc": 0.0,
-                "total_profit_usd": 0.0,
-                "win_rate": 0.0,
-                "total_trades": 0,
-                "winning_trades": 0,
-                "losing_trades": 0,
-                "average_profit_usd": 0.0,
-            }
+    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_result = await db.execute(accounts_query)
+    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    if user_account_ids:
+        query = query.where(Position.account_id.in_(user_account_ids))
+    else:
+        return {
+    "total_profit_btc": 0.0,
+    "total_profit_usd": 0.0,
+    "win_rate": 0.0,
+    "total_trades": 0,
+    "winning_trades": 0,
+    "losing_trades": 0,
+    "average_profit_usd": 0.0,
+    }
 
     # Filter by account_id if provided
     if account_id is not None:
@@ -436,7 +430,7 @@ async def get_completed_trades_stats(
 async def get_realized_pnl(
     account_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get realized PnL for multiple time periods.
@@ -501,38 +495,36 @@ async def get_realized_pnl(
         Position.closed_at is not None
     )
 
-    # Filter by user's accounts if authenticated
-    if current_user:
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
-        if user_account_ids:
-            query = query.where(Position.account_id.in_(user_account_ids))
-        else:
-            return {
-                "daily_profit_btc": 0.0,
-                "daily_profit_usd": 0.0,
-                "yesterday_profit_btc": 0.0,
-                "yesterday_profit_usd": 0.0,
-                "last_week_profit_btc": 0.0,
-                "last_week_profit_usd": 0.0,
-                "last_month_profit_btc": 0.0,
-                "last_month_profit_usd": 0.0,
-                "last_quarter_profit_btc": 0.0,
-                "last_quarter_profit_usd": 0.0,
-                "last_year_profit_btc": 0.0,
-                "last_year_profit_usd": 0.0,
-                "wtd_profit_btc": 0.0,
-                "wtd_profit_usd": 0.0,
-                "mtd_profit_btc": 0.0,
-                "mtd_profit_usd": 0.0,
-                "qtd_profit_btc": 0.0,
-                "qtd_profit_usd": 0.0,
-                "ytd_profit_btc": 0.0,
-                "ytd_profit_usd": 0.0,
-                "alltime_profit_btc": 0.0,
-                "alltime_profit_usd": 0.0,
-            }
+    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_result = await db.execute(accounts_query)
+    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    if user_account_ids:
+        query = query.where(Position.account_id.in_(user_account_ids))
+    else:
+        return {
+    "daily_profit_btc": 0.0,
+    "daily_profit_usd": 0.0,
+    "yesterday_profit_btc": 0.0,
+    "yesterday_profit_usd": 0.0,
+    "last_week_profit_btc": 0.0,
+    "last_week_profit_usd": 0.0,
+    "last_month_profit_btc": 0.0,
+    "last_month_profit_usd": 0.0,
+    "last_quarter_profit_btc": 0.0,
+    "last_quarter_profit_usd": 0.0,
+    "last_year_profit_btc": 0.0,
+    "last_year_profit_usd": 0.0,
+    "wtd_profit_btc": 0.0,
+    "wtd_profit_usd": 0.0,
+    "mtd_profit_btc": 0.0,
+    "mtd_profit_usd": 0.0,
+    "qtd_profit_btc": 0.0,
+    "qtd_profit_usd": 0.0,
+    "ytd_profit_btc": 0.0,
+    "ytd_profit_usd": 0.0,
+    "alltime_profit_btc": 0.0,
+    "alltime_profit_usd": 0.0,
+    }
 
     # Filter by account_id if provided
     if account_id is not None:
@@ -666,22 +658,20 @@ async def get_realized_pnl(
 async def get_position(
     position_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get specific position details"""
     from fastapi import HTTPException
 
     query = select(Position).where(Position.id == position_id)
 
-    # Filter by user's accounts if authenticated
-    if current_user:
-        accounts_query = select(Account.id).where(Account.user_id == current_user.id)
-        accounts_result = await db.execute(accounts_query)
-        user_account_ids = [row[0] for row in accounts_result.fetchall()]
-        if user_account_ids:
-            query = query.where(Position.account_id.in_(user_account_ids))
-        else:
-            raise HTTPException(status_code=404, detail="Position not found")
+    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_result = await db.execute(accounts_query)
+    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+    if user_account_ids:
+        query = query.where(Position.account_id.in_(user_account_ids))
+    else:
+        raise HTTPException(status_code=404, detail="Position not found")
 
     result = await db.execute(query)
     position = result.scalars().first()

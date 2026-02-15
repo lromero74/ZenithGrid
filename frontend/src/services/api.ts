@@ -64,7 +64,7 @@ export interface UpdatePositionSettingsRequest {
 
 export const positionsApi = {
   getAll: (status?: string, limit = 50) =>
-    api.get<Position[]>('/positions', { params: { status, limit } }).then((res) => res.data),
+    api.get<Position[]>('/positions/', { params: { status, limit } }).then((res) => res.data),
   getById: (id: number) =>
     api.get<Position>(`/positions/${id}`).then((res) => res.data),
   getTrades: (id: number) =>
@@ -211,12 +211,12 @@ export const botsApi = {
     api.get<StrategyDefinition>(`/strategies/${strategyId}`).then((res) => res.data),
   getAll: (projectionTimeframe?: string) => {
     const params = projectionTimeframe ? `?projection_timeframe=${projectionTimeframe}` : ''
-    return api.get<Bot[]>(`/bots${params}`).then((res) => res.data)
+    return api.get<Bot[]>(`/bots/${params}`).then((res) => res.data)
   },
   getById: (id: number) =>
     api.get<Bot>(`/bots/${id}`).then((res) => res.data),
   create: (bot: BotCreate) =>
-    api.post<Bot>('/bots', bot).then((res) => res.data),
+    api.post<Bot>('/bots/', bot).then((res) => res.data),
   update: (id: number, bot: Partial<BotCreate>) =>
     api.put<Bot>(`/bots/${id}`, bot).then((res) => res.data),
   delete: (id: number) =>
@@ -318,7 +318,7 @@ export const orderHistoryApi = {
     if (botId !== undefined) params.bot_id = botId;
     if (accountId !== undefined) params.account_id = accountId;
     if (status) params.status = status;
-    return api.get<OrderHistory[]>('/order-history', { params }).then((res) => res.data);
+    return api.get<OrderHistory[]>('/order-history/', { params }).then((res) => res.data);
   },
   getFailed: (botId?: number, accountId?: number, limit = 50) => {
     const params: any = { limit };

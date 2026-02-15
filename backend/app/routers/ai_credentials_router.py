@@ -23,8 +23,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.encryption import encrypt_value, decrypt_value, is_encrypted
 from app.models import AIProviderCredential, User
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,14 @@ class AIProviderStatus(BaseModel):
     free_tier: Optional[str] = None  # Free tier info if applicable
 
 
+def _api_key_preview(api_key: str) -> str:
+    """Get a safe preview of an API key (last 8 chars of plaintext)."""
+    if not api_key:
+        return "..."
+    plaintext = decrypt_value(api_key) if is_encrypted(api_key) else api_key
+    return f"...{plaintext[-8:]}" if len(plaintext) > 8 else "..."
+
+
 # =============================================================================
 # API Endpoints
 # =============================================================================
@@ -85,7 +94,7 @@ class AIProviderStatus(BaseModel):
 @router.get("", response_model=List[AICredentialResponse])
 async def list_ai_credentials(
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     List all AI credentials for the current user.
@@ -95,13 +104,7 @@ async def list_ai_credentials(
     """
     try:
         query = select(AIProviderCredential)
-
-        if current_user:
-            query = query.where(AIProviderCredential.user_id == current_user.id)
-        else:
-            # If no auth, return empty list
-            return []
-
+        query = query.where(AIProviderCredential.user_id == current_user.id)
         query = query.order_by(AIProviderCredential.provider)
 
         result = await db.execute(query)
@@ -113,7 +116,7 @@ async def list_ai_credentials(
                 provider=cred.provider,
                 is_active=cred.is_active,
                 has_api_key=bool(cred.api_key),
-                api_key_preview=f"...{cred.api_key[-8:]}" if cred.api_key and len(cred.api_key) > 8 else "...",
+                api_key_preview=_api_key_preview(cred.api_key),
                 created_at=cred.created_at,
                 updated_at=cred.updated_at,
                 last_used_at=cred.last_used_at,
@@ -123,13 +126,13 @@ async def list_ai_credentials(
 
     except Exception as e:
         logger.error(f"Error listing AI credentials: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/status", response_model=List[AIProviderStatus])
 async def get_ai_providers_status(
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get status of all AI providers, showing both user and system keys.
@@ -173,15 +176,14 @@ async def get_ai_providers_status(
         },
     }
 
-    # Get user's credentials if authenticated
+    # Get user's credentials
     user_credentials = {}
-    if current_user:
-        query = select(AIProviderCredential).where(
-            AIProviderCredential.user_id == current_user.id
-        )
-        result = await db.execute(query)
-        for cred in result.scalars().all():
-            user_credentials[cred.provider] = cred
+    query = select(AIProviderCredential).where(
+        AIProviderCredential.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    for cred in result.scalars().all():
+        user_credentials[cred.provider] = cred
 
     # Build status for each provider
     status_list = []
@@ -204,7 +206,7 @@ async def get_ai_providers_status(
 async def create_or_update_ai_credential(
     credential_data: AICredentialCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Create or update an AI credential for the current user.
@@ -213,9 +215,6 @@ async def create_or_update_ai_credential(
     Otherwise, a new credential is created.
     """
     try:
-        if not current_user:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
         # Validate provider
         provider = credential_data.provider.lower()
         if provider not in VALID_PROVIDERS:
@@ -234,7 +233,7 @@ async def create_or_update_ai_credential(
 
         if existing:
             # Update existing
-            existing.api_key = credential_data.api_key
+            existing.api_key = encrypt_value(credential_data.api_key)
             existing.is_active = True
             existing.updated_at = datetime.utcnow()
             credential = existing
@@ -244,7 +243,7 @@ async def create_or_update_ai_credential(
             credential = AIProviderCredential(
                 user_id=current_user.id,
                 provider=provider,
-                api_key=credential_data.api_key,
+                api_key=encrypt_value(credential_data.api_key),
                 is_active=True,
             )
             db.add(credential)
@@ -258,7 +257,7 @@ async def create_or_update_ai_credential(
             provider=credential.provider,
             is_active=credential.is_active,
             has_api_key=bool(credential.api_key),
-            api_key_preview=f"...{credential.api_key[-8:]}" if credential.api_key and len(credential.api_key) > 8 else "...",
+            api_key_preview=_api_key_preview(credential.api_key),
             created_at=credential.created_at,
             updated_at=credential.updated_at,
             last_used_at=credential.last_used_at,
@@ -269,20 +268,17 @@ async def create_or_update_ai_credential(
     except Exception as e:
         logger.error(f"Error creating/updating AI credential: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{provider}", response_model=AICredentialResponse)
 async def get_ai_credential(
     provider: str,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get a specific AI credential by provider name."""
     try:
-        if not current_user:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
         provider = provider.lower()
         if provider not in VALID_PROVIDERS:
             raise HTTPException(
@@ -308,7 +304,7 @@ async def get_ai_credential(
             provider=credential.provider,
             is_active=credential.is_active,
             has_api_key=bool(credential.api_key),
-            api_key_preview=f"...{credential.api_key[-8:]}" if credential.api_key and len(credential.api_key) > 8 else "...",
+            api_key_preview=_api_key_preview(credential.api_key),
             created_at=credential.created_at,
             updated_at=credential.updated_at,
             last_used_at=credential.last_used_at,
@@ -318,7 +314,7 @@ async def get_ai_credential(
         raise
     except Exception as e:
         logger.error(f"Error getting AI credential for {provider}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.put("/{provider}", response_model=AICredentialResponse)
@@ -326,13 +322,10 @@ async def update_ai_credential(
     provider: str,
     credential_data: AICredentialUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Update an existing AI credential."""
     try:
-        if not current_user:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
         provider = provider.lower()
         if provider not in VALID_PROVIDERS:
             raise HTTPException(
@@ -355,7 +348,7 @@ async def update_ai_credential(
 
         # Update fields
         if credential_data.api_key is not None:
-            credential.api_key = credential_data.api_key
+            credential.api_key = encrypt_value(credential_data.api_key)
         if credential_data.is_active is not None:
             credential.is_active = credential_data.is_active
 
@@ -371,7 +364,7 @@ async def update_ai_credential(
             provider=credential.provider,
             is_active=credential.is_active,
             has_api_key=bool(credential.api_key),
-            api_key_preview=f"...{credential.api_key[-8:]}" if credential.api_key and len(credential.api_key) > 8 else "...",
+            api_key_preview=_api_key_preview(credential.api_key),
             created_at=credential.created_at,
             updated_at=credential.updated_at,
             last_used_at=credential.last_used_at,
@@ -382,20 +375,17 @@ async def update_ai_credential(
     except Exception as e:
         logger.error(f"Error updating AI credential for {provider}: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.delete("/{provider}")
 async def delete_ai_credential(
     provider: str,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Delete an AI credential."""
     try:
-        if not current_user:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
         provider = provider.lower()
         if provider not in VALID_PROVIDERS:
             raise HTTPException(
@@ -428,7 +418,7 @@ async def delete_ai_credential(
     except Exception as e:
         logger.error(f"Error deleting AI credential for {provider}: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 # =============================================================================
@@ -471,6 +461,10 @@ async def get_user_api_key(
         # Update last_used_at
         credential.last_used_at = datetime.utcnow()
         await db.commit()
-        return credential.api_key
+        # Decrypt if encrypted
+        api_key = credential.api_key
+        if is_encrypted(api_key):
+            api_key = decrypt_value(api_key)
+        return api_key
 
     return None

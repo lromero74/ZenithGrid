@@ -43,7 +43,7 @@ async def get_account_value_history(
         return history
     except Exception as e:
         logger.error(f"Failed to fetch account value history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/latest")
@@ -61,7 +61,7 @@ async def get_latest_snapshot(
         return snapshot
     except Exception as e:
         logger.error(f"Failed to fetch latest snapshot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/capture")
@@ -79,7 +79,7 @@ async def capture_snapshots(
         return result
     except Exception as e:
         logger.error(f"Failed to capture snapshots: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/reservations")
@@ -147,4 +147,4 @@ async def get_bidirectional_reservations(
         raise
     except Exception as e:
         logger.error(f"Failed to fetch bidirectional reservations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")

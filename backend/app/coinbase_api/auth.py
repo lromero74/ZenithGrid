@@ -76,11 +76,6 @@ def generate_jwt(key_name: str, private_key: str, request_method: str, request_p
         payload, private_key_obj, algorithm="ES256", headers={"kid": key_name, "nonce": str(current_time)}
     )
 
-    # Debug output
-    print(f"DEBUG: Generated JWT for {uri}")
-    print(f"DEBUG: Payload: {payload}")
-    print(f"DEBUG: Token: {token[:50]}...")
-
     return token
 
 

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Account
 from app.coinbase_unified_client import CoinbaseClient
+from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.order_validation import calculate_minimum_budget_percentage
 from app.bot_routers.schemas import ValidateBotConfigRequest, ValidateBotConfigResponse, ValidationWarning
@@ -36,10 +37,14 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
     if not account or not account.api_key_name or not account.api_private_key:
         return None
 
+    private_key = account.api_private_key
+    if private_key and is_encrypted(private_key):
+        private_key = decrypt_value(private_key)
+
     return create_exchange_client(
         exchange_type="cex",
         coinbase_key_name=account.api_key_name,
-        coinbase_private_key=account.api_private_key,
+        coinbase_private_key=private_key,
     )
 
 

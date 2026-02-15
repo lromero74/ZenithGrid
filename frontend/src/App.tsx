@@ -99,14 +99,17 @@ function AppContent() {
   const { data: portfolio } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
+      const token = localStorage.getItem('auth_access_token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
       // If we have a selected account, use the account-specific endpoint
       if (selectedAccount) {
-        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`, { headers })
         if (!response.ok) throw new Error('Failed to fetch portfolio')
         return response.json()
       }
       // Fallback to legacy endpoint
-      const response = await fetch('/api/account/portfolio')
+      const response = await fetch('/api/account/portfolio', { headers })
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
@@ -124,7 +127,10 @@ function AppContent() {
   const { data: btcPriceData } = useQuery({
     queryKey: ['btc-usd-price'],
     queryFn: async () => {
-      const response = await fetch('/api/market/btc-usd-price')
+      const token = localStorage.getItem('auth_access_token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const response = await fetch('/api/market/btc-usd-price', { headers })
       if (!response.ok) throw new Error('Failed to fetch BTC price')
       return response.json()
     },
@@ -139,7 +145,10 @@ function AppContent() {
   const { data: ethPriceData } = useQuery({
     queryKey: ['eth-usd-price'],
     queryFn: async () => {
-      const response = await fetch('/api/market/eth-usd-price')
+      const token = localStorage.getItem('auth_access_token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const response = await fetch('/api/market/eth-usd-price', { headers })
       if (!response.ok) throw new Error('Failed to fetch ETH price')
       return response.json()
     },

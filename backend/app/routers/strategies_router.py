@@ -64,7 +64,7 @@ async def list_strategies():
         return strategies
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching strategies: {str(e)}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{strategy_id}", response_model=StrategyResponse)
@@ -106,6 +106,6 @@ async def get_strategy(strategy_id: str):
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching strategy: {str(e)}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")

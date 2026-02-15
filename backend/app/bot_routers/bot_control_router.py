@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Bot, Position, Settings, User
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 from app.services.season_detector import get_seasonality_status
 
 logger = logging.getLogger(__name__)
@@ -59,13 +59,12 @@ async def check_seasonality_allows_bot(db: AsyncSession, bot: Bot) -> tuple[bool
 async def start_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Activate a bot to start trading (respects seasonality restrictions)"""
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -95,13 +94,12 @@ async def start_bot(
 async def stop_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Deactivate a bot to stop trading"""
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -123,13 +121,12 @@ async def stop_bot(
 async def force_run_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Force bot to run immediately on next monitor cycle"""
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -165,7 +162,7 @@ async def cancel_all_positions(
     bot_id: int,
     confirm: bool = Query(False, description="Must be true to execute"),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Cancel all open positions for a bot without selling"""
     if not confirm:
@@ -173,8 +170,7 @@ async def cancel_all_positions(
 
     # Get bot with user filtering
     query = select(Bot).where(Bot.id == bot_id)
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
     if not bot:
@@ -222,7 +218,7 @@ async def sell_all_positions(
     bot_id: int,
     confirm: bool = Query(False, description="Must be true to execute"),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Sell all open positions for a bot at market price (realize P&L)"""
     if not confirm:
@@ -230,8 +226,7 @@ async def sell_all_positions(
 
     # Get bot with user filtering
     query = select(Bot).where(Bot.id == bot_id)
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
     if not bot:

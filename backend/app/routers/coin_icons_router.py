@@ -6,10 +6,11 @@ Icons are cached locally on disk for fast subsequent requests.
 """
 
 import logging
+import re
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,10 @@ async def get_coin_icon(symbol: str) -> Response:
     Proxies requests to CoinCap and caches the result locally.
     Returns a fallback SVG if the icon is not available.
     """
+    # Validate symbol is alphanumeric only (prevent path traversal)
+    if not re.match(r'^[a-zA-Z0-9]+$', symbol):
+        raise HTTPException(status_code=400, detail="Invalid symbol")
+
     # Normalize symbol
     symbol_lower = symbol.lower().strip()
     cache_file = CACHE_DIR / f"{symbol_lower}.png"
@@ -68,7 +73,7 @@ async def get_coin_icon(symbol: str) -> Response:
     except Exception as e:
         logger.debug(f"Failed to fetch icon for {symbol}: {e}")
 
-    # Return fallback SVG with first letter
+    # Return fallback SVG with first letter (already validated as alphanumeric)
     letter = symbol[0].upper() if symbol else "?"
     fallback_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
         <circle cx="32" cy="32" r="30" fill="#3b82f6" opacity="0.2"/>

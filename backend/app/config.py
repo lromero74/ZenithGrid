@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 
+    # Encryption key for API credentials at rest (Fernet key)
+    encryption_key: str = ""
+
     # Trading Parameters
     initial_btc_percentage: float = 5.0
     dca_percentage: float = 3.0

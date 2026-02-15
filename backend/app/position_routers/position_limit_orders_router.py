@@ -141,7 +141,7 @@ async def limit_close_position(
     except Exception as e:
         logger.error(f"Error creating limit close order for position {position_id}: {e}", exc_info=True)
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{position_id}/ticker")
@@ -175,7 +175,7 @@ async def get_position_ticker(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{position_id}/slippage-check")
@@ -236,7 +236,7 @@ async def check_market_close_slippage(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{position_id}/cancel-limit-close")
@@ -278,7 +278,7 @@ async def cancel_limit_close(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{position_id}/update-limit-close")
@@ -358,4 +358,4 @@ async def update_limit_close(
     except Exception as e:
         logger.error(f"Error updating limit close order for position {position_id}: {e}", exc_info=True)
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")

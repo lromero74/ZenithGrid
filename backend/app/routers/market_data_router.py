@@ -22,6 +22,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
 from app.models import Account
+from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 
 logger = logging.getLogger(__name__)
@@ -55,10 +56,13 @@ async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
         )
 
     # Create and return client using user's credentials
+    private_key = account.api_private_key
+    if private_key and is_encrypted(private_key):
+        private_key = decrypt_value(private_key)
     client = create_exchange_client(
         exchange_type="cex",
         coinbase_key_name=account.api_key_name,
-        coinbase_private_key=account.api_private_key,
+        coinbase_private_key=private_key,
     )
 
     if not client:
@@ -85,7 +89,7 @@ async def get_ticker(product_id: str, coinbase: CoinbaseClient = Depends(get_coi
             "time": datetime.utcnow().isoformat(),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/prices/batch")
@@ -126,7 +130,7 @@ async def get_prices_batch(products: str, coinbase: CoinbaseClient = Depends(get
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/candles")
@@ -241,7 +245,8 @@ async def get_candles(
 
         return {"candles": formatted_candles, "interval": interval, "product_id": product_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch candles: {str(e)}")
+        logger.error(f"Failed to fetch candles: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/products")
@@ -289,7 +294,7 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
 
         return {"products": filtered_products, "count": len(filtered_products)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/coins")
@@ -350,7 +355,7 @@ async def get_unique_coins(coinbase: CoinbaseClient = Depends(get_coinbase)):
         }
     except Exception as e:
         logger.error(f"Error fetching unique coins: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/product-precision/{product_id}")
@@ -393,7 +398,7 @@ async def get_product_precision(product_id: str):
 
     except Exception as e:
         logger.error(f"Error fetching product precision for {product_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/orderbook/{product_id}")
@@ -447,7 +452,7 @@ async def get_orderbook(
         }
     except Exception as e:
         logger.error(f"Error fetching orderbook for {product_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/market/btc-usd-price")
@@ -465,7 +470,7 @@ async def get_btc_usd_price(coinbase: CoinbaseClient = Depends(get_coinbase)):
         }
     except Exception as e:
         logger.error(f"Error fetching BTC/USD price: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/market/eth-usd-price")
@@ -483,4 +488,4 @@ async def get_eth_usd_price(coinbase: CoinbaseClient = Depends(get_coinbase)):
         }
     except Exception as e:
         logger.error(f"Error fetching ETH/USD price: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")

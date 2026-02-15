@@ -17,9 +17,10 @@ from app.database import get_db
 from app.models import Account, Bot, Position, User
 from app.strategies import StrategyDefinition, StrategyRegistry
 from app.coinbase_unified_client import CoinbaseClient
+from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.bot_routers.schemas import BotCreate, BotUpdate, BotResponse, BotStats
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,14 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
     if not account or not account.api_key_name or not account.api_private_key:
         return None
 
+    private_key = account.api_private_key
+    if private_key and is_encrypted(private_key):
+        private_key = decrypt_value(private_key)
+
     return create_exchange_client(
         exchange_type="cex",
         coinbase_key_name=account.api_key_name,
-        coinbase_private_key=account.api_private_key,
+        coinbase_private_key=private_key,
     )
 router = APIRouter()
 
@@ -61,7 +66,7 @@ async def get_strategy_definition(strategy_id: str):
     try:
         return StrategyRegistry.get_definition(strategy_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 # Bot CRUD Endpoints
@@ -69,7 +74,7 @@ async def get_strategy_definition(strategy_id: str):
 async def create_bot(
     bot_data: BotCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new trading bot"""
     # Validate strategy exists
@@ -233,7 +238,7 @@ async def list_bots(
     active_only: bool = False,
     projection_timeframe: Optional[str] = "all",
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get list of all bots with projection stats based on selected timeframe"""
     import asyncio
@@ -241,8 +246,7 @@ async def list_bots(
     query = select(Bot).order_by(desc(Bot.created_at))
 
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
 
     if active_only:
         query = query.where(Bot.is_active)
@@ -500,13 +504,12 @@ async def list_bots(
 async def get_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get details for a specific bot"""
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -532,13 +535,12 @@ async def update_bot(
     bot_id: int,
     bot_update: BotUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Update bot configuration"""
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -705,13 +707,12 @@ async def update_bot(
 async def delete_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Delete a bot (only if it has no open positions)"""
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -740,7 +741,7 @@ async def delete_bot(
 async def clone_bot(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Clone/duplicate a bot configuration
@@ -755,8 +756,7 @@ async def clone_bot(
     # Get original bot
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     original_bot = result.scalars().first()
 
@@ -832,7 +832,7 @@ async def copy_bot_to_account(
     bot_id: int,
     target_account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Copy bot configuration to a different account (e.g., live to paper trading or vice versa)
@@ -848,8 +848,7 @@ async def copy_bot_to_account(
     """
     # Get original bot
     query = select(Bot).where(Bot.id == bot_id)
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     original_bot = result.scalars().first()
 
@@ -857,9 +856,7 @@ async def copy_bot_to_account(
         raise HTTPException(status_code=404, detail="Bot not found")
 
     # Get target account and verify ownership
-    account_query = select(Account).where(Account.id == target_account_id)
-    if current_user:
-        account_query = account_query.where(Account.user_id == current_user.id)
+    account_query = select(Account).where(Account.id == target_account_id, Account.user_id == current_user.id)
     account_result = await db.execute(account_query)
     target_account = account_result.scalars().first()
 
@@ -891,9 +888,7 @@ async def copy_bot_to_account(
     counter = 2
     base_new_name = new_name
     while True:
-        name_check_query = select(Bot).where(Bot.name == new_name)
-        if current_user:
-            name_check_query = name_check_query.where(Bot.user_id == current_user.id)
+        name_check_query = select(Bot).where(Bot.name == new_name, Bot.user_id == current_user.id)
         name_check_result = await db.execute(name_check_query)
         if not name_check_result.scalars().first():
             break
@@ -936,13 +931,12 @@ async def copy_bot_to_account(
 async def get_bot_stats(
     bot_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get statistics for a specific bot"""
     query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        query = query.where(Bot.user_id == current_user.id)
+    query = query.where(Bot.user_id == current_user.id)
     result = await db.execute(query)
     bot = result.scalars().first()
 

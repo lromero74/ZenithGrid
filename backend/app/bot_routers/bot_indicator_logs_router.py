@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Bot, IndicatorLog, User
 from app.bot_routers.schemas import IndicatorLogResponse
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -32,7 +32,7 @@ async def get_indicator_logs(
     conditions_met: Optional[bool] = None,
     since: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get indicator condition evaluation logs (most recent first)
@@ -49,8 +49,7 @@ async def get_indicator_logs(
     # Verify bot exists and belongs to user
     bot_query = select(Bot).where(Bot.id == bot_id)
     # Filter by user if authenticated
-    if current_user:
-        bot_query = bot_query.where(Bot.user_id == current_user.id)
+    bot_query = bot_query.where(Bot.user_id == current_user.id)
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 
@@ -86,7 +85,7 @@ async def get_indicator_logs_summary(
     product_id: Optional[str] = None,
     hours: int = 24,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get a summary of indicator evaluations over a time period.
@@ -97,8 +96,7 @@ async def get_indicator_logs_summary(
 
     # Verify bot exists and belongs to user
     bot_query = select(Bot).where(Bot.id == bot_id)
-    if current_user:
-        bot_query = bot_query.where(Bot.user_id == current_user.id)
+    bot_query = bot_query.where(Bot.user_id == current_user.id)
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 

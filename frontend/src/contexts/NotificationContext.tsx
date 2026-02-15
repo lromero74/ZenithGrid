@@ -141,7 +141,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     // Determine WebSocket URL based on current location
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const wsUrl = `${protocol}//${host}/ws`
+    const token = localStorage.getItem('auth_access_token')
+    const wsUrl = token ? `${protocol}//${host}/ws?token=${encodeURIComponent(token)}` : `${protocol}//${host}/ws`
 
     console.log('🔌 Connecting to notification WebSocket:', wsUrl)
 

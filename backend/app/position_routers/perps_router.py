@@ -22,7 +22,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, Position, User
 from app.position_routers.dependencies import get_coinbase
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -89,14 +89,14 @@ async def list_perps_products(
         }
     except Exception as e:
         logger.error(f"Failed to list perps products: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/portfolio")
 async def get_perps_portfolio(
     db: AsyncSession = Depends(get_db),
     exchange=Depends(get_coinbase),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
     """Get perpetuals portfolio summary (margin, balances, positions)"""
     client = _get_coinbase_client(exchange)
@@ -115,14 +115,14 @@ async def get_perps_portfolio(
         }
     except Exception as e:
         logger.error(f"Failed to get perps portfolio: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/positions")
 async def list_perps_positions(
     db: AsyncSession = Depends(get_db),
     exchange=Depends(get_coinbase),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
     """List open perps positions (DB records synced with exchange)"""
     # Get DB positions
@@ -132,8 +132,7 @@ async def list_perps_positions(
         .where(Position.status == "open")
         .options(selectinload(Position.trades))
     )
-    if current_user:
-        query = query.where(Position.user_id == current_user.id)
+    query = query.where(Position.user_id == current_user.id)
 
     result = await db.execute(query)
     positions = result.scalars().all()

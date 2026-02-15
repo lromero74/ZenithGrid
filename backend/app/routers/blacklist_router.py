@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import BlacklistedCoin, Settings, User
-from app.routers.auth_dependencies import get_current_user_optional, get_current_user
+from app.routers.auth_dependencies import get_current_user, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +293,7 @@ async def update_ai_provider_setting(
 @router.get("/", response_model=List[BlacklistEntry])
 async def list_blacklisted_coins(
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get all coin categorizations.
@@ -528,7 +528,7 @@ async def update_blacklist_reason(
 async def check_if_blacklisted(
     symbol: str,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Check if a specific coin is categorized and get its category.

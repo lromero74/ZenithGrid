@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import BotTemplate, User
 from app.strategies import StrategyRegistry
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 
@@ -59,7 +59,7 @@ class TemplateResponse(BaseModel):
 async def create_template(
     template_data: TemplateCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new bot template"""
     # Validate strategy exists
@@ -102,7 +102,7 @@ async def create_template(
 @router.get("", response_model=List[TemplateResponse])
 async def list_templates(
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get list of all templates (defaults first, then user-created)"""
     query = select(BotTemplate).order_by(
@@ -110,10 +110,9 @@ async def list_templates(
     )
 
     # Show default templates plus user's own templates
-    if current_user:
-        query = query.where(
-            (BotTemplate.is_default == True) | (BotTemplate.user_id == current_user.id)  # noqa: E712
-        )
+    query = query.where(
+        (BotTemplate.is_default == True) | (BotTemplate.user_id == current_user.id)  # noqa: E712
+    )
 
     result = await db.execute(query)
     templates = result.scalars().all()
@@ -125,15 +124,14 @@ async def list_templates(
 async def get_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get details for a specific template"""
     query = select(BotTemplate).where(BotTemplate.id == template_id)
     # User can see defaults or their own templates
-    if current_user:
-        query = query.where(
-            (BotTemplate.is_default == True) | (BotTemplate.user_id == current_user.id)  # noqa: E712
-        )
+    query = query.where(
+        (BotTemplate.is_default == True) | (BotTemplate.user_id == current_user.id)  # noqa: E712
+    )
     result = await db.execute(query)
     template = result.scalars().first()
 
@@ -148,13 +146,12 @@ async def update_template(
     template_id: int,
     template_update: TemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Update template configuration"""
     query = select(BotTemplate).where(BotTemplate.id == template_id)
     # Only allow updating own templates
-    if current_user:
-        query = query.where(BotTemplate.user_id == current_user.id)
+    query = query.where(BotTemplate.user_id == current_user.id)
     result = await db.execute(query)
     template = result.scalars().first()
 
@@ -203,13 +200,12 @@ async def update_template(
 async def delete_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Delete a template"""
     query = select(BotTemplate).where(BotTemplate.id == template_id)
     # Only allow deleting own templates
-    if current_user:
-        query = query.where(BotTemplate.user_id == current_user.id)
+    query = query.where(BotTemplate.user_id == current_user.id)
     result = await db.execute(query)
     template = result.scalars().first()
 

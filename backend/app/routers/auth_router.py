@@ -10,14 +10,17 @@ Handles user authentication:
 """
 
 import logging
+import re
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +34,32 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Security scheme for JWT bearer tokens
 security = HTTPBearer(auto_error=False)
+
+# =============================================================================
+# Rate Limiting (in-memory, per-IP)
+# =============================================================================
+
+# {ip: [(timestamp, ...)] }
+_login_attempts: dict = defaultdict(list)
+_RATE_LIMIT_MAX = 5  # max attempts
+_RATE_LIMIT_WINDOW = 900  # 15 minutes in seconds
+
+
+def _check_rate_limit(ip: str):
+    """Check if IP has exceeded login rate limit. Raises 429 if exceeded."""
+    now = time.time()
+    # Clean old entries
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _RATE_LIMIT_WINDOW]
+    if len(_login_attempts[ip]) >= _RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Please try again later."
+        )
+
+
+def _record_attempt(ip: str):
+    """Record a login attempt for rate limiting."""
+    _login_attempts[ip].append(time.time())
 
 
 # =============================================================================
@@ -58,10 +87,26 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+def _validate_password_strength(password: str) -> str:
+    """Validate password has uppercase, lowercase, and digit."""
+    if not re.search(r'[A-Z]', password):
+        raise ValueError('Password must contain at least one uppercase letter')
+    if not re.search(r'[a-z]', password):
+        raise ValueError('Password must contain at least one lowercase letter')
+    if not re.search(r'[0-9]', password):
+        raise ValueError('Password must contain at least one digit')
+    return password
+
+
 class ChangePasswordRequest(BaseModel):
     """Request to change password"""
     current_password: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=8, description="New password (min 8 characters)")
+    new_password: str = Field(..., min_length=8, description="New password (min 8 chars, 1 upper, 1 lower, 1 digit)")
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return _validate_password_strength(v)
 
 
 class RegisterRequest(BaseModel):
@@ -69,6 +114,11 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     display_name: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return _validate_password_strength(v)
 
 
 class UserResponse(BaseModel):
@@ -237,6 +287,7 @@ async def get_current_user_optional(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: LoginRequest,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -245,6 +296,11 @@ async def login(
     The access token is short-lived (30 minutes by default) and used for API requests.
     The refresh token is long-lived (7 days by default) and used to get new access tokens.
     """
+    # Rate limiting by IP
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    _check_rate_limit(client_ip)
+    _record_attempt(client_ip)
+
     # Find user by email
     user = await get_user_by_email(db, request.email.lower())
 

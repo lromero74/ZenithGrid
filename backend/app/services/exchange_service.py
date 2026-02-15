@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models import Account
+from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.exchange_clients.base import ExchangeClient
 from app.exchange_clients.paper_trading_client import PaperTradingClient
@@ -87,10 +88,13 @@ async def get_exchange_client_for_account(
             cex_account = cex_result.scalar_one_or_none()
 
             if cex_account:
+                pk = cex_account.api_private_key
+                if is_encrypted(pk):
+                    pk = decrypt_value(pk)
                 real_client = create_exchange_client(
                     exchange_type="cex",
                     coinbase_key_name=cex_account.api_key_name,
-                    coinbase_private_key=cex_account.api_private_key,
+                    coinbase_private_key=pk,
                 )
                 logger.info(f"Using CEX account {cex_account.id} for paper trading price data")
         except Exception as e:
@@ -106,20 +110,26 @@ async def get_exchange_client_for_account(
             logger.warning(f"Account {account_id} missing API credentials")
             return None
 
+        pk = account.api_private_key
+        if is_encrypted(pk):
+            pk = decrypt_value(pk)
         client = create_exchange_client(
             exchange_type="cex",
             coinbase_key_name=account.api_key_name,
-            coinbase_private_key=account.api_private_key,
+            coinbase_private_key=pk,
         )
     elif account.type == "dex":
         if not account.wallet_private_key or not account.rpc_url:
             logger.warning(f"Account {account_id} missing DEX credentials")
             return None
 
+        wpk = account.wallet_private_key
+        if is_encrypted(wpk):
+            wpk = decrypt_value(wpk)
         client = create_exchange_client(
             exchange_type="dex",
             chain_id=account.chain_id,
-            private_key=account.wallet_private_key,
+            private_key=wpk,
             rpc_url=account.rpc_url,
             dex_router=None,  # TODO: Get from account or default
         )
@@ -239,11 +249,12 @@ async def create_or_update_cex_account(
     )
     account = result.scalar_one_or_none()
 
+    from app.encryption import encrypt_value as _encrypt
     if account:
         # Update existing
         account.name = name
         account.api_key_name = api_key_name
-        account.api_private_key = api_private_key
+        account.api_private_key = _encrypt(api_private_key)
         if make_default:
             account.is_default = True
         # Clear cache for this account
@@ -256,7 +267,7 @@ async def create_or_update_cex_account(
             type="cex",
             exchange=exchange,
             api_key_name=api_key_name,
-            api_private_key=api_private_key,
+            api_private_key=_encrypt(api_private_key),
             is_default=make_default,
             is_active=True
         )

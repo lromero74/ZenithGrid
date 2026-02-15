@@ -19,8 +19,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.encryption import encrypt_value, decrypt_value, is_encrypted
 from app.models import Account, Bot, User
-from app.routers.auth_dependencies import get_current_user_optional
+from app.routers.auth_dependencies import get_current_user
 from app.exchange_clients.factory import create_exchange_client
 from app.coinbase_unified_client import CoinbaseClient
 from app.routers.accounts import get_cex_portfolio, get_dex_portfolio
@@ -52,10 +53,15 @@ async def get_coinbase_for_account(
             detail="Coinbase account missing API credentials. Please update in Settings."
         )
 
+    # Decrypt the private key if it's encrypted
+    private_key = account.api_private_key
+    if is_encrypted(private_key):
+        private_key = decrypt_value(private_key)
+
     client = create_exchange_client(
         exchange_type="cex",
         coinbase_key_name=account.api_key_name,
-        coinbase_private_key=account.api_private_key,
+        coinbase_private_key=private_key,
     )
 
     if not client:
@@ -201,7 +207,7 @@ class AutoBuySettingsUpdate(BaseModel):
 async def list_accounts(
     include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     List all accounts for the current user.
@@ -211,9 +217,7 @@ async def list_accounts(
     """
     try:
         query = select(Account)
-        # Filter by user if authenticated
-        if current_user:
-            query = query.where(Account.user_id == current_user.id)
+        query = query.where(Account.user_id == current_user.id)
         if not include_inactive:
             query = query.where(Account.is_active)
         query = query.order_by(Account.is_default.desc(), Account.created_at.asc())
@@ -253,21 +257,18 @@ async def list_accounts(
 
     except Exception as e:
         logger.error(f"Error listing accounts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
 async def get_account(
     account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get a specific account by ID (must belong to current user if authenticated)."""
     try:
-        query = select(Account).where(Account.id == account_id)
-        # Filter by user if authenticated
-        if current_user:
-            query = query.where(Account.user_id == current_user.id)
+        query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
@@ -304,14 +305,14 @@ async def get_account(
         raise
     except Exception as e:
         logger.error(f"Error getting account {account_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("", response_model=AccountResponse)
 async def create_account(
     account_data: AccountCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Create a new account for the current user.
@@ -334,11 +335,9 @@ async def create_account(
             if not account_data.wallet_address:
                 raise HTTPException(status_code=400, detail="DEX accounts require 'wallet_address' field")
 
-        # If this is set as default, unset other defaults (for this user if authenticated)
+        # If this is set as default, unset other defaults for this user
         if account_data.is_default:
-            default_filter = Account.is_default
-            if current_user:
-                default_filter = Account.is_default & (Account.user_id == current_user.id)
+            default_filter = Account.is_default & (Account.user_id == current_user.id)
             await db.execute(
                 update(Account).where(default_filter).values(is_default=False)
             )
@@ -348,14 +347,14 @@ async def create_account(
             name=account_data.name,
             type=account_data.type,
             is_default=account_data.is_default,
-            user_id=current_user.id if current_user else None,
+            user_id=current_user.id,
             is_active=True,
             exchange=account_data.exchange,
             api_key_name=account_data.api_key_name,
-            api_private_key=account_data.api_private_key,  # TODO: Encrypt this
+            api_private_key=encrypt_value(account_data.api_private_key) if account_data.api_private_key else None,
             chain_id=account_data.chain_id,
             wallet_address=account_data.wallet_address,
-            wallet_private_key=account_data.wallet_private_key,  # TODO: Encrypt this
+            wallet_private_key=encrypt_value(account_data.wallet_private_key) if account_data.wallet_private_key else None,
             rpc_url=account_data.rpc_url,
             wallet_type=account_data.wallet_type,
         )
@@ -392,19 +391,20 @@ async def create_account(
     except Exception as e:
         logger.error(f"Error creating account: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.put("/{account_id}", response_model=AccountResponse)
 async def update_account(
     account_id: int,
     account_data: AccountUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Update an existing account."""
     try:
         # Get the account
-        query = select(Account).where(Account.id == account_id)
+        query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
@@ -414,8 +414,12 @@ async def update_account(
         # Update fields that are provided
         update_data = account_data.model_dump(exclude_unset=True)
 
+        # Encrypt sensitive fields before storing
+        sensitive_fields = {'api_private_key', 'wallet_private_key'}
         for field, value in update_data.items():
             if value is not None:
+                if field in sensitive_fields:
+                    value = encrypt_value(value)
                 setattr(account, field, value)
 
         account.updated_at = datetime.utcnow()
@@ -456,13 +460,14 @@ async def update_account(
     except Exception as e:
         logger.error(f"Error updating account {account_id}: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.delete("/{account_id}")
 async def delete_account(
     account_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Delete an account.
@@ -471,13 +476,13 @@ async def delete_account(
     Unlink or delete bots first.
     """
     try:
-        # Get the account
-        query = select(Account).where(Account.id == account_id)
+        # Get the account (filtered by user)
+        query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
         if not account:
-            raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+            raise HTTPException(status_code=404, detail="Not found")
 
         # Check if any bots are linked
         bot_query = select(Bot).where(Bot.account_id == account_id)
@@ -504,27 +509,28 @@ async def delete_account(
     except Exception as e:
         logger.error(f"Error deleting account {account_id}: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{account_id}/set-default")
 async def set_default_account(
     account_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Set an account as the default."""
     try:
-        # Get the account
-        query = select(Account).where(Account.id == account_id)
+        # Get the account (filtered by user)
+        query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
         if not account:
-            raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+            raise HTTPException(status_code=404, detail="Not found")
 
-        # Unset all other defaults
+        # Unset all other defaults for this user
         await db.execute(
-            update(Account).where(Account.is_default).values(is_default=False)
+            update(Account).where(Account.is_default, Account.user_id == current_user.id).values(is_default=False)
         )
 
         # Set this one as default
@@ -542,23 +548,24 @@ async def set_default_account(
     except Exception as e:
         logger.error(f"Error setting default account {account_id}: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{account_id}/bots")
 async def get_account_bots(
     account_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all bots linked to an account."""
     try:
-        # Verify account exists
-        account_query = select(Account).where(Account.id == account_id)
+        # Verify account exists and belongs to user
+        account_query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
         account_result = await db.execute(account_query)
         account = account_result.scalar_one_or_none()
 
         if not account:
-            raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+            raise HTTPException(status_code=404, detail="Not found")
 
         # Get bots
         bot_query = select(Bot).where(Bot.account_id == account_id)
@@ -585,22 +592,23 @@ async def get_account_bots(
         raise
     except Exception as e:
         logger.error(f"Error getting bots for account {account_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/default", response_model=AccountResponse)
 async def get_default_account(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get the default account."""
     try:
-        query = select(Account).where(Account.is_default)
+        query = select(Account).where(Account.is_default, Account.user_id == current_user.id)
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
         if not account:
             # If no default, return the first active account
-            query = select(Account).where(Account.is_active).order_by(Account.created_at.asc())
+            query = select(Account).where(Account.is_active, Account.user_id == current_user.id).order_by(Account.created_at.asc())
             result = await db.execute(query)
             account = result.scalar_one_or_none()
 
@@ -637,13 +645,14 @@ async def get_default_account(
         raise
     except Exception as e:
         logger.error(f"Error getting default account: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{account_id}/portfolio")
 async def get_account_portfolio(
     account_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get portfolio for a specific account.
@@ -655,13 +664,13 @@ async def get_account_portfolio(
     try:
         import json
 
-        # Get the account
-        query = select(Account).where(Account.id == account_id)
+        # Get the account (filtered by user)
+        query = select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
         result = await db.execute(query)
         account = result.scalar_one_or_none()
 
         if not account:
-            raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
+            raise HTTPException(status_code=404, detail="Not found")
 
         # Handle paper trading accounts
         if account.is_paper_trading:
@@ -748,7 +757,7 @@ async def get_account_portfolio(
         raise
     except Exception as e:
         logger.error(f"Error getting portfolio for account {account_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 # =============================================================================
@@ -759,14 +768,12 @@ async def get_account_portfolio(
 async def get_auto_buy_settings(
     account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Get auto-buy BTC settings for an account"""
     query = select(Account).where(Account.id == account_id)
 
-    # Filter by user if authenticated
-    if current_user:
-        query = query.where(Account.user_id == current_user.id)
+    query = query.where(Account.user_id == current_user.id)
 
     result = await db.execute(query)
     account = result.scalar_one_or_none()
@@ -792,14 +799,12 @@ async def update_auto_buy_settings(
     account_id: int,
     settings: AutoBuySettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     """Update auto-buy BTC settings for an account"""
     query = select(Account).where(Account.id == account_id)
 
-    # Filter by user if authenticated
-    if current_user:
-        query = query.where(Account.user_id == current_user.id)
+    query = query.where(Account.user_id == current_user.id)
 
     result = await db.execute(query)
     account = result.scalar_one_or_none()
@@ -856,7 +861,7 @@ async def update_auto_buy_settings(
 async def link_perps_portfolio(
     account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Discover and link the INTX perpetuals portfolio for a CEX account.
@@ -868,7 +873,7 @@ async def link_perps_portfolio(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    if current_user and account.user_id != current_user.id:
+    if account.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     if account.type != "cex":
@@ -914,21 +919,22 @@ async def link_perps_portfolio(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to discover perps portfolio: {str(e)}")
+        logger.error(f"Failed to discover perps portfolio: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{account_id}/perps-portfolio")
 async def get_perps_portfolio_status(
     account_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
     """Get the perps portfolio linking status for an account"""
     account = await db.get(Account, account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    if current_user and account.user_id != current_user.id:
+    if account.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     return {

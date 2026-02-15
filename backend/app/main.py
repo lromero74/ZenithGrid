@@ -46,8 +46,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_origins_list(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Multi-bot monitor - monitors all active bots with their strategies
@@ -300,6 +300,13 @@ async def startup_event():
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
+
+    # Security: Refuse to start with default JWT secret
+    if settings.jwt_secret_key == "jwt-secret-key-change-in-production" or not settings.jwt_secret_key:
+        logger.critical("SECURITY: JWT_SECRET_KEY is not set or still has default value!")
+        logger.critical("SECURITY: Run setup.py to generate a secure JWT secret, or set JWT_SECRET_KEY in .env")
+        raise RuntimeError("JWT_SECRET_KEY must be set to a secure value before starting the application")
+
     print("🚀 Initializing database...")
     await init_db()
     print("🚀 Database initialized successfully")
@@ -451,13 +458,36 @@ async def shutdown_event():
 
 # WebSocket for real-time updates (order fill notifications)
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = None):
+    # Validate JWT token before accepting WebSocket connection
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
+    try:
+        from app.routers.auth_router import decode_token, get_user_by_id
+        from app.database import async_session_maker
+
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.close(code=4001, reason="Invalid token type")
+            return
+
+        user_id = int(payload.get("sub"))
+        async with async_session_maker() as db:
+            user = await get_user_by_id(db, user_id)
+            if not user or not user.is_active:
+                await websocket.close(code=4001, reason="Invalid user")
+                return
+    except Exception:
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
+
     await ws_manager.connect(websocket)
     try:
         while True:
             # Keep connection alive and wait for messages
             data = await websocket.receive_text()
-            # Echo back for debugging
             await websocket.send_json({"type": "echo", "message": f"Received: {data}"})
     except WebSocketDisconnect:
         await ws_manager.disconnect(websocket)
