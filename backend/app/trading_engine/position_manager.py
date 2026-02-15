@@ -161,7 +161,12 @@ def calculate_max_deal_cost(config: dict, base_order_size: float) -> float:
         if safety_order_type == "percentage_of_base":
             base_safety_size = base_order_size * (config.get("safety_order_percentage", 50.0) / 100.0)
         elif safety_order_type in ["fixed", "fixed_btc"]:
-            base_safety_size = config.get("safety_order_btc", 0.0001)
+            if config.get("auto_calculate_order_sizes", False):
+                # When auto-calc is on, safety orders equal base order (then volume-scaled)
+                # Matches indicator_based.py calculate_safety_order_size() lines 971-973
+                base_safety_size = base_order_size
+            else:
+                base_safety_size = config.get("safety_order_btc", 0.0001)
         else:
             base_safety_size = config.get("safety_order_fixed", 0.0005)
 
@@ -286,6 +291,10 @@ async def create_position(
     expected_budget = calculate_expected_position_budget(config, aggregate_value or 0)
     if expected_budget > 0:
         max_quote = expected_budget
+    elif quote_amount > 0:
+        # Auto-calculate or percentage mode: derive max deal cost from actual base order size
+        max_deal_cost = calculate_max_deal_cost(config, quote_amount)
+        max_quote = max_deal_cost if max_deal_cost > 0 else quote_balance
     else:
         max_quote = quote_balance
 

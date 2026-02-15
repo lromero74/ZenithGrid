@@ -5,6 +5,12 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.11] - 2026-02-15
+
+### Fixed
+- Fixed `max_quote_allowed` set to raw per-position budget ceiling instead of actual expected deal cost when `auto_calculate_order_sizes=True`, causing misleading budget utilization percentages (e.g., 87% instead of ~100%)
+- Fixed `calculate_max_deal_cost()` not accounting for `auto_calculate_order_sizes` flag — when enabled with fixed safety order type, safety orders now correctly equal base order size (matching actual trading logic in `indicator_based.py`)
+
 ## [v1.31.10] - 2026-02-15
 
 ### Fixed
