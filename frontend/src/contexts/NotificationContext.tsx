@@ -144,7 +144,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     const token = localStorage.getItem('auth_access_token')
     const wsUrl = token ? `${protocol}//${host}/ws?token=${encodeURIComponent(token)}` : `${protocol}//${host}/ws`
 
-    console.log('🔌 Connecting to notification WebSocket:', wsUrl)
+    console.log('🔌 Connecting to notification WebSocket')
 
     try {
       const ws = new WebSocket(wsUrl)
@@ -163,7 +163,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       ws.onmessage = (event) => {
         try {
           const data: WebSocketMessage = JSON.parse(event.data)
-          console.log('📨 WebSocket message:', data)
+          console.debug('📨 WebSocket message received, type:', data.type)
 
           if (data.type === 'order_fill') {
             handleOrderFill(data as unknown as OrderFillEvent)

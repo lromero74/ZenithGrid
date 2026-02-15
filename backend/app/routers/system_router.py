@@ -16,7 +16,7 @@ import subprocess
 from datetime import datetime, timedelta
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -201,7 +201,7 @@ def build_changelog_cache() -> None:
 
 
 @router.get("/api/changelog")
-async def get_changelog(limit: int = 20, offset: int = 0, refresh: bool = False):
+async def get_changelog(limit: int = Query(20, ge=1, le=100), offset: int = 0, refresh: bool = False):
     """
     Get changelog showing commits between version tags.
     Similar to 'python3 update.py --changelog' output.
@@ -462,7 +462,7 @@ async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monito
 
 
 @router.get("/api/trades", response_model=List[TradeResponse])
-async def get_trades(limit: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_trades(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get recent trades"""
     query = select(Trade).order_by(desc(Trade.timestamp)).limit(limit)
     result = await db.execute(query)
@@ -472,7 +472,7 @@ async def get_trades(limit: int = 100, db: AsyncSession = Depends(get_db), curre
 
 
 @router.get("/api/signals", response_model=List[SignalResponse])
-async def get_signals(limit: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_signals(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get recent signals"""
     query = select(Signal).order_by(desc(Signal.timestamp)).limit(limit)
     result = await db.execute(query)

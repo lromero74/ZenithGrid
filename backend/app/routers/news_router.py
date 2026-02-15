@@ -531,7 +531,7 @@ async def fetch_btc_block_height() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Invalid block height response")
     except Exception as e:
         logger.error(f"Error fetching BTC block height: {e}")
-        raise HTTPException(status_code=503, detail=f"Block height API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Block height API error")
 
 
 async def fetch_us_debt() -> Dict[str, Any]:
@@ -688,7 +688,7 @@ async def fetch_us_debt() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Treasury API timeout")
     except Exception as e:
         logger.error(f"Error fetching US debt: {e}")
-        raise HTTPException(status_code=503, detail=f"Treasury API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Treasury API error")
 
 
 async def fetch_fear_greed_index() -> Dict[str, Any]:
@@ -730,7 +730,7 @@ async def fetch_fear_greed_index() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Fear/Greed API timeout")
     except Exception as e:
         logger.error(f"Error fetching Fear/Greed index: {e}")
-        raise HTTPException(status_code=503, detail=f"Fear/Greed API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Fear/Greed API error")
 
 
 async def fetch_youtube_videos(session: aiohttp.ClientSession, source_id: str, config: Dict) -> List[VideoItem]:
@@ -1498,7 +1498,7 @@ async def get_us_debt():
 
 
 @router.get("/debt-ceiling-history", response_model=DebtCeilingHistoryResponse)
-async def get_debt_ceiling_history(limit: int = 100):
+async def get_debt_ceiling_history(limit: int = Query(100, ge=1, le=1000)):
     """
     Get historical debt ceiling changes/suspensions.
 
@@ -1566,7 +1566,7 @@ async def fetch_btc_dominance() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="CoinGecko API timeout")
     except Exception as e:
         logger.error(f"Error fetching BTC dominance: {e}")
-        raise HTTPException(status_code=503, detail=f"CoinGecko API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="CoinGecko API error")
 
 
 async def fetch_altseason_index() -> Dict[str, Any]:
@@ -1636,7 +1636,7 @@ async def fetch_altseason_index() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="CoinGecko API timeout")
     except Exception as e:
         logger.error(f"Error fetching altseason index: {e}")
-        raise HTTPException(status_code=503, detail=f"CoinGecko API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="CoinGecko API error")
 
 
 async def fetch_funding_rates() -> Dict[str, Any]:
@@ -1754,7 +1754,7 @@ async def fetch_stablecoin_mcap() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="CoinGecko API timeout")
     except Exception as e:
         logger.error(f"Error fetching stablecoin mcap: {e}")
-        raise HTTPException(status_code=503, detail=f"CoinGecko API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="CoinGecko API error")
 
 
 @router.get("/btc-dominance")
@@ -1884,7 +1884,7 @@ async def fetch_mempool_stats() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Mempool API timeout")
     except Exception as e:
         logger.error(f"Error fetching mempool stats: {e}")
-        raise HTTPException(status_code=503, detail=f"Mempool API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Mempool API error")
 
 
 async def fetch_hash_rate() -> Dict[str, Any]:
@@ -1942,7 +1942,7 @@ async def fetch_hash_rate() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Mempool API timeout")
     except Exception as e:
         logger.error(f"Error fetching hash rate: {e}")
-        raise HTTPException(status_code=503, detail=f"Mempool API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Mempool API error")
 
 
 async def fetch_lightning_stats() -> Dict[str, Any]:
@@ -1984,7 +1984,7 @@ async def fetch_lightning_stats() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Lightning API timeout")
     except Exception as e:
         logger.error(f"Error fetching lightning stats: {e}")
-        raise HTTPException(status_code=503, detail=f"Lightning API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Lightning API error")
 
 
 async def fetch_ath_data() -> Dict[str, Any]:
@@ -2039,7 +2039,7 @@ async def fetch_ath_data() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="CoinGecko API timeout")
     except Exception as e:
         logger.error(f"Error fetching ATH data: {e}")
-        raise HTTPException(status_code=503, detail=f"CoinGecko API error: {str(e)}")
+        raise HTTPException(status_code=503, detail="CoinGecko API error")
 
 
 @router.get("/total-market-cap")
@@ -2242,7 +2242,7 @@ async def fetch_btc_rsi() -> Dict[str, Any]:
         raise
     except Exception as e:
         logger.error(f"Error fetching BTC RSI: {e}")
-        raise HTTPException(status_code=503, detail=f"BTC RSI error: {str(e)}")
+        raise HTTPException(status_code=503, detail="BTC RSI error")
 
 
 @router.get("/btc-rsi")
@@ -2608,7 +2608,7 @@ async def text_to_speech(
         )
     except Exception as e:
         logger.error(f"TTS endpoint error: {e}")
-        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="TTS generation failed")
 
 
 @router.get("/tts/voices")
@@ -2685,4 +2685,4 @@ async def text_to_speech_with_sync(
 
     except Exception as e:
         logger.error(f"TTS sync generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="TTS generation failed")

@@ -87,7 +87,7 @@ async def create_bot(
     try:
         StrategyRegistry.get_strategy(bot_data.strategy_type, bot_data.strategy_config)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid strategy config: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid strategy configuration")
 
     # Check if name is unique
     query = select(Bot).where(Bot.name == bot_data.name)
@@ -161,7 +161,7 @@ async def create_bot(
         try:
             exchange = await create_exchange_client(db, bot.account_id)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to connect to exchange: {e}")
+            raise HTTPException(status_code=400, detail="Failed to connect to exchange")
 
         # Get raw balances
         try:
@@ -169,7 +169,7 @@ async def create_bot(
             raw_usd = balances.get("USD", 0.0) + balances.get("USDC", 0.0) + balances.get("USDT", 0.0)
             raw_btc = balances.get("BTC", 0.0)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to fetch account balances: {e}")
+            raise HTTPException(status_code=400, detail="Failed to fetch account balances")
 
         # Calculate aggregate values
         try:
@@ -184,7 +184,7 @@ async def create_bot(
             # Get current BTC price for validation
             current_btc_price = await exchange.get_btc_usd_price()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to calculate aggregate values: {e}")
+            raise HTTPException(status_code=400, detail="Failed to calculate aggregate values")
 
         # Calculate bot's total budget
         budget_pct = bot.budget_percentage or 0.0
@@ -570,7 +570,7 @@ async def update_bot(
         try:
             StrategyRegistry.get_strategy(bot.strategy_type, bot_update.strategy_config)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid strategy config: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid strategy configuration")
         bot.strategy_config = bot_update.strategy_config
 
     if bot_update.product_id is not None:
@@ -644,7 +644,7 @@ async def update_bot(
         try:
             exchange = await create_exchange_client(db, bot.account_id)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to connect to exchange: {e}")
+            raise HTTPException(status_code=400, detail="Failed to connect to exchange")
 
         # Get raw balances and aggregate values
         try:
@@ -659,7 +659,7 @@ async def update_bot(
 
             current_btc_price = await exchange.get_btc_usd_price()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to calculate aggregate values: {e}")
+            raise HTTPException(status_code=400, detail="Failed to calculate aggregate values")
 
         # Calculate new reservations
         budget_pct = bot.budget_percentage or 0.0

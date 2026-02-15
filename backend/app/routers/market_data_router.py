@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -137,7 +137,7 @@ async def get_prices_batch(products: str, coinbase: CoinbaseClient = Depends(get
 async def get_candles(
     product_id: str = "ETH-BTC",
     granularity: Optional[str] = None,
-    limit: int = 300,
+    limit: int = Query(300, ge=1, le=1000),
     coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
     """
@@ -404,7 +404,7 @@ async def get_product_precision(product_id: str):
 @router.get("/orderbook/{product_id}")
 async def get_orderbook(
     product_id: str,
-    limit: int = 25,
+    limit: int = Query(25, ge=1, le=500),
     coinbase: CoinbaseClient = Depends(get_coinbase),
 ):
     """

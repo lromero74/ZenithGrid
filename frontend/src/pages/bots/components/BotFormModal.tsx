@@ -229,12 +229,9 @@ export function BotFormModal({
       rpc_url: formData.rpc_url,
     }
 
-    console.log('Submitting bot data:', botData)
     if (editingBot) {
-      console.log('Updating bot:', editingBot.id)
       updateBot.mutate({ id: editingBot.id, data: botData })
     } else {
-      console.log('Creating new bot')
       createBot.mutate(botData)
     }
   }

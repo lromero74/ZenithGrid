@@ -1,4 +1,5 @@
 import type { Position } from '../../types'
+import { authFetch } from '../../services/api'
 
 /**
  * Calculate unrealized P&L for an open position
@@ -69,7 +70,7 @@ export const checkSlippageBeforeMarketClose = async (
   onProceedDirectly: (positionId: number) => void
 ) => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/positions/${positionId}/slippage-check`)
+    const response = await authFetch(`/api/positions/${positionId}/slippage-check`)
     const slippage = await response.json()
 
     if (slippage.show_warning) {

@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -31,7 +31,7 @@ router = APIRouter()
 async def get_positions(
     response: Response,
     status: Optional[str] = None,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(get_current_user),

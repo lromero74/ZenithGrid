@@ -262,23 +262,6 @@ async def get_current_user(
     return user
 
 
-async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> Optional[User]:
-    """
-    Dependency to optionally get the current user (returns None if not authenticated).
-    Useful for routes that work differently for authenticated vs anonymous users.
-    """
-    if credentials is None:
-        return None
-
-    try:
-        return await get_current_user(credentials, db)
-    except HTTPException:
-        return None
-
-
 # =============================================================================
 # API Endpoints
 # =============================================================================

@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,7 +55,7 @@ async def create_scanner_log(bot_id: int, log_data: ScannerLogCreate, db: AsyncS
 @router.get("/{bot_id}/scanner-logs", response_model=List[ScannerLogResponse])
 async def get_scanner_logs(
     bot_id: int,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=1000),
     offset: int = 0,
     product_id: Optional[str] = None,
     scan_type: Optional[str] = None,

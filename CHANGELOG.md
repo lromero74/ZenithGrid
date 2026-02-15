@@ -5,6 +5,25 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.1] - 2026-02-15
+
+### Changed
+- Remove dead `get_current_user_optional` from auth_dependencies.py and auth_router.py
+- Add Query bounds (ge/le) on all paginated limit parameters to prevent abuse
+- Sanitize remaining `str(e)` in error responses across templates, news, and trading routers
+
+### Fixed
+- Removed console.log that leaked wallet_private_key in BotFormModal
+- Sanitized WebSocket console.log to not expose JWT token or message payloads
+- Fixed broken slippage-check fetch in helpers.ts (wrong env var → authFetch)
+- Closed positions page now correctly fetches up to 500 results (was broken by undefined base URL)
+
+### Security
+- Added security headers middleware (X-Frame-Options: DENY, X-Content-Type-Options: nosniff, X-XSS-Protection, Referrer-Policy)
+- File permissions hardened: .env, trading.db, and backups set to 600
+- Added DB-level unique index migration for bot names to prevent race conditions
+- All query limit parameters now bounded to prevent DoS via unbounded result sets
+
 ## [v1.31.0] - 2026-02-15
 
 ### Added

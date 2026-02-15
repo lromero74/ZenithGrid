@@ -2,7 +2,6 @@
 Authentication dependencies for routers
 
 Provides easy-to-use dependencies for protecting routes with authentication.
-Supports both required and optional authentication modes.
 """
 
 from typing import Optional
@@ -65,34 +64,6 @@ async def get_current_user(
         )
 
     return user
-
-
-async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> Optional[User]:
-    """
-    Optional authentication - returns current user or None.
-
-    This is useful during the transition period when the frontend
-    may not have authentication implemented yet. Routes can work
-    for both authenticated and unauthenticated users.
-
-    Usage:
-        @router.get("/data")
-        async def get_data(current_user: Optional[User] = Depends(get_current_user_optional)):
-            if current_user:
-                # Filter by user
-                query = query.where(Model.user_id == current_user.id)
-            # else return all data (backwards compatible)
-    """
-    if credentials is None:
-        return None
-
-    try:
-        return await get_current_user(credentials, db)
-    except HTTPException:
-        return None
 
 
 async def require_superuser(

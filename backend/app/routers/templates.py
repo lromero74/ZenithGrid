@@ -71,8 +71,8 @@ async def create_template(
     # Validate strategy config
     try:
         StrategyRegistry.get_strategy(template_data.strategy_type, template_data.strategy_config)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid strategy config: {str(e)}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid strategy configuration")
 
     # Check if name is unique
     query = select(BotTemplate).where(BotTemplate.name == template_data.name)
@@ -178,8 +178,8 @@ async def update_template(
         # Validate new config
         try:
             StrategyRegistry.get_strategy(template.strategy_type, template_update.strategy_config)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid strategy config: {str(e)}")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid strategy configuration")
         template.strategy_config = template_update.strategy_config
 
     if template_update.product_ids is not None:

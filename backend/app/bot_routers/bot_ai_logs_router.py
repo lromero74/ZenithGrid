@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select, union_all, literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,7 +62,7 @@ async def create_ai_bot_log(
 @router.get("/{bot_id}/logs", response_model=List[AIBotLogResponse])
 async def get_ai_bot_logs(
     bot_id: int,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=1000),
     offset: int = 0,
     product_id: Optional[str] = None,
     position_id: Optional[int] = None,
@@ -114,7 +114,7 @@ async def get_ai_bot_logs(
 @router.get("/{bot_id}/decision-logs")
 async def get_unified_decision_logs(
     bot_id: int,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=1000),
     offset: int = 0,
     product_id: Optional[str] = None,
     since: Optional[datetime] = None,

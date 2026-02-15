@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +25,7 @@ router = APIRouter()
 @router.get("/{bot_id}/indicator-logs", response_model=List[IndicatorLogResponse])
 async def get_indicator_logs(
     bot_id: int,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=1000),
     offset: int = 0,
     product_id: Optional[str] = None,
     phase: Optional[str] = None,
