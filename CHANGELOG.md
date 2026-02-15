@@ -5,6 +5,20 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.7] - 2026-02-15
+
+### Removed
+- Deleted 7 stale docs/ files (ARBITRAGE_PLATFORM_HANDOFF, CANDLE_FETCH_OPTIMIZATION_PLAN, COMPLETE_DOCUMENTATION, DEVELOPMENT_ROADMAP, LIMIT_ORDERS_TODO, PROJECT_OVERVIEW, TODO_MIN_PROFIT_GUI_DISPLAY)
+
+### Changed
+- Rewrote `docs/CONDITIONAL_STRATEGY.md` — reflects completed system with all operators (INCREASING/DECREASING), all indicators (AI_BUY/AI_SELL/BULL_FLAG/VOLUME_RSI), phase-based conditions
+- Rewrote `docs/USER_GUIDE_CONDITIONAL_STRATEGY.md` — updated strategy name, phase-based conditions, correct JSON format, new operators and indicators
+- Rewrote `docs/QUICKSTART.md` — correct ports, systemd instructions, setup.py workflow, removed MACD-centric content
+- Rewrote `docs/DEVELOPMENT_GUIDELINES.md` — correct file paths, current architecture patterns, removed stale TODOs
+- Updated `docs/FEATURE_CHECKLIST.md` — marked 50+ completed features (grid trading, paper trading, bidirectional, AI providers, notifications, security hardening, etc.)
+- Updated `README.md` — fixed broken doc links, corrected strategy listing
+- Updated `COMMERCIALIZATION.md` — marked Phase 1 items as complete
+
 ## [v1.31.6] - 2026-02-15
 
 ### Removed

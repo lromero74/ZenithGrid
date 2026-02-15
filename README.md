@@ -135,11 +135,10 @@ Then configure API keys in `backend/.env` and create your admin user via the API
 3. Click **"Create New Bot"**
 4. (Optional) Select a template: Conservative/Balanced/Aggressive
 5. Choose strategy:
-   - **AI Autonomous** - Claude AI-powered (NEW!)
-   - **Conditional DCA** - Custom conditions
-   - **MACD DCA** - MACD-based DCA
-   - **RSI** - RSI-based trading
-   - **Bollinger Bands** - BB strategy
+   - **Custom Bot (Indicator-Based)** - Mix-and-match conditions
+   - **AI Spot Opinion** - AI-powered market analysis
+   - **Bull Flag Scanner** - Automated pattern detection
+   - **Grid Trading** - Grid-based strategy
 6. Select trading pair(s)
 7. Configure parameters
 8. Click **"Start Bot"**
@@ -292,8 +291,9 @@ python3 update.py --yes
 
 ## 📖 Documentation
 
-- **[📄 Handoff Document](HANDOFF_DOCUMENT.md)** - Complete setup & migration guide
-- **[✅ Feature Checklist](3COMMAS_REPLACEMENT_CHECKLIST.md)** - Progress tracker
+- **[🏗️ Architecture](docs/ARCHITECTURE.md)** - System architecture with Mermaid diagrams
+- **[✅ Feature Checklist](docs/FEATURE_CHECKLIST.md)** - Progress tracker
+- **[📖 Quick Start](docs/QUICKSTART.md)** - Getting started guide
 - **[🔌 API Docs](http://localhost:8100/docs)** - FastAPI auto-docs (when running)
 
 ## 🔄 Persistence & Recovery
@@ -428,4 +428,4 @@ Trading cryptocurrencies involves substantial risk of loss and is not suitable f
 
 🤖 **Built with Claude Code**
 
-For detailed documentation, see [HANDOFF_DOCUMENT.md](HANDOFF_DOCUMENT.md)
+For detailed documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
