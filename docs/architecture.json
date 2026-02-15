@@ -38,13 +38,13 @@
       { "file": "routers/ai_credentials_router.py", "prefix": "/api/ai-credentials", "purpose": "Manage per-user AI provider API keys" },
       { "file": "routers/auth_router.py", "prefix": "/api/auth", "purpose": "Login, signup, token refresh, password change" },
       { "file": "routers/blacklist_router.py", "prefix": "/api/blacklist", "purpose": "Coin blacklist and category management" },
-      { "file": "routers/bots.py", "prefix": "/api/bots", "purpose": "Bot CRUD, start/stop, logs, decisions, scanner logs, bulk ops" },
+      { "file": "routers/bots.py", "prefix": "/api/bots", "purpose": "Aggregator for bot sub-routers (CRUD, control, logs, validation)" },
       { "file": "routers/coin_icons_router.py", "prefix": "/api/coin-icons", "purpose": "Proxy and cache cryptocurrency icons to avoid CORS" },
       { "file": "routers/market_data_router.py", "prefix": "/api", "purpose": "Current prices, OHLCV candles, product listings" },
       { "file": "routers/news_router.py", "prefix": "/api/news", "purpose": "Aggregated crypto news, video feeds, market sentiment data" },
       { "file": "routers/order_history.py", "prefix": "/api/order-history", "purpose": "Successful and failed order history with filtering" },
       { "file": "routers/paper_trading_router.py", "prefix": "/api/paper-trading", "purpose": "Virtual paper trading account management" },
-      { "file": "routers/positions_router.py", "prefix": "/api/positions", "purpose": "Position CRUD, trades, AI logs, settings, slippage checks" },
+      { "file": "routers/positions_router.py", "prefix": "/api/positions", "purpose": "Aggregator for position sub-routers (queries, actions, limit orders, manual ops, perps)" },
       { "file": "routers/seasonality_router.py", "prefix": "/api/seasonality", "purpose": "Market seasonality toggle for automatic bot management" },
       { "file": "routers/settings_router.py", "prefix": "/api", "purpose": "User settings, changelog, system configuration" },
       { "file": "routers/sources_router.py", "prefix": "/api/sources", "purpose": "News and video source subscription management" },
@@ -53,6 +53,36 @@
       { "file": "routers/templates.py", "prefix": "/api/templates", "purpose": "Bot template CRUD" },
       { "file": "routers/trading_router.py", "prefix": "/api/trading", "purpose": "Manual buy/sell orders for portfolio management" }
     ],
+
+    "sub_routers": {
+      "bot_routers": [
+        { "file": "bot_routers/bot_crud_router.py", "purpose": "Bot creation, reading, updating, deletion, strategy listing" },
+        { "file": "bot_routers/bot_control_router.py", "purpose": "Bot activation, deactivation, and force-run operations" },
+        { "file": "bot_routers/bot_ai_logs_router.py", "purpose": "AI bot reasoning/thinking log retrieval" },
+        { "file": "bot_routers/bot_indicator_logs_router.py", "purpose": "Indicator condition evaluation log retrieval" },
+        { "file": "bot_routers/bot_scanner_logs_router.py", "purpose": "Scanner/monitor log retrieval for non-AI strategies" },
+        { "file": "bot_routers/bot_validation_router.py", "purpose": "Bot config validation against exchange minimums" },
+        { "file": "bot_routers/schemas.py", "purpose": "Pydantic request/response schemas for bot routes" }
+      ],
+      "position_routers": [
+        { "file": "position_routers/position_query_router.py", "purpose": "Position listing, details, trades, AI logs, P&L timeseries" },
+        { "file": "position_routers/position_actions_router.py", "purpose": "Cancel, force-close, and update position settings" },
+        { "file": "position_routers/position_limit_orders_router.py", "purpose": "Limit order operations (create, cancel, slippage check)" },
+        { "file": "position_routers/position_manual_ops_router.py", "purpose": "Manual operations: add funds, update notes" },
+        { "file": "position_routers/perps_router.py", "purpose": "Perpetual futures (INTX) position endpoints" },
+        { "file": "position_routers/dependencies.py", "purpose": "Shared dependency functions for position routes" },
+        { "file": "position_routers/schemas.py", "purpose": "Pydantic request/response schemas for position routes" }
+      ],
+      "news_modules": [
+        { "file": "routers/news/news_sources.py", "purpose": "News and video source configurations by category" },
+        { "file": "routers/news/news_cache.py", "purpose": "Cache loading/saving for news and video data" },
+        { "file": "routers/news/news_models.py", "purpose": "Pydantic models for news router API" },
+        { "file": "routers/news/debt_ceiling_data.py", "purpose": "Historical US debt ceiling data (1939-present)" }
+      ],
+      "account_modules": [
+        { "file": "routers/accounts/portfolio_utils.py", "purpose": "Portfolio calculations for CEX and DEX accounts" }
+      ]
+    },
 
     "models": [
       { "name": "User", "table": "users", "key_fields": ["id", "email", "hashed_password", "is_active", "terms_accepted"] },
@@ -104,14 +134,25 @@
       { "file": "services/websocket_manager.py", "purpose": "WebSocket connection manager for real-time order fill notifications", "type": "infrastructure" }
     ],
 
-    "trading_engine": [
-      { "file": "trading_engine_v2.py", "purpose": "Strategy-based trading engine coordinator; wraps all trading modules" },
-      { "file": "trading_client.py", "purpose": "Quote-currency agnostic buy/sell wrapper; works with any ExchangeClient" },
-      { "file": "multi_bot_monitor.py", "purpose": "Monitors prices for all active bots and dispatches strategy signals" },
-      { "file": "order_validation.py", "purpose": "Ensures orders meet Coinbase minimum size requirements" },
-      { "file": "precision.py", "purpose": "Precision handling for Coinbase API order sizes" },
-      { "file": "product_precision.py", "purpose": "Per-product increment specifications from Coinbase API" }
-    ],
+    "trading_engine": {
+      "coordinators": [
+        { "file": "trading_engine_v2.py", "purpose": "Strategy-based trading engine coordinator; wraps all trading modules" },
+        { "file": "trading_client.py", "purpose": "Quote-currency agnostic buy/sell wrapper; works with any ExchangeClient" },
+        { "file": "multi_bot_monitor.py", "purpose": "Monitors prices for all active bots and dispatches strategy signals" },
+        { "file": "order_validation.py", "purpose": "Ensures orders meet Coinbase minimum size requirements" },
+        { "file": "precision.py", "purpose": "Precision handling for Coinbase API order sizes" },
+        { "file": "product_precision.py", "purpose": "Per-product increment specifications from Coinbase API" }
+      ],
+      "modules": [
+        { "file": "trading_engine/signal_processor.py", "purpose": "Signal processing and trading decision orchestration" },
+        { "file": "trading_engine/buy_executor.py", "purpose": "Market and limit buy order execution" },
+        { "file": "trading_engine/sell_executor.py", "purpose": "Market and limit sell order execution" },
+        { "file": "trading_engine/perps_executor.py", "purpose": "Perpetual futures order execution with bracket TP/SL" },
+        { "file": "trading_engine/position_manager.py", "purpose": "Position CRUD operations and lifecycle management" },
+        { "file": "trading_engine/order_logger.py", "purpose": "Order logging, AI decision logging, audit trail" },
+        { "file": "trading_engine/trailing_stops.py", "purpose": "Trailing stop loss and trailing take profit management" }
+      ]
+    },
 
     "exchange_clients": {
       "base": "exchange_clients/base.py (ExchangeClient ABC)",
@@ -157,6 +198,34 @@
       { "file": "indicators.py", "purpose": "Technical indicator calculators (MACD, RSI, Bollinger Bands, EMA, SMA)" },
       { "file": "models.py", "purpose": "SQLAlchemy ORM model definitions for all database tables" },
       { "file": "phase_conditions.py", "purpose": "Advanced condition grouping with AND/OR/NOT logic (3Commas-style)" }
+    ],
+
+    "schemas": [
+      { "file": "schemas/dashboard.py", "purpose": "Dashboard statistics Pydantic response models" },
+      { "file": "schemas/market.py", "purpose": "Market data and signal Pydantic schemas" },
+      { "file": "schemas/position.py", "purpose": "Position Pydantic response schemas" },
+      { "file": "schemas/settings.py", "purpose": "Settings Pydantic schemas" }
+    ],
+
+    "indicators_module": [
+      { "file": "indicators/ai_spot_opinion.py", "purpose": "AI-powered indicator combining technical metrics with LLM reasoning" },
+      { "file": "indicators/bull_flag_indicator.py", "purpose": "Bull flag chart pattern detection aggregate indicator" },
+      { "file": "indicators/risk_presets.py", "purpose": "Default risk preset configurations for AI indicators" }
+    ],
+
+    "price_feeds": [
+      { "file": "price_feeds/base.py", "purpose": "Abstract PriceFeed interface" },
+      { "file": "price_feeds/coinbase_feed.py", "purpose": "Coinbase exchange price feed implementation" },
+      { "file": "price_feeds/dex_feed.py", "purpose": "DEX price feed implementation (Uniswap V3, etc.)" },
+      { "file": "price_feeds/aggregator.py", "purpose": "Combines multiple price feeds for best-price discovery" }
+    ],
+
+    "middleware": [
+      { "file": "middleware/datetime_timezone.py", "purpose": "Adds 'Z' suffix to datetime fields in JSON responses" }
+    ],
+
+    "utils": [
+      { "file": "utils/candle_utils.py", "purpose": "Candle data utilities: timeframe aggregation, gap filling, synthetic timeframes" }
     ],
 
     "external_integrations": {

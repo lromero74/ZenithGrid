@@ -63,11 +63,11 @@ graph TB
 graph TB
     subgraph "API Layer (20 routers)"
         R_AUTH[auth]
-        R_BOTS[bots]
-        R_POS[positions]
+        R_BOTS[bots<br/><small>crud / control / ai_logs<br/>indicator_logs / scanner_logs / validation</small>]
+        R_POS[positions<br/><small>queries / actions / limit_orders<br/>manual_ops / perps</small>]
         R_ACCT[accounts]
         R_MKT[market_data]
-        R_NEWS[news]
+        R_NEWS[news<br/><small>sources / cache / models<br/>debt_ceiling</small>]
         R_TRADE[trading]
         R_OTHER[settings / templates<br/>order_history / blacklist<br/>seasonality / sources<br/>ai_credentials / ...]
     end
@@ -84,6 +84,15 @@ graph TB
     subgraph "Trading Engine"
         MBM[MultiBotMonitor]
         TEV2[TradingEngineV2]
+        subgraph "Engine Modules"
+            SIG[SignalProcessor]
+            BUY[BuyExecutor]
+            SELL[SellExecutor]
+            PERPS_EX[PerpsExecutor]
+            PM[PositionManager]
+            OL[OrderLogger]
+            TS[TrailingStops]
+        end
         TC[TradingClient]
         OV[OrderValidation]
         PREC[Precision]
@@ -117,10 +126,17 @@ graph TB
         AI_SVC[AIService]
         COND[Conditions]
         INDCALC[IndicatorCalculator]
+        IND_MOD[Indicators<br/><small>ai_spot_opinion / bull_flag<br/>risk_presets</small>]
         CACHE[Cache]
         ENC[Encryption]
         CFG[Config]
         DB[(SQLite)]
+    end
+
+    subgraph "Price Feeds"
+        PF_AGG[Aggregator]
+        PF_CB[CoinbaseFeed]
+        PF_DEX[DexFeed]
     end
 
     R_BOTS --> SVC_GRID
@@ -132,7 +148,10 @@ graph TB
     MBM --> S_GRID & S_IND & S_STAT & S_SPAT & S_TRI
     S_GRID --> COND & INDCALC
     S_IND --> COND & INDCALC
-    TEV2 --> TC
+    INDCALC --> IND_MOD
+    TEV2 --> SIG --> BUY & SELL & PERPS_EX
+    TEV2 --> PM & OL & TS
+    BUY & SELL --> TC
     TC --> OV --> PREC
     TC --> FACTORY
 
@@ -140,6 +159,9 @@ graph TB
     FACTORY --> CADAP & PAPER & DEXC
     CADAP --> CB_AUTH & CB_BAL & CB_MKT & CB_ORD & CB_PERP
     BASE -.->|interface| CADAP & PAPER & DEXC
+
+    MBM --> PF_AGG
+    PF_AGG --> PF_CB & PF_DEX
 
     S_GRID -.-> AI_SVC
     SVC_AI_OPT --> AI_SVC
@@ -215,17 +237,23 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant MBM as MultiBotMonitor
+    participant PF as PriceFeed Aggregator
     participant STRAT as Strategy
     participant AI as AIService
     participant TEV2 as TradingEngineV2
+    participant SIG as SignalProcessor
+    participant BUY as BuyExecutor
     participant TC as TradingClient
     participant OV as OrderValidation
     participant EX as ExchangeClient
     participant CB as Coinbase API
+    participant PM as PositionManager
     participant DB as SQLite
     participant WS as WebSocketManager
 
     loop Every check interval
+        MBM->>PF: get_prices(pairs)
+        PF-->>MBM: prices
         MBM->>STRAT: check_signals(bot, prices)
         alt AI Strategy
             STRAT->>AI: get_recommendation(pairs, context)
@@ -237,19 +265,22 @@ sequenceDiagram
     end
 
     MBM->>TEV2: process_signal(signal, bot)
-    TEV2->>TEV2: calculate_budget(bot, account)
-    TEV2->>OV: validate_order(size, product)
+    TEV2->>SIG: evaluate(signal, bot, account)
+    SIG->>SIG: calculate_budget(bot, account)
+    SIG->>OV: validate_order(size, product)
     alt Valid Order
-        TEV2->>TC: buy/sell(product, size, price)
+        SIG->>BUY: execute(product, size, price)
+        BUY->>TC: buy(product, size, price)
         TC->>EX: place_order(params)
         EX->>CB: POST /api/v3/brokerage/orders
         CB-->>EX: order_id
         EX-->>TC: result
-        TC-->>TEV2: trade
-        TEV2->>DB: create Position + Trade
-        TEV2->>WS: broadcast(order_fill)
+        TC-->>BUY: fill
+        BUY->>PM: create_position(fill)
+        PM->>DB: INSERT Position + Trade
+        BUY->>WS: broadcast(order_fill)
     else Below Minimum
-        TEV2->>DB: log rejection reason
+        SIG->>DB: log rejection reason
     end
 ```
 
