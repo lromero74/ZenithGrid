@@ -21,7 +21,7 @@
 - ✅ Bot templates (presets and custom templates)
 - ✅ Clone/duplicate bots
 - ✅ 3Commas-style UI (toggle switches, ... menu)
-- ⏳ Import/export bot configs
+- ✅ Import/export bot configs
 
 ### Strategy Support
 - ✅ Indicator-Based (custom conditions per phase)
