@@ -3,18 +3,18 @@
 **Goal**: Transform from personal trading tool → sellable SaaS product
 
 ## Phase 1: Foundation (Must-Have Before Any Sale)
-- [ ] **Multi-tenancy**: User registration, login, isolated data per user
-- [ ] **Credential security**: Users enter their own Coinbase API keys (encrypted storage)
-- [ ] **Remove hardcoded values**: No personal API keys, account IDs in code
-- [ ] **Environment-based config**: All secrets via env vars, not code
-- [ ] **Database per-user isolation**: Each user sees only their bots/positions
+- [x] **Multi-tenancy**: User registration, login, isolated data per user
+- [x] **Credential security**: Users enter their own Coinbase API keys (encrypted storage)
+- [x] **Remove hardcoded values**: No personal API keys, account IDs in code
+- [x] **Environment-based config**: All secrets via env vars, not code
+- [x] **Database per-user isolation**: Each user sees only their bots/positions
 
 ## Phase 2: Deployment Ready
 - [ ] **Docker Compose setup**: One-command deployment (backend + frontend + db)
 - [ ] **Production frontend build**: Serve via nginx, not Vite dev server
 - [ ] **HTTPS/SSL**: Proper cert management (Let's Encrypt)
-- [ ] **Health checks**: Uptime monitoring endpoints
-- [ ] **Backup automation**: Scheduled DB backups
+- [x] **Health checks**: Uptime monitoring endpoints
+- [x] **Backup automation**: Scheduled DB backups (via update.py)
 
 ## Phase 3: Business Infrastructure
 - [ ] **Landing page**: Features, pricing, screenshots
