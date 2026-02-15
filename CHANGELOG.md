@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v1.31.7] - 2026-02-15
 
+### Fixed
+- Fixed circular import in `routers/__init__.py` that prevented backend startup after `__pycache__` cleanup
+
 ### Removed
 - Deleted 7 stale docs/ files (ARBITRAGE_PLATFORM_HANDOFF, CANDLE_FETCH_OPTIMIZATION_PLAN, COMPLETE_DOCUMENTATION, DEVELOPMENT_ROADMAP, LIMIT_ORDERS_TODO, PROJECT_OVERVIEW, TODO_MIN_PROFIT_GUI_DISPLAY)
 
