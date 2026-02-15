@@ -5,6 +5,24 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.30.0] - 2026-02-15
+
+### Added
+- Coinbase INTX perpetual futures support: API layer, bracket TP/SL orders, position monitoring
+- Futures bot configuration: leverage (1-10x), margin type (Cross/Isolated), TP/SL percentages, direction
+- Perps portfolio linking in Settings (discovers INTX portfolio UUID)
+- Futures position display: leverage badge, liquidation price, TP/SL, unrealized PnL, funding fees
+- Perps portfolio panel: margin balance, open positions summary
+- Backend endpoints for perps products, portfolio, positions, modify TP/SL, close position
+- Database migration for perpetual futures fields (accounts, bots, positions)
+
+## [v1.29.0] - 2026-02-14
+
+### Added
+- CHANGELOG.md
+- Min volume filter UI for bot configuration
+- Increasing/decreasing operators for indicators
+
 ## [v1.28.2] - 2026-02-14
 
 - Remove 6 PnL cards from Portfolio page
