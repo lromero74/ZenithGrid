@@ -5,9 +5,11 @@ Exposes available trading strategies and their parameter definitions to the fron
 """
 
 from typing import List, Dict, Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.models import User
+from app.routers.auth_dependencies import get_current_user
 from app.strategies import StrategyRegistry, StrategyDefinition
 
 router = APIRouter(prefix="/api/strategies", tags=["strategies"])
@@ -25,7 +27,7 @@ class StrategyResponse(BaseModel):
 
 
 @router.get("/", response_model=List[StrategyResponse])
-async def list_strategies():
+async def list_strategies(current_user: User = Depends(get_current_user)):
     """
     Get all available trading strategies with their parameter definitions.
 
@@ -68,7 +70,7 @@ async def list_strategies():
 
 
 @router.get("/{strategy_id}", response_model=StrategyResponse)
-async def get_strategy(strategy_id: str):
+async def get_strategy(strategy_id: str, current_user: User = Depends(get_current_user)):
     """
     Get a specific strategy's definition by ID.
 

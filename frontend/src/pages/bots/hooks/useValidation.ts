@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import axios from 'axios'
+import { api } from '../../../services/api'
 import type { BotFormData, ValidationWarning, ValidationError } from '../../../components/bots'
 
 interface UseValidationProps {
@@ -33,7 +33,7 @@ export function useValidation({
     }
 
     try {
-      const response = await axios.post('/api/bots/validate-config', {
+      const response = await api.post('/bots/validate-config', {
         product_ids: formData.product_ids,
         strategy_config: formData.strategy_config
       })

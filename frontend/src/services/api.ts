@@ -16,7 +16,7 @@ import type {
   AIBotLog,
 } from '../types';
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
 });
@@ -48,6 +48,32 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * Authenticated fetch wrapper - adds Authorization header from localStorage.
+ * Use this instead of raw fetch() for any protected API endpoint.
+ */
+export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = localStorage.getItem('auth_access_token');
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...headers,
+      ...(options.headers as Record<string, string> || {}),
+    },
+  });
+  // Handle 401 the same way as the axios interceptor
+  if (response.status === 401) {
+    localStorage.removeItem('auth_access_token');
+    localStorage.removeItem('auth_refresh_token');
+    localStorage.removeItem('auth_token_expiry');
+    localStorage.removeItem('auth_user');
+    window.dispatchEvent(new Event('auth-logout'));
+  }
+  return response;
+}
 
 export const dashboardApi = {
   getStats: () => api.get<DashboardStats>('/dashboard').then((res) => res.data),

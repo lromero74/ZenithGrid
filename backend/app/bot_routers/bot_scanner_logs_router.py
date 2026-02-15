@@ -13,15 +13,16 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import ScannerLog, Bot
+from app.models import ScannerLog, Bot, User
 from app.bot_routers.schemas import ScannerLogCreate, ScannerLogResponse
+from app.routers.auth_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/{bot_id}/scanner-logs", response_model=ScannerLogResponse, status_code=201)
-async def create_scanner_log(bot_id: int, log_data: ScannerLogCreate, db: AsyncSession = Depends(get_db)):
+async def create_scanner_log(bot_id: int, log_data: ScannerLogCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Save scanner/monitor reasoning log"""
     # Verify bot exists
     bot_query = select(Bot).where(Bot.id == bot_id)
@@ -61,6 +62,7 @@ async def get_scanner_logs(
     decision: Optional[str] = None,
     since: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get scanner/monitor logs (most recent first)
@@ -110,6 +112,7 @@ async def clear_scanner_logs(
     bot_id: int,
     older_than_hours: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Clear scanner logs for a bot.

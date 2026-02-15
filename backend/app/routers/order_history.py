@@ -14,7 +14,8 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Bot, OrderHistory
+from app.models import Bot, OrderHistory, User
+from app.routers.auth_dependencies import get_current_user
 
 T = TypeVar("T")
 
@@ -58,6 +59,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 @router.get("/", response_model=List[OrderHistoryResponse])
 async def get_order_history(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
     account_id: Optional[int] = Query(None, description="Filter by account ID"),
     status: Optional[str] = Query(None, description="Filter by status (success, failed, canceled)"),
@@ -124,6 +126,7 @@ async def get_order_history(
 @router.get("/failed", response_model=List[OrderHistoryResponse])
 async def get_failed_orders(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
     account_id: Optional[int] = Query(None, description="Filter by account ID"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of records to return"),
@@ -139,6 +142,7 @@ async def get_failed_orders(
 @router.get("/failed/paginated")
 async def get_failed_orders_paginated(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
     account_id: Optional[int] = Query(None, description="Filter by account ID"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
@@ -187,6 +191,7 @@ async def get_failed_orders_paginated(
 @router.get("/stats")
 async def get_order_stats(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     bot_id: Optional[int] = Query(None, description="Filter by bot ID"),
     account_id: Optional[int] = Query(None, description="Filter by account ID"),
 ):

@@ -12,8 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Account
+from app.models import Account, User
 from app.coinbase_unified_client import CoinbaseClient
+from app.routers.auth_dependencies import get_current_user
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.order_validation import calculate_minimum_budget_percentage
@@ -49,7 +50,7 @@ async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
 
 
 @router.post("/validate-config", response_model=ValidateBotConfigResponse)
-async def validate_bot_config(request: ValidateBotConfigRequest, db: AsyncSession = Depends(get_db)):
+async def validate_bot_config(request: ValidateBotConfigRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Validate if bot configuration meets minimum order size requirements
 

@@ -11,6 +11,7 @@
 import { useState, useEffect } from 'react'
 import { FlaskConical, Plus, Minus, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { authFetch } from '../services/api'
 
 interface PaperBalances {
   BTC: number
@@ -52,7 +53,7 @@ export function PaperTradingManager() {
     try {
       setLoading(true)
       const token = getAccessToken()
-      const response = await fetch('/api/paper-trading/balance', {
+      const response = await authFetch('/api/paper-trading/balance', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -86,7 +87,7 @@ export function PaperTradingManager() {
 
     try {
       const token = getAccessToken()
-      const response = await fetch('/api/paper-trading/deposit', {
+      const response = await authFetch('/api/paper-trading/deposit', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -126,7 +127,7 @@ export function PaperTradingManager() {
 
     try {
       const token = getAccessToken()
-      const response = await fetch('/api/paper-trading/withdraw', {
+      const response = await authFetch('/api/paper-trading/withdraw', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -163,7 +164,7 @@ export function PaperTradingManager() {
 
     try {
       const token = getAccessToken()
-      const response = await fetch('/api/paper-trading/reset', {
+      const response = await authFetch('/api/paper-trading/reset', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

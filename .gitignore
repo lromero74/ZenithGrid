@@ -30,6 +30,8 @@ backend/static/news_images/*
 # Environment variables
 .env
 .env.local
+.env.bak*
+*.env.bak*
 
 # Node
 node_modules/

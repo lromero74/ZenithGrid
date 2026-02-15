@@ -17,7 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import PendingOrder, Position
+from app.models import PendingOrder, Position, User
+from app.routers.auth_dependencies import get_current_user
 from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import LimitCloseRequest, UpdateLimitCloseRequest
@@ -32,6 +33,7 @@ async def limit_close_position(
     request: LimitCloseRequest,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: User = Depends(get_current_user),
 ):
     """Close a position via limit order"""
     try:
@@ -146,7 +148,7 @@ async def limit_close_position(
 
 @router.get("/{position_id}/ticker")
 async def get_position_ticker(
-    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)
+    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase), current_user: User = Depends(get_current_user)
 ):
     """Get current bid/ask/mark prices for a position"""
     try:
@@ -180,7 +182,7 @@ async def get_position_ticker(
 
 @router.get("/{position_id}/slippage-check")
 async def check_market_close_slippage(
-    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)
+    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase), current_user: User = Depends(get_current_user)
 ):
     """Check if closing at market would result in significant slippage"""
     try:
@@ -241,7 +243,7 @@ async def check_market_close_slippage(
 
 @router.post("/{position_id}/cancel-limit-close")
 async def cancel_limit_close(
-    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase)
+    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase), current_user: User = Depends(get_current_user)
 ):
     """Cancel a pending limit close order"""
     try:
@@ -287,6 +289,7 @@ async def update_limit_close(
     request: UpdateLimitCloseRequest,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: User = Depends(get_current_user),
 ):
     """Update the limit price for a pending limit close order using Coinbase's native Edit Order API"""
     try:

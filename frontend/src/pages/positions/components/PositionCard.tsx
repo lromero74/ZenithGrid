@@ -11,8 +11,7 @@ import {
   PriceBar,
 } from '../../../components/positions'
 import { GridVisualizer } from '../../../components/GridVisualizer'
-import axios from 'axios'
-import { API_BASE_URL } from '../../../config/api'
+import { api } from '../../../services/api'
 
 interface PositionCardProps {
   position: Position & { _cachedPnL?: any }
@@ -63,7 +62,7 @@ export const PositionCard = ({
     e.stopPropagation()
     if (confirm('Cancel limit close order?')) {
       try {
-        await axios.post(`${API_BASE_URL}/api/positions/${position.id}/cancel-limit-close`)
+        await api.post(`/positions/${position.id}/cancel-limit-close`)
         onRefetch()
       } catch (err: any) {
         alert(`Error: ${err.response?.data?.detail || err.message}`)
@@ -449,7 +448,7 @@ export const PositionCard = ({
             onClick={async (e) => {
               e.stopPropagation()
               try {
-                const result = await axios.post(`${API_BASE_URL}/api/positions/${position.id}/resize-budget`)
+                const result = await api.post(`/positions/${position.id}/resize-budget`)
                 const d = result.data
                 alert(`Budget resized: ${d.old_max.toFixed(8)} → ${d.new_max.toFixed(8)} ${d.quote_currency}`)
                 onRefetch()

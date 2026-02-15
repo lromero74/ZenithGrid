@@ -67,6 +67,7 @@ def _get_coinbase_client(exchange) -> CoinbaseClient:
 @router.get("/products")
 async def list_perps_products(
     exchange=Depends(get_coinbase),
+    current_user: User = Depends(get_current_user),
 ):
     """List available INTX perpetual futures products"""
     client = _get_coinbase_client(exchange)
@@ -172,6 +173,7 @@ async def modify_tp_sl(
     request: ModifyTpSlRequest,
     db: AsyncSession = Depends(get_db),
     exchange=Depends(get_coinbase),
+    current_user: User = Depends(get_current_user),
 ):
     """Update TP/SL prices on an existing perps position"""
     client = _get_coinbase_client(exchange)
@@ -260,6 +262,7 @@ async def close_perps_position(
     request: ClosePositionRequest,
     db: AsyncSession = Depends(get_db),
     exchange=Depends(get_coinbase),
+    current_user: User = Depends(get_current_user),
 ):
     """Manually close a perps position"""
     client = _get_coinbase_client(exchange)

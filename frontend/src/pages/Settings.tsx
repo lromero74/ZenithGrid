@@ -8,10 +8,7 @@ import { AutoBuySettings } from '../components/AutoBuySettings'
 import { BlacklistManager } from '../components/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
-import { settingsApi } from '../services/api'
-import axios from 'axios'
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { settingsApi, api } from '../services/api'
 
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
@@ -336,7 +333,7 @@ function PerpsPortfolioSection({ accountId }: { accountId: number }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    axios.get(`${API_BASE_URL}/api/accounts/${accountId}/perps-portfolio`)
+    api.get(`/accounts/${accountId}/perps-portfolio`)
       .then(res => setStatus(res.data))
       .catch(() => setStatus(null))
   }, [accountId])
@@ -345,7 +342,7 @@ function PerpsPortfolioSection({ accountId }: { accountId: number }) {
     setLinking(true)
     setError(null)
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/accounts/${accountId}/link-perps-portfolio`)
+      const res = await api.post(`/accounts/${accountId}/link-perps-portfolio`)
       setStatus({ ...status, linked: true, perps_portfolio_uuid: res.data.portfolio_uuid })
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to link portfolio')

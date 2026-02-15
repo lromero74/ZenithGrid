@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
-import { positionsApi } from './services/api'
+import { positionsApi, authFetch } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
 import { PaperTradingToggle } from './components/PaperTradingToggle'
 import { AddAccountModal } from './components/AddAccountModal'
@@ -72,9 +72,7 @@ function AppContent() {
       if (!token) return
 
       try {
-        const response = await fetch('/api/auth/preferences/last-seen-history', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const response = await authFetch('/api/auth/preferences/last-seen-history')
         if (response.ok) {
           const data = await response.json()
           setLastSeenClosedCount(data.last_seen_history_count || 0)
@@ -99,17 +97,14 @@ function AppContent() {
   const { data: portfolio } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
-      const token = localStorage.getItem('auth_access_token')
-      const headers: Record<string, string> = {}
-      if (token) headers['Authorization'] = `Bearer ${token}`
       // If we have a selected account, use the account-specific endpoint
       if (selectedAccount) {
-        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`, { headers })
+        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
         if (!response.ok) throw new Error('Failed to fetch portfolio')
         return response.json()
       }
       // Fallback to legacy endpoint
-      const response = await fetch('/api/account/portfolio', { headers })
+      const response = await authFetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
@@ -127,10 +122,7 @@ function AppContent() {
   const { data: btcPriceData } = useQuery({
     queryKey: ['btc-usd-price'],
     queryFn: async () => {
-      const token = localStorage.getItem('auth_access_token')
-      const headers: Record<string, string> = {}
-      if (token) headers['Authorization'] = `Bearer ${token}`
-      const response = await fetch('/api/market/btc-usd-price', { headers })
+      const response = await authFetch('/api/market/btc-usd-price')
       if (!response.ok) throw new Error('Failed to fetch BTC price')
       return response.json()
     },
@@ -145,10 +137,7 @@ function AppContent() {
   const { data: ethPriceData } = useQuery({
     queryKey: ['eth-usd-price'],
     queryFn: async () => {
-      const token = localStorage.getItem('auth_access_token')
-      const headers: Record<string, string> = {}
-      if (token) headers['Authorization'] = `Bearer ${token}`
-      const response = await fetch('/api/market/eth-usd-price', { headers })
+      const response = await authFetch('/api/market/eth-usd-price')
       if (!response.ok) throw new Error('Failed to fetch ETH price')
       return response.json()
     },
@@ -191,9 +180,7 @@ function AppContent() {
         if (!token) return
 
         try {
-          const response = await fetch('/api/auth/preferences/last-seen-history', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
+          const response = await authFetch('/api/auth/preferences/last-seen-history')
           if (response.ok) {
             const data = await response.json()
             setLastSeenClosedCount(data.last_seen_history_count || 0)

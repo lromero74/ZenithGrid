@@ -1,9 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { positionsApi, botsApi } from '../../../services/api'
+import { positionsApi, botsApi, authFetch, api } from '../../../services/api'
 import { useState, useEffect, useMemo } from 'react'
 import type { Position } from '../../../types'
-import { API_BASE_URL } from '../../../config/api'
-import axios from 'axios'
 import { calculateUnrealizedPnL } from '../helpers'
 
 interface UsePositionsDataProps {
@@ -46,11 +44,11 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
     queryKey: ['account-portfolio', selectedAccountId],
     queryFn: async () => {
       if (selectedAccountId) {
-        const response = await fetch(`/api/accounts/${selectedAccountId}/portfolio`)
+        const response = await authFetch(`/api/accounts/${selectedAccountId}/portfolio`)
         if (!response.ok) throw new Error('Failed to fetch portfolio')
         return response.json()
       }
-      const response = await fetch('/api/account/portfolio')
+      const response = await authFetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
@@ -77,7 +75,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
       try {
         // Fetch all prices in a single batch request
         const productIds = openPositions.map(p => p.product_id || 'ETH-BTC').join(',')
-        const response = await axios.get(`${API_BASE_URL}/api/prices/batch`, {
+        const response = await api.get('/prices/batch', {
           params: { products: productIds },
           signal: abortController.signal
         })
@@ -95,7 +93,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
         setCurrentPrices(priceMap)
       } catch (err) {
         // Ignore abort errors (they're expected when component unmounts)
-        if (axios.isCancel(err) || (err as any)?.code === 'ECONNABORTED') {
+        if ((err as any)?.code === 'ERR_CANCELED' || (err as any)?.code === 'ECONNABORTED') {
           return
         }
         console.error('Error fetching batch prices:', err)

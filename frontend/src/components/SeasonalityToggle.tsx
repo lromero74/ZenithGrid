@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sun, Snowflake, Leaf, Sprout, ToggleLeft, ToggleRight, AlertTriangle, TrendingUp, DollarSign, Info } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
+import { authFetch } from '../services/api'
 
 interface SeasonalityStatus {
   enabled: boolean
@@ -66,7 +67,7 @@ export function SeasonalityToggle() {
   const { data: status, isLoading, error } = useQuery<SeasonalityStatus>({
     queryKey: ['seasonality'],
     queryFn: async () => {
-      const response = await fetch('/api/seasonality')
+      const response = await authFetch('/api/seasonality')
       if (!response.ok) throw new Error('Failed to fetch seasonality status')
       return response.json()
     },
@@ -77,7 +78,7 @@ export function SeasonalityToggle() {
   // Toggle mutation
   const toggleMutation = useMutation({
     mutationFn: async (enabled: boolean) => {
-      const response = await fetch('/api/seasonality', {
+      const response = await authFetch('/api/seasonality', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),

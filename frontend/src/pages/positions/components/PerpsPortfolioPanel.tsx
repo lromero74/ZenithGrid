@@ -1,7 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { api } from '../../../services/api'
 
 interface PerpsPosition {
   id: number
@@ -21,7 +19,7 @@ export default function PerpsPortfolioPanel() {
   const { data: portfolio } = useQuery({
     queryKey: ['perps-portfolio'],
     queryFn: async () => {
-      const res = await axios.get(`${API_BASE_URL}/api/perps/portfolio`)
+      const res = await api.get('/perps/portfolio')
       return res.data
     },
     retry: false,
@@ -31,7 +29,7 @@ export default function PerpsPortfolioPanel() {
   const { data: positionsData } = useQuery({
     queryKey: ['perps-positions'],
     queryFn: async () => {
-      const res = await axios.get(`${API_BASE_URL}/api/perps/positions`)
+      const res = await api.get('/perps/positions')
       return res.data
     },
     retry: false,

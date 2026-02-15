@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { botsApi, positionsApi } from '../services/api'
+import { botsApi, positionsApi, authFetch } from '../services/api'
 import {
   TrendingUp,
   TrendingDown,
@@ -84,12 +84,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     queryFn: async () => {
       // If we have a selected account, use the account-specific endpoint
       if (selectedAccount) {
-        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
         if (!response.ok) throw new Error('Failed to fetch portfolio')
         return response.json()
       }
       // Fallback to legacy endpoint
-      const response = await fetch('/api/account/portfolio')
+      const response = await authFetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
@@ -104,7 +104,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     queryKey: ['account-reservations', selectedAccount?.id],
     queryFn: async () => {
       if (!selectedAccount) return null
-      const response = await fetch(`/api/account-value/reservations?account_id=${selectedAccount.id}`)
+      const response = await authFetch(`/api/account-value/reservations?account_id=${selectedAccount.id}`)
       if (!response.ok) throw new Error('Failed to fetch reservations')
       return response.json()
     },

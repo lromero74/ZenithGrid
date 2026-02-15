@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Time } from 'lightweight-charts'
-import axios from 'axios'
+import { api } from '../../../services/api'
 import type { CandleData } from '../../../utils/indicators/types'
-import { API_BASE_URL } from '../../../config/api'
 
 /**
  * Hook for fetching and managing candle data from the API
@@ -23,7 +22,7 @@ export function useChartData(
 
     const fetchCandles = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/candles`, {
+        const response = await api.get('/candles', {
           params: {
             product_id: symbol,
             granularity: timeframe,

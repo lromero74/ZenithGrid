@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Position
+from app.models import Position, User
+from app.routers.auth_dependencies import get_current_user
 from app.coinbase_unified_client import CoinbaseClient
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import AddFundsRequest, UpdateNotesRequest
@@ -29,6 +30,7 @@ async def add_funds_to_position(
     request: AddFundsRequest,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: User = Depends(get_current_user),
 ):
     """Manually add funds to a position (manual safety order)"""
     quote_amount = request.btc_amount  # Multi-currency: actually quote amount (BTC or USD)
@@ -96,7 +98,7 @@ async def add_funds_to_position(
 
 
 @router.patch("/{position_id}/notes")
-async def update_position_notes(position_id: int, request: UpdateNotesRequest, db: AsyncSession = Depends(get_db)):
+async def update_position_notes(position_id: int, request: UpdateNotesRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update notes for a position (like 3Commas)"""
     try:
         query = select(Position).where(Position.id == position_id)

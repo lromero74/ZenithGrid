@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Newspaper, Video, Check, Loader2, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react'
 import { sourceColors, videoSourceColors } from './newsUtils'
-import { useAuth } from '../../contexts/AuthContext'
+import { authFetch } from '../../services/api'
 import { CATEGORY_COLORS, NewsCategory } from '../../pages/news/types'
 
 interface ContentSource {
@@ -25,7 +25,6 @@ interface SourceSubscriptionsModalProps {
 }
 
 export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscriptionsModalProps) {
-  const { getAccessToken } = useAuth()
   const [sources, setSources] = useState<ContentSource[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -44,10 +43,7 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
     setLoading(true)
     setError(null)
     try {
-      const token = getAccessToken()
-      const response = await fetch('/api/sources/', {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
+      const response = await authFetch('/api/sources/')
       if (!response.ok) throw new Error('Failed to fetch sources')
       const data = await response.json()
       setSources(data.sources)
@@ -61,14 +57,12 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
   const toggleSubscription = async (source: ContentSource) => {
     setTogglingId(source.id)
     try {
-      const token = getAccessToken()
       const endpoint = source.is_subscribed
         ? `/api/sources/${source.id}/unsubscribe`
         : `/api/sources/${source.id}/subscribe`
 
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
       if (!response.ok) throw new Error('Failed to update subscription')
 
@@ -102,15 +96,13 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
     const toToggle = categorySources.filter(s => s.is_subscribed !== subscribe)
     if (toToggle.length === 0) return
 
-    const token = getAccessToken()
     for (const source of toToggle) {
       try {
         const endpoint = subscribe
           ? `/api/sources/${source.id}/subscribe`
           : `/api/sources/${source.id}/unsubscribe`
-        const response = await fetch(endpoint, {
+        const response = await authFetch(endpoint, {
           method: 'POST',
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         })
         if (response.ok) {
           setSources(prev => prev.map(s =>

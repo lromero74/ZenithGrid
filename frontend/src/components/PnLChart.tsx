@@ -4,6 +4,7 @@ import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
 import { TrendingUp } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
+import { authFetch } from '../services/api'
 
 interface PnLDataPoint {
   timestamp: string
@@ -109,7 +110,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
       const url = accountId
         ? `/api/positions/pnl-timeseries?account_id=${accountId}`
         : '/api/positions/pnl-timeseries'
-      const response = await fetch(url)
+      const response = await authFetch(url)
       if (!response.ok) throw new Error('Failed to fetch P&L data')
       return response.json()
     },

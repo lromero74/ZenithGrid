@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw, Building2 } from 'lucide-react'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import axios from 'axios'
-import { API_BASE_URL } from '../config/api'
+import { authFetch, api } from '../services/api'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import type { CandleData } from '../utils/indicators/types'
@@ -64,12 +63,12 @@ function Portfolio() {
     queryFn: async () => {
       // If we have a selected account, use the account-specific endpoint
       if (selectedAccount) {
-        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
         if (!response.ok) throw new Error('Failed to fetch portfolio')
         return response.json() as Promise<PortfolioData>
       }
       // Fallback to legacy endpoint
-      const response = await fetch('/api/account/portfolio')
+      const response = await authFetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json() as Promise<PortfolioData>
     },
@@ -84,7 +83,7 @@ function Portfolio() {
   const sellCoinMutation = useMutation({
     mutationFn: async ({ asset, quoteAsset, size }: { asset: string; quoteAsset: string; size: number }) => {
       const productId = `${asset}-${quoteAsset}`
-      const response = await axios.post(`${API_BASE_URL}/trading/market-sell`, {
+      const response = await api.post('/trading/market-sell', {
         product_id: productId,
         size: size
       })
@@ -307,8 +306,8 @@ function Portfolio() {
 
       try {
         const productId = `${chartModalAsset}-${chartPairType}`
-        const response = await axios.get<{ candles: CandleData[] }>(
-          `${API_BASE_URL}/api/candles`,
+        const response = await api.get<{ candles: CandleData[] }>(
+          '/candles',
           {
             params: {
               product_id: productId,

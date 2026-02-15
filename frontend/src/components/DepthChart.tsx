@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
-import { API_BASE_URL } from '../config/api'
+import { api } from '../services/api'
 
 interface DepthChartProps {
   productId: string
@@ -27,7 +26,7 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
   useEffect(() => {
     const fetchOrderBook = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/orderbook/${productId}?limit=15`)
+        const response = await api.get(`/orderbook/${productId}?limit=15`)
         const data = response.data
 
         // Process bids (highest price first)

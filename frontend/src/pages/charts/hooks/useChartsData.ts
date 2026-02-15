@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
-import { API_BASE_URL } from '../../../config/api'
+import { authFetch, api } from '../../../services/api'
 import type { CandleData } from '../../../utils/indicators'
 
 export function useChartsData(
@@ -20,7 +19,7 @@ export function useChartsData(
   const { data: portfolio } = useQuery({
     queryKey: ['account-portfolio'],
     queryFn: async () => {
-      const response = await fetch('/api/account/portfolio')
+      const response = await authFetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
@@ -34,7 +33,7 @@ export function useChartsData(
   const { data: productsData } = useQuery({
     queryKey: ['available-products'],
     queryFn: async () => {
-      const response = await fetch('/api/products')
+      const response = await authFetch('/api/products')
       if (!response.ok) throw new Error('Failed to fetch products')
       return response.json()
     },
@@ -84,8 +83,8 @@ export function useChartsData(
       setError(null)
 
       try {
-        const response = await axios.get<{ candles: CandleData[] }>(
-          `${API_BASE_URL}/api/candles`,
+        const response = await api.get<{ candles: CandleData[] }>(
+          '/candles',
           {
             params: {
               product_id: selectedPair,

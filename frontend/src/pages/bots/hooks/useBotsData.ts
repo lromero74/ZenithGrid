@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { botsApi, templatesApi, accountApi } from '../../../services/api'
+import { botsApi, templatesApi, accountApi, authFetch, api } from '../../../services/api'
 import type { Bot } from '../../../types'
 import { convertProductsToTradingPairs, DEFAULT_TRADING_PAIRS, type TradingPair } from '../../../components/bots'
 import { TimeRange } from '../../../components/PnLChart'
-import axios from 'axios'
 
 interface UseBotsDataProps {
   selectedAccount: { id: number } | null
@@ -36,11 +35,11 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
     queryKey: ['account-portfolio-bots', selectedAccount?.id],
     queryFn: async () => {
       if (selectedAccount) {
-        const response = await fetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
         if (!response.ok) throw new Error('Failed to fetch portfolio')
         return response.json()
       }
-      const response = await fetch('/api/account/portfolio')
+      const response = await authFetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
@@ -65,7 +64,7 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
   const { data: productsData } = useQuery({
     queryKey: ['available-products'],
     queryFn: async () => {
-      const response = await axios.get('/api/products')
+      const response = await api.get('/products')
       return response.data
     },
     staleTime: 3600000, // Cache for 1 hour (product list rarely changes)

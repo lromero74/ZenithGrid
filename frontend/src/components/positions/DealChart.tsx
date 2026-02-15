@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
-import axios from 'axios'
+import { api } from '../../services/api'
 import {
   BarChart3,
   BarChart2,
@@ -19,7 +19,6 @@ import {
   TIME_INTERVALS,
   type CandleData
 } from '../../utils/indicators'
-import { API_BASE_URL } from '../../config/api'
 import type { Position, Trade } from '../../types'
 import {
   getTakeProfitPercent,
@@ -137,7 +136,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
   useEffect(() => {
     const fetchCandles = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/candles`, {
+        const response = await api.get('/candles', {
           params: {
             product_id: selectedPair,
             granularity: timeframe,

@@ -18,9 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
-from app.models import Account, Settings
+from app.models import Account, Settings, User
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
+from app.routers.auth_dependencies import get_current_user
 from app.schemas import SettingsUpdate, TestConnectionRequest
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ def update_env_file(key: str, value: str):
 
 
 @router.get("/settings")
-async def get_settings():
+async def get_settings(current_user: User = Depends(get_current_user)):
     """Get current settings"""
     # Mask API credentials for security
     masked_key = ""
@@ -129,7 +130,7 @@ async def get_settings():
 
 
 @router.post("/settings")
-async def update_settings(settings_update: SettingsUpdate, coinbase: CoinbaseClient = Depends(get_coinbase)):
+async def update_settings(settings_update: SettingsUpdate, coinbase: CoinbaseClient = Depends(get_coinbase), current_user: User = Depends(get_current_user)):
     """Update trading settings"""
     # Update API credentials in .env file if provided
     if settings_update.coinbase_api_key is not None:
@@ -167,7 +168,7 @@ async def update_settings(settings_update: SettingsUpdate, coinbase: CoinbaseCli
 
 
 @router.post("/test-connection")
-async def test_connection(request: TestConnectionRequest):
+async def test_connection(request: TestConnectionRequest, current_user: User = Depends(get_current_user)):
     """Test Coinbase API connection with provided credentials"""
     try:
         # Create a temporary client with the provided credentials
@@ -206,7 +207,7 @@ async def test_connection(request: TestConnectionRequest):
 
 
 @router.get("/settings/{key}")
-async def get_setting_by_key(key: str, db: AsyncSession = Depends(get_db)):
+async def get_setting_by_key(key: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get a single database setting by key"""
     query = select(Settings).where(Settings.key == key)
     result = await db.execute(query)
@@ -225,7 +226,7 @@ async def get_setting_by_key(key: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/settings/{key}")
-async def update_setting_by_key(key: str, value: str, db: AsyncSession = Depends(get_db)):
+async def update_setting_by_key(key: str, value: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update a single database setting by key"""
     query = select(Settings).where(Settings.key == key)
     result = await db.execute(query)

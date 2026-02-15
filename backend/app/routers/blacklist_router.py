@@ -135,7 +135,7 @@ async def get_ai_review_provider(db: AsyncSession) -> str:
 
 
 @router.get("/categories", response_model=CategorySettingsResponse)
-async def get_category_settings(db: AsyncSession = Depends(get_db)):
+async def get_category_settings(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Get current category trading settings.
 
@@ -152,7 +152,8 @@ async def get_category_settings(db: AsyncSession = Depends(get_db)):
 @router.put("/categories", response_model=CategorySettingsResponse)
 async def update_category_settings(
     request: CategorySettingsRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Update which categories are allowed to trade.
@@ -213,7 +214,7 @@ class AIProviderSettingsResponse(BaseModel):
 
 
 @router.get("/ai-provider", response_model=AIProviderSettingsResponse)
-async def get_ai_provider_setting(db: AsyncSession = Depends(get_db)):
+async def get_ai_provider_setting(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Get current AI provider for coin review.
 

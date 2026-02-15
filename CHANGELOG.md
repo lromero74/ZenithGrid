@@ -5,6 +5,40 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.0] - 2026-02-15
+
+### Added
+- Fernet encryption for API keys at rest (exchange credentials + AI provider keys)
+- `authFetch()` helper and exported `api` instance for centralized authenticated HTTP calls
+- WebSocket authentication via JWT query parameter
+- Login rate limiting (5 attempts per 15 minutes per IP)
+- Password strength requirements (min 8 chars, uppercase, lowercase, digit)
+- JWT secret startup validation (refuses to start with default/empty secret)
+- Auto-generate `JWT_SECRET_KEY` and `ENCRYPTION_KEY` in `setup.py`
+
+### Changed
+- Enforce authentication on all protected API endpoints (100% coverage)
+  - Backend: all bot, position, settings, system, order history, strategies, scanner logs, validation, and limit order endpoints now require JWT
+  - Only intentionally public endpoints remain unauthenticated (market data, candles, news, coin icons, auth)
+- Frontend: eliminate all bare `axios` imports in favor of auth-enabled `api` instance
+  - Fixed 13 frontend files using raw `fetch()` or bare `axios` that bypassed auth headers
+  - Affects: LimitCloseModal, PositionCard, usePositionMutations, PerpsPortfolioPanel, Portfolio, Settings, useValidation, useBotsData, useChartsData, usePositionsData, DealChart, DepthChart, useChartData
+- Tighten CORS (explicit methods/headers instead of wildcards)
+- Sanitize error responses (generic messages instead of leaking internal exceptions)
+
+### Fixed
+- Portfolio page "Failed to fetch portfolio" error caused by missing auth headers on auto-refresh
+- PnL chart showing "No closed positions yet" due to unauthenticated `/api/positions/pnl-timeseries` call
+- AISentimentIcon causing continuous 401 errors every 30 seconds
+- Path traversal vulnerability in coin icons endpoint
+- Debug print statements leaking JWT tokens in `coinbase_api/auth.py`
+
+### Security
+- Every non-public endpoint now returns 401 without valid JWT token
+- API keys encrypted at rest using Fernet symmetric encryption
+- Credential decryption at all read points (exchange client, AI service, settings)
+- `.env.bak*` patterns added to `.gitignore` to prevent accidental secret commits
+
 ## [v1.30.1] - 2026-02-15
 
 ### Fixed

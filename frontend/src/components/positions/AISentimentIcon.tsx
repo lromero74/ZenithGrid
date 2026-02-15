@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import axios from 'axios'
+import { authFetch } from '../../services/api'
 
 interface AISentimentIconProps {
   botId: number
@@ -11,10 +11,10 @@ export function AISentimentIcon({ botId, productId }: AISentimentIconProps) {
   const { data: aiLog } = useQuery({
     queryKey: ['ai-sentiment', botId, productId],
     queryFn: async () => {
-      const response = await axios.get(`/api/bots/${botId}/logs`, {
-        params: { product_id: productId, limit: 1 }
-      })
-      return response.data[0] || null
+      const response = await authFetch(`/api/bots/${botId}/logs?product_id=${encodeURIComponent(productId)}&limit=1`)
+      if (!response.ok) return null
+      const data = await response.json()
+      return data[0] || null
     },
     refetchInterval: 30000, // Refresh every 30 seconds
     enabled: !!botId && !!productId,

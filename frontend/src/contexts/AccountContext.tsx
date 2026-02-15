@@ -8,6 +8,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { authFetch } from '../services/api'
 
 // =============================================================================
 // Types
@@ -106,19 +107,19 @@ interface AccountContextType {
 
 const accountsApi = {
   getAll: async (): Promise<Account[]> => {
-    const response = await fetch('/api/accounts')
+    const response = await authFetch('/api/accounts')
     if (!response.ok) throw new Error('Failed to fetch accounts')
     return response.json()
   },
 
   getDefault: async (): Promise<Account> => {
-    const response = await fetch('/api/accounts/default')
+    const response = await authFetch('/api/accounts/default')
     if (!response.ok) throw new Error('Failed to fetch default account')
     return response.json()
   },
 
   create: async (data: CreateAccountDto): Promise<Account> => {
-    const response = await fetch('/api/accounts', {
+    const response = await authFetch('/api/accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),

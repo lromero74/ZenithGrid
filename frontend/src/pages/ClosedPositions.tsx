@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { positionsApi, botsApi, orderHistoryApi } from '../services/api'
+import { positionsApi, botsApi, orderHistoryApi, authFetch } from '../services/api'
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp, Building2, Wallet, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import type { Trade, AIBotLog, Position, Bot } from '../types'
@@ -54,9 +54,7 @@ function ClosedPositions() {
       if (!token) return
 
       try {
-        const response = await fetch('/api/auth/preferences/last-seen-history', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const response = await authFetch('/api/auth/preferences/last-seen-history')
         if (response.ok) {
           const data = await response.json()
           setLastSeenClosedCount(data.last_seen_history_count || 0)
@@ -74,7 +72,7 @@ function ClosedPositions() {
   useEffect(() => {
     const fetchBtcPrice = async () => {
       try {
-        const response = await fetch('/api/market/btc-usd-price')
+        const response = await authFetch('/api/market/btc-usd-price')
         if (response.ok) {
           const data = await response.json()
           setCurrentBtcUsdPrice(data.price || 0)
@@ -258,11 +256,10 @@ function ClosedPositions() {
           const token = getAccessToken()
           if (token) {
             try {
-              await fetch('/api/auth/preferences/last-seen-history', {
+              await authFetch('/api/auth/preferences/last-seen-history', {
                 method: 'PUT',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({ count: currentClosedCount })
               })
@@ -284,11 +281,10 @@ function ClosedPositions() {
           const token = getAccessToken()
           if (token) {
             try {
-              await fetch('/api/auth/preferences/last-seen-history', {
+              await authFetch('/api/auth/preferences/last-seen-history', {
                 method: 'PUT',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({ failed_count: currentFailedCount })
               })

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import axios from 'axios'
-import { API_BASE_URL } from '../config/api'
+import { api } from '../services/api'
 import { DepthChart } from './DepthChart'
 
 interface LimitCloseModalProps {
@@ -81,7 +80,7 @@ export function LimitCloseModal({
   useEffect(() => {
     const fetchPrecision = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/product-precision/${productId}`)
+        const response = await api.get(`/product-precision/${productId}`)
         setProductPrecision(response.data)
       } catch (err: any) {
         console.error('Failed to fetch product precision:', err)
@@ -102,7 +101,7 @@ export function LimitCloseModal({
 
     const fetchBtcPrice = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/market/btc-usd-price`)
+        const response = await api.get('/market/btc-usd-price')
         setBtcUsdPrice(response.data.price || 0)
       } catch (err: any) {
         console.error('Failed to fetch BTC/USD price:', err)
@@ -115,7 +114,7 @@ export function LimitCloseModal({
   useEffect(() => {
     const fetchTicker = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/positions/${positionId}/ticker`)
+        const response = await api.get(`/positions/${positionId}/ticker`)
         const data = response.data
         setTicker(data)
         // Price initialization is handled by separate useEffect with hasInitializedSlider
@@ -308,14 +307,14 @@ export function LimitCloseModal({
 
       if (isEditing) {
         // Update existing limit order
-        await axios.post(`${API_BASE_URL}/api/positions/${positionId}/update-limit-close`, {
+        await api.post(`/positions/${positionId}/update-limit-close`, {
           new_limit_price: limitPrice,
           time_in_force: timeInForce,
           end_time: endTimeIso
         })
       } else {
         // Create new limit order
-        await axios.post(`${API_BASE_URL}/api/positions/${positionId}/limit-close`, {
+        await api.post(`/positions/${positionId}/limit-close`, {
           limit_price: limitPrice,
           time_in_force: timeInForce,
           end_time: endTimeIso

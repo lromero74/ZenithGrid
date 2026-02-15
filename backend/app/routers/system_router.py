@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
-from app.models import Account, MarketData, Position, Signal, Trade
+from app.models import Account, MarketData, Position, Signal, Trade, User
 from app.multi_bot_monitor import MultiBotMonitor
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
@@ -34,6 +34,7 @@ from app.schemas import (
     SignalResponse,
     TradeResponse,
 )
+from app.routers.auth_dependencies import get_current_user
 from app.services.shutdown_manager import shutdown_manager
 
 logger = logging.getLogger(__name__)
@@ -325,7 +326,7 @@ async def root():
 
 
 @router.get("/api/ai-providers")
-async def get_ai_provider_info():
+async def get_ai_provider_info(current_user: User = Depends(get_current_user)):
     """Get information about AI providers and their billing URLs"""
     return {
         "providers": {
@@ -361,7 +362,8 @@ async def get_ai_provider_info():
 
 @router.get("/api/status")
 async def get_status(
-    coinbase: CoinbaseClient = Depends(get_coinbase), price_monitor: MultiBotMonitor = Depends(get_price_monitor)
+    coinbase: CoinbaseClient = Depends(get_coinbase), price_monitor: MultiBotMonitor = Depends(get_price_monitor),
+    current_user: User = Depends(get_current_user)
 ):
     """Get overall system status"""
     try:
@@ -378,6 +380,7 @@ async def get_dashboard(
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
     price_monitor: MultiBotMonitor = Depends(get_price_monitor),
+    current_user: User = Depends(get_current_user),
 ):
     """Get dashboard statistics"""
     try:
@@ -441,7 +444,7 @@ async def get_dashboard(
 
 
 @router.post("/api/monitor/start")
-async def start_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor)):
+async def start_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor), current_user: User = Depends(get_current_user)):
     """Start the price monitor"""
     if not price_monitor.running:
         price_monitor.start()
@@ -450,7 +453,7 @@ async def start_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monit
 
 
 @router.post("/api/monitor/stop")
-async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor)):
+async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor), current_user: User = Depends(get_current_user)):
     """Stop the price monitor"""
     if price_monitor.running:
         await price_monitor.stop()
@@ -459,7 +462,7 @@ async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monito
 
 
 @router.get("/api/trades", response_model=List[TradeResponse])
-async def get_trades(limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def get_trades(limit: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get recent trades"""
     query = select(Trade).order_by(desc(Trade.timestamp)).limit(limit)
     result = await db.execute(query)
@@ -469,7 +472,7 @@ async def get_trades(limit: int = 100, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/api/signals", response_model=List[SignalResponse])
-async def get_signals(limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def get_signals(limit: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get recent signals"""
     query = select(Signal).order_by(desc(Signal.timestamp)).limit(limit)
     result = await db.execute(query)
@@ -479,7 +482,7 @@ async def get_signals(limit: int = 100, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/api/market-data", response_model=List[MarketDataResponse])
-async def get_market_data(hours: int = 24, db: AsyncSession = Depends(get_db)):
+async def get_market_data(hours: int = 24, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get market data for charting"""
     start_time = datetime.utcnow() - timedelta(hours=hours)
     query = select(MarketData).where(MarketData.timestamp >= start_time).order_by(MarketData.timestamp)
@@ -492,13 +495,13 @@ async def get_market_data(hours: int = 24, db: AsyncSession = Depends(get_db)):
 # === Graceful Shutdown Endpoints ===
 
 @router.get("/api/system/shutdown-status")
-async def get_shutdown_status():
+async def get_shutdown_status(current_user: User = Depends(get_current_user)):
     """Get current shutdown manager status"""
     return shutdown_manager.get_status()
 
 
 @router.post("/api/system/prepare-shutdown")
-async def prepare_shutdown(timeout: int = 60):
+async def prepare_shutdown(timeout: int = 60, current_user: User = Depends(get_current_user)):
     """
     Prepare for graceful shutdown.
 
@@ -525,7 +528,7 @@ async def prepare_shutdown(timeout: int = 60):
 
 
 @router.post("/api/system/cancel-shutdown")
-async def cancel_shutdown():
+async def cancel_shutdown(current_user: User = Depends(get_current_user)):
     """
     Cancel a pending shutdown request.
 
@@ -548,7 +551,7 @@ def set_trading_pair_monitor(monitor):
 
 
 @router.get("/api/system/pair-monitor/status")
-async def get_pair_monitor_status():
+async def get_pair_monitor_status(current_user: User = Depends(get_current_user)):
     """Get status of the trading pair monitor"""
     if not _trading_pair_monitor:
         raise HTTPException(status_code=503, detail="Trading pair monitor not initialized")
@@ -556,7 +559,7 @@ async def get_pair_monitor_status():
 
 
 @router.post("/api/system/pair-monitor/sync")
-async def trigger_pair_sync():
+async def trigger_pair_sync(current_user: User = Depends(get_current_user)):
     """
     Manually trigger a trading pair sync.
 

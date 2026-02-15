@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { positionsApi } from '../../../services/api'
-import axios from 'axios'
-import { API_BASE_URL } from '../../../config/api'
+import { positionsApi, api } from '../../../services/api'
 
 interface UsePositionMutationsProps {
   refetchPositions: () => void
@@ -37,7 +35,7 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
 
     setIsProcessing(true)
     try {
-      await axios.patch(`${API_BASE_URL}/api/positions/${editingNotesPositionId}/notes`, {
+      await api.patch(`/positions/${editingNotesPositionId}/notes`, {
         notes: notesText
       })
       refetchPositions()
@@ -52,7 +50,7 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
 
   const handleCancelLimitClose = async (positionId: number) => {
     try {
-      await axios.post(`${API_BASE_URL}/api/positions/${positionId}/cancel-limit-close`)
+      await api.post(`/positions/${positionId}/cancel-limit-close`)
       refetchPositions()
       return { success: true }
     } catch (err: any) {
