@@ -1,0 +1,446 @@
+{
+  "project": "ZenithGrid",
+  "version": "v1.31.4",
+  "updated": "2026-02-15",
+  "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
+
+  "stack": {
+    "backend": {
+      "framework": "FastAPI",
+      "orm": "SQLAlchemy (async)",
+      "database": "SQLite (aiosqlite)",
+      "python": "3.x (venv)",
+      "auth": "JWT (python-jose)",
+      "encryption": "Fernet (cryptography)"
+    },
+    "frontend": {
+      "framework": "React 18",
+      "language": "TypeScript",
+      "bundler": "Vite",
+      "styling": "TailwindCSS",
+      "state": "React Context + React Query",
+      "charts": "Lightweight Charts (TradingView)",
+      "http": "Axios",
+      "routing": "react-router-dom"
+    },
+    "deployment": {
+      "platform": "AWS EC2 (Amazon Linux 2023)",
+      "process_manager": "systemd",
+      "services": ["trading-bot-backend", "trading-bot-frontend"]
+    }
+  },
+
+  "backend": {
+    "routers": [
+      { "file": "routers/account_router.py", "prefix": "/api/account", "purpose": "Account balances, aggregate value, portfolio operations" },
+      { "file": "routers/account_value_router.py", "prefix": "/api/account-value", "purpose": "Historical account value snapshots for charting" },
+      { "file": "routers/accounts_router.py", "prefix": "/api/accounts", "purpose": "CRUD for CEX and DEX trading accounts" },
+      { "file": "routers/ai_credentials_router.py", "prefix": "/api/ai-credentials", "purpose": "Manage per-user AI provider API keys" },
+      { "file": "routers/auth_router.py", "prefix": "/api/auth", "purpose": "Login, signup, token refresh, password change" },
+      { "file": "routers/blacklist_router.py", "prefix": "/api/blacklist", "purpose": "Coin blacklist and category management" },
+      { "file": "routers/bots.py", "prefix": "/api/bots", "purpose": "Bot CRUD, start/stop, logs, decisions, scanner logs, bulk ops" },
+      { "file": "routers/coin_icons_router.py", "prefix": "/api/coin-icons", "purpose": "Proxy and cache cryptocurrency icons to avoid CORS" },
+      { "file": "routers/market_data_router.py", "prefix": "/api", "purpose": "Current prices, OHLCV candles, product listings" },
+      { "file": "routers/news_router.py", "prefix": "/api/news", "purpose": "Aggregated crypto news, video feeds, market sentiment data" },
+      { "file": "routers/order_history.py", "prefix": "/api/order-history", "purpose": "Successful and failed order history with filtering" },
+      { "file": "routers/paper_trading_router.py", "prefix": "/api/paper-trading", "purpose": "Virtual paper trading account management" },
+      { "file": "routers/positions_router.py", "prefix": "/api/positions", "purpose": "Position CRUD, trades, AI logs, settings, slippage checks" },
+      { "file": "routers/seasonality_router.py", "prefix": "/api/seasonality", "purpose": "Market seasonality toggle for automatic bot management" },
+      { "file": "routers/settings_router.py", "prefix": "/api", "purpose": "User settings, changelog, system configuration" },
+      { "file": "routers/sources_router.py", "prefix": "/api/sources", "purpose": "News and video source subscription management" },
+      { "file": "routers/strategies_router.py", "prefix": "/api/strategies", "purpose": "Available trading strategies and parameter definitions" },
+      { "file": "routers/system_router.py", "prefix": "/api", "purpose": "Health check, dashboard stats, monitor control, system status" },
+      { "file": "routers/templates.py", "prefix": "/api/templates", "purpose": "Bot template CRUD" },
+      { "file": "routers/trading_router.py", "prefix": "/api/trading", "purpose": "Manual buy/sell orders for portfolio management" }
+    ],
+
+    "models": [
+      { "name": "User", "table": "users", "key_fields": ["id", "email", "hashed_password", "is_active", "terms_accepted"] },
+      { "name": "Account", "table": "accounts", "key_fields": ["id", "user_id", "name", "exchange", "account_type", "api_key", "api_secret", "is_default"] },
+      { "name": "Bot", "table": "bots", "key_fields": ["id", "account_id", "name", "strategy", "status", "trading_pairs", "budget_percentage", "max_concurrent_deals"] },
+      { "name": "BotTemplate", "table": "bot_templates", "key_fields": ["id", "user_id", "name", "strategy", "config_json"] },
+      { "name": "Position", "table": "positions", "key_fields": ["id", "bot_id", "product_id", "status", "side", "total_base_acquired", "total_quote_spent", "average_buy_price"] },
+      { "name": "Trade", "table": "trades", "key_fields": ["id", "position_id", "trade_type", "price", "amount", "quote_amount"] },
+      { "name": "Signal", "table": "signals", "key_fields": ["id", "product_id", "signal_type", "price", "indicator_values"] },
+      { "name": "Settings", "table": "settings", "key_fields": ["id", "user_id", "key", "value"] },
+      { "name": "MarketData", "table": "market_data", "key_fields": ["id", "product_id", "timestamp", "price", "volume"] },
+      { "name": "AIBotLog", "table": "ai_bot_logs", "key_fields": ["id", "bot_id", "product_id", "decision", "confidence", "thinking", "context"] },
+      { "name": "ScannerLog", "table": "scanner_logs", "key_fields": ["id", "bot_id", "product_id", "decision", "metrics"] },
+      { "name": "IndicatorLog", "table": "indicator_logs", "key_fields": ["id", "bot_id", "product_id", "phase", "conditions_met", "details"] },
+      { "name": "PendingOrder", "table": "pending_orders", "key_fields": ["id", "position_id", "order_id", "order_type", "side", "price", "size", "status"] },
+      { "name": "OrderHistory", "table": "order_history", "key_fields": ["id", "user_id", "bot_id", "product_id", "side", "status", "order_type"] },
+      { "name": "BlacklistedCoin", "table": "blacklisted_coins", "key_fields": ["id", "symbol", "reason", "category"] },
+      { "name": "AIProviderCredential", "table": "ai_provider_credentials", "key_fields": ["id", "user_id", "provider", "api_key_encrypted", "is_active"] },
+      { "name": "NewsArticle", "table": "news_articles", "key_fields": ["id", "title", "url", "source", "category", "published_at"] },
+      { "name": "VideoArticle", "table": "video_articles", "key_fields": ["id", "title", "video_id", "channel_name", "category", "published_at"] },
+      { "name": "ContentSource", "table": "content_sources", "key_fields": ["id", "source_key", "name", "source_type", "url", "category"] },
+      { "name": "UserSourceSubscription", "table": "user_source_subscriptions", "key_fields": ["id", "user_id", "source_id", "is_subscribed"] },
+      { "name": "AccountValueSnapshot", "table": "account_value_snapshots", "key_fields": ["id", "account_id", "timestamp", "btc_value", "usd_value"] },
+      { "name": "MetricSnapshot", "table": "metric_snapshots", "key_fields": ["id", "metric_type", "timestamp", "value_json"] }
+    ],
+
+    "services": [
+      { "file": "services/account_snapshot_service.py", "purpose": "Captures daily account value snapshots for historical charting", "type": "background" },
+      { "file": "services/ai_grid_optimizer.py", "purpose": "AI-powered grid parameter optimization", "type": "analysis" },
+      { "file": "services/auto_buy_monitor.py", "purpose": "Auto-converts stablecoins to BTC when balances exceed minimums", "type": "background" },
+      { "file": "services/budget_calculator.py", "purpose": "Calculates available capital for bidirectional bots with reservations", "type": "trading" },
+      { "file": "services/coin_review_service.py", "purpose": "Weekly AI-powered coin status review and categorization", "type": "analysis" },
+      { "file": "services/content_refresh_service.py", "purpose": "Periodically fetches news and video content from configured sources", "type": "background" },
+      { "file": "services/debt_ceiling_monitor.py", "purpose": "Weekly check for US debt ceiling legislation changes", "type": "background" },
+      { "file": "services/delisted_pair_monitor.py", "purpose": "Daily sync of trading pairs; removes delisted pairs from bots", "type": "background" },
+      { "file": "services/dex_wallet_service.py", "purpose": "Fetches wallet balances from blockchain networks (Ethereum, L2s)", "type": "exchange" },
+      { "file": "services/exchange_service.py", "purpose": "Provides per-user, per-account exchange client instantiation", "type": "exchange" },
+      { "file": "services/grid_rotation_service.py", "purpose": "Periodic profit lock-in and grid refresh for winning positions", "type": "trading" },
+      { "file": "services/grid_trading_service.py", "purpose": "Grid bot lifecycle: initialization, level management, order placement", "type": "trading" },
+      { "file": "services/indicator_log_service.py", "purpose": "Logs indicator condition evaluations for non-AI bots", "type": "logging" },
+      { "file": "services/limit_order_monitor.py", "purpose": "Monitors pending limit orders and updates positions on fill", "type": "background" },
+      { "file": "services/news_image_cache.py", "purpose": "Downloads and caches news thumbnails as base64 data URIs", "type": "background" },
+      { "file": "services/order_monitor.py", "purpose": "Checks pending limit orders and creates trades when filled", "type": "background" },
+      { "file": "services/order_reconciliation_monitor.py", "purpose": "Detects and fixes positions with missing fill data", "type": "background" },
+      { "file": "services/perps_monitor.py", "purpose": "Syncs perpetual futures positions with Coinbase INTX state", "type": "background" },
+      { "file": "services/portfolio_conversion_service.py", "purpose": "Portfolio conversion with progress tracking", "type": "trading" },
+      { "file": "services/season_detector.py", "purpose": "Market season detection using halving cycles and multiple indicators", "type": "analysis" },
+      { "file": "services/shutdown_manager.py", "purpose": "Tracks in-flight operations for graceful shutdown", "type": "infrastructure" },
+      { "file": "services/websocket_manager.py", "purpose": "WebSocket connection manager for real-time order fill notifications", "type": "infrastructure" }
+    ],
+
+    "trading_engine": [
+      { "file": "trading_engine_v2.py", "purpose": "Strategy-based trading engine coordinator; wraps all trading modules" },
+      { "file": "trading_client.py", "purpose": "Quote-currency agnostic buy/sell wrapper; works with any ExchangeClient" },
+      { "file": "multi_bot_monitor.py", "purpose": "Monitors prices for all active bots and dispatches strategy signals" },
+      { "file": "order_validation.py", "purpose": "Ensures orders meet Coinbase minimum size requirements" },
+      { "file": "precision.py", "purpose": "Precision handling for Coinbase API order sizes" },
+      { "file": "product_precision.py", "purpose": "Per-product increment specifications from Coinbase API" }
+    ],
+
+    "exchange_clients": {
+      "base": "exchange_clients/base.py (ExchangeClient ABC)",
+      "implementations": [
+        { "file": "exchange_clients/coinbase_adapter.py", "purpose": "Wraps CoinbaseClient to implement ExchangeClient interface" },
+        { "file": "exchange_clients/paper_trading_client.py", "purpose": "Simulated exchange client for paper trading" },
+        { "file": "exchange_clients/dex_client.py", "purpose": "DEX trading client for on-chain swaps" },
+        { "file": "exchange_clients/dex_constants.py", "purpose": "DEX contract addresses, router ABIs, chain configs" }
+      ],
+      "factory": "exchange_clients/factory.py",
+      "coinbase_modules": [
+        { "file": "coinbase_api/auth.py", "purpose": "HMAC and CDP authentication for Coinbase API" },
+        { "file": "coinbase_api/account_balance_api.py", "purpose": "Account balance and portfolio queries" },
+        { "file": "coinbase_api/market_data_api.py", "purpose": "Prices, candles, product listings" },
+        { "file": "coinbase_api/order_api.py", "purpose": "Order placement, cancellation, and status" },
+        { "file": "coinbase_api/perpetuals_api.py", "purpose": "Perpetual futures positions, portfolio, allocations" }
+      ],
+      "unified_client": "coinbase_unified_client.py (CoinbaseClient wrapper coordinating all API modules)"
+    },
+
+    "strategies": [
+      { "file": "strategies/__init__.py", "class": "TradingStrategy (ABC), StrategyRegistry", "purpose": "Base strategy interface and registry for strategy discovery" },
+      { "file": "strategies/grid_trading.py", "class": "GridTradingStrategy", "purpose": "DCA grid trading with limit orders at predetermined price levels" },
+      { "file": "strategies/indicator_based.py", "class": "IndicatorBasedStrategy", "purpose": "Unified condition-based strategy with configurable indicators for entry/DCA/exit" },
+      { "file": "strategies/spatial_arbitrage.py", "class": "SpatialArbitrageStrategy", "purpose": "Cross-exchange arbitrage exploiting price differences between venues" },
+      { "file": "strategies/statistical_arbitrage.py", "class": "StatisticalArbitrageStrategy", "purpose": "Mean-reversion strategy based on price correlations between pairs" },
+      { "file": "strategies/triangular_arbitrage.py", "class": "TriangularArbitrageStrategy", "purpose": "Single-exchange 3-currency cycle arbitrage (e.g., ETH->BTC->USDT->ETH)" },
+      { "file": "strategies/bull_flag_scanner.py", "class": "N/A (utility)", "purpose": "Volume spike and bull flag pattern detection for USD pairs" },
+      { "file": "strategies/condition_mirror.py", "class": "ConditionMirror", "purpose": "Mirrors long conditions to short conditions for bidirectional bots" }
+    ],
+
+    "core_modules": [
+      { "file": "ai_service.py", "purpose": "Unified AI client interface (Anthropic, OpenAI, Google Gemini)" },
+      { "file": "cache.py", "purpose": "In-memory cache for API responses to reduce exchange API spam" },
+      { "file": "cleanup_jobs.py", "purpose": "Scheduled database cleanup for old decision logs, failed orders, noise logs" },
+      { "file": "conditions.py", "purpose": "Flexible condition framework (3Commas-style) with indicator comparisons" },
+      { "file": "config.py", "purpose": "Pydantic settings loaded from .env (database URL, JWT secret, CORS, etc.)" },
+      { "file": "constants.py", "purpose": "Trading pairs, timeframes, and other application constants" },
+      { "file": "currency_utils.py", "purpose": "Multi-quote-currency detection and formatting (BTC/USD)" },
+      { "file": "database.py", "purpose": "SQLAlchemy async engine, session maker, default content sources" },
+      { "file": "encryption.py", "purpose": "Fernet encryption for API keys and credentials at rest" },
+      { "file": "indicator_calculator.py", "purpose": "Calculates all technical indicators from candle data for conditions" },
+      { "file": "indicators.py", "purpose": "Technical indicator calculators (MACD, RSI, Bollinger Bands, EMA, SMA)" },
+      { "file": "models.py", "purpose": "SQLAlchemy ORM model definitions for all database tables" },
+      { "file": "phase_conditions.py", "purpose": "Advanced condition grouping with AND/OR/NOT logic (3Commas-style)" }
+    ],
+
+    "external_integrations": {
+      "ai_providers": [
+        { "name": "Anthropic (Claude)", "library": "anthropic", "usage": "AI bot decisions, coin review, grid optimization" },
+        { "name": "OpenAI (GPT)", "library": "openai", "usage": "Alternative AI provider for bot decisions" },
+        { "name": "Google Gemini", "library": "google-generativeai", "usage": "Alternative AI provider for bot decisions" }
+      ],
+      "coinbase_api": {
+        "type": "REST + WebSocket",
+        "auth_methods": ["HMAC", "CDP (Cloud Developer Platform)"],
+        "features": ["Spot trading", "Perpetual futures (INTX)", "Market data", "Account management"]
+      },
+      "dex": {
+        "networks": ["Ethereum mainnet", "Arbitrum", "Polygon", "Base"],
+        "features": ["Wallet balances", "Token holdings", "On-chain swaps"]
+      },
+      "news_feeds": {
+        "types": ["RSS feeds", "Reddit JSON API", "YouTube Atom feeds"],
+        "categories": ["CryptoCurrency", "AI", "Finance", "World", "Nation", "Business", "Technology", "Entertainment", "Sports"]
+      },
+      "market_data": {
+        "sources": ["Fear & Greed Index", "BTC Dominance", "Altseason Index", "Market Cap", "Mempool", "Hash Rate", "Lightning Network"]
+      }
+    },
+
+    "background_tasks": [
+      { "name": "MultiBotMonitor", "interval": "Per-strategy (15min for AI, varies for others)", "purpose": "Core bot loop: price monitoring and strategy signal dispatch" },
+      { "name": "LimitOrderMonitor", "interval": "10 seconds", "purpose": "Check pending limit orders for fills" },
+      { "name": "OrderReconciliationMonitor", "interval": "60 seconds", "purpose": "Auto-fix orphaned positions with missing fill data" },
+      { "name": "MissingOrderDetector", "interval": "5 minutes", "purpose": "Detect unrecorded orders from exchange" },
+      { "name": "TradingPairMonitor", "interval": "Daily (first check after 5min)", "purpose": "Sync trading pairs, remove delisted pairs from bots" },
+      { "name": "ContentRefreshService", "interval": "News: 30min, Videos: 60min", "purpose": "Fetch fresh news articles and YouTube videos" },
+      { "name": "DebtCeilingMonitor", "interval": "Weekly", "purpose": "Check for new US debt ceiling legislation" },
+      { "name": "AutoBuyMonitor", "interval": "Per-account setting", "purpose": "Convert stablecoins to BTC when thresholds exceeded" },
+      { "name": "PerpsMonitor", "interval": "60 seconds", "purpose": "Sync perpetual futures positions with exchange state" },
+      { "name": "DecisionLogCleanup", "interval": "Daily", "purpose": "Remove old AI decision logs" },
+      { "name": "FailedConditionCleanup", "interval": "6 hours", "purpose": "Remove noise indicator condition logs" },
+      { "name": "FailedOrderCleanup", "interval": "6 hours", "purpose": "Remove old failed order records" },
+      { "name": "AccountSnapshotCapture", "interval": "Daily (24 hours)", "purpose": "Capture account value snapshots for historical charts" }
+    ],
+
+    "migrations": {
+      "count": 11,
+      "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
+      "directory": "backend/migrations/",
+      "discovery": "Auto-discovered by update.py",
+      "idempotent": true,
+      "files": [
+        "add_account_value_snapshots.py",
+        "add_bidirectional_support.py",
+        "add_bot_name_unique_index.py",
+        "add_metric_snapshots_table.py",
+        "add_news_category_column.py",
+        "add_paper_trading_accounts.py",
+        "add_pending_order_reserves.py",
+        "add_perpetual_futures_fields.py",
+        "convert_coin_categories_to_global.py",
+        "encrypt_existing_credentials.py",
+        "replace_paywalled_sources.py"
+      ]
+    }
+  },
+
+  "frontend": {
+    "pages": [
+      { "file": "pages/Dashboard.tsx", "route": "/", "purpose": "Bot list, open/closed positions summary, account value chart, profit metrics" },
+      { "file": "pages/Bots.tsx", "route": "/bots", "purpose": "Create, edit, delete, and manage trading bots with strategy configuration" },
+      { "file": "pages/Positions.tsx", "route": "/positions", "purpose": "Open positions with real-time P&L, limit close, edit settings, add funds" },
+      { "file": "pages/ClosedPositions.tsx", "route": "/history", "purpose": "Closed and failed positions with trade history, AI logs, statistics" },
+      { "file": "pages/Portfolio.tsx", "route": "/portfolio", "purpose": "All crypto holdings, balances by asset, sell coins, allocation charts" },
+      { "file": "pages/News.tsx", "route": "/news", "purpose": "Aggregated news, video player, article reader with TTS, sentiment cards" },
+      { "file": "pages/Charts.tsx", "route": "/charts", "purpose": "Technical analysis with multiple indicators, timeframes, chart types" },
+      { "file": "pages/Settings.tsx", "route": "/settings", "purpose": "User settings, password, accounts, AI credentials, blacklist config" },
+      { "file": "pages/Login.tsx", "route": "(auth page)", "purpose": "Email/password login and signup form" }
+    ],
+
+    "components": {
+      "bot_management": [
+        { "file": "components/ThreeCommasStyleForm.tsx", "purpose": "3Commas-style bot configuration form" },
+        { "file": "components/ConditionalStrategyForm.tsx", "purpose": "Conditional/rule-based strategy configuration form" },
+        { "file": "components/AdvancedConditionBuilder.tsx", "purpose": "Complex trading condition builder with logic gates" },
+        { "file": "components/ConditionBuilder.tsx", "purpose": "Simple condition builder for strategy parameters" },
+        { "file": "components/PhaseConditionSelector.tsx", "purpose": "Market phase condition selector (bull/bear/accumulation)" },
+        { "file": "components/GridVisualizer.tsx", "purpose": "DCA grid level visualization" },
+        { "file": "pages/bots/components/BotFormModal.tsx", "purpose": "Modal form for creating/editing bots" },
+        { "file": "pages/bots/components/BotListItem.tsx", "purpose": "Bot card component for bot list" }
+      ],
+      "position_management": [
+        { "file": "components/EditPositionSettingsModal.tsx", "purpose": "Edit TP, SL, trailing TP, max safety orders" },
+        { "file": "components/AddFundsModal.tsx", "purpose": "Add funds to existing positions" },
+        { "file": "components/LimitCloseModal.tsx", "purpose": "Set limit close orders with price target" },
+        { "file": "components/SlippageWarningModal.tsx", "purpose": "Slippage impact warning before market close" },
+        { "file": "components/PositionLogsModal.tsx", "purpose": "View logs, trades, AI decisions for a position" },
+        { "file": "pages/positions/components/FilterPanel.tsx", "purpose": "Filter controls for positions" },
+        { "file": "pages/positions/components/OverallStatsPanel.tsx", "purpose": "Summary statistics for open positions" },
+        { "file": "pages/positions/components/PerpsPortfolioPanel.tsx", "purpose": "Perpetual futures portfolio overview" },
+        { "file": "pages/positions/components/PositionCard.tsx", "purpose": "Individual position display with P&L and actions" },
+        { "file": "pages/positions/components/modals/CloseConfirmModal.tsx", "purpose": "Close position confirmation" },
+        { "file": "pages/positions/components/modals/NotesModal.tsx", "purpose": "Position notes editor" },
+        { "file": "pages/positions/components/modals/TradeHistoryModal.tsx", "purpose": "Trade history for a position" }
+      ],
+      "charts": [
+        { "file": "components/TradingChart.tsx", "purpose": "Lightweight price chart for position entry/exit" },
+        { "file": "components/TradingViewChartModal.tsx", "purpose": "TradingView integration for technical analysis" },
+        { "file": "components/LightweightChartModal.tsx", "purpose": "Full-featured chart modal with indicators and oscillators" },
+        { "file": "components/DepthChart.tsx", "purpose": "Order book depth visualization" },
+        { "file": "components/AccountValueChart.tsx", "purpose": "Account value over time line chart" },
+        { "file": "components/PnLChart.tsx", "purpose": "P&L bar/line chart by time period" },
+        { "file": "components/Sparkline.tsx", "purpose": "Minimal inline sparkline chart" },
+        { "file": "components/charts/IndicatorSettingsModal.tsx", "purpose": "Indicator parameter configuration" }
+      ],
+      "logs_and_analysis": [
+        { "file": "components/AIBotLogs.tsx", "purpose": "AI bot decision logs with filtering" },
+        { "file": "components/ScannerLogs.tsx", "purpose": "Scanner logs for pair scanning decisions" },
+        { "file": "components/IndicatorLogs.tsx", "purpose": "Indicator calculation logs with search" }
+      ],
+      "news_and_media": [
+        { "file": "components/MiniPlayer.tsx", "purpose": "Persistent minimizable video player" },
+        { "file": "components/ArticleReaderMiniPlayer.tsx", "purpose": "Persistent TTS article reader" },
+        { "file": "pages/news/components/ArticleContent.tsx", "purpose": "Article content display" },
+        { "file": "pages/news/components/SyncedArticleReader.tsx", "purpose": "Article reader with synchronized TTS" },
+        { "file": "pages/news/components/TTSControls.tsx", "purpose": "Text-to-speech playback controls" },
+        { "file": "components/news/SourceSubscriptionsModal.tsx", "purpose": "Subscribe/unsubscribe from news sources" }
+      ],
+      "account_and_settings": [
+        { "file": "components/AccountSwitcher.tsx", "purpose": "Header dropdown for switching accounts" },
+        { "file": "components/AccountsManagement.tsx", "purpose": "Account CRUD (CEX/DEX)" },
+        { "file": "components/AddAccountModal.tsx", "purpose": "Add new account with credentials" },
+        { "file": "components/AIProvidersManager.tsx", "purpose": "Manage AI provider API keys" },
+        { "file": "components/AutoBuySettings.tsx", "purpose": "Configure auto-buy BTC settings" },
+        { "file": "components/BlacklistManager.tsx", "purpose": "Coin blacklist with AI review" },
+        { "file": "components/PaperTradingManager.tsx", "purpose": "Paper trading mode management" },
+        { "file": "components/PaperTradingToggle.tsx", "purpose": "Header toggle for paper trading" },
+        { "file": "components/DexConfigSection.tsx", "purpose": "DEX-specific settings configuration" }
+      ],
+      "layout_and_common": [
+        { "file": "components/AboutModal.tsx", "purpose": "App version, changelog, update availability" },
+        { "file": "components/CoinIcon.tsx", "purpose": "Crypto coin logo with fallback" },
+        { "file": "components/LoadingSpinner.tsx", "purpose": "Animated loading spinner" },
+        { "file": "components/Toast.tsx", "purpose": "Toast notifications for order fills and alerts" },
+        { "file": "components/RiskDisclaimer.tsx", "purpose": "Terms acceptance modal on first login" },
+        { "file": "components/MarketSentimentCards.tsx", "purpose": "Fear/Greed, ATH distance, altseason, BTC dominance cards" },
+        { "file": "components/SeasonalityToggle.tsx", "purpose": "Seasonality/market phase display toggle" }
+      ],
+      "sub_components": {
+        "bots": [
+          { "file": "components/bots/botUtils.ts", "purpose": "BotFormData type, defaults, parameter validation, pair conversion" }
+        ],
+        "positions": [
+          { "file": "components/positions/AISentimentIcon.tsx", "purpose": "AI sentiment indicator with tooltip" },
+          { "file": "components/positions/DealChart.tsx", "purpose": "Buy/sell history visualization within position" },
+          { "file": "components/positions/IndicatorModals.tsx", "purpose": "Indicator information modal dialogs" },
+          { "file": "components/positions/PriceBar.tsx", "purpose": "Price bar with entry/exit levels" },
+          { "file": "components/positions/positionUtils.ts", "purpose": "Position calculation and formatting utilities" }
+        ],
+        "chart_internals": [
+          { "file": "components/LightweightChartModal/hooks/useChartData.ts", "purpose": "Fetch and manage OHLCV data" },
+          { "file": "components/LightweightChartModal/hooks/useIndicatorRendering.ts", "purpose": "Render technical indicators on chart" },
+          { "file": "components/LightweightChartModal/hooks/useMainChart.ts", "purpose": "Initialize main price chart" },
+          { "file": "components/LightweightChartModal/hooks/useOscillators.ts", "purpose": "Manage oscillator sub-charts (RSI, MACD)" },
+          { "file": "components/LightweightChartModal/utils/chartMarkers.ts", "purpose": "Entry/exit/TP/SL chart markers" },
+          { "file": "components/LightweightChartModal/utils/oscillatorChartFactory.ts", "purpose": "Factory for oscillator charts" },
+          { "file": "components/LightweightChartModal/utils/positionLinesRenderer.ts", "purpose": "Position entry/exit lines on chart" }
+        ]
+      }
+    },
+
+    "contexts": [
+      { "file": "contexts/AuthContext.tsx", "exports": ["AuthProvider", "useAuth"], "purpose": "User authentication, JWT token management, session state" },
+      { "file": "contexts/AccountContext.tsx", "exports": ["AccountProvider", "useAccount"], "purpose": "Multi-account state (CEX/DEX), account switching" },
+      { "file": "contexts/NotificationContext.tsx", "exports": ["NotificationProvider", "useNotifications"], "purpose": "WebSocket order fill notifications, toast alerts, audio" },
+      { "file": "contexts/VideoPlayerContext.tsx", "exports": ["VideoPlayerProvider", "useVideoPlayer"], "purpose": "Persistent video player state across page navigation" },
+      { "file": "contexts/ArticleReaderContext.tsx", "exports": ["ArticleReaderProvider", "useArticleReader"], "purpose": "Persistent article reader with TTS playback" },
+      { "file": "contexts/mediaCoordinator.ts", "exports": ["registerVideoPlayer", "registerArticleReader", "stopVideoPlayer", "stopArticleReader"], "purpose": "Coordinate media playback (pause video when reading, vice versa)" }
+    ],
+
+    "hooks": {
+      "global": [
+        { "file": "hooks/useAudio.ts", "purpose": "Web Audio API for order fill notification sounds" },
+        { "file": "hooks/useMarketSeason.ts", "purpose": "Fetch market indicators and determine current season" }
+      ],
+      "page_specific": {
+        "bots": [
+          { "file": "pages/bots/hooks/useBotMutations.ts", "purpose": "Create/update/delete/start/stop bot mutations" },
+          { "file": "pages/bots/hooks/useBotsData.ts", "purpose": "Fetch bots, strategies, trading pairs, portfolio" },
+          { "file": "pages/bots/hooks/useValidation.ts", "purpose": "Bot config validation, budget sizing, parameters" }
+        ],
+        "charts": [
+          { "file": "pages/charts/hooks/useChartManagement.ts", "purpose": "Chart instance initialization and lifecycle" },
+          { "file": "pages/charts/hooks/useChartsData.ts", "purpose": "Fetch OHLCV data for multiple pairs/timeframes" },
+          { "file": "pages/charts/hooks/useIndicators.ts", "purpose": "Indicator state, rendering, and settings" }
+        ],
+        "positions": [
+          { "file": "pages/positions/hooks/usePositionFilters.ts", "purpose": "Filter and search positions" },
+          { "file": "pages/positions/hooks/usePositionMutations.ts", "purpose": "Close, add funds, update settings, save notes" },
+          { "file": "pages/positions/hooks/usePositionTrades.ts", "purpose": "Fetch and cache trades for positions" },
+          { "file": "pages/positions/hooks/usePositionsData.ts", "purpose": "Fetch positions, bots, prices, calculate P&L" }
+        ],
+        "news": [
+          { "file": "pages/news/hooks/useArticleContent.ts", "purpose": "Fetch and cache article content by URL" },
+          { "file": "pages/news/hooks/useNewsData.ts", "purpose": "Fetch news and video articles with caching" },
+          { "file": "pages/news/hooks/useNewsFilters.ts", "purpose": "Filter news by source, date, category" },
+          { "file": "pages/news/hooks/useTTS.ts", "purpose": "Text-to-speech via Web Speech API" },
+          { "file": "pages/news/hooks/useTTSSync.ts", "purpose": "Advanced TTS with word timing, voice cycling, rate control" }
+        ]
+      }
+    },
+
+    "api_layer": {
+      "base_url": "Configured via VITE_API_URL env var, defaults to same origin",
+      "auth": "Authorization: Bearer {token} header via Axios interceptor",
+      "file": "services/api.ts",
+      "modules": [
+        { "name": "authFetch", "purpose": "Fetch wrapper with auth token injection" },
+        { "name": "dashboardApi", "purpose": "Dashboard statistics" },
+        { "name": "positionsApi", "purpose": "Position CRUD, trades, AI logs, settings, budget resize" },
+        { "name": "tradesApi", "purpose": "All trades" },
+        { "name": "signalsApi", "purpose": "Trading signals" },
+        { "name": "marketDataApi", "purpose": "Market data, coin listings" },
+        { "name": "settingsApi", "purpose": "Get/update settings by key" },
+        { "name": "monitorApi", "purpose": "Start/stop trading monitor" },
+        { "name": "accountApi", "purpose": "Balances, aggregate value, portfolio conversion" },
+        { "name": "statusApi", "purpose": "API connection and monitor status" },
+        { "name": "botsApi", "purpose": "Bot CRUD, strategies, logs, decisions, scanners, indicators, bulk ops" },
+        { "name": "templatesApi", "purpose": "Bot template management" },
+        { "name": "orderHistoryApi", "purpose": "Order history with filtering and pagination" },
+        { "name": "blacklistApi", "purpose": "Blacklist and category management with AI review" },
+        { "name": "aiCredentialsApi", "purpose": "AI provider credential management" },
+        { "name": "autoBuyApi", "purpose": "Auto-buy BTC settings" },
+        { "name": "accountValueApi", "purpose": "Historical account value snapshots" }
+      ]
+    },
+
+    "state_management": {
+      "pattern": "React Context (app state) + React Query (server state)",
+      "contexts": ["AuthContext", "AccountContext", "NotificationContext", "VideoPlayerContext", "ArticleReaderContext"],
+      "react_query": {
+        "purpose": "Centralized data caching with automatic refetch",
+        "polling_intervals": {
+          "positions": "30 seconds",
+          "portfolio_prices": "2 minutes",
+          "btc_eth_prices": "1 minute",
+          "closed_position_badges": "10 seconds"
+        }
+      }
+    },
+
+    "realtime": {
+      "websocket": {
+        "endpoint": "/ws/notifications",
+        "events": ["base_order", "dca_order", "sell_order", "partial_fill"],
+        "features": ["Audio notifications", "Toast alerts", "Auto-reconnect with exponential backoff"]
+      }
+    },
+
+    "types": {
+      "file": "types/index.ts",
+      "categories": {
+        "position": ["Position", "LimitOrderDetails", "LimitOrderFill", "Trade", "Signal", "AIBotLog"],
+        "bot": ["Bot", "BotCreate", "BotStats", "StrategyParameter", "StrategyDefinition", "OrderHistory"],
+        "account": ["Balances", "AggregateValue", "DashboardStats", "Settings"],
+        "market": ["Candle", "ReservedBalances", "MarketData"],
+        "perps": ["PerpsProduct", "PerpsPosition", "PerpsPortfolio"],
+        "sentiment": ["FearGreedData", "BTCDominanceResponse", "AltseasonIndexResponse", "ATHResponse", "BTCRSIResponse", "HalvingCountdown", "DebtCeilingEvent"]
+      }
+    },
+
+    "utilities": [
+      { "file": "utils/dateFormat.ts", "purpose": "Date/time formatting helpers" },
+      { "file": "utils/marketSentiment.ts", "purpose": "Fear & Greed coloring, debt calculations, halving countdown" },
+      { "file": "utils/indicators/calculations.ts", "purpose": "MACD, RSI, Bollinger Bands, EMA, SMA calculations" },
+      { "file": "utils/indicators/definitions.ts", "purpose": "Indicator metadata and default settings" },
+      { "file": "utils/indicators/types.ts", "purpose": "Indicator type definitions (CandleData, IndicatorResult)" },
+      { "file": "config/api.ts", "purpose": "API base URL configuration from env vars" },
+      { "file": "constants/voices.ts", "purpose": "TTS voice IDs and cycling configuration" }
+    ]
+  },
+
+  "data_flow": {
+    "request_flow": "React Page -> Custom Hook -> API Module (Axios) -> FastAPI Router -> Service/Engine -> SQLAlchemy Model -> SQLite",
+    "trading_flow": "MultiBotMonitor -> TradingStrategy.check_signals() -> TradingEngineV2.process_signal() -> TradingClient -> ExchangeClient -> Coinbase API",
+    "websocket_flow": "Exchange order fill -> WebSocketManager.broadcast() -> NotificationContext -> Toast component + Audio notification",
+    "ai_decision_flow": "MultiBotMonitor -> AIService.get_recommendation() -> AI Provider API -> TradingEngine -> OrderValidation -> Exchange",
+    "background_task_flow": "FastAPI startup -> asyncio.create_task() -> Periodic loop with sleep interval -> Database operations"
+  }
+}
