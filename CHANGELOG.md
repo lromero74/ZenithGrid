@@ -5,6 +5,11 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.9] - 2026-02-15
+
+### Fixed
+- Fixed safety order "Insufficient balance" errors caused by negative available balance calculation — when a position already exists, budget is now calculated from the position's own `max_quote_allowed` instead of pair-level budget which could over-subtract across multiple positions
+
 ## [v1.31.8] - 2026-02-15
 
 ### Fixed

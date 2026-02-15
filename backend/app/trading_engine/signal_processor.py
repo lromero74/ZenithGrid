@@ -315,6 +315,11 @@ async def process_signal(
         total_in_positions = sum(p.total_quote_spent for p in open_positions)
         quote_balance = per_position_budget - total_in_positions
 
+        # For safety orders (position already exists), use the position's own allocated budget
+        # instead of pair-level budget which can over-subtract when multiple positions share a pair
+        if position and position.max_quote_allowed:
+            quote_balance = position.max_quote_allowed - position.total_quote_spent
+
         split_mode = "SPLIT" if bot.split_budget_across_pairs else "FULL"
         if bot.budget_percentage > 0:
             logger.info(
