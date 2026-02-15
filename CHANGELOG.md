@@ -5,6 +5,12 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.12] - 2026-02-15
+
+### Added
+- Budget rejection events (insufficient funds, below exchange minimum) now appear on the History page's Failed Orders tab, not just in indicator logs
+- Deduplication prevents repeated identical failed order entries for the same deal — a new entry is only logged when the error message changes
+
 ## [v1.31.11] - 2026-02-15
 
 ### Fixed

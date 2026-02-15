@@ -13,17 +13,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.currency_utils import format_with_usd, get_quote_currency
 from app.exchange_clients.base import ExchangeClient
 from app.indicator_calculator import IndicatorCalculator
-from app.models import BlacklistedCoin, Bot, Position, Settings, Signal
+from app.models import BlacklistedCoin, Bot, OrderHistory, Position, Settings, Signal
 from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
 from app.trading_engine.buy_executor import execute_buy
-from app.trading_engine.order_logger import save_ai_log
+from app.trading_engine.order_logger import log_order_to_history, save_ai_log
 from app.trading_engine.perps_executor import execute_perps_close, execute_perps_open
 from app.trading_engine.position_manager import create_position, get_active_position, get_open_positions_count
 from app.trading_engine.sell_executor import execute_sell
 
 logger = logging.getLogger(__name__)
+
+
+async def _is_duplicate_failed_order(
+    db: AsyncSession, bot_id: int, product_id: str, trade_type: str,
+    error_message: str, position: Optional["Position"] = None,
+) -> bool:
+    """Check if the most recent failed order for this deal+trade_type has the same error."""
+    query = (
+        select(OrderHistory.error_message)
+        .where(
+            OrderHistory.bot_id == bot_id,
+            OrderHistory.product_id == product_id,
+            OrderHistory.trade_type == trade_type,
+            OrderHistory.status == "failed",
+        )
+    )
+    if position is not None:
+        query = query.where(OrderHistory.position_id == position.id)
+    else:
+        query = query.where(OrderHistory.position_id.is_(None))
+    result = await db.execute(query.order_by(OrderHistory.timestamp.desc()).limit(1))
+    last_error = result.scalar_one_or_none()
+    return last_error == error_message
+
 
 # Cache previous market context for crossing detection (bot_id_product_id -> context)
 _previous_market_context: Dict[str, Dict[str, Any]] = {}
@@ -464,6 +488,15 @@ async def process_signal(
                                 indicators_snapshot=signal_data.get("indicators", {}),
                                 current_price=current_price
                             )
+                            if not await _is_duplicate_failed_order(db, bot.id, product_id, "initial", buy_reason):
+                                await log_order_to_history(
+                                    db=db, bot=bot, product_id=product_id,
+                                    position=None, side="BUY", order_type="MARKET",
+                                    trade_type="initial", quote_amount=0.0,
+                                    price=current_price, status="failed",
+                                    error_message=buy_reason
+                                )
+                                await db.commit()
         else:
             # Position already exists for this pair - check for DCA
             should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
@@ -488,6 +521,15 @@ async def process_signal(
                     indicators_snapshot=signal_data.get("indicators", {}),
                     current_price=current_price
                 )
+                if not await _is_duplicate_failed_order(db, bot.id, product_id, "safety_order", buy_reason, position):
+                    await log_order_to_history(
+                        db=db, bot=bot, product_id=product_id,
+                        position=position, side="BUY", order_type="MARKET",
+                        trade_type="safety_order", quote_amount=0.0,
+                        price=current_price, status="failed",
+                        error_message=buy_reason
+                    )
+                    await db.commit()
     else:
         # Bot is stopped - don't open new positions, but still check DCA for existing positions
         if position is None:
@@ -518,6 +560,15 @@ async def process_signal(
                         indicators_snapshot=signal_data.get("indicators", {}),
                         current_price=current_price
                     )
+                    if not await _is_duplicate_failed_order(db, bot.id, product_id, "safety_order", buy_reason, position):
+                        await log_order_to_history(
+                            db=db, bot=bot, product_id=product_id,
+                            position=position, side="BUY", order_type="MARKET",
+                            trade_type="safety_order", quote_amount=0.0,
+                            price=current_price, status="failed",
+                            error_message=buy_reason
+                        )
+                        await db.commit()
 
     if should_buy:
         # Get BTC/USD price for logging
