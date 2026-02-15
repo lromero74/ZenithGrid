@@ -147,6 +147,11 @@ class AccountResponse(BaseModel):
     updated_at: datetime
     last_used_at: Optional[datetime] = None
 
+    # Perpetual Futures
+    perps_portfolio_uuid: Optional[str] = None
+    default_leverage: int = 1
+    margin_type: str = "CROSS"
+
     # Computed fields
     display_name: Optional[str] = None
     short_address: Optional[str] = None
@@ -245,6 +250,9 @@ async def list_accounts(
                 wallet_address=account.wallet_address,
                 rpc_url=account.rpc_url,
                 wallet_type=account.wallet_type,
+                perps_portfolio_uuid=account.perps_portfolio_uuid,
+                default_leverage=account.default_leverage or 1,
+                margin_type=account.margin_type or "CROSS",
                 created_at=account.created_at,
                 updated_at=account.updated_at,
                 last_used_at=account.last_used_at,
@@ -293,6 +301,9 @@ async def get_account(
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
             wallet_type=account.wallet_type,
+            perps_portfolio_uuid=account.perps_portfolio_uuid,
+            default_leverage=account.default_leverage or 1,
+            margin_type=account.margin_type or "CROSS",
             created_at=account.created_at,
             updated_at=account.updated_at,
             last_used_at=account.last_used_at,
@@ -378,6 +389,9 @@ async def create_account(
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
             wallet_type=account.wallet_type,
+            perps_portfolio_uuid=account.perps_portfolio_uuid,
+            default_leverage=account.default_leverage or 1,
+            margin_type=account.margin_type or "CROSS",
             created_at=account.created_at,
             updated_at=account.updated_at,
             last_used_at=account.last_used_at,
@@ -447,6 +461,9 @@ async def update_account(
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
             wallet_type=account.wallet_type,
+            perps_portfolio_uuid=account.perps_portfolio_uuid,
+            default_leverage=account.default_leverage or 1,
+            margin_type=account.margin_type or "CROSS",
             created_at=account.created_at,
             updated_at=account.updated_at,
             last_used_at=account.last_used_at,
@@ -633,6 +650,9 @@ async def get_default_account(
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
             wallet_type=account.wallet_type,
+            perps_portfolio_uuid=account.perps_portfolio_uuid,
+            default_leverage=account.default_leverage or 1,
+            margin_type=account.margin_type or "CROSS",
             created_at=account.created_at,
             updated_at=account.updated_at,
             last_used_at=account.last_used_at,
@@ -880,7 +900,7 @@ async def link_perps_portfolio(
         raise HTTPException(status_code=400, detail="Perps portfolio only available for CEX accounts")
 
     # Get exchange client
-    coinbase_client = await get_coinbase_for_account(db, account_id)
+    coinbase_client = await get_coinbase_for_account(account)
 
     try:
         # Try to get portfolios and find the INTX perpetuals portfolio

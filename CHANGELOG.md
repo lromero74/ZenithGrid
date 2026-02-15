@@ -5,6 +5,15 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.31.13] - 2026-02-15
+
+### Changed
+- Moved Perpetual Futures portfolio linking from standalone Settings card into expandable per-account row in Centralized Exchanges section — each CEX account now shows its own perps status inline
+- Perps portfolio fields (UUID, leverage, margin type) now included in accounts API response, eliminating extra API calls
+
+### Fixed
+- Fixed `link-perps-portfolio` endpoint passing wrong arguments to `get_coinbase_for_account()`
+
 ## [v1.31.12] - 2026-02-15
 
 ### Added

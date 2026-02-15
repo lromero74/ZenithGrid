@@ -34,6 +34,11 @@ export interface Account {
   wallet_type?: string
   rpc_url?: string
 
+  // Perpetual Futures
+  perps_portfolio_uuid?: string | null
+  default_leverage?: number
+  margin_type?: string
+
   // Metadata
   created_at: string
   updated_at: string

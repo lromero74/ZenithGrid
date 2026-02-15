@@ -16,9 +16,13 @@ import {
   AlertCircle,
   RefreshCw,
   ArrowRightLeft,
+  ChevronDown,
+  ChevronRight,
+  Link2,
+  CheckCircle,
 } from 'lucide-react'
 import { useAccount, Account, getChainName } from '../contexts/AccountContext'
-import { accountApi } from '../services/api'
+import { accountApi, api } from '../services/api'
 
 interface AccountsManagementProps {
   onAddAccount: () => void
@@ -35,10 +39,23 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
   } = useAccount()
 
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [sellingToBTC, setSellingToBTC] = useState(false)
   const [sellingToUSD, setSellingToUSD] = useState(false)
+
+  const toggleExpanded = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
 
   const handleDelete = async (account: Account) => {
     if (!confirm(`Are you sure you want to delete "${account.name}"? This action cannot be undone.`)) {
@@ -291,12 +308,15 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
                 account={account}
                 isDeleting={deletingId === account.id}
                 isMenuOpen={openMenuId === account.id}
+                isExpanded={expandedIds.has(account.id)}
+                onToggleExpand={() => toggleExpanded(account.id)}
                 onMenuToggle={() => setOpenMenuId(openMenuId === account.id ? null : account.id)}
                 onDelete={() => handleDelete(account)}
                 onSetDefault={() => handleSetDefault(account)}
                 onConvertToBTC={() => handleSellPortfolioToBase(account, 'BTC')}
                 onConvertToUSD={() => handleSellPortfolioToBase(account, 'USD')}
                 isConverting={sellingToBTC || sellingToUSD}
+                onRefreshAccounts={refreshAccounts}
               />
             ))}
           </div>
@@ -335,140 +355,227 @@ interface AccountRowProps {
   account: Account
   isDeleting: boolean
   isMenuOpen: boolean
+  isExpanded?: boolean
+  onToggleExpand?: () => void
   onMenuToggle: () => void
   onDelete: () => void
   onSetDefault: () => void
   onConvertToBTC?: () => void
   onConvertToUSD?: () => void
   isConverting?: boolean
+  onRefreshAccounts?: () => Promise<void>
 }
 
 function AccountRow({
   account,
   isDeleting,
   isMenuOpen,
+  isExpanded,
+  onToggleExpand,
   onMenuToggle,
   onDelete,
   onSetDefault,
   onConvertToBTC,
   onConvertToUSD,
   isConverting,
+  onRefreshAccounts,
 }: AccountRowProps) {
+  const [linking, setLinking] = useState(false)
+  const [perpsError, setPerpsError] = useState<string | null>(null)
+
+  const isCex = account.type === 'cex'
+  const hasPerps = Boolean(account.perps_portfolio_uuid)
+
+  const handleLinkPerps = async () => {
+    setLinking(true)
+    setPerpsError(null)
+    try {
+      await api.post(`/accounts/${account.id}/link-perps-portfolio`)
+      if (onRefreshAccounts) await onRefreshAccounts()
+    } catch (err: any) {
+      setPerpsError(err.response?.data?.detail || 'Failed to link portfolio')
+    } finally {
+      setLinking(false)
+    }
+  }
+
   return (
-    <div className={`flex items-center justify-between px-4 py-3 ${isDeleting ? 'opacity-50' : ''}`}>
-      <div className="flex items-center space-x-3 min-w-0">
-        {account.type === 'cex' ? (
-          <Building2 className="w-5 h-5 text-blue-400 flex-shrink-0" />
-        ) : (
-          <Wallet className="w-5 h-5 text-orange-400 flex-shrink-0" />
-        )}
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-white truncate">{account.name}</span>
-            {account.is_default && (
-              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/20 text-blue-300 rounded">
-                DEFAULT
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-slate-400">
-            {account.type === 'cex' ? (
-              <span className="capitalize">{account.exchange}</span>
-            ) : (
-              <>
-                {getChainName(account.chain_id || 1)}
-                {account.short_address && (
-                  <span className="font-mono ml-1">{account.short_address}</span>
-                )}
-              </>
-            )}
-          </p>
-        </div>
-      </div>
+    <div className={`${isDeleting ? 'opacity-50' : ''}`}>
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center space-x-3 min-w-0">
+          {/* Expand/collapse chevron for CEX accounts */}
+          {isCex && onToggleExpand ? (
+            <button
+              onClick={onToggleExpand}
+              className="p-0.5 hover:bg-slate-700 rounded transition-colors flex-shrink-0"
+            >
+              {isExpanded ? (
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              )}
+            </button>
+          ) : null}
 
-      <div className="flex items-center gap-2">
-        {/* Bot count badge */}
-        {account.bot_count > 0 && (
-          <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">
-            {account.bot_count} bot{account.bot_count !== 1 ? 's' : ''}
-          </span>
-        )}
-
-        {/* Actions menu */}
-        <div className="relative">
-          <button
-            onClick={onMenuToggle}
-            disabled={isDeleting}
-            className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-          >
-            <MoreVertical className="w-4 h-4 text-slate-400" />
-          </button>
-
-          {isMenuOpen && (
-            <div className="absolute right-0 bottom-full mb-1 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-1">
-              <button
-                onClick={onSetDefault}
-                disabled={account.is_default}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {account.is_default ? (
-                  <>
-                    <StarOff className="w-4 h-4 text-slate-400" />
-                    <span>Already Default</span>
-                  </>
-                ) : (
-                  <>
-                    <Star className="w-4 h-4 text-yellow-400" />
-                    <span>Set as Default</span>
-                  </>
-                )}
-              </button>
-
-              {/* Portfolio Conversion Options (CEX only) */}
-              {onConvertToBTC && onConvertToUSD && (
+          {isCex ? (
+            <Building2 className="w-5 h-5 text-blue-400 flex-shrink-0" />
+          ) : (
+            <Wallet className="w-5 h-5 text-orange-400 flex-shrink-0" />
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-white truncate">{account.name}</span>
+              {account.is_default && (
+                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/20 text-blue-300 rounded">
+                  DEFAULT
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-slate-400">
+              {isCex ? (
+                <span className="capitalize">{account.exchange}</span>
+              ) : (
                 <>
-                  <div className="border-t border-slate-700 my-1" />
-                  <div className="px-3 py-1.5">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Convert Portfolio</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      onMenuToggle()
-                      onConvertToBTC()
-                    }}
-                    disabled={isConverting}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-orange-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ArrowRightLeft className="w-4 h-4" />
-                    <span>Convert to BTC</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      onMenuToggle()
-                      onConvertToUSD()
-                    }}
-                    disabled={isConverting}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-green-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ArrowRightLeft className="w-4 h-4" />
-                    <span>Convert to USD</span>
-                  </button>
+                  {getChainName(account.chain_id || 1)}
+                  {account.short_address && (
+                    <span className="font-mono ml-1">{account.short_address}</span>
+                  )}
                 </>
               )}
+            </p>
+          </div>
+        </div>
 
-              <div className="border-t border-slate-700 my-1" />
-              <button
-                onClick={onDelete}
-                disabled={account.bot_count > 0}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-red-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>{account.bot_count > 0 ? 'Has Active Bots' : 'Delete Account'}</span>
-              </button>
-            </div>
+        <div className="flex items-center gap-2">
+          {/* Bot count badge */}
+          {account.bot_count > 0 && (
+            <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">
+              {account.bot_count} bot{account.bot_count !== 1 ? 's' : ''}
+            </span>
           )}
+
+          {/* Actions menu */}
+          <div className="relative">
+            <button
+              onClick={onMenuToggle}
+              disabled={isDeleting}
+              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              <MoreVertical className="w-4 h-4 text-slate-400" />
+            </button>
+
+            {isMenuOpen && (
+              <div className="absolute right-0 bottom-full mb-1 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 py-1">
+                <button
+                  onClick={onSetDefault}
+                  disabled={account.is_default}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {account.is_default ? (
+                    <>
+                      <StarOff className="w-4 h-4 text-slate-400" />
+                      <span>Already Default</span>
+                    </>
+                  ) : (
+                    <>
+                      <Star className="w-4 h-4 text-yellow-400" />
+                      <span>Set as Default</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Portfolio Conversion Options (CEX only) */}
+                {onConvertToBTC && onConvertToUSD && (
+                  <>
+                    <div className="border-t border-slate-700 my-1" />
+                    <div className="px-3 py-1.5">
+                      <p className="text-xs text-slate-500 uppercase font-semibold">Convert Portfolio</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        onMenuToggle()
+                        onConvertToBTC()
+                      }}
+                      disabled={isConverting}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-orange-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ArrowRightLeft className="w-4 h-4" />
+                      <span>Convert to BTC</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onMenuToggle()
+                        onConvertToUSD()
+                      }}
+                      disabled={isConverting}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-green-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ArrowRightLeft className="w-4 h-4" />
+                      <span>Convert to USD</span>
+                    </button>
+                  </>
+                )}
+
+                <div className="border-t border-slate-700 my-1" />
+                <button
+                  onClick={onDelete}
+                  disabled={account.bot_count > 0}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-red-400 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{account.bot_count > 0 ? 'Has Active Bots' : 'Delete Account'}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Expanded section: Perpetual Futures (CEX only) */}
+      {isCex && isExpanded && (
+        <div className="px-4 pb-3">
+          <div className="ml-10 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Link2 className="w-4 h-4 text-purple-400" />
+              <span className="text-sm font-medium text-white">Perpetual Futures</span>
+            </div>
+
+            {hasPerps ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                  <span className="text-green-400">INTX Portfolio Linked</span>
+                </div>
+                <div className="text-xs text-slate-400 font-mono">
+                  UUID: {account.perps_portfolio_uuid}
+                </div>
+                <div className="text-xs text-slate-400">
+                  Leverage: {account.default_leverage || 1}x | Margin: {account.margin_type || 'CROSS'}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400">
+                  Link your Coinbase INTX perpetuals portfolio to enable futures trading.
+                </p>
+                {perpsError && (
+                  <div className="flex items-center gap-2 text-xs text-red-400">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {perpsError}
+                  </div>
+                )}
+                <button
+                  onClick={handleLinkPerps}
+                  disabled={linking}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  {linking ? 'Discovering...' : 'Link Perpetuals Portfolio'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

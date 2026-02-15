@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react'
-import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Link2 } from 'lucide-react'
+import { User, Lock, CheckCircle, AlertCircle, Database, Trash2 } from 'lucide-react'
 import { AccountsManagement } from '../components/AccountsManagement'
 import { PaperTradingManager } from '../components/PaperTradingManager'
 import { AddAccountModal } from '../components/AddAccountModal'
@@ -8,7 +8,7 @@ import { AutoBuySettings } from '../components/AutoBuySettings'
 import { BlacklistManager } from '../components/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
-import { settingsApi, api } from '../services/api'
+import { settingsApi } from '../services/api'
 
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
@@ -242,11 +242,6 @@ export default function Settings() {
         <AutoBuySettings accounts={accounts} />
       )}
 
-      {/* Perpetual Futures Portfolio Section */}
-      {!isPaperTradingActive && selectedAccount && selectedAccount.type === 'cex' && (
-        <PerpsPortfolioSection accountId={selectedAccount.id} />
-      )}
-
       {/* Coin Categorization Section - Always visible (informational) */}
       <BlacklistManager />
 
@@ -322,75 +317,6 @@ export default function Settings() {
         isOpen={showAddAccountModal}
         onClose={() => setShowAddAccountModal(false)}
       />
-    </div>
-  )
-}
-
-
-function PerpsPortfolioSection({ accountId }: { accountId: number }) {
-  const [status, setStatus] = useState<any>(null)
-  const [linking, setLinking] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    api.get(`/accounts/${accountId}/perps-portfolio`)
-      .then(res => setStatus(res.data))
-      .catch(() => setStatus(null))
-  }, [accountId])
-
-  const handleLink = async () => {
-    setLinking(true)
-    setError(null)
-    try {
-      const res = await api.post(`/accounts/${accountId}/link-perps-portfolio`)
-      setStatus({ ...status, linked: true, perps_portfolio_uuid: res.data.portfolio_uuid })
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to link portfolio')
-    } finally {
-      setLinking(false)
-    }
-  }
-
-  return (
-    <div className="card p-6">
-      <div className="flex items-center space-x-3 mb-4">
-        <Link2 className="w-6 h-6 text-purple-400" />
-        <h3 className="text-xl font-semibold">Perpetual Futures</h3>
-      </div>
-
-      {status?.linked ? (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle className="w-4 h-4 text-green-400" />
-            <span className="text-green-400">INTX Portfolio Linked</span>
-          </div>
-          <div className="text-xs text-slate-400 font-mono">
-            UUID: {status.perps_portfolio_uuid}
-          </div>
-          <div className="text-xs text-slate-400">
-            Default Leverage: {status.default_leverage}x | Margin: {status.margin_type}
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-slate-400">
-            Link your Coinbase INTX perpetuals portfolio to enable futures trading with leverage, bracket TP/SL orders, and position monitoring.
-          </p>
-          {error && (
-            <div className="flex items-center gap-2 text-sm text-red-400">
-              <AlertCircle className="w-4 h-4" />
-              {error}
-            </div>
-          )}
-          <button
-            onClick={handleLink}
-            disabled={linking}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {linking ? 'Discovering...' : 'Link Perpetuals Portfolio'}
-          </button>
-        </div>
-      )}
     </div>
   )
 }
