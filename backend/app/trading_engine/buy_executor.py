@@ -79,7 +79,7 @@ async def execute_buy(
 
         logger.info(f"  📋 Placing limit buy order: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
 
-        # TODO: _pending_order is currently unused but reserved for future limit order tracking/monitoring
+        # Limit order placed; fill tracking handled by limit_order_monitor service
         _pending_order = await execute_limit_buy(  # noqa: F841
             db=db,
             exchange=exchange,
@@ -544,7 +544,7 @@ async def execute_buy_close_short(
     take_profit_order_type = config.get("take_profit_order_type", "limit")
 
     if take_profit_order_type == "limit":
-        # TODO: Implement limit order logic for closing shorts
+        # TODO: Short close currently uses market orders only; limit close not yet implemented
         logger.warning("  ⚠️ Limit close orders for shorts not yet implemented - using market order")
 
     # Execute market buy order to close short

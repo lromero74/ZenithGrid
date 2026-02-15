@@ -19,13 +19,6 @@ interface User {
   terms_accepted_at: string | null  // NULL = must accept terms before accessing dashboard
 }
 
-// AuthTokens interface (used by LoginResponse)
-// interface AuthTokens {
-//   access_token: string
-//   refresh_token: string
-//   expires_in: number
-// }
-
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean

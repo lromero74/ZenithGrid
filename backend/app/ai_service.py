@@ -40,6 +40,10 @@ async def get_ai_client(provider: str = "anthropic", user_id: Optional[int] = No
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
 
+        # BUG: User model has no anthropic_api_key/openai_api_key/gemini_api_key attrs.
+        # Credentials are stored in AIProviderCredential table. This code path
+        # silently fails (AttributeError caught nowhere) and falls through to
+        # system credentials. Needs refactoring to query AIProviderCredential.
         if user:
             if provider == "anthropic":
                 api_key = user.anthropic_api_key

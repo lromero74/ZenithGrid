@@ -82,7 +82,10 @@ export function BotListItem({
   const [isTransitioning, setIsTransitioning] = useState(true)
   const timeframes = ['day', 'week', 'month', 'year']
 
-  // Auto-scroll through timeframes every 5 seconds (only when not expanded)
+  // PnL carousel: auto-scrolls through timeframes using CSS translateY.
+  // Items are rendered twice ([...projections, ...projections]) so that when
+  // the index overshoots past the last real item, there's a duplicate set to
+  // scroll into — then we snap back to index 0 without animation for seamless looping.
   useEffect(() => {
     if (isPnlExpanded) return
 
