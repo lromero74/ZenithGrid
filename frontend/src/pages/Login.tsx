@@ -627,7 +627,11 @@ export default function Login() {
                       required
                       autoComplete="new-password"
                       placeholder="Minimum 8 characters"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full pl-10 pr-4 py-3 bg-slate-700 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-colors ${
+                        signupPassword && signupConfirmPassword && signupPassword === signupConfirmPassword
+                          ? 'border-green-500 focus:ring-green-500 ring-1 ring-green-500/50'
+                          : 'border-slate-600 focus:ring-blue-500'
+                      }`}
                     />
                   </div>
                   <PasswordStrengthMeter password={signupPassword} />
@@ -648,7 +652,13 @@ export default function Login() {
                       required
                       autoComplete="new-password"
                       placeholder="Re-enter your password"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full pl-10 pr-12 py-3 bg-slate-700 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-colors ${
+                        signupConfirmPassword && signupPassword === signupConfirmPassword
+                          ? 'border-green-500 focus:ring-green-500 ring-1 ring-green-500/50'
+                          : signupConfirmPassword && signupPassword !== signupConfirmPassword
+                            ? 'border-red-500 focus:ring-red-500 ring-1 ring-red-500/50'
+                            : 'border-slate-600 focus:ring-blue-500'
+                      }`}
                     />
                     {signupConfirmPassword.length > 0 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -712,7 +722,7 @@ export default function Login() {
                       (e) Ensuring adequate funds and appropriate position sizing.
                     </p>
                     <p>
-                      <strong>9. Release of Liability:</strong> YOU HEREBY RELEASE, WAIVE, AND FOREVER DISCHARGE THE COMPANY, ITS OWNERS, OFFICERS, EMPLOYEES, AGENTS, AND AFFILIATES FROM ANY AND ALL LIABILITY, CLAIMS, DEMANDS, ACTIONS, OR CAUSES OF ACTION WHATSOEVER ARISING OUT OF OR RELATED TO ANY LOSS, DAMAGE, OR INJURY THAT MAY BE SUSTAINED BY YOU AS A RESULT OF USING THIS SOFTWARE, INCLUDING BUT NOT LIMITED TO FINANCIAL LOSSES FROM TRADING ACTIVITIES.
+                      <strong>9. Release of Liability:</strong> YOU HEREBY RELEASE, WAIVE, AND FOREVER DISCHARGE THE COMPANY, ITS OWNERS, MEMBERS, OFFICERS, EMPLOYEES, AGENTS, AND AFFILIATES FROM ANY AND ALL LIABILITY, CLAIMS, DEMANDS, ACTIONS, OR CAUSES OF ACTION WHATSOEVER ARISING OUT OF OR RELATED TO ANY LOSS, DAMAGE, OR INJURY THAT MAY BE SUSTAINED BY YOU AS A RESULT OF USING THIS SOFTWARE, INCLUDING BUT NOT LIMITED TO FINANCIAL LOSSES FROM TRADING ACTIVITIES.
                     </p>
                     <p>
                       <strong>10. Indemnification:</strong> You agree to indemnify, defend, and hold harmless the Company from any claims, damages, losses, or expenses arising from your use of the Software or violation of this Agreement.
@@ -754,7 +764,7 @@ export default function Login() {
                       <Square className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
                     )}
                     <span className="text-sm text-slate-300">
-                      I have read, understood, and agree to the End User License Agreement and Risk Disclosure. I acknowledge that automated trading involves substantial risk of loss, I assume sole liability for all trading outcomes, and I release the Company from all liability related to my use of this Software.
+                      I have read, understood, and agree to the End User License Agreement and Risk Disclosure. I acknowledge that automated trading involves substantial risk of loss, I assume sole liability for all trading outcomes, and I release the Company and its owners, members, and affiliates from all liability related to my use of this Software.
                     </span>
                   </button>
                 </div>

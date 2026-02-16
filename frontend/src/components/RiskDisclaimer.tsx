@@ -105,10 +105,19 @@ export function RiskDisclaimer({ onAccept, onDecline, isLoading }: RiskDisclaime
                 <li>You understand the risks involved in cryptocurrency trading and automated trading systems.</li>
                 <li>You are solely responsible for any losses incurred while using this platform.</li>
                 <li>Past performance is not indicative of future results.</li>
-                <li>You will not hold the developers or operators of this platform liable for any losses.</li>
-                <li>You have read and agree to comply with the Polyform Noncommercial License under which this software is distributed.</li>
-                <li>You understand that this software is provided "as is" without any warranties.</li>
+                <li>You have read and agree to comply with the GNU Affero General Public License v3 (AGPL v3) under which this software is distributed.</li>
+                <li>You understand that this software is provided "AS IS" without warranty of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose, and noninfringement.</li>
               </ol>
+              <p className="text-red-300 font-semibold mt-4">
+                RELEASE OF LIABILITY
+              </p>
+              <p>
+                You hereby release, waive, and forever discharge Romero Tech Solutions, its owners, members, officers,
+                employees, agents, and affiliates from any and all liability, claims, demands, actions, or causes of action
+                arising out of or related to any loss, damage, or injury sustained as a result of using this software,
+                including but not limited to financial losses from trading activities. In no event shall the company be liable
+                for any direct, indirect, incidental, special, consequential, or punitive damages.
+              </p>
             </div>
           </div>
 

@@ -104,7 +104,11 @@ export function ResetPassword({ token, onComplete }: ResetPasswordProps) {
                     autoFocus
                     autoComplete="new-password"
                     placeholder="Minimum 8 characters"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={`w-full pl-10 pr-4 py-3 bg-slate-700 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-colors ${
+                      passwordsMatch
+                        ? 'border-green-500 focus:ring-green-500 ring-1 ring-green-500/50'
+                        : 'border-slate-600 focus:ring-blue-500'
+                    }`}
                   />
                 </div>
                 <PasswordStrengthMeter password={password} />
@@ -124,7 +128,13 @@ export function ResetPassword({ token, onComplete }: ResetPasswordProps) {
                     required
                     autoComplete="new-password"
                     placeholder="Re-enter your password"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={`w-full pl-10 pr-12 py-3 bg-slate-700 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-colors ${
+                      confirmPassword && passwordsMatch
+                        ? 'border-green-500 focus:ring-green-500 ring-1 ring-green-500/50'
+                        : confirmPassword && !passwordsMatch
+                          ? 'border-red-500 focus:ring-red-500 ring-1 ring-red-500/50'
+                          : 'border-slate-600 focus:ring-blue-500'
+                    }`}
                   />
                   {confirmPassword.length > 0 && (
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2">

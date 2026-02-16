@@ -144,7 +144,12 @@ const accountsApi = {
     })
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.detail || 'Failed to create account')
+      const detail = typeof error.detail === 'string'
+        ? error.detail
+        : Array.isArray(error.detail)
+          ? error.detail.map((e: { msg?: string }) => e.msg || String(e)).join(', ')
+          : 'Failed to create account'
+      throw new Error(detail)
     }
     return response.json()
   },
