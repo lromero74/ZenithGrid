@@ -109,7 +109,8 @@
       { "name": "UserSourceSubscription", "table": "user_source_subscriptions", "key_fields": ["id", "user_id", "source_id", "is_subscribed"] },
       { "name": "AccountValueSnapshot", "table": "account_value_snapshots", "key_fields": ["id", "account_id", "timestamp", "btc_value", "usd_value"] },
       { "name": "MetricSnapshot", "table": "metric_snapshots", "key_fields": ["id", "metric_type", "timestamp", "value_json"] },
-      { "name": "PropFirmState", "table": "prop_firm_state", "key_fields": ["id", "account_id", "initial_deposit", "current_equity", "is_killed", "kill_reason"] }
+      { "name": "PropFirmState", "table": "prop_firm_state", "key_fields": ["id", "account_id", "initial_deposit", "current_equity", "is_killed", "kill_reason"] },
+      { "name": "PropFirmEquitySnapshot", "table": "prop_firm_equity_snapshots", "key_fields": ["id", "account_id", "equity", "daily_drawdown_pct", "total_drawdown_pct", "timestamp"] }
     ],
 
     "services": [
@@ -143,9 +144,9 @@
         { "file": "trading_engine_v2.py", "purpose": "Strategy-based trading engine coordinator; wraps all trading modules" },
         { "file": "trading_client.py", "purpose": "Quote-currency agnostic buy/sell wrapper; works with any ExchangeClient" },
         { "file": "multi_bot_monitor.py", "purpose": "Monitors prices for all active bots and dispatches strategy signals" },
-        { "file": "order_validation.py", "purpose": "Ensures orders meet Coinbase minimum size requirements" },
-        { "file": "precision.py", "purpose": "Precision handling for Coinbase API order sizes" },
-        { "file": "product_precision.py", "purpose": "Per-product increment specifications from Coinbase API" }
+        { "file": "order_validation.py", "purpose": "Ensures orders meet exchange minimum size requirements" },
+        { "file": "precision.py", "purpose": "Precision handling for exchange API order sizes" },
+        { "file": "product_precision.py", "purpose": "Per-product increment specifications from exchange APIs" }
       ],
       "modules": [
         { "file": "trading_engine/signal_processor.py", "purpose": "Signal processing and trading decision orchestration" },
@@ -249,6 +250,16 @@
         "auth_methods": ["HMAC", "CDP (Cloud Developer Platform)"],
         "features": ["Spot trading", "Perpetual futures (INTX)", "Market data", "Account management"]
       },
+      "bybit_api": {
+        "type": "REST (pybit) + WebSocket (pybit)",
+        "auth_methods": ["API Key + Secret (HMAC)"],
+        "features": ["Linear perps trading", "Wallet balance", "Position management", "Real-time equity via WS"]
+      },
+      "mt5_bridge": {
+        "type": "HTTP JSON (custom EA bridge)",
+        "auth_methods": ["Bridge URL + Magic Number"],
+        "features": ["Market/limit orders", "Position management", "Equity polling", "Emergency close-all"]
+      },
       "dex": {
         "networks": ["Ethereum mainnet", "Arbitrum", "Polygon", "Base"],
         "features": ["Wallet balances", "Token holdings", "On-chain swaps"]
@@ -279,7 +290,7 @@
     ],
 
     "migrations": {
-      "count": 11,
+      "count": 12,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -295,7 +306,8 @@
         "add_perpetual_futures_fields.py",
         "convert_coin_categories_to_global.py",
         "encrypt_existing_credentials.py",
-        "replace_paywalled_sources.py"
+        "replace_paywalled_sources.py",
+        "add_prop_firm_support.py"
       ]
     }
   },
@@ -361,9 +373,12 @@
         { "file": "pages/news/components/TTSControls.tsx", "purpose": "Text-to-speech playback controls" },
         { "file": "components/news/SourceSubscriptionsModal.tsx", "purpose": "Subscribe/unsubscribe from news sources" }
       ],
+      "prop_firm": [
+        { "file": "components/PropGuardStatus.tsx", "purpose": "PropGuard drawdown monitoring dashboard for prop firm accounts" }
+      ],
       "account_and_settings": [
         { "file": "components/AccountSwitcher.tsx", "purpose": "Header dropdown for switching accounts" },
-        { "file": "components/AccountsManagement.tsx", "purpose": "Account CRUD (CEX/DEX)" },
+        { "file": "components/AccountsManagement.tsx", "purpose": "Account CRUD (CEX/DEX/Prop Firm)" },
         { "file": "components/AddAccountModal.tsx", "purpose": "Add new account with credentials" },
         { "file": "components/AIProvidersManager.tsx", "purpose": "Manage AI provider API keys" },
         { "file": "components/AutoBuySettings.tsx", "purpose": "Configure auto-buy BTC settings" },
@@ -520,7 +535,7 @@
 
   "data_flow": {
     "request_flow": "React Page -> Custom Hook -> API Module (Axios) -> FastAPI Router -> Service/Engine -> SQLAlchemy Model -> SQLite",
-    "trading_flow": "MultiBotMonitor -> TradingStrategy.check_signals() -> TradingEngineV2.process_signal() -> TradingClient -> ExchangeClient -> Coinbase API",
+    "trading_flow": "MultiBotMonitor -> TradingStrategy.check_signals() -> TradingEngineV2.process_signal() -> TradingClient -> ExchangeClient (-> PropGuard for prop firms) -> Exchange API",
     "websocket_flow": "Exchange order fill -> WebSocketManager.broadcast() -> NotificationContext -> Toast component + Audio notification",
     "ai_decision_flow": "MultiBotMonitor -> AIService.get_recommendation() -> AI Provider API -> TradingEngine -> OrderValidation -> Exchange",
     "background_task_flow": "FastAPI startup -> asyncio.create_task() -> Periodic loop with sleep interval -> Database operations"

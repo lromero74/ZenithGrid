@@ -13,7 +13,7 @@
 | Auth | JWT (python-jose) + bcrypt |
 | Encryption | Fernet (AES-128-CBC + HMAC-SHA256) |
 | Deployment | AWS EC2 (Amazon Linux 2023) + systemd |
-| Exchange | Coinbase Advanced Trade API (HMAC / CDP auth) |
+| Exchange | Coinbase (HMAC/CDP), ByBit V5, MT5 Bridge |
 | AI | Anthropic Claude, OpenAI GPT, Google Gemini |
 
 The backend runs as a systemd service (`trading-bot-backend`) on port 8000.
@@ -38,6 +38,8 @@ graph TB
 
     subgraph "External Services"
         CB[Coinbase API<br/>REST + WebSocket]
+        BB[ByBit V5 API<br/>REST + WebSocket]
+        MT5[MT5 Bridge<br/>HTTP JSON]
         AI[AI Providers<br/>Claude / GPT / Gemini]
         DEX[DEX Networks<br/>Ethereum / L2s]
         NEWS[News Feeds<br/>RSS / Reddit / YouTube]
@@ -48,11 +50,14 @@ graph TB
     BE <--> DB
     BG --> DB
     BE <--> CB
+    BE <--> BB
+    BE <--> MT5
     BE <--> AI
     BE <--> DEX
     BG --> NEWS
     BG --> MKT
     BG --> CB
+    BG --> BB
 ```
 
 ---
@@ -109,6 +114,9 @@ graph TB
     subgraph "Exchange Clients"
         BASE[ExchangeClient ABC]
         CADAP[CoinbaseAdapter]
+        BBADAP[ByBitAdapter]
+        MT5C[MT5BridgeClient]
+        PGUARD[PropGuardClient<br/><small>safety decorator</small>]
         PAPER[PaperTradingClient]
         DEXC[DexClient]
         FACTORY[Factory]
@@ -120,6 +128,11 @@ graph TB
         CB_MKT[market_data_api.py]
         CB_ORD[order_api.py]
         CB_PERP[perpetuals_api.py]
+    end
+
+    subgraph "ByBit Modules"
+        BB_CLIENT[ByBitClient<br/><small>pybit + asyncio.to_thread</small>]
+        BB_WS[ByBitWSManager<br/><small>equity / position / ticker</small>]
     end
 
     subgraph "Core"
@@ -156,9 +169,12 @@ graph TB
     TC --> FACTORY
 
     SVC_EXCH --> FACTORY
-    FACTORY --> CADAP & PAPER & DEXC
+    FACTORY --> CADAP & BBADAP & MT5C & PAPER & DEXC
+    PGUARD -.->|wraps| BBADAP & MT5C
     CADAP --> CB_AUTH & CB_BAL & CB_MKT & CB_ORD & CB_PERP
-    BASE -.->|interface| CADAP & PAPER & DEXC
+    BBADAP --> BB_CLIENT
+    BB_WS -.->|real-time state| PGUARD
+    BASE -.->|interface| CADAP & BBADAP & MT5C & PAPER & DEXC & PGUARD
 
     MBM --> PF_AGG
     PF_AGG --> PF_CB & PF_DEX
@@ -246,7 +262,8 @@ sequenceDiagram
     participant TC as TradingClient
     participant OV as OrderValidation
     participant EX as ExchangeClient
-    participant CB as Coinbase API
+    participant PG as PropGuard<br/>(prop firms)
+    participant API as Exchange API<br/>(Coinbase / ByBit / MT5)
     participant PM as PositionManager
     participant DB as SQLite
     participant WS as WebSocketManager
@@ -272,8 +289,12 @@ sequenceDiagram
         SIG->>BUY: execute(product, size, price)
         BUY->>TC: buy(product, size, price)
         TC->>EX: place_order(params)
-        EX->>CB: POST /api/v3/brokerage/orders
-        CB-->>EX: order_id
+        alt Prop Firm Account
+            EX->>PG: preflight_check(drawdown, spread, vol)
+            PG-->>EX: pass/block
+        end
+        EX->>API: place_order (REST)
+        API-->>EX: order_id
         EX-->>TC: result
         TC-->>BUY: fill
         BUY->>PM: create_position(fill)
@@ -299,6 +320,8 @@ erDiagram
     Account ||--o{ Bot : "has many"
     Account ||--o{ OrderHistory : "has many"
     Account ||--o{ AccountValueSnapshot : "daily snapshots"
+    Account ||--o| PropFirmState : "has one (prop)"
+    Account ||--o{ PropFirmEquitySnapshot : "equity history"
 
     Bot ||--o{ Position : "opens"
     Bot ||--o{ AIBotLog : "logs decisions"
@@ -329,6 +352,30 @@ erDiagram
         string account_type
         string api_key_encrypted
         bool is_default
+        string prop_firm
+        json prop_firm_config
+        float prop_daily_drawdown_pct
+        float prop_total_drawdown_pct
+        float prop_initial_deposit
+    }
+
+    PropFirmState {
+        int id PK
+        int account_id FK
+        float initial_deposit
+        float current_equity
+        float daily_start_equity
+        bool is_killed
+        string kill_reason
+    }
+
+    PropFirmEquitySnapshot {
+        int id PK
+        int account_id FK
+        float equity
+        float daily_drawdown_pct
+        float total_drawdown_pct
+        datetime timestamp
     }
 
     Bot {
@@ -408,6 +455,7 @@ All background tasks are launched in `main.py` during the FastAPI `startup` even
 | DebtCeilingMonitor | Weekly | Service `.start()` method |
 | AutoBuyMonitor | Per-account | Service `.start()` method |
 | PerpsMonitor | 60s | Service `.start()` method |
+| PropGuardMonitor | 30s | `asyncio.create_task` loop |
 | DecisionLogCleanup | Daily | `asyncio.create_task` loop |
 | FailedConditionCleanup | 6h | `asyncio.create_task` loop |
 | FailedOrderCleanup | 6h | `asyncio.create_task` loop |
