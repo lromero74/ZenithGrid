@@ -294,7 +294,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             </div>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <p className="text-slate-400 text-xs">Equity</p>
               <p className="text-white font-mono text-sm">{formatCurrency(propGuardStatus.current_equity || 0)}</p>
@@ -349,6 +349,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
         return (
           <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-900">
                 <tr>
@@ -372,9 +373,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     </div>
                   </th>
                   <th className="text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Daily</th>
-                  <th className="text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Weekly</th>
+                  <th className="hidden sm:table-cell text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Weekly</th>
                   <th className="text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Monthly</th>
-                  <th className="text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Yearly</th>
+                  <th className="hidden sm:table-cell text-right px-2 sm:px-4 py-2 text-sm font-medium text-slate-400">Yearly</th>
                 </tr>
               </thead>
               <tbody>
@@ -384,7 +385,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     {prefix}${totalDailyPnl.toFixed(2)}
                     <span className="text-xs ml-1 text-slate-400">({fmtPct(dailyPct)}%)</span>
                   </td>
-                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
                     {prefix}${totalWeeklyPnl.toFixed(2)}
                     <span className="text-xs ml-1 text-slate-400">({fmtPct(weeklyPct)}%)</span>
                   </td>
@@ -392,7 +393,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     {prefix}${totalMonthlyPnl.toFixed(2)}
                     <span className="text-xs ml-1 text-slate-400">({fmtPct(monthlyPct)}%)</span>
                   </td>
-                  <td className={`px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-2 text-right text-lg font-bold ${colorClass}`}>
                     {prefix}${totalYearlyPnl.toFixed(2)}
                     <span className="text-xs ml-1 text-slate-400">({fmtPct(yearlyPct)}%)</span>
                   </td>
@@ -400,7 +401,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 <tr>
                   <td className="px-2 sm:px-4 py-1 text-sm text-slate-400">Compounded</td>
                   <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>—</td>
-                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
                     {prefix}${compWeekly.toFixed(2)}
                     <span className="text-xs ml-1 text-slate-500">({fmtPct(compWeeklyPct)}%)</span>
                   </td>
@@ -408,13 +409,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     {prefix}${compMonthly.toFixed(2)}
                     <span className="text-xs ml-1 text-slate-500">({fmtPct(compMonthlyPct)}%)</span>
                   </td>
-                  <td className={`px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-1 text-right text-sm ${colorClass}`}>
                     {prefix}${compYearly.toFixed(2)}
                     <span className="text-xs ml-1 text-slate-500">({fmtPct(compYearlyPct)}%)</span>
                   </td>
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
         )
       })()}

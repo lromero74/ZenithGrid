@@ -5,6 +5,23 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.0] - 2026-02-16
+
+### Added
+- **Mobile-responsive layouts**: Full mobile-friendly UI across all pages and components (21 files updated)
+  - **App shell**: Header hides Paper Trading toggle and Account Switcher on mobile; nav separator hidden on small screens
+  - **Dashboard**: Projection table columns hidden on mobile, PropGuard grid stacks to single column, recent deals wrapped in overflow scroll
+  - **Positions**: Balance panel tightens column widths and hides "In Grids" on mobile; action buttons wrap
+  - **Bots**: Bot table hides non-essential columns on mobile; header buttons wrap
+  - **Portfolio**: Hides Balance and Price columns on mobile for clean 4-column layout
+  - **Charts**: Toolbar separators hidden on mobile; chart type and time interval buttons wrap
+  - **History**: Trade history grid wraps on mobile; pagination controls wrap
+  - **News**: Article and video grids transition to 2-column at smaller breakpoint
+  - **Mini players**: Both article reader and video mini players now stack progress bar above centered buttons on mobile with auto-height; expanded mode stacks controls vertically
+  - **Market sentiment carousel**: Responsive card count (1 on mobile, 2 on tablet, 3 on desktop) with resize listener
+  - **Modals**: All modals use full-width on mobile with proper margin; internal grids stack to single column
+  - **Charts**: PnL chart stats stack above chart on mobile; Account Value chart header and time buttons wrap
+
 ## [v2.0.1] - 2026-02-16
 
 ### Fixed

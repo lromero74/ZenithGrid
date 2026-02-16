@@ -392,10 +392,10 @@ export function ArticleReaderMiniPlayer() {
         className={`fixed z-50 transition-all duration-300 ease-in-out ${
           isExpanded
             ? 'inset-4 sm:inset-8 md:inset-12 lg:inset-x-[10%] lg:inset-y-8'
-            : 'bottom-0 left-0 right-0 h-20'
+            : 'bottom-0 left-0 right-0 sm:h-20'
         }`}
       >
-        <div className={`h-full bg-slate-800 shadow-2xl flex transition-all duration-300 ${
+        <div className={`h-full bg-slate-800 shadow-2xl flex transition-all duration-300 overflow-hidden ${
           isExpanded
             ? 'flex-col rounded-lg border border-slate-700'
             : 'flex-row border-t border-slate-700'
@@ -422,7 +422,7 @@ export function ArticleReaderMiniPlayer() {
               )}
 
               {/* Article content */}
-              <div className="p-6">
+              <div className="p-3 sm:p-6">
                 {/* Header with source, time, voice */}
                 <div className="flex flex-wrap items-center gap-3 mb-4">
                   <span className={`px-2 py-1 rounded text-sm font-medium border ${
@@ -450,7 +450,7 @@ export function ArticleReaderMiniPlayer() {
                 </div>
 
                 {/* Title */}
-                <h1 className="text-2xl font-bold text-white mb-6 leading-tight">
+                <h1 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 leading-tight">
                   {currentArticle.title}
                 </h1>
 
@@ -472,7 +472,7 @@ export function ArticleReaderMiniPlayer() {
           {/* Mini mode: Thumbnail (click to find article in news list) */}
           {!isExpanded && currentArticle.thumbnail && (
             <div
-              className="w-28 h-16 my-auto ml-4 rounded overflow-hidden flex-shrink-0 bg-slate-900 cursor-pointer hover:ring-2 hover:ring-green-500 transition-all"
+              className="w-20 h-12 sm:w-28 sm:h-16 my-auto ml-2 sm:ml-4 rounded overflow-hidden flex-shrink-0 bg-slate-900 cursor-pointer hover:ring-2 hover:ring-green-500 transition-all"
               onClick={findCurrentArticle}
               title="Find article in news list"
             >
@@ -490,11 +490,11 @@ export function ArticleReaderMiniPlayer() {
           {/* Controls bar */}
           <div className={`flex transition-all duration-300 ${
             isExpanded
-              ? 'flex-row items-center gap-4 p-4 border-t border-slate-700'
-              : 'flex-col flex-1 px-4 py-2 justify-center gap-1'
+              ? 'flex-col sm:flex-row items-center gap-2 sm:gap-4 p-2 sm:p-4 border-t border-slate-700'
+              : 'flex-col flex-1 min-w-0 px-2 sm:px-4 py-2 justify-center gap-0.5 sm:gap-1'
           }`}>
             {/* Article info */}
-            <div className={`min-w-0 ${isExpanded ? 'flex-shrink-0 w-64' : 'flex items-center gap-2'}`}>
+            <div className={`min-w-0 ${isExpanded ? 'w-full sm:w-auto sm:flex-shrink-0 sm:max-w-[16rem]' : 'flex items-center gap-2'}`}>
               <span className={`px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${
                 sourceColors[currentArticle.source] || 'bg-slate-600 text-slate-300'
               }`}>
@@ -510,10 +510,10 @@ export function ArticleReaderMiniPlayer() {
             </div>
 
             {/* Progress and controls */}
-            <div className={`flex items-center gap-2 ${isExpanded ? 'flex-1' : ''}`}>
+            <div className={`flex gap-1 sm:gap-2 w-full sm:w-auto ${isExpanded ? 'flex-col sm:flex-row items-center flex-1' : 'flex-col sm:flex-row items-center'}`}>
               {/* Progress bar and time */}
-              <div className="flex-1 flex items-center gap-2 min-w-0">
-                <span className="text-xs text-slate-400 w-10 text-right flex-shrink-0 font-mono">
+              <div className={`flex items-center gap-1 sm:gap-2 min-w-0 w-full ${isExpanded ? 'sm:w-auto sm:flex-1' : 'sm:flex-1'}`}>
+                <span className="text-xs text-slate-400 w-8 sm:w-10 text-right flex-shrink-0 font-mono">
                   {formatTime(currentTime)}
                 </span>
 
@@ -536,7 +536,7 @@ export function ArticleReaderMiniPlayer() {
               </div>
 
               {/* Playback controls */}
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className={`flex items-center gap-1 ${isExpanded ? 'flex-wrap justify-center sm:justify-start' : 'flex-wrap justify-center sm:justify-start'}`}>
                 {/* Voice settings dropdown */}
                 <div className="relative" ref={settingsRef}>
                   <button
@@ -548,7 +548,7 @@ export function ArticleReaderMiniPlayer() {
                   </button>
 
                   {showSettingsDropdown && (
-                    <div className="fixed bottom-24 right-20 w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-[60] p-4">
+                    <div className="fixed bottom-24 right-4 sm:right-20 w-60 sm:w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-[60] p-4">
                       <div className="space-y-4">
                         {/* Voice cycling toggle */}
                         <div>
@@ -776,7 +776,7 @@ export function ArticleReaderMiniPlayer() {
       </div>
 
       {/* Spacer to prevent content from being hidden behind mini-player */}
-      {!isExpanded && <div className="h-20" />}
+      {!isExpanded && <div className="h-24 sm:h-20" />}
     </>
   )
 }

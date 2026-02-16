@@ -593,7 +593,7 @@ function Portfolio() {
                     </div>
                   </th>
                   <th
-                    className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="hidden sm:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('total_balance')}
                   >
                     <div className="flex items-center justify-end gap-2">
@@ -601,13 +601,13 @@ function Portfolio() {
                       {getSortIcon('total_balance')}
                     </div>
                   </th>
-                  <th className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="hidden md:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
                     Avail
                   </th>
-                  <th className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="hidden md:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
                     Hold
                   </th>
-                  <th className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
+                  <th className="hidden sm:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider">
                     Price
                   </th>
                   <th
@@ -620,7 +620,7 @@ function Portfolio() {
                     </div>
                   </th>
                   <th
-                    className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="hidden sm:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('btc_value')}
                   >
                     <div className="flex items-center justify-end gap-2">
@@ -629,7 +629,7 @@ function Portfolio() {
                     </div>
                   </th>
                   <th
-                    className="px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
+                    className="hidden sm:table-cell px-3 py-3 text-right text-sm font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors"
                     onClick={() => handleSort('percentage')}
                   >
                     <div className="flex items-center justify-end gap-2">
@@ -669,16 +669,16 @@ function Portfolio() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-right text-white font-mono text-sm">
+                    <td className="hidden sm:table-cell px-3 py-3 text-right text-white font-mono text-sm">
                       {formatCrypto(holding.total_balance)}
                     </td>
-                    <td className="px-3 py-3 text-right text-green-400 font-mono text-sm">
+                    <td className="hidden md:table-cell px-3 py-3 text-right text-green-400 font-mono text-sm">
                       {formatCrypto(holding.available)}
                     </td>
-                    <td className="px-3 py-3 text-right text-orange-400 font-mono text-sm">
+                    <td className="hidden md:table-cell px-3 py-3 text-right text-orange-400 font-mono text-sm">
                       {holding.hold > 0 ? formatCrypto(holding.hold) : '-'}
                     </td>
-                    <td className="px-3 py-3 text-right text-slate-300 font-mono text-sm">
+                    <td className="hidden sm:table-cell px-3 py-3 text-right text-slate-300 font-mono text-sm">
                       {holding.current_price_usd > 0
                         ? formatCurrency(holding.current_price_usd)
                         : '-'}
@@ -686,10 +686,10 @@ function Portfolio() {
                     <td className="px-3 py-3 text-right text-white font-semibold text-sm">
                       {formatCurrency(holding.usd_value)}
                     </td>
-                    <td className="px-3 py-3 text-right text-orange-400 font-mono text-sm">
+                    <td className="hidden sm:table-cell px-3 py-3 text-right text-orange-400 font-mono text-sm">
                       {formatCrypto(holding.btc_value, 6)}
                     </td>
-                    <td className="px-3 py-3 text-right">
+                    <td className="hidden sm:table-cell px-3 py-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <span className="text-white font-medium text-sm">
                           {holding.percentage.toFixed(1)}%
@@ -782,7 +782,7 @@ function Portfolio() {
       {/* Chart Modal */}
       {chartModalAsset && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-800 rounded-lg w-full max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">

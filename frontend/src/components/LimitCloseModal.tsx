@@ -373,8 +373,8 @@ export function LimitCloseModal({
   const breakevenPrice = totalAmount > 0 ? totalQuoteSpent / totalAmount : 0
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-lg w-full max-w-2xl flex">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-slate-800 rounded-lg w-full max-w-2xl flex mx-1 sm:mx-auto">
         {/* Main Content */}
         <div className="flex-1">
           {/* Header */}

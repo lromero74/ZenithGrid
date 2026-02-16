@@ -298,10 +298,10 @@ export function MiniPlayer() {
         className={`fixed z-50 transition-all duration-300 ease-in-out ${
           isExpanded
             ? 'inset-4 sm:inset-8 md:inset-12 lg:inset-x-[10%] lg:inset-y-8'
-            : 'bottom-0 left-0 right-0 h-20'
+            : 'bottom-0 left-0 right-0 sm:h-20'
         }`}
       >
-        <div className={`h-full bg-slate-800 shadow-2xl flex transition-all duration-300 ${
+        <div className={`h-full bg-slate-800 shadow-2xl flex transition-all duration-300 overflow-hidden ${
           isExpanded
             ? 'flex-col rounded-lg border border-slate-700'
             : 'flex-row border-t border-slate-700'
@@ -311,12 +311,12 @@ export function MiniPlayer() {
           <div className={`bg-black flex-shrink-0 transition-all duration-300 ${
             isExpanded
               ? 'flex-1 rounded-t-lg overflow-hidden'
-              : 'w-28 h-16 my-auto ml-4 rounded relative group overflow-visible'
+              : 'w-20 h-12 sm:w-28 sm:h-16 my-auto ml-2 sm:ml-4 rounded relative group overflow-visible'
           }`}>
             {/* Video wrapper - scales up 6x on hover in mini mode, positioned absolutely to break out of container */}
             <div className={`bg-black rounded ${
               !isExpanded
-                ? 'absolute bottom-0 left-0 w-28 h-16 transition-all duration-200 ease-out group-hover:w-[672px] group-hover:h-96 group-hover:z-[100] group-hover:shadow-2xl'
+                ? 'absolute bottom-0 left-0 w-20 h-12 sm:w-28 sm:h-16 transition-all duration-200 ease-out group-hover:w-[672px] group-hover:h-96 group-hover:z-[100] group-hover:shadow-2xl'
                 : 'w-full h-full'
             }`}>
               <iframe
@@ -334,12 +334,12 @@ export function MiniPlayer() {
           {/* Controls bar */}
           <div className={`flex transition-all duration-300 ${
             isExpanded
-              ? 'flex-row items-center gap-4 p-4 border-t border-slate-700'
-              : 'flex-col flex-1 px-4 py-2 justify-center gap-1'
+              ? 'flex-col sm:flex-row items-center gap-2 sm:gap-4 p-2 sm:p-4 border-t border-slate-700'
+              : 'flex-col flex-1 min-w-0 px-2 sm:px-4 py-2 justify-center gap-0.5 sm:gap-1'
           }`}>
-            {/* Video thumbnail (only in expanded) */}
+            {/* Video thumbnail (only in expanded, hidden on mobile) */}
             {isExpanded && (
-              <div className="relative flex-shrink-0 w-20 h-12 bg-black rounded overflow-hidden">
+              <div className="relative flex-shrink-0 w-20 h-12 bg-black rounded overflow-hidden hidden sm:block">
                 {currentVideo.thumbnail && (
                   <img
                     src={currentVideo.thumbnail}
@@ -351,7 +351,7 @@ export function MiniPlayer() {
             )}
 
             {/* Top row in mini mode: Video info */}
-            <div className={`min-w-0 ${isExpanded ? 'flex-shrink-0 w-48' : 'flex items-center gap-2'}`}>
+            <div className={`min-w-0 ${isExpanded ? 'w-full sm:w-auto sm:flex-shrink-0 sm:max-w-[12rem]' : 'flex items-center gap-2'}`}>
               <span
                 className={`px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${
                   videoSourceColors[currentVideo.source] || 'bg-slate-600 text-slate-300'
@@ -368,9 +368,9 @@ export function MiniPlayer() {
             </div>
 
             {/* Bottom row in mini mode: Progress bar, time, and controls */}
-            <div className={`flex items-center gap-2 ${isExpanded ? 'flex-1' : ''}`}>
+            <div className={`flex gap-1 sm:gap-2 w-full sm:w-auto ${isExpanded ? 'flex-col sm:flex-row items-center flex-1' : 'flex-col sm:flex-row items-center'}`}>
               {/* Progress bar and time */}
-              <div className="flex-1 flex items-center gap-2 min-w-0">
+              <div className={`flex items-center gap-2 min-w-0 w-full ${isExpanded ? 'sm:w-auto sm:flex-1' : 'sm:flex-1'}`}>
                 {/* Current time */}
                 <span className="text-xs text-slate-400 w-10 text-right flex-shrink-0 font-mono">
                   {formatTime(currentTime)}
@@ -441,7 +441,7 @@ export function MiniPlayer() {
               </div>
 
               {/* Controls */}
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className={`flex items-center gap-1 flex-shrink-0 ${isExpanded ? 'flex-wrap justify-center sm:justify-start' : 'justify-center sm:justify-start'}`}>
                 {/* Previous */}
                 <button
                   onClick={previousVideo}
@@ -584,7 +584,7 @@ export function MiniPlayer() {
       </div>
 
       {/* Spacer to prevent content from being hidden behind mini-player */}
-      <div className="h-20" />
+      <div className="h-24 sm:h-20" />
     </>
   )
 }

@@ -85,8 +85,8 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-lg w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-slate-800 rounded-lg w-full max-w-2xl max-h-[95vh] sm:max-h-[85vh] flex flex-col mx-1 sm:mx-auto">
         {/* Header */}
         <div className="p-6 border-b border-slate-700 flex items-center justify-between shrink-0">
           <div>

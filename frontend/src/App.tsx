@@ -248,15 +248,19 @@ function AppContent() {
                   <span className={`text-sm font-medium ${seasonInfo.color}`}>{seasonInfo.name}</span>
                 </div>
               )}
-              <div className="flex items-center space-x-3 sm:space-x-6 self-end sm:self-auto">
-                {/* Paper Trading Toggle */}
-                <PaperTradingToggle />
+              <div className="flex items-center gap-2 sm:gap-3 md:gap-6 self-end sm:self-auto">
+                {/* Paper Trading Toggle - hidden on mobile */}
+                <div className="hidden sm:block">
+                  <PaperTradingToggle />
+                </div>
 
-                {/* Account Switcher */}
-                <AccountSwitcher
-                  onAddAccount={() => setShowAddAccountModal(true)}
-                  onManageAccounts={() => navigate('/settings')}
-                />
+                {/* Account Switcher - hidden on mobile */}
+                <div className="hidden md:block">
+                  <AccountSwitcher
+                    onAddAccount={() => setShowAddAccountModal(true)}
+                    onManageAccounts={() => navigate('/settings')}
+                  />
+                </div>
 
                 <div className="text-right hidden sm:block">
                   <p className="text-xs text-slate-400">BTC Price</p>
@@ -285,7 +289,7 @@ function AppContent() {
                     ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </p>
                 </div>
-                <DollarSign className="w-8 h-8 sm:w-10 sm:h-10 text-green-500 opacity-50" />
+                <DollarSign className="hidden sm:block w-8 h-8 sm:w-10 sm:h-10 text-green-500 opacity-50" />
 
                 {/* User Info & Logout */}
                 <div className="flex items-center space-x-2 pl-4 border-l border-slate-600">
@@ -398,7 +402,7 @@ function AppContent() {
             </Link>
 
             {/* Separator */}
-            <div className="flex items-center px-1">
+            <div className="hidden sm:flex items-center px-1">
               <div className="h-6 w-px bg-slate-600" />
             </div>
 

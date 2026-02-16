@@ -547,7 +547,7 @@ export default function News() {
           </div>
 
           {/* News grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {paginatedNews.map((item, index) => {
               const isCurrentlyReading = isArticleReaderPlaying && currentArticle?.url === item.url
               return (
@@ -925,7 +925,7 @@ export default function News() {
           </div>
 
           {/* Videos grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredVideos.map((video, idx) => {
               // Use unique key combining source and video_id to avoid collisions
               const uniqueKey = `${video.source}-${video.video_id}`
