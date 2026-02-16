@@ -37,6 +37,15 @@ def clear_exchange_client_cache(account_id: Optional[int] = None):
             except RuntimeError:
                 pass  # No event loop — client will be GC'd
     else:
+        # Close all clients that support it before clearing
+        for _aid, _client in list(_exchange_client_cache.items()):
+            if _client and hasattr(_client, 'close'):
+                import asyncio
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(_client.close())
+                except RuntimeError:
+                    pass
         _exchange_client_cache.clear()
 
     # Also clear the monitor's per-account exchange cache
@@ -101,12 +110,15 @@ async def get_exchange_client_for_account(
             cex_account = cex_result.scalar_one_or_none()
 
             if cex_account:
+                kn = cex_account.api_key_name
+                if is_encrypted(kn):
+                    kn = decrypt_value(kn)
                 pk = cex_account.api_private_key
                 if is_encrypted(pk):
                     pk = decrypt_value(pk)
                 real_client = create_exchange_client(
                     exchange_type="cex",
-                    coinbase_key_name=cex_account.api_key_name,
+                    coinbase_key_name=kn,
                     coinbase_private_key=pk,
                 )
                 logger.info(f"Using CEX account {cex_account.id} for paper trading price data")
@@ -164,12 +176,15 @@ async def get_exchange_client_for_account(
             if not account.api_key_name or not account.api_private_key:
                 logger.warning(f"Account {account_id} missing API credentials")
                 return None
+            kn = account.api_key_name
+            if is_encrypted(kn):
+                kn = decrypt_value(kn)
             pk = account.api_private_key
             if is_encrypted(pk):
                 pk = decrypt_value(pk)
             client = create_exchange_client(
                 exchange_type="cex",
-                coinbase_key_name=account.api_key_name,
+                coinbase_key_name=kn,
                 coinbase_private_key=pk,
             )
 

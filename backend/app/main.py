@@ -544,6 +544,10 @@ async def shutdown_event():
         except asyncio.CancelledError:
             pass
 
+    # Close all cached exchange clients (releases httpx connections etc.)
+    from app.services.exchange_service import clear_exchange_client_cache
+    clear_exchange_client_cache()
+
     logger.info("🛑 Monitors stopped - shutdown complete")
 
 

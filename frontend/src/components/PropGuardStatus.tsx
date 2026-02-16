@@ -58,6 +58,12 @@ export function PropGuardStatus({ account }: PropGuardStatusProps) {
   const fetchStatus = useCallback(async () => {
     try {
       const response = await authFetch(`/api/propguard/${account.id}/status`)
+      if (response.status === 404) {
+        // PropGuard not initialized yet — show as not_initialized, not error
+        setState(null)
+        setError(null)
+        return
+      }
       if (!response.ok) {
         const err = await response.json()
         throw new Error(err.detail || 'Failed to fetch PropGuard status')

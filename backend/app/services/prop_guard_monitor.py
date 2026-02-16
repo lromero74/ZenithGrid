@@ -194,14 +194,21 @@ async def _check_account(db, account):
 
 async def _get_account_equity(account) -> float:
     """Get current equity for a prop firm account."""
-    # Try WS state first (ByBit)
+    # Try WS state first (ByBit) with staleness check
     if account.exchange == "bybit":
         from app.exchange_clients.bybit_ws import get_ws_manager
         ws_mgr = get_ws_manager(account.id)
         if ws_mgr and ws_mgr.state.connected:
             eq = ws_mgr.state.equity
-            if eq > 0:
-                return eq
+            eq_ts = ws_mgr.state.equity_timestamp
+            if eq > 0 and eq_ts:
+                age = (datetime.utcnow() - eq_ts).total_seconds()
+                if age <= 60:
+                    return eq
+                logger.warning(
+                    f"PropGuard monitor: WS equity stale "
+                    f"({age:.0f}s) for account {account.id}"
+                )
 
     # Fallback: get exchange client and query
     try:

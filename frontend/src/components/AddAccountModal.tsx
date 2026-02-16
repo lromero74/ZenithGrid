@@ -97,8 +97,12 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
         accountData.exchange = formData.exchange
 
         if (formData.exchange === 'bybit') {
-          accountData.api_key_name = formData.api_key_name
-          accountData.api_private_key = formData.api_private_key
+          if (!formData.api_key_name?.trim() || !formData.api_private_key?.trim()) {
+            setError('ByBit API key and secret are required')
+            return
+          }
+          accountData.api_key_name = formData.api_key_name.trim()
+          accountData.api_private_key = formData.api_private_key.trim()
           // Only set prop firm if user selected one (ByBit can be standalone)
           if (formData.prop_firm) {
             accountData.prop_firm = formData.prop_firm
@@ -107,14 +111,22 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
             testnet: formData.bybit_testnet,
           }
         } else if (formData.exchange === 'mt5_bridge') {
+          if (!formData.mt5_bridge_url?.trim()) {
+            setError('MT5 bridge URL is required')
+            return
+          }
           accountData.prop_firm = 'ftmo'
           accountData.prop_firm_config = {
-            bridge_url: formData.mt5_bridge_url,
+            bridge_url: formData.mt5_bridge_url.trim(),
             magic_number: parseInt(formData.mt5_magic_number) || 12345,
           }
         } else {
-          accountData.api_key_name = formData.api_key_name
-          accountData.api_private_key = formData.api_private_key
+          if (!formData.api_key_name?.trim() || !formData.api_private_key?.trim()) {
+            setError('API key name and private key are required')
+            return
+          }
+          accountData.api_key_name = formData.api_key_name.trim()
+          accountData.api_private_key = formData.api_private_key.trim()
         }
 
         // Prop firm drawdown settings (only when a prop firm is selected)

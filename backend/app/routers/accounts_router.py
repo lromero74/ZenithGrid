@@ -35,6 +35,17 @@ from app.services.exchange_service import (
 logger = logging.getLogger(__name__)
 
 
+def _mask_key_name(val: Optional[str]) -> Optional[str]:
+    """Mask an encrypted or plaintext API key name for safe API responses."""
+    if not val:
+        return None
+    # Decrypt to get real value for masking
+    plain = decrypt_value(val) if is_encrypted(val) else val
+    if len(plain) <= 8:
+        return "****"
+    return plain[:4] + "****" + plain[-4:]
+
+
 async def get_coinbase_for_account(
     account: Account,
 ) -> CoinbaseClient:
@@ -59,14 +70,17 @@ async def get_coinbase_for_account(
             detail="Coinbase account missing API credentials. Please update in Settings."
         )
 
-    # Decrypt the private key if it's encrypted
+    # Decrypt credentials if encrypted
+    key_name = account.api_key_name
+    if is_encrypted(key_name):
+        key_name = decrypt_value(key_name)
     private_key = account.api_private_key
     if is_encrypted(private_key):
         private_key = decrypt_value(private_key)
 
     client = create_exchange_client(
         exchange_type="cex",
-        coinbase_key_name=account.api_key_name,
+        coinbase_key_name=key_name,
         coinbase_private_key=private_key,
     )
 
@@ -324,7 +338,7 @@ async def list_accounts(
                 is_active=account.is_active,
                 is_paper_trading=account.is_paper_trading or False,
                 exchange=account.exchange,
-                api_key_name=account.api_key_name,
+                api_key_name=_mask_key_name(account.api_key_name),
                 chain_id=account.chain_id,
                 wallet_address=account.wallet_address,
                 rpc_url=account.rpc_url,
@@ -379,7 +393,7 @@ async def get_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=account.api_key_name,
+            api_key_name=_mask_key_name(account.api_key_name),
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
@@ -470,8 +484,8 @@ async def create_account(
             exchange=account_data.exchange,
             api_key_name=(
                 encrypt_value(account_data.api_key_name)
-                if account_data.api_key_name and account_data.exchange in ("bybit",)
-                else account_data.api_key_name
+                if account_data.api_key_name
+                else None
             ),
             api_private_key=encrypt_value(account_data.api_private_key) if account_data.api_private_key else None,
             chain_id=account_data.chain_id,
@@ -530,7 +544,7 @@ async def create_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=account.api_key_name,
+            api_key_name=_mask_key_name(account.api_key_name),
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
@@ -606,10 +620,7 @@ async def update_account(
                 if field in sensitive_fields:
                     credentials_changed = True
                     value = encrypt_value(value)
-                if field == 'api_key_name' and (
-                    account.exchange in ("bybit",)
-                    or update_data.get('exchange') in ("bybit",)
-                ):
+                if field == 'api_key_name':
                     credentials_changed = True
                     value = encrypt_value(value)
                 if field in exchange_config_fields:
@@ -640,7 +651,7 @@ async def update_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=account.api_key_name,
+            api_key_name=_mask_key_name(account.api_key_name),
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,
@@ -840,7 +851,7 @@ async def get_default_account(
             is_active=account.is_active,
             is_paper_trading=account.is_paper_trading or False,
             exchange=account.exchange,
-            api_key_name=account.api_key_name,
+            api_key_name=_mask_key_name(account.api_key_name),
             chain_id=account.chain_id,
             wallet_address=account.wallet_address,
             rpc_url=account.rpc_url,

@@ -237,6 +237,11 @@ async def sell_all_positions(
     from app.trading_engine_v2 import StrategyTradingEngine
 
     exchange = await get_exchange_client_for_account(db, bot.account_id)
+    if not exchange:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No exchange client for account {bot.account_id}"
+        )
     strategy = StrategyRegistry.get_strategy(bot.strategy_type, bot.strategy_config)
 
     # Get all open positions for this bot
