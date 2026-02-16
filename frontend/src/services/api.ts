@@ -21,6 +21,55 @@ export const api = axios.create({
   timeout: 30000,
 });
 
+// Token refresh mutex — prevents multiple concurrent refresh attempts
+let isRefreshing = false;
+let refreshSubscribers: ((token: string | null) => void)[] = [];
+
+function subscribeToRefresh(callback: (token: string | null) => void) {
+  refreshSubscribers.push(callback);
+}
+
+function onRefreshComplete(token: string | null) {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
+function forceLogout() {
+  localStorage.removeItem('auth_access_token');
+  localStorage.removeItem('auth_refresh_token');
+  localStorage.removeItem('auth_token_expiry');
+  localStorage.removeItem('auth_user');
+  window.dispatchEvent(new Event('auth-logout'));
+}
+
+/**
+ * Attempt to refresh the access token using the stored refresh token.
+ * Returns the new access token on success, null on failure.
+ */
+async function tryRefreshToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem('auth_refresh_token');
+  if (!refreshToken) return null;
+
+  try {
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const expiryTime = Date.now() + data.expires_in * 1000;
+    localStorage.setItem('auth_access_token', data.access_token);
+    localStorage.setItem('auth_refresh_token', data.refresh_token);
+    localStorage.setItem('auth_token_expiry', expiryTime.toString());
+    localStorage.setItem('auth_user', JSON.stringify(data.user));
+    return data.access_token;
+  } catch {
+    return null;
+  }
+}
+
 // Add request interceptor to attach auth token to all requests
 api.interceptors.request.use(
   (config) => {
@@ -33,18 +82,44 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Add response interceptor to handle 401 errors (redirect to login)
+// Add response interceptor: on 401, try token refresh before logging out
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Clear auth data and dispatch event so AuthContext can update without page reload
-      localStorage.removeItem('auth_access_token');
-      localStorage.removeItem('auth_refresh_token');
-      localStorage.removeItem('auth_token_expiry');
-      localStorage.removeItem('auth_user');
-      window.dispatchEvent(new Event('auth-logout'));
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Only handle 401, and don't retry if already retried or if this IS the refresh request
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
+      originalRequest._retry = true;
+
+      if (isRefreshing) {
+        // Another request is already refreshing — wait for it
+        return new Promise((resolve, reject) => {
+          subscribeToRefresh((token) => {
+            if (token) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(api(originalRequest));
+            } else {
+              reject(error);
+            }
+          });
+        });
+      }
+
+      isRefreshing = true;
+      const newToken = await tryRefreshToken();
+      isRefreshing = false;
+      onRefreshComplete(newToken);
+
+      if (newToken) {
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      }
+
+      // Refresh failed — now logout
+      forceLogout();
     }
+
     return Promise.reject(error);
   }
 );
@@ -52,6 +127,7 @@ api.interceptors.response.use(
 /**
  * Authenticated fetch wrapper - adds Authorization header from localStorage.
  * Use this instead of raw fetch() for any protected API endpoint.
+ * On 401, attempts a token refresh before dispatching logout.
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = localStorage.getItem('auth_access_token');
@@ -64,14 +140,45 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
       ...(options.headers as Record<string, string> || {}),
     },
   });
-  // Handle 401 the same way as the axios interceptor
-  if (response.status === 401) {
-    localStorage.removeItem('auth_access_token');
-    localStorage.removeItem('auth_refresh_token');
-    localStorage.removeItem('auth_token_expiry');
-    localStorage.removeItem('auth_user');
-    window.dispatchEvent(new Event('auth-logout'));
+
+  if (response.status === 401 && !url.includes('/auth/refresh')) {
+    // Use the same mutex as the axios interceptor
+    if (isRefreshing) {
+      return new Promise<Response>((resolve, reject) => {
+        subscribeToRefresh((token) => {
+          if (token) {
+            resolve(fetch(url, {
+              ...options,
+              headers: {
+                ...(options.headers as Record<string, string> || {}),
+                'Authorization': `Bearer ${token}`,
+              },
+            }));
+          } else {
+            reject(new Error('Token refresh failed'));
+          }
+        });
+      });
+    }
+
+    isRefreshing = true;
+    const newToken = await tryRefreshToken();
+    isRefreshing = false;
+    onRefreshComplete(newToken);
+
+    if (newToken) {
+      return fetch(url, {
+        ...options,
+        headers: {
+          ...(options.headers as Record<string, string> || {}),
+          'Authorization': `Bearer ${newToken}`,
+        },
+      });
+    }
+    // Refresh failed — logout
+    forceLogout();
   }
+
   return response;
 }
 

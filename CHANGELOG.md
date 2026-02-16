@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v2.1.1] - 2026-02-16
 
 ### Fixed
-- **TTS article reading interrupted overnight**: MarketSentimentCards had 23 React Query hooks refetching every 5-15 minutes regardless of user engagement, causing re-render cascades that disrupted TTS playback. All refetch intervals now pause when the user is actively listening to articles.
+- **TTS article reading interrupted by auth logout**: The 401 interceptor immediately cleared all tokens (including refresh token) and forced logout on any expired access token. Now attempts a token refresh first, with a mutex to prevent concurrent refresh races. This was the primary cause of "page refreshes" during long listening sessions.
+- **TTS article reading interrupted by refetch cascades**: MarketSentimentCards had 23 React Query hooks refetching every 5-15 minutes regardless of user engagement, causing re-render cascades that disrupted TTS playback. All refetch intervals now pause when the user is actively listening to articles.
 
 ### Changed
 - **Mobile header redesign**: Separate mobile/desktop header layouts for a cleaner design
