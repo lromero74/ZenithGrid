@@ -5,6 +5,19 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.1] - 2026-02-16
+
+### Fixed
+- **TTS article reading interrupted overnight**: MarketSentimentCards had 23 React Query hooks refetching every 5-15 minutes regardless of user engagement, causing re-render cascades that disrupted TTS playback. All refetch intervals now pause when the user is actively listening to articles.
+
+### Changed
+- **Mobile header redesign**: Separate mobile/desktop header layouts for a cleaner design
+  - Row 1: Brand + version (left), Account Value (right)
+  - Row 2: Season indicator, Live/Paper toggle, Account Switcher, Logout — all equal-height pills with consistent styling
+  - BTC/ETH prices hidden on mobile, version link visible and tappable
+- **Consistent header control sizing**: Season badge, Paper Trading toggle, Account Switcher, and Logout button now share matching border-radius (`rounded-lg`), padding, and icon sizes across mobile and desktop
+- **Season indicator visible on all screen sizes**: Previously hidden below `lg` breakpoint, now shown on mobile (in controls row) and tablet (in right-side controls)
+
 ## [v2.1.0] - 2026-02-16
 
 ### Added

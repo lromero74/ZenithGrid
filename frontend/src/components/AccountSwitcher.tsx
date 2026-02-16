@@ -84,34 +84,34 @@ export function AccountSwitcher({ onAddAccount, onManageAccounts }: AccountSwitc
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative flex" ref={dropdownRef}>
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors min-w-[160px]"
+        className="flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg border border-slate-600 transition-colors min-w-0 sm:min-w-[160px]"
       >
         {selectedAccount?.type === 'cex' ? (
-          <Building2 className="w-4 h-4 text-blue-400 flex-shrink-0" />
+          <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 flex-shrink-0" />
         ) : (
-          <Wallet className="w-4 h-4 text-orange-400 flex-shrink-0" />
+          <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-400 flex-shrink-0" />
         )}
         <div className="flex flex-col items-start flex-1 min-w-0">
-          <span className="text-sm font-medium truncate w-full text-left">
+          <span className="text-xs sm:text-sm font-medium truncate w-full text-left">
             {selectedAccount?.name || 'Select Account'}
           </span>
           {selectedAccount?.type === 'dex' && selectedAccount.short_address && (
-            <span className="text-xs text-slate-400 truncate w-full text-left">
+            <span className="text-xs text-slate-400 truncate w-full text-left hidden sm:block">
               {selectedAccount.short_address}
             </span>
           )}
           {selectedAccount?.type === 'cex' && selectedAccount.exchange && (
-            <span className="text-xs text-slate-400 capitalize">
+            <span className="text-xs text-slate-400 capitalize hidden sm:block">
               {selectedAccount.exchange}
             </span>
           )}
         </div>
         <ChevronDown
-          className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${
+          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 transition-transform flex-shrink-0 ${
             isOpen ? 'rotate-180' : ''
           }`}
         />
