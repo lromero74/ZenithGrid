@@ -49,24 +49,28 @@ export function MFAEncouragement({ onSetupMFA, onSkip }: MFAEncouragementProps) 
         <h2 className="text-xl font-semibold text-white mb-2">Secure Your Account</h2>
         <p className="text-slate-400 text-sm mb-6">
           Your account manages real trading activity. We strongly recommend
-          enabling two-factor authentication (MFA) to protect your account from
-          unauthorized access.
+          enabling two-factor authentication (MFA) to protect your account.
+          You can use an authenticator app or email verification.
         </p>
 
         <div className="bg-slate-700/50 rounded-lg p-4 mb-6 text-left">
-          <p className="text-slate-300 text-sm font-medium mb-2">With MFA enabled:</p>
+          <p className="text-slate-300 text-sm font-medium mb-2">MFA options:</p>
           <ul className="space-y-1.5 text-slate-400 text-sm">
             <li className="flex items-start space-x-2">
               <span className="text-green-400 mt-0.5">&#10003;</span>
-              <span>Even if your password is compromised, your account stays safe</span>
+              <span>Authenticator app (Google Authenticator, Authy, etc.)</span>
             </li>
             <li className="flex items-start space-x-2">
               <span className="text-green-400 mt-0.5">&#10003;</span>
-              <span>Protects your API keys and trading configurations</span>
+              <span>Email verification code and link</span>
             </li>
             <li className="flex items-start space-x-2">
               <span className="text-green-400 mt-0.5">&#10003;</span>
-              <span>Option to "Remember this device" for convenience</span>
+              <span>Enable one or both — only one needs to succeed at login</span>
+            </li>
+            <li className="flex items-start space-x-2">
+              <span className="text-green-400 mt-0.5">&#10003;</span>
+              <span>Option to "Remember this device" for 30-day convenience</span>
             </li>
           </ul>
         </div>

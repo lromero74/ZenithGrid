@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect, useCallback } from 'react'
-import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Shield, ShieldCheck, ShieldOff, Copy, CheckSquare, Monitor, MapPin, Clock, X as XIcon } from 'lucide-react'
+import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Shield, ShieldCheck, ShieldOff, Copy, CheckSquare, Monitor, MapPin, Clock, X as XIcon, Mail } from 'lucide-react'
 import { AccountsManagement } from '../components/AccountsManagement'
 import { PaperTradingManager } from '../components/PaperTradingManager'
 import { AddAccountModal } from '../components/AddAccountModal'
@@ -12,7 +12,7 @@ import { settingsApi } from '../services/api'
 
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
-  const { user, changePassword, getAccessToken, updateUser } = useAuth()
+  const { user, changePassword, getAccessToken, updateUser, enableEmailMFA, disableEmailMFA } = useAuth()
   const { accounts, selectedAccount } = useAccount()
 
   // Check if paper trading is currently active
@@ -39,6 +39,13 @@ export default function Settings() {
   const [isDisablingMFA, setIsDisablingMFA] = useState(false)
   const [showDisableMFA, setShowDisableMFA] = useState(false)
   const [secretCopied, setSecretCopied] = useState(false)
+
+  // Email MFA state
+  const [emailMfaPassword, setEmailMfaPassword] = useState('')
+  const [emailMfaError, setEmailMfaError] = useState<string | null>(null)
+  const [isTogglingEmailMfa, setIsTogglingEmailMfa] = useState(false)
+  const [showEmailMfaConfirm, setShowEmailMfaConfirm] = useState<'enable' | 'disable' | null>(null)
+  const [emailMfaSuccess, setEmailMfaSuccess] = useState(false)
 
   // Trusted devices state
   interface TrustedDeviceInfo {
@@ -259,6 +266,29 @@ export default function Settings() {
     }
   }
 
+  // Email MFA toggle
+  const handleEmailMfaToggle = async (e: FormEvent) => {
+    e.preventDefault()
+    setEmailMfaError(null)
+    setIsTogglingEmailMfa(true)
+
+    try {
+      if (showEmailMfaConfirm === 'enable') {
+        await enableEmailMFA(emailMfaPassword)
+        setEmailMfaSuccess(true)
+        setTimeout(() => setEmailMfaSuccess(false), 5000)
+      } else {
+        await disableEmailMFA(emailMfaPassword)
+      }
+      setShowEmailMfaConfirm(null)
+      setEmailMfaPassword('')
+    } catch (err) {
+      setEmailMfaError(err instanceof Error ? err.message : 'Failed to update email MFA')
+    } finally {
+      setIsTogglingEmailMfa(false)
+    }
+  }
+
   // Load trusted devices
   const loadTrustedDevices = useCallback(async () => {
     const token = getAccessToken()
@@ -279,12 +309,12 @@ export default function Settings() {
     }
   }, [getAccessToken])
 
-  // Load devices when MFA is enabled
+  // Load devices when any MFA method is enabled
   useEffect(() => {
-    if (user?.mfa_enabled) {
+    if (user?.mfa_enabled || user?.mfa_email_enabled) {
       loadTrustedDevices()
     }
-  }, [user?.mfa_enabled, loadTrustedDevices])
+  }, [user?.mfa_enabled, user?.mfa_email_enabled, loadTrustedDevices])
 
   const revokeDevice = async (deviceId: number) => {
     const token = getAccessToken()
@@ -652,8 +682,150 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Trusted Devices — only show when MFA is enabled */}
-          {user?.mfa_enabled && (
+          {/* Email MFA Section */}
+          <div className="mt-6 pt-4 border-t border-slate-600/50">
+            <div className="flex items-center space-x-2 mb-4">
+              <Mail className="w-5 h-5 text-slate-400" />
+              <h5 className="text-sm font-medium text-slate-300">Email Verification</h5>
+            </div>
+
+            {emailMfaSuccess && (
+              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/50 rounded-lg flex items-center space-x-2">
+                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                <p className="text-green-400 text-sm">Email MFA enabled successfully!</p>
+              </div>
+            )}
+
+            {user?.mfa_email_enabled ? (
+              <div>
+                <div className="flex items-center space-x-3 mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <ShieldCheck className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-green-400 font-medium text-sm">Email verification is enabled</p>
+                    <p className="text-slate-400 text-xs">A verification code and link will be sent to your email during login.</p>
+                  </div>
+                </div>
+
+                {showEmailMfaConfirm !== 'disable' ? (
+                  <button
+                    onClick={() => { setShowEmailMfaConfirm('disable'); setEmailMfaError(null); setEmailMfaPassword('') }}
+                    className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 rounded-lg transition-colors text-sm"
+                  >
+                    Disable Email MFA
+                  </button>
+                ) : (
+                  <div className="mt-3 p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+                    <p className="text-sm text-slate-300 mb-3">
+                      Enter your password to disable email MFA.
+                    </p>
+
+                    {emailMfaError && (
+                      <div className="mb-3 p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
+                        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <p className="text-red-400 text-sm">{emailMfaError}</p>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleEmailMfaToggle} className="space-y-3">
+                      <input
+                        type="password"
+                        value={emailMfaPassword}
+                        onChange={(e) => setEmailMfaPassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                        placeholder="Current password"
+                        className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                      <div className="flex space-x-3">
+                        <button
+                          type="submit"
+                          disabled={isTogglingEmailMfa || !emailMfaPassword}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+                        >
+                          {isTogglingEmailMfa ? 'Disabling...' : 'Confirm Disable'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowEmailMfaConfirm(null); setEmailMfaError(null); setEmailMfaPassword('') }}
+                          className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center space-x-3 mb-4 p-3 bg-slate-700/50 border border-slate-600 rounded-lg">
+                  <ShieldOff className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-slate-300 text-sm font-medium">Email verification is not enabled</p>
+                    <p className="text-slate-400 text-xs">Receive a verification code and link via email when logging in.</p>
+                  </div>
+                </div>
+
+                {!user?.email_verified && (
+                  <p className="text-xs text-amber-400 mb-3">You must verify your email address before enabling email MFA.</p>
+                )}
+
+                {showEmailMfaConfirm !== 'enable' ? (
+                  <button
+                    onClick={() => { setShowEmailMfaConfirm('enable'); setEmailMfaError(null); setEmailMfaPassword('') }}
+                    disabled={!user?.email_verified}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+                  >
+                    Enable Email MFA
+                  </button>
+                ) : (
+                  <div className="mt-3 p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+                    <p className="text-sm text-slate-300 mb-3">
+                      Enter your password to enable email MFA.
+                    </p>
+
+                    {emailMfaError && (
+                      <div className="mb-3 p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
+                        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <p className="text-red-400 text-sm">{emailMfaError}</p>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleEmailMfaToggle} className="space-y-3">
+                      <input
+                        type="password"
+                        value={emailMfaPassword}
+                        onChange={(e) => setEmailMfaPassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                        placeholder="Current password"
+                        className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <div className="flex space-x-3">
+                        <button
+                          type="submit"
+                          disabled={isTogglingEmailMfa || !emailMfaPassword}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+                        >
+                          {isTogglingEmailMfa ? 'Enabling...' : 'Confirm Enable'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowEmailMfaConfirm(null); setEmailMfaError(null); setEmailMfaPassword('') }}
+                          className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Trusted Devices — only show when any MFA is enabled */}
+          {(user?.mfa_enabled || user?.mfa_email_enabled) && (
             <div className="mt-6 pt-4 border-t border-slate-600/50">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">

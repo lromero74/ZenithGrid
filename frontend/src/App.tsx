@@ -21,6 +21,7 @@ import { EmailVerificationPending } from './components/EmailVerificationPending'
 import { MFAEncouragement, MFA_DISMISSED_KEY } from './components/MFAEncouragement'
 import { VerifyEmail } from './components/VerifyEmail'
 import { ResetPassword } from './components/ResetPassword'
+import MFAEmailVerify from './components/MFAEmailVerify'
 import Login from './pages/Login'
 
 // App version - fetched from backend API at runtime (avoids Vite cache issues)
@@ -655,6 +656,24 @@ function VerifyEmailRoute() {
   )
 }
 
+// MFA Email Verify route handler (works regardless of auth state)
+function MFAEmailVerifyRoute() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const token = searchParams.get('token') || ''
+
+  if (!token) {
+    return <Navigate to="/" replace />
+  }
+
+  return (
+    <MFAEmailVerify
+      token={token}
+      onComplete={() => navigate('/', { replace: true })}
+    />
+  )
+}
+
 // Reset Password route handler (works regardless of auth state)
 function ResetPasswordRoute() {
   const [searchParams] = useSearchParams()
@@ -689,6 +708,9 @@ function App() {
   }
   if (location.pathname === '/reset-password') {
     return <ResetPasswordRoute />
+  }
+  if (location.pathname === '/mfa-email-verify') {
+    return <MFAEmailVerifyRoute />
   }
 
   // Handle terms acceptance
@@ -739,7 +761,7 @@ function App() {
   }
 
   // Gate: MFA encouragement (one time, after email verified + terms accepted)
-  if (user && !user.mfa_enabled && !mfaDismissed) {
+  if (user && !user.mfa_enabled && !user.mfa_email_enabled && !mfaDismissed) {
     return (
       <MFAEncouragement
         onSetupMFA={() => {
