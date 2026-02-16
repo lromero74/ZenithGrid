@@ -6,8 +6,10 @@
  */
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import { Activity, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap } from 'lucide-react'
+import { Activity, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap, Check } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { PasswordStrengthMeter, isPasswordValid } from '../components/PasswordStrengthMeter'
+import { ForgotPassword } from '../components/ForgotPassword'
 
 export default function Login() {
   const { login, signup, mfaPending, verifyMFA, cancelMFA } = useAuth()
@@ -32,6 +34,7 @@ export default function Login() {
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [signupError, setSignupError] = useState<string | null>(null)
   const [isSigningUp, setIsSigningUp] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
 
   // Auto-focus MFA input when MFA step appears
   useEffect(() => {
@@ -87,8 +90,8 @@ export default function Login() {
       return
     }
 
-    if (signupPassword.length < 8) {
-      setSignupError('Password must be at least 8 characters')
+    if (!isPasswordValid(signupPassword)) {
+      setSignupError('Password must be at least 8 characters with uppercase, lowercase, and a number')
       return
     }
 
@@ -313,8 +316,18 @@ export default function Login() {
               </button>
             </form>
 
+            {/* Forgot Password Link */}
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setShowForgotPassword(true)}
+                className="text-slate-400 hover:text-blue-400 text-sm transition-colors"
+              >
+                Forgot your password?
+              </button>
+            </div>
+
             {/* Create Account Link */}
-            <div className="mt-6 text-center">
+            <div className="mt-3 text-center">
               <p className="text-slate-400 text-sm">
                 Don't have an account?{' '}
                 <button
@@ -333,6 +346,11 @@ export default function Login() {
       <p className="mt-8 text-sm text-slate-500">
         &copy; {new Date().getFullYear()} Romero Tech Solutions
       </p>
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <ForgotPassword onClose={() => setShowForgotPassword(false)} />
+      )}
 
       {/* Signup Modal */}
       {showSignup && (
@@ -417,6 +435,7 @@ export default function Login() {
                       className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+                  <PasswordStrengthMeter password={signupPassword} />
                 </div>
 
                 {/* Confirm Password Field */}
@@ -436,6 +455,15 @@ export default function Login() {
                       placeholder="Re-enter your password"
                       className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
+                    {signupConfirmPassword.length > 0 && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        {signupPassword === signupConfirmPassword ? (
+                          <Check className="w-5 h-5 text-green-400" />
+                        ) : (
+                          <span className="text-xs text-red-400">No match</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -539,7 +567,7 @@ export default function Login() {
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isSigningUp || !signupEmail || !signupPassword || !signupConfirmPassword || !agreedToTerms}
+                  disabled={isSigningUp || !signupEmail || !isPasswordValid(signupPassword) || signupPassword !== signupConfirmPassword || !agreedToTerms}
                   className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
                 >
                   {isSigningUp ? (

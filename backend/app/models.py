@@ -60,6 +60,10 @@ class User(Base):
     # Terms and conditions acceptance
     terms_accepted_at = Column(DateTime, nullable=True)  # NULL = not accepted, timestamp = when accepted
 
+    # Email verification
+    email_verified = Column(Boolean, default=False)  # Whether email has been verified
+    email_verified_at = Column(DateTime, nullable=True)  # When email was verified
+
     # MFA (Two-Factor Authentication)
     totp_secret = Column(String, nullable=True)  # Fernet-encrypted TOTP secret key
     mfa_enabled = Column(Boolean, default=False)  # Whether MFA is active
@@ -77,6 +81,7 @@ class User(Base):
     ai_provider_credentials = relationship("AIProviderCredential", back_populates="user", cascade="all, delete-orphan")
     source_subscriptions = relationship("UserSourceSubscription", back_populates="user", cascade="all, delete-orphan")
     trusted_devices = relationship("TrustedDevice", back_populates="user", cascade="all, delete-orphan")
+    email_verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
 
 
 class TrustedDevice(Base):
@@ -100,6 +105,31 @@ class TrustedDevice(Base):
 
     # Relationships
     user = relationship("User", back_populates="trusted_devices")
+
+
+class EmailVerificationToken(Base):
+    """
+    Tokens for email verification and password reset.
+
+    token_type distinguishes purpose:
+    - "email_verify": Email verification (24h expiry)
+    - "password_reset": Password reset (1h expiry)
+
+    Supports both link-based (token) and code-based (verification_code) verification.
+    """
+    __tablename__ = "email_verification_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token = Column(String, unique=True, nullable=False, index=True)
+    verification_code = Column(String, nullable=True)  # 6-digit code for manual entry
+    token_type = Column(String, nullable=False, default="email_verify")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="email_verification_tokens")
 
 
 class Account(Base):

@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # Encryption key for API credentials at rest (Fernet key)
     encryption_key: str = ""
 
+    # Email / SES Configuration
+    ses_region: str = "us-east-1"
+    ses_sender_email: str = "noreply@romerotechsolutions.com"
+    ses_enabled: bool = True
+    frontend_url: str = "https://tradebot.romerotechsolutions.com"
+    public_signup_enabled: bool = True
+
     # Trading Parameters
     initial_btc_percentage: float = 5.0
     dca_percentage: float = 3.0

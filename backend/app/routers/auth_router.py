@@ -12,7 +12,9 @@ Handles user authentication:
 
 import base64
 import io
+import json
 import logging
+import random
 import re
 import time
 import uuid
@@ -35,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.encryption import decrypt_value, encrypt_value
-from app.models import TrustedDevice, User
+from app.models import EmailVerificationToken, TrustedDevice, User
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,73 @@ def _check_rate_limit(ip: str):
 def _record_attempt(ip: str):
     """Record a login attempt for rate limiting."""
     _login_attempts[ip].append(time.time())
+
+
+# Signup rate limiting: 3 per IP per hour
+_signup_attempts: dict = defaultdict(list)
+_SIGNUP_RATE_LIMIT_MAX = 3
+_SIGNUP_RATE_LIMIT_WINDOW = 3600  # 1 hour
+
+
+def _check_signup_rate_limit(ip: str):
+    """Check if IP has exceeded signup rate limit."""
+    now = time.time()
+    _signup_attempts[ip] = [t for t in _signup_attempts[ip] if now - t < _SIGNUP_RATE_LIMIT_WINDOW]
+    if len(_signup_attempts[ip]) >= _SIGNUP_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many signup attempts. Please try again later."
+        )
+
+
+def _record_signup_attempt(ip: str):
+    """Record a signup attempt for rate limiting."""
+    _signup_attempts[ip].append(time.time())
+
+
+# Forgot-password rate limiting: 3 per IP per hour
+_forgot_pw_attempts: dict = defaultdict(list)
+_FORGOT_PW_RATE_LIMIT_MAX = 3
+_FORGOT_PW_RATE_LIMIT_WINDOW = 3600
+
+
+def _check_forgot_pw_rate_limit(ip: str):
+    """Check if IP has exceeded forgot-password rate limit."""
+    now = time.time()
+    _forgot_pw_attempts[ip] = [t for t in _forgot_pw_attempts[ip] if now - t < _FORGOT_PW_RATE_LIMIT_WINDOW]
+    if len(_forgot_pw_attempts[ip]) >= _FORGOT_PW_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later."
+        )
+
+
+def _record_forgot_pw_attempt(ip: str):
+    """Record a forgot-password attempt for rate limiting."""
+    _forgot_pw_attempts[ip].append(time.time())
+
+
+# Resend verification rate limiting: 3 per user per hour
+_resend_attempts: dict = defaultdict(list)
+_RESEND_RATE_LIMIT_MAX = 3
+_RESEND_RATE_LIMIT_WINDOW = 3600
+
+
+def _check_resend_rate_limit(user_id: int):
+    """Check if user has exceeded resend verification rate limit."""
+    now = time.time()
+    key = str(user_id)
+    _resend_attempts[key] = [t for t in _resend_attempts[key] if now - t < _RESEND_RATE_LIMIT_WINDOW]
+    if len(_resend_attempts[key]) >= _RESEND_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many resend attempts. Please try again later."
+        )
+
+
+def _record_resend_attempt(user_id: int):
+    """Record a resend verification attempt for rate limiting."""
+    _resend_attempts[str(user_id)].append(time.time())
 
 
 # =============================================================================
@@ -139,6 +208,8 @@ class UserResponse(BaseModel):
     is_active: bool
     is_superuser: bool
     mfa_enabled: bool = False
+    email_verified: bool = False
+    email_verified_at: Optional[datetime] = None
     created_at: datetime
     last_login_at: Optional[datetime]
     terms_accepted_at: Optional[datetime] = None  # NULL = must accept terms
@@ -347,6 +418,8 @@ def _build_user_response(user: User) -> UserResponse:
         is_active=user.is_active,
         is_superuser=user.is_superuser,
         mfa_enabled=bool(user.mfa_enabled),
+        email_verified=bool(user.email_verified),
+        email_verified_at=user.email_verified_at,
         created_at=user.created_at,
         last_login_at=user.last_login_at,
         terms_accepted_at=user.terms_accepted_at,
@@ -623,13 +696,15 @@ async def register(
             detail="Email already registered",
         )
 
-    # Create new user
+    # Create new user (admin-created users are auto-verified)
     new_user = User(
         email=request.email.lower(),
         hashed_password=hash_password(request.password),
         display_name=request.display_name,
         is_active=True,
         is_superuser=False,
+        email_verified=True,
+        email_verified_at=datetime.utcnow(),
     )
 
     db.add(new_user)
@@ -638,7 +713,6 @@ async def register(
 
     # Create default paper trading account for new user
     from app.models import Account
-    import json
 
     default_paper_account = Account(
         user_id=new_user.id,
@@ -649,11 +723,11 @@ async def register(
         is_active=True,
         is_paper_trading=True,
         paper_balances=json.dumps({
-            "BTC": 0.01,      # Start with 0.01 BTC
+            "BTC": 0.01,
             "ETH": 0.0,
-            "USD": 1000.0,    # Start with $1000 USD
+            "USD": 1000.0,
             "USDC": 0.0,
-            "USDT": 0.0
+            "USDT": 0.0,
         })
     )
 
@@ -692,18 +766,26 @@ async def logout():
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     request: RegisterRequest,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Public user registration endpoint.
 
-    Creates a new user account and returns JWT tokens for immediate login.
+    Creates a new user account with email_verified=False,
+    sends a verification email, and returns JWT tokens for immediate login.
+    The frontend gates unverified users from the dashboard.
     """
-    # Public registration is disabled for security
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Public registration is currently disabled. Contact an administrator.",
-    )
+    if not settings.public_signup_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public registration is currently disabled. Contact an administrator.",
+        )
+
+    # Rate limit by IP
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    _check_signup_rate_limit(client_ip)
+    _record_signup_attempt(client_ip)
 
     # Check if email already exists
     existing_user = await get_user_by_email(db, request.email.lower())
@@ -713,13 +795,14 @@ async def signup(
             detail="Email already registered",
         )
 
-    # Create new user
+    # Create new user (unverified)
     new_user = User(
         email=request.email.lower(),
         hashed_password=hash_password(request.password),
         display_name=request.display_name,
         is_active=True,
         is_superuser=False,
+        email_verified=False,
     )
 
     db.add(new_user)
@@ -728,7 +811,6 @@ async def signup(
 
     # Create default paper trading account for new user
     from app.models import Account
-    import json
 
     default_paper_account = Account(
         user_id=new_user.id,
@@ -739,11 +821,11 @@ async def signup(
         is_active=True,
         is_paper_trading=True,
         paper_balances=json.dumps({
-            "BTC": 0.01,      # Start with 0.01 BTC
+            "BTC": 0.01,
             "ETH": 0.0,
-            "USD": 1000.0,    # Start with $1000 USD
+            "USD": 1000.0,
             "USDC": 0.0,
-            "USDT": 0.0
+            "USDT": 0.0,
         })
     )
 
@@ -752,6 +834,32 @@ async def signup(
     await db.refresh(default_paper_account)
 
     logger.info(f"Created default paper trading account for new user: {new_user.email}")
+
+    # Generate verification token + 6-digit code and send email
+    token_str = uuid.uuid4().hex
+    verify_code = f"{random.randint(0, 999999):06d}"
+    verification_token = EmailVerificationToken(
+        user_id=new_user.id,
+        token=token_str,
+        verification_code=verify_code,
+        token_type="email_verify",
+        expires_at=datetime.utcnow() + timedelta(hours=24),
+    )
+    db.add(verification_token)
+    await db.commit()
+
+    # Send verification email (fire and forget — don't block signup on email failure)
+    try:
+        from app.services.email_service import send_verification_email
+        verification_url = f"{settings.frontend_url}/verify-email?token={token_str}"
+        send_verification_email(
+            to=new_user.email,
+            verification_url=verification_url,
+            display_name=new_user.display_name or "",
+            verification_code=verify_code,
+        )
+    except Exception as e:
+        logger.error(f"Failed to send verification email to {new_user.email}: {e}")
 
     # Generate tokens for immediate login
     access_token = create_access_token(new_user.id, new_user.email)
@@ -765,6 +873,315 @@ async def signup(
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         user=_build_user_response(new_user),
     )
+
+
+# =============================================================================
+# Email Verification Endpoints
+# =============================================================================
+
+
+class VerifyEmailRequest(BaseModel):
+    """Request to verify email with token"""
+    token: str = Field(..., min_length=1)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request to send password reset email"""
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request to reset password with token"""
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return _validate_password_strength(v)
+
+
+@router.post("/verify-email", response_model=UserResponse)
+async def verify_email(
+    request: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Verify a user's email address using a token from the verification email.
+
+    No auth required — user clicks link from email (may be in a different browser tab).
+    """
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.token == request.token,
+            EmailVerificationToken.token_type == "email_verify",
+        )
+    )
+    token_record = result.scalar_one_or_none()
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification token.",
+        )
+
+    if token_record.used_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This verification link has already been used.",
+        )
+
+    if token_record.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This verification link has expired. Please request a new one.",
+        )
+
+    # Mark token as used and verify user
+    token_record.used_at = datetime.utcnow()
+    user = await get_user_by_id(db, token_record.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    user.email_verified = True
+    user.email_verified_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(user)
+
+    logger.info(f"Email verified for user: {user.email}")
+
+    return _build_user_response(user)
+
+
+@router.post("/resend-verification")
+async def resend_verification(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Resend email verification link. Rate limited to 3 per user per hour.
+    """
+    if current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already verified.",
+        )
+
+    _check_resend_rate_limit(current_user.id)
+    _record_resend_attempt(current_user.id)
+
+    # Delete old unused tokens for this user
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == current_user.id,
+            EmailVerificationToken.token_type == "email_verify",
+            EmailVerificationToken.used_at.is_(None),
+        )
+    )
+    old_tokens = result.scalars().all()
+    for old_token in old_tokens:
+        await db.delete(old_token)
+
+    # Generate new token + 6-digit code
+    token_str = uuid.uuid4().hex
+    verify_code = f"{random.randint(0, 999999):06d}"
+    verification_token = EmailVerificationToken(
+        user_id=current_user.id,
+        token=token_str,
+        verification_code=verify_code,
+        token_type="email_verify",
+        expires_at=datetime.utcnow() + timedelta(hours=24),
+    )
+    db.add(verification_token)
+    await db.commit()
+
+    # Send email
+    try:
+        from app.services.email_service import send_verification_email
+        verification_url = f"{settings.frontend_url}/verify-email?token={token_str}"
+        send_verification_email(
+            to=current_user.email,
+            verification_url=verification_url,
+            display_name=current_user.display_name or "",
+            verification_code=verify_code,
+        )
+    except Exception as e:
+        logger.error(f"Failed to resend verification email to {current_user.email}: {e}")
+
+    return {"message": "Verification email sent. Please check your inbox."}
+
+
+class VerifyEmailCodeRequest(BaseModel):
+    """Request to verify email with 6-digit code (authenticated user)"""
+    code: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$')
+
+
+@router.post("/verify-email-code", response_model=UserResponse)
+async def verify_email_code(
+    request: VerifyEmailCodeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Verify email using a 6-digit code (entered by authenticated user).
+
+    Alternative to clicking the email link — user can type the code
+    shown in the verification email directly in the app.
+    """
+    if current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already verified.",
+        )
+
+    # Find an unused verification token with matching code for this user
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == current_user.id,
+            EmailVerificationToken.token_type == "email_verify",
+            EmailVerificationToken.verification_code == request.code,
+            EmailVerificationToken.used_at.is_(None),
+        )
+    )
+    token_record = result.scalar_one_or_none()
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code.",
+        )
+
+    if token_record.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This code has expired. Please request a new one.",
+        )
+
+    # Mark token as used and verify user
+    token_record.used_at = datetime.utcnow()
+    current_user.email_verified = True
+    current_user.email_verified_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(current_user)
+
+    logger.info(f"Email verified via code for user: {current_user.email}")
+
+    return _build_user_response(current_user)
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    http_request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Send password reset email. Always returns success to avoid leaking email existence.
+    """
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    _check_forgot_pw_rate_limit(client_ip)
+    _record_forgot_pw_attempt(client_ip)
+
+    # Always return the same message regardless of whether email exists
+    success_message = {"message": "If an account exists with that email, we've sent a password reset link."}
+
+    user = await get_user_by_email(db, request.email.lower())
+    if not user:
+        return success_message
+
+    # Delete old unused reset tokens for this user
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.token_type == "password_reset",
+            EmailVerificationToken.used_at.is_(None),
+        )
+    )
+    old_tokens = result.scalars().all()
+    for old_token in old_tokens:
+        await db.delete(old_token)
+
+    # Generate reset token (1 hour expiry)
+    token_str = uuid.uuid4().hex
+    reset_token = EmailVerificationToken(
+        user_id=user.id,
+        token=token_str,
+        token_type="password_reset",
+        expires_at=datetime.utcnow() + timedelta(hours=1),
+    )
+    db.add(reset_token)
+    await db.commit()
+
+    # Send reset email
+    try:
+        from app.services.email_service import send_password_reset_email
+        reset_url = f"{settings.frontend_url}/reset-password?token={token_str}"
+        send_password_reset_email(
+            to=user.email,
+            reset_url=reset_url,
+            display_name=user.display_name or "",
+        )
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {user.email}: {e}")
+
+    return success_message
+
+
+@router.post("/reset-password")
+async def reset_password(
+    request: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reset password using a token from the reset email.
+    Invalidates all existing sessions by updating updated_at.
+    """
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.token == request.token,
+            EmailVerificationToken.token_type == "password_reset",
+        )
+    )
+    token_record = result.scalar_one_or_none()
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token.",
+        )
+
+    if token_record.used_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This reset link has already been used.",
+        )
+
+    if token_record.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This reset link has expired. Please request a new one.",
+        )
+
+    user = await get_user_by_id(db, token_record.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    # Update password
+    user.hashed_password = hash_password(request.new_password)
+    user.updated_at = datetime.utcnow()
+    token_record.used_at = datetime.utcnow()
+
+    await db.commit()
+
+    logger.info(f"Password reset for user: {user.email}")
+
+    return {"message": "Password reset successfully. Please log in with your new password."}
 
 
 # =============================================================================
