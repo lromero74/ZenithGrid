@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
@@ -117,6 +117,7 @@ function AppContent() {
     staleTime: 60000, // Consider data fresh for 60 seconds
     refetchOnMount: false, // Don't refetch on page refresh - use cache
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    placeholderData: keepPreviousData, // Retain old values during refetch instead of flashing to 0
   })
 
   const totalBtcValue = portfolio?.total_btc_value || 0

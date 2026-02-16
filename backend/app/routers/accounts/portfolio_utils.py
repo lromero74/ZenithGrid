@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import api_cache
 from app.models import Account, Bot, Position
 from app.services.dex_wallet_service import dex_wallet_service
 
@@ -37,6 +38,13 @@ async def get_cex_portfolio(
     Returns:
         Dict with portfolio data including holdings, balances, and PnL
     """
+    # Check response cache first (60s TTL) to avoid slow re-computation
+    cache_key = f"portfolio_response_{account.id}"
+    cached = await api_cache.get(cache_key)
+    if cached is not None:
+        logger.debug(f"Using cached portfolio response for account {account.id}")
+        return cached
+
     coinbase = await get_coinbase_for_account_func(account)
 
     # Get portfolio breakdown with all holdings
@@ -307,7 +315,7 @@ async def get_cex_portfolio(
             if position.closed_at and position.closed_at >= start_of_today:
                 pnl_today[quote_key] += position.profit_quote
 
-    return {
+    result = {
         "total_usd_value": total_usd_value,
         "total_btc_value": total_btc_value,
         "btc_usd_price": btc_usd_price,
@@ -342,6 +350,10 @@ async def get_cex_portfolio(
         "account_type": "cex",
         "is_dex": False,
     }
+
+    # Cache the response for 60s
+    await api_cache.set(cache_key, result, 60)
+    return result
 
 
 async def get_dex_portfolio(

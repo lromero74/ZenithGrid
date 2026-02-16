@@ -60,6 +60,13 @@ class SimpleCache:
         async with self._lock:
             self._cache.clear()
 
+    async def delete_prefix(self, prefix: str):
+        """Delete all cache entries whose keys start with the given prefix"""
+        async with self._lock:
+            keys_to_delete = [key for key in self._cache if key.startswith(prefix)]
+            for key in keys_to_delete:
+                del self._cache[key]
+
     async def cleanup_expired(self):
         """Remove all expired entries"""
         async with self._lock:

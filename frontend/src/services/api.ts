@@ -18,7 +18,7 @@ import type {
 
 export const api = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: 45000,
 });
 
 // Token refresh mutex — prevents multiple concurrent refresh attempts

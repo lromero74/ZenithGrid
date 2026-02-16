@@ -17,6 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import api_cache
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
@@ -346,6 +347,13 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
 async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get full portfolio breakdown (all coins like 3Commas)"""
     try:
+        # Check response cache first (60s TTL) to avoid slow re-computation
+        cache_key = "portfolio_response"
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            logger.debug("Using cached portfolio response")
+            return cached
+
         coinbase = await get_coinbase_from_db(db, current_user.id)
         # Get portfolio breakdown with all holdings
         breakdown = await coinbase.get_portfolio_breakdown()
@@ -650,7 +658,7 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
         # Log portfolio summary for debugging inconsistent results
         logger.info(f"Portfolio summary: {len(spot_positions)} raw positions -> {len(portfolio_holdings)} after filtering (${total_usd_value:.2f} total)")
 
-        return {
+        result = {
             "total_usd_value": total_usd_value,
             "total_btc_value": total_btc_value,
             "btc_usd_price": btc_usd_price,
@@ -681,6 +689,10 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
                 "all_time": {"usd": pnl_all_time_usd, "btc": pnl_all_time_btc, "usdc": pnl_all_time_usdc},
             },
         }
+
+        # Cache the response for 60s
+        await api_cache.set(cache_key, result, 60)
+        return result
     except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 

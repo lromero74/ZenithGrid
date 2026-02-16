@@ -239,6 +239,9 @@ async def invalidate_balance_cache():
     await api_cache.delete("accounts_list")
     await api_cache.delete("aggregate_btc_value")
     await api_cache.delete("aggregate_usd_value")
+    # Also invalidate cached portfolio responses (stale after trades)
+    await api_cache.delete("portfolio_response")
+    await api_cache.delete_prefix("portfolio_response_")
 
 
 async def calculate_aggregate_btc_value(
