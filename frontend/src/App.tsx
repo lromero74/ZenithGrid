@@ -206,12 +206,13 @@ function AppContent() {
       <header className="sticky top-0 z-50 bg-slate-800">
         <div className={`border-b border-slate-700 bg-gradient-to-r ${headerGradient} transition-colors duration-1000`}>
           <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-              <div className="flex items-center space-x-2 sm:space-x-3">
-                <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
+            {/* Desktop layout */}
+            <div className="hidden sm:flex flex-row items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Activity className="w-8 h-8 text-blue-500" />
                 <div>
-                  <h1 className="text-xl sm:text-2xl font-bold">Zenith Grid</h1>
-                  <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
+                  <h1 className="text-2xl font-bold">Zenith Grid</h1>
+                  <p className="text-sm text-slate-400">
                     Multi-Strategy Trading Platform{' '}
                     <button
                       onClick={() => setShowAboutModal(true)}
@@ -233,9 +234,9 @@ function AppContent() {
                 </div>
               </div>
 
-              {/* Market Season Indicator - separate from title for better spacing */}
+              {/* Market Season Indicator - desktop standalone */}
               {seasonInfo && (
-                <div className={`hidden lg:flex items-center space-x-1.5 px-3 py-1.5 mr-6 rounded-full border ${
+                <div className={`hidden lg:flex items-center space-x-1.5 px-3 py-2 mr-6 rounded-lg border ${
                   seasonInfo.season === 'accumulation' ? 'bg-pink-900/30 border-pink-700/50' :
                   seasonInfo.season === 'bull' ? 'bg-green-900/30 border-green-700/50' :
                   seasonInfo.season === 'distribution' ? 'bg-orange-900/30 border-orange-700/50' :
@@ -248,21 +249,31 @@ function AppContent() {
                   <span className={`text-sm font-medium ${seasonInfo.color}`}>{seasonInfo.name}</span>
                 </div>
               )}
-              <div className="flex items-center gap-2 sm:gap-3 md:gap-6 self-end sm:self-auto">
-                {/* Paper Trading Toggle - hidden on mobile */}
-                <div className="hidden sm:block">
-                  <PaperTradingToggle />
-                </div>
 
-                {/* Account Switcher - hidden on mobile */}
+              <div className="flex items-center gap-3 md:gap-6">
+                {/* Season - tablet only (sm to lg) */}
+                {seasonInfo && (
+                  <div className={`flex lg:hidden items-center space-x-1.5 px-3 py-2 rounded-lg border ${
+                    seasonInfo.season === 'accumulation' ? 'bg-pink-900/30 border-pink-700/50' :
+                    seasonInfo.season === 'bull' ? 'bg-green-900/30 border-green-700/50' :
+                    seasonInfo.season === 'distribution' ? 'bg-orange-900/30 border-orange-700/50' :
+                    'bg-blue-900/30 border-blue-700/50'
+                  }`} title={`${seasonInfo.subtitle}: ${seasonInfo.description}`}>
+                    {seasonInfo.season === 'accumulation' && <Sprout className="w-4 h-4 text-pink-400" />}
+                    {seasonInfo.season === 'bull' && <Sun className="w-4 h-4 text-green-400" />}
+                    {seasonInfo.season === 'distribution' && <Leaf className="w-4 h-4 text-orange-400" />}
+                    {seasonInfo.season === 'bear' && <Snowflake className="w-4 h-4 text-blue-400" />}
+                    <span className={`text-sm font-medium ${seasonInfo.color}`}>{seasonInfo.name}</span>
+                  </div>
+                )}
+                <PaperTradingToggle />
                 <div className="hidden md:block">
                   <AccountSwitcher
                     onAddAccount={() => setShowAddAccountModal(true)}
                     onManageAccounts={() => navigate('/settings')}
                   />
                 </div>
-
-                <div className="text-right hidden sm:block">
+                <div className="text-right">
                   <p className="text-xs text-slate-400">BTC Price</p>
                   <p className="text-sm font-medium text-orange-400">
                     ${btcUsdPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -271,7 +282,7 @@ function AppContent() {
                     {usdBtcPrice.toFixed(8)} BTC/USD
                   </p>
                 </div>
-                <div className="text-right hidden sm:block">
+                <div className="text-right">
                   <p className="text-xs text-slate-400">ETH Price</p>
                   <p className="text-sm font-medium text-blue-400">
                     ${ethUsdPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -281,19 +292,17 @@ function AppContent() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs sm:text-sm text-slate-400">Account Value</p>
-                  <p className="text-base sm:text-xl font-bold text-blue-400">
+                  <p className="text-sm text-slate-400">Account Value</p>
+                  <p className="text-xl font-bold text-blue-400">
                     {totalBtcValue.toFixed(6)} BTC
                   </p>
-                  <p className="text-xs sm:text-sm text-green-400">
+                  <p className="text-sm text-green-400">
                     ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </p>
                 </div>
-                <DollarSign className="hidden sm:block w-8 h-8 sm:w-10 sm:h-10 text-green-500 opacity-50" />
-
-                {/* User Info & Logout */}
+                <DollarSign className="w-8 h-8 md:w-10 md:h-10 text-green-500 opacity-50" />
                 <div className="flex items-center space-x-2 pl-4 border-l border-slate-600">
-                  <div className="text-right hidden sm:block">
+                  <div className="text-right">
                     <p className="text-xs text-slate-400">Logged in as</p>
                     <p className="text-sm text-slate-200">{user?.display_name || user?.email}</p>
                   </div>
@@ -305,6 +314,77 @@ function AppContent() {
                     <LogOut className="w-5 h-5" />
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Mobile layout */}
+            <div className="flex sm:hidden flex-col gap-2">
+              {/* Row 1: Brand left, Account Value right */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Activity className="w-6 h-6 text-blue-500" />
+                  <div>
+                    <h1 className="text-lg font-bold leading-tight">Zenith Grid</h1>
+                    <button
+                      onClick={() => setShowAboutModal(true)}
+                      className={`text-[10px] ${updateAvailable ? 'text-yellow-500' : 'text-slate-500'} hover:text-blue-400 transition-colors`}
+                      title="Click to view changelog"
+                    >
+                      {appVersion}
+                      {updateAvailable && (
+                        <span className="ml-1 text-green-400">
+                          → {latestVersion}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-400 leading-tight">Account Value</p>
+                  <p className="text-base font-bold text-blue-400 leading-tight">
+                    {totalBtcValue.toFixed(6)} BTC
+                  </p>
+                  <p className="text-xs text-green-400 leading-tight">
+                    ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Row 2: Controls bar — evenly spaced, equal-height pills */}
+              <div className="flex items-stretch justify-between gap-1.5 pt-1.5 border-t border-slate-700/50">
+                {/* Season */}
+                {seasonInfo && (
+                  <div className={`flex items-center space-x-1 px-2 rounded-lg border ${
+                    seasonInfo.season === 'accumulation' ? 'bg-pink-900/30 border-pink-700/50' :
+                    seasonInfo.season === 'bull' ? 'bg-green-900/30 border-green-700/50' :
+                    seasonInfo.season === 'distribution' ? 'bg-orange-900/30 border-orange-700/50' :
+                    'bg-blue-900/30 border-blue-700/50'
+                  }`} title={`${seasonInfo.subtitle}: ${seasonInfo.description}`}>
+                    {seasonInfo.season === 'accumulation' && <Sprout className="w-3.5 h-3.5 text-pink-400" />}
+                    {seasonInfo.season === 'bull' && <Sun className="w-3.5 h-3.5 text-green-400" />}
+                    {seasonInfo.season === 'distribution' && <Leaf className="w-3.5 h-3.5 text-orange-400" />}
+                    {seasonInfo.season === 'bear' && <Snowflake className="w-3.5 h-3.5 text-blue-400" />}
+                    <span className={`text-[11px] font-medium ${seasonInfo.color}`}>{seasonInfo.name}</span>
+                  </div>
+                )}
+
+                {/* Paper/Live Toggle */}
+                <PaperTradingToggle />
+
+                {/* Account Switcher */}
+                <AccountSwitcher
+                  onAddAccount={() => setShowAddAccountModal(true)}
+                  onManageAccounts={() => navigate('/settings')}
+                />
+
+                {/* Logout */}
+                <button
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className="flex items-center px-2 text-slate-400 hover:text-red-400 bg-slate-700 hover:bg-slate-600 rounded-lg border border-slate-600 transition-colors"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           </div>

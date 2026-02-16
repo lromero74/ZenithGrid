@@ -296,7 +296,7 @@ const springKeyframes = `
 }
 `
 
-export function MarketSentimentCards() {
+export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?: boolean }) {
   // Responsive cards visible count (1 on mobile, 2 on sm, 3 on lg+)
   const [cardsVisible, setCardsVisible] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -353,7 +353,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -366,7 +366,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 10,
-    refetchInterval: 1000 * 60 * 10,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 10,
     refetchOnWindowFocus: false,
   })
 
@@ -379,7 +379,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 60 * 24,
-    refetchInterval: 1000 * 60 * 60 * 24,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 60 * 24,
     refetchOnWindowFocus: false,
   })
 
@@ -404,7 +404,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -417,7 +417,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -430,7 +430,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -443,7 +443,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -456,7 +456,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 10,
-    refetchInterval: 1000 * 60 * 10,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 10,
     refetchOnWindowFocus: false,
   })
 
@@ -469,7 +469,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 5,
-    refetchInterval: 1000 * 60 * 5,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   })
 
@@ -482,7 +482,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -495,7 +495,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -508,7 +508,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -521,7 +521,7 @@ export function MarketSentimentCards() {
       return response.json()
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: isUserEngaged ? false : 1000 * 60 * 15,
     refetchOnWindowFocus: false,
   })
 
@@ -534,7 +534,7 @@ export function MarketSentimentCards() {
       return response.json() as Promise<MetricHistoryResponse>
     },
     staleTime: 1000 * 60 * 15,
-    refetchInterval: 1000 * 60 * 15,
+    refetchInterval: (isUserEngaged ? false : 1000 * 60 * 15) as number | false,
     refetchOnWindowFocus: false,
   })
 

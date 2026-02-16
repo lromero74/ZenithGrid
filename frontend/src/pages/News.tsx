@@ -286,7 +286,7 @@ export default function News() {
           <TrendingUp className="w-6 h-6 text-green-400" />
           <h2 className="text-xl font-bold text-white">Market Sentiment</h2>
         </div>
-        <MarketSentimentCards />
+        <MarketSentimentCards isUserEngaged={isUserEngaged} />
       </div>
 
       {/* News Section */}
