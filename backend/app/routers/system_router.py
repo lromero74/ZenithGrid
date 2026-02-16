@@ -310,7 +310,6 @@ def get_price_monitor() -> MultiBotMonitor:
     raise NotImplementedError("Must override price_monitor dependency")
 
 
-@router.get("/")
 @router.get("/api/")
 async def root():
     current_version = get_git_version()

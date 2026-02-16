@@ -32,6 +32,11 @@ FRONTEND_SERVICE="trading-bot-frontend"
 BACKEND_PORT=8100
 FRONTEND_PORT=5173
 
+# Check if frontend is in production mode (built dist served by backend)
+is_production_frontend() {
+    [ -f "$FRONTEND_DIR/dist/index.html" ]
+}
+
 # Graceful shutdown timeout (seconds)
 SHUTDOWN_TIMEOUT=60
 
@@ -147,7 +152,13 @@ start_backend() {
 
 # Function to start frontend
 start_frontend() {
-    echo -e "${BLUE}Starting frontend...${NC}"
+    if is_production_frontend; then
+        echo -e "${GREEN}✅ Frontend served by backend (production build)${NC}"
+        echo -e "${GREEN}   URL: http://localhost:$BACKEND_PORT${NC}"
+        return 0
+    fi
+
+    echo -e "${BLUE}Starting frontend (dev mode)...${NC}"
 
     if is_service_running "$FRONTEND_SERVICE"; then
         echo -e "${YELLOW}Frontend is already running${NC}"
@@ -158,7 +169,7 @@ start_frontend() {
     sleep 2
 
     if is_service_running "$FRONTEND_SERVICE"; then
-        echo -e "${GREEN}✅ Frontend started${NC}"
+        echo -e "${GREEN}✅ Frontend started (dev mode)${NC}"
         echo -e "${GREEN}   URL: http://localhost:5173${NC}"
         echo -e "${GREEN}   Logs: sudo journalctl -u $FRONTEND_SERVICE -f${NC}"
         return 0
@@ -194,6 +205,11 @@ stop_backend() {
 
 # Function to stop frontend
 stop_frontend() {
+    if is_production_frontend; then
+        echo -e "${YELLOW}Frontend served by backend (no separate service to stop)${NC}"
+        return 0
+    fi
+
     echo -e "${BLUE}Stopping frontend...${NC}"
 
     if ! is_service_running "$FRONTEND_SERVICE"; then
@@ -228,8 +244,11 @@ show_status() {
 
     # Frontend status
     echo -n "Frontend: "
-    if is_service_running "$FRONTEND_SERVICE"; then
-        echo -e "${GREEN}RUNNING${NC}"
+    if is_production_frontend; then
+        echo -e "${GREEN}PRODUCTION (served by backend)${NC}"
+        echo "          http://localhost:$BACKEND_PORT"
+    elif is_service_running "$FRONTEND_SERVICE"; then
+        echo -e "${GREEN}RUNNING (dev mode)${NC}"
         echo "          http://localhost:5173"
     else
         echo -e "${RED}STOPPED${NC}"
@@ -239,8 +258,10 @@ show_status() {
     echo -e "${BLUE}Detailed status:${NC}"
     echo ""
     sudo systemctl status "$BACKEND_SERVICE" --no-pager -l || true
-    echo ""
-    sudo systemctl status "$FRONTEND_SERVICE" --no-pager -l || true
+    if ! is_production_frontend; then
+        echo ""
+        sudo systemctl status "$FRONTEND_SERVICE" --no-pager -l || true
+    fi
 }
 
 # Function to show logs
@@ -252,13 +273,17 @@ show_logs() {
     sudo journalctl -u "$BACKEND_SERVICE" -n 20 --no-pager
     echo ""
 
-    echo -e "${YELLOW}Frontend (last 20 lines):${NC}"
-    sudo journalctl -u "$FRONTEND_SERVICE" -n 20 --no-pager
-    echo ""
+    if ! is_production_frontend; then
+        echo -e "${YELLOW}Frontend (last 20 lines):${NC}"
+        sudo journalctl -u "$FRONTEND_SERVICE" -n 20 --no-pager
+        echo ""
+    fi
 
     echo -e "${BLUE}To follow logs in real-time:${NC}"
     echo "  Backend:  sudo journalctl -u $BACKEND_SERVICE -f"
-    echo "  Frontend: sudo journalctl -u $FRONTEND_SERVICE -f"
+    if ! is_production_frontend; then
+        echo "  Frontend: sudo journalctl -u $FRONTEND_SERVICE -f"
+    fi
 }
 
 # Main script logic
@@ -284,7 +309,11 @@ case "${1:-}" in
             echo -e "${GREEN}✅ Trading Bot started successfully!${NC}"
             echo ""
             echo -e "${YELLOW}Next steps:${NC}"
-            echo "  1. Open http://localhost:5173 in your browser"
+            if is_production_frontend; then
+                echo "  1. Open http://localhost:$BACKEND_PORT in your browser"
+            else
+                echo "  1. Open http://localhost:5173 in your browser"
+            fi
             echo "  2. Add your Coinbase API credentials in Settings"
             echo "  3. Click 'Start Bot' to begin monitoring"
             echo ""
@@ -335,11 +364,16 @@ case "${1:-}" in
         sleep 2
         echo -e "${GREEN}✅ Backend restarted${NC}"
 
-        echo ""
-        echo -e "${BLUE}Restarting frontend...${NC}"
-        sudo systemctl restart "$FRONTEND_SERVICE"
-        sleep 2
-        echo -e "${GREEN}✅ Frontend restarted${NC}"
+        if is_production_frontend; then
+            echo ""
+            echo -e "${GREEN}✅ Frontend served by backend (production build)${NC}"
+        else
+            echo ""
+            echo -e "${BLUE}Restarting frontend (dev mode)...${NC}"
+            sudo systemctl restart "$FRONTEND_SERVICE"
+            sleep 2
+            echo -e "${GREEN}✅ Frontend restarted${NC}"
+        fi
 
         echo ""
         echo -e "${YELLOW}========================================${NC}"

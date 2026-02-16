@@ -530,6 +530,40 @@ def install_npm_dependencies(project_root, dry_run=False):
         return False
 
 
+def build_frontend(project_root, dry_run=False):
+    """Build frontend for production using vite build.
+
+    Args:
+        project_root: Path to project root
+        dry_run: If True, only show what would be done
+
+    Returns:
+        bool: True if successful
+    """
+    frontend_dir = project_root / 'frontend'
+    if not frontend_dir.exists():
+        print_warning("Frontend directory not found - skipping build")
+        return True
+
+    if dry_run:
+        print_info("DRY RUN: Would run 'npx vite build' in frontend/")
+        return True
+
+    try:
+        print_info("Building frontend for production...")
+        result = run_command('npx vite build', cwd=frontend_dir, capture_output=True)
+        if result.stdout:
+            lines = result.stdout.strip().split('\n')
+            for line in lines[-3:]:
+                if line.strip():
+                    print_info(f"  {line.strip()}")
+        print_success("Frontend built successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print_error(f"Frontend build failed: {e.stderr if e.stderr else str(e)}")
+        return False
+
+
 def install_pip_dependencies(project_root, dry_run=False):
     """Install pip dependencies in the backend virtual environment.
 
@@ -1083,6 +1117,14 @@ Examples:
             sys.exit(1)
     elif 'frontend' in services_to_restart:
         print_step("4.6", "Skipping npm install (no package changes)")
+
+    # Step 4.7: Build frontend for production (always when frontend changes)
+    if 'frontend' in services_to_restart:
+        print_step("4.7", "Building frontend for production...")
+        if not build_frontend(project_root, args.dry_run):
+            print_error("Update failed at frontend build step")
+            start_services(os_type, project_root, args.dry_run, services_to_restart)
+            sys.exit(1)
 
     # Step 5: Start services (only those that need restart)
     if not start_services(os_type, project_root, args.dry_run, services_to_restart):

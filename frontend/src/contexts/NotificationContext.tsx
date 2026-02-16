@@ -202,11 +202,20 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     connect()
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
+      const ws = wsRef.current
+      if (ws) {
+        // Detach all handlers to prevent reconnection and state updates after unmount
+        // (React StrictMode double-invokes effects, causing "closed before established" otherwise)
+        ws.onopen = null
+        ws.onmessage = null
+        ws.onerror = null
+        ws.onclose = null
+        ws.close()
+        wsRef.current = null
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
       }
     }
   }, [connect])

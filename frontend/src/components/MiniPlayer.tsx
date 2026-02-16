@@ -432,8 +432,8 @@ export function MiniPlayer() {
                       max="100"
                       value={isMuted ? 0 : volume}
                       onChange={handleVolumeChange}
-                      className="h-24 w-2 appearance-none bg-slate-600 rounded-full cursor-pointer [-webkit-appearance:slider-vertical]"
-                      style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)' }}
+                      className="h-24 w-2 appearance-none bg-slate-600 rounded-full cursor-pointer"
+                      style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
                     />
                   </div>
                 </div>

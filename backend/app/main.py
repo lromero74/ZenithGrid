@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
@@ -586,6 +587,25 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
             await websocket.send_json({"type": "echo", "message": f"Received: {data}"})
     except WebSocketDisconnect:
         await ws_manager.disconnect(websocket)
+
+
+# ---------------------------------------------------------------------------
+# Serve production frontend (built with `vite build` → frontend/dist/)
+# Must be AFTER all API routes so /api/* and /ws are matched first.
+# ---------------------------------------------------------------------------
+_frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+if _frontend_dist.exists():
+    # Serve JS/CSS/image assets
+    app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="frontend-assets")
+
+    # SPA catch-all: any non-API route returns index.html for client-side routing
+    @app.get("/{full_path:path}")
+    async def serve_spa(request: Request, full_path: str):
+        # Serve actual files from dist/ if they exist (e.g. favicon, manifest)
+        file_path = _frontend_dist / full_path
+        if full_path and file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(_frontend_dist / "index.html"))
 
 
 if __name__ == "__main__":

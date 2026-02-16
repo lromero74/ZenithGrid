@@ -12,13 +12,13 @@
 | Charts | TradingView Lightweight Charts |
 | Auth | JWT (python-jose) + bcrypt |
 | Encryption | Fernet (AES-128-CBC + HMAC-SHA256) |
-| Deployment | AWS EC2 (Amazon Linux 2023) + systemd |
+| Deployment | AWS EC2 (Amazon Linux 2023) + systemd (single service) |
 | Exchange | Coinbase (HMAC/CDP), ByBit V5, MT5 Bridge |
 | AI | Anthropic Claude, OpenAI GPT, Google Gemini |
 
-The backend runs as a systemd service (`trading-bot-backend`) on port 8000.
-The frontend runs as a Vite dev server (`trading-bot-frontend`) on port 5173.
-Both auto-start on boot.
+The backend runs as a systemd service (`trading-bot-backend`) on port 8100.
+The frontend is a production build (`vite build`) served by the FastAPI backend — no separate frontend service needed.
+The service auto-starts on boot.
 
 ---
 
@@ -27,13 +27,13 @@ Both auto-start on boot.
 ```mermaid
 graph TB
     subgraph Browser
-        FE[React Frontend<br/>:5173]
+        FE[React Frontend<br/>production build]
     end
 
     subgraph "EC2 Instance"
-        BE[FastAPI Backend<br/>:8000]
+        BE[FastAPI Backend<br/>:8100<br/>serves frontend + API]
         DB[(SQLite<br/>trading.db)]
-        BG[Background Tasks<br/>13 scheduled jobs]
+        BG[Background Tasks<br/>14 scheduled jobs]
     end
 
     subgraph "External Services"
@@ -227,9 +227,9 @@ graph TB
         API_MODS[botsApi / positionsApi<br/>accountApi / marketDataApi<br/>settingsApi / orderHistoryApi<br/>+ 11 more modules]
     end
 
-    subgraph "Backend"
-        BE[FastAPI :8000]
-        WS[WebSocket /ws/notifications]
+    subgraph "Backend (:8100)"
+        BE[FastAPI<br/>serves API + SPA]
+        WS[WebSocket /ws]
     end
 
     P_BOTS --> H_BOTS
@@ -430,7 +430,7 @@ erDiagram
 3. Frontend stores tokens in `localStorage` via `AuthContext`
 4. Every API request includes `Authorization: Bearer {token}` via Axios interceptor
 5. Backend `get_current_user` dependency validates JWT on protected routes
-6. On 401 response, frontend clears session and redirects to login
+6. On 401 response, frontend attempts token refresh before logout; queues concurrent requests during refresh
 7. On first login, `RiskDisclaimer` modal requires terms acceptance
 
 ## Multi-Tenancy Model

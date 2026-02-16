@@ -152,14 +152,14 @@ function AppContent() {
   const { data: closedPositions = [] } = useQuery({
     queryKey: ['closed-positions-badge'],
     queryFn: () => positionsApi.getAll('closed', 100),
-    refetchInterval: 10000, // Check every 10 seconds
+    refetchInterval: 60000, // Check every 60 seconds (reduced from 10s to save memory)
     enabled: deferredQueriesEnabled, // Defer until 2s after initial render
   })
 
   const { data: failedPositions = [] } = useQuery({
     queryKey: ['failed-positions-badge'],
     queryFn: () => positionsApi.getAll('failed', 100),
-    refetchInterval: 10000, // Check every 10 seconds
+    refetchInterval: 60000, // Check every 60 seconds (reduced from 10s to save memory)
     enabled: deferredQueriesEnabled, // Defer until 2s after initial render
   })
 

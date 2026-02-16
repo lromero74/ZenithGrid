@@ -1,6 +1,6 @@
 {
   "project": "ZenithGrid",
-  "version": "v2.1.1",
+  "version": "v2.2.0",
   "updated": "2026-02-16",
   "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -26,7 +26,8 @@
     "deployment": {
       "platform": "AWS EC2 (Amazon Linux 2023)",
       "process_manager": "systemd",
-      "services": ["trading-bot-backend", "trading-bot-frontend"]
+      "services": ["trading-bot-backend"],
+      "frontend_serving": "Production build (vite build) served by FastAPI backend"
     }
   },
 
@@ -497,7 +498,7 @@
           "positions": "30 seconds",
           "portfolio_prices": "2 minutes",
           "btc_eth_prices": "1 minute",
-          "closed_position_badges": "10 seconds"
+          "closed_position_badges": "60 seconds"
         }
       }
     },

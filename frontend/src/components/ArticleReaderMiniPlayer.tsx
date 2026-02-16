@@ -391,7 +391,7 @@ export function ArticleReaderMiniPlayer() {
       <div
         className={`fixed z-50 transition-all duration-300 ease-in-out ${
           isExpanded
-            ? 'inset-4 sm:inset-8 md:inset-12 lg:inset-x-[10%] lg:inset-y-8'
+            ? 'inset-0 sm:inset-8 md:inset-12 lg:inset-x-[10%] lg:inset-y-8'
             : 'bottom-0 left-0 right-0 sm:h-20'
         }`}
       >
@@ -401,59 +401,72 @@ export function ArticleReaderMiniPlayer() {
             : 'flex-row border-t border-slate-700'
         }`}>
 
-          {/* Expanded: Full article view */}
+          {/* Expanded: Pinned thumbnail with blurred background fill */}
+          {isExpanded && currentArticle.thumbnail && (
+            <div className="relative w-full flex-shrink-0 overflow-hidden max-h-[150px] sm:max-h-[250px] bg-slate-900">
+              {/* Blurred version fills empty space on sides */}
+              <img
+                src={currentArticle.thumbnail}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-90"
+              />
+              {/* Actual image centered on top */}
+              <img
+                src={currentArticle.thumbnail}
+                alt=""
+                className="relative w-full h-auto max-h-[150px] sm:max-h-[250px] object-contain mx-auto"
+                onError={(e) => {
+                  // Hide the whole container (both images) on error
+                  (e.target as HTMLImageElement).parentElement!.style.display = 'none'
+                }}
+              />
+            </div>
+          )}
+          {/* Expanded: Pinned article info */}
+          {isExpanded && (
+            <div className="flex-shrink-0 px-3 sm:px-6 pt-3 sm:pt-4 pb-2">
+              {/* Header with source, time, voice */}
+              <div className="flex flex-wrap items-center gap-3 mb-2">
+                <span className={`px-2 py-1 rounded text-sm font-medium border ${
+                  sourceColors[currentArticle.source] || 'bg-slate-600 text-slate-300'
+                }`}>
+                  {currentArticle.source_name}
+                </span>
+                {currentArticle.published && (
+                  <span className="text-sm text-slate-400">
+                    {new Date(currentArticle.published).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                )}
+                <span className="text-sm text-green-400">
+                  Voice: {voiceInfo.name} ({voiceInfo.gender})
+                </span>
+                <span className="text-sm text-slate-500">
+                  Article {currentIndex + 1} of {playlist.length}
+                </span>
+              </div>
+
+              {/* Title */}
+              <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight">
+                {currentArticle.title}
+              </h1>
+              <div className="mt-3 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
+            </div>
+          )}
+
+          {/* Expanded: Scrollable article body */}
           {isExpanded && (
             <div
               ref={contentRef}
-              className="flex-1 overflow-y-auto"
+              className="flex-1 overflow-y-auto relative [mask-image:linear-gradient(to_bottom,transparent,black_24px,black_calc(100%-24px),transparent)]"
             >
-              {/* Full-size thumbnail */}
-              {currentArticle.thumbnail && (
-                <div className="w-full bg-slate-900">
-                  <img
-                    src={currentArticle.thumbnail}
-                    alt=""
-                    className="w-full h-auto max-h-[400px] object-contain mx-auto"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).parentElement!.style.display = 'none'
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Article content */}
-              <div className="p-3 sm:p-6">
-                {/* Header with source, time, voice */}
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <span className={`px-2 py-1 rounded text-sm font-medium border ${
-                    sourceColors[currentArticle.source] || 'bg-slate-600 text-slate-300'
-                  }`}>
-                    {currentArticle.source_name}
-                  </span>
-                  {currentArticle.published && (
-                    <span className="text-sm text-slate-400">
-                      {new Date(currentArticle.published).toLocaleDateString(undefined, {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                  )}
-                  <span className="text-sm text-green-400">
-                    Voice: {voiceInfo.name} ({voiceInfo.gender})
-                  </span>
-                  <span className="text-sm text-slate-500">
-                    Article {currentIndex + 1} of {playlist.length}
-                  </span>
-                </div>
-
-                {/* Title */}
-                <h1 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 leading-tight">
-                  {currentArticle.title}
-                </h1>
-
+              <div className="px-3 sm:px-6 py-2">
                 {/* Article content with word highlighting */}
                 <div className="prose prose-invert prose-slate max-w-none">
                   {articleContentLoading ? (
@@ -493,21 +506,23 @@ export function ArticleReaderMiniPlayer() {
               ? 'flex-col sm:flex-row items-center gap-2 sm:gap-4 p-2 sm:p-4 border-t border-slate-700'
               : 'flex-col flex-1 min-w-0 px-2 sm:px-4 py-2 justify-center gap-0.5 sm:gap-1'
           }`}>
-            {/* Article info */}
-            <div className={`min-w-0 ${isExpanded ? 'w-full sm:w-auto sm:flex-shrink-0 sm:max-w-[16rem]' : 'flex items-center gap-2'}`}>
-              <span className={`px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${
-                sourceColors[currentArticle.source] || 'bg-slate-600 text-slate-300'
-              }`}>
-                {currentArticle.source_name}
-              </span>
-              <h4 className={`text-sm font-medium text-white truncate ${isExpanded ? 'mt-1' : 'flex-1'}`}>
-                {currentArticle.title}
-              </h4>
-              <div className="flex items-center gap-2 text-xs text-slate-500 flex-shrink-0">
-                <span>{voiceInfo.name}</span>
-                <span>{currentIndex + 1}/{playlist.length}</span>
+            {/* Article info — only in mini mode (pinned header shows it in expanded) */}
+            {!isExpanded && (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${
+                  sourceColors[currentArticle.source] || 'bg-slate-600 text-slate-300'
+                }`}>
+                  {currentArticle.source_name}
+                </span>
+                <h4 className="text-sm font-medium text-white truncate flex-1">
+                  {currentArticle.title}
+                </h4>
+                <div className="flex items-center gap-2 text-xs text-slate-500 flex-shrink-0">
+                  <span>{voiceInfo.name}</span>
+                  <span>{currentIndex + 1}/{playlist.length}</span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Progress and controls */}
             <div className={`flex gap-1 sm:gap-2 w-full sm:w-auto ${isExpanded ? 'flex-col sm:flex-row items-center flex-1' : 'flex-col sm:flex-row items-center'}`}>

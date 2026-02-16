@@ -36,7 +36,7 @@ const REFETCH_INTERVAL = 1000 * 60 * 15 // 15 minutes
 export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => {
   const isUserEngaged = options?.isUserEngaged ?? false
 
-  // Fetch ALL news articles once (client-side pagination for instant page changes)
+  // Fetch recent news articles (limited to reduce memory on mobile devices)
   const {
     data: newsData,
     isLoading: newsLoading,
@@ -46,12 +46,12 @@ export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => 
   } = useQuery<NewsResponse>({
     queryKey: ['crypto-news'],
     queryFn: async () => {
-      // Fetch all articles, paginate client-side for instant transitions
-      const response = await fetch('/api/news/?page=1&page_size=10000')
+      const response = await fetch('/api/news/?page=1&page_size=500')
       if (!response.ok) throw new Error('Failed to fetch news')
       return response.json()
     },
     staleTime: 1000 * 60 * 15, // Consider fresh for 15 minutes
+    gcTime: 1000 * 60 * 5, // Garbage collect 5 min after unmount (default is 5 min, explicit for clarity)
     refetchInterval: isUserEngaged ? false : REFETCH_INTERVAL,
     refetchOnWindowFocus: false,
     refetchOnReconnect: !isUserEngaged,

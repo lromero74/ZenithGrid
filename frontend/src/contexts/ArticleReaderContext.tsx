@@ -101,6 +101,13 @@ interface ArticleReaderProviderProps {
 // Storage keys
 const VOICE_CACHE_KEY = 'article-reader-voice-cache'
 const VOICE_CYCLE_ENABLED_KEY = 'article-reader-voice-cycle-enabled'
+const TTS_SESSION_KEY = 'article-reader-session'
+
+interface TTSSession {
+  playlist: ArticleItem[]
+  currentIndex: number
+  timestamp: number
+}
 
 export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) {
   const [playlist, setPlaylist] = useState<ArticleItem[]>([])
@@ -115,6 +122,10 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
   const playlistRef = useRef<ArticleItem[]>([])
   const hasPlaybackStartedRef = useRef(false)  // Track if audio ever started for current article
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wakeLockRef = useRef<any>(null)
+  const keepaliveAudioRef = useRef<HTMLAudioElement | null>(null)
+  const autoResumeTriggeredRef = useRef(false)
 
   // Use TTS hook
   const tts = useTTSSync()
@@ -123,6 +134,9 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   useEffect(() => {
     playlistRef.current = playlist
   }, [playlist])
+
+  // Keep a ref to the latest loadAndPlayArticle (for use in timeout callbacks)
+  const loadAndPlayRef = useRef<typeof loadAndPlayArticle | null>(null)
 
   // Load voice cache and cycle preference from localStorage
   useEffect(() => {
@@ -265,6 +279,172 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
   }, [voiceCycleEnabled, voiceCache, saveVoiceCache, fetchArticleContent, tts])
 
+  // Keep loadAndPlayRef in sync so timeout callbacks always get the latest version
+  useEffect(() => {
+    loadAndPlayRef.current = loadAndPlayArticle
+  }, [loadAndPlayArticle])
+
+  // ===========================================================================
+  // Playback Keep-Alive: Wake Lock + Silent Audio + Auto-Resume
+  // Prevents iPad/mobile browsers from discarding the tab during TTS playback.
+  // ===========================================================================
+
+  // Acquire screen wake lock to signal active media use
+  const acquireWakeLock = useCallback(async () => {
+    try {
+      if ('wakeLock' in navigator && !wakeLockRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
+        wakeLockRef.current?.addEventListener('release', () => {
+          wakeLockRef.current = null
+        })
+      }
+    } catch {
+      // Wake lock request can fail (low battery, unsupported, etc.)
+    }
+  }, [])
+
+  const releaseWakeLock = useCallback(() => {
+    try {
+      wakeLockRef.current?.release()
+    } catch { /* ignore */ }
+    wakeLockRef.current = null
+  }, [])
+
+  // Acquire wake lock when playing, release when stopped
+  useEffect(() => {
+    if (isPlaying) {
+      acquireWakeLock()
+    } else {
+      releaseWakeLock()
+    }
+    return () => releaseWakeLock()
+  }, [isPlaying, acquireWakeLock, releaseWakeLock])
+
+  // Re-acquire wake lock when tab becomes visible (auto-released on visibility:hidden)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden && isPlaying) {
+        acquireWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [isPlaying, acquireWakeLock])
+
+  // Create keepalive audio element (silent, looped) to prevent tab discard.
+  // Browsers avoid killing tabs with active audio playback.
+  useEffect(() => {
+    // Generate a tiny silent WAV (0.5s, 8kHz, 8-bit mono)
+    const sampleRate = 8000
+    const numSamples = sampleRate * 0.5
+    const buffer = new ArrayBuffer(44 + numSamples)
+    const view = new DataView(buffer)
+    const writeStr = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
+    }
+    writeStr(0, 'RIFF')
+    view.setUint32(4, 36 + numSamples, true)
+    writeStr(8, 'WAVE')
+    writeStr(12, 'fmt ')
+    view.setUint32(16, 16, true)
+    view.setUint16(20, 1, true)
+    view.setUint16(22, 1, true)
+    view.setUint32(24, sampleRate, true)
+    view.setUint32(28, sampleRate, true)
+    view.setUint16(32, 1, true)
+    view.setUint16(34, 8, true)
+    writeStr(36, 'data')
+    view.setUint32(40, numSamples, true)
+    for (let i = 0; i < numSamples; i++) view.setUint8(44 + i, 128) // 128 = silence for 8-bit WAV
+    const blob = new Blob([buffer], { type: 'audio/wav' })
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    audio.loop = true
+    audio.volume = 0.01 // Near-silent (some browsers optimize away volume=0)
+    keepaliveAudioRef.current = audio
+    return () => {
+      audio.pause()
+      audio.src = ''
+      URL.revokeObjectURL(url)
+      keepaliveAudioRef.current = null
+    }
+  }, [])
+
+  // Play keepalive audio during gaps between articles (no active TTS audio)
+  useEffect(() => {
+    const keepalive = keepaliveAudioRef.current
+    if (!keepalive) return
+    if (isPlaying && (tts.isLoading || (!tts.isPlaying && !tts.isPaused))) {
+      // Gap between articles — play silence to maintain audio session
+      keepalive.play().catch(() => {})
+    } else {
+      keepalive.pause()
+    }
+  }, [isPlaying, tts.isLoading, tts.isPlaying, tts.isPaused])
+
+  // Persist TTS session to localStorage for auto-resume after tab kill
+  useEffect(() => {
+    if (isPlaying && playlist.length > 0) {
+      try {
+        const session: TTSSession = {
+          playlist: playlist.map(({ title, url, source, source_name, published, thumbnail, summary }) =>
+            ({ title, url, source, source_name, published, thumbnail, summary })),
+          currentIndex,
+          timestamp: Date.now(),
+        }
+        localStorage.setItem(TTS_SESSION_KEY, JSON.stringify(session))
+      } catch { /* ignore */ }
+    }
+  }, [isPlaying, playlist, currentIndex])
+
+  // Auto-resume TTS session after page reload (tab was killed by browser)
+  useEffect(() => {
+    if (autoResumeTriggeredRef.current) return
+    autoResumeTriggeredRef.current = true
+
+    try {
+      const saved = localStorage.getItem(TTS_SESSION_KEY)
+      if (!saved) return
+
+      // Clear session BEFORE attempting resume to prevent crash loops
+      localStorage.removeItem(TTS_SESSION_KEY)
+
+      const session: TTSSession = JSON.parse(saved)
+      // Only resume if saved within last 10 minutes and has content
+      if (Date.now() - session.timestamp > 10 * 60 * 1000 || session.playlist.length === 0) {
+        return
+      }
+
+      console.log('[TTS] Auto-resuming session:', session.playlist.length, 'articles, index', session.currentIndex)
+
+      // Delay to let voice cache and other mount effects settle
+      const timer = setTimeout(() => {
+        try {
+          stopVideoPlayer()
+          tts.stop()
+          const idx = Math.min(session.currentIndex, session.playlist.length - 1)
+          setPlaylist(session.playlist)
+          setCurrentIndex(idx)
+          setIsPlaying(true)
+          setShowMiniPlayer(true)
+          if (loadAndPlayRef.current) {
+            loadAndPlayRef.current(session.playlist[idx], idx)
+          }
+        } catch (err) {
+          console.error('[TTS] Auto-resume failed:', err)
+          setIsPlaying(false)
+          setShowMiniPlayer(false)
+        }
+      }, 1000)
+
+      return () => clearTimeout(timer)
+    } catch { /* ignore parse errors */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Mount only — intentionally omit deps
+
+  // ===========================================================================
+
   // Start a new playlist
   const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false) => {
     if (articles.length === 0) return
@@ -304,6 +484,8 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setIsPlaying(false)
     setShowMiniPlayer(false)
     setArticleContent(null)
+    // Clear saved session so auto-resume doesn't trigger after intentional stop
+    try { localStorage.removeItem(TTS_SESSION_KEY) } catch { /* ignore */ }
   }, [tts])
 
   // Register with media coordinator for mutual exclusion with video player

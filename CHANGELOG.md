@@ -5,6 +5,29 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.0] - 2026-02-16
+
+### Added
+- **Production frontend build**: Frontend now built with `vite build` and served by FastAPI backend — eliminates React dev-mode overhead that caused `DataCloneError: out of memory` (tab crashes on iPad/mobile during overnight TTS playback)
+- **TTS session resilience**: Wake Lock API keeps screen awake during playback, silent audio keepalive prevents browser from discarding tab, session auto-resumes from localStorage after tab kill
+- **Article reader UI improvements**: Full-screen mode on mobile, pinned image with blurred background fill (YouTube-style), pinned article info section with gradient separator, fade-out edges on scrollable text
+- **Child voice content filter**: Expanded adult content keywords from ~25 to ~90+ covering sexuality, guns/weapons, alcohol, smoking/tobacco, drugs, and violence
+
+### Changed
+- **Single-service deployment**: Backend serves the production frontend bundle — `trading-bot-frontend` systemd service no longer needed
+- **`bot.sh` production awareness**: Detects production build (`frontend/dist/index.html`) and skips frontend service operations
+- **`update.py` builds frontend**: Automatically runs `vite build` when frontend changes are detected during updates
+- **Badge polling reduced**: Closed/failed position badge queries reduced from 10s to 60s
+- **News page size reduced**: Article fetch reduced from 10,000 to 500 per request
+- **Slider-vertical fix**: MiniPlayer volume slider uses `direction: 'rtl'` instead of deprecated `-webkit-appearance: slider-vertical`
+- **WebSocket cleanup fix**: NotificationContext properly detaches handlers before closing to prevent StrictMode reconnection cascade
+
+### Removed
+- **Vite client strip plugin**: No longer needed — production build doesn't include `/@vite/client`
+- **HMR disable setting**: No longer needed — production build has no HMR
+- **Page reload diagnostics**: Investigation scaffolding removed (DIAG_KEY, logDiag, /api/diag endpoint)
+- **Root health check route**: Moved from `/` to `/api/` only, so SPA catch-all can serve frontend at root
+
 ## [v2.1.1] - 2026-02-16
 
 ### Fixed

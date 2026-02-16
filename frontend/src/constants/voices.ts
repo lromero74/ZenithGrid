@@ -80,27 +80,71 @@ export const CHILD_VOICE_IDS: Set<string> = new Set(
   TTS_VOICES.filter(v => v.child).map(v => v.id)
 )
 
-// Keywords that flag content as unsuitable for child voices (case-insensitive)
+// Keywords that flag content as unsuitable for child voices (case-insensitive).
+// Errs on the side of caution — a false positive just means an adult voice reads it instead.
 export const ADULT_CONTENT_KEYWORDS: string[] = [
-  'murder', 'murdered', 'murderer', 'murders',
+  // Sexual content
+  'sexual', 'sexuality', 'sexually', 'sex worker',
+  'intercourse', 'orgasm', 'erotic', 'erotica',
+  'seduction', 'seduce', 'foreplay', 'kink', 'kinky', 'fetish',
+  'arousal', 'aroused', 'libido', 'pleasure',
+  'pornography', 'pornographic', 'porn',
+  'prostitution', 'prostitute', 'escort service',
+  'strip club', 'stripper', 'lap dance',
   'rape', 'raped', 'rapist', 'raping',
   'sexual assault', 'sexually assaulted',
   'molestation', 'molested', 'molester',
   'pedophile', 'paedophile', 'pedophilia',
   'trafficking', 'sex trafficking',
-  'prostitution', 'prostitute',
-  'pornography', 'pornographic',
   'transsexual', 'transexual',
+
+  // Guns and weapons
+  'firearm', 'firearms', 'handgun', 'pistol', 'revolver',
+  'rifle', 'shotgun', 'assault rifle', 'semi-automatic',
+  'ammunition', 'ammo', 'bullet', 'bullets',
+  'gunshot', 'gunfire', 'shooter', 'gunman',
+  'mass shooting', 'school shooting',
+
+  // Alcohol
+  'alcohol', 'alcoholic', 'alcoholism',
+  'drunk', 'drunken', 'intoxicated', 'intoxication',
+  'beer', 'whiskey', 'vodka', 'tequila', 'rum',
+  'cocktail', 'liquor', 'wine',
+  'binge drinking', 'hangover',
+  'brewery', 'distillery', 'bartender',
+
+  // Smoking and tobacco
+  'smoking', 'cigarette', 'cigarettes', 'tobacco',
+  'vaping', 'vape', 'e-cigarette', 'nicotine',
+  'cigar', 'cigars',
+
+  // Drugs
+  'cocaine', 'heroin', 'methamphetamine', 'meth',
+  'fentanyl', 'opioid', 'opioids', 'opiate',
+  'marijuana', 'cannabis', 'weed',
+  'ecstasy', 'mdma', 'lsd', 'psychedelic',
+  'drug abuse', 'drug addict', 'drug addiction',
+  'overdose', 'overdosed',
+  'drug dealer', 'drug trafficking', 'cartel',
+  'narcotics', 'narcotic',
+
+  // Violence
+  'murder', 'murdered', 'murderer', 'murders',
+  'homicide', 'manslaughter', 'infanticide',
+  'serial killer', 'assassination', 'assassinated',
   'genocide', 'ethnic cleansing',
   'torture', 'tortured',
   'dismember', 'dismembered', 'dismemberment',
   'decapitate', 'decapitated', 'beheading',
-  'suicide bombing', 'mass shooting',
-  'serial killer', 'homicide',
-  'manslaughter', 'infanticide',
-  'child abuse', 'domestic violence',
+  'suicide bombing', 'suicide bomber',
   'stabbing', 'stabbed to death',
-  'execution', 'executed',
+  'child abuse', 'domestic violence',
+  'violent crime', 'violent attack',
+  'bloodshed', 'bloodbath', 'massacre',
+  'bombing', 'terrorist', 'terrorism',
+  'hostage', 'kidnapping', 'kidnapped',
+  'beating', 'beaten to death',
+  'arson', 'arsonist',
 ]
 
 // Precompiled regex for efficient matching
