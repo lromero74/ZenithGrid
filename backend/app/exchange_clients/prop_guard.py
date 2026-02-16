@@ -96,7 +96,13 @@ class PropGuardClient(ExchangeClient):
     # ==========================================================
 
     async def _load_state(self) -> Optional[dict]:
-        """Load PropFirmState from database."""
+        """Load PropFirmState from database.
+
+        Returns:
+            State dict if found, None if no state record exists.
+        Raises:
+            RuntimeError: If database is unavailable (fail-safe).
+        """
         try:
             # Late import to avoid circular dependencies
             from sqlalchemy import select
@@ -117,12 +123,17 @@ class PropGuardClient(ExchangeClient):
                         "initial_deposit": state.initial_deposit,
                         "current_equity": state.current_equity,
                     }
+                return None
         except Exception as e:
             logger.error(
                 f"PropGuard: Failed to load state "
                 f"for account {self._account_id}: {e}"
             )
-        return None
+            # Fail-safe: if we can't verify safety state, block all orders
+            raise RuntimeError(
+                f"PropGuard: Database unavailable — cannot verify "
+                f"safety state for account {self._account_id}"
+            )
 
     async def _save_kill_state(
         self, reason: str
@@ -178,6 +189,9 @@ class PropGuardClient(ExchangeClient):
                 f"PropGuard: Failed to update equity: {e}"
             )
 
+    # Maximum age for WS equity data before falling back to REST
+    _WS_EQUITY_MAX_AGE_SECONDS = 60
+
     async def _get_current_equity(self) -> float:
         """Get current equity from WS state or REST.
 
@@ -185,11 +199,19 @@ class PropGuardClient(ExchangeClient):
             Current equity in USD. Returns 0.0 only if all sources fail,
             which will cause _preflight_check to block the order.
         """
-        # Try WebSocket state first (sub-second)
+        # Try WebSocket state first (sub-second) with staleness check
         if self._ws_state and self._ws_state.connected:
             eq = self._ws_state.equity
-            if eq > 0:
-                return eq
+            eq_ts = self._ws_state.equity_timestamp
+            if eq > 0 and eq_ts:
+                age = (datetime.utcnow() - eq_ts).total_seconds()
+                if age <= self._WS_EQUITY_MAX_AGE_SECONDS:
+                    return eq
+                logger.warning(
+                    f"PropGuard: WS equity stale ({age:.0f}s old) "
+                    f"for account {self._account_id} — falling "
+                    f"back to REST"
+                )
 
         # Fallback to REST (with error handling)
         try:
@@ -226,14 +248,20 @@ class PropGuardClient(ExchangeClient):
             None if all checks pass.
             Error message string if order should be blocked.
         """
-        # 1. Kill switch check
-        state = await self._load_state()
+        # 1. Kill switch check (fail-safe: block on DB error)
+        try:
+            state = await self._load_state()
+        except RuntimeError as e:
+            return str(e)
         if state and state.get("is_killed"):
             reason = state.get("kill_reason", "Unknown")
             return f"KILL SWITCH ACTIVE: {reason}"
 
-        # Get current equity
+        # Get current equity (guard against NaN, negative, and zero)
         current_equity = await self._get_current_equity()
+        import math
+        if math.isnan(current_equity) or math.isinf(current_equity):
+            return "Equity returned invalid value (NaN/Inf)"
         if current_equity <= 0:
             return "Cannot determine current equity"
 
@@ -252,8 +280,11 @@ class PropGuardClient(ExchangeClient):
 
         # 2. Daily reset check
         if should_reset_daily(daily_start_ts):
-            # Snapshot new daily start equity
-            await self._snapshot_daily_start(current_equity)
+            # Snapshot new daily start equity (fail-safe: block on error)
+            try:
+                await self._snapshot_daily_start(current_equity)
+            except RuntimeError as e:
+                return str(e)
             daily_start_equity = current_equity
 
         # 3. Daily drawdown check
@@ -307,7 +338,8 @@ class PropGuardClient(ExchangeClient):
                 # No valid bid/ask — can't verify spread safety
                 logger.warning(
                     f"PropGuard: No valid bid/ask for {product_id} "
-                    f"— deferring trade for safety"
+                    f"(bid={bid}, ask={ask}) — deferring trade "
+                    f"for safety"
                 )
                 return (
                     f"Cannot verify spread for {product_id} "
@@ -384,6 +416,10 @@ class PropGuardClient(ExchangeClient):
         except Exception as e:
             logger.error(
                 f"PropGuard: Failed to snapshot daily start: {e}"
+            )
+            raise RuntimeError(
+                f"PropGuard: Daily reset failed — cannot verify "
+                f"drawdown baseline for account {self._account_id}"
             )
 
     async def _apply_volatility_adjustment(

@@ -81,7 +81,9 @@ export default function TradingViewChartModal({
       // Convert our symbol format (LTC-BTC) to TradingView format (EXCHANGE:LTCBTC)
       const [base, quote] = symbol.split('-')
       const tvPrefix = TV_EXCHANGE_PREFIX[exchange || 'coinbase'] || 'COINBASE'
-      const tvSymbol = `${tvPrefix}:${base}${quote}`
+      // ByBit uses USDT pairs on TradingView (our system maps USDT→USD internally)
+      const tvQuote = (exchange === 'bybit' && quote === 'USD') ? 'USDT' : quote
+      const tvSymbol = `${tvPrefix}:${base}${tvQuote}`
 
       // Get saved chart settings from localStorage
       const savedSettings = localStorage.getItem(`chart_settings_${symbol}`)

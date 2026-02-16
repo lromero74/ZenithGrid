@@ -195,6 +195,12 @@ export function BotFormModal({
       return
     }
 
+    // Validate account is selected
+    if (!selectedAccount?.id) {
+      alert('Please select an account before creating a bot')
+      return
+    }
+
     // Validate at least one pair is selected
     if (formData.product_ids.length === 0) {
       alert('Please select at least one trading pair')

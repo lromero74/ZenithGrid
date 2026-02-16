@@ -5,6 +5,19 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.1] - 2026-02-16
+
+### Fixed
+- **PropGuard fail-safe on DB unavailability**: `_load_state()` and `_snapshot_daily_start()` now raise RuntimeError on database failures, blocking all orders rather than silently allowing them through
+- **WS equity staleness detection**: PropGuard now rejects WebSocket equity data older than 60 seconds and falls back to REST, with NaN/Inf guard on equity values
+- **WS staleness check in monitor**: PropGuard background monitor now applies the same 60-second staleness check as the order preflight path
+- **Exchange client cache cleanup**: Shutdown handler now properly closes all cached exchange clients (fixes httpx connection leak for MT5), and `clear_exchange_client_cache(None)` now closes clients before clearing
+- **Missing null checks on exchange client**: Added null checks for `get_exchange_client_for_account()` in `bot_control_router` and `account_router` portfolio conversion
+- **API key encryption for all exchanges**: `api_key_name` is now encrypted at rest for Coinbase accounts (was only encrypted for ByBit), decrypted on use, and masked in API responses
+- **Frontend account validation**: Bot form now validates account selection before submission; AddAccountModal validates required credentials for ByBit, MT5, and Coinbase
+- **PropGuardStatus 404 handling**: Frontend now treats 404 as "not initialized" instead of showing an error state
+- **TradingView ByBit symbol mapping**: Correctly maps internal `-USD` suffix back to `-USDT` for ByBit charts on TradingView
+
 ## [v2.0.0] - 2026-02-16
 
 ### Added

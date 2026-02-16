@@ -715,6 +715,13 @@ async def _run_portfolio_conversion(
             # Get exchange client
             from app.services.exchange_service import get_exchange_client_for_account
             exchange = await get_exchange_client_for_account(db, account_id)
+            if not exchange:
+                pcs.update_task_progress(
+                    task_id,
+                    status="failed",
+                    message=f"No exchange client for account {account_id}"
+                )
+                return
 
             # Get all account balances
             pcs.update_task_progress(task_id, message="Fetching account balances...")
