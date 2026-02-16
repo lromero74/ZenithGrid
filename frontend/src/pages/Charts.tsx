@@ -162,10 +162,10 @@ function Charts() {
           </optgroup>
         </select>
 
-        <div className="w-px h-6 bg-slate-600" />
+        <div className="w-px h-6 bg-slate-600 hidden sm:block" />
 
         {/* Chart Type Buttons */}
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           <button
             onClick={() => setChartType('candlestick')}
             className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
@@ -223,7 +223,7 @@ function Charts() {
           </button>
         </div>
 
-        <div className="w-px h-6 bg-slate-600" />
+        <div className="w-px h-6 bg-slate-600 hidden sm:block" />
 
         {/* Heikin-Ashi Toggle */}
         <button
@@ -238,7 +238,7 @@ function Charts() {
           HA
         </button>
 
-        <div className="w-px h-6 bg-slate-600" />
+        <div className="w-px h-6 bg-slate-600 hidden sm:block" />
 
         {/* Indicators Button */}
         <button
@@ -249,10 +249,10 @@ function Charts() {
           Indicators
         </button>
 
-        <div className="flex-1" />
+        <div className="hidden sm:block sm:flex-1" />
 
         {/* Time Interval Buttons */}
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {TIME_INTERVALS.map((interval) => (
             <button
               key={interval.value}

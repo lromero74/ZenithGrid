@@ -259,14 +259,14 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   return (
     <div className={`bg-slate-800 rounded-lg border border-slate-700 p-6 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
         <div className="flex items-center space-x-2">
           <TrendingUp className="w-5 h-5 text-blue-400" />
-          <h2 className="text-xl font-semibold text-white">Account Value Over Time</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-white">Account Value Over Time</h2>
         </div>
 
         {/* Time range selector */}
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-1.5">
           {(['7d', '14d', '30d', '3m', '6m', '1y', 'all'] as TimeRange[]).map((range) => (
             <button
               key={range}

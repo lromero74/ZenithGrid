@@ -205,7 +205,7 @@ export default function Positions() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-medium">
               {openPositions.length} Active
             </div>
@@ -261,8 +261,8 @@ export default function Positions() {
           </div>
         ) : (
           <div className="space-y-2">
-            {/* Column Headers - 3Commas Style */}
-            <div className="bg-slate-800/50 rounded-lg border border-slate-700/50 px-4 py-2">
+            {/* Column Headers - 3Commas Style (hidden on mobile) */}
+            <div className="hidden sm:block bg-slate-800/50 rounded-lg border border-slate-700/50 px-4 py-2">
               <div className="grid grid-cols-12 gap-4 items-center text-xs text-slate-400">
                 <div
                   className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-slate-300"

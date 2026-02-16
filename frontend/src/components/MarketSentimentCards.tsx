@@ -255,7 +255,6 @@ export { determineMarketSeason }
 export type { MarketSeason, SeasonInfo }
 
 // Carousel configuration
-const CARDS_VISIBLE = 3
 const AUTO_CYCLE_INTERVAL = 30000 // 30 seconds
 const ANIMATION_DURATION = 1200 // ms - bowstring feel
 const SWIPE_THRESHOLD = 50 // px minimum swipe distance
@@ -298,6 +297,29 @@ const springKeyframes = `
 `
 
 export function MarketSentimentCards() {
+  // Responsive cards visible count (1 on mobile, 2 on sm, 3 on lg+)
+  const [cardsVisible, setCardsVisible] = useState(() => {
+    if (typeof window !== 'undefined') {
+      if (window.innerWidth < 640) return 1
+      if (window.innerWidth < 1024) return 2
+      return 3
+    }
+    return 3
+  })
+
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth
+      setCardsVisible(prev => {
+        const next = width < 640 ? 1 : width < 1024 ? 2 : 3
+        if (next !== prev) return next
+        return prev
+      })
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   // Carousel state - for infinite scroll, we track position in extended array
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
@@ -306,6 +328,13 @@ export function MarketSentimentCards() {
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null)
   const autoPlayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
+
+  // Reset carousel position when cards visible count changes
+  useEffect(() => {
+    setCurrentIndex(0)
+    setIsAnimating(false)
+    setSlideDirection(null)
+  }, [cardsVisible])
 
   // Swipe tracking
   const touchStartX = useRef<number>(0)
@@ -679,9 +708,9 @@ export function MarketSentimentCards() {
   // For infinite scroll: create extended array with clones at both ends
   // [clone of last 3] + [all cards] + [clone of first 3]
   const extendedCards = [
-    ...baseCards.slice(-CARDS_VISIBLE).map((card, i) => ({ ...card, id: `clone-end-${i}` })),
+    ...baseCards.slice(-cardsVisible).map((card, i) => ({ ...card, id: `clone-end-${i}` })),
     ...baseCards,
-    ...baseCards.slice(0, CARDS_VISIBLE).map((card, i) => ({ ...card, id: `clone-start-${i}` })),
+    ...baseCards.slice(0, cardsVisible).map((card, i) => ({ ...card, id: `clone-start-${i}` })),
   ]
   const extendedTotal = extendedCards.length
 
@@ -817,10 +846,10 @@ export function MarketSentimentCards() {
   const cardWidthInTrack = 100 / extendedTotal
 
   // Calculate the transform for the current position
-  // Account for the prepended clones (offset by CARDS_VISIBLE)
-  // currentIndex 0 should show real cards starting at position CARDS_VISIBLE in extended array
+  // Account for the prepended clones (offset by cardsVisible)
+  // currentIndex 0 should show real cards starting at position cardsVisible in extended array
   const getTransformPercent = (index: number) => {
-    return -((index + CARDS_VISIBLE) * cardWidthInTrack)
+    return -((index + cardsVisible) * cardWidthInTrack)
   }
   const baseTransform = getTransformPercent(currentIndex)
 
@@ -908,7 +937,7 @@ export function MarketSentimentCards() {
             ref={carouselRef}
             className="flex gap-4"
             style={{
-              width: `${(extendedTotal / CARDS_VISIBLE) * 100}%`,
+              width: `${(extendedTotal / cardsVisible) * 100}%`,
               ...getAnimationStyle(),
             }}
           >

@@ -166,8 +166,8 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-800 rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-slate-800 rounded-lg w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto mx-1 sm:mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700">
           <h2 className="text-xl font-bold text-white">Add Account</h2>
@@ -395,7 +395,7 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-slate-300 mb-1">
                           Daily Drawdown Limit (%)

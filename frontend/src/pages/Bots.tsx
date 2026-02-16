@@ -410,21 +410,23 @@ function Bots() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded font-medium transition-colors"
+            className="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 px-3 sm:px-4 py-2 rounded font-medium transition-colors text-sm sm:text-base"
             title="Import bot from file or clipboard"
           >
             <Upload className="w-4 h-4" />
-            <span>Import Bot</span>
+            <span className="hidden sm:inline">Import Bot</span>
+            <span className="sm:hidden">Import</span>
           </button>
           <button
             onClick={handleOpenCreate}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium transition-colors"
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded font-medium transition-colors text-sm sm:text-base"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Bot</span>
+            <span className="hidden sm:inline">Create Bot</span>
+            <span className="sm:hidden">Create</span>
           </button>
         </div>
       </div>
@@ -493,14 +495,14 @@ function Bots() {
               <thead>
                 <tr className="bg-slate-900 border-b border-slate-700">
                   <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Name</th>
-                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Strategy</th>
-                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Pair</th>
-                  <th className="text-left px-0.5 sm:px-1 py-2 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
-                  <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Trade Stats</th>
-                  <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Win Rate</th>
+                  <th className="hidden md:table-cell text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Strategy</th>
+                  <th className="hidden sm:table-cell text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Pair</th>
+                  <th className="hidden sm:table-cell text-left px-0.5 sm:px-1 py-2 text-xs sm:text-sm font-medium text-slate-400">Active trades</th>
+                  <th className="hidden md:table-cell text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Trade Stats</th>
+                  <th className="hidden md:table-cell text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Win Rate</th>
                   <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">PnL</th>
-                  <th className="text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Projected PnL</th>
-                  <th className="text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Budget</th>
+                  <th className="hidden lg:table-cell text-right px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Projected PnL</th>
+                  <th className="hidden lg:table-cell text-left px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Budget</th>
                   <th className="text-center px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Status</th>
                   <th className="text-center px-1 sm:px-2 py-2 text-xs sm:text-sm font-medium text-slate-400">Actions</th>
                 </tr>
@@ -587,8 +589,8 @@ function Bots() {
 
       {/* Import Bot Modal */}
       {showImportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-2xl mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-2xl mx-1 sm:mx-4">
             <div className="flex items-center justify-between p-4 border-b border-slate-700">
               <h2 className="text-xl font-semibold">Import Bot</h2>
               <button

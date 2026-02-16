@@ -778,9 +778,9 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
       </div>
 
       {/* Stats Cards + Chart */}
-      <div className="p-4 sm:p-6 flex gap-6">
-        {/* Left sidebar - Stats Cards */}
-        <div className="flex flex-col gap-3 w-72 flex-shrink-0">
+      <div className="p-4 sm:p-6 flex flex-col lg:flex-row gap-4 lg:gap-6">
+        {/* Left sidebar - Stats Cards (horizontal grid on mobile, vertical sidebar on lg+) */}
+        <div className="grid grid-cols-2 lg:flex lg:flex-col gap-3 lg:w-72 lg:flex-shrink-0">
           {/* Total P&L Card */}
           <div className="bg-slate-800/50 rounded-lg p-4">
             <div className="text-sm text-slate-400 mb-1">PnL</div>

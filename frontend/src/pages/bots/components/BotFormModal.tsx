@@ -382,8 +382,8 @@ export function BotFormModal({
   if (!showModal) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className={`bg-slate-800 rounded-lg w-full max-h-[90vh] overflow-y-auto ${
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-1 sm:p-4 z-50">
+      <div className={`bg-slate-800 rounded-lg w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto mx-1 sm:mx-auto ${
         formData.strategy_type === 'conditional_dca' ? 'max-w-6xl' : 'max-w-4xl'
       }`}>
         <div className="p-6 border-b border-slate-700">
@@ -739,7 +739,7 @@ export function BotFormModal({
                           <div className="text-xs font-medium text-slate-400 mb-1.5">
                             {group} Pairs
                           </div>
-                          <div className="grid grid-cols-2 gap-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                             {groupPairs.map((pair: { value: string; label: string; group: string }) => {
                               const isChecked = formData.product_ids.includes(pair.value)
 
@@ -804,7 +804,7 @@ export function BotFormModal({
                         (Select which types of coins this bot can trade)
                       </span>
                     </label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
                         { value: 'APPROVED', label: 'Approved', description: 'Strong fundamentals, clear utility', color: 'green' },
                         { value: 'BORDERLINE', label: 'Borderline', description: 'Some concerns, declining relevance', color: 'yellow' },

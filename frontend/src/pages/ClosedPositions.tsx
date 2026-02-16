@@ -396,7 +396,7 @@ function ClosedPositions() {
         </div>
 
         {/* Tabs + Filter Toggle */}
-        <div className="flex items-center justify-between mb-2 border-b border-slate-700">
+        <div className="flex items-center justify-between mb-2 border-b border-slate-700 flex-wrap gap-1">
           <div className="flex space-x-2">
           <button
             onClick={() => setActiveTab('closed')}
@@ -579,7 +579,7 @@ function ClosedPositions() {
                         <p className="text-slate-400 text-xs mb-3">Trade History</p>
                         <div className="space-y-2">
                           {positionTrades[position.id].map((trade) => (
-                            <div key={trade.id} className="bg-slate-800 rounded p-3 grid grid-cols-5 gap-3 text-sm">
+                            <div key={trade.id} className="bg-slate-800 rounded p-3 grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
                               <div>
                                 <p className="text-slate-500 text-xs mb-1">Time</p>
                                 <p className="text-white">{formatDateTime(trade.timestamp)}</p>
@@ -674,7 +674,7 @@ function ClosedPositions() {
 
           {/* Pagination Controls for Closed Positions */}
           {closedTotalPages > 1 && (
-            <div className="flex items-center justify-between mt-6 px-2">
+            <div className="flex flex-col sm:flex-row items-center justify-between mt-6 px-2 gap-2">
               <p className="text-sm text-slate-400">
                 Page {closedPage} of {closedTotalPages} ({filteredClosedPositions.length} total)
               </p>
@@ -798,7 +798,7 @@ function ClosedPositions() {
 
                 {/* Pagination Controls */}
                 {failedTotalPages > 1 && (
-                  <div className="flex items-center justify-between mt-6 px-2">
+                  <div className="flex flex-col sm:flex-row items-center justify-between mt-6 px-2 gap-2">
                     <p className="text-sm text-slate-400">
                       Page {failedPage} of {failedTotalPages} ({filteredFailedOrders.length} total)
                     </p>

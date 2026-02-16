@@ -77,9 +77,9 @@ export const PositionCard = ({
         className="p-4 cursor-pointer hover:bg-slate-750 transition-colors"
         onClick={() => onTogglePosition(position.id)}
       >
-        <div className="grid grid-cols-12 gap-4 items-start text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-12 gap-4 items-start text-sm">
           {/* Column 1: Bot Info + Strategy (2 cols) */}
-          <div className="col-span-2">
+          <div className="col-span-1 sm:col-span-2">
             <div className="flex items-center gap-2 mb-1">
               <div className="text-white font-semibold">
                 {bot?.name || `Bot #${position.bot_id || 'N/A'}`}
@@ -123,7 +123,7 @@ export const PositionCard = ({
           </div>
 
           {/* Column 2: Pair + Exchange (1.5 cols) */}
-          <div className="col-span-2 flex items-start gap-2">
+          <div className="col-span-1 sm:col-span-2 flex items-start gap-2">
             <CoinIcon
               symbol={position.product_id?.split('-')[0] || 'BTC'}
               size="sm"
@@ -223,7 +223,7 @@ export const PositionCard = ({
           </div>
 
           {/* Column 3: uPnL + Price Bar (4 cols) */}
-          <div className="col-span-4">
+          <div className="col-span-2 sm:col-span-4">
             <PriceBar
               position={position}
               currentPrice={currentPrice || position.average_buy_price}
@@ -233,8 +233,8 @@ export const PositionCard = ({
             />
           </div>
 
-          {/* Column 4: Volume (2 cols) */}
-          <div className="col-span-2">
+          {/* Column 4: Volume (2 cols) - hidden on mobile */}
+          <div className="hidden sm:block col-span-2">
             <div className="text-[10px] space-y-0.5">
               <div className="text-white">
                 {formatQuoteAmount(position.total_quote_spent, position.product_id || 'ETH-BTC')}
@@ -253,8 +253,8 @@ export const PositionCard = ({
             </div>
           </div>
 
-          {/* Column 5: Avg. O (Averaging Orders) - Like 3Commas (1 col) */}
-          <div className="col-span-1">
+          {/* Column 5: Avg. O (Averaging Orders) - Like 3Commas (1 col) - hidden on mobile */}
+          <div className="hidden sm:block col-span-1">
             <div className="text-[10px] space-y-0.5">
               <div className="text-slate-400">
                 Completed: {(() => {
@@ -287,8 +287,8 @@ export const PositionCard = ({
             </div>
           </div>
 
-          {/* Column 6: Created (1 col) */}
-          <div className="col-span-1">
+          {/* Column 6: Created (1 col) - hidden on mobile */}
+          <div className="hidden sm:block col-span-1">
             <div className="text-[10px] space-y-0.5">
               <div
                 className="text-blue-400 hover:text-blue-300 cursor-pointer underline"
@@ -362,7 +362,7 @@ export const PositionCard = ({
         )}
 
         {/* Action Buttons Row */}
-        <div className="mt-3 px-4 flex items-center gap-3">
+        <div className="mt-3 px-4 flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
             onClick={(e) => {

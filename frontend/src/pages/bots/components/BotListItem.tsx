@@ -148,7 +148,7 @@ export function BotListItem({
       </td>
 
       {/* Strategy */}
-      <td className="px-1 sm:px-2 py-2">
+      <td className="hidden md:table-cell px-1 sm:px-2 py-2">
         <div className="flex flex-col">
           <div className="text-sm text-white">{strategyName}</div>
           {aiProvider && (
@@ -176,7 +176,7 @@ export function BotListItem({
       </td>
 
       {/* Pairs */}
-      <td className="px-1 sm:px-2 py-2">
+      <td className="hidden sm:table-cell px-1 sm:px-2 py-2">
         <div className="flex items-center gap-1">
           {botPairs.length === 1 ? (
             <span className="text-sm text-white font-mono">
@@ -191,7 +191,7 @@ export function BotListItem({
       </td>
 
       {/* Active Trades */}
-      <td className="px-0.5 sm:px-1 py-2 w-16">
+      <td className="hidden sm:table-cell px-0.5 sm:px-1 py-2 w-16">
         {(bot.strategy_config?.max_concurrent_deals || bot.strategy_config?.max_concurrent_positions) ? (
           <div className="text-sm whitespace-nowrap">
             <span className="text-blue-400 font-medium">
@@ -208,7 +208,7 @@ export function BotListItem({
       </td>
 
       {/* Trade Stats */}
-      <td className="px-1 sm:px-2 py-2 text-right">
+      <td className="hidden md:table-cell px-1 sm:px-2 py-2 text-right">
         <div className="flex flex-col items-end">
           <div className="text-xs text-slate-400">
             {(bot as any).closed_positions_count || 0} closed
@@ -220,7 +220,7 @@ export function BotListItem({
       </td>
 
       {/* Win Rate */}
-      <td className="px-1 sm:px-2 py-2 text-right w-16">
+      <td className="hidden md:table-cell px-1 sm:px-2 py-2 text-right w-16">
         {(() => {
           const winRate = (bot as any).win_rate || 0
           const closedCount = (bot as any).closed_positions_count || 0
@@ -262,7 +262,7 @@ export function BotListItem({
       </td>
 
       {/* Projected PnL */}
-      <td className="px-1 sm:px-2 py-2 text-right">
+      <td className="hidden lg:table-cell px-1 sm:px-2 py-2 text-right">
         {(() => {
           const dailyPnlUsd = (bot as any).avg_daily_pnl_usd || 0
           const dailyPnlBtc = (bot as any).avg_daily_pnl_btc || 0
@@ -347,7 +347,7 @@ export function BotListItem({
       </td>
 
       {/* Budget */}
-      <td className="px-1 sm:px-2 py-2 w-20">
+      <td className="hidden lg:table-cell px-1 sm:px-2 py-2 w-20">
         <div className="flex flex-col gap-1">
           <span className="text-sm text-emerald-400 font-medium whitespace-nowrap">
             {bot.budget_percentage}%
