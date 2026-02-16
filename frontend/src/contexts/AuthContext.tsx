@@ -16,6 +16,7 @@ interface User {
   is_active: boolean
   is_superuser: boolean
   mfa_enabled: boolean
+  mfa_email_enabled: boolean
   email_verified: boolean
   email_verified_at: string | null
   created_at: string
@@ -29,8 +30,12 @@ interface AuthContextType {
   isLoading: boolean
   mfaPending: boolean  // True when MFA verification is needed
   mfaToken: string | null  // Short-lived token for MFA verification
+  mfaMethods: string[]  // Available MFA methods (e.g. ["totp", "email_code", "email_link"])
   login: (email: string, password: string) => Promise<void>
   verifyMFA: (code: string, rememberDevice?: boolean) => Promise<void>
+  verifyMFAEmailCode: (code: string, rememberDevice?: boolean) => Promise<void>
+  verifyMFAEmailLink: (token: string, rememberDevice?: boolean) => Promise<void>
+  resendMFAEmail: () => Promise<void>
   cancelMFA: () => void
   signup: (email: string, password: string, displayName?: string) => Promise<void>
   logout: () => void
@@ -38,6 +43,8 @@ interface AuthContextType {
   getAccessToken: () => string | null
   acceptTerms: () => Promise<void>
   updateUser: (user: User) => void  // Update user state (e.g., after MFA enable/disable)
+  enableEmailMFA: (password: string) => Promise<void>
+  disableEmailMFA: (password: string) => Promise<void>
   verifyEmail: (token: string) => Promise<void>
   verifyEmailCode: (code: string) => Promise<void>
   resendVerification: () => Promise<void>
@@ -53,6 +60,7 @@ interface LoginResponse {
   user: User | null
   mfa_required: boolean
   mfa_token: string | null
+  mfa_methods: string[] | null
   device_trust_token: string | null
 }
 
@@ -83,8 +91,12 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   mfaPending: false,
   mfaToken: null,
+  mfaMethods: [],
   login: async () => {},
   verifyMFA: async (_code: string, _rememberDevice?: boolean) => {},
+  verifyMFAEmailCode: async (_code: string, _rememberDevice?: boolean) => {},
+  verifyMFAEmailLink: async (_token: string, _rememberDevice?: boolean) => {},
+  resendMFAEmail: async () => {},
   cancelMFA: () => {},
   signup: async () => {},
   logout: () => {},
@@ -92,6 +104,8 @@ const AuthContext = createContext<AuthContextType>({
   getAccessToken: () => null,
   acceptTerms: async () => {},
   updateUser: () => {},
+  enableEmailMFA: async () => {},
+  disableEmailMFA: async () => {},
   verifyEmail: async () => {},
   verifyEmailCode: async () => {},
   resendVerification: async () => {},
@@ -113,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tokenExpiry, setTokenExpiry] = useState<number | null>(null)
   const [mfaPending, setMfaPending] = useState(false)
   const [mfaToken, setMfaToken] = useState<string | null>(null)
+  const [mfaMethods, setMfaMethods] = useState<string[]>([])
 
   // Get access token (returns null if not available or expired)
   const getAccessToken = useCallback((): string | null => {
@@ -242,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.mfa_required && data.mfa_token) {
       setMfaPending(true)
       setMfaToken(data.mfa_token)
+      setMfaMethods(data.mfa_methods || [])
       return  // Don't set user/tokens yet — need MFA verification
     }
 
@@ -259,7 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Verify MFA code to complete login
+  // Verify TOTP MFA code to complete login
   const verifyMFA = async (code: string, rememberDevice = false): Promise<void> => {
     if (!mfaToken) {
       throw new Error('No MFA session active')
@@ -267,9 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const response = await fetch(`${API_BASE}/mfa/verify`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mfa_token: mfaToken,
         totp_code: code,
@@ -283,7 +297,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data: LoginResponse = await response.json()
+    _completeMFALogin(data)
+  }
 
+  // Helper to complete MFA login from any verification response
+  const _completeMFALogin = (data: LoginResponse) => {
     if (data.access_token && data.refresh_token && data.user && data.expires_in) {
       const expiryTime = Date.now() + data.expires_in * 1000
 
@@ -292,7 +310,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString())
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user))
 
-      // Store device trust token if provided
       if (data.device_trust_token) {
         localStorage.setItem(STORAGE_KEYS.DEVICE_TRUST_TOKEN, data.device_trust_token)
       }
@@ -301,15 +318,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user)
     }
 
-    // Clear MFA state
     setMfaPending(false)
     setMfaToken(null)
+    setMfaMethods([])
+  }
+
+  // Verify MFA email code to complete login
+  const verifyMFAEmailCode = async (code: string, rememberDevice = false): Promise<void> => {
+    if (!mfaToken) {
+      throw new Error('No MFA session active')
+    }
+
+    const response = await fetch(`${API_BASE}/mfa/verify-email-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mfa_token: mfaToken,
+        email_code: code,
+        remember_device: rememberDevice,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Email code verification failed')
+    }
+
+    const data: LoginResponse = await response.json()
+    _completeMFALogin(data)
+  }
+
+  // Verify MFA email link to complete login
+  const verifyMFAEmailLink = async (token: string, rememberDevice = false): Promise<void> => {
+    const response = await fetch(`${API_BASE}/mfa/verify-email-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        remember_device: rememberDevice,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Email link verification failed')
+    }
+
+    const data: LoginResponse = await response.json()
+    _completeMFALogin(data)
+  }
+
+  // Resend MFA email during login
+  const resendMFAEmail = async (): Promise<void> => {
+    if (!mfaToken) {
+      throw new Error('No MFA session active')
+    }
+
+    const response = await fetch(`${API_BASE}/mfa/resend-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mfa_token: mfaToken }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to resend MFA email')
+    }
   }
 
   // Cancel MFA (go back to login form)
   const cancelMFA = useCallback(() => {
     setMfaPending(false)
     setMfaToken(null)
+    setMfaMethods([])
   }, [])
 
   // Signup function
@@ -424,6 +505,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
   }, [])
 
+  // Enable email-based MFA (requires password confirmation)
+  const enableEmailMFA = useCallback(async (password: string): Promise<void> => {
+    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+    if (!token) throw new Error('Not authenticated')
+
+    const response = await fetch(`${API_BASE}/mfa/email/enable`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ password }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to enable email MFA')
+    }
+
+    const updatedUser: User = await response.json()
+    setUser(updatedUser)
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
+  }, [])
+
+  // Disable email-based MFA (requires password confirmation)
+  const disableEmailMFA = useCallback(async (password: string): Promise<void> => {
+    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+    if (!token) throw new Error('Not authenticated')
+
+    const response = await fetch(`${API_BASE}/mfa/email/disable`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ password }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to disable email MFA')
+    }
+
+    const updatedUser: User = await response.json()
+    setUser(updatedUser)
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
+  }, [])
+
   // Verify email with token from email link
   const verifyEmail = useCallback(async (token: string): Promise<void> => {
     const response = await fetch(`${API_BASE}/verify-email`, {
@@ -519,8 +648,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     mfaPending,
     mfaToken,
+    mfaMethods,
     login,
     verifyMFA,
+    verifyMFAEmailCode,
+    verifyMFAEmailLink,
+    resendMFAEmail,
     cancelMFA,
     signup,
     logout,
@@ -528,6 +661,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getAccessToken,
     acceptTerms,
     updateUser,
+    enableEmailMFA,
+    disableEmailMFA,
     verifyEmail,
     verifyEmailCode,
     resendVerification,

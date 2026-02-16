@@ -208,6 +208,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_superuser: bool
     mfa_enabled: bool = False
+    mfa_email_enabled: bool = False
     email_verified: bool = False
     email_verified_at: Optional[datetime] = None
     created_at: datetime
@@ -233,6 +234,7 @@ class LoginResponse(BaseModel):
     user: Optional[UserResponse] = None
     mfa_required: bool = False
     mfa_token: Optional[str] = None
+    mfa_methods: Optional[List[str]] = None  # e.g. ["totp", "email_code", "email_link"]
     device_trust_token: Optional[str] = None  # 30-day device trust token
 
 
@@ -418,12 +420,39 @@ def _build_user_response(user: User) -> UserResponse:
         is_active=user.is_active,
         is_superuser=user.is_superuser,
         mfa_enabled=bool(user.mfa_enabled),
+        mfa_email_enabled=bool(user.mfa_email_enabled),
         email_verified=bool(user.email_verified),
         email_verified_at=user.email_verified_at,
         created_at=user.created_at,
         last_login_at=user.last_login_at,
         terms_accepted_at=user.terms_accepted_at,
     )
+
+
+async def _create_device_trust(
+    user: User, request: Request, db: AsyncSession
+) -> Optional[str]:
+    """Create a trusted device record and return the device trust JWT token."""
+    device_uuid = str(uuid.uuid4())
+    expires = datetime.utcnow() + timedelta(days=30)
+    device_trust = create_device_trust_token(user.id, device_uuid)
+
+    user_agent = request.headers.get("user-agent", "")
+    client_ip = request.client.host if request.client else "unknown"
+    location = await _geolocate_ip(client_ip)
+
+    trusted_device = TrustedDevice(
+        user_id=user.id,
+        device_id=device_uuid,
+        device_name=_parse_device_name(user_agent),
+        ip_address=client_ip,
+        location=location,
+        expires_at=expires,
+    )
+    db.add(trusted_device)
+    await db.commit()
+    logger.info(f"Device trust token issued for user: {user.email} (device: {device_uuid[:8]}...)")
+    return device_trust
 
 
 def decode_token(token: str) -> dict:
@@ -549,8 +578,9 @@ async def login(
             detail="User account is disabled",
         )
 
-    # If MFA is enabled, check for trusted device token before requiring MFA
-    if user.mfa_enabled:
+    # If any MFA method is enabled, check for trusted device token before requiring MFA
+    any_mfa_enabled = user.mfa_enabled or user.mfa_email_enabled
+    if any_mfa_enabled:
         trusted = False
         if request.device_trust_token:
             payload = decode_device_trust_token(request.device_trust_token)
@@ -570,10 +600,48 @@ async def login(
 
         if not trusted:
             mfa_token = create_mfa_token(user.id)
-            logger.info(f"MFA challenge issued for user: {user.email}")
+
+            # Build list of available MFA methods
+            mfa_methods = []
+            if user.mfa_enabled:
+                mfa_methods.append("totp")
+            if user.mfa_email_enabled:
+                mfa_methods.append("email_code")
+                mfa_methods.append("email_link")
+
+                # Create email verification token and send MFA email
+                token_str = uuid.uuid4().hex
+                verify_code = f"{random.randint(0, 999999):06d}"
+                mfa_email_token = EmailVerificationToken(
+                    user_id=user.id,
+                    token=token_str,
+                    verification_code=verify_code,
+                    token_type="mfa_email",
+                    expires_at=datetime.utcnow() + timedelta(
+                        minutes=settings.mfa_email_code_lifetime_minutes
+                    ),
+                )
+                db.add(mfa_email_token)
+                await db.commit()
+
+                # Send MFA verification email
+                try:
+                    from app.services.email_service import send_mfa_verification_email
+                    link_url = f"{settings.frontend_url}/mfa-email-verify?token={token_str}"
+                    send_mfa_verification_email(
+                        to=user.email,
+                        code=verify_code,
+                        link_url=link_url,
+                        display_name=user.display_name or "",
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send MFA email to {user.email}: {e}")
+
+            logger.info(f"MFA challenge issued for user: {user.email} (methods: {mfa_methods})")
             return LoginResponse(
                 mfa_required=True,
                 mfa_token=mfa_token,
+                mfa_methods=mfa_methods,
             )
 
     # No MFA (or trusted device) - issue full tokens
@@ -1391,6 +1459,12 @@ async def mfa_disable(
             detail="Invalid TOTP code.",
         )
 
+    # Check that at least one MFA method will remain (if email MFA is enabled)
+    if current_user.mfa_email_enabled:
+        # OK to disable TOTP - email MFA will still be active
+        pass
+    # If no other MFA method, allow disabling (user wants no MFA at all)
+
     # Disable MFA and clear secret
     current_user.mfa_enabled = False
     current_user.totp_secret = None
@@ -1398,7 +1472,7 @@ async def mfa_disable(
     await db.commit()
     await db.refresh(current_user)
 
-    logger.info(f"MFA disabled for user: {current_user.email}")
+    logger.info(f"TOTP MFA disabled for user: {current_user.email}")
 
     return _build_user_response(current_user)
 
@@ -1466,31 +1540,10 @@ async def mfa_verify(
     access_token = create_access_token(user.id, user.email)
     refresh_token = create_refresh_token(user.id)
 
-    # Optionally create a device trust token (30 days) and store in DB
+    # Optionally create a device trust token (30 days)
     device_trust = None
     if request.remember_device:
-        device_uuid = str(uuid.uuid4())
-        expires = datetime.utcnow() + timedelta(days=30)
-        device_trust = create_device_trust_token(user.id, device_uuid)
-
-        # Parse device info from request
-        user_agent = http_request.headers.get("user-agent", "")
-        client_ip = http_request.client.host if http_request.client else "unknown"
-
-        # Resolve IP to location (city, state, country)
-        location = await _geolocate_ip(client_ip)
-
-        trusted_device = TrustedDevice(
-            user_id=user.id,
-            device_id=device_uuid,
-            device_name=_parse_device_name(user_agent),
-            ip_address=client_ip,
-            location=location,
-            expires_at=expires,
-        )
-        db.add(trusted_device)
-        await db.commit()
-        logger.info(f"Device trust token issued for user: {user.email} (device: {device_uuid[:8]}...)")
+        device_trust = await _create_device_trust(user, http_request, db)
 
     logger.info(f"MFA verified, user logged in: {user.email}")
 
@@ -1501,6 +1554,350 @@ async def mfa_verify(
         user=_build_user_response(user),
         device_trust_token=device_trust,
     )
+
+
+# =============================================================================
+# Email MFA Verification Endpoints
+# =============================================================================
+
+
+class MFAEmailCodeRequest(BaseModel):
+    """Request to verify MFA with email code"""
+    mfa_token: str
+    email_code: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$')
+    remember_device: bool = False
+
+
+class MFAEmailLinkRequest(BaseModel):
+    """Request to verify MFA with email link token"""
+    token: str
+    remember_device: bool = False
+
+
+class MFAEmailEnableRequest(BaseModel):
+    """Request to enable email MFA"""
+    password: str = Field(..., min_length=1)
+
+
+class MFAEmailDisableRequest(BaseModel):
+    """Request to disable email MFA"""
+    password: str = Field(..., min_length=1)
+
+
+async def _decode_mfa_token(mfa_token: str) -> int:
+    """Decode MFA JWT token and return user_id. Raises HTTPException on failure."""
+    try:
+        payload = jwt.decode(
+            mfa_token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired MFA token. Please login again.",
+        )
+
+    if payload.get("type") != "mfa":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type.",
+        )
+
+    return int(payload.get("sub"))
+
+
+async def _complete_mfa_login(
+    user: User, remember_device: bool, http_request: Request, db: AsyncSession
+) -> LoginResponse:
+    """Common logic to complete MFA login after any verification method succeeds."""
+    user.last_login_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(user)
+
+    access_token = create_access_token(user.id, user.email)
+    refresh_token = create_refresh_token(user.id)
+
+    device_trust = None
+    if remember_device:
+        device_trust = await _create_device_trust(user, http_request, db)
+
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.jwt_access_token_expire_minutes * 60,
+        user=_build_user_response(user),
+        device_trust_token=device_trust,
+    )
+
+
+@router.post("/mfa/verify-email-code", response_model=LoginResponse)
+async def mfa_verify_email_code(
+    request: MFAEmailCodeRequest,
+    http_request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Verify email code during login to complete MFA challenge.
+
+    Called after /login returns mfa_required=true with "email_code" in mfa_methods.
+    User enters the 6-digit code from their email.
+    """
+    user_id = await _decode_mfa_token(request.mfa_token)
+    user = await get_user_by_id(db, user_id)
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or disabled.",
+        )
+
+    # Find matching unused MFA email token with this code
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == user_id,
+            EmailVerificationToken.token_type == "mfa_email",
+            EmailVerificationToken.verification_code == request.email_code,
+            EmailVerificationToken.used_at.is_(None),
+        )
+    )
+    token_record = result.scalar_one_or_none()
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid verification code.",
+        )
+
+    if token_record.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Verification code has expired. Please login again.",
+        )
+
+    # Mark token as used
+    token_record.used_at = datetime.utcnow()
+    await db.commit()
+
+    logger.info(f"MFA email code verified, user logged in: {user.email}")
+
+    return await _complete_mfa_login(user, request.remember_device, http_request, db)
+
+
+@router.post("/mfa/verify-email-link", response_model=LoginResponse)
+async def mfa_verify_email_link(
+    request: MFAEmailLinkRequest,
+    http_request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Verify MFA via email link click.
+
+    No mfa_token needed — user clicked a link from their email.
+    The token in the URL identifies the user and MFA session.
+    """
+    # Find the token record
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.token == request.token,
+            EmailVerificationToken.token_type == "mfa_email",
+        )
+    )
+    token_record = result.scalar_one_or_none()
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid verification link.",
+        )
+
+    if token_record.used_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This verification link has already been used.",
+        )
+
+    if token_record.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This verification link has expired. Please login again.",
+        )
+
+    user = await get_user_by_id(db, token_record.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or disabled.",
+        )
+
+    # Mark token as used
+    token_record.used_at = datetime.utcnow()
+    await db.commit()
+
+    logger.info(f"MFA email link verified, user logged in: {user.email}")
+
+    return await _complete_mfa_login(user, request.remember_device, http_request, db)
+
+
+@router.post("/mfa/email/enable", response_model=UserResponse)
+async def mfa_email_enable(
+    request: MFAEmailEnableRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Enable email-based MFA for the current user.
+
+    Requires password confirmation. User must have a verified email address.
+    """
+    if current_user.mfa_email_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email MFA is already enabled.",
+        )
+
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must verify your email address before enabling email MFA.",
+        )
+
+    # Verify password
+    if not verify_password(request.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password.",
+        )
+
+    current_user.mfa_email_enabled = True
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(current_user)
+
+    logger.info(f"Email MFA enabled for user: {current_user.email}")
+
+    return _build_user_response(current_user)
+
+
+@router.post("/mfa/email/disable", response_model=UserResponse)
+async def mfa_email_disable(
+    request: MFAEmailDisableRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Disable email-based MFA for the current user.
+
+    Requires password confirmation. Cannot disable if it would leave no MFA methods.
+    """
+    if not current_user.mfa_email_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email MFA is not enabled.",
+        )
+
+    # Verify password
+    if not verify_password(request.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password.",
+        )
+
+    # Check that at least one MFA method will remain
+    if not current_user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot disable email MFA — it's your only MFA method. "
+                   "Enable authenticator app (TOTP) first.",
+        )
+
+    current_user.mfa_email_enabled = False
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(current_user)
+
+    logger.info(f"Email MFA disabled for user: {current_user.email}")
+
+    return _build_user_response(current_user)
+
+
+@router.post("/mfa/resend-email")
+async def mfa_resend_email(
+    http_request: Request,
+    mfa_token: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Resend MFA verification email during login.
+
+    Invalidates old MFA email tokens and creates a new one.
+    Accepts mfa_token in body as JSON or query param.
+    """
+    # Parse body for mfa_token
+    try:
+        body = await http_request.json()
+        mfa_token = body.get("mfa_token", mfa_token)
+    except Exception:
+        pass
+
+    if not mfa_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA token is required.",
+        )
+
+    user_id = await _decode_mfa_token(mfa_token)
+    user = await get_user_by_id(db, user_id)
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or disabled.",
+        )
+
+    # Invalidate old unused MFA email tokens
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.token_type == "mfa_email",
+            EmailVerificationToken.used_at.is_(None),
+        )
+    )
+    old_tokens = result.scalars().all()
+    for old_token in old_tokens:
+        old_token.used_at = datetime.utcnow()
+
+    # Create new token
+    token_str = uuid.uuid4().hex
+    verify_code = f"{random.randint(0, 999999):06d}"
+    mfa_email_token = EmailVerificationToken(
+        user_id=user.id,
+        token=token_str,
+        verification_code=verify_code,
+        token_type="mfa_email",
+        expires_at=datetime.utcnow() + timedelta(
+            minutes=settings.mfa_email_code_lifetime_minutes
+        ),
+    )
+    db.add(mfa_email_token)
+    await db.commit()
+
+    # Send email
+    try:
+        from app.services.email_service import send_mfa_verification_email
+        link_url = f"{settings.frontend_url}/mfa-email-verify?token={token_str}"
+        send_mfa_verification_email(
+            to=user.email,
+            code=verify_code,
+            link_url=link_url,
+            display_name=user.display_name or "",
+        )
+    except Exception as e:
+        logger.error(f"Failed to resend MFA email to {user.email}: {e}")
+
+    logger.info(f"MFA email resent for user: {user.email}")
+
+    return {"message": "Verification email sent. Please check your inbox."}
 
 
 # =============================================================================

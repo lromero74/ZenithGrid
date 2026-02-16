@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     ses_enabled: bool = True
     frontend_url: str = "https://tradebot.romerotechsolutions.com"
     public_signup_enabled: bool = True
+    mfa_email_code_lifetime_minutes: int = 5
 
     # Trading Parameters
     initial_btc_percentage: float = 5.0

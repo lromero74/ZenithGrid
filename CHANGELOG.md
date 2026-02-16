@@ -5,6 +5,24 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.4.0] - 2026-02-16
+
+### Added
+- **Multi-method MFA**: Users can now choose between authenticator app (TOTP), email verification code, and email verification link for two-factor authentication
+- **Email MFA login flow**: Login sends a styled HTML email with both a 6-digit code and a clickable "Verify Login" link; either completes the MFA challenge
+- **Tabbed MFA UI on login**: When multiple MFA methods are enabled, login shows Authenticator / Email Code / Email Link tabs — only one method needs to succeed
+- **Email MFA settings toggle**: Enable/disable email MFA independently from TOTP in Settings, with password confirmation and mutual-exclusion guard (can't disable your last MFA method)
+- **MFA email resend**: "Resend code" button with 60-second cooldown during login MFA challenge
+- **`/mfa-email-verify` route**: Handles email link clicks — auto-verifies and redirects to dashboard
+- **Resend MFA email endpoint**: `POST /api/auth/mfa/resend-email` invalidates old tokens and sends fresh code+link
+- **MFA encouragement updated**: Now mentions both authenticator app and email verification as options
+
+### Changed
+- **Login response**: Now includes `mfa_methods` list (e.g. `["totp", "email_code", "email_link"]`) so frontend knows which tabs to show
+- **Device trust helper extracted**: `_create_device_trust()` shared across all MFA verify endpoints (DRY)
+- **Trusted devices section**: Now visible when any MFA method is enabled (not just TOTP)
+- **MFA encouragement gate**: Checks both `mfa_enabled` and `mfa_email_enabled` before showing encouragement screen
+
 ## [v2.3.0] - 2026-02-16
 
 ### Added

@@ -6,13 +6,13 @@
  */
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import { Activity, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap, Check } from 'lucide-react'
+import { Activity, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap, Check, Smartphone, RefreshCw } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { PasswordStrengthMeter, isPasswordValid } from '../components/PasswordStrengthMeter'
 import { ForgotPassword } from '../components/ForgotPassword'
 
 export default function Login() {
-  const { login, signup, mfaPending, verifyMFA, cancelMFA } = useAuth()
+  const { login, signup, mfaPending, mfaMethods, verifyMFA, verifyMFAEmailCode, resendMFAEmail, cancelMFA } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +23,12 @@ export default function Login() {
   const [mfaError, setMfaError] = useState<string | null>(null)
   const [isVerifyingMFA, setIsVerifyingMFA] = useState(false)
   const [rememberDevice, setRememberDevice] = useState(false)
+  const [mfaTab, setMfaTab] = useState<'totp' | 'email_code' | 'email_link'>('totp')
+  const [emailCode, setEmailCode] = useState('')
+  const [isResendingEmail, setIsResendingEmail] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(0)
   const mfaInputRef = useRef<HTMLInputElement>(null)
+  const emailCodeInputRef = useRef<HTMLInputElement>(null)
 
   // Signup modal state
   const [showSignup, setShowSignup] = useState(false)
@@ -36,12 +41,36 @@ export default function Login() {
   const [isSigningUp, setIsSigningUp] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
 
-  // Auto-focus MFA input when MFA step appears
+  // Set default MFA tab based on available methods
   useEffect(() => {
-    if (mfaPending && mfaInputRef.current) {
-      mfaInputRef.current.focus()
+    if (mfaPending && mfaMethods.length > 0) {
+      if (mfaMethods.includes('totp')) {
+        setMfaTab('totp')
+      } else if (mfaMethods.includes('email_code')) {
+        setMfaTab('email_code')
+      } else if (mfaMethods.includes('email_link')) {
+        setMfaTab('email_link')
+      }
     }
-  }, [mfaPending])
+  }, [mfaPending, mfaMethods])
+
+  // Auto-focus MFA input when MFA step or tab changes
+  useEffect(() => {
+    if (mfaPending) {
+      if (mfaTab === 'totp' && mfaInputRef.current) {
+        mfaInputRef.current.focus()
+      } else if (mfaTab === 'email_code' && emailCodeInputRef.current) {
+        emailCodeInputRef.current.focus()
+      }
+    }
+  }, [mfaPending, mfaTab])
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [resendCooldown])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -74,9 +103,38 @@ export default function Login() {
     }
   }
 
+  const handleEmailCodeSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setMfaError(null)
+    setIsVerifyingMFA(true)
+
+    try {
+      await verifyMFAEmailCode(emailCode, rememberDevice)
+    } catch (err) {
+      setMfaError(err instanceof Error ? err.message : 'Verification failed')
+      setEmailCode('')
+    } finally {
+      setIsVerifyingMFA(false)
+    }
+  }
+
+  const handleResendEmail = async () => {
+    if (isResendingEmail || resendCooldown > 0) return
+    setIsResendingEmail(true)
+    try {
+      await resendMFAEmail()
+      setResendCooldown(60)
+    } catch (err) {
+      setMfaError(err instanceof Error ? err.message : 'Failed to resend email')
+    } finally {
+      setIsResendingEmail(false)
+    }
+  }
+
   const handleCancelMFA = () => {
     cancelMFA()
     setMfaCode('')
+    setEmailCode('')
     setMfaError(null)
   }
 
@@ -166,7 +224,7 @@ export default function Login() {
               <h2 className="text-2xl font-semibold text-white">Two-Factor Authentication</h2>
             </div>
             <p className="text-slate-400 text-sm mb-6">
-              Enter the 6-digit code from your authenticator app.
+              Verify your identity to complete login.
             </p>
 
             {/* MFA Error Message */}
@@ -177,46 +235,183 @@ export default function Login() {
               </div>
             )}
 
-            <form onSubmit={handleMFASubmit} className="space-y-6">
-              <div>
-                <label htmlFor="mfaCode" className="block text-sm font-medium text-slate-300 mb-2">
-                  Verification Code
-                </label>
-                <input
-                  ref={mfaInputRef}
-                  id="mfaCode"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required
-                  autoComplete="one-time-code"
-                  placeholder="000000"
-                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isVerifyingMFA || mfaCode.length !== 6}
-                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
-              >
-                {isVerifyingMFA ? (
-                  <span className="flex items-center justify-center space-x-2">
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span>Verifying...</span>
-                  </span>
-                ) : (
-                  'Verify'
+            {/* MFA Method Tabs (only show if multiple methods) */}
+            {mfaMethods.length > 1 && (
+              <div className="flex rounded-lg bg-slate-700/50 p-1 mb-6">
+                {mfaMethods.includes('totp') && (
+                  <button
+                    type="button"
+                    onClick={() => { setMfaTab('totp'); setMfaError(null) }}
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                      mfaTab === 'totp'
+                        ? 'bg-slate-600 text-white'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>Authenticator</span>
+                  </button>
                 )}
-              </button>
+                {mfaMethods.includes('email_code') && (
+                  <button
+                    type="button"
+                    onClick={() => { setMfaTab('email_code'); setMfaError(null) }}
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                      mfaTab === 'email_code'
+                        ? 'bg-slate-600 text-white'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>Email Code</span>
+                  </button>
+                )}
+                {mfaMethods.includes('email_link') && (
+                  <button
+                    type="button"
+                    onClick={() => { setMfaTab('email_link'); setMfaError(null) }}
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                      mfaTab === 'email_link'
+                        ? 'bg-slate-600 text-white'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>Email Link</span>
+                  </button>
+                )}
+              </div>
+            )}
 
-              {/* Remember Device Checkbox */}
+            {/* TOTP Authenticator Tab */}
+            {mfaTab === 'totp' && mfaMethods.includes('totp') && (
+              <form onSubmit={handleMFASubmit} className="space-y-6">
+                <div>
+                  <label htmlFor="mfaCode" className="block text-sm font-medium text-slate-300 mb-2">
+                    Authenticator Code
+                  </label>
+                  <input
+                    ref={mfaInputRef}
+                    id="mfaCode"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                    autoComplete="one-time-code"
+                    placeholder="000000"
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Enter the 6-digit code from your authenticator app</p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isVerifyingMFA || mfaCode.length !== 6}
+                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+                >
+                  {isVerifyingMFA ? (
+                    <span className="flex items-center justify-center space-x-2">
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Verifying...</span>
+                    </span>
+                  ) : (
+                    'Verify'
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Email Code Tab */}
+            {mfaTab === 'email_code' && mfaMethods.includes('email_code') && (
+              <form onSubmit={handleEmailCodeSubmit} className="space-y-6">
+                <div>
+                  <label htmlFor="emailCode" className="block text-sm font-medium text-slate-300 mb-2">
+                    Email Verification Code
+                  </label>
+                  <input
+                    ref={emailCodeInputRef}
+                    id="emailCode"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    value={emailCode}
+                    onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                    autoComplete="one-time-code"
+                    placeholder="000000"
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Enter the 6-digit code sent to your email</p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isVerifyingMFA || emailCode.length !== 6}
+                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+                >
+                  {isVerifyingMFA ? (
+                    <span className="flex items-center justify-center space-x-2">
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Verifying...</span>
+                    </span>
+                  ) : (
+                    'Verify'
+                  )}
+                </button>
+
+                {/* Resend Code */}
+                <button
+                  type="button"
+                  onClick={handleResendEmail}
+                  disabled={isResendingEmail || resendCooldown > 0}
+                  className="w-full flex items-center justify-center space-x-2 text-slate-400 hover:text-blue-400 disabled:text-slate-600 transition-colors text-sm"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isResendingEmail ? 'animate-spin' : ''}`} />
+                  <span>
+                    {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
+                  </span>
+                </button>
+              </form>
+            )}
+
+            {/* Email Link Tab */}
+            {mfaTab === 'email_link' && mfaMethods.includes('email_link') && (
+              <div className="space-y-6">
+                <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6 text-center">
+                  <Mail className="w-12 h-12 text-blue-400 mx-auto mb-3" />
+                  <p className="text-slate-200 font-medium mb-2">Check your email</p>
+                  <p className="text-slate-400 text-sm">
+                    We sent a verification link to your email address. Click the link to complete your login.
+                  </p>
+                </div>
+
+                {/* Resend Link */}
+                <button
+                  type="button"
+                  onClick={handleResendEmail}
+                  disabled={isResendingEmail || resendCooldown > 0}
+                  className="w-full flex items-center justify-center space-x-2 text-slate-400 hover:text-blue-400 disabled:text-slate-600 transition-colors text-sm"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isResendingEmail ? 'animate-spin' : ''}`} />
+                  <span>
+                    {resendCooldown > 0 ? `Resend email (${resendCooldown}s)` : 'Resend email'}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* Common: Remember Device + Back */}
+            <div className="mt-6 space-y-4">
               <button
                 type="button"
                 onClick={() => setRememberDevice(!rememberDevice)}
@@ -238,7 +433,7 @@ export default function Login() {
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back to login</span>
               </button>
-            </form>
+            </div>
           </>
         ) : (
           <>
