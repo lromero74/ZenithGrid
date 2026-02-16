@@ -1,6 +1,6 @@
 {
   "project": "ZenithGrid",
-  "version": "v2.2.0",
+  "version": "v2.3.0",
   "updated": "2026-02-16",
   "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -10,7 +10,7 @@
       "orm": "SQLAlchemy (async)",
       "database": "SQLite (aiosqlite)",
       "python": "3.x (venv)",
-      "auth": "JWT (python-jose)",
+      "auth": "JWT (python-jose) + TOTP MFA (pyotp)",
       "encryption": "Fernet (cryptography)"
     },
     "frontend": {
@@ -26,8 +26,10 @@
     "deployment": {
       "platform": "AWS EC2 (Amazon Linux 2023)",
       "process_manager": "systemd",
-      "services": ["trading-bot-backend"],
-      "frontend_serving": "Production build (vite build) served by FastAPI backend"
+      "services": ["trading-bot-backend", "nginx"],
+      "reverse_proxy": "Nginx with Let's Encrypt SSL",
+      "public_url": "https://tradebot.romerotechsolutions.com",
+      "frontend_serving": "Production build (vite build) served by FastAPI backend behind Nginx"
     }
   },
 
@@ -37,7 +39,7 @@
       { "file": "routers/account_value_router.py", "prefix": "/api/account-value", "purpose": "Historical account value snapshots for charting" },
       { "file": "routers/accounts_router.py", "prefix": "/api/accounts", "purpose": "CRUD for CEX and DEX trading accounts" },
       { "file": "routers/ai_credentials_router.py", "prefix": "/api/ai-credentials", "purpose": "Manage per-user AI provider API keys" },
-      { "file": "routers/auth_router.py", "prefix": "/api/auth", "purpose": "Login, signup, token refresh, password change" },
+      { "file": "routers/auth_router.py", "prefix": "/api/auth", "purpose": "Login (with MFA), signup, token refresh, password change, TOTP MFA setup/verify/disable, trusted devices management" },
       { "file": "routers/blacklist_router.py", "prefix": "/api/blacklist", "purpose": "Coin blacklist and category management" },
       { "file": "routers/bots.py", "prefix": "/api/bots", "purpose": "Aggregator for bot sub-routers (CRUD, control, logs, validation)" },
       { "file": "routers/coin_icons_router.py", "prefix": "/api/coin-icons", "purpose": "Proxy and cache cryptocurrency icons to avoid CORS" },
@@ -88,7 +90,8 @@
     },
 
     "models": [
-      { "name": "User", "table": "users", "key_fields": ["id", "email", "hashed_password", "is_active", "terms_accepted"] },
+      { "name": "User", "table": "users", "key_fields": ["id", "email", "hashed_password", "is_active", "mfa_enabled", "totp_secret", "terms_accepted"] },
+      { "name": "TrustedDevice", "table": "trusted_devices", "key_fields": ["id", "user_id", "device_id", "device_name", "ip_address", "location", "expires_at"] },
       { "name": "Account", "table": "accounts", "key_fields": ["id", "user_id", "name", "exchange", "account_type", "api_key", "api_secret", "is_default"] },
       { "name": "Bot", "table": "bots", "key_fields": ["id", "account_id", "name", "strategy", "status", "trading_pairs", "budget_percentage", "max_concurrent_deals"] },
       { "name": "BotTemplate", "table": "bot_templates", "key_fields": ["id", "user_id", "name", "strategy", "config_json"] },

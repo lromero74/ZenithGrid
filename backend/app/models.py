@@ -60,6 +60,10 @@ class User(Base):
     # Terms and conditions acceptance
     terms_accepted_at = Column(DateTime, nullable=True)  # NULL = not accepted, timestamp = when accepted
 
+    # MFA (Two-Factor Authentication)
+    totp_secret = Column(String, nullable=True)  # Fernet-encrypted TOTP secret key
+    mfa_enabled = Column(Boolean, default=False)  # Whether MFA is active
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -72,6 +76,30 @@ class User(Base):
     blacklisted_coins = relationship("BlacklistedCoin", back_populates="user", cascade="all, delete-orphan")
     ai_provider_credentials = relationship("AIProviderCredential", back_populates="user", cascade="all, delete-orphan")
     source_subscriptions = relationship("UserSourceSubscription", back_populates="user", cascade="all, delete-orphan")
+    trusted_devices = relationship("TrustedDevice", back_populates="user", cascade="all, delete-orphan")
+
+
+class TrustedDevice(Base):
+    """
+    Trusted device for MFA bypass (30-day remember device).
+
+    When a user checks "Remember this device", a record is created here.
+    The device_id is embedded in a JWT token stored on the client.
+    Users can view and revoke trusted devices from Settings.
+    """
+    __tablename__ = "trusted_devices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    device_id = Column(String, unique=True, nullable=False, index=True)  # UUID in the JWT
+    device_name = Column(String, nullable=True)  # Parsed from User-Agent
+    ip_address = Column(String, nullable=True)
+    location = Column(String, nullable=True)  # City, State, Country from IP geolocation
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="trusted_devices")
 
 
 class Account(Base):

@@ -34,3 +34,7 @@ pytest>=9.0.0
 
 # Text-to-speech
 edge-tts>=6.1.0
+
+# TOTP MFA (Two-Factor Authentication)
+pyotp>=2.9.0
+qrcode[pil]>=7.4

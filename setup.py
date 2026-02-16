@@ -67,6 +67,8 @@ REQUIRED_PACKAGES = {
     'feedparser': 'feedparser',
     'trafilatura': 'trafilatura',
     'Pillow': 'PIL',
+    'pyotp': 'pyotp',
+    'qrcode': 'qrcode',
 }
 
 # Color codes for terminal output
@@ -808,12 +810,30 @@ def initialize_database(project_root):
                 last_seen_history_count INTEGER DEFAULT 0,
                 last_seen_failed_count INTEGER DEFAULT 0,
                 terms_accepted_at DATETIME,
+                totp_secret TEXT DEFAULT NULL,
+                mfa_enabled INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_login_at DATETIME
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_users_email ON users(email)")
+
+        # Trusted devices table (MFA remember device for 30 days)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS trusted_devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                device_id TEXT UNIQUE NOT NULL,
+                device_name TEXT,
+                ip_address TEXT,
+                location TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME NOT NULL
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_trusted_devices_user_id ON trusted_devices(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_trusted_devices_device_id ON trusted_devices(device_id)")
 
         # Accounts table
         cursor.execute("""

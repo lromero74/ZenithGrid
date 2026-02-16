@@ -5,6 +5,23 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.3.0] - 2026-02-16
+
+### Added
+- **HTTPS domain access**: App publicly accessible at `https://tradebot.romerotechsolutions.com` via Nginx reverse proxy with Let's Encrypt SSL (auto-renewing)
+- **TOTP MFA (Two-Factor Authentication)**: Authenticator app support (Google Authenticator, Authy, etc.) with QR code setup, manual key entry, and encrypted secret storage (Fernet)
+- **MFA login flow**: Two-step login — password then 6-digit TOTP code — with auto-focus, numeric input, and "Back to login" escape
+- **Remember device for 30 days**: Optional checkbox during MFA login stores a device trust token, skipping MFA on subsequent logins from the same browser
+- **Trusted device management**: Settings page shows all trusted devices with browser/OS name, IP geolocation (city, state, country), and date added; individual or bulk revocation
+- **Login page branding**: Subtle gradient accents, feature highlights (Automated Trading, AI Analysis, Grid Strategies), and polished card styling
+- **Public signup disabled**: Registration locked down; new users created by admin only via `POST /api/auth/register`
+
+### Infrastructure
+- **Route53 DNS**: A record `tradebot.romerotechsolutions.com` -> EC2 (54.226.70.55)
+- **EC2 security group**: Ports 80 and 443 opened for HTTP/HTTPS
+- **Nginx**: Installed and configured as reverse proxy to localhost:8100, with WebSocket upgrade support
+- **Certbot**: SSL certificate obtained and auto-renewal configured
+
 ## [v2.2.0] - 2026-02-16
 
 ### Added

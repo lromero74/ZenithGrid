@@ -5,16 +5,23 @@
  * Includes signup modal with terms of service agreement.
  */
 
-import { useState, FormEvent } from 'react'
-import { Activity, Lock, Mail, AlertCircle, User, X, CheckSquare, Square } from 'lucide-react'
+import { useState, useRef, useEffect, FormEvent } from 'react'
+import { Activity, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
-  const { login, signup } = useAuth()
+  const { login, signup, mfaPending, verifyMFA, cancelMFA } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+
+  // MFA verification state
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaError, setMfaError] = useState<string | null>(null)
+  const [isVerifyingMFA, setIsVerifyingMFA] = useState(false)
+  const [rememberDevice, setRememberDevice] = useState(false)
+  const mfaInputRef = useRef<HTMLInputElement>(null)
 
   // Signup modal state
   const [showSignup, setShowSignup] = useState(false)
@@ -26,6 +33,13 @@ export default function Login() {
   const [signupError, setSignupError] = useState<string | null>(null)
   const [isSigningUp, setIsSigningUp] = useState(false)
 
+  // Auto-focus MFA input when MFA step appears
+  useEffect(() => {
+    if (mfaPending && mfaInputRef.current) {
+      mfaInputRef.current.focus()
+    }
+  }, [mfaPending])
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -33,12 +47,34 @@ export default function Login() {
 
     try {
       await login(email, password)
-      // Login successful - AuthContext will update and App will show main content
+      // Login successful or MFA pending - AuthContext handles state
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleMFASubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setMfaError(null)
+    setIsVerifyingMFA(true)
+
+    try {
+      await verifyMFA(mfaCode, rememberDevice)
+      // MFA verified - AuthContext will set user and tokens
+    } catch (err) {
+      setMfaError(err instanceof Error ? err.message : 'Verification failed')
+      setMfaCode('')
+    } finally {
+      setIsVerifyingMFA(false)
+    }
+  }
+
+  const handleCancelMFA = () => {
+    cancelMFA()
+    setMfaCode('')
+    setMfaError(null)
   }
 
   const handleSignup = async (e: FormEvent) => {
@@ -84,103 +120,213 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center px-4 relative overflow-hidden">
+      {/* Subtle background gradient accents */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl" />
+      </div>
+
       {/* Logo and Title */}
-      <div className="flex items-center space-x-3 mb-8">
-        <Activity className="w-10 h-10 text-blue-500" />
-        <div>
-          <h1 className="text-3xl font-bold text-white">Zenith Grid</h1>
-          <p className="text-sm text-slate-400">Multi-Strategy Trading Platform</p>
+      <div className="flex flex-col items-center mb-8 relative">
+        <div className="flex items-center space-x-3 mb-3">
+          <div className="relative">
+            <Activity className="w-11 h-11 text-blue-500" />
+            <div className="absolute inset-0 w-11 h-11 bg-blue-500/20 rounded-full blur-md" />
+          </div>
+          <h1 className="text-4xl font-bold text-white tracking-tight">Zenith Grid</h1>
+        </div>
+        <p className="text-slate-400 text-sm tracking-wide">Multi-Strategy Trading Platform</p>
+        <div className="flex items-center space-x-6 mt-4 text-xs text-slate-500">
+          <span className="flex items-center space-x-1.5">
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-500/70" />
+            <span>Automated Trading</span>
+          </span>
+          <span className="flex items-center space-x-1.5">
+            <BarChart3 className="w-3.5 h-3.5 text-blue-500/70" />
+            <span>AI Analysis</span>
+          </span>
+          <span className="flex items-center space-x-1.5">
+            <Zap className="w-3.5 h-3.5 text-amber-500/70" />
+            <span>Grid Strategies</span>
+          </span>
         </div>
       </div>
 
       {/* Login Card */}
-      <div className="w-full max-w-md bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-8">
-        <h2 className="text-2xl font-semibold text-white mb-6 text-center">Sign In</h2>
-
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-            <p className="text-red-400 text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Email Field */}
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                autoFocus
-                placeholder="you@example.com"
-                className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+      <div className="w-full max-w-md bg-slate-800/80 backdrop-blur-sm rounded-xl shadow-2xl border border-slate-700/50 p-8 relative">
+        {mfaPending ? (
+          <>
+            {/* MFA Verification Step */}
+            <div className="flex items-center space-x-3 mb-2">
+              <Shield className="w-7 h-7 text-blue-400" />
+              <h2 className="text-2xl font-semibold text-white">Two-Factor Authentication</h2>
             </div>
-          </div>
+            <p className="text-slate-400 text-sm mb-6">
+              Enter the 6-digit code from your authenticator app.
+            </p>
 
-          {/* Password Field */}
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isLoading || !email || !password}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
-          >
-            {isLoading ? (
-              <span className="flex items-center justify-center space-x-2">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>Signing in...</span>
-              </span>
-            ) : (
-              'Sign In'
+            {/* MFA Error Message */}
+            {mfaError && (
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-3">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                <p className="text-red-400 text-sm">{mfaError}</p>
+              </div>
             )}
-          </button>
-        </form>
 
-        {/* Create Account Link */}
-        <div className="mt-6 text-center">
-          <p className="text-slate-400 text-sm">
-            Don't have an account?{' '}
-            <button
-              onClick={openSignupModal}
-              className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
-            >
-              Create Account
-            </button>
-          </p>
-        </div>
+            <form onSubmit={handleMFASubmit} className="space-y-6">
+              <div>
+                <label htmlFor="mfaCode" className="block text-sm font-medium text-slate-300 mb-2">
+                  Verification Code
+                </label>
+                <input
+                  ref={mfaInputRef}
+                  id="mfaCode"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  autoComplete="one-time-code"
+                  placeholder="000000"
+                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isVerifyingMFA || mfaCode.length !== 6}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+              >
+                {isVerifyingMFA ? (
+                  <span className="flex items-center justify-center space-x-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Verifying...</span>
+                  </span>
+                ) : (
+                  'Verify'
+                )}
+              </button>
+
+              {/* Remember Device Checkbox */}
+              <button
+                type="button"
+                onClick={() => setRememberDevice(!rememberDevice)}
+                className="w-full flex items-center space-x-3 text-left"
+              >
+                {rememberDevice ? (
+                  <CheckSquare className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                ) : (
+                  <Square className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                )}
+                <span className="text-sm text-slate-300">Remember this device for 30 days</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCancelMFA}
+                className="w-full flex items-center justify-center space-x-2 text-slate-400 hover:text-white transition-colors text-sm"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to login</span>
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            {/* Normal Login Step */}
+            <h2 className="text-2xl font-semibold text-white mb-6 text-center">Sign In</h2>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-3">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+
+            {/* Login Form */}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email Field */}
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    autoFocus
+                    placeholder="you@example.com"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading || !email || !password}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center space-x-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Signing in...</span>
+                  </span>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+            </form>
+
+            {/* Create Account Link */}
+            <div className="mt-6 text-center">
+              <p className="text-slate-400 text-sm">
+                Don't have an account?{' '}
+                <button
+                  onClick={openSignupModal}
+                  className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                >
+                  Create Account
+                </button>
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Footer */}

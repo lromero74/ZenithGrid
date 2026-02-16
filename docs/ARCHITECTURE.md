@@ -10,13 +10,15 @@
 | Frontend | React 18 + TypeScript + Vite + TailwindCSS |
 | State | React Context (app) + React Query (server) |
 | Charts | TradingView Lightweight Charts |
-| Auth | JWT (python-jose) + bcrypt |
+| Auth | JWT (python-jose) + bcrypt + TOTP MFA (pyotp) |
 | Encryption | Fernet (AES-128-CBC + HMAC-SHA256) |
-| Deployment | AWS EC2 (Amazon Linux 2023) + systemd (single service) |
+| Deployment | AWS EC2 (Amazon Linux 2023) + Nginx + Let's Encrypt SSL + systemd |
 | Exchange | Coinbase (HMAC/CDP), ByBit V5, MT5 Bridge |
 | AI | Anthropic Claude, OpenAI GPT, Google Gemini |
 
 The backend runs as a systemd service (`trading-bot-backend`) on port 8100.
+Nginx reverse-proxies HTTPS (port 443) to the backend, with Let's Encrypt SSL via Certbot.
+Public URL: `https://tradebot.romerotechsolutions.com`
 The frontend is a production build (`vite build`) served by the FastAPI backend — no separate frontend service needed.
 The service auto-starts on boot.
 
@@ -31,6 +33,7 @@ graph TB
     end
 
     subgraph "EC2 Instance"
+        NGX[Nginx<br/>:443 HTTPS<br/>Let's Encrypt SSL]
         BE[FastAPI Backend<br/>:8100<br/>serves frontend + API]
         DB[(SQLite<br/>trading.db)]
         BG[Background Tasks<br/>14 scheduled jobs]
@@ -46,7 +49,8 @@ graph TB
         MKT[Market Data<br/>Fear&Greed / Dominance]
     end
 
-    FE <-->|REST + WebSocket| BE
+    FE <-->|HTTPS| NGX
+    NGX <-->|reverse proxy| BE
     BE <--> DB
     BG --> DB
     BE <--> CB
@@ -315,6 +319,7 @@ erDiagram
     User ||--o{ AIProviderCredential : "has many"
     User ||--o{ BotTemplate : "has many"
     User ||--o{ UserSourceSubscription : "subscribes to"
+    User ||--o{ TrustedDevice : "trusts"
     User ||--o{ Settings : "has many"
 
     Account ||--o{ Bot : "has many"
@@ -341,7 +346,19 @@ erDiagram
         string email
         string hashed_password
         bool is_active
+        bool mfa_enabled
+        string totp_secret_encrypted
         bool terms_accepted
+    }
+
+    TrustedDevice {
+        int id PK
+        int user_id FK
+        string device_id
+        string device_name
+        string ip_address
+        string location
+        datetime expires_at
     }
 
     Account {
@@ -426,12 +443,28 @@ erDiagram
 ## Authentication Flow
 
 1. User submits email/password to `POST /api/auth/login`
-2. Backend verifies bcrypt hash, issues JWT access + refresh tokens
-3. Frontend stores tokens in `localStorage` via `AuthContext`
-4. Every API request includes `Authorization: Bearer {token}` via Axios interceptor
-5. Backend `get_current_user` dependency validates JWT on protected routes
-6. On 401 response, frontend attempts token refresh before logout; queues concurrent requests during refresh
-7. On first login, `RiskDisclaimer` modal requires terms acceptance
+2. Backend verifies bcrypt hash
+3. **If MFA enabled**: check for trusted device token
+   - If valid trusted device: skip MFA, issue tokens directly
+   - If no trusted device: return `mfa_required=true` with short-lived `mfa_token` (5-min JWT)
+   - User enters 6-digit TOTP code from authenticator app
+   - Optional: "Remember this device for 30 days" checkbox stores a `device_trust_token`
+   - Trusted device record saved in DB with device name, IP, and geolocation (city, state, country)
+4. **If MFA not enabled**: issue JWT access + refresh tokens directly
+5. Frontend stores tokens in `localStorage` via `AuthContext`
+6. Every API request includes `Authorization: Bearer {token}` via Axios interceptor
+7. Backend `get_current_user` dependency validates JWT on protected routes
+8. On 401 response, frontend attempts token refresh before logout; queues concurrent requests during refresh
+9. On first login, `RiskDisclaimer` modal requires terms acceptance
+
+### MFA Management
+
+- Users enable/disable TOTP MFA from Settings > Account Security
+- Setup: QR code (backend-generated PNG) + manual key entry + verification code
+- Disable: requires current password + TOTP code
+- Trusted devices: viewable and revocable from Settings (device name, location, date added)
+- TOTP secrets encrypted at rest with Fernet (AES-128-CBC + HMAC-SHA256)
+- Public signup disabled; new users created by admin only
 
 ## Multi-Tenancy Model
 

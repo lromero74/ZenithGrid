@@ -3,6 +3,7 @@
  *
  * Manages user authentication state, tokens, and login/logout functionality.
  * Provides automatic token refresh and persistent sessions via localStorage.
+ * Supports TOTP MFA (two-factor authentication) challenge flow.
  */
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
@@ -14,6 +15,7 @@ interface User {
   display_name: string | null
   is_active: boolean
   is_superuser: boolean
+  mfa_enabled: boolean
   created_at: string
   last_login_at: string | null
   terms_accepted_at: string | null  // NULL = must accept terms before accessing dashboard
@@ -23,15 +25,31 @@ interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  mfaPending: boolean  // True when MFA verification is needed
+  mfaToken: string | null  // Short-lived token for MFA verification
   login: (email: string, password: string) => Promise<void>
+  verifyMFA: (code: string, rememberDevice?: boolean) => Promise<void>
+  cancelMFA: () => void
   signup: (email: string, password: string, displayName?: string) => Promise<void>
   logout: () => void
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   getAccessToken: () => string | null
-  acceptTerms: () => Promise<void>  // Accept terms and update user state
+  acceptTerms: () => Promise<void>
+  updateUser: (user: User) => void  // Update user state (e.g., after MFA enable/disable)
 }
 
 interface LoginResponse {
+  access_token: string | null
+  refresh_token: string | null
+  token_type: string
+  expires_in: number | null
+  user: User | null
+  mfa_required: boolean
+  mfa_token: string | null
+  device_trust_token: string | null
+}
+
+interface TokenRefreshResponse {
   access_token: string
   refresh_token: string
   token_type: string
@@ -45,6 +63,7 @@ const STORAGE_KEYS = {
   REFRESH_TOKEN: 'auth_refresh_token',
   USER: 'auth_user',
   TOKEN_EXPIRY: 'auth_token_expiry',
+  DEVICE_TRUST_TOKEN: 'auth_device_trust_token',
 }
 
 // API base URL
@@ -55,12 +74,17 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+  mfaPending: false,
+  mfaToken: null,
   login: async () => {},
+  verifyMFA: async (_code: string, _rememberDevice?: boolean) => {},
+  cancelMFA: () => {},
   signup: async () => {},
   logout: () => {},
   changePassword: async () => {},
   getAccessToken: () => null,
   acceptTerms: async () => {},
+  updateUser: () => {},
 })
 
 // Helper to check if token is expired
@@ -75,6 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [tokenExpiry, setTokenExpiry] = useState<number | null>(null)
+  const [mfaPending, setMfaPending] = useState(false)
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
 
   // Get access token (returns null if not available or expired)
   const getAccessToken = useCallback((): string | null => {
@@ -107,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      const data: LoginResponse = await response.json()
+      const data: TokenRefreshResponse = await response.json()
 
       // Update stored tokens
       const expiryTime = Date.now() + data.expires_in * 1000
@@ -176,14 +202,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(refreshTimer)
   }, [tokenExpiry, user, refreshAccessToken])
 
-  // Login function
+  // Login function — may return MFA challenge instead of tokens
   const login = async (email: string, password: string): Promise<void> => {
+    // Include device trust token if available (to skip MFA on trusted devices)
+    const deviceTrustToken = localStorage.getItem(STORAGE_KEYS.DEVICE_TRUST_TOKEN)
+    const loginBody: Record<string, string> = { email, password }
+    if (deviceTrustToken) {
+      loginBody.device_trust_token = deviceTrustToken
+    }
+
     const response = await fetch(`${API_BASE}/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(loginBody),
     })
 
     if (!response.ok) {
@@ -193,18 +226,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data: LoginResponse = await response.json()
 
-    // Calculate and store token expiry
-    const expiryTime = Date.now() + data.expires_in * 1000
+    // Check if MFA is required
+    if (data.mfa_required && data.mfa_token) {
+      setMfaPending(true)
+      setMfaToken(data.mfa_token)
+      return  // Don't set user/tokens yet — need MFA verification
+    }
 
-    // Store in localStorage
-    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token)
-    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
-    localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString())
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user))
+    // No MFA — complete login
+    if (data.access_token && data.refresh_token && data.user && data.expires_in) {
+      const expiryTime = Date.now() + data.expires_in * 1000
 
-    setTokenExpiry(expiryTime)
-    setUser(data.user)
+      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token)
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
+      localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString())
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user))
+
+      setTokenExpiry(expiryTime)
+      setUser(data.user)
+    }
   }
+
+  // Verify MFA code to complete login
+  const verifyMFA = async (code: string, rememberDevice = false): Promise<void> => {
+    if (!mfaToken) {
+      throw new Error('No MFA session active')
+    }
+
+    const response = await fetch(`${API_BASE}/mfa/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        mfa_token: mfaToken,
+        totp_code: code,
+        remember_device: rememberDevice,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'MFA verification failed')
+    }
+
+    const data: LoginResponse = await response.json()
+
+    if (data.access_token && data.refresh_token && data.user && data.expires_in) {
+      const expiryTime = Date.now() + data.expires_in * 1000
+
+      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token)
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token)
+      localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, expiryTime.toString())
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user))
+
+      // Store device trust token if provided
+      if (data.device_trust_token) {
+        localStorage.setItem(STORAGE_KEYS.DEVICE_TRUST_TOKEN, data.device_trust_token)
+      }
+
+      setTokenExpiry(expiryTime)
+      setUser(data.user)
+    }
+
+    // Clear MFA state
+    setMfaPending(false)
+    setMfaToken(null)
+  }
+
+  // Cancel MFA (go back to login form)
+  const cancelMFA = useCallback(() => {
+    setMfaPending(false)
+    setMfaToken(null)
+  }, [])
 
   // Signup function
   const signup = async (email: string, password: string, displayName?: string): Promise<void> => {
@@ -221,7 +315,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(error.detail || 'Signup failed')
     }
 
-    const data: LoginResponse = await response.json()
+    const data: TokenRefreshResponse = await response.json()
 
     // Calculate and store token expiry
     const expiryTime = Date.now() + data.expires_in * 1000
@@ -247,6 +341,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear state
     setUser(null)
     setTokenExpiry(null)
+    setMfaPending(false)
+    setMfaToken(null)
 
     // Call logout endpoint (fire and forget)
     fetch(`${API_BASE}/logout`, { method: 'POST' }).catch(() => {})
@@ -310,16 +406,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
   }
 
+  // Update user state (e.g., after enabling/disabling MFA in settings)
+  const updateUser = useCallback((updatedUser: User) => {
+    setUser(updatedUser)
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
+  }, [])
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     isLoading,
+    mfaPending,
+    mfaToken,
     login,
+    verifyMFA,
+    cancelMFA,
     signup,
     logout,
     changePassword,
     getAccessToken,
     acceptTerms,
+    updateUser,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
