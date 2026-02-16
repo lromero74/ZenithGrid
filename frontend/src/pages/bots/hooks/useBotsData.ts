@@ -60,11 +60,12 @@ export function useBotsData({ selectedAccount, projectionTimeframe }: UseBotsDat
     queryFn: templatesApi.getAll,
   })
 
-  // Fetch available trading pairs from Coinbase
+  // Fetch available trading pairs for the selected account's exchange
   const { data: productsData } = useQuery({
-    queryKey: ['available-products'],
+    queryKey: ['available-products', selectedAccount?.id],
     queryFn: async () => {
-      const response = await api.get('/products')
+      const params = selectedAccount?.id ? { account_id: selectedAccount.id } : {}
+      const response = await api.get('/products', { params })
       return response.data
     },
     staleTime: 3600000, // Cache for 1 hour (product list rarely changes)

@@ -2,14 +2,29 @@ import type { ISeriesApi } from 'lightweight-charts'
 import type { Position } from '../../types'
 
 // Fee adjustment for profit targets
-// Coinbase Advanced Trade taker fee is ~0.6% (0.006)
+// Default taker fee rate — varies by exchange:
+//   Coinbase: ~0.6%, ByBit: ~0.1%, MT5: commission-based
 // To achieve X% NET profit after sell fees: gross_target = (1 + X%) / (1 - sell_fee)
-export const SELL_FEE_RATE = 0.006 // 0.6% Coinbase taker fee
+export const SELL_FEE_RATE = 0.006 // Default (Coinbase) taker fee
+
+// Exchange-specific fee rates
+export const EXCHANGE_FEE_RATES: Record<string, number> = {
+  coinbase: 0.006,
+  bybit: 0.001,
+  mt5_bridge: 0.0005,
+}
+
+export const getSellFeeRate = (exchange?: string): number =>
+  EXCHANGE_FEE_RATES[exchange || 'coinbase'] ?? SELL_FEE_RATE
 
 // Helper to calculate fee-adjusted profit target multiplier
-export const getFeeAdjustedProfitMultiplier = (desiredNetProfitPercent: number): number => {
+export const getFeeAdjustedProfitMultiplier = (
+  desiredNetProfitPercent: number,
+  exchange?: string
+): number => {
+  const feeRate = getSellFeeRate(exchange)
   const netMultiplier = 1 + (desiredNetProfitPercent / 100)
-  return netMultiplier / (1 - SELL_FEE_RATE)
+  return netMultiplier / (1 - feeRate)
 }
 
 // Get take profit percentage from position config (frozen at position open) or bot config

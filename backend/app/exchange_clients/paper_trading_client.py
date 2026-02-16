@@ -42,6 +42,7 @@ class PaperTradingClient(ExchangeClient):
         self.account = account
         self.db = db
         self.real_client = real_client  # For fetching real prices
+        self._order_cache: Dict[str, Dict[str, Any]] = {}
 
         # Load virtual balances
         if account.paper_balances:
@@ -178,8 +179,8 @@ class PaperTradingClient(ExchangeClient):
             f"at {current_price:.8f} {quote_currency} (order_id: {order_id})"
         )
 
-        # Return fake order response (matches Coinbase format)
-        return {
+        # Build order response (matches Coinbase format)
+        order_data = {
             "order_id": order_id,
             "success": True,
             "product_id": product_id,
@@ -191,33 +192,67 @@ class PaperTradingClient(ExchangeClient):
             "status": "filled",
             "filled_size": str(actual_size),
             "filled_value": str(actual_funds),
+            "average_filled_price": str(current_price),
+            "total_fees": "0",
             "created_time": datetime.utcnow().isoformat(),
             "done_time": datetime.utcnow().isoformat(),
             "done_reason": "filled",
-            "paper_trading": True
+            "paper_trading": True,
         }
 
-    async def cancel_order(self, order_id: str) -> bool:
+        # Cache for get_order() lookups (keep last 100 orders)
+        self._order_cache[order_id] = order_data
+        if len(self._order_cache) > 100:
+            oldest = next(iter(self._order_cache))
+            del self._order_cache[oldest]
+
+        return order_data
+
+    async def cancel_order(self, order_id: str) -> Dict[str, Any]:
         """
         Simulate order cancellation.
 
-        Paper trading orders are filled instantly, so cancellation always returns False
-        (order already filled).
+        Paper trading orders are filled instantly, so cancellation
+        always returns failure (order already filled).
         """
         logger.info(f"Paper trading: Cancel requested for {order_id} (already filled)")
-        return False  # Paper orders fill instantly, can't be cancelled
+        return {
+            "success": False,
+            "error": "Paper trading orders fill instantly and cannot be cancelled",
+        }
 
     async def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get order details (always returns filled status for paper orders).
+        Get order details with fill data for paper orders.
+
+        Returns cached fill data from when the order was placed.
+        If the order was placed in a previous session (cache lost
+        on restart), returns a minimal response — the order
+        reconciliation monitor will flag it for manual review.
         """
         if not order_id.startswith("paper-"):
             return None
 
+        # Return cached order data with full fill info
+        cached = self._order_cache.get(order_id)
+        if cached:
+            return cached
+
+        # Order was placed in a previous session (cache lost on restart)
+        # Return status=filled but zero fill amounts so the executor
+        # records it and the reconciliation monitor can fix it later
+        logger.warning(
+            f"Paper order {order_id} not in cache (placed before "
+            f"restart?) — returning zero fill amounts"
+        )
         return {
             "order_id": order_id,
             "status": "filled",
-            "paper_trading": True
+            "filled_size": "0",
+            "filled_value": "0",
+            "average_filled_price": "0",
+            "total_fees": "0",
+            "paper_trading": True,
         }
 
     async def get_products(self) -> List[Dict[str, Any]]:
@@ -498,17 +533,33 @@ class PaperTradingClient(ExchangeClient):
         size: Optional[str] = None,
         funds: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Create market order (wrapper around place_order)."""
+        """Create market order (wrapper around place_order).
+
+        Returns response in the standard envelope format expected
+        by buy_executor and sell_executor:
+        {"success": True, "success_response": {"order_id": ...}, ...}
+        """
         size_float = float(size) if size else None
         funds_float = float(funds) if funds else None
 
-        return await self.place_order(
+        raw = await self.place_order(
             product_id=product_id,
             side=side.lower(),
             order_type="market",
             size=size_float,
-            funds=funds_float
+            funds=funds_float,
         )
+
+        # Wrap in standard envelope for trading engine compatibility
+        return {
+            "success": True,
+            "success_response": {"order_id": raw["order_id"]},
+            "order_id": raw["order_id"],
+            "filled_size": raw.get("filled_size", "0"),
+            "filled_value": raw.get("filled_value", "0"),
+            "average_filled_price": raw.get("price", "0"),
+            "paper_trading": True,
+        }
 
     async def create_limit_order(
         self,

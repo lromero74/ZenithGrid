@@ -15,7 +15,7 @@ export function useValidation({
   setValidationErrors,
   portfolio
 }: UseValidationProps) {
-  // Validate bot configuration against Coinbase minimum order sizes
+  // Validate bot configuration against exchange minimum order sizes
   const validateBotConfig = useCallback(async () => {
     // Only validate if we have products and strategy config
     if (formData.product_ids.length === 0 || !formData.strategy_config) {
@@ -64,9 +64,9 @@ export function useValidation({
     const hasBtcPairs = formData.product_ids.some(p => p.endsWith('-BTC'))
     const hasUsdPairs = formData.product_ids.some(p => p.endsWith('-USD') || p.endsWith('-USDC') || p.endsWith('-USDT'))
 
-    // Exchange minimums
-    const BTC_MINIMUM = 0.0001  // Coinbase minimum for BTC pairs
-    const USD_MINIMUM = 1.0     // Coinbase minimum for USD pairs (roughly)
+    // Exchange minimums (conservative defaults — actual limits vary by exchange)
+    const BTC_MINIMUM = 0.0001  // Minimum for BTC pairs
+    const USD_MINIMUM = 1.0     // Minimum for USD pairs
 
     if (portfolio) {
       // Use balance_breakdown.btc.total which is the true aggregate (free + in positions)
@@ -81,7 +81,7 @@ export function useValidation({
           if (calculatedBtc < BTC_MINIMUM) {
             errors.push({
               field: 'base_order_value',
-              message: `Base Order Value (${baseOrderPct}%) calculates to ${calculatedBtc.toFixed(8)} BTC, which is below Coinbase's minimum of ${BTC_MINIMUM} BTC`,
+              message: `Base Order Value (${baseOrderPct}%) calculates to ${calculatedBtc.toFixed(8)} BTC, which is below the exchange minimum of ${BTC_MINIMUM} BTC`,
               calculated_value: calculatedBtc,
               minimum_required: BTC_MINIMUM
             })
@@ -92,7 +92,7 @@ export function useValidation({
           if (calculatedUsd < USD_MINIMUM) {
             errors.push({
               field: 'base_order_value',
-              message: `Base Order Value (${baseOrderPct}%) calculates to $${calculatedUsd.toFixed(2)}, which is below Coinbase's minimum of $${USD_MINIMUM}`,
+              message: `Base Order Value (${baseOrderPct}%) calculates to $${calculatedUsd.toFixed(2)}, which is below the exchange minimum of $${USD_MINIMUM}`,
               calculated_value: calculatedUsd,
               minimum_required: USD_MINIMUM
             })
@@ -108,7 +108,7 @@ export function useValidation({
           if (calculatedBtc < BTC_MINIMUM) {
             errors.push({
               field: 'dca_order_value',
-              message: `DCA Order Value (${dcaOrderPct}%) calculates to ${calculatedBtc.toFixed(8)} BTC, which is below Coinbase's minimum of ${BTC_MINIMUM} BTC`,
+              message: `DCA Order Value (${dcaOrderPct}%) calculates to ${calculatedBtc.toFixed(8)} BTC, which is below the exchange minimum of ${BTC_MINIMUM} BTC`,
               calculated_value: calculatedBtc,
               minimum_required: BTC_MINIMUM
             })
@@ -119,7 +119,7 @@ export function useValidation({
           if (calculatedUsd < USD_MINIMUM) {
             errors.push({
               field: 'dca_order_value',
-              message: `DCA Order Value (${dcaOrderPct}%) calculates to $${calculatedUsd.toFixed(2)}, which is below Coinbase's minimum of $${USD_MINIMUM}`,
+              message: `DCA Order Value (${dcaOrderPct}%) calculates to $${calculatedUsd.toFixed(2)}, which is below the exchange minimum of $${USD_MINIMUM}`,
               calculated_value: calculatedUsd,
               minimum_required: USD_MINIMUM
             })

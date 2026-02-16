@@ -95,7 +95,7 @@ async def get_bidirectional_reservations(
     Reservations are from bidirectional DCA bots that lock capital for both long and short sides.
     """
     from app.services.budget_calculator import calculate_available_usd, calculate_available_btc
-    from app.exchange_clients.factory import create_exchange_client
+    from app.services.exchange_service import get_exchange_client_for_account
     from app.models import Account
     from sqlalchemy import select
 
@@ -112,7 +112,9 @@ async def get_bidirectional_reservations(
             raise HTTPException(status_code=404, detail=f"Account {account_id} not found or not accessible")
 
         # Get exchange client for this account
-        exchange = await create_exchange_client(db, account_id)
+        exchange = await get_exchange_client_for_account(db, account_id)
+        if not exchange:
+            raise HTTPException(status_code=400, detail="No exchange client for account")
 
         # Get raw balances
         balances = await exchange.get_account()

@@ -1,7 +1,7 @@
 {
   "project": "ZenithGrid",
-  "version": "v1.31.13",
-  "updated": "2026-02-15",
+  "version": "v2.0.0",
+  "updated": "2026-02-16",
   "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
   "stack": {
@@ -52,6 +52,7 @@
       { "file": "routers/system_router.py", "prefix": "/api", "purpose": "Health check, dashboard stats, monitor control, system status" },
       { "file": "routers/templates.py", "prefix": "/api/templates", "purpose": "Bot template CRUD" },
       { "file": "routers/trading_router.py", "prefix": "/api/trading", "purpose": "Manual buy/sell orders for portfolio management" },
+      { "file": "routers/prop_guard_router.py", "prefix": "/api/propguard", "purpose": "PropGuard safety monitoring: status, kill switch, reset, history" },
       { "file": "routers/auth_dependencies.py", "prefix": null, "purpose": "Shared authentication dependencies for protecting routes" }
     ],
 
@@ -107,7 +108,8 @@
       { "name": "ContentSource", "table": "content_sources", "key_fields": ["id", "source_key", "name", "source_type", "url", "category"] },
       { "name": "UserSourceSubscription", "table": "user_source_subscriptions", "key_fields": ["id", "user_id", "source_id", "is_subscribed"] },
       { "name": "AccountValueSnapshot", "table": "account_value_snapshots", "key_fields": ["id", "account_id", "timestamp", "btc_value", "usd_value"] },
-      { "name": "MetricSnapshot", "table": "metric_snapshots", "key_fields": ["id", "metric_type", "timestamp", "value_json"] }
+      { "name": "MetricSnapshot", "table": "metric_snapshots", "key_fields": ["id", "metric_type", "timestamp", "value_json"] },
+      { "name": "PropFirmState", "table": "prop_firm_state", "key_fields": ["id", "account_id", "initial_deposit", "current_equity", "is_killed", "kill_reason"] }
     ],
 
     "services": [
@@ -129,6 +131,7 @@
       { "file": "services/order_monitor.py", "purpose": "Checks pending limit orders and creates trades when filled", "type": "background" },
       { "file": "services/order_reconciliation_monitor.py", "purpose": "Detects and fixes positions with missing fill data", "type": "background" },
       { "file": "services/perps_monitor.py", "purpose": "Syncs perpetual futures positions with Coinbase INTX state", "type": "background" },
+      { "file": "services/prop_guard_monitor.py", "purpose": "Background equity monitoring for prop firm accounts every 30s", "type": "background" },
       { "file": "services/portfolio_conversion_service.py", "purpose": "Portfolio conversion with progress tracking", "type": "trading" },
       { "file": "services/season_detector.py", "purpose": "Market season detection using halving cycles and multiple indicators", "type": "analysis" },
       { "file": "services/shutdown_manager.py", "purpose": "Tracks in-flight operations for graceful shutdown", "type": "infrastructure" },
@@ -160,6 +163,12 @@
       "implementations": [
         { "file": "exchange_clients/coinbase_adapter.py", "purpose": "Wraps CoinbaseClient to implement ExchangeClient interface" },
         { "file": "exchange_clients/paper_trading_client.py", "purpose": "Simulated exchange client for paper trading" },
+        { "file": "exchange_clients/bybit_adapter.py", "purpose": "Wraps ByBitClient to implement ExchangeClient for ByBit V5 linear perps" },
+        { "file": "exchange_clients/bybit_client.py", "purpose": "Low-level pybit HTTP wrapper with product ID translation and async" },
+        { "file": "exchange_clients/bybit_ws.py", "purpose": "ByBit WebSocket manager for real-time position/order/wallet/ticker streams" },
+        { "file": "exchange_clients/mt5_bridge_client.py", "purpose": "ExchangeClient for FTMO MT5 EA bridge via HTTP JSON" },
+        { "file": "exchange_clients/prop_guard.py", "purpose": "PropGuard safety decorator wrapping any ExchangeClient with drawdown checks" },
+        { "file": "exchange_clients/prop_guard_state.py", "purpose": "Pure helper functions for drawdown calculations and daily reset logic" },
         { "file": "exchange_clients/dex_client.py", "purpose": "DEX trading client for on-chain swaps" },
         { "file": "exchange_clients/dex_constants.py", "purpose": "DEX contract addresses, router ABIs, chain configs" }
       ],

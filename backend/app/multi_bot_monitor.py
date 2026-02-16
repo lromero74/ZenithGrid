@@ -42,6 +42,19 @@ from app.utils.candle_utils import (
 
 logger = logging.getLogger(__name__)
 
+# Module-level reference to the active monitor instance (set in __init__)
+_active_monitor_instance: Optional["MultiBotMonitor"] = None
+
+
+def clear_monitor_exchange_cache(account_id: Optional[int] = None):
+    """Clear the monitor's exchange client cache (called when credentials change)."""
+    if _active_monitor_instance is None:
+        return
+    if account_id is not None:
+        _active_monitor_instance._exchange_cache.pop(account_id, None)
+    else:
+        _active_monitor_instance._exchange_cache.clear()
+
 
 async def filter_pairs_by_allowed_categories(
     db: AsyncSession,
@@ -139,6 +152,8 @@ class MultiBotMonitor:
             exchange: Optional fallback exchange client (for backwards compatibility)
             interval_seconds: How often to check signals (default: 60s)
         """
+        global _active_monitor_instance
+        _active_monitor_instance = self
         self._fallback_exchange = exchange  # Fallback for bots without account_id
         self.interval_seconds = interval_seconds
         self.running = False
@@ -146,6 +161,7 @@ class MultiBotMonitor:
 
         # Current exchange client (set per-bot in the monitoring loop)
         self._current_exchange: Optional[ExchangeClient] = None
+        self._current_account_id: Optional[int] = None
 
         # Initialize order monitor (will get exchange per-bot)
         self.order_monitor = None  # Initialized lazily when needed
@@ -261,8 +277,10 @@ class MultiBotMonitor:
         This dramatically reduces API calls since candles don't change until the next
         candle closes.
         """
-        # Use product_id + granularity as cache key
-        cache_key = f"{product_id}:{granularity}"
+        # Use account + product_id + granularity as cache key
+        # Account ID prevents cross-exchange cache collisions
+        acct = self._current_account_id or 0
+        cache_key = f"{acct}:{product_id}:{granularity}"
 
         # Check cache with per-timeframe TTL
         now = datetime.utcnow().timestamp()
@@ -326,8 +344,7 @@ class MultiBotMonitor:
                 product_id=product_id, start=start_time, end=end_time, granularity=granularity
             )
 
-            # Coinbase returns newest first, reverse to get oldest first
-            candles = list(reversed(candles))
+            # All exchange adapters now return candles oldest-first (chronological)
 
             # Gap-fill sparse candles (BTC pairs often have low volume)
             # This ensures indicators have continuous data like charting platforms
@@ -1684,6 +1701,7 @@ class MultiBotMonitor:
 
                                 # Get exchange client for this bot (per-user/per-account)
                                 self._current_exchange = await self.get_exchange_for_bot(db, bot)
+                                self._current_account_id = bot.account_id
                                 if not self._current_exchange:
                                     logger.warning(f"No exchange client for bot {bot.name} (account_id={bot.account_id})")
                                     continue

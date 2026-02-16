@@ -1,7 +1,8 @@
 """
-Order validation utilities for Coinbase API
+Order validation utilities for exchange APIs
 
 Ensures orders meet minimum size requirements before submission.
+Works with any ExchangeClient (Coinbase, ByBit, MT5, etc.).
 """
 
 import json
@@ -33,23 +34,34 @@ def _load_product_precision():
     return _PRODUCT_PRECISION
 
 
-# Common minimum order sizes for BTC pairs (fallback if API call fails)
-# Based on Coinbase documentation and empirical testing
+# Common minimum order sizes (fallback if API call fails)
+# Based on Coinbase/ByBit documentation and empirical testing
 DEFAULT_MINIMUMS = {
     "BTC": {
         "quote_min_size": "0.0001",  # 0.0001 BTC minimum (~$10 at $100k/BTC)
         "base_min_size": "0.00000001",  # 1 satoshi
     },
-    "USD": {"quote_min_size": "1.00", "base_min_size": "0.00000001"},  # $1 minimum
+    "USD": {
+        "quote_min_size": "1.00",
+        "base_min_size": "0.00000001",
+    },
+    "USDT": {
+        "quote_min_size": "10.00",  # ByBit min notional: 10 USDT
+        "base_min_size": "0.001",
+    },
+    "USDC": {
+        "quote_min_size": "10.00",
+        "base_min_size": "0.001",
+    },
 }
 
 
-async def get_product_minimums(coinbase_client, product_id: str) -> Dict[str, str]:
+async def get_product_minimums(exchange, product_id: str) -> Dict[str, str]:
     """
     Get minimum order sizes for a product
 
     Args:
-        coinbase_client: Coinbase API client
+        exchange: ExchangeClient instance (Coinbase, ByBit, etc.)
         product_id: Trading pair (e.g., "DASH-BTC")
 
     Returns:
@@ -62,12 +74,12 @@ async def get_product_minimums(coinbase_client, product_id: str) -> Dict[str, st
         return cached
 
     try:
-        # Load product precision from our JSON file (more reliable than Coinbase API)
+        # Load product precision from our JSON file (Coinbase-specific, fallback)
         precision_data = _load_product_precision()
         product_precision = precision_data.get(product_id, {})
 
-        # Fetch product details from Coinbase (for quote/base currency info)
-        product = await coinbase_client.get_product(product_id)
+        # Fetch product details from exchange (for quote/base currency info)
+        product = await exchange.get_product(product_id)
 
         # Use our precision table values (they're more reliable than Coinbase's API)
         minimums = {
@@ -75,12 +87,20 @@ async def get_product_minimums(coinbase_client, product_id: str) -> Dict[str, st
             "base_min_size": product.get("base_min_size", "0.00000001"),
             "quote_currency": product.get("quote_currency", "BTC"),
             "base_currency": product.get("base_currency", ""),
-            # CRITICAL: Use our precision table instead of Coinbase API (which returns None)
-            "quote_increment": product_precision.get("quote_increment", product.get("quote_increment", "0.00000001")),
-            "base_increment": product_precision.get("base_increment", product.get("base_increment", "0.00000001")),
+            # Use our precision table instead of exchange API (which may return None)
+            "quote_increment": product_precision.get(
+                "quote_increment", product.get("quote_increment", "0.00000001")
+            ),
+            "base_increment": product_precision.get(
+                "base_increment", product.get("base_increment", "0.00000001")
+            ),
         }
 
-        logger.info(f"Product {product_id} precision: base_increment={minimums['base_increment']}, quote_increment={minimums['quote_increment']}")
+        logger.info(
+            f"Product {product_id} precision: "
+            f"base_increment={minimums['base_increment']}, "
+            f"quote_increment={minimums['quote_increment']}"
+        )
 
         # Cache for 1 hour (product minimums rarely change)
         await api_cache.set(cache_key, minimums, ttl_seconds=3600)
@@ -96,13 +116,13 @@ async def get_product_minimums(coinbase_client, product_id: str) -> Dict[str, st
 
 
 async def validate_order_size(
-    coinbase_client, product_id: str, quote_amount: Optional[float] = None, base_amount: Optional[float] = None
+    exchange, product_id: str, quote_amount: Optional[float] = None, base_amount: Optional[float] = None
 ) -> Tuple[bool, Optional[str]]:
     """
     Validate if an order meets minimum size requirements
 
     Args:
-        coinbase_client: Coinbase API client
+        exchange: ExchangeClient instance (Coinbase, ByBit, etc.)
         product_id: Trading pair (e.g., "DASH-BTC")
         quote_amount: Amount of quote currency (BTC/USD)
         base_amount: Amount of base currency (DASH/ETH)
@@ -112,7 +132,7 @@ async def validate_order_size(
         - (True, None) if valid
         - (False, "error message") if invalid
     """
-    minimums = await get_product_minimums(coinbase_client, product_id)
+    minimums = await get_product_minimums(exchange, product_id)
 
     quote_min = Decimal(minimums["quote_min_size"])
     base_min = Decimal(minimums["base_min_size"])
@@ -124,7 +144,8 @@ async def validate_order_size(
         if quote_decimal < quote_min:
             return (
                 False,
-                f"Order size {quote_amount} {quote_currency} is below minimum {quote_min} {quote_currency} for {product_id}",
+                f"Order size {quote_amount} {quote_currency} is below "
+                f"minimum {quote_min} {quote_currency} for {product_id}",
             )
 
     # Validate base amount if provided
@@ -134,18 +155,19 @@ async def validate_order_size(
             base_currency = minimums["base_currency"]
             return (
                 False,
-                f"Order size {base_amount} {base_currency} is below minimum {base_min} {base_currency} for {product_id}",
+                f"Order size {base_amount} {base_currency} is below "
+                f"minimum {base_min} {base_currency} for {product_id}",
             )
 
     return (True, None)
 
 
-async def calculate_minimum_budget_percentage(coinbase_client, product_id: str, quote_balance: float) -> float:
+async def calculate_minimum_budget_percentage(exchange, product_id: str, quote_balance: float) -> float:
     """
     Calculate minimum budget percentage needed to meet order minimums
 
     Args:
-        coinbase_client: Coinbase API client
+        exchange: ExchangeClient instance (Coinbase, ByBit, etc.)
         product_id: Trading pair (e.g., "DASH-BTC")
         quote_balance: Available quote currency balance
 
@@ -155,7 +177,7 @@ async def calculate_minimum_budget_percentage(coinbase_client, product_id: str, 
     if quote_balance <= 0:
         return 100.0  # Cannot calculate if no balance
 
-    minimums = await get_product_minimums(coinbase_client, product_id)
+    minimums = await get_product_minimums(exchange, product_id)
     quote_min = Decimal(minimums["quote_min_size"])
 
     # Calculate what percentage of balance equals the minimum

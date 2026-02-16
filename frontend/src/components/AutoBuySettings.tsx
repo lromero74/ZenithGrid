@@ -120,7 +120,7 @@ export function AutoBuySettings({ accounts }: AutoBuySettingsProps) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <h2 className="text-xl font-semibold text-white mb-4">Auto-Buy BTC</h2>
-        <p className="text-slate-400">No CEX accounts available. Add a Coinbase account to use auto-buy.</p>
+        <p className="text-slate-400">No CEX accounts available. Add an exchange account to use auto-buy.</p>
       </div>
     )
   }

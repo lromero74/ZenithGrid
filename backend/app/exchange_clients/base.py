@@ -367,6 +367,31 @@ class ExchangeClient(ABC):
         """
         pass
 
+    async def edit_order(
+        self,
+        order_id: str,
+        price: Optional[str] = None,
+        size: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Edit an existing order's price or size.
+
+        Not all exchanges support this. Default raises NotImplementedError.
+        Callers should handle NotImplementedError by falling back to
+        cancel + new order.
+
+        Args:
+            order_id: Order to edit
+            price: New price (optional)
+            size: New size (optional)
+
+        Returns:
+            Edit response dict
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support edit_order"
+        )
+
     @abstractmethod
     async def list_orders(
         self,

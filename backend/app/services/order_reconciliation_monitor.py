@@ -3,7 +3,9 @@ Order Reconciliation Monitor Service
 
 Automatically detects and fixes positions with missing fill data.
 Runs as a background task to check for positions showing 0% filled
-but with orders that are actually filled on Coinbase.
+but with orders that are actually filled on the exchange.
+
+Exchange-agnostic: works with any ExchangeClient implementation.
 """
 
 import asyncio
@@ -13,7 +15,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
+from app.exchange_clients.base import ExchangeClient
 from app.models import Position, Trade
 
 logger = logging.getLogger(__name__)
@@ -22,9 +24,9 @@ logger = logging.getLogger(__name__)
 class OrderReconciliationMonitor:
     """Monitors and auto-fixes positions with missing fill data"""
 
-    def __init__(self, db: AsyncSession, coinbase_client: CoinbaseClient):
+    def __init__(self, db: AsyncSession, exchange: ExchangeClient):
         self.db = db
-        self.coinbase = coinbase_client
+        self.exchange = exchange
 
     async def check_and_fix_orphaned_positions(self):
         """
@@ -59,7 +61,7 @@ class OrderReconciliationMonitor:
             logger.error(f"Error checking orphaned positions: {e}")
 
     async def _reconcile_position(self, position: Position):
-        """Attempt to reconcile a single position by fetching fill data from Coinbase"""
+        """Attempt to reconcile a single position by fetching fill data from exchange"""
         try:
             # Find the initial trade record for this position
             trade_query = select(Trade).where(
@@ -86,8 +88,8 @@ class OrderReconciliationMonitor:
 
             logger.info(f"🔄 Position #{position.id}: Attempting auto-reconciliation for order {order_id}")
 
-            # Fetch order details from Coinbase
-            order_data = await self.coinbase.get_order(order_id)
+            # Fetch order details from exchange
+            order_data = await self.exchange.get_order(order_id)
 
             if not order_data:
                 logger.warning(f"Position #{position.id}: Could not fetch order data for {order_id}")
@@ -129,7 +131,7 @@ class OrderReconciliationMonitor:
 
             # Order has fills - reconcile the position!
             logger.info(
-                f"✅ Position #{position.id}: Auto-reconciling with Coinbase data - "
+                f"✅ Position #{position.id}: Auto-reconciling with exchange data - "
                 f"filled_size={filled_size}, filled_value={filled_value}, avg_price={avg_price}"
             )
 
@@ -159,9 +161,9 @@ class OrderReconciliationMonitor:
             await self.db.rollback()
 
 
-async def run_order_reconciliation_monitor(db: AsyncSession, coinbase_client: CoinbaseClient):
+async def run_order_reconciliation_monitor(db: AsyncSession, exchange: ExchangeClient):
     """Main loop for order reconciliation monitoring"""
-    monitor = OrderReconciliationMonitor(db, coinbase_client)
+    monitor = OrderReconciliationMonitor(db, exchange)
 
     while True:
         try:
@@ -175,20 +177,20 @@ async def run_order_reconciliation_monitor(db: AsyncSession, coinbase_client: Co
 
 class MissingOrderDetector:
     """
-    Detects orders that exist on Coinbase but are not recorded in our database.
+    Detects orders that exist on exchange but are not recorded in our database.
     Runs periodically to catch any orders that were placed but not committed due to errors.
     Enhanced to check both BUY and SELL orders, and recently closed positions.
     """
 
-    def __init__(self, db: AsyncSession, coinbase_client: CoinbaseClient):
+    def __init__(self, db: AsyncSession, exchange: ExchangeClient):
         self.db = db
-        self.coinbase = coinbase_client
+        self.exchange = exchange
         # Threshold for alerting (in BTC equivalent)
         self.alert_threshold_btc = 0.0001  # Alert if missing order is >= 0.0001 BTC
 
     async def check_for_missing_orders(self):
         """
-        Compare Coinbase orders with recorded trades for both open and recently closed positions.
+        Compare exchange orders with recorded trades for both open and recently closed positions.
         Alert if any orders are found that weren't recorded.
         Enhanced to check BOTH buy and sell orders.
         """
@@ -208,7 +210,7 @@ class MissingOrderDetector:
             if not positions:
                 return
 
-            # Group positions by product_id for efficient Coinbase queries
+            # Group positions by product_id for efficient exchange queries
             positions_by_product = {}
             for pos in positions:
                 if pos.product_id not in positions_by_product:
@@ -220,9 +222,6 @@ class MissingOrderDetector:
             stuck_pending_orders = []
 
             for product_id, product_positions in positions_by_product.items():
-                # Find the earliest position open date
-                earliest_open = min(p.opened_at for p in product_positions)
-
                 # Get all recorded order_ids for these positions from trades table
                 position_ids = [p.id for p in product_positions]
                 trade_query = select(Trade.order_id).where(
@@ -238,13 +237,11 @@ class MissingOrderDetector:
                 pending_result = await self.db.execute(pending_query)
                 pending_orders = {row[0]: row[1] for row in pending_result.fetchall() if row[0]}
 
-                # Get orders from Coinbase since earliest position opened
-                start_date = earliest_open.strftime("%Y-%m-%dT%H:%M:%SZ")
+                # Get filled orders from exchange for this product
                 try:
-                    coinbase_orders = await self.coinbase.list_orders(
+                    exchange_orders = await self.exchange.list_orders(
                         product_id=product_id,
                         order_status=["FILLED"],
-                        start_date=start_date,
                         limit=200,
                     )
                 except Exception as e:
@@ -252,7 +249,7 @@ class MissingOrderDetector:
                     continue
 
                 # Check for missing orders (both BUY and SELL)
-                for order in coinbase_orders.get("orders", []):
+                for order in exchange_orders:
                     order_id = order.get("order_id", "")
                     filled_size = float(order.get("filled_size", 0) or 0)
                     filled_value = float(order.get("filled_value", 0) or 0)
@@ -328,7 +325,7 @@ class MissingOrderDetector:
                 if stuck_pending_orders:
                     logger.warning(
                         f"\n  🔒 STUCK PENDING ORDERS: {len(stuck_pending_orders)} orders "
-                        f"filled on Coinbase but stuck with status='pending'"
+                        f"filled on exchange but stuck with status='pending'"
                     )
                     for order in stuck_pending_orders[:5]:  # Show first 5
                         logger.warning(
@@ -347,9 +344,9 @@ class MissingOrderDetector:
             logger.error(f"Error checking for missing orders: {e}")
 
 
-async def run_missing_order_detector(db: AsyncSession, coinbase_client: CoinbaseClient):
+async def run_missing_order_detector(db: AsyncSession, exchange: ExchangeClient):
     """Background task to detect missing orders every 5 minutes"""
-    detector = MissingOrderDetector(db, coinbase_client)
+    detector = MissingOrderDetector(db, exchange)
 
     # Wait 2 minutes after startup before first check
     await asyncio.sleep(120)

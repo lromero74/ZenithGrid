@@ -5,6 +5,63 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.0] - 2026-02-16
+
+### Added
+- **Multi-Exchange Architecture**: ByBit V5 (HyroTrader) and FTMO MT5 Bridge exchange adapters implementing the ExchangeClient interface — ZenithGrid is no longer Coinbase-only
+- **PropGuard Safety Middleware**: Real-time drawdown monitoring decorator that wraps any exchange client with pre-flight safety checks (daily/total drawdown limits, spread guard, volatility buffer, kill switch)
+- **ByBit WebSocket Manager**: Real-time position, order, wallet, and ticker streams via pybit for sub-second equity monitoring
+- **PropGuard Background Monitor**: Async service running every 30s to check all prop firm accounts, update equity state, and trigger kill switch on drawdown breach
+- **PropGuard API Endpoints**: GET status, POST reset kill switch, POST manual emergency kill, GET history (`/api/propguard/{account_id}/...`)
+- **PropGuard Status Widget**: Frontend dashboard card with live equity, color-coded daily/total drawdown progress bars, and manual kill/reset controls
+- **Prop firm badges** on account cards in Settings showing firm name (HyroTrader/FTMO)
+- **Database schema**: `prop_firm_state` table and 5 new columns on `accounts` (prop_firm, prop_firm_config, prop_daily_drawdown_pct, prop_total_drawdown_pct, prop_initial_deposit)
+- **Account creation UI**: Exchange dropdown (Coinbase/ByBit/MT5 Bridge) with conditional fields per exchange type, prop firm dropdown, drawdown configuration with input validation
+- **ByBit global rate limiter**: 100ms minimum spacing between ByBit API calls via async lock to prevent rate limit violations
+- Added `pybit>=5.8.0` dependency for ByBit V5 API integration
+
+### Changed
+- Exchange factory now accepts `exchange_name` parameter to route to ByBit/MT5 adapters (backwards-compatible, defaults to Coinbase)
+- Exchange service wraps clients with PropGuard decorator when `account.prop_firm` is set
+- ByBitAdapter wraps order responses in Coinbase-compatible `success_response` format for consistent parsing by buy/sell executors
+- ByBit `from_bybit_symbol()` maps USDT→USD so products appear as standard `-USD` pairs system-wide
+- ByBitAdapter `calculate_aggregate_btc_value()` and `calculate_aggregate_usd_value()` use `totalEquity` (includes unrealized PnL)
+- TradingClient buy/sell/get_balance now support USDT and USDC quote currencies alongside USD and BTC
+- Order validation parameter renamed from `coinbase_client` to `exchange` for exchange-agnostic clarity
+- Candle data reversal moved into each adapter's `get_candles()` — each adapter returns chronological (oldest-first) order
+- Multi-bot monitor candle cache now keyed by account_id to prevent cross-account data bleed
+- Missing order detector now checks all active accounts instead of only account_id=1
+- Order reconciliation monitor iterates all active accounts for startup reconciliation
+- Bot creation/update budget validation now uses `get_exchange_client_for_account()` instead of Coinbase-only factory calls
+- Grid order fill handler uses bot's `account_id` to get correct exchange client
+- Account creation validates exchange names, prop firm names, and bridge URLs (SSRF prevention)
+- ByBit API keys encrypted at rest during account creation and update
+- Exchange config changes trigger client cache invalidation (including monitor cache)
+- Indicator-based strategy removes hardcoded 0.0001 BTC minimum floor — exchange-specific minimums enforced by order_validation at execution time
+- ByBitAdapter `cancel_order()` falls back to order history when order not found in open orders
+- ByBitAdapter `list_products()` and `get_product()` return Coinbase-compatible field aliases (`base_currency_id`, `quote_currency_id`, `display_name`) and normalized `"online"` status
+- TradingView chart modal uses exchange-specific symbol prefix
+- Frontend `authFetch()` used for all account management API calls (update, delete, setDefault)
+- INTX perps section hidden for non-Coinbase accounts
+- Fee-adjusted profit multiplier accepts optional `exchange` parameter
+- Replaced Coinbase-specific error messages in buy/sell executors with exchange-agnostic wording
+
+### Fixed
+- **CRITICAL**: Infinite recursion in ByBit rate limiter — `_rate_limited_call()` was calling itself instead of `asyncio.to_thread()`
+- **CRITICAL**: Bot creation/update called `create_exchange_client(db, account_id)` with wrong signature — would crash for all exchanges
+- **CRITICAL**: ByBit buy orders treated as failures because buy_executor expected Coinbase's nested `success_response.order_id` format
+- **CRITICAL**: ByBit `get_order()` missing `total_fees` field — fee calculation defaulted to zero
+- **CRITICAL**: PropGuard safety blocks not detected by trading engine — now raise clear `PropGuard blocked:` errors
+- **CRITICAL**: ByBit `cancel_all_orders()` failed for linear category — now passes `settleCoin="USDT"` as required by ByBit V5 API
+- Fixed wrong Trade model field names in `execute_sell_short()` and `execute_buy_close_short()` — used nonexistent `size`/`filled_value`/`commission`/`executed_at` instead of `base_amount`/`quote_amount`/`timestamp`
+- Fixed `sell_executor.execute_sell_short()` calling `validate_order_size()` without `await` and with wrong argument order
+- Fixed grid order fill handler querying random active account instead of using bot's `account_id`
+- Fixed limit order monitor `list_orders()` expecting dict wrapper instead of direct list return
+- Fixed missing order detector removing unsupported `start_date` kwarg from `list_orders()` call
+- Added USDT/USDC to order validation `DEFAULT_MINIMUMS` fallback (10 USDT min notional)
+- Added `quote_min_size` (from ByBit `minNotionalValue`) to ByBitAdapter product responses
+- Removed unused variable warnings from sell_executor and order_reconciliation_monitor
+
 ## [v1.31.13] - 2026-02-15
 
 ### Changed

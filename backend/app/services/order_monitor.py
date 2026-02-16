@@ -13,8 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.encryption import decrypt_value, is_encrypted
-from app.exchange_clients.factory import create_exchange_client
 from app.models import Bot, PendingOrder, Position, Trade
 
 logger = logging.getLogger(__name__)
@@ -212,26 +210,14 @@ class OrderMonitor:
             logger.info("   Grid trading order filled - handling grid logic")
 
             try:
-                # Get exchange client for this bot
-                from app.models import Account
+                # Get exchange client for this bot's account
+                from app.services.exchange_service import get_exchange_client_for_account
                 from app.services.grid_trading_service import handle_grid_order_fill
-                account_query = select(Account).where(
-                    Account.type == "cex",
-                    Account.is_active.is_(True)
-                ).order_by(Account.is_default.desc())
-                account_result = await db.execute(account_query)
-                account = account_result.scalar_one_or_none()
+                exchange_client = await get_exchange_client_for_account(
+                    db, bot.account_id
+                )
 
-                if account:
-                    private_key = account.api_private_key
-                    if private_key and is_encrypted(private_key):
-                        private_key = decrypt_value(private_key)
-                    exchange_client = create_exchange_client(
-                        exchange_type="cex",
-                        coinbase_key_name=account.api_key_name,
-                        coinbase_private_key=private_key,
-                    )
-
+                if exchange_client:
                     # Handle grid order fill (may place opposite order)
                     await handle_grid_order_fill(
                         pending_order=pending_order,

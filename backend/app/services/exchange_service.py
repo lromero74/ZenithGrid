@@ -26,11 +26,25 @@ _exchange_client_cache: dict[int, ExchangeClient] = {}
 
 
 def clear_exchange_client_cache(account_id: Optional[int] = None):
-    """Clear cached exchange clients (call when credentials change)"""
+    """Clear cached exchange clients (call when credentials change or account deleted)."""
     if account_id is not None:
-        _exchange_client_cache.pop(account_id, None)
+        client = _exchange_client_cache.pop(account_id, None)
+        if client and hasattr(client, 'close'):
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(client.close())
+            except RuntimeError:
+                pass  # No event loop — client will be GC'd
     else:
         _exchange_client_cache.clear()
+
+    # Also clear the monitor's per-account exchange cache
+    try:
+        from app.multi_bot_monitor import clear_monitor_exchange_cache
+        clear_monitor_exchange_cache(account_id)
+    except ImportError:
+        pass
 
 
 async def get_exchange_client_for_account(
@@ -71,13 +85,15 @@ async def get_exchange_client_for_account(
     if account.is_paper_trading:
         logger.info(f"Creating paper trading client for account {account_id}")
 
-        # Get a real CEX account for price data
+        # Get a real CEX account for price data (scoped to same user)
         real_client = None
         try:
             cex_result = await db.execute(
                 select(Account).where(
                     Account.type == "cex",
+                    Account.user_id == account.user_id,
                     Account.is_active.is_(True),
+                    Account.is_paper_trading.is_(False),
                     Account.api_key_name.isnot(None),
                     Account.api_private_key.isnot(None)
                 ).order_by(Account.is_default.desc(), Account.created_at)
@@ -102,19 +118,61 @@ async def get_exchange_client_for_account(
         return client
 
     # Create exchange client based on account type
+    client = None
     if account.type == "cex":
-        if not account.api_key_name or not account.api_private_key:
-            logger.warning(f"Account {account_id} missing API credentials")
-            return None
+        exchange_name = account.exchange or "coinbase"
 
-        pk = account.api_private_key
-        if is_encrypted(pk):
-            pk = decrypt_value(pk)
-        client = create_exchange_client(
-            exchange_type="cex",
-            coinbase_key_name=account.api_key_name,
-            coinbase_private_key=pk,
-        )
+        if exchange_name == "bybit":
+            # ByBit V5 (HyroTrader / prop firms)
+            if not account.api_key_name or not account.api_private_key:
+                logger.warning(f"Account {account_id} missing ByBit API credentials")
+                return None
+            ak = account.api_key_name
+            if is_encrypted(ak):
+                ak = decrypt_value(ak)
+            sk = account.api_private_key
+            if is_encrypted(sk):
+                sk = decrypt_value(sk)
+            # Testnet flag from prop_firm_config
+            config = account.prop_firm_config or {}
+            testnet = config.get("testnet", False)
+            client = create_exchange_client(
+                exchange_type="cex",
+                exchange_name="bybit",
+                bybit_api_key=ak,
+                bybit_api_secret=sk,
+                bybit_testnet=testnet,
+            )
+
+        elif exchange_name == "mt5_bridge":
+            # MT5 Bridge (FTMO)
+            config = account.prop_firm_config or {}
+            bridge_url = config.get("bridge_url")
+            if not bridge_url:
+                logger.warning(f"Account {account_id} missing MT5 bridge_url")
+                return None
+            client = create_exchange_client(
+                exchange_type="cex",
+                exchange_name="mt5_bridge",
+                mt5_bridge_url=bridge_url,
+                mt5_magic_number=config.get("magic_number", 12345),
+                mt5_account_balance=account.prop_initial_deposit or 100000.0,
+            )
+
+        else:
+            # Default: Coinbase
+            if not account.api_key_name or not account.api_private_key:
+                logger.warning(f"Account {account_id} missing API credentials")
+                return None
+            pk = account.api_private_key
+            if is_encrypted(pk):
+                pk = decrypt_value(pk)
+            client = create_exchange_client(
+                exchange_type="cex",
+                coinbase_key_name=account.api_key_name,
+                coinbase_private_key=pk,
+            )
+
     elif account.type == "dex":
         if not account.wallet_private_key or not account.rpc_url:
             logger.warning(f"Account {account_id} missing DEX credentials")
@@ -133,6 +191,33 @@ async def get_exchange_client_for_account(
     else:
         logger.error(f"Unknown account type: {account.type}")
         return None
+
+    # Wrap with PropGuard if this is a prop firm account
+    if client and account.prop_firm:
+        from app.database import async_session_maker
+        from app.exchange_clients.prop_guard import PropGuardClient
+        from app.exchange_clients.bybit_ws import get_ws_manager
+
+        ws_state = None
+        ws_mgr = get_ws_manager(account_id)
+        if ws_mgr:
+            ws_state = ws_mgr.state
+
+        client = PropGuardClient(
+            inner=client,
+            account_id=account_id,
+            db_session_maker=async_session_maker,
+            daily_drawdown_pct=account.prop_daily_drawdown_pct or 4.5,
+            total_drawdown_pct=account.prop_total_drawdown_pct or 9.0,
+            initial_deposit=account.prop_initial_deposit or 100000.0,
+            ws_state=ws_state,
+        )
+        logger.info(
+            f"PropGuard wrapped account {account_id} "
+            f"(firm={account.prop_firm}, "
+            f"daily_dd={account.prop_daily_drawdown_pct}%, "
+            f"total_dd={account.prop_total_drawdown_pct}%)"
+        )
 
     # Cache the client
     if client and use_cache:

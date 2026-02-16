@@ -74,7 +74,7 @@ def calculate_expected_position_budget(config: dict, aggregate_value: float) -> 
     if base_order_type in ["fixed", "fixed_btc"] and max_safety_orders > 0:
         total_expected = 0.0
 
-        # Get base order size (minimum 0.0001 BTC for Coinbase)
+        # Get base order size
         # IMPORTANT: Match the logic in calculate_base_order_size() - prioritize base_order_btc over base_order_fixed
         base_order_btc = config.get("base_order_btc", 0.0001)
         base_order_fixed = config.get("base_order_fixed", 0.001)
@@ -84,8 +84,7 @@ def calculate_expected_position_budget(config: dict, aggregate_value: float) -> 
             base_order_size = base_order_btc
         else:
             base_order_size = base_order_fixed
-
-        base_order_size = max(base_order_size, 0.0001)  # Enforce Coinbase minimum
+        # Exchange-specific minimums are enforced by order_validation at execution time
         total_expected += base_order_size
 
         # Calculate safety orders with volume scaling

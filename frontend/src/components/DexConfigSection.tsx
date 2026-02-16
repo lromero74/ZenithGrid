@@ -258,7 +258,7 @@ export default function DexConfigSection({ config, onChange }: DexConfigSectionP
       {/* CEX Info */}
       {!isDex && (
         <div className="p-3 bg-slate-700/50 rounded border border-slate-600 text-xs text-slate-400">
-          Using Coinbase Pro API credentials configured in backend settings.
+          Using exchange API credentials configured in your account settings.
         </div>
       )}
     </div>

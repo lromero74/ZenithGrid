@@ -1,12 +1,13 @@
 /**
  * Add Account Modal
  *
- * Modal for adding new CEX (Coinbase) or DEX (MetaMask) accounts.
- * Collects appropriate credentials based on account type.
+ * Modal for adding new CEX (Coinbase, ByBit, MT5 Bridge) or DEX accounts.
+ * Collects appropriate credentials based on account type and exchange.
+ * Supports prop firm configuration for ByBit (HyroTrader) and MT5 (FTMO).
  */
 
-import { useState } from 'react'
-import { X, Building2, Wallet, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { X, Building2, Wallet, Eye, EyeOff, AlertCircle, Shield } from 'lucide-react'
 import { useAccount, CreateAccountDto, SUPPORTED_CHAINS } from '../contexts/AccountContext'
 
 interface AddAccountModalProps {
@@ -34,6 +35,19 @@ interface FormData {
   rpc_url: string
   wallet_type: string
 
+  // ByBit-specific
+  bybit_testnet: boolean
+
+  // MT5 Bridge-specific
+  mt5_bridge_url: string
+  mt5_magic_number: string
+
+  // Prop firm fields
+  prop_firm: string
+  prop_daily_drawdown_pct: string
+  prop_total_drawdown_pct: string
+  prop_initial_deposit: string
+
   // Flags
   is_default: boolean
 }
@@ -44,13 +58,21 @@ const initialFormData: FormData = {
   exchange: 'coinbase',
   api_key_name: '',
   api_private_key: '',
-  chain_id: 1, // Ethereum mainnet
+  chain_id: 1,
   wallet_address: '',
   wallet_private_key: '',
   rpc_url: '',
   wallet_type: 'metamask',
+  bybit_testnet: false,
+  mt5_bridge_url: '',
+  mt5_magic_number: '12345',
+  prop_firm: '',
+  prop_daily_drawdown_pct: '4.5',
+  prop_total_drawdown_pct: '9.0',
+  prop_initial_deposit: '100000',
   is_default: false,
 }
+
 
 export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalProps) {
   const { addAccount, accounts } = useAccount()
@@ -68,13 +90,39 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
       const accountData: CreateAccountDto = {
         name: formData.name,
         type: formData.type,
-        is_default: formData.is_default || accounts.length === 0, // First account is default
+        is_default: formData.is_default || accounts.length === 0,
       }
 
       if (formData.type === 'cex') {
         accountData.exchange = formData.exchange
-        accountData.api_key_name = formData.api_key_name
-        accountData.api_private_key = formData.api_private_key
+
+        if (formData.exchange === 'bybit') {
+          accountData.api_key_name = formData.api_key_name
+          accountData.api_private_key = formData.api_private_key
+          // Only set prop firm if user selected one (ByBit can be standalone)
+          if (formData.prop_firm) {
+            accountData.prop_firm = formData.prop_firm
+          }
+          accountData.prop_firm_config = {
+            testnet: formData.bybit_testnet,
+          }
+        } else if (formData.exchange === 'mt5_bridge') {
+          accountData.prop_firm = 'ftmo'
+          accountData.prop_firm_config = {
+            bridge_url: formData.mt5_bridge_url,
+            magic_number: parseInt(formData.mt5_magic_number) || 12345,
+          }
+        } else {
+          accountData.api_key_name = formData.api_key_name
+          accountData.api_private_key = formData.api_private_key
+        }
+
+        // Prop firm drawdown settings (only when a prop firm is selected)
+        if (formData.prop_firm || formData.exchange === 'mt5_bridge') {
+          accountData.prop_daily_drawdown_pct = parseFloat(formData.prop_daily_drawdown_pct) || 4.5
+          accountData.prop_total_drawdown_pct = parseFloat(formData.prop_total_drawdown_pct) || 9.0
+          accountData.prop_initial_deposit = parseFloat(formData.prop_initial_deposit) || 100000
+        }
       } else {
         accountData.chain_id = formData.chain_id
         accountData.wallet_address = formData.wallet_address
@@ -93,6 +141,15 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
       setIsSubmitting(false)
     }
   }
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
@@ -130,7 +187,7 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
                   formData.type === 'cex' ? 'text-blue-400' : 'text-slate-400'
                 }`} />
                 <span className="font-medium text-white">CEX</span>
-                <span className="text-xs text-slate-400 mt-1">Coinbase</span>
+                <span className="text-xs text-slate-400 mt-1">Coinbase / ByBit / MT5</span>
               </button>
               <button
                 type="button"
@@ -159,7 +216,11 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder={formData.type === 'cex' ? 'My Coinbase Account' : 'My MetaMask Wallet'}
+              placeholder={
+                formData.exchange === 'bybit' ? 'My ByBit Account' :
+                formData.exchange === 'mt5_bridge' ? 'My FTMO Account' :
+                formData.type === 'cex' ? 'My Coinbase Account' : 'My MetaMask Wallet'
+              }
               className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none"
               required
             />
@@ -178,58 +239,187 @@ export function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccountModalP
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
                 >
                   <option value="coinbase">Coinbase</option>
+                  <option value="bybit">ByBit (HyroTrader)</option>
+                  <option value="mt5_bridge">MT5 Bridge (FTMO)</option>
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  API Key Name *
-                </label>
-                <input
-                  type="text"
-                  value={formData.api_key_name}
-                  onChange={(e) => setFormData({ ...formData, api_key_name: e.target.value })}
-                  placeholder="organizations/xxx/apiKeys/xxx"
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none font-mono text-sm"
-                  required
-                />
-                <p className="mt-1 text-xs text-slate-400">
-                  From Coinbase CDP API Key settings
-                </p>
-              </div>
+              {/* Coinbase / ByBit: API Key fields */}
+              {(formData.exchange === 'coinbase' || formData.exchange === 'bybit') && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      {formData.exchange === 'bybit' ? 'API Key' : 'API Key Name'} *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.api_key_name}
+                      onChange={(e) => setFormData({ ...formData, api_key_name: e.target.value })}
+                      placeholder={formData.exchange === 'bybit' ? 'ByBit API key' : 'organizations/xxx/apiKeys/xxx'}
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none font-mono text-sm"
+                      required
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  API Private Key *
-                </label>
-                <div className="relative">
-                  <textarea
-                    value={formData.api_private_key}
-                    onChange={(e) => setFormData({ ...formData, api_private_key: e.target.value })}
-                    placeholder="-----BEGIN EC PRIVATE KEY-----"
-                    rows={4}
-                    className={`w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none font-mono text-xs ${
-                      !showPrivateKey ? 'text-security-disc' : ''
-                    }`}
-                    style={{ WebkitTextSecurity: showPrivateKey ? 'none' : 'disc' } as React.CSSProperties}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPrivateKey(!showPrivateKey)}
-                    className="absolute right-2 top-2 p-1 hover:bg-slate-600 rounded"
-                  >
-                    {showPrivateKey ? (
-                      <EyeOff className="w-4 h-4 text-slate-400" />
-                    ) : (
-                      <Eye className="w-4 h-4 text-slate-400" />
-                    )}
-                  </button>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      {formData.exchange === 'bybit' ? 'API Secret' : 'API Private Key'} *
+                    </label>
+                    <div className="relative">
+                      <textarea
+                        value={formData.api_private_key}
+                        onChange={(e) => setFormData({ ...formData, api_private_key: e.target.value })}
+                        placeholder={formData.exchange === 'bybit' ? 'ByBit API secret' : '-----BEGIN EC PRIVATE KEY-----'}
+                        rows={formData.exchange === 'bybit' ? 2 : 4}
+                        className={`w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none font-mono text-xs ${
+                          !showPrivateKey ? 'text-security-disc' : ''
+                        }`}
+                        style={{ WebkitTextSecurity: showPrivateKey ? 'none' : 'disc' } as React.CSSProperties}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPrivateKey(!showPrivateKey)}
+                        className="absolute right-2 top-2 p-1 hover:bg-slate-600 rounded"
+                      >
+                        {showPrivateKey ? (
+                          <EyeOff className="w-4 h-4 text-slate-400" />
+                        ) : (
+                          <Eye className="w-4 h-4 text-slate-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ByBit testnet toggle */}
+                  {formData.exchange === 'bybit' && (
+                    <>
+                      <label className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.bybit_testnet}
+                          onChange={(e) => setFormData({ ...formData, bybit_testnet: e.target.checked })}
+                          className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-slate-300">Use ByBit Testnet</span>
+                      </label>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                          Prop Firm (optional)
+                        </label>
+                        <select
+                          value={formData.prop_firm}
+                          onChange={(e) => setFormData({ ...formData, prop_firm: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-blue-500 focus:outline-none text-sm"
+                        >
+                          <option value="">None (standalone ByBit)</option>
+                          <option value="hyrotrader">HyroTrader</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* MT5 Bridge fields */}
+              {formData.exchange === 'mt5_bridge' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Bridge URL *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.mt5_bridge_url}
+                      onChange={(e) => setFormData({ ...formData, mt5_bridge_url: e.target.value })}
+                      placeholder="http://your-vps-ip:8080"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none font-mono text-sm"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      URL of your MT5 EA bridge running on a Windows VPS
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Magic Number
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.mt5_magic_number}
+                      onChange={(e) => setFormData({ ...formData, mt5_magic_number: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      MT5 magic number to identify orders from this bot
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* PropGuard Settings (shown when prop firm selected or MT5) */}
+              {(formData.prop_firm || formData.exchange === 'mt5_bridge') && (
+                <div className="border border-amber-700/50 rounded-lg p-4 bg-amber-900/10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield className="w-5 h-5 text-amber-400" />
+                    <h3 className="text-sm font-semibold text-amber-300">PropGuard Safety Settings</h3>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1">
+                        Initial Deposit (USD)
+                      </label>
+                      <input
+                        type="number"
+                        step="1000"
+                        min="1"
+                        max="100000000"
+                        value={formData.prop_initial_deposit}
+                        onChange={(e) => setFormData({ ...formData, prop_initial_deposit: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-amber-500 focus:outline-none text-sm"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1">
+                          Daily Drawdown Limit (%)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.1"
+                          max="100"
+                          value={formData.prop_daily_drawdown_pct}
+                          onChange={(e) => setFormData({ ...formData, prop_daily_drawdown_pct: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-amber-500 focus:outline-none text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1">
+                          Total Drawdown Limit (%)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.1"
+                          max="100"
+                          value={formData.prop_total_drawdown_pct}
+                          onChange={(e) => setFormData({ ...formData, prop_total_drawdown_pct: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-amber-500 focus:outline-none text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-amber-400/70">
+                      PropGuard will automatically close all positions and block new orders if drawdown limits are breached.
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-1 text-xs text-slate-400">
-                  Private key from CDP API Key download
-                </p>
-              </div>
+              )}
             </>
           )}
 

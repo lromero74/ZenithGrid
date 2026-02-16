@@ -3,6 +3,7 @@ Buy order execution for trading engine
 Handles market and limit buy orders
 """
 
+import asyncio
 import logging
 import math
 from datetime import datetime
@@ -127,24 +128,41 @@ async def execute_buy(
         raise ValueError(error_msg)
 
     # Execute order via TradingClient (currency-agnostic)
-    # Actual fill amounts will be fetched from Coinbase after order executes
+    # Actual fill amounts will be fetched from exchange after order executes
     # Track this as an in-flight order for graceful shutdown
     order_id = None
     await shutdown_manager.increment_in_flight()
     try:
         order_response = await trading_client.buy(product_id=product_id, quote_amount=quote_amount)
+
+        # Check for PropGuard safety block before normal error handling
+        if order_response.get("blocked_by") == "propguard":
+            error_msg = f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            logger.warning(f"  PropGuard blocked buy order for {product_id}: {error_msg}")
+            await log_order_to_history(
+                db=db, bot=bot, product_id=product_id, position=position,
+                side="BUY", order_type="MARKET", trade_type=trade_type,
+                quote_amount=quote_amount, price=current_price,
+                status="failed", error_message=error_msg,
+            )
+            if commit_on_error:
+                position.last_error_message = error_msg
+                position.last_error_timestamp = datetime.utcnow()
+                await db.commit()
+            raise ValueError(error_msg)
+
         success_response = order_response.get("success_response", {})
         error_response = order_response.get("error_response", {})
         order_id = success_response.get("order_id", "")
 
         # CRITICAL: Validate order_id is present
         if not order_id:
-            # Log the full Coinbase response to understand why order failed
-            logger.error(f"Coinbase order failed - Full response: {order_response}")
+            # Log the full exchange response to understand why order failed
+            logger.error(f"Exchange order failed - Full response: {order_response}")
 
             # Save error to position for UI display (like 3Commas)
             if error_response:
-                # Try multiple possible error field names from Coinbase
+                # Try multiple possible error field names from exchange
                 error_msg = error_response.get("message") or error_response.get("error") or "Unknown error"
                 error_details = error_response.get("error_details", "")
                 failure_reason = error_response.get("failure_reason", "")
@@ -165,11 +183,11 @@ async def execute_buy(
                 if full_error == "Unknown error":
                     import json
 
-                    full_error = f"Coinbase error: {json.dumps(error_response)}"
+                    full_error = f"Exchange error: {json.dumps(error_response)}"
 
-                logger.error(f"Coinbase error details: {full_error}")
+                logger.error(f"Exchange error details: {full_error}")
             else:
-                full_error = "No order_id returned from Coinbase (no error_response provided)"
+                full_error = "No order_id returned from exchange (no error_response provided)"
 
             # Log failed order to history
             await log_order_to_history(
@@ -192,9 +210,9 @@ async def execute_buy(
                 position.last_error_timestamp = datetime.utcnow()
                 await db.commit()
 
-            raise ValueError(f"Coinbase order failed: {full_error}")
+            raise ValueError(f"Exchange order failed: {full_error}")
 
-        # Fetch actual fill data from Coinbase with retry logic
+        # Fetch actual fill data from exchange with retry logic
         # Market orders can take time to fill on illiquid pairs - retry up to 10 times over ~30s
         logger.info(f"Fetching order details for order_id: {order_id}")
 
@@ -202,12 +220,12 @@ async def execute_buy(
         actual_quote_amount = 0.0
         actual_price = 0.0
 
+        import asyncio
+
         max_retries = 10  # Increased from 5 to handle slow fills
         for attempt in range(max_retries):
             if attempt > 0:
                 # Wait before retrying (exponential backoff: 0.5s, 1s, 2s, 4s, 8s, then 5s intervals)
-                import asyncio
-
                 if attempt < 5:
                     delay = 0.5 * (2 ** (attempt - 1))
                 else:
@@ -215,10 +233,23 @@ async def execute_buy(
                 logger.info(f"Waiting {delay}s before retry {attempt + 1}/{max_retries}...")
                 await asyncio.sleep(delay)
 
-            order_details = await exchange.get_order(order_id)
+            try:
+                order_details = await exchange.get_order(order_id)
+            except Exception as get_err:
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries}: "
+                    f"get_order({order_id}) failed: {get_err}"
+                )
+                if attempt == max_retries - 1:
+                    logger.error(
+                        f"Order {order_id} placed but fill data "
+                        f"unavailable after {max_retries} attempts. "
+                        f"Recording with zero amounts. "
+                        f"Use scripts/fix_position.py to reconcile."
+                    )
+                continue
 
             # get_order() already unwraps the "order" key - access fields directly
-            # See app/coinbase_api/order_api.py:118-135
             filled_size_str = order_details.get("filled_size", "0")
             filled_value_str = order_details.get("filled_value", "0")
             avg_price_str = order_details.get("average_filled_price", "0")
@@ -233,21 +264,12 @@ async def execute_buy(
             # For BTC pair buy orders, fees are charged IN the base currency (the crypto you buy)
             # So filled_size is GROSS, and you actually receive filled_size - fee_in_base
             # For USD pairs, fees are charged in USD (quote currency), so filled_size is NET
-            # Fee calculation: fee_in_base = total_fees_in_usd / avg_price
-            # Or we can estimate: fee ~= gross_base * fee_rate (typically 0.5-0.8% for taker)
             #
             # Since total_fees is in USD, we need to convert to base currency for BTC pairs
             is_btc_pair = product_id.endswith("-BTC")
             if is_btc_pair and actual_price > 0 and total_fees > 0:
-                # Fee is returned in USD, convert to base currency
-                # fee_in_base = total_fees_usd / (base_price_in_usd)
-                # base_price_in_usd = avg_btc_price * avg_price_btc_pair
-                # For simplicity, estimate fee % from filled_value ratio
-                # Coinbase Advanced Trade taker fee is ~0.5-0.8%
-                # Net base = gross_base * (1 - fee_rate)
-                # We can derive fee_rate = total_fees / filled_value
                 if actual_quote_amount > 0:
-                    fee_rate = total_fees / actual_quote_amount  # This gives us fee as % of trade
+                    fee_rate = total_fees / actual_quote_amount
                     fee_in_base = gross_base_amount * fee_rate
                     actual_base_amount = gross_base_amount - fee_in_base
                     logger.info(
@@ -260,9 +282,8 @@ async def execute_buy(
             else:
                 actual_base_amount = gross_base_amount
 
-            # CRITICAL: Round actual_base_amount down to Coinbase's base_increment
+            # CRITICAL: Round actual_base_amount down to exchange's base_increment
             # This ensures we never record more than we can sell (avoids precision loss on sell)
-            # Example: LINK-BTC has 0.01 increment, so 0.799 LINK → 0.79 LINK
             precision = get_base_precision(product_id)
             actual_base_amount_raw = actual_base_amount
             actual_base_amount = math.floor(actual_base_amount * (10 ** precision)) / (10 ** precision)
@@ -276,14 +297,18 @@ async def execute_buy(
             # Check if order has filled (non-zero amounts)
             if actual_base_amount > 0 and actual_quote_amount > 0:
                 logger.info(
-                    f"Order filled - Base: {actual_base_amount}, Quote: {actual_quote_amount}, Avg Price: {actual_price}"
+                    f"Order filled - Base: {actual_base_amount}, "
+                    f"Quote: {actual_quote_amount}, Avg Price: {actual_price}"
                 )
                 break
             else:
-                logger.warning(f"Attempt {attempt + 1}/{max_retries}: Order not yet filled (amounts still zero)")
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries}: Order not yet filled (amounts still zero)"
+                )
                 if attempt == max_retries - 1:
                     logger.error(
-                        f"Order {order_id} did not fill after {max_retries} attempts (~30s) - recording with zero amounts. "
+                        f"Order {order_id} did not fill after {max_retries} "
+                        f"attempts (~30s) - recording with zero amounts. "
                         f"This position will need manual reconciliation."
                     )
 
@@ -324,7 +349,7 @@ async def execute_buy(
     finally:
         await shutdown_manager.decrement_in_flight()
 
-    # Record trade with ACTUAL filled amounts from Coinbase
+    # Record trade with ACTUAL filled amounts from exchange
     trade = Trade(
         position_id=position.id,
         timestamp=datetime.utcnow(),
@@ -452,11 +477,18 @@ async def execute_limit_buy(
         order_response = await trading_client.buy_limit(
             product_id=product_id, limit_price=limit_price, quote_amount=quote_amount
         )
+
+        # Check for PropGuard safety block
+        if order_response.get("blocked_by") == "propguard":
+            raise ValueError(
+                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            )
+
         success_response = order_response.get("success_response", {})
         order_id = success_response.get("order_id", "")
 
         if not order_id:
-            raise ValueError("No order_id returned from Coinbase")
+            raise ValueError("No order_id returned from exchange")
 
     except Exception as e:
         logger.error(f"Error placing limit buy order: {e}")
@@ -532,12 +564,18 @@ async def execute_buy_close_short(
     btc_to_buy_back = position.short_total_sold_base or 0.0
 
     if btc_to_buy_back <= 0:
-        raise ValueError(f"Position #{position.id} has no BTC to buy back (short_total_sold_base = {btc_to_buy_back})")
+        raise ValueError(
+            f"Position #{position.id} has no BTC to buy back "
+            f"(short_total_sold_base = {btc_to_buy_back})"
+        )
 
     # Calculate how much USD we need to buy back the BTC
     quote_amount_needed = btc_to_buy_back * current_price
 
-    logger.info(f"  📈 CLOSING SHORT: Buying back {btc_to_buy_back:.8f} BTC @ ${current_price:.2f} (need ${quote_amount_needed:.2f})")
+    logger.info(
+        f"  CLOSING SHORT: Buying back {btc_to_buy_back:.8f} BTC "
+        f"@ ${current_price:.2f} (need ${quote_amount_needed:.2f})"
+    )
 
     # Check if we should use a limit order for closing
     config: Dict = position.strategy_config_snapshot or {}
@@ -555,18 +593,25 @@ async def execute_buy_close_short(
     await shutdown_manager.increment_in_flight()
     try:
         order_response = await trading_client.buy(product_id=product_id, quote_amount=quote_amount_needed)
+
+        # Check for PropGuard safety block
+        if order_response.get("blocked_by") == "propguard":
+            raise ValueError(
+                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            )
+
         success_response = order_response.get("success_response", {})
         error_response = order_response.get("error_response", {})
         order_id = success_response.get("order_id", "")
 
         if not order_id:
-            logger.error(f"Coinbase close-short buy failed - Full response: {order_response}")
+            logger.error(f"Exchange close-short buy failed - Full response: {order_response}")
             if error_response:
                 error_msg = error_response.get("message", "Unknown error")
                 error_details = error_response.get("error_details", "")
-                raise ValueError(f"Coinbase close-short buy failed: {error_msg}. Details: {error_details}")
+                raise ValueError(f"Close-short buy failed: {error_msg}. Details: {error_details}")
             else:
-                raise ValueError(f"Coinbase close-short buy failed. Full response: {order_response}")
+                raise ValueError(f"Close-short buy failed. Full response: {order_response}")
 
     except Exception as e:
         logger.error(f"Error executing close-short buy order: {e}")
@@ -574,10 +619,8 @@ async def execute_buy_close_short(
     finally:
         await shutdown_manager.decrement_in_flight()
 
-    # Fetch actual fill data from Coinbase
+    # Fetch actual fill data from exchange
     logger.info(f"Fetching order details for close-short order_id: {order_id}")
-    import asyncio
-
     max_retries = 10
     retry_delay = 3.0  # seconds
     filled_size = None
@@ -594,11 +637,16 @@ async def execute_buy_close_short(
                 break
 
             if attempt < max_retries - 1:
-                logger.warning(f"Order {order_id} not fully filled yet (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                logger.warning(
+                    f"Order {order_id} not fully filled yet "
+                    f"(attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s..."
+                )
                 await asyncio.sleep(retry_delay)
 
         except Exception as e:
-            logger.error(f"Error fetching order details (attempt {attempt + 1}/{max_retries}): {e}")
+            logger.error(
+                f"Error fetching order details (attempt {attempt + 1}/{max_retries}): {e}"
+            )
             if attempt < max_retries - 1:
                 await asyncio.sleep(retry_delay)
 
@@ -615,7 +663,10 @@ async def execute_buy_close_short(
     profit_quote = usd_received_from_short - usd_spent_to_close
     profit_percentage = (profit_quote / usd_received_from_short) * 100 if usd_received_from_short > 0 else 0.0
 
-    logger.info(f"  💰 SHORT CLOSED: Sold @ avg ${position.short_average_sell_price:.2f}, bought back @ ${average_filled_price:.2f}")
+    logger.info(
+        f"  SHORT CLOSED: Sold @ avg ${position.short_average_sell_price:.2f}, "
+        f"bought back @ ${average_filled_price:.2f}"
+    )
     logger.info(f"  💰 P&L: ${profit_quote:.2f} ({profit_percentage:.2f}%)")
 
     # Get BTC/USD price for USD profit tracking
@@ -632,17 +683,13 @@ async def execute_buy_close_short(
     # Create Trade record for closing short
     trade = Trade(
         position_id=position.id,
-        bot_id=bot.id,
-        order_id=order_id,
-        product_id=product_id,
+        timestamp=datetime.utcnow(),
         side="buy",  # Buying back BTC to close short
-        size=filled_size,  # BTC bought back
-        filled_value=usd_spent_to_close,  # USD spent
-        commission=0.0,  # TODO: Extract from order response
+        base_amount=filled_size,  # Base currency bought back
+        quote_amount=usd_spent_to_close,  # Quote currency spent
         price=average_filled_price,  # Average buy-back price
-        executed_at=datetime.utcnow(),
         trade_type="close_short",
-        btc_usd_price_at_execution=btc_usd_price_at_close,
+        order_id=order_id,
     )
 
     db.add(trade)
@@ -657,20 +704,24 @@ async def execute_buy_close_short(
     await db.commit()
     await db.refresh(trade)
 
-    # Log to order history
-    await log_order_to_history(
-        db=db,
-        exchange=exchange,
-        bot=bot,
-        action="CLOSE_SHORT",
-        order_id=order_id,
-        product_id=product_id,
-        amount=filled_size,
-        price=average_filled_price,
-        total=usd_spent_to_close,
-        reason="Closing short position",
-        signal_data=signal_data,
-    )
+    # Log to order history (best-effort)
+    try:
+        await log_order_to_history(
+            db=db,
+            bot=bot,
+            product_id=product_id,
+            position=position,
+            side="BUY",
+            order_type="MARKET",
+            trade_type="close_short",
+            quote_amount=usd_spent_to_close,
+            price=average_filled_price,
+            status="success",
+            order_id=order_id,
+            base_amount=filled_size,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log close-short to history: {e}")
 
     # Send WebSocket update
     await ws_manager.broadcast_position_update(position)

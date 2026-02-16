@@ -211,7 +211,7 @@ export const PositionCard = ({
                 })()}
               </div>
               <div className="flex items-center gap-2">
-                <div className="text-[10px] text-slate-400">My Coinbase Advanced</div>
+                <div className="text-[10px] text-slate-400">{(bot as any)?.account_name || 'Exchange Account'}</div>
                 {/* Limit Close Status Badge */}
                 {position.closing_via_limit && position.limit_order_details && (
                   <div className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-[10px] font-medium">

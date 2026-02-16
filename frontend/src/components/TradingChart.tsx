@@ -50,7 +50,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
 
       if (!response.ok) {
         // API error (401, 500, etc) - likely missing credentials
-        console.warn('Cannot fetch candles - check Coinbase API credentials in Settings')
+        console.warn('Cannot fetch candles - check exchange API credentials in Settings')
         return []
       }
 

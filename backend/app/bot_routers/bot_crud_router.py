@@ -159,7 +159,12 @@ async def create_bot(
 
         # Get exchange client for this bot's account
         try:
-            exchange = await create_exchange_client(db, bot.account_id)
+            from app.services.exchange_service import get_exchange_client_for_account
+            exchange = await get_exchange_client_for_account(db, bot.account_id)
+            if not exchange:
+                raise HTTPException(status_code=400, detail="No exchange client for account")
+        except HTTPException:
+            raise
         except Exception:
             raise HTTPException(status_code=400, detail="Failed to connect to exchange")
 
@@ -642,7 +647,12 @@ async def update_bot(
 
         # Get exchange client
         try:
-            exchange = await create_exchange_client(db, bot.account_id)
+            from app.services.exchange_service import get_exchange_client_for_account
+            exchange = await get_exchange_client_for_account(db, bot.account_id)
+            if not exchange:
+                raise HTTPException(status_code=400, detail="No exchange client for account")
+        except HTTPException:
+            raise
         except Exception:
             raise HTTPException(status_code=400, detail="Failed to connect to exchange")
 

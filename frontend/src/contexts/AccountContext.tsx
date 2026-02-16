@@ -39,6 +39,12 @@ export interface Account {
   default_leverage?: number
   margin_type?: string
 
+  // Prop firm
+  prop_firm?: string | null
+  prop_daily_drawdown_pct?: number | null
+  prop_total_drawdown_pct?: number | null
+  prop_initial_deposit?: number | null
+
   // Metadata
   created_at: string
   updated_at: string
@@ -66,6 +72,13 @@ export interface CreateAccountDto {
   wallet_private_key?: string
   rpc_url?: string
   wallet_type?: string
+
+  // Prop firm fields
+  prop_firm?: string
+  prop_firm_config?: Record<string, unknown>
+  prop_daily_drawdown_pct?: number
+  prop_total_drawdown_pct?: number
+  prop_initial_deposit?: number
 }
 
 export interface UpdateAccountDto {
@@ -137,7 +150,7 @@ const accountsApi = {
   },
 
   update: async (id: number, data: UpdateAccountDto): Promise<Account> => {
-    const response = await fetch(`/api/accounts/${id}`, {
+    const response = await authFetch(`/api/accounts/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -150,7 +163,7 @@ const accountsApi = {
   },
 
   delete: async (id: number): Promise<void> => {
-    const response = await fetch(`/api/accounts/${id}`, {
+    const response = await authFetch(`/api/accounts/${id}`, {
       method: 'DELETE',
     })
     if (!response.ok) {
@@ -160,7 +173,7 @@ const accountsApi = {
   },
 
   setDefault: async (id: number): Promise<void> => {
-    const response = await fetch(`/api/accounts/${id}/set-default`, {
+    const response = await authFetch(`/api/accounts/${id}/set-default`, {
       method: 'POST',
     })
     if (!response.ok) {

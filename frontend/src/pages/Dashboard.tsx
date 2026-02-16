@@ -12,7 +12,9 @@ import {
   Award,
   Clock,
   Building2,
-  Wallet
+  Wallet,
+  Shield,
+  AlertTriangle
 } from 'lucide-react'
 import { Bot } from '../types'
 import { format } from 'date-fns'
@@ -111,6 +113,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     enabled: !!selectedAccount,
     refetchInterval: 30000, // 30 seconds
     staleTime: 15000,
+  })
+
+  // Fetch PropGuard status for prop firm accounts
+  const isPropFirm = !!selectedAccount?.prop_firm
+  const { data: propGuardStatus } = useQuery({
+    queryKey: ['propguard-status', selectedAccount?.id],
+    queryFn: async () => {
+      if (!selectedAccount?.id) return null
+      const response = await authFetch(`/api/propguard/${selectedAccount.id}/status`)
+      if (!response.ok) return null
+      return response.json()
+    },
+    enabled: isPropFirm && !!selectedAccount?.id,
+    refetchInterval: 30000,
   })
 
   const activeBots = bots.filter(bot => bot.is_active)
@@ -256,6 +272,52 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           )}
         </div>
       </div>
+
+      {/* PropGuard Status (prop firm accounts only) */}
+      {isPropFirm && propGuardStatus && (
+        <div className={`rounded-lg p-4 border ${propGuardStatus.is_killed ? 'bg-red-900/20 border-red-700/50' : 'bg-slate-800 border-slate-700'}`}>
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className={`w-5 h-5 ${propGuardStatus.is_killed ? 'text-red-400' : 'text-green-400'}`} />
+            <span className="text-sm font-semibold text-white">PropGuard</span>
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-300 rounded">
+              {(selectedAccount?.prop_firm || '').toUpperCase()}
+            </span>
+            <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${propGuardStatus.is_killed ? 'bg-red-500/20 text-red-300 animate-pulse' : 'bg-green-500/20 text-green-300'}`}>
+              {propGuardStatus.is_killed ? 'KILLED' : 'ACTIVE'}
+            </span>
+          </div>
+
+          {propGuardStatus.is_killed && propGuardStatus.kill_reason && (
+            <div className="flex items-center gap-2 mb-3 p-2 bg-red-900/30 rounded text-xs text-red-300">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>{propGuardStatus.kill_reason}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-slate-400 text-xs">Equity</p>
+              <p className="text-white font-mono text-sm">{formatCurrency(propGuardStatus.current_equity || 0)}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">Initial Deposit</p>
+              <p className="text-slate-300 font-mono text-sm">{formatCurrency(propGuardStatus.initial_deposit || 0)}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">Daily Drawdown</p>
+              <p className={`font-mono text-sm ${(propGuardStatus.daily_drawdown_pct || 0) > (propGuardStatus.daily_drawdown_limit || 4.5) * 0.8 ? 'text-red-400' : (propGuardStatus.daily_drawdown_pct || 0) > (propGuardStatus.daily_drawdown_limit || 4.5) * 0.5 ? 'text-yellow-400' : 'text-green-400'}`}>
+                {(propGuardStatus.daily_drawdown_pct || 0).toFixed(2)}% / {(propGuardStatus.daily_drawdown_limit || 4.5)}%
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">Total Drawdown</p>
+              <p className={`font-mono text-sm ${(propGuardStatus.total_drawdown_pct || 0) > (propGuardStatus.total_drawdown_limit || 9.0) * 0.8 ? 'text-red-400' : (propGuardStatus.total_drawdown_pct || 0) > (propGuardStatus.total_drawdown_limit || 9.0) * 0.5 ? 'text-yellow-400' : 'text-green-400'}`}>
+                {(propGuardStatus.total_drawdown_pct || 0).toFixed(2)}% / {(propGuardStatus.total_drawdown_limit || 9.0)}%
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Portfolio Totals - Projected PnL */}
       {bots.length > 0 && (() => {

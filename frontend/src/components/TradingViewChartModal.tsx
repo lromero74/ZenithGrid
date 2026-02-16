@@ -17,11 +17,19 @@ const getTakeProfitPercent = (position: any): number => {
     ?? 2.0 // Default 2% if not configured
 }
 
+// TradingView exchange prefix mapping
+const TV_EXCHANGE_PREFIX: Record<string, string> = {
+  coinbase: 'COINBASE',
+  bybit: 'BYBIT',
+  mt5_bridge: 'OANDA',  // Reasonable default for MT5/forex
+}
+
 interface TradingViewChartModalProps {
   isOpen: boolean
   onClose: () => void
   symbol: string  // e.g., "LTC-BTC"
   position?: any
+  exchange?: string  // e.g., "coinbase", "bybit"
 }
 
 declare global {
@@ -34,7 +42,8 @@ export default function TradingViewChartModal({
   isOpen,
   onClose,
   symbol,
-  position
+  position,
+  exchange,
 }: TradingViewChartModalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const widgetRef = useRef<any>(null)
@@ -69,9 +78,10 @@ export default function TradingViewChartModal({
     function initWidget() {
       if (!containerRef.current) return
 
-      // Convert our symbol format (LTC-BTC) to TradingView format (COINBASE:LTCBTC)
+      // Convert our symbol format (LTC-BTC) to TradingView format (EXCHANGE:LTCBTC)
       const [base, quote] = symbol.split('-')
-      const tvSymbol = `COINBASE:${base}${quote}`
+      const tvPrefix = TV_EXCHANGE_PREFIX[exchange || 'coinbase'] || 'COINBASE'
+      const tvSymbol = `${tvPrefix}:${base}${quote}`
 
       // Get saved chart settings from localStorage
       const savedSettings = localStorage.getItem(`chart_settings_${symbol}`)

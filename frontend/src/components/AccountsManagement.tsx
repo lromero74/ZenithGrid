@@ -20,9 +20,11 @@ import {
   ChevronRight,
   Link2,
   CheckCircle,
+  Shield,
 } from 'lucide-react'
 import { useAccount, Account, getChainName } from '../contexts/AccountContext'
 import { accountApi, api } from '../services/api'
+import { PropGuardStatus } from './PropGuardStatus'
 
 interface AccountsManagementProps {
   onAddAccount: () => void
@@ -430,6 +432,12 @@ function AccountRow({
                   DEFAULT
                 </span>
               )}
+              {account.prop_firm && (
+                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-300 rounded flex items-center gap-1">
+                  <Shield className="w-2.5 h-2.5" />
+                  {account.prop_firm.toUpperCase()}
+                </span>
+              )}
             </div>
             <p className="text-sm text-slate-400">
               {isCex ? (
@@ -534,44 +542,54 @@ function AccountRow({
       {/* Expanded section: Perpetual Futures (CEX only) */}
       {isCex && isExpanded && (
         <div className="px-4 pb-3">
-          <div className="ml-10 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
-            <div className="flex items-center gap-2 mb-2">
-              <Link2 className="w-4 h-4 text-purple-400" />
-              <span className="text-sm font-medium text-white">Perpetual Futures</span>
-            </div>
+          <div className="ml-10 space-y-3">
+            {/* Perpetual Futures (Coinbase INTX only) */}
+            {(!account.exchange || account.exchange === 'coinbase') && (
+            <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+              <div className="flex items-center gap-2 mb-2">
+                <Link2 className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-medium text-white">Perpetual Futures</span>
+              </div>
 
-            {hasPerps ? (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-400" />
-                  <span className="text-green-400">INTX Portfolio Linked</span>
-                </div>
-                <div className="text-xs text-slate-400 font-mono">
-                  UUID: {account.perps_portfolio_uuid}
-                </div>
-                <div className="text-xs text-slate-400">
-                  Leverage: {account.default_leverage || 1}x | Margin: {account.margin_type || 'CROSS'}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-xs text-slate-400">
-                  Link your Coinbase INTX perpetuals portfolio to enable futures trading.
-                </p>
-                {perpsError && (
-                  <div className="flex items-center gap-2 text-xs text-red-400">
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    {perpsError}
+              {hasPerps ? (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                    <span className="text-green-400">INTX Portfolio Linked</span>
                   </div>
-                )}
-                <button
-                  onClick={handleLinkPerps}
-                  disabled={linking}
-                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
-                >
-                  {linking ? 'Discovering...' : 'Link Perpetuals Portfolio'}
-                </button>
-              </div>
+                  <div className="text-xs text-slate-400 font-mono">
+                    UUID: {account.perps_portfolio_uuid}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Leverage: {account.default_leverage || 1}x | Margin: {account.margin_type || 'CROSS'}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400">
+                    Link your Coinbase INTX perpetuals portfolio to enable futures trading.
+                  </p>
+                  {perpsError && (
+                    <div className="flex items-center gap-2 text-xs text-red-400">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {perpsError}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleLinkPerps}
+                    disabled={linking}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    {linking ? 'Discovering...' : 'Link Perpetuals Portfolio'}
+                  </button>
+                </div>
+              )}
+            </div>
+            )}
+
+            {/* PropGuard Status (prop firm accounts only) */}
+            {account.prop_firm && (
+              <PropGuardStatus account={account} />
             )}
           </div>
         </div>

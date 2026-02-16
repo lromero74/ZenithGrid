@@ -135,6 +135,13 @@ class Account(Base):
     default_leverage = Column(Integer, default=1)  # Default leverage for new perps positions (1-10)
     margin_type = Column(String, default="CROSS")  # "CROSS" or "ISOLATED"
 
+    # Prop firm fields (nullable — non-prop accounts leave these NULL)
+    prop_firm = Column(String, nullable=True)  # "hyrotrader" | "ftmo" | None
+    prop_firm_config = Column(JSON, nullable=True)  # Firm-specific JSON blob
+    prop_daily_drawdown_pct = Column(Float, nullable=True)  # e.g. 4.5
+    prop_total_drawdown_pct = Column(Float, nullable=True)  # e.g. 9.0
+    prop_initial_deposit = Column(Float, nullable=True)  # e.g. 100000.0 USD
+
     # Relationships
     user = relationship("User", back_populates="accounts")
     bots = relationship("Bot", back_populates="account")
@@ -204,8 +211,10 @@ class Bot(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_signal_check = Column(DateTime, nullable=True)  # Last time signal was checked (technical conditions + positions)
-    last_ai_check = Column(DateTime, nullable=True)  # Last time AI analysis was performed (expensive operation)
+    # Last time signal was checked (technical conditions + positions)
+    last_signal_check = Column(DateTime, nullable=True)
+    # Last time AI analysis was performed (expensive operation)
+    last_ai_check = Column(DateTime, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="bots")
@@ -355,11 +364,16 @@ class Position(Base):
     __tablename__ = "positions"
 
     id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True)  # Link to bot (nullable for backwards compatibility)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # Link to account (for filtering)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (for user-specific deal numbers)
-    user_attempt_number = Column(Integer, nullable=True, index=True)  # Sequential attempt number (ALL positions: success + failed)
-    user_deal_number = Column(Integer, nullable=True, index=True)  # User-specific deal number (SUCCESSFUL deals only, like 3Commas)
+    # Link to bot (nullable for backwards compatibility)
+    bot_id = Column(Integer, ForeignKey("bots.id"), nullable=True)
+    # Link to account (for filtering)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    # Owner (for user-specific deal numbers)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # Sequential attempt number (ALL positions: success + failed)
+    user_attempt_number = Column(Integer, nullable=True, index=True)
+    # User-specific deal number (SUCCESSFUL deals only, like 3Commas)
+    user_deal_number = Column(Integer, nullable=True, index=True)
     product_id = Column(String, default="ETH-BTC")  # Trading pair (e.g., "ETH-BTC", "SOL-USD")
     status = Column(String, default="open")  # open, closed
     opened_at = Column(DateTime, default=datetime.utcnow)
@@ -985,3 +999,71 @@ class MetricSnapshot(Base):
     metric_name = Column(String, nullable=False, index=True)
     value = Column(Float, nullable=False)
     recorded_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class PropFirmState(Base):
+    """
+    Tracks equity state for prop firm accounts across restarts.
+
+    Persists kill switch status, daily/total drawdown tracking, and
+    equity snapshots needed by PropGuard safety middleware.
+    One row per prop firm account.
+    """
+    __tablename__ = "prop_firm_state"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False, unique=True, index=True
+    )
+
+    # Starting capital for total drawdown calculation
+    initial_deposit = Column(Float, nullable=False, default=0.0)
+
+    # Daily reset tracking (resets at 17:00 EST)
+    daily_start_equity = Column(Float, nullable=True)
+    daily_start_timestamp = Column(DateTime, nullable=True)
+
+    # Current equity tracking
+    current_equity = Column(Float, nullable=True)
+    current_equity_timestamp = Column(DateTime, nullable=True)
+
+    # Kill switch state
+    is_killed = Column(Boolean, default=False)
+    kill_reason = Column(String, nullable=True)
+    kill_timestamp = Column(DateTime, nullable=True)
+
+    # Running P&L totals
+    daily_pnl = Column(Float, default=0.0)
+    total_pnl = Column(Float, default=0.0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relationships
+    account = relationship("Account")
+
+
+class PropFirmEquitySnapshot(Base):
+    """
+    Time-series equity snapshots for prop firm accounts.
+
+    Recorded every monitor cycle (~30s) to allow charting
+    equity trajectory and drawdown history over time.
+    """
+    __tablename__ = "prop_firm_equity_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    equity = Column(Float, nullable=False)
+    daily_drawdown_pct = Column(Float, default=0.0)
+    total_drawdown_pct = Column(Float, default=0.0)
+    daily_pnl = Column(Float, default=0.0)
+    is_killed = Column(Boolean, default=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)

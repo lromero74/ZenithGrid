@@ -175,11 +175,13 @@ async def validate_bidirectional_budget(
     Returns:
         (is_valid, error_message)
     """
-    from app.exchange_clients.factory import create_exchange_client
+    from app.services.exchange_service import get_exchange_client_for_account
 
     # Get exchange client for this bot's account
     try:
-        exchange = await create_exchange_client(db, bot.account_id)
+        exchange = await get_exchange_client_for_account(db, bot.account_id)
+        if not exchange:
+            return False, "No exchange client available for account"
     except Exception as e:
         return False, f"Failed to connect to exchange: {e}"
 

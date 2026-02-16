@@ -3,6 +3,7 @@ Sell order execution for trading engine
 Handles market and limit sell orders
 """
 
+import asyncio
 import logging
 import math
 from datetime import datetime
@@ -15,7 +16,9 @@ from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.product_precision import get_base_precision
 from app.services.shutdown_manager import shutdown_manager
+from app.services.websocket_manager import ws_manager
 from app.trading_client import TradingClient
+from app.trading_engine.order_logger import log_order_to_history
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +60,6 @@ async def execute_sell_short(
         Trade record (for market orders only; limit orders return None)
     """
     from app.order_validation import validate_order_size
-    from app.services.websocket_manager import ws_manager
-    from app.trading_engine.order_logger import log_order_to_history
 
     # Check if shutdown is in progress - reject new orders
     if shutdown_manager.is_shutting_down:
@@ -88,7 +89,9 @@ async def execute_sell_short(
     base_amount_rounded = math.floor(base_amount * (10 ** precision)) / (10 ** precision)
 
     # Validate order size meets exchange minimums
-    is_valid, error_msg = validate_order_size(product_id, base_amount_rounded, current_price)
+    is_valid, error_msg = await validate_order_size(
+        exchange, product_id, base_amount=base_amount_rounded
+    )
     if not is_valid:
         error = f"Order validation failed: {error_msg}"
         logger.error(f"  ❌ {error}")
@@ -104,7 +107,13 @@ async def execute_sell_short(
     try:
         order_response = await trading_client.sell(product_id=product_id, base_amount=base_amount_rounded)
 
-        logger.info(f"Coinbase short sell order response: {order_response}")
+        logger.info(f"Exchange short sell order response: {order_response}")
+
+        # Check for PropGuard safety block
+        if order_response.get("blocked_by") == "propguard":
+            raise ValueError(
+                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            )
 
         # Check success flag
         if not order_response.get("success", False):
@@ -113,20 +122,61 @@ async def execute_sell_short(
                 error_msg = error_response.get("message", "Unknown error")
                 error_details = error_response.get("error_details", "")
                 error_code = error_response.get("error", "UNKNOWN")
-                raise ValueError(f"Coinbase short sell failed [{error_code}]: {error_msg}. Details: {error_details}")
+                raise ValueError(f"Short sell failed [{error_code}]: {error_msg}. Details: {error_details}")
             else:
-                raise ValueError(f"Coinbase short sell failed. Full response: {order_response}")
+                raise ValueError(f"Short sell failed. Full response: {order_response}")
 
         # Extract order_id
         success_response = order_response.get("success_response", {})
         order_id = success_response.get("order_id", "") or order_response.get("order_id", "")
 
         if not order_id:
-            logger.error(f"Full Coinbase response: {order_response}")
-            raise ValueError("No order_id in successful Coinbase response")
+            logger.error(f"Full exchange response: {order_response}")
+            raise ValueError("No order_id in successful exchange response")
 
-        # Calculate filled amounts
-        quote_received = base_amount_rounded * current_price  # USD received from selling BTC
+        # Fetch actual fill data from exchange with retry
+        logger.info(f"Fetching fill data for short sell order {order_id}")
+        actual_base_sold = base_amount_rounded
+        quote_received = base_amount_rounded * current_price
+        actual_price = current_price
+
+        max_retries = 10
+        for attempt in range(max_retries):
+            if attempt > 0:
+                delay = min(0.5 * (2 ** (attempt - 1)), 5.0)
+                await asyncio.sleep(delay)
+
+            try:
+                order_details = await exchange.get_order(order_id)
+                filled_size = float(order_details.get("filled_size", "0"))
+                filled_value = float(order_details.get("filled_value", "0"))
+                avg_price = float(order_details.get("average_filled_price", "0"))
+
+                if filled_size > 0 and filled_value > 0:
+                    actual_base_sold = filled_size
+                    quote_received = filled_value
+                    actual_price = avg_price if avg_price > 0 else current_price
+                    logger.info(
+                        f"Short sell filled: {actual_base_sold:.8f} @ "
+                        f"{actual_price:.8f} = {quote_received:.2f}"
+                    )
+                    break
+
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries}: "
+                    f"Short sell not yet filled"
+                )
+            except Exception as fill_err:
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries}: "
+                    f"Failed to get fill data: {fill_err}"
+                )
+
+            if attempt == max_retries - 1:
+                logger.warning(
+                    f"Could not fetch fill data for {order_id} after "
+                    f"{max_retries} attempts. Using estimates."
+                )
 
     except Exception as e:
         logger.error(f"Error executing short sell order: {e}")
@@ -138,26 +188,16 @@ async def execute_sell_short(
     finally:
         await shutdown_manager.decrement_in_flight()
 
-    # Get BTC/USD price for USD tracking
-    try:
-        btc_usd_price = await exchange.get_btc_usd_price()
-    except Exception:
-        btc_usd_price = None
-
-    # Create Trade record
+    # Create Trade record using actual fill data
     trade = Trade(
         position_id=position.id,
-        bot_id=bot.id,
-        order_id=order_id,
-        product_id=product_id,
+        timestamp=datetime.utcnow(),
         side="sell",  # Selling BTC to open/add to short
-        size=base_amount_rounded,  # BTC sold
-        filled_value=quote_received,  # USD received
-        commission=0.0,  # TODO: Extract from order response if available
-        price=current_price,  # Execution price
-        executed_at=datetime.utcnow(),
+        base_amount=actual_base_sold,  # Base currency sold (actual)
+        quote_amount=quote_received,  # Quote currency received (actual)
+        price=actual_price,  # Execution price (actual)
         trade_type=trade_type,
-        btc_usd_price_at_execution=btc_usd_price,
+        order_id=order_id,
     )
 
     db.add(trade)
@@ -167,25 +207,35 @@ async def execute_sell_short(
 
     if is_first_short:
         # First short order - initialize fields
-        position.short_entry_price = current_price
-        position.short_average_sell_price = current_price
-        position.short_total_sold_base = base_amount_rounded
+        position.short_entry_price = actual_price
+        position.short_average_sell_price = actual_price
+        position.short_total_sold_base = actual_base_sold
         position.short_total_sold_quote = quote_received
-        logger.info(f"  📉 SHORT POSITION OPENED: Entry={current_price:.8f}, BTC sold={base_amount_rounded:.8f}, USD received={quote_received:.2f}")
+        logger.info(
+            f"  SHORT POSITION OPENED: Entry={actual_price:.8f}, "
+            f"BTC sold={actual_base_sold:.8f}, USD received={quote_received:.2f}"
+        )
     else:
         # Adding to existing short position (safety order)
-        # Update average sell price: ((prev_avg * prev_btc) + (new_price * new_btc)) / (prev_btc + new_btc)
         prev_sold_base = position.short_total_sold_base or 0.0
         prev_sold_quote = position.short_total_sold_quote or 0.0
 
-        new_total_sold_base = prev_sold_base + base_amount_rounded
+        new_total_sold_base = prev_sold_base + actual_base_sold
         new_total_sold_quote = prev_sold_quote + quote_received
 
         position.short_total_sold_base = new_total_sold_base
         position.short_total_sold_quote = new_total_sold_quote
-        position.short_average_sell_price = new_total_sold_quote / new_total_sold_base if new_total_sold_base > 0 else current_price
+        if new_total_sold_base > 0:
+            position.short_average_sell_price = (
+                new_total_sold_quote / new_total_sold_base
+            )
+        else:
+            position.short_average_sell_price = actual_price
 
-        logger.info(f"  📉 SHORT POSITION UPDATED: Avg={position.short_average_sell_price:.8f}, Total BTC sold={new_total_sold_base:.8f}, Total USD={new_total_sold_quote:.2f}")
+        logger.info(
+            f"  SHORT POSITION UPDATED: Avg={position.short_average_sell_price:.8f}, "
+            f"Total BTC sold={new_total_sold_base:.8f}, Total USD={new_total_sold_quote:.2f}"
+        )
 
     # Clear any error status
     position.last_error_message = None
@@ -194,25 +244,32 @@ async def execute_sell_short(
     await db.commit()
     await db.refresh(trade)
 
-    # Log to order history
-    await log_order_to_history(
-        db=db,
-        exchange=exchange,
-        bot=bot,
-        action="SHORT_SELL",
-        order_id=order_id,
-        product_id=product_id,
-        amount=base_amount_rounded,
-        price=current_price,
-        total=quote_received,
-        reason=f"{trade_type} for short position",
-        signal_data=signal_data,
-    )
+    # Log to order history (best-effort)
+    try:
+        await log_order_to_history(
+            db=db,
+            bot=bot,
+            product_id=product_id,
+            position=position,
+            side="SELL",
+            order_type="MARKET",
+            trade_type=trade_type,
+            quote_amount=quote_received,
+            price=actual_price,
+            status="success",
+            order_id=order_id,
+            base_amount=actual_base_sold,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log short sell to history: {e}")
 
     # Send WebSocket update
     await ws_manager.broadcast_position_update(position)
 
-    logger.info(f"  ✅ SHORT SELL EXECUTED: {base_amount_rounded:.8f} BTC @ {current_price:.8f} = ${quote_received:.2f} (Order: {order_id})")
+    logger.info(
+        f"  SHORT SELL EXECUTED: {actual_base_sold:.8f} BTC @ {actual_price:.8f} "
+        f"= ${quote_received:.2f} (Order: {order_id})"
+    )
 
     return trade
 
@@ -263,11 +320,18 @@ async def execute_limit_sell(
         order_response = await trading_client.sell_limit(
             product_id=product_id, limit_price=limit_price, base_amount=base_amount_rounded
         )
+
+        # Check for PropGuard safety block
+        if order_response.get("blocked_by") == "propguard":
+            raise ValueError(
+                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            )
+
         success_response = order_response.get("success_response", {})
         order_id = success_response.get("order_id", "")
 
         if not order_id:
-            raise ValueError("No order_id returned from Coinbase")
+            raise ValueError("No order_id returned from exchange")
 
     except Exception as e:
         logger.error(f"Error placing limit sell order: {e}")
@@ -359,8 +423,12 @@ async def execute_sell(
         try:
             # Get ticker to calculate mark price
             ticker = await exchange.get_ticker(product_id)
-            best_bid = float(ticker.get("best_bid", 0))
-            best_ask = float(ticker.get("best_ask", 0))
+            best_bid = float(
+                ticker.get("best_bid", 0) or ticker.get("bid", 0)
+            )
+            best_ask = float(
+                ticker.get("best_ask", 0) or ticker.get("ask", 0)
+            )
 
             # Use mark price (mid-point) as limit price
             if best_bid > 0 and best_ask > 0:
@@ -429,8 +497,6 @@ async def execute_sell(
     precision = get_base_precision(product_id)
     base_amount = math.floor(position.total_base_acquired * (10 ** precision)) / (10 ** precision)
 
-    quote_received = base_amount * current_price
-
     logger.info(
         f"  💰 Selling {base_amount:.8f} {product_id.split('-')[0]} "
         f"(raw: {position.total_base_acquired:.8f}, precision: {precision} decimals)"
@@ -439,12 +505,22 @@ async def execute_sell(
     # Execute order via TradingClient (currency-agnostic)
     # Track this as an in-flight order for graceful shutdown
     order_id = None
+    actual_base_sold = base_amount
+    actual_price = current_price
+    quote_received = base_amount * current_price
+
     await shutdown_manager.increment_in_flight()
     try:
         order_response = await trading_client.sell(product_id=product_id, base_amount=base_amount)
 
         # Log the full response for debugging
-        logger.info(f"Coinbase sell order response: {order_response}")
+        logger.info(f"Exchange sell order response: {order_response}")
+
+        # Check for PropGuard safety block
+        if order_response.get("blocked_by") == "propguard":
+            raise ValueError(
+                f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
+            )
 
         # Check success flag first
         if not order_response.get("success", False):
@@ -454,9 +530,9 @@ async def execute_sell(
                 error_msg = error_response.get("message", "Unknown error")
                 error_details = error_response.get("error_details", "")
                 error_code = error_response.get("error", "UNKNOWN")
-                raise ValueError(f"Coinbase sell order failed [{error_code}]: {error_msg}. Details: {error_details}")
+                raise ValueError(f"Sell order failed [{error_code}]: {error_msg}. Details: {error_details}")
             else:
-                raise ValueError(f"Coinbase sell order failed with no error details. Full response: {order_response}")
+                raise ValueError(f"Sell order failed with no error details. Full response: {order_response}")
 
         # Extract order_id from success_response (documented format)
         success_response = order_response.get("success_response", {})
@@ -468,19 +544,89 @@ async def execute_sell(
 
         # CRITICAL: Validate order_id is present
         if not order_id:
-            logger.error(f"Full Coinbase response: {order_response}")
+            logger.error(f"Full exchange response: {order_response}")
             raise ValueError(
-                f"No order_id found in successful Coinbase response. Response keys: {list(order_response.keys())}"
+                f"No order_id found in successful exchange response. Response keys: {list(order_response.keys())}"
             )
+
+        # Fetch actual fill data from exchange with retry
+        logger.info(f"Fetching fill data for sell order {order_id}")
+        max_retries = 10
+        for attempt in range(max_retries):
+            if attempt > 0:
+                delay = min(0.5 * (2 ** (attempt - 1)), 5.0)
+                await asyncio.sleep(delay)
+
+            try:
+                order_details = await exchange.get_order(order_id)
+                filled_size = float(order_details.get("filled_size", "0"))
+                filled_value = float(order_details.get("filled_value", "0"))
+                avg_price = float(
+                    order_details.get("average_filled_price", "0")
+                )
+
+                if filled_size > 0 and filled_value > 0:
+                    actual_base_sold = filled_size
+                    quote_received = filled_value
+                    actual_price = avg_price if avg_price > 0 else current_price
+                    logger.info(
+                        f"Sell order filled: {actual_base_sold:.8f} @ "
+                        f"{actual_price:.8f} = {quote_received:.8f}"
+                    )
+                    break
+
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries}: "
+                    f"Sell order not yet filled"
+                )
+            except Exception as fill_err:
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries}: "
+                    f"Failed to get fill data: {fill_err}"
+                )
+
+            if attempt == max_retries - 1:
+                logger.warning(
+                    f"Could not fetch fill data for {order_id} after "
+                    f"{max_retries} attempts. Using estimate: "
+                    f"{base_amount} @ {current_price}"
+                )
 
     except Exception as e:
         logger.error(f"Error executing sell order: {e}")
+
+        # Record error on position for UI visibility
+        try:
+            position.last_error_message = f"Sell failed: {str(e)[:200]}"
+            position.last_error_timestamp = datetime.utcnow()
+            await db.commit()
+        except Exception:
+            pass  # Don't mask the original error
+
+        # Log failed sell to order history (best-effort)
+        try:
+            await log_order_to_history(
+                db=db,
+                bot=bot,
+                product_id=product_id,
+                position=position,
+                side="SELL",
+                order_type="MARKET",
+                trade_type="sell",
+                quote_amount=base_amount * current_price,
+                price=current_price,
+                status="failed",
+                error_message=str(e)[:200],
+            )
+        except Exception:
+            pass
+
         raise
 
     finally:
         await shutdown_manager.decrement_in_flight()
 
-    # Calculate profit
+    # Calculate profit using actual fill data
     profit_quote = quote_received - position.total_quote_spent
     profit_percentage = (profit_quote / position.total_quote_spent) * 100
 
@@ -496,14 +642,14 @@ async def execute_sell(
         btc_usd_price_at_close = None
         profit_usd = None
 
-    # Record trade
+    # Record trade with actual fill data
     trade = Trade(
         position_id=position.id,
         timestamp=datetime.utcnow(),
         side="sell",
         quote_amount=quote_received,
-        base_amount=base_amount,
-        price=current_price,
+        base_amount=actual_base_sold,
+        price=actual_price,
         trade_type="sell",
         order_id=order_id,
         macd_value=signal_data.get("macd_value") if signal_data else None,
@@ -513,10 +659,10 @@ async def execute_sell(
 
     db.add(trade)
 
-    # Close position
+    # Close position using actual fill data
     position.status = "closed"
     position.closed_at = datetime.utcnow()
-    position.sell_price = current_price
+    position.sell_price = actual_price
     position.total_quote_received = quote_received
     position.profit_quote = profit_quote
     position.profit_percentage = profit_percentage
@@ -530,6 +676,40 @@ async def execute_sell(
 
     # === NON-CRITICAL OPERATIONS BELOW ===
     # These can fail without losing the trade record
+
+    # Log successful sell to order history (best-effort)
+    try:
+        await log_order_to_history(
+            db=db,
+            bot=bot,
+            product_id=product_id,
+            position=position,
+            side="SELL",
+            order_type="MARKET",
+            trade_type="sell",
+            quote_amount=quote_received,
+            price=actual_price,
+            status="success",
+            order_id=order_id,
+            base_amount=actual_base_sold,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log sell order to history (trade was recorded): {e}")
+
+    # Broadcast sell order fill notification via WebSocket (best-effort)
+    try:
+        await ws_manager.broadcast_order_fill(
+            fill_type="sell_order",
+            product_id=product_id,
+            base_amount=actual_base_sold,
+            quote_amount=quote_received,
+            price=actual_price,
+            position_id=position.id,
+            profit=profit_quote,
+            profit_percentage=profit_percentage,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
 
     # Invalidate balance cache after trade (best-effort)
     try:

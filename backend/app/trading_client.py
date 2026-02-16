@@ -40,21 +40,19 @@ class TradingClient:
         Get balance for any currency
 
         Args:
-            currency: Currency code (e.g., "BTC", "USD", "ETH")
+            currency: Currency code (e.g., "BTC", "USD", "USDT", "ETH")
 
         Returns:
             Balance amount
         """
         if currency == "BTC":
             return await self.exchange.get_btc_balance()
-        elif currency == "USD":
+        elif currency in ("USD", "USDT", "USDC"):
             return await self.exchange.get_usd_balance()
         else:
-            # Currently only BTC and USD quote currencies are supported
-            # If other quote currencies are needed in the future, implement balance fetching here
             raise ValueError(
                 f"Unsupported quote currency: {currency}. "
-                f"Only BTC and USD are currently supported as quote currencies."
+                f"Supported: BTC, USD, USDT, USDC."
             )
 
     async def get_quote_balance(self, product_id: str) -> float:
@@ -88,8 +86,8 @@ class TradingClient:
         if quote_currency == "BTC":
             # Buy with BTC
             return await self.exchange.buy_eth_with_btc(btc_amount=quote_amount, product_id=product_id)
-        elif quote_currency == "USD":
-            # Buy with USD
+        elif quote_currency in ("USD", "USDT", "USDC"):
+            # Buy with USD/USDT/USDC (stablecoins treated as USD)
             return await self.exchange.buy_with_usd(usd_amount=quote_amount, product_id=product_id)
         else:
             raise ValueError(f"Unsupported quote currency: {quote_currency}")
@@ -144,11 +142,23 @@ class TradingClient:
         if quote_currency == "BTC":
             # Sell for BTC
             return await self.exchange.sell_eth_for_btc(eth_amount=base_amount, product_id=product_id)
-        elif quote_currency == "USD":
-            # Sell for USD
+        elif quote_currency in ("USD", "USDT", "USDC"):
+            # Sell for USD/USDT/USDC (stablecoins treated as USD)
             return await self.exchange.sell_for_usd(base_amount=base_amount, product_id=product_id)
         else:
             raise ValueError(f"Unsupported quote currency: {quote_currency}")
+
+    async def get_order(self, order_id: str) -> Dict[str, Any]:
+        """
+        Get order details by ID
+
+        Args:
+            order_id: Exchange order ID
+
+        Returns:
+            Order details from exchange
+        """
+        return await self.exchange.get_order(order_id)
 
     async def cancel_order(self, order_id: str) -> Dict[str, Any]:
         """

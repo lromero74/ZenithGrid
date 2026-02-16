@@ -152,13 +152,16 @@ class CoinbaseAdapter(ExchangeClient):
         end: int,
         granularity: str,
     ) -> List[Dict[str, Any]]:
-        """Get historical OHLCV candle data."""
-        return await self._client.get_candles(
+        """Get historical OHLCV candle data (returns oldest-first)."""
+        candles = await self._client.get_candles(
             product_id=product_id,
             start=start,
             end=end,
             granularity=granularity,
         )
+        # Coinbase returns newest-first; reverse to chronological (oldest-first)
+        candles.reverse()
+        return candles
 
     async def get_product_book(self, product_id: str, limit: int = 50) -> Dict[str, Any]:
         """Get order book (Level 2) for a product."""

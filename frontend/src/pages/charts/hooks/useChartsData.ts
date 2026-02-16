@@ -8,7 +8,8 @@ export function useChartsData(
   selectedInterval: string,
   chartType: string,
   useHeikinAshi: boolean,
-  indicators: any[]
+  indicators: any[],
+  accountId?: number | null,
 ) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -29,11 +30,12 @@ export function useChartsData(
     refetchOnWindowFocus: false,
   })
 
-  // Fetch all available products from Coinbase
+  // Fetch all available products (exchange-aware via account_id)
   const { data: productsData } = useQuery({
-    queryKey: ['available-products'],
+    queryKey: ['available-products', accountId],
     queryFn: async () => {
-      const response = await authFetch('/api/products')
+      const url = accountId ? `/api/products?account_id=${accountId}` : '/api/products'
+      const response = await authFetch(url)
       if (!response.ok) throw new Error('Failed to fetch products')
       return response.json()
     },

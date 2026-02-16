@@ -51,6 +51,8 @@ export function BotListItem({
   const { addToast } = useNotifications()
   const botPairs = ((bot as any).product_ids || [bot.product_id])
   const strategyName = strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
+  const botAccount = accounts.find(a => a.id === bot.account_id)
+  const exchangeName = botAccount?.exchange || 'coinbase'
   const aiProvider = bot.strategy_config?.ai_provider
 
   // Ref and position for fixed-position dropdown menu
@@ -123,6 +125,11 @@ export function BotListItem({
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
             <span className="font-medium text-white">{bot.name}</span>
+            {exchangeName !== 'coinbase' && (
+              <span className="px-1 py-0.5 text-[9px] font-medium bg-purple-500/20 text-purple-300 rounded">
+                {exchangeName === 'bybit' ? 'BYBIT' : exchangeName === 'mt5_bridge' ? 'MT5' : exchangeName.toUpperCase()}
+              </span>
+            )}
             {(bot as any).insufficient_funds && (
               <span
                 className="text-amber-500 text-sm"

@@ -86,8 +86,8 @@ export function LimitCloseModal({
         console.error('Failed to fetch product precision:', err)
         // Use defaults if fetch fails
         setProductPrecision({
-          quote_increment: quoteCurrency === 'USD' ? '0.01' : '0.00000001',
-          quote_decimals: quoteCurrency === 'USD' ? 2 : 8,
+          quote_increment: ['USD', 'USDT', 'USDC'].includes(quoteCurrency) ? '0.01' : '0.00000001',
+          quote_decimals: ['USD', 'USDT', 'USDC'].includes(quoteCurrency) ? 2 : 8,
           base_increment: '0.00000001'
         })
       }
@@ -346,7 +346,7 @@ export function LimitCloseModal({
 
   // Get precision for the quote currency
   const getPrecision = () => {
-    if (quoteCurrency === 'USD') return 2
+    if (['USD', 'USDT', 'USDC'].includes(quoteCurrency)) return 2
     if (quoteCurrency === 'BTC') return 8
     return 8
   }
@@ -357,7 +357,7 @@ export function LimitCloseModal({
       return parseFloat(productPrecision.quote_increment)
     }
     // Fallback defaults
-    if (quoteCurrency === 'USD') return 0.01
+    if (['USD', 'USDT', 'USDC'].includes(quoteCurrency)) return 0.01
     if (quoteCurrency === 'BTC') return 0.00000001
     return 0.00000001
   }

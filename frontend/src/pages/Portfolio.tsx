@@ -103,7 +103,6 @@ function Portfolio() {
   const canSellToUSD = (asset: string) => {
     // Can't sell USD, USDC, USDT to USD (they are quote currencies)
     if (['USD', 'USDC', 'USDT'].includes(asset)) return false
-    // All other assets can typically be sold to USD on Coinbase
     return true
   }
 
@@ -111,9 +110,8 @@ function Portfolio() {
   const canSellToBTC = (asset: string) => {
     // Can't sell BTC to BTC
     if (asset === 'BTC') return false
-    // Can't sell USD/stablecoins to BTC (no such market)
+    // Can't sell USD/stablecoins to BTC (no such market on most exchanges)
     if (['USD', 'USDC', 'USDT'].includes(asset)) return false
-    // Most other assets have BTC pairs on Coinbase
     return true
   }
 

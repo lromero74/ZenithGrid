@@ -89,6 +89,9 @@ from app.services.perps_monitor import PerpsMonitor  # noqa: E402
 
 perps_monitor = PerpsMonitor(interval_seconds=60)
 
+# PropGuard safety monitor - monitors prop firm equity/drawdown
+from app.services.prop_guard_monitor import start_prop_guard_monitor, stop_prop_guard_monitor  # noqa: E402
+
 # Background task handles
 limit_order_monitor_task = None
 order_reconciliation_monitor_task = None
@@ -125,6 +128,9 @@ app.include_router(account_value_router.router)  # Account value history trackin
 app.include_router(trading_router.router)  # Manual trading operations
 app.include_router(seasonality_router.router)  # Seasonality-based bot management
 app.include_router(perps_router.router)  # Perpetual futures (INTX) management
+
+from app.routers import prop_guard_router  # noqa: E402
+app.include_router(prop_guard_router.router)  # PropGuard safety monitoring
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -179,6 +185,26 @@ async def run_limit_order_monitor():
                 print(f"   ✅ Startup reconciliation complete: Checked {len(positions)} orders")
             else:
                 print("   ✅ No pending limit orders to check")
+
+            # Fix orphaned positions: closing_via_limit=True but no order ID
+            # This can happen if a cancel+replace failed midway before restart
+            orphaned = await db.execute(
+                select(Position).where(
+                    Position.status == "open",
+                    Position.closing_via_limit.is_(True),
+                    Position.limit_close_order_id.is_(None)
+                )
+            )
+            orphaned_positions = orphaned.scalars().all()
+            if orphaned_positions:
+                print(
+                    f"   ⚠️ Found {len(orphaned_positions)} orphaned positions "
+                    f"(closing_via_limit=True but no order ID) - clearing flags..."
+                )
+                for pos in orphaned_positions:
+                    pos.closing_via_limit = False
+                    print(f"   Fixed position {pos.id}: cleared closing_via_limit")
+                await db.commit()
     except Exception as e:
         print(f"   ❌ Error in startup reconciliation: {e}")
 
@@ -212,7 +238,11 @@ async def run_limit_order_monitor():
 
 # Background task for order reconciliation
 async def run_order_reconciliation_monitor():
-    """Background task that auto-fixes positions with missing fill data"""
+    """Background task that auto-fixes positions with missing fill data.
+
+    Runs immediately on startup (catch crash-orphaned orders), then
+    checks every 60 seconds.
+    """
     from sqlalchemy import select
 
     from app.database import async_session_maker
@@ -220,8 +250,12 @@ async def run_order_reconciliation_monitor():
     from app.services.exchange_service import get_exchange_client_for_account
     from app.services.order_reconciliation_monitor import OrderReconciliationMonitor
 
+    first_run = True
     while True:
         try:
+            if first_run:
+                print("🔄 Running startup reconciliation for orphaned orders...")
+
             async with async_session_maker() as db:
                 # Get positions that might need reconciliation (open positions)
                 result = await db.execute(
@@ -243,8 +277,16 @@ async def run_order_reconciliation_monitor():
                         if exchange:
                             monitor = OrderReconciliationMonitor(db, exchange)
                             await monitor.check_and_fix_orphaned_positions()
+
+            if first_run:
+                print("   ✅ Startup order reconciliation complete")
+                first_run = False
+
         except Exception as e:
             logger.error(f"Error in order reconciliation monitor loop: {e}")
+            if first_run:
+                print(f"   ❌ Startup order reconciliation error: {e}")
+                first_run = False
 
         # Check every 60 seconds (less frequent than limit orders)
         await asyncio.sleep(60)
@@ -252,7 +294,7 @@ async def run_order_reconciliation_monitor():
 
 # Background task for detecting missing orders
 async def run_missing_order_detector():
-    """Background task that detects orders on Coinbase not recorded in our DB"""
+    """Background task that detects orders on exchanges not recorded in our DB"""
     from sqlalchemy import select
 
     from app.database import async_session_maker
@@ -266,15 +308,25 @@ async def run_missing_order_detector():
     while True:
         try:
             async with async_session_maker() as db:
-                # Get primary account (account_id=1 for now, could be extended)
-                result = await db.execute(select(Account).where(Account.id == 1))
-                account = result.scalars().first()
+                # Check all active accounts (not just account_id=1)
+                result = await db.execute(
+                    select(Account).where(Account.is_active.is_(True))
+                )
+                accounts = result.scalars().all()
 
-                if account:
-                    exchange = await get_exchange_client_for_account(db, account.id)
-                    if exchange:
-                        detector = MissingOrderDetector(db, exchange)
-                        await detector.check_for_missing_orders()
+                for account in accounts:
+                    try:
+                        exchange = await get_exchange_client_for_account(
+                            db, account.id
+                        )
+                        if exchange:
+                            detector = MissingOrderDetector(db, exchange)
+                            await detector.check_for_missing_orders()
+                    except Exception as e:
+                        logger.error(
+                            f"Error checking missing orders for account "
+                            f"{account.id}: {e}"
+                        )
         except Exception as e:
             logger.error(f"Error in missing order detector loop: {e}")
 
@@ -304,8 +356,13 @@ async def run_account_snapshot_capture():
                 for user in users:
                     try:
                         logger.info(f"Capturing account snapshots for user {user.id}")
-                        result = await account_snapshot_service.capture_all_account_snapshots(db, user.id)
-                        logger.info(f"User {user.id}: {result['success_count']}/{result['total_accounts']} snapshots captured")
+                        result = await account_snapshot_service.capture_all_account_snapshots(
+                            db, user.id
+                        )
+                        logger.info(
+                            f"User {user.id}: {result['success_count']}/"
+                            f"{result['total_accounts']} snapshots captured"
+                        )
                         if result['errors']:
                             for error in result['errors']:
                                 logger.warning(f"Snapshot error: {error}")
@@ -322,7 +379,10 @@ async def run_account_snapshot_capture():
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
-    global limit_order_monitor_task, order_reconciliation_monitor_task, missing_order_detector_task, decision_log_cleanup_task, failed_condition_cleanup_task, failed_order_cleanup_task, account_snapshot_task
+    global limit_order_monitor_task, order_reconciliation_monitor_task
+    global missing_order_detector_task, decision_log_cleanup_task
+    global failed_condition_cleanup_task, failed_order_cleanup_task
+    global account_snapshot_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -374,6 +434,10 @@ async def startup_event():
     await perps_monitor.start()
     print("🚀 Perps monitor started - syncing futures positions every 60s")
 
+    print("🚀 Starting PropGuard safety monitor...")
+    await start_prop_guard_monitor()
+    print("🚀 PropGuard monitor started - checking prop firm drawdowns every 30s")
+
     print("🚀 Building changelog cache...")
     build_changelog_cache()
     print("🚀 Changelog cache built")
@@ -424,6 +488,9 @@ async def shutdown_event():
 
     if perps_monitor:
         await perps_monitor.stop()
+
+    logger.info("🛑 Stopping PropGuard monitor...")
+    await stop_prop_guard_monitor()
 
     if limit_order_monitor_task:
         limit_order_monitor_task.cancel()

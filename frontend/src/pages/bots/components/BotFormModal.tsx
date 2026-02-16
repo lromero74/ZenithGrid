@@ -1377,7 +1377,7 @@ export function BotFormModal({
                     Cannot Save - Order Size Below Exchange Minimum
                   </div>
                   <div className="text-sm text-red-200/90 mb-3">
-                    Your configured order percentages result in order sizes below Coinbase's minimum. Increase the percentages or add more funds to your account.
+                    Your configured order percentages result in order sizes below the exchange minimum. Increase the percentages or add more funds to your account.
                   </div>
                   <div className="space-y-2">
                     {validationErrors.map((error, idx) => (
@@ -1409,7 +1409,7 @@ export function BotFormModal({
                     Minimum Order Size Warning
                   </div>
                   <div className="text-sm text-yellow-200/90 mb-3">
-                    The following products may fail to execute orders because your configured budget percentage is below Coinbase's minimum order size:
+                    The following products may fail to execute orders because your configured budget percentage is below the exchange's minimum order size:
                   </div>
                   <div className="space-y-2">
                     {validationWarnings.map((warning, idx) => (

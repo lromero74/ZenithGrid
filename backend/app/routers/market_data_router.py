@@ -24,6 +24,8 @@ from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.models import Account
+from app.routers.auth_dependencies import get_current_user
+from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 
@@ -250,10 +252,35 @@ async def get_candles(
 
 
 @router.get("/products")
-async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
-    """Get all available trading products from Coinbase"""
+async def get_products(
+    account_id: Optional[int] = Query(None, description="Account ID to fetch products for"),
+    coinbase: CoinbaseClient = Depends(get_coinbase),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get all available trading products for an exchange account"""
     try:
-        products = await coinbase.list_products()
+        # Use account-specific exchange client if provided
+        exchange = None
+        if account_id is not None:
+            # Verify user owns this account before creating client
+            acct_result = await db.execute(
+                select(Account).where(
+                    Account.id == account_id,
+                    Account.user_id == current_user.id,
+                )
+            )
+            if not acct_result.scalar_one_or_none():
+                raise HTTPException(status_code=404, detail="Account not found")
+
+            exchange = await get_exchange_client_for_account(db, account_id)
+            if exchange:
+                products = await exchange.list_products()
+            else:
+                logger.warning(f"Account {account_id} client unavailable, falling back to default")
+                products = await coinbase.list_products()
+        else:
+            products = await coinbase.list_products()
 
         # Filter to only USD, USDC, and BTC pairs that are tradeable
         filtered_products = []
@@ -262,13 +289,25 @@ async def get_products(coinbase: CoinbaseClient = Depends(get_coinbase)):
             status = product.get("status", "")
 
             # Only include online/active products
-            if status != "online":
+            # Coinbase uses "online", ByBit uses "Trading"
+            if status not in ("online", "Trading"):
                 continue
 
             # Only include USD, USDC, and BTC pairs
-            if product_id.endswith("-USD") or product_id.endswith("-USDC") or product_id.endswith("-BTC"):
-                base_currency = product.get("base_currency_id", "")
-                quote_currency = product.get("quote_currency_id", "")
+            if (
+                product_id.endswith("-USD")
+                or product_id.endswith("-USDC")
+                or product_id.endswith("-BTC")
+            ):
+                # Coinbase uses *_id suffix, ByBit uses plain names
+                base_currency = (
+                    product.get("base_currency_id", "")
+                    or product.get("base_currency", "")
+                )
+                quote_currency = (
+                    product.get("quote_currency_id", "")
+                    or product.get("quote_currency", "")
+                )
 
                 filtered_products.append(
                     {

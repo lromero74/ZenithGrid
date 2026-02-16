@@ -3,6 +3,9 @@ Limit Order Monitoring Service
 
 Monitors pending limit orders and updates positions when they fill.
 Runs as a background task to check order status periodically.
+
+Exchange-agnostic: works with any ExchangeClient implementation
+(Coinbase, ByBit, MT5, PropGuard wrapper).
 """
 
 import asyncio
@@ -12,8 +15,8 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exchange_clients.base import ExchangeClient
 from app.models import Position, PendingOrder, Trade
-from app.coinbase_unified_client import CoinbaseClient
 from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -22,9 +25,9 @@ logger = logging.getLogger(__name__)
 class LimitOrderMonitor:
     """Monitors limit orders and processes fills"""
 
-    def __init__(self, db: AsyncSession, coinbase_client: CoinbaseClient):
+    def __init__(self, db: AsyncSession, exchange: ExchangeClient):
         self.db = db
-        self.coinbase = coinbase_client
+        self.exchange = exchange
 
     async def startup_reconciliation(self):
         """
@@ -101,8 +104,8 @@ class LimitOrderMonitor:
                 )
                 return
 
-            # Fetch order status from Coinbase
-            order_data = await self.coinbase.get_order(position.limit_close_order_id)
+            # Fetch order status from exchange
+            order_data = await self.exchange.get_order(position.limit_close_order_id)
 
             if not order_data:
                 logger.warning(f"Could not fetch order data for {position.limit_close_order_id}")
@@ -271,7 +274,7 @@ class LimitOrderMonitor:
             )
 
             # Get current ticker for bid price
-            ticker = await self.coinbase.get_ticker(position.product_id)
+            ticker = await self.exchange.get_ticker(position.product_id)
             best_bid = float(ticker.get("best_bid", 0))
 
             if best_bid <= 0:
@@ -296,9 +299,10 @@ class LimitOrderMonitor:
                 )
                 return
 
-            # Profit threshold met - use Edit Order API to change price to bid
+            # Profit threshold met - adjust limit order price to bid
             logger.info(
-                f"🔄 Position {position.id}: Editing limit order price from {pending_order.limit_price:.8f} to bid {best_bid:.8f}"
+                f"🔄 Position {position.id}: Adjusting limit order price "
+                f"from {pending_order.limit_price:.8f} to bid {best_bid:.8f}"
             )
 
             try:
@@ -306,34 +310,46 @@ class LimitOrderMonitor:
                 from app.product_precision import format_quote_amount_for_product
                 formatted_bid = format_quote_amount_for_product(best_bid, position.product_id)
 
-                # Use Coinbase's native Edit Order API (atomic, may preserve queue position)
-                edit_result = await self.coinbase.edit_order(
-                    order_id=pending_order.order_id,
-                    price=formatted_bid
-                )
+                try:
+                    # Try native edit_order API (atomic, preserves queue position)
+                    edit_result = await self.exchange.edit_order(
+                        order_id=pending_order.order_id,
+                        price=formatted_bid
+                    )
 
-                # Check if edit was successful
-                if edit_result.get("error_response"):
-                    error_response = edit_result.get("error_response", {})
-                    error_msg = error_response.get("message", "Unknown error")
-                    raise Exception(f"Edit order failed: {error_msg}")
+                    # Check if edit was successful
+                    if edit_result.get("error_response"):
+                        error_response = edit_result.get("error_response", {})
+                        error_msg = error_response.get("message", "Unknown error")
+                        raise Exception(f"Edit order failed: {error_msg}")
+
+                    logger.info(
+                        f"✅ Position {position.id}: Order price edited to bid "
+                        f"{best_bid:.8f} (Order ID: {pending_order.order_id})"
+                    )
+
+                    # Update pending order with new price (same order_id)
+                    pending_order.limit_price = best_bid
+                    pending_order.created_at = datetime.utcnow()
+                    await self.db.commit()
+
+                except NotImplementedError:
+                    # Exchange doesn't support edit — cancel + new order
+                    logger.info(
+                        f"Position {position.id}: Exchange doesn't support "
+                        f"edit_order, using cancel+replace"
+                    )
+                    await self._cancel_and_replace_order(
+                        position, pending_order, formatted_bid, best_bid
+                    )
 
                 logger.info(
-                    f"✅ Position {position.id}: Order price edited to bid {best_bid:.8f} (Order ID: {pending_order.order_id})"
-                )
-
-                # Update pending order with new price (same order_id)
-                pending_order.limit_price = best_bid
-                pending_order.created_at = datetime.utcnow()  # Reset timer for edited order
-
-                await self.db.commit()
-
-                logger.info(
-                    f"🎉 Position {position.id}: Successfully adjusted to bid price - should fill quickly"
+                    f"🎉 Position {position.id}: Successfully adjusted to "
+                    f"bid price - should fill quickly"
                 )
 
             except Exception as e:
-                logger.error(f"❌ Position {position.id}: Failed to edit limit order: {e}")
+                logger.error(f"❌ Position {position.id}: Failed to adjust limit order: {e}")
                 logger.warning(
                     f"⚠️ Position {position.id}: Order remains at original price {pending_order.limit_price:.8f}"
                 )
@@ -344,6 +360,139 @@ class LimitOrderMonitor:
 
         except Exception as e:
             logger.error(f"Error in bid fallback check for position {position.id}: {e}")
+
+    async def _cancel_and_replace_order(
+        self,
+        position: Position,
+        pending_order: PendingOrder,
+        formatted_bid: str,
+        best_bid: float,
+    ):
+        """Cancel existing order and place a new one at the bid price.
+
+        Used as fallback when the exchange doesn't support edit_order().
+
+        Handles edge cases:
+        - If the cancelled order filled between our last check and
+          cancel, we detect it and skip replacement.
+        - If the replacement order fails, we clear closing_via_limit
+          so the position returns to normal monitoring on the next
+          cycle (or after restart).
+        - Uses pending_order remaining amount, not position total,
+          to handle partially-filled orders correctly.
+        """
+        old_order_id = pending_order.order_id
+
+        # Cancel the old order
+        cancel_result = await self.exchange.cancel_order(old_order_id)
+        if not cancel_result.get("success", False):
+            raise Exception(
+                f"Cancel failed: {cancel_result.get('error', 'unknown')}"
+            )
+
+        # Check if the cancelled order filled between our last check
+        # and the cancel. This prevents double-selling.
+        try:
+            cancelled_order = await self.exchange.get_order(old_order_id)
+            if cancelled_order:
+                filled_size = float(
+                    cancelled_order.get("filled_size", "0")
+                )
+                if filled_size > 0:
+                    status = cancelled_order.get("status", "")
+                    if status == "FILLED":
+                        logger.info(
+                            f"Position {position.id}: Cancelled order "
+                            f"was actually FILLED — processing as fill"
+                        )
+                        await self._process_order_completion(
+                            position, pending_order,
+                            cancelled_order, "FILLED"
+                        )
+                        return
+                    # Partial fill on cancel — update pending_order
+                    # and use remaining amount for replacement
+                    filled_value = float(
+                        cancelled_order.get("filled_value", "0")
+                    )
+                    avg_price = (
+                        filled_value / filled_size
+                        if filled_size > 0 else 0
+                    )
+                    await self._process_partial_fills(
+                        position, pending_order, cancelled_order
+                    )
+                    logger.info(
+                        f"Position {position.id}: Cancelled order had "
+                        f"partial fill: {filled_size} @ {avg_price:.8f}"
+                    )
+        except Exception as e:
+            logger.warning(
+                f"Position {position.id}: Could not check "
+                f"cancelled order fill state: {e}"
+            )
+
+        # Use remaining amount (handles partial fills correctly)
+        remaining = pending_order.remaining_base_amount
+        if remaining is None or remaining <= 0:
+            remaining = pending_order.base_amount or (
+                position.total_base_acquired
+            )
+
+        # Place new limit sell at bid price
+        try:
+            new_order_resp = await self.exchange.create_limit_order(
+                product_id=position.product_id,
+                side="SELL",
+                limit_price=float(formatted_bid),
+                size=str(remaining),
+            )
+        except Exception as replace_err:
+            # Replacement failed — clear closing flags so the
+            # position re-enters normal monitoring.  On restart,
+            # startup_reconciliation will find it has no order_id
+            # and will leave it as a normal open position.
+            logger.error(
+                f"Position {position.id}: Replacement order "
+                f"failed: {replace_err} — clearing limit close "
+                f"flags for re-evaluation"
+            )
+            position.closing_via_limit = False
+            position.limit_close_order_id = None
+            pending_order.status = "cancelled"
+            pending_order.canceled_at = datetime.utcnow()
+            await self.db.commit()
+            raise
+
+        # Extract new order_id
+        success_resp = new_order_resp.get("success_response", {})
+        new_order_id = (
+            success_resp.get("order_id", "")
+            or new_order_resp.get("order_id", "")
+        )
+
+        if not new_order_id:
+            # No order_id — same recovery as replacement failure
+            position.closing_via_limit = False
+            position.limit_close_order_id = None
+            pending_order.status = "cancelled"
+            pending_order.canceled_at = datetime.utcnow()
+            await self.db.commit()
+            raise Exception("No order_id in replacement order response")
+
+        # Update tracking
+        pending_order.order_id = new_order_id
+        pending_order.limit_price = best_bid
+        pending_order.created_at = datetime.utcnow()
+        pending_order.status = "pending"
+        position.limit_close_order_id = new_order_id
+
+        await self.db.commit()
+        logger.info(
+            f"✅ Position {position.id}: Replaced order with "
+            f"new order {new_order_id} @ {best_bid:.8f} "
+            f"(size: {remaining})"
+        )
 
     async def _process_order_completion(
         self, position: Position, pending_order: PendingOrder, order_data: dict, order_status: str
@@ -407,7 +556,7 @@ class LimitOrderMonitor:
                 # Calculate USD profit if BTC pair
                 quote_currency = position.get_quote_currency()
                 if quote_currency == "BTC":
-                    btc_usd_price = await self.coinbase.get_btc_usd_price()
+                    btc_usd_price = await self.exchange.get_btc_usd_price()
                     position.btc_usd_price_at_close = btc_usd_price
                     position.profit_usd = position.profit_quote * btc_usd_price
 
@@ -471,9 +620,9 @@ class LimitOrderMonitor:
             await self.db.rollback()
 
 
-async def run_limit_order_monitor(db: AsyncSession, coinbase_client: CoinbaseClient):
+async def run_limit_order_monitor(db: AsyncSession, exchange: ExchangeClient):
     """Main loop for limit order monitoring"""
-    monitor = LimitOrderMonitor(db, coinbase_client)
+    monitor = LimitOrderMonitor(db, exchange)
 
     # Run startup reconciliation to catch orders that filled during downtime
     logger.info("🚀 Starting limit order monitor with startup reconciliation...")
