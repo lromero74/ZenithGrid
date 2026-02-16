@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Link, useLocation, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
 import { positionsApi, authFetch } from './services/api'
@@ -17,6 +17,10 @@ import { MiniPlayer } from './components/MiniPlayer'
 import { ArticleReaderMiniPlayer } from './components/ArticleReaderMiniPlayer'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
 import { AboutModal } from './components/AboutModal'
+import { EmailVerificationPending } from './components/EmailVerificationPending'
+import { MFAEncouragement, MFA_DISMISSED_KEY } from './components/MFAEncouragement'
+import { VerifyEmail } from './components/VerifyEmail'
+import { ResetPassword } from './components/ResetPassword'
 import Login from './pages/Login'
 
 // App version - fetched from backend API at runtime (avoids Vite cache issues)
@@ -633,10 +637,59 @@ function AppContent() {
   )
 }
 
+// Verify Email route handler (works regardless of auth state)
+function VerifyEmailRoute() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const token = searchParams.get('token') || ''
+
+  if (!token) {
+    return <Navigate to="/" replace />
+  }
+
+  return (
+    <VerifyEmail
+      token={token}
+      onComplete={() => navigate('/', { replace: true })}
+    />
+  )
+}
+
+// Reset Password route handler (works regardless of auth state)
+function ResetPasswordRoute() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const token = searchParams.get('token') || ''
+
+  if (!token) {
+    return <Navigate to="/" replace />
+  }
+
+  return (
+    <ResetPassword
+      token={token}
+      onComplete={() => navigate('/', { replace: true })}
+    />
+  )
+}
+
 // Root App component - handles authentication wrapper
 function App() {
   const { isAuthenticated, isLoading, user, acceptTerms, logout } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false)
+  const [mfaDismissed, setMfaDismissed] = useState(
+    () => localStorage.getItem(MFA_DISMISSED_KEY) === 'true'
+  )
+
+  // Handle special routes that work regardless of auth state
+  if (location.pathname === '/verify-email') {
+    return <VerifyEmailRoute />
+  }
+  if (location.pathname === '/reset-password') {
+    return <ResetPasswordRoute />
+  }
 
   // Handle terms acceptance
   const handleAcceptTerms = async () => {
@@ -669,6 +722,11 @@ function App() {
     return <Login />
   }
 
+  // Gate: Email verification required
+  if (user && !user.email_verified) {
+    return <EmailVerificationPending />
+  }
+
   // Show risk disclaimer if user hasn't accepted terms yet
   if (user && !user.terms_accepted_at) {
     return (
@@ -676,6 +734,19 @@ function App() {
         onAccept={handleAcceptTerms}
         onDecline={handleDeclineTerms}
         isLoading={isAcceptingTerms}
+      />
+    )
+  }
+
+  // Gate: MFA encouragement (one time, after email verified + terms accepted)
+  if (user && !user.mfa_enabled && !mfaDismissed) {
+    return (
+      <MFAEncouragement
+        onSetupMFA={() => {
+          setMfaDismissed(true)
+          navigate('/settings')
+        }}
+        onSkip={() => setMfaDismissed(true)}
       />
     )
   }

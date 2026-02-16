@@ -16,6 +16,8 @@ interface User {
   is_active: boolean
   is_superuser: boolean
   mfa_enabled: boolean
+  email_verified: boolean
+  email_verified_at: string | null
   created_at: string
   last_login_at: string | null
   terms_accepted_at: string | null  // NULL = must accept terms before accessing dashboard
@@ -36,6 +38,11 @@ interface AuthContextType {
   getAccessToken: () => string | null
   acceptTerms: () => Promise<void>
   updateUser: (user: User) => void  // Update user state (e.g., after MFA enable/disable)
+  verifyEmail: (token: string) => Promise<void>
+  verifyEmailCode: (code: string) => Promise<void>
+  resendVerification: () => Promise<void>
+  forgotPassword: (email: string) => Promise<void>
+  resetPassword: (token: string, newPassword: string) => Promise<void>
 }
 
 interface LoginResponse {
@@ -85,6 +92,11 @@ const AuthContext = createContext<AuthContextType>({
   getAccessToken: () => null,
   acceptTerms: async () => {},
   updateUser: () => {},
+  verifyEmail: async () => {},
+  verifyEmailCode: async () => {},
+  resendVerification: async () => {},
+  forgotPassword: async () => {},
+  resetPassword: async () => {},
 })
 
 // Helper to check if token is expired
@@ -412,6 +424,95 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
   }, [])
 
+  // Verify email with token from email link
+  const verifyEmail = useCallback(async (token: string): Promise<void> => {
+    const response = await fetch(`${API_BASE}/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Email verification failed')
+    }
+
+    const updatedUser: User = await response.json()
+    setUser(updatedUser)
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
+  }, [])
+
+  // Verify email with 6-digit code (authenticated user enters code)
+  const verifyEmailCode = useCallback(async (code: string): Promise<void> => {
+    const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+    if (!accessToken) throw new Error('Not authenticated')
+
+    const response = await fetch(`${API_BASE}/verify-email-code`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ code }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Code verification failed')
+    }
+
+    const updatedUser: User = await response.json()
+    setUser(updatedUser)
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
+  }, [])
+
+  // Resend verification email (authenticated)
+  const resendVerification = useCallback(async (): Promise<void> => {
+    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+    if (!token) throw new Error('Not authenticated')
+
+    const response = await fetch(`${API_BASE}/resend-verification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to resend verification email')
+    }
+  }, [])
+
+  // Request password reset email (unauthenticated)
+  const forgotPassword = useCallback(async (email: string): Promise<void> => {
+    const response = await fetch(`${API_BASE}/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to send reset email')
+    }
+  }, [])
+
+  // Reset password with token (unauthenticated)
+  const resetPassword = useCallback(async (token: string, newPassword: string): Promise<void> => {
+    const response = await fetch(`${API_BASE}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to reset password')
+    }
+  }, [])
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -427,6 +528,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getAccessToken,
     acceptTerms,
     updateUser,
+    verifyEmail,
+    verifyEmailCode,
+    resendVerification,
+    forgotPassword,
+    resetPassword,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

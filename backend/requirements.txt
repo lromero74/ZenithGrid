@@ -38,3 +38,6 @@ edge-tts>=6.1.0
 # TOTP MFA (Two-Factor Authentication)
 pyotp>=2.9.0
 qrcode[pil]>=7.4
+
+# Email via Amazon SES
+boto3>=1.35.0
