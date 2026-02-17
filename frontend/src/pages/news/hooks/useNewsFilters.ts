@@ -81,13 +81,13 @@ export const useNewsFilters = ({
     () => new Set(saved?.selectedSources?.length ? saved.selectedSources : [])
   )
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
-    () => new Set(saved?.selectedCategories?.length ? saved.selectedCategories : ['CryptoCurrency'])
+    () => new Set(saved?.selectedCategories?.length ? saved.selectedCategories : NEWS_CATEGORIES)
   )
   const [selectedVideoSources, setSelectedVideoSources] = useState<Set<string>>(
     () => new Set(saved?.selectedVideoSources?.length ? saved.selectedVideoSources : [])
   )
   const [selectedVideoCategories, setSelectedVideoCategories] = useState<Set<string>>(
-    () => new Set(saved?.selectedVideoCategories?.length ? saved.selectedVideoCategories : ['CryptoCurrency'])
+    () => new Set(saved?.selectedVideoCategories?.length ? saved.selectedVideoCategories : NEWS_CATEGORIES)
   )
   const [currentPage, setCurrentPage] = useState(saved?.currentPage ?? 1)
 

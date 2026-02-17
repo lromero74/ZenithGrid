@@ -45,6 +45,8 @@ class NewsResponse(BaseModel):
     page: int = 1
     page_size: int = 50
     total_pages: int = 1
+    # Retention info
+    retention_days: int = 14
 
 
 class VideoResponse(BaseModel):

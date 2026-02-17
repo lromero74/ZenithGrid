@@ -90,6 +90,7 @@ export interface NewsResponse {
   page: number
   page_size: number
   total_pages: number
+  retention_days?: number
 }
 
 export interface VideoResponse {
