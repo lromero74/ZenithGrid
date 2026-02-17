@@ -220,8 +220,20 @@ export function ArticleReaderMiniPlayer() {
     seekToTime(targetTime)
   }, [duration, seekToTime])
 
+  // P2: Event delegation for word clicks — single handler on container
+  const handleWordClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    const ttsIdx = target.dataset?.ttsIdx
+    if (ttsIdx !== undefined) {
+      seekToWord(parseInt(ttsIdx, 10))
+    }
+  }, [seekToWord])
+
   // Build word-highlighted content by matching TTS words to text words sequentially
   const renderedContent = useMemo(() => {
+    // M7: Reset stale DOM refs when content changes
+    wordRefs.current = []
+
     // Show placeholder if no content yet
     if (!plainText) {
       return (
@@ -360,11 +372,7 @@ export function ArticleReaderMiniPlayer() {
               wordRefs.current[firstTTSIndex] = el
             }
           }}
-          onClick={() => {
-            if (firstTTSIndex !== undefined) {
-              seekToWord(firstTTSIndex)
-            }
-          }}
+          data-tts-idx={firstTTSIndex}
           className="text-slate-300 transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50"
         >
           {tw.text}
@@ -384,7 +392,7 @@ export function ArticleReaderMiniPlayer() {
     }
 
     return <p className="leading-relaxed whitespace-pre-wrap">{elements}</p>
-  }, [words, plainText, seekToWord])
+  }, [words, plainText])
 
   // Don't render if not showing
   if (!isPlaying || !showMiniPlayer || !currentArticle) {
@@ -485,7 +493,7 @@ export function ArticleReaderMiniPlayer() {
             >
               <div className="px-3 sm:px-6 py-2">
                 {/* Article content with word highlighting */}
-                <div className="prose prose-invert prose-slate max-w-none">
+                <div className="prose prose-invert prose-slate max-w-none" onClick={handleWordClick}>
                   {articleContentLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full" />

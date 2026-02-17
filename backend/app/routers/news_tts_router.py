@@ -15,9 +15,10 @@ import logging
 import os
 import re
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import edge_tts
 from fastapi import APIRouter, Depends, HTTPException
@@ -47,14 +48,73 @@ TTS_CACHE_DIR = Path(
 # =============================================================================
 
 _tts_semaphore = asyncio.Semaphore(3)
-_tts_user_semaphores: Dict[int, asyncio.Semaphore] = {}
+
+# M2: Bounded per-user semaphore dict (semaphore + last-used monotonic time)
+_MAX_USER_SEMAPHORES = 100
+_SEMAPHORE_TTL = 3600  # 1 hour
+_tts_user_semaphores: Dict[int, Tuple[asyncio.Semaphore, float]] = {}
 
 
 def _get_user_tts_semaphore(user_id: int) -> asyncio.Semaphore:
     """Get or create a per-user TTS semaphore (limit 1 per user)."""
-    if user_id not in _tts_user_semaphores:
-        _tts_user_semaphores[user_id] = asyncio.Semaphore(1)
-    return _tts_user_semaphores[user_id]
+    now = time.monotonic()
+    if user_id in _tts_user_semaphores:
+        sem, _ = _tts_user_semaphores[user_id]
+        _tts_user_semaphores[user_id] = (sem, now)
+        return sem
+
+    # Prune if over limit
+    if len(_tts_user_semaphores) >= _MAX_USER_SEMAPHORES:
+        # Remove expired entries first
+        expired = [
+            k for k, (_, ts) in _tts_user_semaphores.items()
+            if now - ts > _SEMAPHORE_TTL
+        ]
+        for k in expired:
+            del _tts_user_semaphores[k]
+        # If still over limit, evict oldest
+        while len(_tts_user_semaphores) >= _MAX_USER_SEMAPHORES:
+            oldest_key = min(
+                _tts_user_semaphores, key=lambda k: _tts_user_semaphores[k][1]
+            )
+            del _tts_user_semaphores[oldest_key]
+
+    sem = asyncio.Semaphore(1)
+    _tts_user_semaphores[user_id] = (sem, now)
+    return sem
+
+
+# C1: Per-key generation dedup lock (prevents duplicate edge-tts runs)
+_MAX_GEN_LOCKS = 200
+_GEN_LOCK_TTL = 300  # 5 minutes
+_tts_generation_locks: Dict[str, Tuple[asyncio.Lock, float]] = {}
+
+
+def _get_generation_lock(key: str) -> asyncio.Lock:
+    """Get or create a per-key lock for TTS generation deduplication."""
+    now = time.monotonic()
+    if key in _tts_generation_locks:
+        lock, _ = _tts_generation_locks[key]
+        _tts_generation_locks[key] = (lock, now)
+        return lock
+
+    if len(_tts_generation_locks) >= _MAX_GEN_LOCKS:
+        expired = [
+            k for k, (_, ts) in _tts_generation_locks.items()
+            if now - ts > _GEN_LOCK_TTL
+        ]
+        for k in expired:
+            del _tts_generation_locks[k]
+        while len(_tts_generation_locks) >= _MAX_GEN_LOCKS:
+            oldest_key = min(
+                _tts_generation_locks,
+                key=lambda k: _tts_generation_locks[k][1],
+            )
+            del _tts_generation_locks[oldest_key]
+
+    lock = asyncio.Lock()
+    _tts_generation_locks[key] = (lock, now)
+    return lock
 
 
 # =============================================================================
@@ -178,64 +238,82 @@ async def _get_or_create_tts(
     text: str,
     rate: str,
     user_id: int,
+    audio_needed: bool = True,
 ) -> tuple:
-    """Get cached TTS or generate new one. Returns (audio_bytes, words)."""
+    """Get cached TTS or generate new one.
+
+    Returns (audio_bytes_or_None, words).
+    When audio_needed=False and cache hit, skips reading audio file.
+    """
     voice_name = TTS_VOICES.get(voice.lower(), TTS_VOICES[DEFAULT_VOICE])
 
-    # Check DB cache
-    async with async_session_maker() as db:
-        result = await db.execute(
-            select(ArticleTTS).where(
-                ArticleTTS.article_id == article_id,
-                ArticleTTS.voice_id == voice,
-            )
-        )
-        cached = result.scalars().first()
+    # C1: Dedup lock — concurrent requests for same article+voice wait
+    gen_lock = _get_generation_lock(f"{article_id}:{voice}")
 
-    if cached:
-        cache_path = TTS_CACHE_DIR / cached.audio_path
-        if cache_path.exists():
-            audio_data = cache_path.read_bytes()
-            words = json.loads(cached.word_timings) if cached.word_timings else []
-            return audio_data, words
-        # File missing — regenerate below
-
-    # Generate new TTS
-    audio_data, words = await _generate_tts(text, voice_name, rate)
-
-    # Save to filesystem
-    article_dir = TTS_CACHE_DIR / str(article_id)
-    article_dir.mkdir(parents=True, exist_ok=True)
-    audio_path = f"{article_id}/{voice}.mp3"
-    (TTS_CACHE_DIR / audio_path).write_bytes(audio_data)
-
-    # Save to DB
-    async with async_session_maker() as db:
-        # Upsert: delete old record if exists (file was missing)
-        if cached:
-            await db.execute(
-                delete(ArticleTTS).where(
+    async with gen_lock:
+        # Check DB cache
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(ArticleTTS).where(
                     ArticleTTS.article_id == article_id,
                     ArticleTTS.voice_id == voice,
                 )
             )
-            await db.flush()
+            cached = result.scalars().first()
 
-        tts_record = ArticleTTS(
-            article_id=article_id,
-            voice_id=voice,
-            audio_path=audio_path,
-            word_timings=json.dumps(words),
-            file_size_bytes=len(audio_data),
-            created_by_user_id=user_id,
-        )
-        try:
-            db.add(tts_record)
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            # R1: Another request won the race — audio file already written
+        if cached:
+            cache_path = TTS_CACHE_DIR / cached.audio_path
+            if cache_path.exists():
+                words = (
+                    json.loads(cached.word_timings)
+                    if cached.word_timings else []
+                )
+                # M1: Skip file read when caller only needs words
+                if not audio_needed:
+                    return None, words
+                audio_data = cache_path.read_bytes()
+                return audio_data, words
+            # File missing — regenerate below
 
+        # Generate new TTS
+        audio_data, words = await _generate_tts(text, voice_name, rate)
+
+        # Save to filesystem
+        article_dir = TTS_CACHE_DIR / str(article_id)
+        article_dir.mkdir(parents=True, exist_ok=True)
+        audio_path = f"{article_id}/{voice}.mp3"
+        (TTS_CACHE_DIR / audio_path).write_bytes(audio_data)
+
+        # Save to DB
+        async with async_session_maker() as db:
+            # Upsert: delete old record if exists (file was missing)
+            if cached:
+                await db.execute(
+                    delete(ArticleTTS).where(
+                        ArticleTTS.article_id == article_id,
+                        ArticleTTS.voice_id == voice,
+                    )
+                )
+                await db.flush()
+
+            tts_record = ArticleTTS(
+                article_id=article_id,
+                voice_id=voice,
+                audio_path=audio_path,
+                word_timings=json.dumps(words),
+                file_size_bytes=len(audio_data),
+                created_by_user_id=user_id,
+            )
+            try:
+                db.add(tts_record)
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                # R1: Another request won the race — audio file already written
+
+    # After generation, caller may not need audio bytes
+    if not audio_needed:
+        return None, words
     return audio_data, words
 
 
@@ -316,8 +394,10 @@ async def text_to_speech_with_sync(
     """
     Convert text to speech with word-level timing.
 
-    If article_id is provided, caches the result for sharing across users.
-    Returns JSON with audio (base64 MP3) and words (timing array).
+    If article_id is provided, caches the result and returns an audio_url
+    (streaming via /tts/audio/{id}/{voice}) instead of base64 to save
+    bandwidth and memory.
+    Falls back to base64 when no article_id is given.
     """
     text = body.text
     voice = body.voice.lower()
@@ -340,29 +420,38 @@ async def text_to_speech_with_sync(
             async with user_semaphore:
                 async with _tts_semaphore:
                     if body.article_id:
-                        audio_data, words = await _get_or_create_tts(
+                        # M1: Don't read audio into memory — return URL
+                        _, words = await _get_or_create_tts(
                             body.article_id, voice, text, rate,
                             current_user.id,
+                            audio_needed=False,
                         )
                         # Record history
                         await _update_tts_history(
                             current_user.id, body.article_id, voice,
                         )
+                        return {
+                            "audio_url": (
+                                f"/api/news/tts/audio/"
+                                f"{body.article_id}/{voice}"
+                            ),
+                            "words": words,
+                            "voice": voice,
+                            "rate": rate,
+                        }
                     else:
                         audio_data, words = await _generate_tts(
                             text, voice_name, rate,
                         )
-
-                    audio_base64 = base64.b64encode(
-                        audio_data
-                    ).decode("utf-8")
-
-                    return {
-                        "audio": audio_base64,
-                        "words": words,
-                        "voice": voice,
-                        "rate": rate,
-                    }
+                        audio_base64 = base64.b64encode(
+                            audio_data
+                        ).decode("utf-8")
+                        return {
+                            "audio": audio_base64,
+                            "words": words,
+                            "voice": voice,
+                            "rate": rate,
+                        }
 
     except TimeoutError:
         raise HTTPException(
@@ -502,6 +591,58 @@ async def update_voice_subscriptions(
     return {"message": "Voice preferences updated"}
 
 
+class TTSPrepareRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=15000)
+    voice: str = Field(default="aria")
+    rate: str = Field(default="+0%")
+    article_id: int = Field(..., description="Article ID (required for cache)")
+
+
+@router.post("/tts/prepare")
+async def prepare_tts(
+    body: TTSPrepareRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Pre-generate TTS for an article without returning audio.
+
+    Used by the frontend to prefetch the next article's TTS while
+    the current article is playing, eliminating loading gaps.
+    """
+    voice = body.voice.lower()
+    rate = body.rate
+
+    if voice not in TTS_VOICES:
+        raise HTTPException(status_code=400, detail="Unknown voice")
+
+    if not re.match(r'^[+-]\d{1,3}%$', rate):
+        rate = "+0%"
+
+    user_semaphore = _get_user_tts_semaphore(current_user.id)
+
+    try:
+        async with asyncio.timeout(60):
+            async with user_semaphore:
+                async with _tts_semaphore:
+                    await _get_or_create_tts(
+                        body.article_id, voice, body.text, rate,
+                        current_user.id,
+                        audio_needed=False,
+                    )
+                    return {"ok": True}
+
+    except TimeoutError:
+        raise HTTPException(
+            status_code=503,
+            detail="TTS service busy, try again shortly",
+            headers={"Retry-After": "5"},
+        )
+    except Exception as e:
+        logger.error(f"TTS prepare error: {e}")
+        raise HTTPException(
+            status_code=500, detail="TTS preparation failed"
+        )
+
+
 # =============================================================================
 # TTS Cleanup (called when articles are deleted)
 # =============================================================================
@@ -512,7 +653,6 @@ async def cleanup_tts_for_articles(article_ids: List[int]):
         return
 
     async with async_session_maker() as db:
-        from sqlalchemy import delete
         await db.execute(
             delete(ArticleTTS).where(
                 ArticleTTS.article_id.in_(article_ids)

@@ -14,7 +14,8 @@ export interface WordTiming {
 }
 
 interface TTSSyncResponse {
-  audio: string  // Base64-encoded MP3
+  audio?: string  // Base64-encoded MP3 (fallback when no article_id)
+  audio_url?: string  // Streaming URL (when article_id provided)
   words: WordTiming[]
   voice: string
   rate: string
@@ -370,8 +371,26 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         // Check again after async operation
         if (thisRequestId !== requestIdRef.current) return
 
-        // Create audio from base64
-        const audioBlob = await fetch(`data:audio/mpeg;base64,${data.audio}`).then(r => r.blob())
+        // M1+M5: Create audio blob — prefer streaming URL, fall back to direct decode
+        let audioBlob: Blob
+        if (data.audio_url) {
+          // Streaming fetch — no base64 in memory
+          const audioResp = await authFetch(data.audio_url, {
+            signal: abortControllerRef.current.signal,
+          })
+          if (!audioResp.ok) throw new Error(`Audio fetch failed: ${audioResp.status}`)
+          audioBlob = await audioResp.blob()
+        } else if (data.audio) {
+          // Fallback: decode base64 directly (no intermediate fetch(data:...))
+          const binaryStr = atob(data.audio)
+          const bytes = new Uint8Array(binaryStr.length)
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i)
+          }
+          audioBlob = new Blob([bytes], { type: 'audio/mpeg' })
+        } else {
+          throw new Error('No audio data in response')
+        }
         const audioUrl = URL.createObjectURL(audioBlob)
 
         // Check again after async operation

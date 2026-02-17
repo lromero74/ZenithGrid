@@ -128,6 +128,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const wakeLockRef = useRef<any>(null)
   const keepaliveAudioRef = useRef<HTMLAudioElement | null>(null)
   const autoResumeTriggeredRef = useRef(false)
+  const prefetchAbortRef = useRef<AbortController | null>(null)
 
   // Use TTS hook
   const tts = useTTSSync()
@@ -482,6 +483,11 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
   // Stop playlist
   const stopPlaylist = useCallback(() => {
+    // Cancel any in-flight prefetch
+    if (prefetchAbortRef.current) {
+      prefetchAbortRef.current.abort()
+      prefetchAbortRef.current = null
+    }
     tts.stop()
     setIsPlaying(false)
     setShowMiniPlayer(false)
@@ -553,6 +559,76 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       return () => clearTimeout(timer)
     }
   }, [isPlaying, tts.isPlaying, tts.isPaused, tts.isLoading, tts.isReady, tts.words.length, nextArticle])
+
+  // P1: Prefetch next article's TTS while current article is playing
+  useEffect(() => {
+    if (!tts.isPlaying || !isPlaying) return
+
+    const nextIdx = currentIndex + 1
+    if (nextIdx >= playlistRef.current.length) return
+
+    const nextArt = playlistRef.current[nextIdx]
+    if (!nextArt?.id) return  // Need article_id for cache
+
+    // Wait 5s so we don't compete with current article's load
+    const timer = setTimeout(async () => {
+      // Determine the voice that will be used for the next article
+      let nextVoice: string | undefined
+      if (voiceCycleEnabled) {
+        nextVoice = VOICE_CYCLE_IDS[nextIdx % VOICE_CYCLE_IDS.length]
+      }
+
+      try {
+        prefetchAbortRef.current = new AbortController()
+
+        // Fetch content if not already available
+        let content = nextArt.content
+        if (!content) {
+          const resp = await authFetch(
+            `/api/news/article-content?url=${encodeURIComponent(nextArt.url)}`,
+            { signal: prefetchAbortRef.current.signal },
+          )
+          if (resp.ok) {
+            const data = await resp.json()
+            if (data.success && data.content) {
+              content = data.content
+              // Cache content on the article object for later use
+              nextArt.content = content
+            }
+          }
+        }
+
+        if (!content) return
+
+        const plainText = markdownToPlainText(content)
+        const ratePercent = Math.round((tts.playbackRate - 1) * 100)
+        const rateStr = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`
+
+        await authFetch('/api/news/tts/prepare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: plainText,
+            voice: nextVoice || tts.currentVoice,
+            rate: rateStr,
+            article_id: nextArt.id,
+          }),
+          signal: prefetchAbortRef.current.signal,
+        })
+      } catch {
+        // Abort or network error — ignore silently
+      }
+    }, 5000)
+
+    return () => {
+      clearTimeout(timer)
+      if (prefetchAbortRef.current) {
+        prefetchAbortRef.current.abort()
+        prefetchAbortRef.current = null
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tts.isPlaying, isPlaying, currentIndex])
 
   // ESC to collapse
   useEffect(() => {

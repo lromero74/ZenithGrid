@@ -5,6 +5,24 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.9.4] - 2026-02-17
+
+### Fixed
+- **TTS memory leak**: Per-user semaphore dict now bounded (100 max, 1hr TTL) — prevents unbounded growth in multi-user environments
+- **TTS duplicate generation**: Per-key dedup locks prevent concurrent requests from running edge-tts twice for the same article+voice
+- **TTS bandwidth waste**: `/tts-sync` returns `audio_url` instead of base64 when `article_id` is provided — saves ~33% bandwidth and ~5MB peak RAM per request
+- **Frontend memory triple-allocation**: Base64 audio decode now uses `atob()` + `Uint8Array` instead of `fetch(data:...)` which tripled peak memory
+- **Stale word refs**: `wordRefs` array now reset at top of `renderedContent` useMemo — prevents stale DOM ref retention across article switches
+- **Redundant import**: Removed duplicate `from sqlalchemy import delete` in TTS cleanup function
+
+### Changed
+- **Word click performance**: Replaced ~2000 per-word `onClick` closures with single event delegation handler via `data-tts-idx` attributes
+- **TTS prefetch**: Next article's TTS is prefetched 5 seconds after playback starts, eliminating loading gaps between articles
+- **New `/tts/prepare` endpoint**: Warms TTS cache without returning audio payload — used by frontend prefetch
+
+### Added
+- **`/whitebox` custom command**: Reusable audit command that bakes in standing assumptions about multi-user, security, performance, and code quality
+
 ## [v2.9.3] - 2026-02-17
 
 ### Fixed
