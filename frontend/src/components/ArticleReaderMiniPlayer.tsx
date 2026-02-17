@@ -20,6 +20,19 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+// Number-related words that TTS uses when reading numbers/currency
+const NUMBER_WORDS = new Set([
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+  'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety',
+  'hundred', 'thousand', 'million', 'billion', 'trillion',
+  'dollar', 'dollars', 'cent', 'cents', 'percent', 'point',
+  'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'
+])
+
+// Check if a string contains digits
+const hasDigits = (s: string) => /\d/.test(s)
+
 export function ArticleReaderMiniPlayer() {
   const {
     playlist,
@@ -70,6 +83,12 @@ export function ArticleReaderMiniPlayer() {
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([])
   const progressBarRef = useRef<HTMLDivElement>(null)
   const progressRafRef = useRef<number | null>(null)
+  const getPlaybackStateRef = useRef(getPlaybackState)
+
+  // Keep ref in sync (avoids restarting rAF on context value changes)
+  useEffect(() => {
+    getPlaybackStateRef.current = getPlaybackState
+  }, [getPlaybackState])
 
   // Smooth progress bar via direct DOM updates (bypasses React state for 60fps)
   useEffect(() => {
@@ -81,7 +100,7 @@ export function ArticleReaderMiniPlayer() {
 
     const updateBar = () => {
       if (progressBarRef.current) {
-        const state = getPlaybackState()
+        const state = getPlaybackStateRef.current()
         const pct = state.duration > 0 ? (state.currentTime / state.duration) * 100 : 0
         progressBarRef.current.style.width = `${pct}%`
       }
@@ -92,7 +111,7 @@ export function ArticleReaderMiniPlayer() {
     return () => {
       if (progressRafRef.current) cancelAnimationFrame(progressRafRef.current)
     }
-  }, [isPlaying, isPaused, getPlaybackState])
+  }, [isPlaying, isPaused])
 
   // Convert article content to plain text for word matching
   const plainText = useMemo(() => {
@@ -183,19 +202,6 @@ export function ArticleReaderMiniPlayer() {
     const targetTime = percentage * duration
     seekToTime(targetTime)
   }, [duration, seekToTime])
-
-  // Number-related words that TTS uses when reading numbers/currency
-  const NUMBER_WORDS = new Set([
-    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
-    'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
-    'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety',
-    'hundred', 'thousand', 'million', 'billion', 'trillion',
-    'dollar', 'dollars', 'cent', 'cents', 'percent', 'point',
-    'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'
-  ])
-
-  // Check if a string contains digits
-  const hasDigits = (s: string) => /\d/.test(s)
 
   // Build word-highlighted content by matching TTS words to text words sequentially
   const renderedContent = useMemo(() => {

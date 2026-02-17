@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '../services/api'
 import { Sparkline } from './Sparkline'
 import {
   Gauge, Timer, DollarSign, ToggleLeft, ToggleRight, Info, X, ExternalLink,
@@ -348,7 +349,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: fearGreedData } = useQuery<FearGreedResponse>({
     queryKey: ['fear-greed'],
     queryFn: async () => {
-      const response = await fetch('/api/news/fear-greed')
+      const response = await authFetch('/api/news/fear-greed')
       if (!response.ok) throw new Error('Failed to fetch fear/greed index')
       return response.json()
     },
@@ -361,7 +362,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: blockHeight } = useQuery<BlockHeightResponse>({
     queryKey: ['btc-block-height'],
     queryFn: async () => {
-      const response = await fetch('/api/news/btc-block-height')
+      const response = await authFetch('/api/news/btc-block-height')
       if (!response.ok) throw new Error('Failed to fetch block height')
       return response.json()
     },
@@ -374,7 +375,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: usDebtData } = useQuery<USDebtResponse>({
     queryKey: ['us-debt'],
     queryFn: async () => {
-      const response = await fetch('/api/news/us-debt')
+      const response = await authFetch('/api/news/us-debt')
       if (!response.ok) throw new Error('Failed to fetch US debt')
       return response.json()
     },
@@ -387,7 +388,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: debtCeilingHistory } = useQuery<DebtCeilingHistoryResponse>({
     queryKey: ['debt-ceiling-history'],
     queryFn: async () => {
-      const response = await fetch('/api/news/debt-ceiling-history')
+      const response = await authFetch('/api/news/debt-ceiling-history')
       if (!response.ok) throw new Error('Failed to fetch debt ceiling history')
       return response.json()
     },
@@ -399,7 +400,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: btcDominanceData } = useQuery<BTCDominanceResponse>({
     queryKey: ['btc-dominance'],
     queryFn: async () => {
-      const response = await fetch('/api/news/btc-dominance')
+      const response = await authFetch('/api/news/btc-dominance')
       if (!response.ok) throw new Error('Failed to fetch BTC dominance')
       return response.json()
     },
@@ -412,7 +413,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: altseasonData } = useQuery<AltseasonIndexResponse>({
     queryKey: ['altseason-index'],
     queryFn: async () => {
-      const response = await fetch('/api/news/altseason-index')
+      const response = await authFetch('/api/news/altseason-index')
       if (!response.ok) throw new Error('Failed to fetch altseason index')
       return response.json()
     },
@@ -425,7 +426,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: stablecoinData } = useQuery<StablecoinMcapResponse>({
     queryKey: ['stablecoin-mcap'],
     queryFn: async () => {
-      const response = await fetch('/api/news/stablecoin-mcap')
+      const response = await authFetch('/api/news/stablecoin-mcap')
       if (!response.ok) throw new Error('Failed to fetch stablecoin mcap')
       return response.json()
     },
@@ -438,7 +439,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: totalMarketCapData } = useQuery<TotalMarketCapResponse>({
     queryKey: ['total-market-cap'],
     queryFn: async () => {
-      const response = await fetch('/api/news/total-market-cap')
+      const response = await authFetch('/api/news/total-market-cap')
       if (!response.ok) throw new Error('Failed to fetch total market cap')
       return response.json()
     },
@@ -451,7 +452,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: btcSupplyData } = useQuery<BTCSupplyResponse>({
     queryKey: ['btc-supply'],
     queryFn: async () => {
-      const response = await fetch('/api/news/btc-supply')
+      const response = await authFetch('/api/news/btc-supply')
       if (!response.ok) throw new Error('Failed to fetch BTC supply')
       return response.json()
     },
@@ -464,7 +465,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: mempoolData } = useQuery<MempoolResponse>({
     queryKey: ['mempool'],
     queryFn: async () => {
-      const response = await fetch('/api/news/mempool')
+      const response = await authFetch('/api/news/mempool')
       if (!response.ok) throw new Error('Failed to fetch mempool')
       return response.json()
     },
@@ -477,7 +478,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: hashRateData } = useQuery<HashRateResponse>({
     queryKey: ['hash-rate'],
     queryFn: async () => {
-      const response = await fetch('/api/news/hash-rate')
+      const response = await authFetch('/api/news/hash-rate')
       if (!response.ok) throw new Error('Failed to fetch hash rate')
       return response.json()
     },
@@ -490,7 +491,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: lightningData } = useQuery<LightningResponse>({
     queryKey: ['lightning'],
     queryFn: async () => {
-      const response = await fetch('/api/news/lightning')
+      const response = await authFetch('/api/news/lightning')
       if (!response.ok) throw new Error('Failed to fetch lightning stats')
       return response.json()
     },
@@ -503,7 +504,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: athData } = useQuery<ATHResponse>({
     queryKey: ['ath'],
     queryFn: async () => {
-      const response = await fetch('/api/news/ath')
+      const response = await authFetch('/api/news/ath')
       if (!response.ok) throw new Error('Failed to fetch ATH data')
       return response.json()
     },
@@ -516,7 +517,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const { data: btcRsiData } = useQuery<BTCRSIResponse>({
     queryKey: ['btc-rsi'],
     queryFn: async () => {
-      const response = await fetch('/api/news/btc-rsi')
+      const response = await authFetch('/api/news/btc-rsi')
       if (!response.ok) throw new Error('Failed to fetch BTC RSI')
       return response.json()
     },
@@ -529,7 +530,7 @@ export function MarketSentimentCards({ isUserEngaged = false }: { isUserEngaged?
   const metricHistoryQuery = (name: string) => ({
     queryKey: ['metric-history', name],
     queryFn: async () => {
-      const response = await fetch(`/api/news/metric-history/${name}?days=30&max_points=30`)
+      const response = await authFetch(`/api/news/metric-history/${name}?days=30&max_points=30`)
       if (!response.ok) return { metric_name: name, data: [] }
       return response.json() as Promise<MetricHistoryResponse>
     },
