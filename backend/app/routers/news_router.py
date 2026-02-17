@@ -20,7 +20,7 @@ import concurrent.futures
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -220,9 +220,18 @@ async def get_articles_for_user(
     - Per-user retention_days: filters visibility (query-time only)
     - user_category override applied in response layer, not here
     """
-    from sqlalchemy import func
+    from sqlalchemy import case, func
 
-    default_cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    default_cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+
+    # Retention cutoff: use per-user retention_days if set, otherwise system default.
+    # NOTE: SQLite printf('-%d days', NULL) returns '-0 days' (not NULL),
+    # so coalesce won't reach the fallback. Use case() to handle NULL explicitly.
+    retention_cutoff = case(
+        (UserSourceSubscription.retention_days.is_not(None),
+         func.datetime('now', func.printf('-%d days', UserSourceSubscription.retention_days))),
+        else_=default_cutoff,
+    )
 
     # Base query: articles with source_id JOIN through ContentSource
     # LEFT JOIN subscription for per-user overrides
@@ -254,19 +263,7 @@ async def get_articles_for_user(
                 & (UserSourceSubscription.is_subscribed.is_(True))
             )
         )
-        .where(
-            # Retention filter: per-user override or system default
-            NewsArticle.published_at >= func.coalesce(
-                func.datetime(
-                    'now',
-                    func.printf(
-                        '-%d days',
-                        UserSourceSubscription.retention_days,
-                    ),
-                ),
-                default_cutoff,
-            )
-        )
+        .where(NewsArticle.published_at >= retention_cutoff)
     )
 
     if category:
@@ -298,7 +295,7 @@ async def get_articles_from_db(
     """Legacy: get articles without user filtering (for internal use)."""
     from sqlalchemy import func
 
-    cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
 
     conditions = [NewsArticle.published_at >= cutoff]
     if category:
@@ -358,7 +355,7 @@ async def store_article_in_db(
         cached_thumbnail_path=cached_thumbnail_path,
         category=category,
         source_id=source_id,
-        fetched_at=datetime.utcnow(),
+        fetched_at=datetime.now(timezone.utc),
     )
     db.add(article)
     return article
@@ -374,7 +371,7 @@ async def cleanup_old_articles(
     Articles with no source_id use flat max_age_days cutoff."""
     from sqlalchemy import delete
 
-    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
     total_deleted = 0
 
     # Per-source cleanup: for each source_id, keep newer of min_keep or age
@@ -489,7 +486,7 @@ async def store_video_in_db(
         thumbnail_url=item.thumbnail,
         category=category,
         source_id=source_id,
-        fetched_at=datetime.utcnow(),
+        fetched_at=datetime.now(timezone.utc),
     )
     db.add(video)
     return video
@@ -501,9 +498,16 @@ async def get_videos_for_user(
     category: Optional[str] = None,
 ) -> List[VideoArticle]:
     """Get videos filtered by user's subscriptions and retention."""
-    from sqlalchemy import func
+    from sqlalchemy import case, func
 
-    default_cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    default_cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+
+    # Same NULL-safe retention logic as get_articles_for_user
+    retention_cutoff = case(
+        (UserSourceSubscription.retention_days.is_not(None),
+         func.datetime('now', func.printf('-%d days', UserSourceSubscription.retention_days))),
+        else_=default_cutoff,
+    )
 
     query = (
         select(VideoArticle)
@@ -529,18 +533,7 @@ async def get_videos_for_user(
                 & (UserSourceSubscription.is_subscribed.is_(True))
             )
         )
-        .where(
-            VideoArticle.published_at >= func.coalesce(
-                func.datetime(
-                    'now',
-                    func.printf(
-                        '-%d days',
-                        UserSourceSubscription.retention_days,
-                    ),
-                ),
-                default_cutoff,
-            )
-        )
+        .where(VideoArticle.published_at >= retention_cutoff)
     )
 
     if category:
@@ -555,7 +548,7 @@ async def get_videos_from_db_list(
     db: AsyncSession, category: Optional[str] = None
 ) -> List[VideoArticle]:
     """Legacy: get videos without user filtering (for internal use)."""
-    cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
     conditions = [VideoArticle.published_at >= cutoff]
     if category:
         conditions.append(VideoArticle.category == category)
@@ -579,7 +572,7 @@ async def cleanup_old_videos(
     Videos with no source_id use flat max_age_days cutoff."""
     from sqlalchemy import delete
 
-    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
     total_deleted = 0
 
     # Per-source cleanup
@@ -676,7 +669,7 @@ async def get_videos_from_db(
         for sid, cfg in sources_to_use.items()
     ]
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return {
         "videos": video_items,
         "sources": sources_list,
@@ -802,7 +795,7 @@ async def fetch_all_videos() -> Dict[str, Any]:
         for sid, cfg in sources_to_use.items()
     ]
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     cache_data = {
         "videos": merged_items,
         "sources": sources_list,
@@ -812,7 +805,7 @@ async def fetch_all_videos() -> Dict[str, Any]:
     }
     save_video_cache(cache_data)
 
-    _last_video_refresh = datetime.utcnow()
+    _last_video_refresh = datetime.now(timezone.utc)
     return cache_data
 
 
@@ -1109,7 +1102,7 @@ async def fetch_all_news() -> None:
     except Exception as e:
         logger.warning(f"Post-fetch article cleanup failed: {e}")
 
-    _last_news_refresh = datetime.utcnow()
+    _last_news_refresh = datetime.now(timezone.utc)
 
 
 async def get_news_from_db(
@@ -1149,7 +1142,7 @@ async def get_news_from_db(
         math.ceil(total_count / page_size) if total_count > 0 else 1
     )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return {
         "news": news_items,
         "sources": sources_list,
@@ -1245,7 +1238,6 @@ async def get_categories(current_user: User = Depends(get_current_user)):
 @router.get("/image/{article_id}")
 async def get_article_image(
     article_id: int,
-    current_user: User = Depends(get_current_user),
 ):
     """
     Serve cached article thumbnail image from filesystem.
@@ -1338,7 +1330,7 @@ async def cleanup_articles_with_images(
     async with async_session_maker() as db:
         # Collect image paths of articles that will be deleted
         # We need to query before deleting
-        cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
         paths_to_delete = []
 
         # Per-source: find articles beyond effective cutoff

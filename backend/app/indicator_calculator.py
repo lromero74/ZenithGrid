@@ -142,6 +142,27 @@ class IndicatorCalculator:
                 if value is not None:
                     indicators[indicator_key] = value
 
+            elif indicator_key == "gap_fill_pct":
+                # Count synthetic/filler candles as a percentage
+                # For aggregated candles, use _synthetic_count/_synthetic_total
+                # For base candles, use _synthetic flag
+                syn_count = 0
+                total_count = 0
+                for c in closed_candles:
+                    sc = c.get("_synthetic_count", 0)
+                    st = c.get("_synthetic_total", 0)
+                    if sc > 0 and st > 0:
+                        syn_count += sc
+                        total_count += st
+                    else:
+                        total_count += 1
+                        if c.get("_synthetic"):
+                            syn_count += 1
+                if total_count > 0:
+                    indicators["gap_fill_pct"] = (syn_count / total_count) * 100
+                else:
+                    indicators["gap_fill_pct"] = 0.0
+
         # Calculate indicators for the previous CLOSED candle (for crossing detection)
         # We need at least 4 candles total: 3 closed + 1 incomplete
         # This gives us 2 closed candles to compare (current closed vs previous closed)

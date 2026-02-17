@@ -86,6 +86,8 @@ def aggregate_candles(
         # Low: min of all lows
         # Close: last candle's close
         # Volume: sum of all volumes
+        # Count synthetic candles in this group for gap_fill_pct
+        synthetic_count = sum(1 for c in group if c.get("_synthetic"))
         aggregated_candle = {
             "start": group[0].get("start", group[0].get("time", 0)),
             "open": group[0].get("open"),
@@ -94,6 +96,9 @@ def aggregate_candles(
             "close": group[-1].get("close"),
             "volume": sum(float(c.get("volume", 0)) for c in group),
         }
+        if synthetic_count > 0:
+            aggregated_candle["_synthetic_count"] = synthetic_count
+            aggregated_candle["_synthetic_total"] = len(group)
         aggregated.append(aggregated_candle)
 
     return aggregated
@@ -236,6 +241,7 @@ def fill_candle_gaps(
                     "low": prev_close,
                     "close": prev_close,
                     "volume": 0,  # No trades in this period
+                    "_synthetic": True,
                 }
                 filled.append(synthetic_candle)
 

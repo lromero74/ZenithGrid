@@ -20,6 +20,7 @@ export type ConditionType =
   | 'ai_buy'
   | 'ai_sell'
   | 'bull_flag'
+  | 'gap_fill_pct'
 
 export type Operator = 'greater_than' | 'less_than' | 'crossing_above' | 'crossing_below' | 'equal' | 'increasing' | 'decreasing'
 
@@ -121,6 +122,7 @@ const CONDITION_TYPES: Record<ConditionType, { label: string; description: strin
   ai_buy: { label: 'AI Buy', description: 'AI buy signal = 1', isAggregate: true },
   ai_sell: { label: 'AI Sell', description: 'AI sell signal = 1', isAggregate: true },
   bull_flag: { label: 'Bull Flag', description: 'Pattern detected = 1', isAggregate: true },
+  gap_fill_pct: { label: 'Gap Fill %', description: 'Percentage of synthetic/filler candles (0-100). High values = unreliable data' },
 }
 
 const OPERATORS: Record<Operator, string> = {
@@ -339,6 +341,10 @@ function AdvancedConditionBuilder({
                     case 'bull_flag':
                       newCond.operator = 'equal'
                       newCond.value = 1
+                      break
+                    case 'gap_fill_pct':
+                      newCond.operator = 'less_than'
+                      newCond.value = 50
                       break
                     default:
                       newCond.operator = 'greater_than'

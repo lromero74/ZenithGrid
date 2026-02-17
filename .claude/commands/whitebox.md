@@ -29,6 +29,7 @@ You are auditing this area of the ZenithGrid application with the following stan
 ### Rules
 
 - **Don't assume — verify.** Read the actual code. Check actual DB queries. Trace actual data flow.
+- **Clean up dead code**: Remove unused imports, unreachable code, commented-out blocks, and orphaned functions/variables you encounter in the audited area. Don't leave debris behind.
 - **Modularize as you go**: If any file you touch is approaching or beyond ~1200 lines, split it into logical modules as part of your changes.
 - **Watch for circular imports**: When refactoring or splitting files, verify import graphs don't create cycles. Test with `python -c "from app.routers.X import router"` after changes.
 - **Lint everything**: `flake8 --max-line-length=120` for Python, `tsc --noEmit` for TypeScript. All code you touch or create must pass.
