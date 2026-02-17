@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import SimpleCache
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
@@ -26,6 +27,9 @@ from app.auth.dependencies import get_current_user
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
+
+# Cache for expensive market data (product listings don't change often)
+_market_data_cache = SimpleCache()
 
 router = APIRouter(prefix="/api", tags=["market_data"])
 
@@ -315,8 +319,13 @@ async def get_unique_coins(coinbase: CoinbaseClient = Depends(get_coinbase)):
 
     Returns coins that trade on USD, USDC, or BTC markets.
     Each coin appears once regardless of how many markets it trades on.
+    Cached for 10 minutes — product listings rarely change.
     """
     try:
+        cached = await _market_data_cache.get("unique_coins")
+        if cached is not None:
+            return cached
+
         products = await coinbase.list_products()
 
         # Track unique coins and which markets they trade on
@@ -360,10 +369,12 @@ async def get_unique_coins(coinbase: CoinbaseClient = Depends(get_coinbase)):
         # Convert to list and sort alphabetically
         coin_list = sorted(coins.values(), key=lambda c: c["symbol"])
 
-        return {
+        result = {
             "coins": coin_list,
             "count": len(coin_list),
         }
+        await _market_data_cache.set("unique_coins", result, ttl_seconds=600)
+        return result
     except Exception as e:
         logger.error(f"Error fetching unique coins: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred")

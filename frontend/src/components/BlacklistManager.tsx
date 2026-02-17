@@ -71,26 +71,31 @@ export function BlacklistManager() {
   // Category dropdown
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
 
-  // Fetch data
+  // Fetch data in two phases: essential first (fast), supplementary second (slow)
   const fetchData = async () => {
     setIsLoading(true)
     setError(null)
 
     try {
-      const [blacklist, coinsData, categories, aiProvider] = await Promise.all([
+      // Phase 1: Essential data — blacklist + categories (fast DB queries)
+      const [blacklist, categories] = await Promise.all([
         blacklistApi.getAll(),
-        marketDataApi.getCoins(),
         blacklistApi.getCategories(),
-        blacklistApi.getAIProvider(),
       ])
-
       setBlacklistedCoins(blacklist)
       setCategorySettings(categories)
+      setIsLoading(false)
+
+      // Phase 2: Supplementary — coins list (external API) + AI provider
+      // These load in background without blocking the UI
+      const [coinsData, aiProvider] = await Promise.all([
+        marketDataApi.getCoins(),
+        blacklistApi.getAIProvider(),
+      ])
       setAllCoins(coinsData.coins)
       setAIProviderSettings(aiProvider)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
-    } finally {
       setIsLoading(false)
     }
   }

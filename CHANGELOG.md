@@ -5,6 +5,14 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.11.1] - 2026-02-17
+
+### Fixed
+- **Settings page slow to draw**: SQLite was using `delete` journal mode — reads blocked on writes from bot trading cycles. Switched to WAL mode (concurrent reads during writes). API response times dropped from 5-7s to sub-second
+- **Coins endpoint hitting Coinbase API on every page load**: Added 10-minute cache for `/api/market-data/coins` — product listings rarely change. First hit from external API, subsequent hits from cache (5.3s → 4ms)
+- **BlacklistManager blocking on slowest API call**: Split `Promise.all` into two phases — essential data (blacklist + categories) loads first and renders immediately, supplementary data (coins list + AI provider) loads in background. UI draws in ~0.2s instead of waiting 7.5s
+- **database.py lint**: Reformatted all `DEFAULT_CONTENT_SOURCES` tuples to comply with 120-char line limit
+
 ## [v2.11.0] - 2026-02-17
 
 ### Added
