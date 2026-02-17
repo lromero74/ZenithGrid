@@ -27,7 +27,7 @@ from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.models import Account, MarketData, Position, Signal, Trade, User
 from app.multi_bot_monitor import MultiBotMonitor
-from app.routers.auth_dependencies import get_current_user
+from app.routers.auth_dependencies import get_current_user, require_superuser
 from app.schemas import (
     DashboardStats,
     MarketDataResponse,
@@ -201,7 +201,7 @@ def build_changelog_cache() -> None:
 
 
 @router.get("/api/changelog")
-async def get_changelog(limit: int = Query(20, ge=1, le=100), offset: int = 0, refresh: bool = False):
+async def get_changelog(limit: int = Query(20, ge=1, le=100), offset: int = 0, refresh: bool = False, current_user: User = Depends(get_current_user)):
     """
     Get changelog showing commits between version tags.
     Similar to 'python3 update.py --changelog' output.
@@ -458,8 +458,8 @@ async def get_dashboard(
 
 
 @router.post("/api/monitor/start")
-async def start_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor), current_user: User = Depends(get_current_user)):
-    """Start the price monitor"""
+async def start_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor), current_user: User = Depends(require_superuser)):
+    """Start the price monitor (admin only)"""
     if not price_monitor.running:
         price_monitor.start()
         return {"message": "Monitor started"}
@@ -467,8 +467,8 @@ async def start_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monit
 
 
 @router.post("/api/monitor/stop")
-async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor), current_user: User = Depends(get_current_user)):
-    """Stop the price monitor"""
+async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor), current_user: User = Depends(require_superuser)):
+    """Stop the price monitor (admin only)"""
     if price_monitor.running:
         await price_monitor.stop()
         return {"message": "Monitor stopped"}
@@ -539,7 +539,7 @@ async def get_shutdown_status(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/api/system/prepare-shutdown")
-async def prepare_shutdown(timeout: int = 60, current_user: User = Depends(get_current_user)):
+async def prepare_shutdown(timeout: int = 60, current_user: User = Depends(require_superuser)):
     """
     Prepare for graceful shutdown.
 
@@ -566,7 +566,7 @@ async def prepare_shutdown(timeout: int = 60, current_user: User = Depends(get_c
 
 
 @router.post("/api/system/cancel-shutdown")
-async def cancel_shutdown(current_user: User = Depends(get_current_user)):
+async def cancel_shutdown(current_user: User = Depends(require_superuser)):
     """
     Cancel a pending shutdown request.
 
@@ -589,7 +589,7 @@ def set_trading_pair_monitor(monitor):
 
 
 @router.get("/api/system/pair-monitor/status")
-async def get_pair_monitor_status(current_user: User = Depends(get_current_user)):
+async def get_pair_monitor_status(current_user: User = Depends(require_superuser)):
     """Get status of the trading pair monitor"""
     if not _trading_pair_monitor:
         raise HTTPException(status_code=503, detail="Trading pair monitor not initialized")
@@ -597,7 +597,7 @@ async def get_pair_monitor_status(current_user: User = Depends(get_current_user)
 
 
 @router.post("/api/system/pair-monitor/sync")
-async def trigger_pair_sync(current_user: User = Depends(get_current_user)):
+async def trigger_pair_sync(current_user: User = Depends(require_superuser)):
     """
     Manually trigger a trading pair sync.
 

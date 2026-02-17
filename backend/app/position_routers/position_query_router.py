@@ -67,8 +67,14 @@ async def get_positions(
     result = await db.execute(query)
     positions = result.scalars().all()
 
-    # Fetch all blacklisted coins once for efficiency
-    blacklist_query = select(BlacklistedCoin)
+    # Fetch blacklisted coins: global entries + current user's overrides
+    from sqlalchemy import or_
+    blacklist_query = select(BlacklistedCoin).where(
+        or_(
+            BlacklistedCoin.user_id.is_(None),
+            BlacklistedCoin.user_id == current_user.id,
+        )
+    )
     blacklist_result = await db.execute(blacklist_query)
     blacklisted_coins = blacklist_result.scalars().all()
     blacklist_map = {coin.symbol: coin.reason for coin in blacklisted_coins}
@@ -275,8 +281,11 @@ async def get_pnl_timeseries(
     # Sort by USD profit (descending)
     by_pair_data.sort(key=lambda x: x["total_pnl_usd"], reverse=True)
 
-    # Get active trades count (filtered by account if specified)
-    active_count_query = select(func.count(Position.id)).where(Position.status == "open")
+    # Get active trades count (scoped to current user's accounts)
+    active_count_query = select(func.count(Position.id)).where(
+        Position.status == "open",
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
     if account_id is not None:
         active_count_query = active_count_query.where(Position.account_id == account_id)
     active_count_result = await db.execute(active_count_query)

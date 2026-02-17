@@ -6,6 +6,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '../../../services/api'
 import { NewsResponse, VideoResponse } from '../types'
 
 interface UseNewsDataOptions {
@@ -46,7 +47,7 @@ export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => 
   } = useQuery<NewsResponse>({
     queryKey: ['crypto-news'],
     queryFn: async () => {
-      const response = await fetch('/api/news/?page=1&page_size=500')
+      const response = await authFetch('/api/news/?page=1&page_size=500')
       if (!response.ok) throw new Error('Failed to fetch news')
       return response.json()
     },
@@ -67,7 +68,7 @@ export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => 
   } = useQuery<VideoResponse>({
     queryKey: ['crypto-videos'],
     queryFn: async () => {
-      const response = await fetch('/api/news/videos')
+      const response = await authFetch('/api/news/videos')
       if (!response.ok) throw new Error('Failed to fetch videos')
       return response.json()
     },
@@ -82,10 +83,10 @@ export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => 
    */
   const handleForceRefresh = async (activeTab: 'articles' | 'videos') => {
     if (activeTab === 'articles') {
-      await fetch('/api/news/?force_refresh=true')
+      await authFetch('/api/news/?force_refresh=true')
       refetchNews()
     } else {
-      await fetch('/api/news/videos?force_refresh=true')
+      await authFetch('/api/news/videos?force_refresh=true')
       refetchVideos()
     }
   }

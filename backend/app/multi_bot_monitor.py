@@ -1567,7 +1567,8 @@ class MultiBotMonitor:
                 exchange_client=self.exchange,
                 config=bot.strategy_config,
                 max_coins=max_scan_coins,
-                bot_id=bot.id  # Pass bot_id for scanner logging
+                bot_id=bot.id,  # Pass bot_id for scanner logging
+                user_id=bot.user_id,  # Scope blacklist query to this user
             )
 
             # Commit scanner logs immediately after scan completes

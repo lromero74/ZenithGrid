@@ -58,13 +58,13 @@ router = APIRouter()
 
 # Strategy Endpoints
 @router.get("/strategies", response_model=List[StrategyDefinition])
-async def list_strategies():
+async def list_strategies(current_user: User = Depends(get_current_user)):
     """Get list of all available trading strategies"""
     return StrategyRegistry.list_strategies()
 
 
 @router.get("/strategies/{strategy_id}", response_model=StrategyDefinition)
-async def get_strategy_definition(strategy_id: str):
+async def get_strategy_definition(strategy_id: str, current_user: User = Depends(get_current_user)):
     """Get detailed definition for a specific strategy"""
     try:
         return StrategyRegistry.get_definition(strategy_id)

@@ -5,6 +5,36 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.8.0] - 2026-02-17
+
+### Fixed
+- **Article cache race condition**: Added `asyncio.Lock` to prevent `KeyError` during concurrent cache eviction
+- **Auto-buy monitor broken**: `PendingOrder` usage had wrong field names and missing columns — replaced with in-memory `AutoBuyPendingOrder` dataclass so repricing actually works
+- **Broadcast crash**: `sell_executor`/`buy_executor` called non-existent `broadcast_position_update()` — fixed
+- **Gemini AI race condition**: Fixed in AI service credential lookup
+
+### Added
+- **Auth on all news endpoints**: All 23 previously unprotected news/metrics endpoints now require authentication — unauthenticated scraping no longer possible
+- **Per-user TTS semaphore**: TTS concurrency limited to 1 per user (nested inside global limit of 3) — one user can no longer starve others
+- **Admin-gated endpoints**: Settings, seasonality, blacklist categories, template seed-defaults, strategy, monitor/shutdown/pair-sync all require superuser
+- **ContentSource ownership**: Added `user_id` column + ownership check on delete
+- **Per-user AI credentials**: AI service looks up credentials per-user via `AIProviderCredential`
+- **Migration: content_source_user_id**: Adds `user_id` column to `content_sources`
+
+### Changed
+- **news_router modularized**: Split 2700-line `news_router.py` into 3 files — `news_router.py` (articles/videos), `news_metrics_router.py` (market metrics), `news_tts_router.py` (TTS)
+- **Frontend auth enforcement**: 23 `fetch()` calls switched to `authFetch()` across MarketSentimentCards, useNewsData, useMarketSeason
+- **Context memoization**: `ArticleReaderContext` value wrapped in `useMemo` — eliminates unnecessary 4Hz re-renders
+- **MiniPlayer performance**: Constants moved to module scope; progress bar uses ref pattern for stable `useEffect` deps
+- **Order reconciliation scoped**: `OrderReconciliationMonitor` and `MissingOrderDetector` scoped by `account_id`
+- **Balance API scoped**: `account_id` passed to all `get_accounts()`/`get_btc_balance()` calls
+- **Per-instance rate limiter**: No more cross-user API throttling
+- **Market data**: Prefers system/public credentials over random user account
+- **Bull flag scanner**: `BlacklistedCoin` query scoped to global + user
+
+### Removed
+- Dead `order_monitor.py` (231 lines), `SyncedArticleReader` component, `useTTS` hook, dead `calculate_available_balance`, dead `limit_order_monitor` methods
+
 ## [v2.7.0] - 2026-02-17
 
 ### Fixed

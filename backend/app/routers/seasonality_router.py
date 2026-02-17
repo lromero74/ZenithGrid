@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Bot, Settings, User
-from app.routers.auth_dependencies import get_current_user
+from app.routers.auth_dependencies import get_current_user, require_superuser
 from app.services.season_detector import get_seasonality_status, SeasonalityStatus
 
 logger = logging.getLogger(__name__)
@@ -120,17 +120,23 @@ async def get_seasonality(
     )
 
 
-async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus) -> dict:
+async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus, user_id: int = None) -> dict:
     """
     Auto-enable/disable bots based on seasonality mode.
 
     Risk-Off mode: Disable BTC bots, keep USD bots
     Risk-On mode: Disable USD bots, keep BTC bots
 
+    Args:
+        user_id: If provided, only manage this user's bots. If None, manage all bots.
+
     Returns counts of bots affected.
     """
-    # Get all active bots
-    result = await db.execute(select(Bot).where(Bot.is_active.is_(True)))
+    # Get active bots (scoped to user if provided)
+    query = select(Bot).where(Bot.is_active.is_(True))
+    if user_id is not None:
+        query = query.where(Bot.user_id == user_id)
+    result = await db.execute(query)
     active_bots = result.scalars().all()
 
     disabled_btc = 0
@@ -167,7 +173,7 @@ async def auto_manage_bots(db: AsyncSession, status: SeasonalityStatus) -> dict:
 async def toggle_seasonality(
     request: SeasonalityToggleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_superuser)
 ):
     """
     Toggle seasonality tracking on or off.
@@ -205,7 +211,7 @@ async def toggle_seasonality(
             "Timestamp of last mode transition"
         )
 
-        # Auto-disable restricted bots
+        # Auto-disable restricted bots (admin action affects all users' bots)
         counts = await auto_manage_bots(db, status)
 
         logger.info(
@@ -222,7 +228,8 @@ async def toggle_seasonality(
 @router.get("/check-bot")
 async def check_bot_allowed(
     bot_type: str,  # 'btc' or 'usd'
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Check if a bot type is currently allowed based on seasonality.

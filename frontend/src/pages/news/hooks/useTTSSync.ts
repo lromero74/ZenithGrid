@@ -5,6 +5,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { authFetch } from '../../../services/api'
 
 export interface WordTiming {
   text: string
@@ -144,7 +145,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
       try {
         const time = audioRef.current.currentTime
-        setCurrentTime(time)
 
         const foundIndex = findWordIndex(time)
 
@@ -347,14 +347,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
           abortControllerRef.current?.abort()
         }, 45000)
 
-        const params = new URLSearchParams({
-          text,
-          voice: voiceToUse,
-          rate: rateStr,
-        })
-
-        const response = await fetch(`/api/news/tts-sync?${params.toString()}`, {
+        const response = await authFetch('/api/news/tts-sync', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, voice: voiceToUse, rate: rateStr }),
           signal: abortControllerRef.current.signal,
         })
 

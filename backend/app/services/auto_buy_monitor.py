@@ -10,6 +10,7 @@ IMPORTANT: Respects bot reservations - only converts funds that are truly free
 """
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict
 
@@ -17,10 +18,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import Account, Bot, PendingOrder, Position
+from app.models import Account, Bot, Position
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AutoBuyPendingOrder:
+    """In-memory tracking for auto-buy limit orders (not stored in DB)."""
+    order_id: str
+    account_id: int
+    product_id: str
+    side: str
+    size: float        # base currency amount (BTC)
+    price: float       # limit price
+    placed_at: datetime
 
 
 class AutoBuyMonitor:
@@ -38,7 +51,7 @@ class AutoBuyMonitor:
         self.running = False
         self.task = None
         self._account_timers: Dict[int, datetime] = {}  # account_id -> last_check_time
-        self._pending_orders: Dict[str, datetime] = {}  # order_id -> placement_time
+        self._pending_orders: Dict[str, AutoBuyPendingOrder] = {}  # order_id -> order info
 
     async def start(self):
         """Start the auto-buy monitor"""
@@ -225,23 +238,16 @@ class AutoBuyMonitor:
 
                 order_id = result.get('order_id')
 
-                # Track pending order for re-pricing
-                self._pending_orders[order_id] = datetime.utcnow()
-
-                # Store in database
-                pending_order = PendingOrder(
+                # Track pending order in memory for re-pricing
+                self._pending_orders[order_id] = AutoBuyPendingOrder(
                     order_id=order_id,
                     account_id=account.id,
                     product_id=product_id,
                     side="BUY",
-                    order_type="limit",
-                    price=current_price,
                     size=btc_size,
-                    status="open",
-                    created_at=datetime.utcnow()
+                    price=current_price,
+                    placed_at=datetime.utcnow(),
                 )
-                db.add(pending_order)
-                await db.commit()
 
                 logger.info(
                     f"✅ Auto-buy limit order placed: {btc_size:.8f} BTC @ ${current_price:.2f} "
@@ -263,91 +269,69 @@ class AutoBuyMonitor:
             now = datetime.utcnow()
             orders_to_remove = []
 
-            for order_id, placed_time in list(self._pending_orders.items()):
-                elapsed = (now - placed_time).total_seconds()
+            for order_id, pending in list(self._pending_orders.items()):
+                elapsed = (now - pending.placed_at).total_seconds()
 
                 # Re-price after 2 minutes
                 if elapsed >= 120:  # 2 minutes
-                    await self._reprice_order(order_id, db)
+                    await self._reprice_order(pending, db)
                     orders_to_remove.append(order_id)
 
             # Clean up processed orders
             for order_id in orders_to_remove:
                 del self._pending_orders[order_id]
 
-    async def _reprice_order(self, order_id: str, db: AsyncSession):
+    async def _reprice_order(self, pending: AutoBuyPendingOrder, db: AsyncSession):
         """Cancel and replace a limit order at current market price"""
         try:
-            # Get order from database
-            query = select(PendingOrder).where(PendingOrder.order_id == order_id)
-            result = await db.execute(query)
-            pending_order = result.scalar_one_or_none()
-
-            if not pending_order or pending_order.status != "open":
-                logger.debug(f"Order {order_id} already filled or cancelled")
-                return
-
             # Get exchange client
-            client = await get_exchange_client_for_account(db, pending_order.account_id)
+            client = await get_exchange_client_for_account(db, pending.account_id)
             if not client:
                 return
 
             # Check if order is still open
-            order_status = await client.get_order(order_id)
+            order_status = await client.get_order(pending.order_id)
             if order_status.get('status') in ['FILLED', 'CANCELLED']:
-                # Order already filled or cancelled
-                pending_order.status = order_status.get('status').lower()
-                await db.commit()
-                logger.debug(f"Order {order_id} already {pending_order.status}")
+                logger.debug(f"Order {pending.order_id} already {order_status.get('status')}")
                 return
 
             # Cancel old order
-            await client.cancel_order(order_id)
-            pending_order.status = "cancelled"
-            await db.commit()
-
-            logger.info(f"🔄 Re-pricing auto-buy order {order_id} (after 2 minutes)")
+            await client.cancel_order(pending.order_id)
+            logger.info(f"🔄 Re-pricing auto-buy order {pending.order_id} (after 2 minutes)")
 
             # Get current market price
-            ticker = await client.get_product(pending_order.product_id)
+            ticker = await client.get_product(pending.product_id)
             new_price = float(ticker.get('price', 0))
 
             if new_price == 0:
-                logger.error(f"Could not get price for {pending_order.product_id}")
+                logger.error(f"Could not get price for {pending.product_id}")
                 return
 
             # Place new limit order at current price
             result = await client.create_limit_order(
-                product_id=pending_order.product_id,
-                side=pending_order.side,
-                size=str(pending_order.size),
+                product_id=pending.product_id,
+                side=pending.side,
+                size=str(pending.size),
                 price=str(new_price)
             )
 
             new_order_id = result.get('order_id')
 
-            # Track new order
-            self._pending_orders[new_order_id] = datetime.utcnow()
-
-            # Update database
-            new_pending_order = PendingOrder(
+            # Track new order in memory
+            self._pending_orders[new_order_id] = AutoBuyPendingOrder(
                 order_id=new_order_id,
-                account_id=pending_order.account_id,
-                product_id=pending_order.product_id,
-                side=pending_order.side,
-                order_type="limit",
+                account_id=pending.account_id,
+                product_id=pending.product_id,
+                side=pending.side,
+                size=pending.size,
                 price=new_price,
-                size=pending_order.size,
-                status="open",
-                created_at=datetime.utcnow()
+                placed_at=datetime.utcnow(),
             )
-            db.add(new_pending_order)
-            await db.commit()
 
             logger.info(
-                f"✅ Re-priced order: {pending_order.size:.8f} BTC @ ${new_price:.2f} "
-                f"(Old: ${pending_order.price:.2f}, New Order: {new_order_id})"
+                f"✅ Re-priced order: {pending.size:.8f} BTC @ ${new_price:.2f} "
+                f"(Old: ${pending.price:.2f}, New Order: {new_order_id})"
             )
 
         except Exception as e:
-            logger.error(f"Error re-pricing order {order_id}: {e}", exc_info=True)
+            logger.error(f"Error re-pricing order {pending.order_id}: {e}", exc_info=True)

@@ -24,27 +24,31 @@ logger = logging.getLogger(__name__)
 class OrderReconciliationMonitor:
     """Monitors and auto-fixes positions with missing fill data"""
 
-    def __init__(self, db: AsyncSession, exchange: ExchangeClient):
+    def __init__(self, db: AsyncSession, exchange: ExchangeClient, account_id: int = None):
         self.db = db
         self.exchange = exchange
+        self.account_id = account_id
 
     async def check_and_fix_orphaned_positions(self):
         """
         Check for positions with zero fill data but existing order_id in trades.
         These are positions where the initial order succeeded but fill data wasn't captured.
+        Scoped to self.account_id if set.
         """
         try:
             # Find open positions with zero base acquired (orphaned orders)
             # Only check positions opened within last 24 hours to avoid re-checking old issues
             twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
 
-            query = select(Position).where(
-                and_(
-                    Position.status == "open",
-                    Position.total_base_acquired == 0,
-                    Position.opened_at >= twenty_four_hours_ago
-                )
-            )
+            conditions = [
+                Position.status == "open",
+                Position.total_base_acquired == 0,
+                Position.opened_at >= twenty_four_hours_ago,
+            ]
+            if self.account_id:
+                conditions.append(Position.account_id == self.account_id)
+
+            query = select(Position).where(and_(*conditions))
             result = await self.db.execute(query)
             orphaned_positions = result.scalars().all()
 
@@ -182,9 +186,10 @@ class MissingOrderDetector:
     Enhanced to check both BUY and SELL orders, and recently closed positions.
     """
 
-    def __init__(self, db: AsyncSession, exchange: ExchangeClient):
+    def __init__(self, db: AsyncSession, exchange: ExchangeClient, account_id: int = None):
         self.db = db
         self.exchange = exchange
+        self.account_id = account_id
         # Threshold for alerting (in BTC equivalent)
         self.alert_threshold_btc = 0.0001  # Alert if missing order is >= 0.0001 BTC
 
@@ -192,7 +197,7 @@ class MissingOrderDetector:
         """
         Compare exchange orders with recorded trades for both open and recently closed positions.
         Alert if any orders are found that weren't recorded.
-        Enhanced to check BOTH buy and sell orders.
+        Scoped to self.account_id if set.
         """
         try:
             from app.models import PendingOrder
@@ -200,10 +205,13 @@ class MissingOrderDetector:
             # Get all open positions + recently closed positions (last 7 days)
             seven_days_ago = datetime.utcnow() - timedelta(days=7)
 
-            query = select(Position).where(
-                (Position.status == "open")
-                | ((Position.status == "closed") & (Position.closed_at >= seven_days_ago))
+            conditions = (Position.status == "open") | (
+                (Position.status == "closed") & (Position.closed_at >= seven_days_ago)
             )
+            if self.account_id:
+                conditions = conditions & (Position.account_id == self.account_id)
+
+            query = select(Position).where(conditions)
             result = await self.db.execute(query)
             positions = result.scalars().all()
 

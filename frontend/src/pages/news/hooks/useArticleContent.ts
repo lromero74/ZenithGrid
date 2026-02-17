@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '../../../services/api'
 import { ArticleContentResponse, NewsItem } from '../types'
 
 export interface UseArticleContentReturn {
@@ -44,7 +45,7 @@ export const useArticleContent = ({
       setArticleContent(null)
 
       try {
-        const response = await fetch(
+        const response = await authFetch(
           `/api/news/article-content?url=${encodeURIComponent(
             previewArticle.url
           )}`

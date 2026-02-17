@@ -300,7 +300,7 @@ async def add_custom_source(
     if request.type == "video" and not request.channel_id:
         raise HTTPException(status_code=400, detail="channel_id required for video sources")
 
-    # Create custom source
+    # Create custom source (owned by creating user)
     source = ContentSource(
         source_key=request.source_key,
         name=request.name,
@@ -311,6 +311,7 @@ async def add_custom_source(
         channel_id=request.channel_id,
         is_system=False,  # User-created
         is_enabled=True,
+        user_id=current_user.id,
     )
     db.add(source)
     await db.commit()
@@ -357,6 +358,10 @@ async def delete_custom_source(
 
     if source.is_system:
         raise HTTPException(status_code=400, detail="Cannot delete system sources")
+
+    # Only the owner (or a superuser) can delete custom sources
+    if source.user_id and source.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this source")
 
     source_name = source.name
     await db.delete(source)

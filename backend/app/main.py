@@ -276,7 +276,7 @@ async def run_order_reconciliation_monitor():
                     if account_id > 0:
                         exchange = await get_exchange_client_for_account(db, account_id)
                         if exchange:
-                            monitor = OrderReconciliationMonitor(db, exchange)
+                            monitor = OrderReconciliationMonitor(db, exchange, account_id=account_id)
                             await monitor.check_and_fix_orphaned_positions()
 
             if first_run:
@@ -321,7 +321,7 @@ async def run_missing_order_detector():
                             db, account.id
                         )
                         if exchange:
-                            detector = MissingOrderDetector(db, exchange)
+                            detector = MissingOrderDetector(db, exchange, account_id=account.id)
                             await detector.check_for_missing_orders()
                     except Exception as e:
                         logger.error(

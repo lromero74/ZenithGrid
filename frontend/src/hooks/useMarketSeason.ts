@@ -4,6 +4,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { authFetch } from '../services/api'
 import type {
   FearGreedResponse,
   ATHResponse,
@@ -21,7 +22,7 @@ export function useMarketSeason(): {
   const { data: fearGreedData, isLoading: fgLoading } = useQuery<FearGreedResponse>({
     queryKey: ['fear-greed'],
     queryFn: async () => {
-      const response = await fetch('/api/news/fear-greed')
+      const response = await authFetch('/api/news/fear-greed')
       if (!response.ok) throw new Error('Failed to fetch')
       return response.json()
     },
@@ -32,7 +33,7 @@ export function useMarketSeason(): {
   const { data: athData, isLoading: athLoading } = useQuery<ATHResponse>({
     queryKey: ['ath'],
     queryFn: async () => {
-      const response = await fetch('/api/news/ath')
+      const response = await authFetch('/api/news/ath')
       if (!response.ok) throw new Error('Failed to fetch')
       return response.json()
     },
@@ -43,7 +44,7 @@ export function useMarketSeason(): {
   const { data: altseasonData, isLoading: altLoading } = useQuery<AltseasonIndexResponse>({
     queryKey: ['altseason-index'],
     queryFn: async () => {
-      const response = await fetch('/api/news/altseason-index')
+      const response = await authFetch('/api/news/altseason-index')
       if (!response.ok) throw new Error('Failed to fetch')
       return response.json()
     },
@@ -54,7 +55,7 @@ export function useMarketSeason(): {
   const { data: btcDominanceData, isLoading: domLoading } = useQuery<BTCDominanceResponse>({
     queryKey: ['btc-dominance'],
     queryFn: async () => {
-      const response = await fetch('/api/news/btc-dominance')
+      const response = await authFetch('/api/news/btc-dominance')
       if (!response.ok) throw new Error('Failed to fetch')
       return response.json()
     },

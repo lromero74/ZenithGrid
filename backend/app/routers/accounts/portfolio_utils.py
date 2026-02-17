@@ -354,11 +354,12 @@ async def get_dex_portfolio(
     Returns:
         Dict with portfolio data including holdings and balances
     """
-    # Get ETH/USD price for valuations (from default CEX account or fallback)
+    # Get ETH/USD price for valuations (from same user's CEX account or fallback)
     try:
-        # Find a CEX account to get price data
+        # Find a CEX account belonging to the same user for price data
         cex_result = await db.execute(
             select(Account).where(
+                Account.user_id == account.user_id,
                 Account.type == "cex",
                 Account.is_active.is_(True)
             ).order_by(Account.is_default.desc(), Account.created_at)

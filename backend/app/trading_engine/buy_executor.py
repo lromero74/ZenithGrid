@@ -724,8 +724,21 @@ async def execute_buy_close_short(
     except Exception as e:
         logger.warning(f"Failed to log close-short to history: {e}")
 
-    # Send WebSocket update
-    await ws_manager.broadcast_position_update(position)
+    # Broadcast short close notification via WebSocket (best-effort)
+    try:
+        await ws_manager.broadcast_order_fill(
+            fill_type="close_short",
+            product_id=product_id,
+            base_amount=filled_size,
+            quote_amount=usd_spent_to_close,
+            price=average_filled_price,
+            position_id=position.id,
+            profit=profit_quote,
+            profit_percentage=profit_percentage,
+            user_id=position.user_id,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to broadcast short close WebSocket notification: {e}")
 
     logger.info(f"  ✅ SHORT POSITION CLOSED: Profit ${profit_quote:.2f} ({profit_percentage:.2f}%)")
 

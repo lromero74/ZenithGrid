@@ -1028,6 +1028,7 @@ class ContentSource(Base):
     is_system = Column(Boolean, default=True)  # System sources can't be deleted
     is_enabled = Column(Boolean, default=True, index=True)  # Globally enabled
     category = Column(String, nullable=False, default="CryptoCurrency", index=True)  # News category
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner for custom sources (null for system)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

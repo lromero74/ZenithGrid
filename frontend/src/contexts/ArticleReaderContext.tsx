@@ -3,7 +3,8 @@
  * Manages article playlist with voice cycling and caching
  */
 
-import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo, ReactNode } from 'react'
+import { authFetch } from '../services/api'
 import { useTTSSync, WordTiming } from '../pages/news/hooks/useTTSSync'
 import { markdownToPlainText } from '../pages/news/helpers'
 import { registerArticleReader, stopVideoPlayer } from './mediaCoordinator'
@@ -201,7 +202,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const fetchArticleContent = useCallback(async (url: string): Promise<string | null> => {
     setArticleContentLoading(true)
     try {
-      const response = await fetch(`/api/news/article-content?url=${encodeURIComponent(url)}`)
+      const response = await authFetch(`/api/news/article-content?url=${encodeURIComponent(url)}`)
       if (!response.ok) {
         throw new Error('Failed to fetch article')
       }
@@ -563,7 +564,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isExpanded])
 
-  const value: ArticleReaderContextType = {
+  const value: ArticleReaderContextType = useMemo(() => ({
     // Playlist state
     playlist,
     currentIndex,
@@ -620,7 +621,17 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
     // Voice cache
     getVoiceForArticle,
-  }
+  }), [
+    playlist, currentIndex, isPlaying, showMiniPlayer, isExpanded, currentArticle,
+    tts.isLoading, tts.isPaused, tts.isReady, tts.error, tts.words,
+    tts.currentWordIndex, tts.currentTime, tts.duration, tts.currentVoice, tts.playbackRate,
+    articleContent, articleContentLoading, voiceCycleEnabled, toggleVoiceCycle,
+    openArticle, startPlaylist, stopPlaylist, playArticle, nextArticle, previousArticle,
+    toggleExpanded, closeMiniPlayer,
+    tts.play, tts.pause, tts.resume, tts.stop, tts.replay,
+    tts.seekToWord, tts.seekToTime, tts.skipWords, tts.setVoice, tts.setRate,
+    tts.getPlaybackState, getVoiceForArticle,
+  ])
 
   return (
     <ArticleReaderContext.Provider value={value}>
