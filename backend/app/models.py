@@ -82,7 +82,9 @@ class User(Base):
     ai_provider_credentials = relationship("AIProviderCredential", back_populates="user", cascade="all, delete-orphan")
     source_subscriptions = relationship("UserSourceSubscription", back_populates="user", cascade="all, delete-orphan")
     trusted_devices = relationship("TrustedDevice", back_populates="user", cascade="all, delete-orphan")
-    email_verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
+    email_verification_tokens = relationship(
+        "EmailVerificationToken", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class TrustedDevice(Base):
@@ -433,7 +435,10 @@ class BotTemplate(Base):
 
     # Relationships
     user = relationship("User", back_populates="bot_templates")
-    products = relationship("BotTemplateProduct", back_populates="template", cascade="all, delete-orphan", lazy="selectin")
+    products = relationship(
+        "BotTemplateProduct", back_populates="template",
+        cascade="all, delete-orphan", lazy="selectin"
+    )
 
     def get_trading_pairs(self):
         """Get list of trading pairs for this template from the junction table"""
@@ -969,6 +974,9 @@ class NewsArticle(Base):
     # Category for filtering (like Newsmap: World, Nation, Business, Technology, etc.)
     category = Column(String, nullable=False, default="CryptoCurrency", index=True)
 
+    # FK to content_sources for proper relational lookups
+    source_id = Column(Integer, ForeignKey("content_sources.id"), nullable=True, index=True)
+
     # Metadata
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -1002,6 +1010,9 @@ class VideoArticle(Base):
     # Category for filtering (like Newsmap: World, Nation, Business, Technology, etc.)
     category = Column(String, nullable=False, default="CryptoCurrency", index=True)
 
+    # FK to content_sources for proper relational lookups
+    source_id = Column(Integer, ForeignKey("content_sources.id"), nullable=True, index=True)
+
     # Metadata
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -1028,7 +1039,8 @@ class ContentSource(Base):
     is_system = Column(Boolean, default=True)  # System sources can't be deleted
     is_enabled = Column(Boolean, default=True, index=True)  # Globally enabled
     category = Column(String, nullable=False, default="CryptoCurrency", index=True)  # News category
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner for custom sources (null for system)
+    # Owner for custom sources (null for system)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -1049,6 +1061,8 @@ class UserSourceSubscription(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     source_id = Column(Integer, ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False)
     is_subscribed = Column(Boolean, default=True)
+    user_category = Column(String, nullable=True)  # Per-user category override
+    retention_days = Column(Integer, nullable=True)  # Per-user visibility filter (days)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Unique constraint
@@ -1057,6 +1071,73 @@ class UserSourceSubscription(Base):
     # Relationships
     user = relationship("User", back_populates="source_subscriptions")
     source = relationship("ContentSource", back_populates="subscriptions")
+
+
+class ArticleTTS(Base):
+    """Cached TTS audio per article and voice. Shared across users."""
+
+    __tablename__ = "article_tts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    article_id = Column(
+        Integer, ForeignKey("news_articles.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    voice_id = Column(String, nullable=False)
+    audio_path = Column(String, nullable=False)
+    word_timings = Column(Text, nullable=True)  # JSON array
+    file_size_bytes = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by_user_id = Column(
+        Integer, ForeignKey("users.id"), nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("article_id", "voice_id", name="uq_article_voice"),
+    )
+
+
+class UserVoiceSubscription(Base):
+    """Per-user voice preferences (which voices are enabled)."""
+
+    __tablename__ = "user_voice_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    voice_id = Column(String, nullable=False)
+    is_enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "voice_id", name="uq_user_voice"),
+    )
+
+
+class UserArticleTTSHistory(Base):
+    """Per-user last-played voice per article (for auto-resume)."""
+
+    __tablename__ = "user_article_tts_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    article_id = Column(
+        Integer, ForeignKey("news_articles.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    last_voice_id = Column(String, nullable=False)
+    last_played_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "article_id", name="uq_user_article_tts"
+        ),
+    )
 
 
 class AccountValueSnapshot(Base):

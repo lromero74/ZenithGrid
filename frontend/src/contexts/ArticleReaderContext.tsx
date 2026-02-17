@@ -11,6 +11,7 @@ import { registerArticleReader, stopVideoPlayer } from './mediaCoordinator'
 import { VOICE_CYCLE_IDS, CHILD_VOICE_IDS, containsAdultContent } from '../constants/voices'
 
 export interface ArticleItem {
+  id?: number  // DB article ID (for TTS caching)
   title: string
   url: string
   source: string
@@ -269,13 +270,13 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     if (content) {
       setArticleContent(content)
       const plainText = markdownToPlainText(content)
-      // Pass voice directly to avoid async state race condition
-      await tts.loadAndPlay(plainText, voiceToUse)
+      // Pass voice and article ID for server-side TTS caching
+      await tts.loadAndPlay(plainText, voiceToUse, article.id)
     } else {
       // No content available, try to read summary
       if (article.summary) {
         setArticleContent(article.summary)
-        await tts.loadAndPlay(article.summary, voiceToUse)
+        await tts.loadAndPlay(article.summary, voiceToUse, article.id)
       }
     }
   }, [voiceCycleEnabled, voiceCache, saveVoiceCache, fetchArticleContent, tts])

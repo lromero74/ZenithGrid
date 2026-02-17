@@ -1202,6 +1202,7 @@ def initialize_database(project_root):
                 cached_thumbnail_path TEXT,
                 image_data TEXT,
                 category TEXT NOT NULL DEFAULT 'CryptoCurrency',
+                source_id INTEGER REFERENCES content_sources(id),
                 fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -1210,6 +1211,7 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_published_at ON news_articles(published_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_fetched_at ON news_articles(fetched_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_news_articles_category ON news_articles(category)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_source_id ON news_articles(source_id)")
 
         # Video articles table (cached YouTube videos)
         cursor.execute("""
@@ -1224,6 +1226,7 @@ def initialize_database(project_root):
                 description TEXT,
                 thumbnail_url TEXT,
                 category TEXT NOT NULL DEFAULT 'CryptoCurrency',
+                source_id INTEGER REFERENCES content_sources(id),
                 fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -1234,6 +1237,7 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_video_articles_fetched_at ON video_articles(fetched_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_video_articles_source ON video_articles(source)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_video_articles_category ON video_articles(category)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_video_articles_source_id ON video_articles(source_id)")
 
         # AI provider credentials table (per-user AI API keys)
         cursor.execute("""
@@ -1302,6 +1306,8 @@ def initialize_database(project_root):
                 user_id INTEGER NOT NULL,
                 source_id INTEGER NOT NULL,
                 is_subscribed BOOLEAN DEFAULT 1,
+                user_category TEXT,
+                retention_days INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (source_id) REFERENCES content_sources(id) ON DELETE CASCADE,
@@ -1309,6 +1315,47 @@ def initialize_database(project_root):
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_user_source_subscriptions_user_id ON user_source_subscriptions(user_id)")
+
+        # TTS persistence tables
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS article_tts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id INTEGER NOT NULL
+                    REFERENCES news_articles(id) ON DELETE CASCADE,
+                voice_id TEXT NOT NULL,
+                audio_path TEXT NOT NULL,
+                word_timings TEXT,
+                file_size_bytes INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_by_user_id INTEGER REFERENCES users(id),
+                UNIQUE(article_id, voice_id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_voice_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL
+                    REFERENCES users(id) ON DELETE CASCADE,
+                voice_id TEXT NOT NULL,
+                is_enabled BOOLEAN DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, voice_id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_article_tts_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL
+                    REFERENCES users(id) ON DELETE CASCADE,
+                article_id INTEGER NOT NULL
+                    REFERENCES news_articles(id) ON DELETE CASCADE,
+                last_voice_id TEXT NOT NULL,
+                last_played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, article_id)
+            )
+        """)
 
         # Account value snapshots (daily historical tracking)
         cursor.execute("""

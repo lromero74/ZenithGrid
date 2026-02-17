@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 class NewsItem(BaseModel):
     """Individual news item"""
+    id: Optional[int] = None
     title: str
     url: str
     source: str

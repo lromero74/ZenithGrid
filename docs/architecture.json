@@ -1,6 +1,6 @@
 {
   "project": "ZenithGrid",
-  "version": "v2.8.0",
+  "version": "v2.9.0",
   "updated": "2026-02-17",
   "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -273,7 +273,9 @@
       },
       "news_feeds": {
         "types": ["RSS feeds", "Reddit JSON API", "YouTube Atom feeds"],
-        "categories": ["CryptoCurrency", "AI", "Finance", "World", "Nation", "Business", "Technology", "Entertainment", "Sports"]
+        "categories": ["CryptoCurrency", "AI", "Finance", "World", "Nation", "Business", "Technology", "Entertainment", "Sports"],
+        "architecture_spec": "docs/NEWS_CONTENT_ARCHITECTURE.md",
+        "notes": "See NEWS_CONTENT_ARCHITECTURE.md for full rules on system vs user sources, TTS sharing, retention, and visibility"
       },
       "market_data": {
         "sources": ["Fear & Greed Index", "BTC Dominance", "Altseason Index", "Market Cap", "Mempool", "Hash Rate", "Lightning Network"]

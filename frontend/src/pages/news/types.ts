@@ -3,6 +3,7 @@
  */
 
 export interface NewsItem {
+  id?: number  // DB article ID (for TTS caching)
   title: string
   url: string
   source: string

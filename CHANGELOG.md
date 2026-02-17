@@ -5,6 +5,33 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.9.0] - 2026-02-17
+
+### Added
+- **TTS caching system**: Article TTS audio cached to disk and DB (`article_tts` table), shared across users — no re-generation for same article+voice
+- **TTS history tracking**: `user_article_tts_history` table records last-used voice per article per user for auto-resume
+- **Voice subscription preferences**: `user_voice_subscriptions` table for per-user voice enable/disable
+- **TTS serve endpoint**: `GET /tts/audio/{article_id}/{voice_id}` serves cached MP3 files directly
+- **Article source_id FK**: `news_articles` and `video_articles` now have `source_id` FK to `content_sources` for proper relational lookups (backfilled on migration)
+- **Source subscription enhancements**: `user_category` (per-user category override) and `retention_days` (visibility filter) columns on `user_source_subscriptions`
+- **Domain blacklist service**: New `domain_blacklist_service.py` for URL domain filtering
+- **URL utilities**: New `url_utils.py` for URL normalization and validation
+- **Custom commands**: `/shipit` (full release process), `/setdev` (switch to Vite dev mode), `/setprod` (switch to production dist/ mode)
+
+### Fixed
+- **S1: Voice path traversal**: Voice parameter validated against `TTS_VOICES` keys before filesystem use — rejects unknown voices with 400
+- **S2: Path containment escape**: `serve_tts_audio` verifies resolved path stays within `TTS_CACHE_DIR` — blocks DB-driven path traversal
+- **R1: TTS race condition**: `IntegrityError` caught in `_get_or_create_tts` — concurrent requests for same article+voice no longer cause 500 errors
+- **R2: Rate parameter injection**: Strict regex validation (`^[+-]\d{1,3}%$`) rejects malformed rate strings like `+abc%`
+- **Q1: Deprecated datetime**: `datetime.utcnow()` replaced with `datetime.now(timezone.utc)` in TTS history
+
+### Changed
+- **O(1) word highlighting (MiniPlayer)**: Removed `currentWordIndex` from `renderedContent` useMemo deps; highlighting via direct DOM class toggle instead of rebuilding 1000+ spans per word
+- **O(1) word highlighting (ArticleContent)**: Same DOM-based pattern — `useEffect` toggles highlight classes on prev/current word refs
+- **Source subscriptions modal**: Enhanced with category/retention controls
+- **News router**: Extended with source_id-aware queries and domain blacklist integration
+- **Sources router**: Enhanced subscription management with category and retention support
+
 ## [v2.8.0] - 2026-02-17
 
 ### Fixed

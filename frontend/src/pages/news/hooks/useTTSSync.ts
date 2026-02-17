@@ -50,7 +50,7 @@ interface UseTTSSyncReturn {
   getPlaybackState: () => { currentTime: number; duration: number }
 
   // Actions
-  loadAndPlay: (text: string, overrideVoice?: string) => Promise<void>
+  loadAndPlay: (text: string, overrideVoice?: string, articleId?: number) => Promise<void>
   play: () => void
   pause: () => void
   resume: () => void
@@ -261,7 +261,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     }
   }, [playbackRate])
 
-  const loadAndPlay = useCallback(async (text: string, overrideVoice?: string) => {
+  const loadAndPlay = useCallback(async (text: string, overrideVoice?: string, articleId?: number) => {
     const audio = audioRef.current
     if (!audio) return
 
@@ -350,7 +350,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         const response = await authFetch('/api/news/tts-sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice: voiceToUse, rate: rateStr }),
+          body: JSON.stringify({ text, voice: voiceToUse, rate: rateStr, ...(articleId ? { article_id: articleId } : {}) }),
           signal: abortControllerRef.current.signal,
         })
 

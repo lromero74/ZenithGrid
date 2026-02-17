@@ -39,6 +39,7 @@ from app.routers import (
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
 from app.services.content_refresh_service import content_refresh_service
 from app.services.debt_ceiling_monitor import debt_ceiling_monitor
+from app.services.domain_blacklist_service import domain_blacklist_service
 from app.services.delisted_pair_monitor import TradingPairMonitor
 from app.services.limit_order_monitor import LimitOrderMonitor
 from app.services.shutdown_manager import shutdown_manager
@@ -423,6 +424,10 @@ async def startup_event():
     await content_refresh_service.start()
     print("🚀 Content refresh service started - news every 30min, videos every 60min")
 
+    print("🚀 Starting domain blacklist service...")
+    await domain_blacklist_service.start()
+    print("🚀 Domain blacklist service started - refreshing weekly")
+
     print("🚀 Starting debt ceiling monitor...")
     await debt_ceiling_monitor.start()
     print("🚀 Debt ceiling monitor started - checking for new legislation weekly")
@@ -480,6 +485,9 @@ async def shutdown_event():
 
     if content_refresh_service:
         await content_refresh_service.stop()
+
+    if domain_blacklist_service:
+        await domain_blacklist_service.stop()
 
     if debt_ceiling_monitor:
         await debt_ceiling_monitor.stop()

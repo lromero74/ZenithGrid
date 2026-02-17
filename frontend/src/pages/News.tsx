@@ -347,6 +347,7 @@ export default function News() {
             <button
               onClick={() => {
                 const articles: ArticleItem[] = filteredNews.map(item => ({
+                  id: item.id,
                   title: item.title,
                   url: item.url,
                   source: item.source,
@@ -592,6 +593,7 @@ export default function News() {
                         summary: item.summary,
                       }
                       const allArticles: ArticleItem[] = filteredNews.map(n => ({
+                        id: n.id,
                         title: n.title,
                         url: n.url,
                         source: n.source,
