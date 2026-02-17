@@ -84,20 +84,21 @@ npm run dev
 
 ## Service Management
 
-### Using bot.sh (development)
+### Using bot.sh
 
 ```bash
-./bot.sh start      # Start backend + frontend
-./bot.sh stop       # Stop both
-./bot.sh restart    # Restart both
-./bot.sh status     # Check status
-./bot.sh logs       # View logs
+./bot.sh start                       # Start backend + frontend
+./bot.sh stop                        # Stop both
+./bot.sh restart --dev --back-end    # Restart backend only (dev mode)
+./bot.sh restart --dev --front-end   # Restart frontend only (dev mode)
+./bot.sh restart --dev --both        # Restart both services (dev mode)
+./bot.sh restart --prod              # Rebuild + restart (prod mode)
+./bot.sh status                      # Check mode and services
+./bot.sh logs                        # View logs
 ```
 
-### Using systemd (production / EC2)
-
+View logs directly:
 ```bash
-sudo systemctl restart trading-bot-backend trading-bot-frontend
 sudo journalctl -u trading-bot-backend -f   # Backend logs
 sudo journalctl -u trading-bot-frontend -f  # Frontend logs
 ```

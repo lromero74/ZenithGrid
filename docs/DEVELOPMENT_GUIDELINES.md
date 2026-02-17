@@ -28,7 +28,7 @@ cd frontend && npx tsc --noEmit
 ```
 
 ### Testing Before Commits
-1. Restart services: `sudo systemctl restart trading-bot-backend trading-bot-frontend`
+1. Restart services: `./bot.sh restart --dev --both`
 2. Check backend logs: `sudo journalctl -u trading-bot-backend -f`
 3. Check frontend loads: http://localhost:5173
 4. Verify key features work:

@@ -100,7 +100,7 @@ function AppContent() {
 
   // Fetch full portfolio data (all coins) - account-specific for CEX/DEX switching
   // Gated on selectedAccount so it doesn't fire before accounts have loaded
-  const { data: portfolio } = useQuery({
+  const { data: portfolio, isLoading: isPortfolioLoading } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
       const response = await authFetch(`/api/accounts/${selectedAccount!.id}/portfolio`)
@@ -293,12 +293,21 @@ function AppContent() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-slate-400">Account Value</p>
-                  <p className="text-xl font-bold text-blue-400">
-                    {totalBtcValue.toFixed(6)} BTC
-                  </p>
-                  <p className="text-sm text-green-400">
-                    ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </p>
+                  {isPortfolioLoading && !portfolio ? (
+                    <>
+                      <div className="h-7 w-32 bg-slate-700 rounded animate-pulse ml-auto" />
+                      <div className="h-5 w-16 bg-slate-700 rounded animate-pulse ml-auto mt-1" />
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xl font-bold text-blue-400">
+                        {totalBtcValue.toFixed(6)} BTC
+                      </p>
+                      <p className="text-sm text-green-400">
+                        ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <DollarSign className="w-8 h-8 md:w-10 md:h-10 text-green-500 opacity-50" />
                 <div className="flex items-center space-x-2 pl-4 border-l border-slate-600">
@@ -341,12 +350,21 @@ function AppContent() {
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] text-slate-400 leading-tight">Account Value</p>
-                  <p className="text-base font-bold text-blue-400 leading-tight">
-                    {totalBtcValue.toFixed(6)} BTC
-                  </p>
-                  <p className="text-xs text-green-400 leading-tight">
-                    ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </p>
+                  {isPortfolioLoading && !portfolio ? (
+                    <>
+                      <div className="h-5 w-28 bg-slate-700 rounded animate-pulse ml-auto" />
+                      <div className="h-4 w-14 bg-slate-700 rounded animate-pulse ml-auto mt-0.5" />
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-base font-bold text-blue-400 leading-tight">
+                        {totalBtcValue.toFixed(6)} BTC
+                      </p>
+                      <p className="text-xs text-green-400 leading-tight">
+                        ${totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 

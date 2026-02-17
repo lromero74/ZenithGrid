@@ -2,43 +2,23 @@ Switch the EC2 environment to PROD mode (frontend served from dist/ by backend).
 
 In prod mode, the backend on port 8100 serves both the API and the built frontend from `frontend/dist/`. The Vite dev server is not used. Nginx points everything (including `/ws`) to port 8100.
 
-**Execute these steps in order:**
+**Execute this command:**
 
-### 1. Build the frontend
-```
-cd /home/ec2-user/ZenithGrid/frontend && npm run build
-```
-Verify that `frontend/dist/` exists and contains `index.html` and `assets/`.
-
-### 2. Stop and disable the frontend service
-```
-sudo systemctl stop trading-bot-frontend
-sudo systemctl disable trading-bot-frontend
+```bash
+./bot.sh restart --prod --force
 ```
 
-### 3. Update nginx to proxy to backend (port 8100)
-Edit `/etc/nginx/conf.d/tradebot.conf`:
-- `location /` block: `proxy_pass http://127.0.0.1:8100`
-- `location /ws` block: `proxy_pass http://127.0.0.1:8100`
+The bot.sh script handles:
+1. Building frontend (`npm run build` → `frontend/dist/`)
+2. Stopping and disabling the frontend service
+3. Updating nginx to proxy both `/` and `/ws` to backend (port 8100)
+4. Reloading nginx
+5. Restarting the backend
 
-**Both** locations must point to 8100. If `/ws` is left pointing to 5173, WebSocket connections will fail since the Vite server is stopped.
-
-### 4. Reload nginx
+**Verify with:**
+```bash
+./bot.sh status
 ```
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-### 5. Restart backend (now serves both API + frontend dist/)
-```
-sudo systemctl restart trading-bot-backend
-```
-
-### 6. Verify
-- `sudo systemctl status trading-bot-frontend` — should be inactive/disabled
-- `sudo systemctl status trading-bot-backend` — should be active
-- Confirm nginx config: both `/` and `/ws` → 8100
-- Curl test: `curl -s -o /dev/null -w "%{http_code}" https://tradebot.romerotechsolutions.com/` should return 200
-- Report the final state to the user
 
 **Prod mode summary:**
 - Nginx (443) → Backend (8100) → serves API + frontend/dist/ + WebSocket

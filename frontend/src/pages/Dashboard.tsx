@@ -81,23 +81,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const allPositions = [...openPositions, ...closedPositions]
 
   // Fetch portfolio for account value - account-specific for CEX/DEX switching
-  const { data: portfolio } = useQuery({
+  const { data: portfolio, isLoading: isPortfolioLoading } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
-      // If we have a selected account, use the account-specific endpoint
-      if (selectedAccount) {
-        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json()
-      }
-      // Fallback to legacy endpoint
-      const response = await authFetch('/api/account/portfolio')
+      const response = await authFetch(`/api/accounts/${selectedAccount!.id}/portfolio`)
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
+    enabled: !!selectedAccount,
     refetchInterval: 120000, // Match header timing
     staleTime: 60000,
-    refetchOnMount: false,
     refetchOnWindowFocus: false,
   })
 
@@ -242,12 +235,21 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <p className="text-slate-400 text-sm font-medium">Account Value</p>
             <DollarSign className="w-5 h-5 text-green-500" />
           </div>
-          <p className="text-2xl font-bold text-white">
-            {formatCrypto(portfolio?.total_btc_value || 0, 6)} BTC
-          </p>
-          <p className="text-sm text-slate-400 mt-1">
-            {formatCurrency(portfolio?.total_usd_value || 0)}
-          </p>
+          {isPortfolioLoading && !portfolio ? (
+            <>
+              <div className="h-8 w-36 bg-slate-700 rounded animate-pulse" />
+              <div className="h-5 w-20 bg-slate-700 rounded animate-pulse mt-1" />
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-bold text-white">
+                {formatCrypto(portfolio?.total_btc_value || 0, 6)} BTC
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                {formatCurrency(portfolio?.total_usd_value || 0)}
+              </p>
+            </>
+          )}
 
           {/* Bidirectional Reservations Breakdown */}
           {reservations && (reservations.reserved_usd > 0 || reservations.reserved_btc > 0) && (

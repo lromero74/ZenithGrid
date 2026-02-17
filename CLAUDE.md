@@ -29,7 +29,7 @@
   - Run migrations: `backend/venv/bin/python3 update.py --yes`
   - Update `setup.py` raw SQL if new tables/columns were added (for fresh installs)
   - Update `database.py` `Base.metadata.create_all()` models if needed (runtime init)
-  - Restart after: `./bot.sh restart --dev` (or `--prod`)
+  - Restart after: `./bot.sh restart --dev --both` (or `--prod`)
 
 ### 4. Update Version References (all in the SAME commit)
 All of these must match the new tag version:
@@ -55,7 +55,9 @@ git push origin main --tags
 - Return to main: `git checkout main`
 
 ### 7. Deploy to Production (EC2)
-- Restart using `./bot.sh restart --dev` (or `--prod` depending on current mode)
+- Backend changes: `./bot.sh restart --dev --back-end` (or `--prod`)
+- Frontend changes: `./bot.sh restart --dev --front-end` (Vite config/deps only)
+- Both changed: `./bot.sh restart --dev --both` (or `--prod`)
 - If switching modes, add `--force`: `./bot.sh restart --prod --force`
 - Verify services are running: `./bot.sh status`
 
@@ -71,23 +73,27 @@ git push origin main --tags
 **Always use `./bot.sh` for restarts — never call systemctl directly.**
 
 ```bash
-./bot.sh restart --dev       # Restart in dev mode (Vite HMR)
-./bot.sh restart --prod      # Restart in prod mode (built dist/)
-./bot.sh restart --prod --force  # Switch modes (e.g., dev → prod)
-./bot.sh status              # Check current mode and services
+./bot.sh restart --dev --back-end    # Backend only (Python changes)
+./bot.sh restart --dev --front-end   # Frontend only (Vite config/deps)
+./bot.sh restart --dev --both        # Both services
+./bot.sh restart --prod              # Rebuild + restart (prod mode)
+./bot.sh restart --prod --force      # Switch modes (e.g., dev → prod)
+./bot.sh status                      # Check current mode and services
 ```
 
 - The script enforces mode consistency (nginx, systemd, frontend service)
+- In dev mode, you must specify `--back-end`, `--front-end`, or `--both`
 - If you pass a mode different from current, it warns and requires `--force`
-- Backend changes always require a restart
-- Frontend-only changes in dev mode do NOT need a restart (Vite HMR)
+- Backend changes always require a restart (`--back-end`)
+- Frontend-only changes in dev mode usually do NOT need a restart (Vite HMR handles it)
+- Only restart frontend (`--front-end`) for Vite config changes or dependency updates
 - Never restart services unnecessarily — it disrupts the running trading bot
 
 ## Current Environment Detection
 
 **If hostname contains `ec2.internal`**: You are ON the EC2 production instance.
 - Services run LOCALLY - no SSH needed
-- Use `./bot.sh restart --dev` (or `--prod`) for restarts
+- Use `./bot.sh restart --dev --back-end` (or `--front-end`/`--both`/`--prod`) for restarts
 - Use `./bot.sh status` to check mode and services
 - Database is local: `backend/trading.db`
 - This IS production - be careful with changes
@@ -119,7 +125,7 @@ git push origin main --tags
 ```bash
 ssh testbot
 cd ZenithGrid
-./bot.sh start|stop|restart --dev|--prod [--force]|status|logs
+./bot.sh start|stop|restart --dev --back-end|--front-end|--both|restart --prod [--force]|status|logs
 ```
 
 **Important Notes:**
@@ -147,7 +153,7 @@ cd ZenithGrid/backend
 1. These are already listed in `backend/requirements.txt`
 2. On fresh EC2 instance: `pip install -r requirements.txt`
 3. If missing libraries cause errors in AI Bot Reasoning logs, install individually
-4. After installation, restart: `./bot.sh restart --dev` (or `--prod`)
+4. After installation, restart: `./bot.sh restart --dev --back-end` (or `--prod`)
 - please always back up the database before you mess with it
 
 ## CRITICAL: Budget Calculation for BTC Bots
@@ -277,7 +283,7 @@ See **COMMERCIALIZATION.md** for the full roadmap to make Zenith Grid sale-ready
 - you can tell the update.py script to answer "yes" automatically with "-y"
 - if we are just fixing things that should already work, bump tag patch number when I tell you it's time (major.minor.patch)
 - if we are adding a new feature, bump tag minor number when I tell you it's time (major.minor.patch)
-- use `./bot.sh restart --dev` (or `--prod`) for restarts. Never call systemctl directly — the script manages nginx, systemd, and frontend service consistency. Never restart unnecessarily.
+- use `./bot.sh restart --dev --back-end` (or `--front-end`/`--both`/`--prod`) for restarts. Never call systemctl directly — the script manages nginx, systemd, and frontend service consistency. Never restart unnecessarily.
 ## HTTPS & Nginx (v2.3.0+)
 
 **Public URL**: https://tradebot.romerotechsolutions.com

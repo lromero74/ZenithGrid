@@ -202,11 +202,14 @@ All configuration is done through the web interface - no manual JSON editing req
 ### Service Management
 
 ```bash
-./bot.sh start      # Start backend + frontend
-./bot.sh stop       # Stop both
-./bot.sh restart    # Restart both
-./bot.sh status     # Check status
-./bot.sh logs       # View logs
+./bot.sh start                       # Start backend + frontend
+./bot.sh stop                        # Stop both
+./bot.sh restart --dev --back-end    # Restart backend only (dev mode)
+./bot.sh restart --dev --front-end   # Restart frontend only (dev mode)
+./bot.sh restart --dev --both        # Restart both services (dev mode)
+./bot.sh restart --prod              # Rebuild + restart (prod mode)
+./bot.sh status                      # Check status
+./bot.sh logs                        # View logs
 ```
 
 ### Updating Zenith Grid

@@ -65,11 +65,21 @@ def _check_rate_limit(ip: str):
     """Check if IP has exceeded login rate limit. Raises 429 if exceeded."""
     now = time.time()
     # Clean old entries
-    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _RATE_LIMIT_WINDOW]
+    _login_attempts[ip] = [
+        t for t in _login_attempts[ip]
+        if now - t < _RATE_LIMIT_WINDOW
+    ]
     if len(_login_attempts[ip]) >= _RATE_LIMIT_MAX:
+        oldest = min(_login_attempts[ip])
+        retry_after = int(oldest + _RATE_LIMIT_WINDOW - now)
+        minutes = (retry_after + 59) // 60  # round up
         raise HTTPException(
             status_code=429,
-            detail="Too many login attempts. Please try again later."
+            detail=(
+                f"Too many login attempts. "
+                f"Try again in {minutes} minute{'s' if minutes != 1 else ''}."
+            ),
+            headers={"Retry-After": str(retry_after)},
         )
 
 
@@ -87,11 +97,21 @@ _SIGNUP_RATE_LIMIT_WINDOW = 3600  # 1 hour
 def _check_signup_rate_limit(ip: str):
     """Check if IP has exceeded signup rate limit."""
     now = time.time()
-    _signup_attempts[ip] = [t for t in _signup_attempts[ip] if now - t < _SIGNUP_RATE_LIMIT_WINDOW]
+    _signup_attempts[ip] = [
+        t for t in _signup_attempts[ip]
+        if now - t < _SIGNUP_RATE_LIMIT_WINDOW
+    ]
     if len(_signup_attempts[ip]) >= _SIGNUP_RATE_LIMIT_MAX:
+        oldest = min(_signup_attempts[ip])
+        retry_after = int(oldest + _SIGNUP_RATE_LIMIT_WINDOW - now)
+        minutes = (retry_after + 59) // 60
         raise HTTPException(
             status_code=429,
-            detail="Too many signup attempts. Please try again later."
+            detail=(
+                f"Too many signup attempts. "
+                f"Try again in {minutes} minute{'s' if minutes != 1 else ''}."
+            ),
+            headers={"Retry-After": str(retry_after)},
         )
 
 
@@ -109,11 +129,23 @@ _FORGOT_PW_RATE_LIMIT_WINDOW = 3600
 def _check_forgot_pw_rate_limit(ip: str):
     """Check if IP has exceeded forgot-password rate limit."""
     now = time.time()
-    _forgot_pw_attempts[ip] = [t for t in _forgot_pw_attempts[ip] if now - t < _FORGOT_PW_RATE_LIMIT_WINDOW]
+    _forgot_pw_attempts[ip] = [
+        t for t in _forgot_pw_attempts[ip]
+        if now - t < _FORGOT_PW_RATE_LIMIT_WINDOW
+    ]
     if len(_forgot_pw_attempts[ip]) >= _FORGOT_PW_RATE_LIMIT_MAX:
+        oldest = min(_forgot_pw_attempts[ip])
+        retry_after = int(
+            oldest + _FORGOT_PW_RATE_LIMIT_WINDOW - now
+        )
+        minutes = (retry_after + 59) // 60
         raise HTTPException(
             status_code=429,
-            detail="Too many requests. Please try again later."
+            detail=(
+                f"Too many requests. "
+                f"Try again in {minutes} minute{'s' if minutes != 1 else ''}."
+            ),
+            headers={"Retry-After": str(retry_after)},
         )
 
 
@@ -132,11 +164,23 @@ def _check_resend_rate_limit(user_id: int):
     """Check if user has exceeded resend verification rate limit."""
     now = time.time()
     key = str(user_id)
-    _resend_attempts[key] = [t for t in _resend_attempts[key] if now - t < _RESEND_RATE_LIMIT_WINDOW]
+    _resend_attempts[key] = [
+        t for t in _resend_attempts[key]
+        if now - t < _RESEND_RATE_LIMIT_WINDOW
+    ]
     if len(_resend_attempts[key]) >= _RESEND_RATE_LIMIT_MAX:
+        oldest = min(_resend_attempts[key])
+        retry_after = int(
+            oldest + _RESEND_RATE_LIMIT_WINDOW - now
+        )
+        minutes = (retry_after + 59) // 60
         raise HTTPException(
             status_code=429,
-            detail="Too many resend attempts. Please try again later."
+            detail=(
+                f"Too many resend attempts. "
+                f"Try again in {minutes} minute{'s' if minutes != 1 else ''}."
+            ),
+            headers={"Retry-After": str(retry_after)},
         )
 
 

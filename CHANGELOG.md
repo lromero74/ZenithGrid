@@ -5,6 +5,18 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.12.3] - 2026-02-17
+
+### Added
+- **Service qualifier for bot.sh restart**: `--dev` restart now requires `--back-end`, `--front-end`, or `--both` to specify which service(s) to restart. Prevents unnecessary frontend restarts when only backend Python changed
+
+### Fixed
+- **Account Value loading skeleton**: Dashboard header and Account Value card now show animated pulse placeholders while portfolio data loads, instead of displaying misleading zeros
+- **Rate limit messages include retry time**: All 4 rate limiters (login, signup, forgot-password, resend verification) now tell users exactly when they can try again ("Try again in X minutes") with standard `Retry-After` HTTP header
+
+### Changed
+- **Updated all documentation**: README.md, QUICKSTART.md, DEVELOPMENT_GUIDELINES.md, CLAUDE.md, and slash commands updated to reflect new `--back-end`/`--front-end`/`--both` syntax
+
 ## [v2.12.2] - 2026-02-17
 
 ### Fixed

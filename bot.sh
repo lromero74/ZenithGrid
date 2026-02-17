@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ZenithGrid Trading Bot Manager
-# Usage: ./bot.sh [start|stop|restart --dev|--prod [--force]|status|logs]
+# Usage: ./bot.sh [start|stop|restart --dev --back-end|--front-end|--both|restart --prod [--force]|status|logs]
 
 set -e
 
@@ -632,31 +632,73 @@ case "${1:-}" in
         ;;
 
     restart)
-        # Require --dev or --prod flag
-        MODE_FLAG="${2:-}"
-        FORCE_FLAG="${3:-}"
-        if [ "$MODE_FLAG" != "--dev" ] \
-            && [ "$MODE_FLAG" != "--prod" ]; then
+        # Parse restart flags from remaining args
+        shift  # remove "restart"
+        TARGET_MODE=""
+        SERVICE_TARGET=""
+        FORCE=false
+        for arg in "$@"; do
+            case "$arg" in
+                --dev)       TARGET_MODE="dev" ;;
+                --prod)      TARGET_MODE="prod" ;;
+                --back-end)  SERVICE_TARGET="backend" ;;
+                --front-end) SERVICE_TARGET="frontend" ;;
+                --both)      SERVICE_TARGET="both" ;;
+                --force)     FORCE=true ;;
+                *)
+                    echo -e "${RED}Unknown flag: $arg${NC}"
+                    exit 1
+                    ;;
+            esac
+        done
+
+        # Require --dev or --prod
+        if [ -z "$TARGET_MODE" ]; then
             echo -e "${RED}restart requires" \
                 "--dev or --prod flag${NC}"
             echo ""
             echo "Usage:"
-            echo "  $0 restart --dev   " \
-                "# Restart in dev mode (Vite HMR)"
-            echo "  $0 restart --prod  " \
-                "# Restart in prod mode (built dist/)"
+            echo "  $0 restart --dev --back-end  " \
+                "# Restart backend only (dev mode)"
+            echo "  $0 restart --dev --front-end " \
+                "# Restart frontend only (dev mode)"
+            echo "  $0 restart --dev --both      " \
+                "# Restart both services (dev mode)"
+            echo "  $0 restart --prod            " \
+                "# Rebuild + restart (prod mode)"
             echo ""
             echo "Current mode: $(get_current_mode)"
             exit 1
         fi
 
-        TARGET_MODE="${MODE_FLAG#--}"
+        # In dev mode, require a service qualifier
+        if [ "$TARGET_MODE" = "dev" ] \
+            && [ -z "$SERVICE_TARGET" ]; then
+            echo -e "${RED}--dev restart requires a" \
+                "service qualifier${NC}"
+            echo ""
+            echo "Usage:"
+            echo "  $0 restart --dev --back-end  " \
+                "# Backend only (Python changes)"
+            echo "  $0 restart --dev --front-end " \
+                "# Frontend only (Vite dev server)"
+            echo "  $0 restart --dev --both      " \
+                "# Both services"
+            echo ""
+            exit 1
+        fi
+
+        # In prod mode, service qualifier is ignored (only backend)
+        if [ "$TARGET_MODE" = "prod" ]; then
+            SERVICE_TARGET="both"
+        fi
+
         CURRENT_MODE=$(get_current_mode)
 
         # Guard: warn if switching deployment modes
         if [ "$CURRENT_MODE" != "unknown" ] \
             && [ "$CURRENT_MODE" != "$TARGET_MODE" ]; then
-            if [ "$FORCE_FLAG" != "--force" ]; then
+            if [ "$FORCE" != true ]; then
                 echo -e "${YELLOW}========================================${NC}"
                 echo -e "${YELLOW}  Mode change detected${NC}"
                 echo -e "${YELLOW}========================================${NC}"
@@ -667,7 +709,7 @@ case "${1:-}" in
                     "${BLUE}${TARGET_MODE^^}${NC} deployment?"
                 echo ""
                 echo -e "If yes, re-run with --force:"
-                echo -e "  $0 restart ${MODE_FLAG} --force"
+                echo -e "  $0 restart --${TARGET_MODE} --force"
                 echo ""
                 exit 1
             fi
@@ -678,27 +720,39 @@ case "${1:-}" in
         fi
 
         # Guard: warn if infrastructure is in a mixed state
-        if [ "$FORCE_FLAG" != "--force" ]; then
+        if [ "$FORCE" != true ]; then
             if ! check_mode_consistency; then
                 exit 1
             fi
         fi
 
+        # Build restart label
+        RESTART_LABEL="$TARGET_MODE"
+        if [ "$TARGET_MODE" = "dev" ]; then
+            RESTART_LABEL="$TARGET_MODE / $SERVICE_TARGET"
+        fi
+
         echo -e "${YELLOW}========================================${NC}"
         echo -e "${YELLOW}  Restarting Trading Bot" \
-            "(${TARGET_MODE} mode)${NC}"
+            "(${RESTART_LABEL})${NC}"
         echo -e "${YELLOW}========================================${NC}"
         echo ""
 
-        # Clear bytecode cache before restarting
-        clear_python_cache
-        echo ""
-
-        # Graceful shutdown - wait for in-flight orders
-        if is_service_running "$BACKEND_SERVICE"; then
-            prepare_graceful_shutdown
+        # Clear bytecode cache if restarting backend
+        if [ "$SERVICE_TARGET" = "backend" ] \
+            || [ "$SERVICE_TARGET" = "both" ]; then
+            clear_python_cache
+            echo ""
         fi
-        echo ""
+
+        # Graceful shutdown if restarting backend
+        if [ "$SERVICE_TARGET" = "backend" ] \
+            || [ "$SERVICE_TARGET" = "both" ]; then
+            if is_service_running "$BACKEND_SERVICE"; then
+                prepare_graceful_shutdown
+            fi
+            echo ""
+        fi
 
         # Switch mode (handles nginx config + frontend service)
         if [ "$TARGET_MODE" = "dev" ]; then
@@ -708,38 +762,45 @@ case "${1:-}" in
         fi
         echo ""
 
-        # Restart backend
-        echo -e "${BLUE}Restarting backend...${NC}"
-        sudo systemctl restart "$BACKEND_SERVICE"
-        sleep 2
-        if is_service_running "$BACKEND_SERVICE"; then
-            echo -e "${GREEN}Backend restarted${NC}"
-        else
-            echo -e "${RED}Backend failed to restart${NC}"
-            echo -e "${YELLOW}Check logs:" \
-                "sudo journalctl -u $BACKEND_SERVICE -n 50${NC}"
+        # Restart backend if requested
+        if [ "$SERVICE_TARGET" = "backend" ] \
+            || [ "$SERVICE_TARGET" = "both" ]; then
+            echo -e "${BLUE}Restarting backend...${NC}"
+            sudo systemctl restart "$BACKEND_SERVICE"
+            sleep 2
+            if is_service_running "$BACKEND_SERVICE"; then
+                echo -e "${GREEN}Backend restarted${NC}"
+            else
+                echo -e "${RED}Backend failed to restart${NC}"
+                echo -e "${YELLOW}Check logs:" \
+                    "sudo journalctl -u $BACKEND_SERVICE" \
+                    "-n 50${NC}"
+            fi
         fi
 
-        # In dev mode, also restart the frontend service
+        # Restart frontend if requested (dev mode only)
         if [ "$TARGET_MODE" = "dev" ]; then
-            echo ""
-            echo -e "${BLUE}Restarting frontend...${NC}"
-            sudo systemctl restart "$FRONTEND_SERVICE"
-            sleep 2
-            if is_service_running "$FRONTEND_SERVICE"; then
-                echo -e "${GREEN}Frontend restarted${NC}"
-            else
-                echo -e "${RED}Frontend failed to restart${NC}"
-                echo -e "${YELLOW}Check logs:" \
-                    "sudo journalctl -u $FRONTEND_SERVICE" \
-                    "-n 50${NC}"
+            if [ "$SERVICE_TARGET" = "frontend" ] \
+                || [ "$SERVICE_TARGET" = "both" ]; then
+                echo ""
+                echo -e "${BLUE}Restarting frontend...${NC}"
+                sudo systemctl restart "$FRONTEND_SERVICE"
+                sleep 2
+                if is_service_running "$FRONTEND_SERVICE"; then
+                    echo -e "${GREEN}Frontend restarted${NC}"
+                else
+                    echo -e "${RED}Frontend failed to restart${NC}"
+                    echo -e "${YELLOW}Check logs:" \
+                        "sudo journalctl -u" \
+                        "$FRONTEND_SERVICE -n 50${NC}"
+                fi
             fi
         fi
 
         echo ""
         echo -e "${YELLOW}========================================${NC}"
         echo -e "${GREEN}Trading Bot restarted" \
-            "(${TARGET_MODE} mode)${NC}"
+            "(${RESTART_LABEL})${NC}"
         echo -e "${YELLOW}========================================${NC}"
         ;;
 
@@ -757,14 +818,21 @@ case "${1:-}" in
         echo "Usage: $0 [command]"
         echo ""
         echo "Commands:"
-        echo "  start              Start backend and frontend"
-        echo "  stop               Gracefully stop all services"
-        echo "  restart --dev      Restart in dev mode" \
-            "(Vite HMR, nginx → ${FRONTEND_PORT})"
-        echo "  restart --prod     Restart in prod mode" \
-            "(build dist/, nginx → ${BACKEND_PORT})"
-        echo "  status             Show mode, services, and nginx"
-        echo "  logs               Show recent logs"
+        echo "  start                        Start backend" \
+            "and frontend"
+        echo "  stop                         Gracefully" \
+            "stop all services"
+        echo "  restart --dev --back-end     Restart backend" \
+            "only (dev mode)"
+        echo "  restart --dev --front-end    Restart frontend" \
+            "only (dev mode)"
+        echo "  restart --dev --both         Restart both" \
+            "services (dev mode)"
+        echo "  restart --prod               Rebuild + restart" \
+            "(prod mode)"
+        echo "  status                       Show mode," \
+            "services, and nginx"
+        echo "  logs                         Show recent logs"
         echo ""
         echo "Modes:"
         echo "  --dev   Nginx routes to Vite dev server" \
@@ -776,18 +844,35 @@ case "${1:-}" in
         echo "          Backend serves static files." \
             "Frontend service disabled."
         echo ""
+        echo "Service qualifiers (required for --dev):"
+        echo "  --back-end    Restart backend only" \
+            "(Python changes)"
+        echo "  --front-end   Restart frontend only" \
+            "(Vite dev server)"
+        echo "  --both        Restart both services"
+        echo ""
         echo "  --force is required when switching between" \
             "modes (e.g., dev → prod)."
         echo "  Without --force, the script warns and" \
             "exits to prevent accidental mode changes."
         echo ""
         echo "Examples:"
-        echo "  $0 start                  # Start services"
-        echo "  $0 restart --dev          # Restart in dev mode"
-        echo "  $0 restart --prod         # Restart in prod mode"
-        echo "  $0 restart --prod --force # Switch dev → prod"
-        echo "  $0 status                 # Check mode and services"
-        echo "  $0 stop                   # Gracefully stop the bot"
+        echo "  $0 start" \
+            "                       # Start services"
+        echo "  $0 restart --dev --back-end" \
+            "        # Backend only"
+        echo "  $0 restart --dev --front-end" \
+            "       # Frontend only"
+        echo "  $0 restart --dev --both" \
+            "            # Both services"
+        echo "  $0 restart --prod" \
+            "                  # Rebuild + restart"
+        echo "  $0 restart --prod --force" \
+            "            # Switch dev → prod"
+        echo "  $0 status" \
+            "                        # Check mode"
+        echo "  $0 stop" \
+            "                          # Stop the bot"
         echo ""
         exit 1
         ;;
