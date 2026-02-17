@@ -499,8 +499,20 @@ async def get_trades(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = 
 
 @router.get("/api/signals", response_model=List[SignalResponse])
 async def get_signals(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get recent signals"""
-    query = select(Signal).order_by(desc(Signal.timestamp)).limit(limit)
+    """Get recent signals (scoped to current user)"""
+    # Get user's account IDs to scope signals via positions
+    user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+    user_accounts_r = await db.execute(user_accounts_q)
+    user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+
+    # Get position IDs for user's accounts
+    user_position_ids_q = select(Position.id).where(
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
+
+    query = select(Signal).where(
+        Signal.position_id.in_(user_position_ids_q)
+    ).order_by(desc(Signal.timestamp)).limit(limit)
     result = await db.execute(query)
     signals = result.scalars().all()
 
@@ -509,7 +521,7 @@ async def get_signals(limit: int = Query(100, ge=1, le=1000), db: AsyncSession =
 
 @router.get("/api/market-data", response_model=List[MarketDataResponse])
 async def get_market_data(hours: int = 24, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get market data for charting"""
+    """Get market data for charting (global — price/indicator data is not user-specific)"""
     start_time = datetime.utcnow() - timedelta(hours=hours)
     query = select(MarketData).where(MarketData.timestamp >= start_time).order_by(MarketData.timestamp)
     result = await db.execute(query)

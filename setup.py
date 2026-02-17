@@ -907,6 +907,8 @@ def initialize_database(project_root):
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_bots_user_id ON bots(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_bots_name ON bots(name)")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_bot_user_name ON bots(user_id, name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_bots_strategy_type ON bots(strategy_type)")
 
         # Bot templates table

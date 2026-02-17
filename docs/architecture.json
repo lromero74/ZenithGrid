@@ -1,6 +1,6 @@
 {
   "project": "ZenithGrid",
-  "version": "v2.6.0",
+  "version": "v2.7.0",
   "updated": "2026-02-17",
   "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -297,7 +297,7 @@
     ],
 
     "migrations": {
-      "count": 14,
+      "count": 15,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -316,7 +316,8 @@
         "replace_paywalled_sources.py",
         "add_prop_firm_support.py",
         "extract_bot_products.py",
-        "move_news_images_to_filesystem.py"
+        "move_news_images_to_filesystem.py",
+        "bot_name_per_user_unique.py"
       ]
     }
   },
@@ -551,16 +552,17 @@
   },
 
   "multi_user_data_isolation": {
-    "description": "All user-facing API endpoints scope queries by current_user.id or their account IDs. Background services process all users intentionally.",
+    "description": "All user-facing API endpoints scope queries by current_user.id or their account IDs. Background services process all users intentionally but with per-account isolation.",
     "ownership_chain": "User -> Account(s) -> Bot(s) -> Position(s) -> Trade(s)",
     "patterns": {
       "router_queries": "Filter by user_account_ids: select(Account.id).where(Account.user_id == current_user.id), then Position.account_id.in_(user_account_ids)",
       "position_ownership": "Helper function _get_user_position() in position_limit_orders_router.py verifies position belongs to user's accounts before any operation",
+      "bot_ownership": "All bot queries include Bot.user_id == current_user.id; bot names are unique per-user via composite constraint uq_bot_user_name(user_id, name)",
       "websocket_scoping": "WebSocketManager stores (websocket, user_id) tuples; broadcast() filters by user_id so notifications only reach the owning user",
       "exchange_clients": "Each account has its own API credentials; get_exchange_client_for_account(db, account_id) creates per-account clients",
       "paper_trading": "Users without Coinbase credentials get PublicMarketDataClient (no-auth public endpoints) instead of failing CoinbaseClient"
     },
     "background_services": "Bot monitor, limit order monitor, and reconciliation services intentionally process all users (no user filter) but use per-account exchange clients and route notifications to the correct user",
-    "audit_tracking": "MULTI_USER_AUDIT_PLAN.md tracks all query scoping work across 5 phases"
+    "hardened_in_v2_7_0": "Whitebox audit fixed: order_history user scoping, perps position ownership checks, scanner logs user filter, signals user scoping, news cleanup auth, account balance ownership, bot name per-user uniqueness, delisted pair monitor account selection"
   }
 }

@@ -201,20 +201,21 @@ async def get_balances(
     try:
         import json
 
-        # Get account (either specified or default)
+        # Get account (either specified or default) — always filter by current user
         if account_id:
             account_result = await db.execute(
-                select(Account).where(Account.id == account_id)
+                select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
             )
             account = account_result.scalar_one_or_none()
             if not account:
                 raise HTTPException(status_code=404, detail="Account not found")
         else:
-            # Get first active CEX account (backwards compatibility)
+            # Get first active CEX account for current user
             account_result = await db.execute(
                 select(Account).where(
                     Account.type == "cex",
-                    Account.is_active.is_(True)
+                    Account.is_active.is_(True),
+                    Account.user_id == current_user.id,
                 ).order_by(Account.is_default.desc(), Account.created_at)
             )
             account = account_result.scalar_one_or_none()

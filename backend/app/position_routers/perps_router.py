@@ -126,14 +126,19 @@ async def list_perps_positions(
     current_user: User = Depends(get_current_user),
 ):
     """List open perps positions (DB records synced with exchange)"""
-    # Get DB positions
+    # Get user's account IDs for ownership filtering
+    accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_r = await db.execute(accounts_q)
+    user_account_ids = [row[0] for row in accounts_r.fetchall()]
+
+    # Get DB positions filtered by user's accounts
     query = (
         select(Position)
         .where(Position.product_type == "future")
         .where(Position.status == "open")
+        .where(Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0)
         .options(selectinload(Position.trades))
     )
-    query = query.where(Position.user_id == current_user.id)
 
     result = await db.execute(query)
     positions = result.scalars().all()
@@ -178,8 +183,20 @@ async def modify_tp_sl(
     """Update TP/SL prices on an existing perps position"""
     client = _get_coinbase_client(exchange)
 
-    position = await db.get(Position, position_id)
-    if not position or position.product_type != "future" or position.status != "open":
+    # Verify position exists AND belongs to current user (via account ownership)
+    accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_r = await db.execute(accounts_q)
+    user_account_ids = [row[0] for row in accounts_r.fetchall()]
+
+    position_q = select(Position).where(
+        Position.id == position_id,
+        Position.product_type == "future",
+        Position.status == "open",
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
+    result = await db.execute(position_q)
+    position = result.scalars().first()
+    if not position:
         raise HTTPException(status_code=404, detail="Open perps position not found")
 
     # Cancel existing TP/SL orders
@@ -267,8 +284,20 @@ async def close_perps_position(
     """Manually close a perps position"""
     client = _get_coinbase_client(exchange)
 
-    position = await db.get(Position, position_id)
-    if not position or position.product_type != "future" or position.status != "open":
+    # Verify position exists AND belongs to current user (via account ownership)
+    accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_r = await db.execute(accounts_q)
+    user_account_ids = [row[0] for row in accounts_r.fetchall()]
+
+    position_q = select(Position).where(
+        Position.id == position_id,
+        Position.product_type == "future",
+        Position.status == "open",
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
+    result = await db.execute(position_q)
+    position = result.scalars().first()
+    if not position:
         raise HTTPException(status_code=404, detail="Open perps position not found")
 
     # Get current price for PnL calculation
@@ -300,15 +329,14 @@ async def close_perps_position(
 # ===== Helpers =====
 
 
-async def _get_portfolio_uuid(db: AsyncSession, user: Optional[User]) -> str:
+async def _get_portfolio_uuid(db: AsyncSession, user: User) -> str:
     """Get the perps portfolio UUID from the user's account"""
     query = select(Account).where(
         Account.type == "cex",
         Account.is_active.is_(True),
         Account.perps_portfolio_uuid.isnot(None),
+        Account.user_id == user.id,
     )
-    if user:
-        query = query.where(Account.user_id == user.id)
 
     result = await db.execute(query.limit(1))
     account = result.scalar_one_or_none()

@@ -22,14 +22,15 @@ import aiohttp
 import edge_tts
 import feedparser
 import trafilatura
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
 from app.indicator_calculator import IndicatorCalculator
-from app.models import ContentSource, MetricSnapshot, NewsArticle, VideoArticle
+from app.models import ContentSource, MetricSnapshot, NewsArticle, User, VideoArticle
+from app.routers.auth_dependencies import get_current_user
 from app.routers.news import (
     CACHE_FILE,
     DEBT_CEILING_HISTORY,
@@ -1359,7 +1360,7 @@ async def get_cache_stats():
 
 
 @router.post("/cleanup")
-async def cleanup_cache():
+async def cleanup_cache(current_user: User = Depends(get_current_user)):
     """Manually trigger cleanup of old news articles (older than 7 days)."""
     from app.services.news_image_cache import NEWS_IMAGES_DIR
 

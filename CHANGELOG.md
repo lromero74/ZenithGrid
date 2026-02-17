@@ -5,6 +5,24 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.7.0] - 2026-02-17
+
+### Fixed
+- **Order history data leak**: All 4 endpoints now filter by `Bot.user_id == current_user.id` — previously any user could see all orders
+- **Perps position ownership**: `modify_tp_sl()` and `close_perps_position()` now verify position belongs to current user via account ownership chain — previously any user could modify/close any position by ID
+- **Scanner logs data leak**: All 3 scanner log endpoints now filter by bot ownership
+- **Signals data leak**: `GET /api/signals` now scoped to current user's positions via account chain — previously returned all users' signals
+- **News cleanup unauthenticated**: `POST /api/news/cleanup` now requires authentication — previously anyone could purge the news cache
+- **Account balance data leak**: `GET /account/balances` now filters by `Account.user_id` in both specified and default account branches
+- **Bot name uniqueness**: Changed from global unique to per-user unique via composite constraint `(user_id, name)` — different users can now have bots with the same name
+- **Delisted pair monitor hardcoded account**: Replaced `Account.id == 1` with dynamic query for any active CEX account
+
+### Added
+- **Migration: bot_name_per_user_unique**: Drops global unique index on `bots.name`, creates composite unique index on `(user_id, name)`
+
+### Changed
+- **Architecture docs**: Documented multi-user hardening patterns and ownership chain
+
 ## [v2.6.0] - 2026-02-17
 
 ### Changed

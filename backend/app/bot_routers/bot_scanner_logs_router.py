@@ -25,7 +25,7 @@ router = APIRouter()
 async def create_scanner_log(bot_id: int, log_data: ScannerLogCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Save scanner/monitor reasoning log"""
     # Verify bot exists
-    bot_query = select(Bot).where(Bot.id == bot_id)
+    bot_query = select(Bot).where(Bot.id == bot_id, Bot.user_id == current_user.id)
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 
@@ -77,7 +77,7 @@ async def get_scanner_logs(
         since: Optional filter for logs since this timestamp
     """
     # Verify bot exists
-    bot_query = select(Bot).where(Bot.id == bot_id)
+    bot_query = select(Bot).where(Bot.id == bot_id, Bot.user_id == current_user.id)
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 
@@ -125,7 +125,7 @@ async def clear_scanner_logs(
     from datetime import timedelta
 
     # Verify bot exists
-    bot_query = select(Bot).where(Bot.id == bot_id)
+    bot_query = select(Bot).where(Bot.id == bot_id, Bot.user_id == current_user.id)
     bot_result = await db.execute(bot_query)
     bot = bot_result.scalars().first()
 

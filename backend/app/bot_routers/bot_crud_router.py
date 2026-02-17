@@ -92,8 +92,8 @@ async def create_bot(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid strategy configuration")
 
-    # Check if name is unique
-    query = select(Bot).where(Bot.name == bot_data.name)
+    # Check if name is unique for this user
+    query = select(Bot).where(Bot.name == bot_data.name, Bot.user_id == current_user.id)
     result = await db.execute(query)
     if result.scalars().first():
         raise HTTPException(status_code=400, detail=f"Bot with name '{bot_data.name}' already exists")
@@ -577,7 +577,7 @@ async def update_bot(
     # Update fields
     if bot_update.name is not None:
         # Check name uniqueness
-        name_query = select(Bot).where(Bot.name == bot_update.name, Bot.id != bot_id)
+        name_query = select(Bot).where(Bot.name == bot_update.name, Bot.id != bot_id, Bot.user_id == current_user.id)
         name_result = await db.execute(name_query)
         if name_result.scalars().first():
             raise HTTPException(status_code=400, detail=f"Bot with name '{bot_update.name}' already exists")
@@ -824,7 +824,7 @@ async def clone_bot(
     counter = 2
     base_new_name = new_name
     while True:
-        name_check_query = select(Bot).where(Bot.name == new_name)
+        name_check_query = select(Bot).where(Bot.name == new_name, Bot.user_id == current_user.id)
         name_check_result = await db.execute(name_check_query)
         if not name_check_result.scalars().first():
             break
