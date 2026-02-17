@@ -5,6 +5,27 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.10.0] - 2026-02-17
+
+### Added
+- **Gap Fill % condition type**: New bot condition that detects the percentage of synthetic/filler candles in a timeframe (0-100). Lets users block trades when data quality is poor (e.g., illiquid pairs where 50-80% of candles are synthetic)
+- **Synthetic candle tagging**: `fill_candle_gaps()` now marks gap-filled candles with `_synthetic: True`; `aggregate_candles()` propagates synthetic counts through higher timeframes
+- **Portfolio chart UX**: Escape key closes chart modal; click outside modal to close; resize observer keeps chart responsive
+
+### Fixed
+- **TEN_MINUTE timeframe extraction**: Added missing `"TEN"` prefix to indicator timeframe parsing — TEN_MINUTE conditions now work correctly
+- **Paper trading candle order**: `PaperTradingClient.get_candles()` now reverses Coinbase API results to chronological order, matching `CoinbaseAdapter` behavior
+- **Portfolio N+1 query**: Batch-fetch all position prices in parallel instead of sequential per-position API calls
+- **News retention NULL handling**: `SQLite printf('-%d days', NULL)` returns `'-0 days'` not NULL — replaced `coalesce` with explicit `case()` for correct per-user retention
+- **Deprecated `datetime.utcnow()`**: Replaced all remaining calls in news_router with `datetime.now(timezone.utc)`
+- **Portfolio TypeScript**: Removed `as any` casts by adding `unrealized_pnl_usd` and `unrealized_pnl_percentage` to `Holding` interface
+- **Account portfolio valuation**: Use public market data API (cached) instead of instantiating authenticated CoinbaseClient
+
+### Changed
+- **WebSocket routing in dev/prod commands**: `/ws` routes directly to backend (port 8100) instead of through Vite dev server — fixes fragile WebSocket proxying
+- **Whitebox audit command**: Added "clean up dead code" rule
+- **News article image endpoint**: Removed unnecessary auth requirement from `/api/news/image/{article_id}`
+
 ## [v2.9.6] - 2026-02-17
 
 ### Changed

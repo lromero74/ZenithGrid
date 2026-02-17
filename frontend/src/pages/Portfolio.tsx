@@ -16,6 +16,8 @@ interface Holding {
   usd_value: number
   btc_value: number
   percentage: number
+  unrealized_pnl_usd?: number
+  unrealized_pnl_percentage?: number
 }
 
 interface BalanceBreakdown {
@@ -198,7 +200,7 @@ function Portfolio() {
         compareValue = a.percentage - b.percentage
         break
       case 'unrealized_pnl_usd':
-        compareValue = ((a as any).unrealized_pnl_usd || 0) - ((b as any).unrealized_pnl_usd || 0)
+        compareValue = (a.unrealized_pnl_usd || 0) - (b.unrealized_pnl_usd || 0)
         break
     }
 
@@ -220,6 +222,16 @@ function Portfolio() {
     mainSeriesRef.current = null
     volumeSeriesRef.current = null
   }
+
+  // Close chart modal on Escape key
+  useEffect(() => {
+    if (!chartModalAsset) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeChartModal()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [chartModalAsset])
 
   // Initialize chart when modal opens
   useEffect(() => {
@@ -289,7 +301,16 @@ function Portfolio() {
     mainSeriesRef.current = candleSeries
     volumeSeriesRef.current = volumeSeries
 
+    // Resize chart when container resizes
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        chart.applyOptions({ width: entry.contentRect.width })
+      }
+    })
+    resizeObserver.observe(chartContainerRef.current)
+
     return () => {
+      resizeObserver.disconnect()
       chart.remove()
     }
   }, [chartModalAsset, chartPairType])
@@ -704,8 +725,8 @@ function Portfolio() {
                     </td>
                     <td className="px-3 py-3 text-right">
                       {(() => {
-                        const pnl = (holding as any).unrealized_pnl_usd || 0
-                        const pnlPct = (holding as any).unrealized_pnl_percentage || 0
+                        const pnl = holding.unrealized_pnl_usd || 0
+                        const pnlPct = holding.unrealized_pnl_percentage || 0
                         const isPositive = pnl > 0
                         const isNegative = pnl < 0
                         const colorClass = isPositive ? 'text-green-400' : isNegative ? 'text-red-400' : 'text-slate-400'
@@ -781,8 +802,8 @@ function Portfolio() {
 
       {/* Chart Modal */}
       {chartModalAsset && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg w-full max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeChartModal}>
+          <div className="bg-slate-800 rounded-lg w-full max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">

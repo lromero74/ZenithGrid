@@ -490,7 +490,11 @@ class PaperTradingClient(ExchangeClient):
 
         try:
             from app.coinbase_api import public_market_data
-            return await public_market_data.get_candles(product_id, start, end, granularity)
+            candles = await public_market_data.get_candles(product_id, start, end, granularity)
+            # Coinbase returns newest-first; reverse to chronological (oldest-first)
+            # to match CoinbaseAdapter.get_candles() behavior
+            candles.reverse()
+            return candles
         except Exception as e:
             logger.warning(f"Public API candles fetch failed for {product_id}: {e}")
             return []

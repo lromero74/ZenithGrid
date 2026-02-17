@@ -1104,16 +1104,14 @@ async def get_account_portfolio(
             else:
                 balances = {"BTC": 0.0, "ETH": 0.0, "USD": 0.0, "USDC": 0.0, "USDT": 0.0}
 
-            # Get real prices for valuation (use system Coinbase client)
-            from app.config import settings
-            from app.coinbase_unified_client import CoinbaseClient
-
-            system_coinbase = CoinbaseClient(
-                api_key=settings.coinbase_api_key,
-                api_secret=settings.coinbase_api_secret
+            # Get real prices for valuation (public market data, cached)
+            from app.coinbase_api.public_market_data import (
+                get_btc_usd_price as get_public_btc_price,
+                get_current_price as get_public_price,
             )
-            btc_usd_price = await system_coinbase.get_btc_usd_price()
-            eth_btc_price = await system_coinbase.get_current_price()  # ETH-BTC
+
+            btc_usd_price = await get_public_btc_price()
+            eth_btc_price = await get_public_price("ETH-BTC")
 
             # Calculate totals
             btc_balance = balances.get("BTC", 0.0)
