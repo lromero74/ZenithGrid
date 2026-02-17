@@ -24,7 +24,7 @@ import feedparser
 import trafilatura
 from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
@@ -80,7 +80,7 @@ from app.routers.news import (
     save_us_debt_cache,
     save_video_cache,
 )
-from app.services.news_image_cache import download_image_as_base64
+from app.services.news_image_cache import download_and_save_image
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +280,7 @@ async def get_articles_from_db(
 async def store_article_in_db(
     db: AsyncSession,
     item: NewsItem,
-    image_data: Optional[str] = None,
+    cached_thumbnail_path: Optional[str] = None,
     category: str = "CryptoCurrency"
 ) -> Optional[NewsArticle]:
     """Store a news article in the database. Returns None if already exists."""
@@ -301,14 +301,19 @@ async def store_article_in_db(
         except (ValueError, TypeError):
             pass
 
+    # Sanitize thumbnail URL — reject non-http values like "undefined"
+    thumbnail_url = item.thumbnail
+    if thumbnail_url and not thumbnail_url.startswith(("http://", "https://")):
+        thumbnail_url = None
+
     article = NewsArticle(
         title=item.title,
         url=item.url,
         source=item.source,
         published_at=published_at,
         summary=item.summary,
-        original_thumbnail_url=item.thumbnail,
-        image_data=image_data,  # Base64 data URI
+        original_thumbnail_url=thumbnail_url,
+        cached_thumbnail_path=cached_thumbnail_path,  # Filename in news_images/
         category=category,
         fetched_at=datetime.utcnow(),
     )
@@ -334,9 +339,8 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
     """Convert a NewsArticle database object to a NewsItem dict for API response."""
     # Use provided sources for name mapping, fall back to hardcoded
     source_map = sources if sources else NEWS_SOURCES
-    # Use image proxy URL if we have cached image, otherwise fall back to original URL
-    # This keeps response small while serving cached images with proper cache headers
-    if article.image_data:
+    # Use image proxy URL if we have a cached image on filesystem
+    if article.cached_thumbnail_path:
         thumbnail = f"/api/news/image/{article.id}"
     else:
         thumbnail = article.original_thumbnail_url
@@ -1105,21 +1109,50 @@ async def fetch_all_news() -> None:
             elif isinstance(result, Exception):
                 logger.error(f"Task failed: {result}")
 
-        # Download images as base64 and store articles in database
+        # Store articles in database first, then download images separately
+        # (two transactions to avoid holding DB lock during network I/O)
         new_articles_count = 0
+        articles_to_download = []  # (article_id, thumbnail_url)
         async with async_session_maker() as db:
+            # Deduplicate within this batch (autoflush=False means
+            # the SELECT in store_article_in_db won't see pending inserts)
+            seen_urls = set()
             for item in fresh_items:
-                # Download thumbnail as base64 data URI if present
-                image_data = None
-                if item.thumbnail:
-                    image_data = await download_image_as_base64(session, item.thumbnail)
-
-                # Store in database (returns None if already exists)
-                article = await store_article_in_db(db, item, image_data, category=item.category)
+                if item.url in seen_urls:
+                    continue
+                seen_urls.add(item.url)
+                article = await store_article_in_db(db, item, category=item.category)
                 if article:
                     new_articles_count += 1
 
+            # Commit articles immediately — releases the DB lock
             await db.commit()
+
+            # Collect IDs of articles that need image downloads
+            if new_articles_count > 0:
+                for item in fresh_items:
+                    result = await db.execute(
+                        select(NewsArticle.id).where(
+                            NewsArticle.url == item.url,
+                            NewsArticle.cached_thumbnail_path.is_(None),
+                        )
+                    )
+                    row = result.first()
+                    if row and item.thumbnail:
+                        articles_to_download.append((row[0], item.thumbnail))
+
+        # Download images in a separate pass — no long-held DB lock
+        if articles_to_download:
+            for article_id, thumbnail_url in articles_to_download:
+                filename = await download_and_save_image(session, thumbnail_url, article_id)
+                if filename:
+                    async with async_session_maker() as db:
+                        await db.execute(
+                            update(NewsArticle)
+                            .where(NewsArticle.id == article_id)
+                            .values(cached_thumbnail_path=filename)
+                        )
+                        await db.commit()
 
         if new_articles_count > 0:
             logger.info(f"Added {new_articles_count} new news articles to database")
@@ -1263,62 +1296,54 @@ async def get_categories():
 @router.get("/image/{article_id}")
 async def get_article_image(article_id: int):
     """
-    Serve cached article thumbnail image.
+    Serve cached article thumbnail image from filesystem.
 
-    Returns the base64-decoded image with proper cache headers (7 days).
-    This allows small JSON responses while still serving cached images efficiently.
+    Returns the image with 7-day cache headers.
     """
-    import base64
+    from app.services.news_image_cache import NEWS_IMAGES_DIR
 
     async with async_session_maker() as db:
         result = await db.execute(
-            select(NewsArticle.image_data).where(NewsArticle.id == article_id)
+            select(NewsArticle.cached_thumbnail_path).where(NewsArticle.id == article_id)
         )
         row = result.first()
 
     if not row or not row[0]:
         raise HTTPException(status_code=404, detail="Image not found")
 
-    image_data = row[0]
+    filepath = NEWS_IMAGES_DIR / row[0]
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Image file missing")
 
-    # Parse the data URI: data:image/jpeg;base64,/9j/4AAQSkZJRgAB...
-    if image_data.startswith("data:"):
-        # Extract mime type and base64 data
-        header, b64_data = image_data.split(",", 1)
-        mime_type = header.split(":")[1].split(";")[0]
-    else:
-        # Assume it's raw base64 JPEG
-        b64_data = image_data
-        mime_type = "image/jpeg"
+    # Determine MIME type from extension
+    ext = filepath.suffix.lower()
+    mime_map = {".webp": "image/webp", ".jpg": "image/jpeg", ".png": "image/png", ".gif": "image/gif"}
+    mime_type = mime_map.get(ext, "image/webp")
 
-    try:
-        image_bytes = base64.b64decode(b64_data)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Invalid image data")
-
-    # Return with 7-day cache headers
     return Response(
-        content=image_bytes,
+        content=filepath.read_bytes(),
         media_type=mime_type,
         headers={
             "Cache-Control": "public, max-age=604800",  # 7 days
             "ETag": f'"{article_id}"',
-        }
+        },
     )
 
 
 @router.get("/cache-stats")
 async def get_cache_stats():
     """Get news cache statistics including database article count."""
-    # Get article count and articles with images from database
+    from sqlalchemy import func
+
     async with async_session_maker() as db:
-        from sqlalchemy import func
         result = await db.execute(select(func.count(NewsArticle.id)))
         article_count = result.scalar() or 0
 
-        # Count articles with embedded images
+        # Count articles with cached images on filesystem
         result = await db.execute(
-            select(func.count(NewsArticle.id)).where(NewsArticle.image_data.isnot(None))
+            select(func.count(NewsArticle.id)).where(
+                NewsArticle.cached_thumbnail_path.isnot(None)
+            )
         )
         articles_with_images = result.scalar() or 0
 
@@ -1336,13 +1361,37 @@ async def get_cache_stats():
 @router.post("/cleanup")
 async def cleanup_cache():
     """Manually trigger cleanup of old news articles (older than 7 days)."""
-    # Cleanup old articles from database (images are stored inline, so they're deleted with articles)
+    from app.services.news_image_cache import NEWS_IMAGES_DIR
+
+    # Get IDs of articles that will be deleted (for image cleanup)
+    image_files_deleted = 0
     async with async_session_maker() as db:
+        cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+        result = await db.execute(
+            select(NewsArticle.cached_thumbnail_path).where(
+                NewsArticle.fetched_at < cutoff,
+                NewsArticle.cached_thumbnail_path.isnot(None),
+            )
+        )
+        paths_to_delete = [row[0] for row in result.fetchall() if row[0]]
+
+        # Delete old articles from database
         articles_deleted = await cleanup_old_articles(db)
+
+    # Delete orphaned image files from filesystem
+    for filename in paths_to_delete:
+        filepath = NEWS_IMAGES_DIR / filename
+        if filepath.exists():
+            try:
+                filepath.unlink()
+                image_files_deleted += 1
+            except OSError:
+                pass
 
     return {
         "articles_deleted": articles_deleted,
-        "message": f"Cleaned up {articles_deleted} articles older than {NEWS_ITEM_MAX_AGE_DAYS} days"
+        "image_files_deleted": image_files_deleted,
+        "message": f"Cleaned up {articles_deleted} articles and {image_files_deleted} image files older than {NEWS_ITEM_MAX_AGE_DAYS} days"
     }
 
 

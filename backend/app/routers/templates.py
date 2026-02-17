@@ -13,7 +13,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import BotTemplate, User
+from app.models import BotTemplate, BotTemplateProduct, User
 from app.strategies import StrategyRegistry
 from app.routers.auth_dependencies import get_current_user
 
@@ -95,6 +95,15 @@ async def create_template(
     db.add(template)
     await db.commit()
     await db.refresh(template)
+
+    # Sync bot_template_products junction table
+    pair_list = template_data.product_ids or []
+    for pid in pair_list:
+        if pid:
+            db.add(BotTemplateProduct(template_id=template.id, product_id=pid))
+    if pair_list:
+        await db.commit()
+        await db.refresh(template)
 
     return template
 
@@ -184,6 +193,12 @@ async def update_template(
 
     if template_update.product_ids is not None:
         template.product_ids = template_update.product_ids
+        # Sync bot_template_products junction table
+        from sqlalchemy import delete
+        await db.execute(delete(BotTemplateProduct).where(BotTemplateProduct.template_id == template.id))
+        for pid in template_update.product_ids:
+            if pid:
+                db.add(BotTemplateProduct(template_id=template.id, product_id=pid))
 
     if template_update.split_budget_across_pairs is not None:
         template.split_budget_across_pairs = template_update.split_budget_across_pairs

@@ -1,7 +1,7 @@
 {
   "project": "ZenithGrid",
-  "version": "v2.5.0",
-  "updated": "2026-02-16",
+  "version": "v2.6.0",
+  "updated": "2026-02-17",
   "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
   "stack": {
@@ -107,7 +107,9 @@
       { "name": "OrderHistory", "table": "order_history", "key_fields": ["id", "user_id", "bot_id", "product_id", "side", "status", "order_type"] },
       { "name": "BlacklistedCoin", "table": "blacklisted_coins", "key_fields": ["id", "symbol", "reason", "category"] },
       { "name": "AIProviderCredential", "table": "ai_provider_credentials", "key_fields": ["id", "user_id", "provider", "api_key_encrypted", "is_active"] },
-      { "name": "NewsArticle", "table": "news_articles", "key_fields": ["id", "title", "url", "source", "category", "published_at"] },
+      { "name": "BotProduct", "table": "bot_products", "key_fields": ["id", "bot_id", "product_id", "created_at"], "purpose": "Junction table normalizing bot trading pairs (1NF)" },
+      { "name": "BotTemplateProduct", "table": "bot_template_products", "key_fields": ["id", "template_id", "product_id", "created_at"], "purpose": "Junction table normalizing template trading pairs (1NF)" },
+      { "name": "NewsArticle", "table": "news_articles", "key_fields": ["id", "title", "url", "source", "category", "published_at", "cached_thumbnail_path"] },
       { "name": "VideoArticle", "table": "video_articles", "key_fields": ["id", "title", "video_id", "channel_name", "category", "published_at"] },
       { "name": "ContentSource", "table": "content_sources", "key_fields": ["id", "source_key", "name", "source_type", "url", "category"] },
       { "name": "UserSourceSubscription", "table": "user_source_subscriptions", "key_fields": ["id", "user_id", "source_id", "is_subscribed"] },
@@ -132,7 +134,7 @@
       { "file": "services/grid_trading_service.py", "purpose": "Grid bot lifecycle: initialization, level management, order placement", "type": "trading" },
       { "file": "services/indicator_log_service.py", "purpose": "Logs indicator condition evaluations for non-AI bots", "type": "logging" },
       { "file": "services/limit_order_monitor.py", "purpose": "Monitors pending limit orders and updates positions on fill", "type": "background" },
-      { "file": "services/news_image_cache.py", "purpose": "Downloads and caches news thumbnails as base64 data URIs", "type": "background" },
+      { "file": "services/news_image_cache.py", "purpose": "Downloads and saves news thumbnails as WebP files to backend/news_images/", "type": "background" },
       { "file": "services/order_monitor.py", "purpose": "Checks pending limit orders and creates trades when filled", "type": "background" },
       { "file": "services/order_reconciliation_monitor.py", "purpose": "Detects and fixes positions with missing fill data", "type": "background" },
       { "file": "services/perps_monitor.py", "purpose": "Syncs perpetual futures positions with Coinbase INTX state", "type": "background" },
@@ -295,7 +297,7 @@
     ],
 
     "migrations": {
-      "count": 12,
+      "count": 14,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -312,7 +314,9 @@
         "convert_coin_categories_to_global.py",
         "encrypt_existing_credentials.py",
         "replace_paywalled_sources.py",
-        "add_prop_firm_support.py"
+        "add_prop_firm_support.py",
+        "extract_bot_products.py",
+        "move_news_images_to_filesystem.py"
       ]
     }
   },

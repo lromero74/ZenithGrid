@@ -18,7 +18,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
-from app.models import Account, Bot, Position, User
+from app.models import Account, Bot, BotProduct, Position, User
 from app.routers.auth_dependencies import get_current_user
 from app.strategies import StrategyDefinition, StrategyRegistry
 
@@ -232,6 +232,15 @@ async def create_bot(
     db.add(bot)
     await db.commit()
     await db.refresh(bot)
+
+    # Sync bot_products junction table
+    pair_list = bot_data.product_ids or ([bot_data.product_id] if bot_data.product_id else [])
+    for pid in pair_list:
+        if pid:
+            db.add(BotProduct(bot_id=bot.id, product_id=pid))
+    if pair_list:
+        await db.commit()
+        await db.refresh(bot)
 
     # Add counts
     response = BotResponse.model_validate(bot)
@@ -593,6 +602,12 @@ async def update_bot(
 
     if bot_update.product_ids is not None:
         bot.product_ids = bot_update.product_ids
+        # Sync bot_products junction table: delete old, insert new
+        from sqlalchemy import delete
+        await db.execute(delete(BotProduct).where(BotProduct.bot_id == bot.id))
+        for pid in bot_update.product_ids:
+            if pid:
+                db.add(BotProduct(bot_id=bot.id, product_id=pid))
 
     if bot_update.split_budget_across_pairs is not None:
         bot.split_budget_across_pairs = bot_update.split_budget_across_pairs
@@ -843,6 +858,17 @@ async def clone_bot(
     await db.commit()
     await db.refresh(cloned_bot)
 
+    # Copy bot_products from original bot
+    pair_list = original_bot.product_ids.copy() if original_bot.product_ids else []
+    if not pair_list and original_bot.product_id:
+        pair_list = [original_bot.product_id]
+    for pid in pair_list:
+        if pid:
+            db.add(BotProduct(bot_id=cloned_bot.id, product_id=pid))
+    if pair_list:
+        await db.commit()
+        await db.refresh(cloned_bot)
+
     bot_response = BotResponse.model_validate(cloned_bot)
     return bot_response
 
@@ -940,6 +966,17 @@ async def copy_bot_to_account(
     db.add(copied_bot)
     await db.commit()
     await db.refresh(copied_bot)
+
+    # Copy bot_products from original bot
+    pair_list = original_bot.product_ids.copy() if original_bot.product_ids else []
+    if not pair_list and original_bot.product_id:
+        pair_list = [original_bot.product_id]
+    for pid in pair_list:
+        if pid:
+            db.add(BotProduct(bot_id=copied_bot.id, product_id=pid))
+    if pair_list:
+        await db.commit()
+        await db.refresh(copied_bot)
 
     logger.info(f"Copied bot {bot_id} to account {target_account_id} as bot {copied_bot.id}")
 

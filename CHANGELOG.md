@@ -5,6 +5,20 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.6.0] - 2026-02-17
+
+### Changed
+- **bot_products junction table**: Extracted `bots.product_ids` JSON array into a normalized `bot_products` table with proper indexes; enables SQL queries like "find all bots trading ETH-BTC" without JSON parsing
+- **bot_template_products junction table**: Same normalization for bot templates
+- **Bot.get_trading_pairs()**: Now reads from junction table instead of JSON column
+- **News images moved to filesystem**: Article thumbnails stored as WebP files in `backend/news_images/` instead of base64 blobs in the database; reduces DB bloat by ~50MB
+- **News image serving**: `/api/news/image/{id}` now serves from filesystem; cleanup also deletes orphaned image files
+- **Bot CRUD operations**: Create, update, clone, and copy-to-account all sync `bot_products` junction table rows
+
+### Added
+- **Migration: extract_bot_products**: Creates `bot_products` and `bot_template_products` tables, populates from existing JSON data
+- **Migration: move_news_images_to_filesystem**: Extracts base64 `image_data` from `news_articles` to `backend/news_images/` directory
+
 ## [v2.5.0] - 2026-02-17
 
 ### Added

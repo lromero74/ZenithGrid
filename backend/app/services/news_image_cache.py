@@ -1,15 +1,18 @@
 """
 News Image Caching Service
 
-Downloads news article thumbnails and converts them to base64 data URIs
-for storage directly in the database. This avoids path/proxy issues with
-SSH tunneling and simplifies serving images from any environment.
+Downloads news article thumbnails and saves them as compressed WebP files
+on the filesystem (backend/news_images/). Articles store the filename
+in cached_thumbnail_path and images are served via /api/news/image/{id}.
+
+Legacy base64 functions are retained for backwards compatibility.
 """
 
 import asyncio
 import base64
 import io
 import logging
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -20,7 +23,10 @@ logger = logging.getLogger(__name__)
 
 # Image download settings
 IMAGE_DOWNLOAD_TIMEOUT = 10  # seconds
-MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2MB max (smaller for base64 storage)
+MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2MB max
+
+# Filesystem storage directory (relative to backend/)
+NEWS_IMAGES_DIR = Path(__file__).parent.parent.parent / "news_images"
 
 # Image compression settings
 THUMBNAIL_MAX_WIDTH = 600  # Resize thumbnails to max 600px width (50% increase from 400px)
@@ -180,6 +186,44 @@ async def download_image_as_base64(session: aiohttp.ClientSession, url: str) -> 
 
     logger.debug(f"Converted image to base64 ({len(b64_data)} chars): {url[:50]}...")
     return data_uri
+
+
+async def download_and_save_image(
+    session: aiohttp.ClientSession, url: str, article_id: int
+) -> Optional[str]:
+    """
+    Download an image, compress it, and save to the filesystem.
+
+    Returns:
+        Filename (e.g., "123.webp") stored under NEWS_IMAGES_DIR,
+        or None if download failed.
+    """
+    if not url:
+        return None
+
+    result = await download_image(session, url)
+    if not result:
+        return None
+
+    image_data, _mime_type = result
+
+    # Compress the image (resize + convert to WebP)
+    compressed_data, _compressed_mime = compress_image(image_data)
+
+    # Ensure directory exists
+    NEWS_IMAGES_DIR.mkdir(exist_ok=True)
+
+    # Write to filesystem
+    filename = f"{article_id}.webp"
+    filepath = NEWS_IMAGES_DIR / filename
+
+    try:
+        filepath.write_bytes(compressed_data)
+        logger.debug(f"Saved image ({len(compressed_data):,} bytes) to {filepath}")
+        return filename
+    except Exception as e:
+        logger.warning(f"Failed to save image to {filepath}: {e}")
+        return None
 
 
 async def download_images_batch(urls: list[str]) -> dict[str, Optional[str]]:

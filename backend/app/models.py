@@ -280,15 +280,13 @@ class Bot(Base):
     account = relationship("Account", back_populates="bots")
     positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
     pending_orders = relationship("PendingOrder", back_populates="bot", cascade="all, delete-orphan")
+    products = relationship("BotProduct", back_populates="bot", cascade="all, delete-orphan", lazy="selectin")
 
     def get_trading_pairs(self):
-        """Get list of trading pairs for this bot (backward compatible)"""
-        if self.product_ids and len(self.product_ids) > 0:
-            return self.product_ids
-        elif self.product_id:
-            return [self.product_id]
-        else:
-            return ["ETH-BTC"]  # Default fallback
+        """Get list of trading pairs for this bot from the junction table"""
+        if self.products:
+            return [bp.product_id for bp in self.products]
+        return ["ETH-BTC"]  # Default fallback
 
     def get_quote_currency(self):
         """Get the quote currency for this bot's trading pairs (BTC or USD)"""
@@ -394,6 +392,21 @@ class Bot(Base):
         return total_btc
 
 
+class BotProduct(Base):
+    """Junction table for bot trading pairs (normalized from bots.product_ids JSON)."""
+    __tablename__ = "bot_products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("bot_id", "product_id", name="uq_bot_product"),)
+
+    # Relationships
+    bot = relationship("Bot", back_populates="products")
+
+
 class BotTemplate(Base):
     __tablename__ = "bot_templates"
 
@@ -417,6 +430,28 @@ class BotTemplate(Base):
 
     # Relationships
     user = relationship("User", back_populates="bot_templates")
+    products = relationship("BotTemplateProduct", back_populates="template", cascade="all, delete-orphan", lazy="selectin")
+
+    def get_trading_pairs(self):
+        """Get list of trading pairs for this template from the junction table"""
+        if self.products:
+            return [bp.product_id for bp in self.products]
+        return []
+
+
+class BotTemplateProduct(Base):
+    """Junction table for template trading pairs (normalized from bot_templates.product_ids JSON)."""
+    __tablename__ = "bot_template_products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("bot_templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("template_id", "product_id", name="uq_template_product"),)
+
+    # Relationships
+    template = relationship("BotTemplate", back_populates="products")
 
 
 class Position(Base):

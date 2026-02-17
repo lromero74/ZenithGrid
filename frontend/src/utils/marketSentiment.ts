@@ -55,8 +55,8 @@ export function getFearGreedColor(value: number): { bg: string; text: string; bo
 // Format large numbers with commas and optional prefix
 export function formatDebt(value: number): string {
   return value.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   })
 }
 
