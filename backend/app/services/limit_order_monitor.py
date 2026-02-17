@@ -8,7 +8,6 @@ Exchange-agnostic: works with any ExchangeClient implementation
 (Coinbase, ByBit, MT5, PropGuard wrapper).
 """
 
-import asyncio
 import logging
 from datetime import datetime
 
@@ -16,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exchange_clients.base import ExchangeClient
-from app.models import Position, PendingOrder, Trade
+from app.models import PendingOrder, Position, Trade
 from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -28,63 +27,6 @@ class LimitOrderMonitor:
     def __init__(self, db: AsyncSession, exchange: ExchangeClient):
         self.db = db
         self.exchange = exchange
-
-    async def startup_reconciliation(self):
-        """
-        Reconcile all pending limit orders on startup.
-
-        Checks ALL positions with limit_close_order_id set (even if closing_via_limit is False)
-        to catch any orders that filled during downtime or got orphaned due to flag sync issues.
-        """
-        try:
-            # Get all open positions with a limit_close_order_id (regardless of closing_via_limit flag)
-            # This catches both active limit orders AND orphaned orders where the flag wasn't set
-            query = select(Position).where(
-                Position.status == "open",
-                Position.limit_close_order_id.isnot(None)
-            )
-            result = await self.db.execute(query)
-            positions = result.scalars().all()
-
-            if not positions:
-                logger.info("✅ Startup reconciliation: No pending limit orders to check")
-                return
-
-            logger.info(f"🔄 Startup reconciliation: Checking {len(positions)} positions with limit order IDs")
-
-            for position in positions:
-                # Ensure closing_via_limit flag is set (fix orphaned orders)
-                if not position.closing_via_limit:
-                    logger.warning(
-                        f"⚠️ Position {position.id} has limit_close_order_id but closing_via_limit is False. "
-                        f"Fixing flag and checking order status..."
-                    )
-                    position.closing_via_limit = True
-
-                await self.check_single_position_limit_order(position)
-
-            await self.db.commit()
-            logger.info(f"✅ Startup reconciliation complete: Checked {len(positions)} orders")
-
-        except Exception as e:
-            logger.error(f"❌ Error in startup reconciliation: {e}")
-            await self.db.rollback()
-
-    async def check_limit_close_orders(self):
-        """Check all pending limit close orders for fills"""
-        try:
-            # Get all positions with pending limit close orders
-            query = select(Position).where(Position.closing_via_limit, Position.status == "open")
-            result = await self.db.execute(query)
-            positions = result.scalars().all()
-
-            logger.info(f"Checking {len(positions)} positions with pending limit close orders")
-
-            for position in positions:
-                await self.check_single_position_limit_order(position)
-
-        except Exception as e:
-            logger.error(f"Error checking limit close orders: {e}")
 
     async def check_single_position_limit_order(self, position: Position):
         """Check a single position's limit order status"""
@@ -620,21 +562,3 @@ class LimitOrderMonitor:
         except Exception as e:
             logger.error(f"Error processing order completion for position {position.id}: {e}")
             await self.db.rollback()
-
-
-async def run_limit_order_monitor(db: AsyncSession, exchange: ExchangeClient):
-    """Main loop for limit order monitoring"""
-    monitor = LimitOrderMonitor(db, exchange)
-
-    # Run startup reconciliation to catch orders that filled during downtime
-    logger.info("🚀 Starting limit order monitor with startup reconciliation...")
-    await monitor.startup_reconciliation()
-
-    while True:
-        try:
-            await monitor.check_limit_close_orders()
-        except Exception as e:
-            logger.error(f"Error in limit order monitor loop: {e}")
-
-        # Check every 10 seconds (fast response without hitting rate limits)
-        await asyncio.sleep(10)

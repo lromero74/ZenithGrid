@@ -21,8 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
-from app.encryption import decrypt_value, is_encrypted
-from app.exchange_clients.factory import create_exchange_client
 from app.models import Account
 from app.routers.auth_dependencies import get_current_user
 from app.services.exchange_service import get_exchange_client_for_account
@@ -36,55 +34,20 @@ async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
     """
     Get Coinbase client for market data.
 
-    Excludes paper trading accounts and uses real CEX account credentials.
-    If no user account is available, falls back to system credentials.
+    Priority: system credentials > public API > user account fallback.
+    Market data doesn't need user-specific credentials, so avoid
+    using a random user's account (multi-user isolation).
     """
-    # Get first active CEX account (excluding paper trading accounts)
-    result = await db.execute(
-        select(Account).where(
-            Account.type == "cex",
-            Account.is_active.is_(True),
-            Account.is_paper_trading.is_not(True)  # Exclude paper trading accounts
-        ).order_by(Account.is_default.desc(), Account.created_at)
-    )
-    account = result.scalar_one_or_none()
+    # 1. Prefer system credentials (not tied to any user)
+    if settings.coinbase_api_key and settings.coinbase_api_secret:
+        return CoinbaseClient(
+            api_key=settings.coinbase_api_key,
+            api_secret=settings.coinbase_api_secret
+        )
 
-    # If no user account found, try system credentials, then fall back to public API
-    if not account or not account.api_key_name or not account.api_private_key:
-        if settings.coinbase_api_key and settings.coinbase_api_secret:
-            logger.info("No user CEX account found, using system Coinbase credentials for market data")
-            return CoinbaseClient(
-                api_key=settings.coinbase_api_key,
-                api_secret=settings.coinbase_api_secret
-            )
-        # No credentials at all — use public (no-auth) API
-        logger.info("No Coinbase credentials available, using public market data API")
-        from app.coinbase_api.public_market_data import PublicMarketDataClient
-        return PublicMarketDataClient()
-
-    # Create and return client using user's credentials
-    private_key = account.api_private_key
-    if private_key and is_encrypted(private_key):
-        private_key = decrypt_value(private_key)
-    client = create_exchange_client(
-        exchange_type="cex",
-        coinbase_key_name=account.api_key_name,
-        coinbase_private_key=private_key,
-    )
-
-    if not client:
-        # Fallback to system credentials if user client fails
-        if settings.coinbase_api_key and settings.coinbase_api_secret:
-            logger.warning("Failed to create user Coinbase client, using system credentials")
-            return CoinbaseClient(
-                api_key=settings.coinbase_api_key,
-                api_secret=settings.coinbase_api_secret
-            )
-        logger.warning("Failed to create user Coinbase client, using public market data API")
-        from app.coinbase_api.public_market_data import PublicMarketDataClient
-        return PublicMarketDataClient()
-
-    return client
+    # 2. Fall back to public (no-auth) API
+    from app.coinbase_api.public_market_data import PublicMarketDataClient
+    return PublicMarketDataClient()
 
 
 @router.get("/ticker/{product_id}")

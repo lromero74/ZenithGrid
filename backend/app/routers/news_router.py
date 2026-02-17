@@ -2591,6 +2591,7 @@ async def text_to_speech(
     text: str = Query(..., min_length=1, max_length=50000, description="Text to convert to speech"),
     voice: str = Query(DEFAULT_VOICE, description="Voice to use (aria, guy, jenny, brian, emma, andrew)"),
     rate: str = Query("+0%", description="Speech rate adjustment (e.g., +10%, -20%)"),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Convert text to speech using Microsoft Edge's neural TTS.
@@ -2643,7 +2644,7 @@ async def text_to_speech(
 
 
 @router.get("/tts/voices")
-async def get_tts_voices():
+async def get_tts_voices(current_user: User = Depends(get_current_user)):
     """
     Get available TTS voices.
 
@@ -2667,6 +2668,7 @@ async def text_to_speech_with_sync(
     text: str = Query(..., min_length=1, max_length=50000),
     voice: str = Query(DEFAULT_VOICE),
     rate: str = Query("+0%"),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Convert text to speech with word-level timing for synchronized highlighting.

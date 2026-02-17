@@ -32,80 +32,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/account", tags=["account"])
 
 
-async def calculate_available_balance(
-    currency: str,
-    db: AsyncSession,
-    coinbase: CoinbaseClient
-) -> float:
-    """
-    Calculate truly available balance for a specific currency.
-
-    This subtracts capital reserved in:
-    1. Open positions (total_quote_spent)
-    2. Pending orders (reserved_amount_quote/base)
-
-    Args:
-        currency: Currency code (BTC, ETH, USD, USDC, USDT)
-        db: Database session
-        coinbase: Coinbase client instance
-
-    Returns:
-        Available balance (can be used for new bots)
-    """
-    # Get account balance from exchange
-    if currency == "BTC":
-        account_balance = await coinbase.get_btc_balance()
-    elif currency == "ETH":
-        account_balance = await coinbase.get_eth_balance()
-    elif currency == "USD":
-        account_balance = await coinbase.get_usd_balance()
-    elif currency == "USDC":
-        account_balance = await coinbase.get_usdc_balance()
-    elif currency == "USDT":
-        account_balance = await coinbase.get_usdt_balance()
-    else:
-        raise ValueError(f"Unsupported currency: {currency}")
-
-    # Calculate reserved in open positions
-    positions_result = await db.execute(
-        select(Position).where(
-            Position.status == "open",
-            Position.product_id.like(f"%-{currency}")
-        )
-    )
-    open_positions = positions_result.scalars().all()
-    reserved_in_positions = sum(pos.total_quote_spent or 0 for pos in open_positions)
-
-    # Calculate reserved in pending orders
-    # For quote currency (buy orders)
-    pending_quote_result = await db.execute(
-        select(PendingOrder).where(
-            PendingOrder.status == "pending",
-            PendingOrder.side == "BUY",
-            PendingOrder.product_id.like(f"%-{currency}")
-        )
-    )
-    pending_quote_orders = pending_quote_result.scalars().all()
-    reserved_quote = sum(order.reserved_amount_quote or 0 for order in pending_quote_orders)
-
-    # For base currency (sell orders)
-    pending_base_result = await db.execute(
-        select(PendingOrder).where(
-            PendingOrder.status == "pending",
-            PendingOrder.side == "SELL",
-            PendingOrder.product_id.like(f"{currency}-%")
-        )
-    )
-    pending_base_orders = pending_base_result.scalars().all()
-    reserved_base = sum(order.reserved_amount_base or 0 for order in pending_base_orders)
-
-    # Calculate available
-    available = account_balance - reserved_in_positions - reserved_quote - reserved_base
-
-    # Ensure non-negative
-    return max(0, available)
-
-
 async def get_user_paper_account(db: AsyncSession, user_id: int) -> Optional[Account]:
     """Get user's paper trading account if they have no live CEX account."""
     # Check if user has a live CEX account
@@ -793,9 +719,9 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
 
 
 @router.get("/conversion-status/{task_id}")
-async def get_conversion_status(task_id: str):
+async def get_conversion_status(task_id: str, current_user: User = Depends(get_current_user)):
     """
-    Get status of a portfolio conversion task
+    Get status of a portfolio conversion task (requires auth)
     """
     progress = pcs.get_task_progress(task_id)
     if not progress:

@@ -20,8 +20,6 @@ logger = logging.getLogger(__name__)
 # ByBit rate limiting: 120 requests per second for most endpoints,
 # but order endpoints are stricter (10/s). Use 100ms min spacing as
 # a safe default to avoid 10006 rate limit errors.
-_bybit_rate_lock = asyncio.Lock()
-_bybit_last_request_time: float = 0.0
 _BYBIT_MIN_INTERVAL = 0.10  # 100ms between requests
 
 # Product ID translation maps
@@ -137,19 +135,21 @@ class ByBitClient:
             api_key=api_key,
             api_secret=api_secret,
         )
+        # Per-instance rate limiting (avoids cross-user interference)
+        self._rate_lock = asyncio.Lock()
+        self._last_request_time: float = 0.0
         logger.info(
             f"ByBitClient initialized (testnet={testnet})"
         )
 
     async def _rate_limited_call(self, func, **kwargs):
-        """Execute a pybit call with global rate limiting."""
-        global _bybit_last_request_time
-        async with _bybit_rate_lock:
+        """Execute a pybit call with per-instance rate limiting."""
+        async with self._rate_lock:
             now = time.monotonic()
-            elapsed = now - _bybit_last_request_time
+            elapsed = now - self._last_request_time
             if elapsed < _BYBIT_MIN_INTERVAL:
                 await asyncio.sleep(_BYBIT_MIN_INTERVAL - elapsed)
-            _bybit_last_request_time = time.monotonic()
+            self._last_request_time = time.monotonic()
         return await asyncio.to_thread(func, **kwargs)
 
     # ----------------------------------------------------------
