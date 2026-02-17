@@ -15,7 +15,7 @@ export function Sparkline({ data, color, height = 40, timeLabel }: SparklineProp
   return (
     <div className="w-full">
       <div className="w-full opacity-60 hover:opacity-100 transition-opacity" style={{ height }}>
-        <ResponsiveContainer width="100%" height="100%" minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <AreaChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
             <defs>
               <linearGradient id={`spark-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
