@@ -11,7 +11,7 @@ import { LoadingSpinner } from './components/LoadingSpinner'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { VideoPlayerProvider } from './contexts/VideoPlayerContext'
 import { ArticleReaderProvider } from './contexts/ArticleReaderContext'
-import { useAccount } from './contexts/AccountContext'
+import { AccountProvider, useAccount } from './contexts/AccountContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MiniPlayer } from './components/MiniPlayer'
 import { ArticleReaderMiniPlayer } from './components/ArticleReaderMiniPlayer'
@@ -99,23 +99,17 @@ function AppContent() {
   }, [])
 
   // Fetch full portfolio data (all coins) - account-specific for CEX/DEX switching
+  // Gated on selectedAccount so it doesn't fire before accounts have loaded
   const { data: portfolio } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
-      // If we have a selected account, use the account-specific endpoint
-      if (selectedAccount) {
-        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json()
-      }
-      // Fallback to legacy endpoint
-      const response = await authFetch('/api/account/portfolio')
+      const response = await authFetch(`/api/accounts/${selectedAccount!.id}/portfolio`)
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
+    enabled: !!selectedAccount,
     refetchInterval: 120000, // Update prices every 2 minutes
     staleTime: 60000, // Consider data fresh for 60 seconds
-    refetchOnMount: false, // Don't refetch on page refresh - use cache
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
     placeholderData: keepPreviousData, // Retain old values during refetch instead of flashing to 0
   })
@@ -774,8 +768,12 @@ function App() {
     )
   }
 
-  // Show main app content
-  return <AppContent />
+  // Show main app content (AccountProvider here ensures accounts fetch only after auth)
+  return (
+    <AccountProvider>
+      <AppContent />
+    </AccountProvider>
+  )
 }
 
 // Export with AuthProvider wrapper

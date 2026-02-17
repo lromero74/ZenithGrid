@@ -5,6 +5,12 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.12.2] - 2026-02-17
+
+### Fixed
+- **"No accounts configured" on first login**: AccountProvider was mounted outside AuthProvider, so the accounts query fired before authentication completed. Moved AccountProvider inside the auth-gated content so accounts only fetch after login is confirmed
+- **Account value slow to appear after login**: Portfolio query fired immediately with no selected account, hitting a legacy fallback endpoint, then re-fetching once accounts loaded. Added `enabled: !!selectedAccount` so portfolio only fetches after account selection — removes one wasted round-trip
+
 ## [v2.12.1] - 2026-02-17
 
 ### Fixed
