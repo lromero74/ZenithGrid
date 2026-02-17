@@ -20,9 +20,7 @@ US_DEBT_CACHE_FILE = CACHE_DIR / "us_debt_cache.json"
 # New market metrics caches
 BTC_DOMINANCE_CACHE_FILE = CACHE_DIR / "btc_dominance_cache.json"
 ALTSEASON_CACHE_FILE = CACHE_DIR / "altseason_cache.json"
-FUNDING_RATES_CACHE_FILE = CACHE_DIR / "funding_rates_cache.json"
 STABLECOIN_MCAP_CACHE_FILE = CACHE_DIR / "stablecoin_mcap_cache.json"
-EXCHANGE_FLOWS_CACHE_FILE = CACHE_DIR / "exchange_flows_cache.json"
 MEMPOOL_CACHE_FILE = CACHE_DIR / "mempool_cache.json"
 HASH_RATE_CACHE_FILE = CACHE_DIR / "hash_rate_cache.json"
 LIGHTNING_CACHE_FILE = CACHE_DIR / "lightning_cache.json"
@@ -50,7 +48,6 @@ __all__ = [
     "US_DEBT_CACHE_FILE",
     "BTC_DOMINANCE_CACHE_FILE",
     "ALTSEASON_CACHE_FILE",
-    "FUNDING_RATES_CACHE_FILE",
     "STABLECOIN_MCAP_CACHE_FILE",
     "MEMPOOL_CACHE_FILE",
     "HASH_RATE_CACHE_FILE",
@@ -80,8 +77,6 @@ __all__ = [
     "save_btc_dominance_cache",
     "load_altseason_cache",
     "save_altseason_cache",
-    "load_funding_rates_cache",
-    "save_funding_rates_cache",
     "load_stablecoin_mcap_cache",
     "save_stablecoin_mcap_cache",
     "load_mempool_cache",
@@ -376,28 +371,12 @@ def save_altseason_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(ALTSEASON_CACHE_FILE, "Altseason index", data)
 
 
-def load_funding_rates_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(FUNDING_RATES_CACHE_FILE, "Funding rates")
-
-
-def save_funding_rates_cache(data: Dict[str, Any]) -> None:
-    _save_market_metrics_cache(FUNDING_RATES_CACHE_FILE, "Funding rates", data)
-
-
 def load_stablecoin_mcap_cache() -> Optional[Dict[str, Any]]:
     return _load_market_metrics_cache(STABLECOIN_MCAP_CACHE_FILE, "Stablecoin mcap")
 
 
 def save_stablecoin_mcap_cache(data: Dict[str, Any]) -> None:
     _save_market_metrics_cache(STABLECOIN_MCAP_CACHE_FILE, "Stablecoin mcap", data)
-
-
-def load_exchange_flows_cache() -> Optional[Dict[str, Any]]:
-    return _load_market_metrics_cache(EXCHANGE_FLOWS_CACHE_FILE, "Exchange flows")
-
-
-def save_exchange_flows_cache(data: Dict[str, Any]) -> None:
-    _save_market_metrics_cache(EXCHANGE_FLOWS_CACHE_FILE, "Exchange flows", data)
 
 
 def load_mempool_cache() -> Optional[Dict[str, Any]]:

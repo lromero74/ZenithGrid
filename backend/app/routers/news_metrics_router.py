@@ -8,16 +8,22 @@ Market sentiment and blockchain metric endpoints:
 - BTC Dominance / Altseason Index
 - Stablecoin Market Cap / Total Market Cap
 - Mempool / Hash Rate / Lightning Network
-- ATH / RSI / Funding Rates
+- ATH / RSI
 - Metric history for sparkline charts
 
 Extracted from news_router.py for maintainability.
+
+S7: Shared aiohttp session for all fetch functions.
+S6: Prune timestamp guard to avoid pruning on every read.
+S12: Use datetime.now(timezone.utc) instead of deprecated datetime.utcnow().
+S9/S10: Removed dead exchange_flows and funding_rates code.
 """
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -42,7 +48,6 @@ from app.routers.news import (
     load_btc_dominance_cache,
     load_btc_rsi_cache,
     load_fear_greed_cache,
-    load_funding_rates_cache,
     load_hash_rate_cache,
     load_lightning_cache,
     load_mempool_cache,
@@ -54,7 +59,6 @@ from app.routers.news import (
     save_btc_dominance_cache,
     save_btc_rsi_cache,
     save_fear_greed_cache,
-    save_funding_rates_cache,
     save_hash_rate_cache,
     save_lightning_cache,
     save_mempool_cache,
@@ -67,6 +71,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["news-metrics"])
 
 METRIC_SNAPSHOT_PRUNE_DAYS = 90
+
+# S6: Prune guard — only prune once per hour
+_last_prune_time: float = 0.0
+PRUNE_INTERVAL_SECONDS = 3600
+
+# S7: Shared aiohttp session (lazy-initialized, reused across requests)
+_shared_session: Optional[aiohttp.ClientSession] = None
+_SHARED_HEADERS = {"User-Agent": "ZenithGrid/1.0"}
+
+
+async def get_shared_session() -> aiohttp.ClientSession:
+    """Get or create a shared aiohttp session for external API calls."""
+    global _shared_session
+    if _shared_session is None or _shared_session.closed:
+        _shared_session = aiohttp.ClientSession(headers=_SHARED_HEADERS)
+    return _shared_session
 
 
 # =============================================================================
@@ -81,7 +101,7 @@ async def record_metric_snapshot(metric_name: str, value: float) -> None:
             db.add(MetricSnapshot(
                 metric_name=metric_name,
                 value=value,
-                recorded_at=datetime.utcnow(),
+                recorded_at=datetime.now(timezone.utc),
             ))
             await db.commit()
     except Exception as e:
@@ -89,9 +109,14 @@ async def record_metric_snapshot(metric_name: str, value: float) -> None:
 
 
 async def prune_old_snapshots() -> None:
-    """Delete metric snapshots older than 90 days."""
+    """Delete metric snapshots older than 90 days. Guarded to run at most once per hour."""
+    global _last_prune_time
+    now = time.monotonic()
+    if now - _last_prune_time < PRUNE_INTERVAL_SECONDS:
+        return
+    _last_prune_time = now
     try:
-        cutoff = datetime.utcnow() - timedelta(days=METRIC_SNAPSHOT_PRUNE_DAYS)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=METRIC_SNAPSHOT_PRUNE_DAYS)
         async with async_session_maker() as db:
             from sqlalchemy import delete
             await db.execute(
@@ -110,29 +135,27 @@ async def prune_old_snapshots() -> None:
 async def fetch_btc_block_height() -> Dict[str, Any]:
     """Fetch current BTC block height from blockchain.info API"""
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
-            async with session.get(
-                "https://blockchain.info/q/getblockcount",
-                headers=headers,
-                timeout=10
-            ) as response:
-                if response.status != 200:
-                    logger.warning(f"Blockchain.info API returned {response.status}")
-                    raise HTTPException(status_code=503, detail="Block height API unavailable")
+        session = await get_shared_session()
+        async with session.get(
+            "https://blockchain.info/q/getblockcount",
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as response:
+            if response.status != 200:
+                logger.warning(f"Blockchain.info API returned {response.status}")
+                raise HTTPException(status_code=503, detail="Block height API unavailable")
 
-                height_text = await response.text()
-                height = int(height_text.strip())
+            height_text = await response.text()
+            height = int(height_text.strip())
 
-                now = datetime.now()
-                cache_data = {
-                    "height": height,
-                    "timestamp": now.isoformat(),
-                    "cached_at": now.isoformat(),
-                }
+            now = datetime.now()
+            cache_data = {
+                "height": height,
+                "timestamp": now.isoformat(),
+                "cached_at": now.isoformat(),
+            }
 
-                save_block_height_cache(cache_data)
-                return cache_data
+            save_block_height_cache(cache_data)
+            return cache_data
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching BTC block height")
         raise HTTPException(status_code=503, detail="Block height API timeout")
@@ -147,138 +170,143 @@ async def fetch_btc_block_height() -> Dict[str, Any]:
 async def fetch_us_debt() -> Dict[str, Any]:
     """Fetch US National Debt from Treasury Fiscal Data API and GDP from FRED"""
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
+        session = await get_shared_session()
 
-            # Get last 8 records to calculate 7-day weighted average rate
-            debt_url = (
-                "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/"
-                "v2/accounting/od/debt_to_penny"
-                "?sort=-record_date&page[size]=8"
-            )
+        # Get last 8 records to calculate 7-day weighted average rate
+        debt_url = (
+            "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/"
+            "v2/accounting/od/debt_to_penny"
+            "?sort=-record_date&page[size]=8"
+        )
 
-            # Fetch debt data
-            async with session.get(debt_url, headers=headers, timeout=15) as response:
-                if response.status != 200:
-                    logger.warning(f"Treasury API returned {response.status}")
-                    raise HTTPException(status_code=503, detail="Treasury API unavailable")
+        # Fetch debt data
+        async with session.get(
+            debt_url, timeout=aiohttp.ClientTimeout(total=15)
+        ) as response:
+            if response.status != 200:
+                logger.warning(f"Treasury API returned {response.status}")
+                raise HTTPException(status_code=503, detail="Treasury API unavailable")
 
-                data = await response.json()
-                records = data.get("data", [])
+            data = await response.json()
+            records = data.get("data", [])
 
-                if len(records) < 1:
-                    raise HTTPException(status_code=503, detail="No debt data available")
+            if len(records) < 1:
+                raise HTTPException(status_code=503, detail="No debt data available")
 
-                # Get current debt
-                latest = records[0]
-                total_debt = float(latest.get("tot_pub_debt_out_amt", 0))
-                record_date = latest.get("record_date", "")
+            # Get current debt
+            latest = records[0]
+            total_debt = float(latest.get("tot_pub_debt_out_amt", 0))
+            record_date = latest.get("record_date", "")
 
-                # Calculate rate of change per second using 7-day weighted average
-                default_rate = 31710.0
-                debt_per_second = default_rate
+            # Calculate rate of change per second using 7-day weighted average
+            default_rate = 31710.0
+            debt_per_second = default_rate
 
-                if len(records) >= 2:
-                    daily_rates = []
-                    for i in range(len(records) - 1):
-                        curr = records[i]
-                        prev = records[i + 1]
-                        curr_debt = float(curr.get("tot_pub_debt_out_amt", 0))
-                        prev_debt = float(prev.get("tot_pub_debt_out_amt", 0))
-                        curr_date = curr.get("record_date", "")
-                        prev_date = prev.get("record_date", "")
+            if len(records) >= 2:
+                daily_rates = []
+                for i in range(len(records) - 1):
+                    curr = records[i]
+                    prev = records[i + 1]
+                    curr_debt = float(curr.get("tot_pub_debt_out_amt", 0))
+                    prev_debt = float(prev.get("tot_pub_debt_out_amt", 0))
+                    curr_date = curr.get("record_date", "")
+                    prev_date = prev.get("record_date", "")
 
-                        if prev_date and curr_date:
-                            date1 = datetime.strptime(curr_date, "%Y-%m-%d")
-                            date2 = datetime.strptime(prev_date, "%Y-%m-%d")
-                            days_diff = (date1 - date2).days
+                    if prev_date and curr_date:
+                        date1 = datetime.strptime(curr_date, "%Y-%m-%d")
+                        date2 = datetime.strptime(prev_date, "%Y-%m-%d")
+                        days_diff = (date1 - date2).days
 
-                            if days_diff > 0:
-                                debt_change = curr_debt - prev_debt
-                                seconds_diff = days_diff * 24 * 60 * 60
-                                rate = debt_change / seconds_diff
-                                if rate > 0:
-                                    daily_rates.append(rate)
+                        if days_diff > 0:
+                            debt_change = curr_debt - prev_debt
+                            seconds_diff = days_diff * 24 * 60 * 60
+                            rate = debt_change / seconds_diff
+                            if rate > 0:
+                                daily_rates.append(rate)
 
-                    if daily_rates:
-                        num_rates = len(daily_rates)
-                        weights = []
-                        for i in range(num_rates):
-                            if i < 1:
-                                weights.append(3)
-                            elif i < 3:
-                                weights.append(2)
-                            else:
-                                weights.append(1)
+                if daily_rates:
+                    num_rates = len(daily_rates)
+                    weights = []
+                    for i in range(num_rates):
+                        if i < 1:
+                            weights.append(3)
+                        elif i < 3:
+                            weights.append(2)
+                        else:
+                            weights.append(1)
 
-                        weighted_sum = sum(r * w for r, w in zip(daily_rates, weights))
-                        total_weight = sum(weights)
-                        debt_per_second = weighted_sum / total_weight
-                        logger.info(f"Calculated debt rate from {num_rates} days: ${debt_per_second:.2f}/sec (weighted avg)")
-                    else:
-                        logger.info("No positive debt rates found, using default rate")
-                        debt_per_second = default_rate
-
-            # Fetch GDP from FRED
-            gdp = 28_000_000_000_000.0
-            try:
-                gdp_url = (
-                    "https://api.stlouisfed.org/fred/series/observations"
-                    "?series_id=GDP&api_key=DEMO_KEY&file_type=json"
-                    "&sort_order=desc&limit=1"
-                )
-                async with session.get(gdp_url, headers=headers, timeout=10) as gdp_response:
-                    if gdp_response.status == 200:
-                        gdp_data = await gdp_response.json()
-                        observations = gdp_data.get("observations", [])
-                        if observations:
-                            gdp_billions = float(observations[0].get("value", 28000))
-                            gdp = gdp_billions * 1_000_000_000
-                    else:
-                        logger.warning(f"FRED GDP API returned {gdp_response.status}, using fallback")
-            except Exception as e:
-                logger.warning(f"Failed to fetch GDP: {e}, using fallback")
-
-            debt_to_gdp_ratio = (total_debt / gdp * 100) if gdp > 0 else 0
-
-            # Get current debt ceiling from history
-            debt_ceiling = None
-            debt_ceiling_suspended = False
-            debt_ceiling_note = None
-            headroom = None
-
-            if DEBT_CEILING_HISTORY:
-                latest_ceiling = DEBT_CEILING_HISTORY[0]
-                debt_ceiling_suspended = latest_ceiling.get("suspended", False)
-                debt_ceiling_note = latest_ceiling.get("note", "")
-
-                if debt_ceiling_suspended:
-                    suspension_end = latest_ceiling.get("suspension_end")
-                    if suspension_end:
-                        debt_ceiling_note = f"Suspended until {suspension_end}"
+                    weighted_sum = sum(r * w for r, w in zip(daily_rates, weights))
+                    total_weight = sum(weights)
+                    debt_per_second = weighted_sum / total_weight
+                    logger.info(
+                        f"Calculated debt rate from {num_rates} days: ${debt_per_second:.2f}/sec (weighted avg)"
+                    )
                 else:
-                    amount_trillion = latest_ceiling.get("amount_trillion")
-                    if amount_trillion:
-                        debt_ceiling = amount_trillion * 1_000_000_000_000
-                        headroom = debt_ceiling - total_debt
+                    logger.info("No positive debt rates found, using default rate")
+                    debt_per_second = default_rate
 
-            now = datetime.now()
-            cache_data = {
-                "total_debt": total_debt,
-                "debt_per_second": debt_per_second,
-                "gdp": gdp,
-                "debt_to_gdp_ratio": round(debt_to_gdp_ratio, 2),
-                "record_date": record_date,
-                "cached_at": now.isoformat(),
-                "cache_expires_at": (now + timedelta(hours=US_DEBT_CACHE_HOURS)).isoformat(),
-                "debt_ceiling": debt_ceiling,
-                "debt_ceiling_suspended": debt_ceiling_suspended,
-                "debt_ceiling_note": debt_ceiling_note,
-                "headroom": headroom,
-            }
+        # Fetch GDP from FRED
+        gdp = 28_000_000_000_000.0
+        try:
+            gdp_url = (
+                "https://api.stlouisfed.org/fred/series/observations"
+                "?series_id=GDP&api_key=DEMO_KEY&file_type=json"
+                "&sort_order=desc&limit=1"
+            )
+            async with session.get(
+                gdp_url, timeout=aiohttp.ClientTimeout(total=10)
+            ) as gdp_response:
+                if gdp_response.status == 200:
+                    gdp_data = await gdp_response.json()
+                    observations = gdp_data.get("observations", [])
+                    if observations:
+                        gdp_billions = float(observations[0].get("value", 28000))
+                        gdp = gdp_billions * 1_000_000_000
+                else:
+                    logger.warning(f"FRED GDP API returned {gdp_response.status}, using fallback")
+        except Exception as e:
+            logger.warning(f"Failed to fetch GDP: {e}, using fallback")
 
-            save_us_debt_cache(cache_data)
-            return cache_data
+        debt_to_gdp_ratio = (total_debt / gdp * 100) if gdp > 0 else 0
+
+        # Get current debt ceiling from history
+        debt_ceiling = None
+        debt_ceiling_suspended = False
+        debt_ceiling_note = None
+        headroom = None
+
+        if DEBT_CEILING_HISTORY:
+            latest_ceiling = DEBT_CEILING_HISTORY[0]
+            debt_ceiling_suspended = latest_ceiling.get("suspended", False)
+            debt_ceiling_note = latest_ceiling.get("note", "")
+
+            if debt_ceiling_suspended:
+                suspension_end = latest_ceiling.get("suspension_end")
+                if suspension_end:
+                    debt_ceiling_note = f"Suspended until {suspension_end}"
+            else:
+                amount_trillion = latest_ceiling.get("amount_trillion")
+                if amount_trillion:
+                    debt_ceiling = amount_trillion * 1_000_000_000_000
+                    headroom = debt_ceiling - total_debt
+
+        now = datetime.now()
+        cache_data = {
+            "total_debt": total_debt,
+            "debt_per_second": debt_per_second,
+            "gdp": gdp,
+            "debt_to_gdp_ratio": round(debt_to_gdp_ratio, 2),
+            "record_date": record_date,
+            "cached_at": now.isoformat(),
+            "cache_expires_at": (now + timedelta(hours=US_DEBT_CACHE_HOURS)).isoformat(),
+            "debt_ceiling": debt_ceiling,
+            "debt_ceiling_suspended": debt_ceiling_suspended,
+            "debt_ceiling_note": debt_ceiling_note,
+            "headroom": headroom,
+        }
+
+        save_us_debt_cache(cache_data)
+        return cache_data
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching US debt")
         raise HTTPException(status_code=503, detail="Treasury API timeout")
@@ -290,35 +318,33 @@ async def fetch_us_debt() -> Dict[str, Any]:
 async def fetch_fear_greed_index() -> Dict[str, Any]:
     """Fetch Fear & Greed Index from Alternative.me API"""
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
-            async with session.get(
-                "https://api.alternative.me/fng/",
-                headers=headers,
-                timeout=10
-            ) as response:
-                if response.status != 200:
-                    logger.warning(f"Fear/Greed API returned {response.status}")
-                    raise HTTPException(status_code=503, detail="Fear/Greed API unavailable")
+        session = await get_shared_session()
+        async with session.get(
+            "https://api.alternative.me/fng/",
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as response:
+            if response.status != 200:
+                logger.warning(f"Fear/Greed API returned {response.status}")
+                raise HTTPException(status_code=503, detail="Fear/Greed API unavailable")
 
-                data = await response.json()
-                fng_data = data.get("data", [{}])[0]
+            data = await response.json()
+            fng_data = data.get("data", [{}])[0]
 
-                now = datetime.now()
-                cache_data = {
-                    "data": {
-                        "value": int(fng_data.get("value", 50)),
-                        "value_classification": fng_data.get("value_classification", "Neutral"),
-                        "timestamp": datetime.fromtimestamp(int(fng_data.get("timestamp", 0))).isoformat(),
-                        "time_until_update": fng_data.get("time_until_update"),
-                    },
-                    "cached_at": now.isoformat(),
-                    "cache_expires_at": (now + timedelta(minutes=FEAR_GREED_CACHE_MINUTES)).isoformat(),
-                }
+            now = datetime.now()
+            cache_data = {
+                "data": {
+                    "value": int(fng_data.get("value", 50)),
+                    "value_classification": fng_data.get("value_classification", "Neutral"),
+                    "timestamp": datetime.fromtimestamp(int(fng_data.get("timestamp", 0))).isoformat(),
+                    "time_until_update": fng_data.get("time_until_update"),
+                },
+                "cached_at": now.isoformat(),
+                "cache_expires_at": (now + timedelta(minutes=FEAR_GREED_CACHE_MINUTES)).isoformat(),
+            }
 
-                save_fear_greed_cache(cache_data)
-                asyncio.create_task(record_metric_snapshot("fear_greed", cache_data["data"]["value"]))
-                return cache_data
+            save_fear_greed_cache(cache_data)
+            asyncio.create_task(record_metric_snapshot("fear_greed", cache_data["data"]["value"]))
+            return cache_data
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching Fear/Greed index")
         raise HTTPException(status_code=503, detail="Fear/Greed API timeout")
@@ -330,35 +356,34 @@ async def fetch_fear_greed_index() -> Dict[str, Any]:
 async def fetch_btc_dominance() -> Dict[str, Any]:
     """Fetch Bitcoin dominance from CoinGecko"""
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
-            url = "https://api.coingecko.com/api/v3/global"
+        session = await get_shared_session()
+        url = "https://api.coingecko.com/api/v3/global"
 
-            async with session.get(url, headers=headers, timeout=15) as response:
-                if response.status != 200:
-                    logger.warning(f"CoinGecko global API returned {response.status}")
-                    raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+            if response.status != 200:
+                logger.warning(f"CoinGecko global API returned {response.status}")
+                raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
 
-                data = await response.json()
-                global_data = data.get("data", {})
+            data = await response.json()
+            global_data = data.get("data", {})
 
-                btc_dominance = global_data.get("market_cap_percentage", {}).get("btc", 0)
-                eth_dominance = global_data.get("market_cap_percentage", {}).get("eth", 0)
-                total_mcap = global_data.get("total_market_cap", {}).get("usd", 0)
+            btc_dominance = global_data.get("market_cap_percentage", {}).get("btc", 0)
+            eth_dominance = global_data.get("market_cap_percentage", {}).get("eth", 0)
+            total_mcap = global_data.get("total_market_cap", {}).get("usd", 0)
 
-                now = datetime.now()
-                cache_data = {
-                    "btc_dominance": round(btc_dominance, 2),
-                    "eth_dominance": round(eth_dominance, 2),
-                    "others_dominance": round(100 - btc_dominance - eth_dominance, 2),
-                    "total_market_cap": total_mcap,
-                    "cached_at": now.isoformat(),
-                }
+            now = datetime.now()
+            cache_data = {
+                "btc_dominance": round(btc_dominance, 2),
+                "eth_dominance": round(eth_dominance, 2),
+                "others_dominance": round(100 - btc_dominance - eth_dominance, 2),
+                "total_market_cap": total_mcap,
+                "cached_at": now.isoformat(),
+            }
 
-                save_btc_dominance_cache(cache_data)
-                asyncio.create_task(record_metric_snapshot("btc_dominance", cache_data["btc_dominance"]))
-                asyncio.create_task(record_metric_snapshot("total_market_cap", cache_data["total_market_cap"]))
-                return cache_data
+            save_btc_dominance_cache(cache_data)
+            asyncio.create_task(record_metric_snapshot("btc_dominance", cache_data["btc_dominance"]))
+            asyncio.create_task(record_metric_snapshot("total_market_cap", cache_data["total_market_cap"]))
+            return cache_data
 
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching BTC dominance")
@@ -374,54 +399,57 @@ async def fetch_altseason_index() -> Dict[str, Any]:
     Altcoin season = 75%+ of top 50 altcoins outperformed BTC over 30 days.
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
-            url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=51&sparkline=false&price_change_percentage=30d"
+        session = await get_shared_session()
+        url = (
+            "https://api.coingecko.com/api/v3/coins/markets"
+            "?vs_currency=usd&order=market_cap_desc&per_page=51"
+            "&sparkline=false&price_change_percentage=30d"
+        )
 
-            async with session.get(url, headers=headers, timeout=20) as response:
-                if response.status != 200:
-                    logger.warning(f"CoinGecko markets API returned {response.status}")
-                    raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=20)) as response:
+            if response.status != 200:
+                logger.warning(f"CoinGecko markets API returned {response.status}")
+                raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
 
-                coins = await response.json()
+            coins = await response.json()
 
-                btc_change = 0
-                altcoins = []
-                for coin in coins:
-                    if coin.get("id") == "bitcoin":
-                        btc_change = coin.get("price_change_percentage_30d_in_currency", 0) or 0
-                    elif coin.get("id") not in ["tether", "usd-coin", "dai", "binance-usd"]:
-                        altcoins.append(coin)
+            btc_change = 0
+            altcoins = []
+            for coin in coins:
+                if coin.get("id") == "bitcoin":
+                    btc_change = coin.get("price_change_percentage_30d_in_currency", 0) or 0
+                elif coin.get("id") not in ["tether", "usd-coin", "dai", "binance-usd"]:
+                    altcoins.append(coin)
 
-                outperformers = 0
-                for coin in altcoins[:50]:
-                    coin_change = coin.get("price_change_percentage_30d_in_currency", 0) or 0
-                    if coin_change > btc_change:
-                        outperformers += 1
+            outperformers = 0
+            for coin in altcoins[:50]:
+                coin_change = coin.get("price_change_percentage_30d_in_currency", 0) or 0
+                if coin_change > btc_change:
+                    outperformers += 1
 
-                total_altcoins = min(len(altcoins), 50)
-                altseason_index = round((outperformers / total_altcoins) * 100) if total_altcoins > 0 else 50
+            total_altcoins = min(len(altcoins), 50)
+            altseason_index = round((outperformers / total_altcoins) * 100) if total_altcoins > 0 else 50
 
-                if altseason_index >= 75:
-                    season = "Altcoin Season"
-                elif altseason_index <= 25:
-                    season = "Bitcoin Season"
-                else:
-                    season = "Neutral"
+            if altseason_index >= 75:
+                season = "Altcoin Season"
+            elif altseason_index <= 25:
+                season = "Bitcoin Season"
+            else:
+                season = "Neutral"
 
-                now = datetime.now()
-                cache_data = {
-                    "altseason_index": altseason_index,
-                    "season": season,
-                    "outperformers": outperformers,
-                    "total_altcoins": total_altcoins,
-                    "btc_30d_change": round(btc_change, 2),
-                    "cached_at": now.isoformat(),
-                }
+            now = datetime.now()
+            cache_data = {
+                "altseason_index": altseason_index,
+                "season": season,
+                "outperformers": outperformers,
+                "total_altcoins": total_altcoins,
+                "btc_30d_change": round(btc_change, 2),
+                "cached_at": now.isoformat(),
+            }
 
-                save_altseason_cache(cache_data)
-                asyncio.create_task(record_metric_snapshot("altseason_index", cache_data["altseason_index"]))
-                return cache_data
+            save_altseason_cache(cache_data)
+            asyncio.create_task(record_metric_snapshot("altseason_index", cache_data["altseason_index"]))
+            return cache_data
 
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching altseason index")
@@ -431,107 +459,54 @@ async def fetch_altseason_index() -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="CoinGecko API error")
 
 
-async def fetch_funding_rates() -> Dict[str, Any]:
-    """
-    Fetch BTC and ETH perpetual funding rates from CoinGlass public API.
-    Positive = longs pay shorts (bullish overcrowded)
-    Negative = shorts pay longs (bearish overcrowded)
-    """
-    try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
-            url = "https://open-api.coinglass.com/public/v2/funding"
-
-            async with session.get(url, headers=headers, timeout=15) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    funding_data = data.get("data", [])
-
-                    btc_funding = None
-                    eth_funding = None
-
-                    for item in funding_data:
-                        symbol = item.get("symbol", "").upper()
-                        if symbol == "BTC":
-                            btc_funding = item.get("uMarginList", [{}])[0].get("rate", 0)
-                        elif symbol == "ETH":
-                            eth_funding = item.get("uMarginList", [{}])[0].get("rate", 0)
-
-                    if btc_funding is not None:
-                        now = datetime.now()
-                        cache_data = {
-                            "btc_funding_rate": round(btc_funding * 100, 4),
-                            "eth_funding_rate": round((eth_funding or 0) * 100, 4),
-                            "sentiment": "Overleveraged Longs" if (btc_funding or 0) > 0.01 else (
-                                "Overleveraged Shorts" if (btc_funding or 0) < -0.01 else "Neutral"
-                            ),
-                            "cached_at": now.isoformat(),
-                        }
-                        save_funding_rates_cache(cache_data)
-                        return cache_data
-
-                logger.warning("CoinGlass funding API unavailable, using fallback")
-                now = datetime.now()
-                return {
-                    "btc_funding_rate": 0.01,
-                    "eth_funding_rate": 0.01,
-                    "sentiment": "Data Unavailable",
-                    "cached_at": now.isoformat(),
-                }
-
-    except asyncio.TimeoutError:
-        logger.warning("Timeout fetching funding rates")
-        return {"btc_funding_rate": 0, "eth_funding_rate": 0, "sentiment": "Data Unavailable", "cached_at": datetime.now().isoformat()}
-    except Exception as e:
-        logger.error(f"Error fetching funding rates: {e}")
-        return {"btc_funding_rate": 0, "eth_funding_rate": 0, "sentiment": "Data Unavailable", "cached_at": datetime.now().isoformat()}
-
-
 async def fetch_stablecoin_mcap() -> Dict[str, Any]:
     """Fetch total stablecoin market cap from CoinGecko"""
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
-            url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=stablecoins&order=market_cap_desc&per_page=20&sparkline=false"
+        session = await get_shared_session()
+        url = (
+            "https://api.coingecko.com/api/v3/coins/markets"
+            "?vs_currency=usd&category=stablecoins&order=market_cap_desc"
+            "&per_page=20&sparkline=false"
+        )
 
-            async with session.get(url, headers=headers, timeout=15) as response:
-                if response.status != 200:
-                    logger.warning(f"CoinGecko stablecoins API returned {response.status}")
-                    raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+            if response.status != 200:
+                logger.warning(f"CoinGecko stablecoins API returned {response.status}")
+                raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
 
-                coins = await response.json()
-                total_mcap = sum(coin.get("market_cap", 0) or 0 for coin in coins)
+            coins = await response.json()
+            total_mcap = sum(coin.get("market_cap", 0) or 0 for coin in coins)
 
-                usdt_mcap = 0
-                usdc_mcap = 0
-                dai_mcap = 0
-                others_mcap = 0
+            usdt_mcap = 0
+            usdc_mcap = 0
+            dai_mcap = 0
+            others_mcap = 0
 
-                for coin in coins:
-                    coin_id = coin.get("id", "")
-                    mcap = coin.get("market_cap", 0) or 0
-                    if coin_id == "tether":
-                        usdt_mcap = mcap
-                    elif coin_id == "usd-coin":
-                        usdc_mcap = mcap
-                    elif coin_id == "dai":
-                        dai_mcap = mcap
-                    else:
-                        others_mcap += mcap
+            for coin in coins:
+                coin_id = coin.get("id", "")
+                mcap = coin.get("market_cap", 0) or 0
+                if coin_id == "tether":
+                    usdt_mcap = mcap
+                elif coin_id == "usd-coin":
+                    usdc_mcap = mcap
+                elif coin_id == "dai":
+                    dai_mcap = mcap
+                else:
+                    others_mcap += mcap
 
-                now = datetime.now()
-                cache_data = {
-                    "total_stablecoin_mcap": total_mcap,
-                    "usdt_mcap": usdt_mcap,
-                    "usdc_mcap": usdc_mcap,
-                    "dai_mcap": dai_mcap,
-                    "others_mcap": others_mcap,
-                    "cached_at": now.isoformat(),
-                }
+            now = datetime.now()
+            cache_data = {
+                "total_stablecoin_mcap": total_mcap,
+                "usdt_mcap": usdt_mcap,
+                "usdc_mcap": usdc_mcap,
+                "dai_mcap": dai_mcap,
+                "others_mcap": others_mcap,
+                "cached_at": now.isoformat(),
+            }
 
-                save_stablecoin_mcap_cache(cache_data)
-                asyncio.create_task(record_metric_snapshot("stablecoin_mcap", cache_data["total_stablecoin_mcap"]))
-                return cache_data
+            save_stablecoin_mcap_cache(cache_data)
+            asyncio.create_task(record_metric_snapshot("stablecoin_mcap", cache_data["total_stablecoin_mcap"]))
+            return cache_data
 
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching stablecoin mcap")
@@ -547,46 +522,42 @@ async def fetch_mempool_stats() -> Dict[str, Any]:
     Shows network congestion and fee estimates.
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
+        session = await get_shared_session()
+        timeout = aiohttp.ClientTimeout(total=15)
 
-            async with session.get(
-                "https://mempool.space/api/mempool",
-                headers=headers,
-                timeout=15
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(status_code=503, detail="Mempool API unavailable")
-                mempool_data = await response.json()
+        async with session.get(
+            "https://mempool.space/api/mempool", timeout=timeout
+        ) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=503, detail="Mempool API unavailable")
+            mempool_data = await response.json()
 
-            async with session.get(
-                "https://mempool.space/api/v1/fees/recommended",
-                headers=headers,
-                timeout=15
-            ) as response:
-                if response.status != 200:
-                    fee_data = {"fastestFee": 0, "halfHourFee": 0, "hourFee": 0, "economyFee": 0}
-                else:
-                    fee_data = await response.json()
+        async with session.get(
+            "https://mempool.space/api/v1/fees/recommended", timeout=timeout
+        ) as response:
+            if response.status != 200:
+                fee_data = {"fastestFee": 0, "halfHourFee": 0, "hourFee": 0, "economyFee": 0}
+            else:
+                fee_data = await response.json()
 
-            now = datetime.now()
-            cache_data = {
-                "tx_count": mempool_data.get("count", 0),
-                "vsize": mempool_data.get("vsize", 0),
-                "total_fee": mempool_data.get("total_fee", 0),
-                "fee_fastest": fee_data.get("fastestFee", 0),
-                "fee_half_hour": fee_data.get("halfHourFee", 0),
-                "fee_hour": fee_data.get("hourFee", 0),
-                "fee_economy": fee_data.get("economyFee", 0),
-                "congestion": "High" if mempool_data.get("count", 0) > 50000 else (
-                    "Medium" if mempool_data.get("count", 0) > 20000 else "Low"
-                ),
-                "cached_at": now.isoformat(),
-            }
+        now = datetime.now()
+        cache_data = {
+            "tx_count": mempool_data.get("count", 0),
+            "vsize": mempool_data.get("vsize", 0),
+            "total_fee": mempool_data.get("total_fee", 0),
+            "fee_fastest": fee_data.get("fastestFee", 0),
+            "fee_half_hour": fee_data.get("halfHourFee", 0),
+            "fee_hour": fee_data.get("hourFee", 0),
+            "fee_economy": fee_data.get("economyFee", 0),
+            "congestion": "High" if mempool_data.get("count", 0) > 50000 else (
+                "Medium" if mempool_data.get("count", 0) > 20000 else "Low"
+            ),
+            "cached_at": now.isoformat(),
+        }
 
-            save_mempool_cache(cache_data)
-            asyncio.create_task(record_metric_snapshot("mempool_tx_count", cache_data["tx_count"]))
-            return cache_data
+        save_mempool_cache(cache_data)
+        asyncio.create_task(record_metric_snapshot("mempool_tx_count", cache_data["tx_count"]))
+        return cache_data
 
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching mempool stats")
@@ -602,46 +573,42 @@ async def fetch_hash_rate() -> Dict[str, Any]:
     Higher hash rate = more secure network.
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
+        session = await get_shared_session()
+        timeout = aiohttp.ClientTimeout(total=15)
 
-            async with session.get(
-                "https://mempool.space/api/v1/mining/hashrate/3d",
-                headers=headers,
-                timeout=15
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(status_code=503, detail="Mempool API unavailable")
-                data = await response.json()
-                hashrates = data.get("hashrates", [])
-                if hashrates:
-                    latest = hashrates[-1].get("avgHashrate", 0)
-                    hash_rate_eh = latest / 1e18
-                else:
-                    hash_rate_eh = 0
+        async with session.get(
+            "https://mempool.space/api/v1/mining/hashrate/3d", timeout=timeout
+        ) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=503, detail="Mempool API unavailable")
+            data = await response.json()
+            hashrates = data.get("hashrates", [])
+            if hashrates:
+                latest = hashrates[-1].get("avgHashrate", 0)
+                hash_rate_eh = latest / 1e18
+            else:
+                hash_rate_eh = 0
 
-            async with session.get(
-                "https://mempool.space/api/v1/difficulty-adjustment",
-                headers=headers,
-                timeout=15
-            ) as response:
-                if response.status != 200:
-                    difficulty = 0
-                else:
-                    diff_data = await response.json()
-                    difficulty = diff_data.get("difficultyChange", 0)
+        async with session.get(
+            "https://mempool.space/api/v1/difficulty-adjustment", timeout=timeout
+        ) as response:
+            if response.status != 200:
+                difficulty = 0
+            else:
+                diff_data = await response.json()
+                difficulty = diff_data.get("difficultyChange", 0)
 
-            now = datetime.now()
-            cache_data = {
-                "hash_rate_eh": round(hash_rate_eh, 2),
-                "difficulty": difficulty,
-                "difficulty_t": round(difficulty, 2),
-                "cached_at": now.isoformat(),
-            }
+        now = datetime.now()
+        cache_data = {
+            "hash_rate_eh": round(hash_rate_eh, 2),
+            "difficulty": difficulty,
+            "difficulty_t": round(difficulty, 2),
+            "cached_at": now.isoformat(),
+        }
 
-            save_hash_rate_cache(cache_data)
-            asyncio.create_task(record_metric_snapshot("hash_rate", cache_data["hash_rate_eh"]))
-            return cache_data
+        save_hash_rate_cache(cache_data)
+        asyncio.create_task(record_metric_snapshot("hash_rate", cache_data["hash_rate_eh"]))
+        return cache_data
 
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching hash rate")
@@ -657,32 +624,30 @@ async def fetch_lightning_stats() -> Dict[str, Any]:
     Shows LN adoption and capacity.
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
+        session = await get_shared_session()
 
-            async with session.get(
-                "https://mempool.space/api/v1/lightning/statistics/latest",
-                headers=headers,
-                timeout=15
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(status_code=503, detail="Lightning API unavailable")
-                response_data = await response.json()
-                data = response_data.get("latest", response_data)
+        async with session.get(
+            "https://mempool.space/api/v1/lightning/statistics/latest",
+            timeout=aiohttp.ClientTimeout(total=15)
+        ) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=503, detail="Lightning API unavailable")
+            response_data = await response.json()
+            data = response_data.get("latest", response_data)
 
-            now = datetime.now()
-            cache_data = {
-                "channel_count": data.get("channel_count", 0),
-                "node_count": data.get("node_count", 0),
-                "total_capacity_btc": round(data.get("total_capacity", 0) / 100_000_000, 2),
-                "avg_capacity_sats": data.get("avg_capacity", 0),
-                "avg_fee_rate": data.get("avg_fee_rate", 0),
-                "cached_at": now.isoformat(),
-            }
+        now = datetime.now()
+        cache_data = {
+            "channel_count": data.get("channel_count", 0),
+            "node_count": data.get("node_count", 0),
+            "total_capacity_btc": round(data.get("total_capacity", 0) / 100_000_000, 2),
+            "avg_capacity_sats": data.get("avg_capacity", 0),
+            "avg_fee_rate": data.get("avg_fee_rate", 0),
+            "cached_at": now.isoformat(),
+        }
 
-            save_lightning_cache(cache_data)
-            asyncio.create_task(record_metric_snapshot("lightning_capacity", cache_data["total_capacity_btc"]))
-            return cache_data
+        save_lightning_cache(cache_data)
+        asyncio.create_task(record_metric_snapshot("lightning_capacity", cache_data["total_capacity_btc"]))
+        return cache_data
 
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching lightning stats")
@@ -698,45 +663,45 @@ async def fetch_ath_data() -> Dict[str, Any]:
     Shows days since ATH and drawdown percentage.
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            headers = {"User-Agent": "ZenithGrid/1.0"}
+        session = await get_shared_session()
 
-            async with session.get(
-                "https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false",
-                headers=headers,
-                timeout=15
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
-                data = await response.json()
+        async with session.get(
+            "https://api.coingecko.com/api/v3/coins/bitcoin"
+            "?localization=false&tickers=false&market_data=true"
+            "&community_data=false&developer_data=false",
+            timeout=aiohttp.ClientTimeout(total=15)
+        ) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=503, detail="CoinGecko API unavailable")
+            data = await response.json()
 
-            market_data = data.get("market_data", {})
-            current_price = market_data.get("current_price", {}).get("usd", 0)
-            ath = market_data.get("ath", {}).get("usd", 0)
-            ath_date_str = market_data.get("ath_date", {}).get("usd", "")
-            ath_change_pct = market_data.get("ath_change_percentage", {}).get("usd", 0)
+        market_data = data.get("market_data", {})
+        current_price = market_data.get("current_price", {}).get("usd", 0)
+        ath = market_data.get("ath", {}).get("usd", 0)
+        ath_date_str = market_data.get("ath_date", {}).get("usd", "")
+        ath_change_pct = market_data.get("ath_change_percentage", {}).get("usd", 0)
 
-            days_since_ath = 0
-            if ath_date_str:
-                try:
-                    ath_date = datetime.fromisoformat(ath_date_str.replace("Z", "+00:00"))
-                    days_since_ath = (datetime.now(ath_date.tzinfo) - ath_date).days
-                except Exception:
-                    pass
+        days_since_ath = 0
+        if ath_date_str:
+            try:
+                ath_date = datetime.fromisoformat(ath_date_str.replace("Z", "+00:00"))
+                days_since_ath = (datetime.now(ath_date.tzinfo) - ath_date).days
+            except Exception:
+                pass
 
-            now = datetime.now()
-            cache_data = {
-                "current_price": round(current_price, 2),
-                "ath": round(ath, 2),
-                "ath_date": ath_date_str[:10] if ath_date_str else "",
-                "days_since_ath": days_since_ath,
-                "drawdown_pct": round(ath_change_pct, 2),
-                "recovery_pct": round(100 + ath_change_pct, 2) if ath_change_pct < 0 else 100,
-                "cached_at": now.isoformat(),
-            }
+        now = datetime.now()
+        cache_data = {
+            "current_price": round(current_price, 2),
+            "ath": round(ath, 2),
+            "ath_date": ath_date_str[:10] if ath_date_str else "",
+            "days_since_ath": days_since_ath,
+            "drawdown_pct": round(ath_change_pct, 2),
+            "recovery_pct": round(100 + ath_change_pct, 2) if ath_change_pct < 0 else 100,
+            "cached_at": now.isoformat(),
+        }
 
-            save_ath_cache(cache_data)
-            return cache_data
+        save_ath_cache(cache_data)
+        return cache_data
 
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching ATH data")
@@ -752,53 +717,52 @@ async def fetch_btc_rsi() -> Dict[str, Any]:
         now = int(datetime.now().timestamp())
         start = now - (25 * 24 * 60 * 60)
 
-        async with aiohttp.ClientSession() as session:
-            url = (
-                f"https://api.coinbase.com/api/v3/brokerage/market/products/BTC-USD/candles"
-                f"?start={start}&end={now}&granularity=ONE_DAY"
-            )
-            headers = {"User-Agent": "ZenithGrid/1.0"}
+        session = await get_shared_session()
+        url = (
+            f"https://api.coinbase.com/api/v3/brokerage/market/products/BTC-USD/candles"
+            f"?start={start}&end={now}&granularity=ONE_DAY"
+        )
 
-            async with session.get(url, headers=headers, timeout=15) as response:
-                if response.status != 200:
-                    logger.warning(f"Coinbase candles API returned {response.status}")
-                    raise HTTPException(status_code=503, detail="Coinbase API unavailable")
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+            if response.status != 200:
+                logger.warning(f"Coinbase candles API returned {response.status}")
+                raise HTTPException(status_code=503, detail="Coinbase API unavailable")
 
-                data = await response.json()
-                candles = data.get("candles", [])
+            data = await response.json()
+            candles = data.get("candles", [])
 
-                if len(candles) < 15:
-                    raise HTTPException(status_code=503, detail="Not enough candle data for RSI")
+            if len(candles) < 15:
+                raise HTTPException(status_code=503, detail="Not enough candle data for RSI")
 
-                candles.sort(key=lambda c: int(c["start"]))
-                closes = [float(c["close"]) for c in candles]
+            candles.sort(key=lambda c: int(c["start"]))
+            closes = [float(c["close"]) for c in candles]
 
-                calc = IndicatorCalculator()
-                rsi = calc.calculate_rsi(closes, 14)
+            calc = IndicatorCalculator()
+            rsi = calc.calculate_rsi(closes, 14)
 
-                if rsi is None:
-                    raise HTTPException(status_code=503, detail="RSI calculation failed")
+            if rsi is None:
+                raise HTTPException(status_code=503, detail="RSI calculation failed")
 
-                rsi = round(rsi, 2)
+            rsi = round(rsi, 2)
 
-                if rsi < 30:
-                    zone = "oversold"
-                elif rsi > 70:
-                    zone = "overbought"
-                else:
-                    zone = "neutral"
+            if rsi < 30:
+                zone = "oversold"
+            elif rsi > 70:
+                zone = "overbought"
+            else:
+                zone = "neutral"
 
-                now_dt = datetime.now()
-                cache_data = {
-                    "rsi": rsi,
-                    "zone": zone,
-                    "cached_at": now_dt.isoformat(),
-                    "cache_expires_at": (now_dt + timedelta(minutes=15)).isoformat(),
-                }
+            now_dt = datetime.now()
+            cache_data = {
+                "rsi": rsi,
+                "zone": zone,
+                "cached_at": now_dt.isoformat(),
+                "cache_expires_at": (now_dt + timedelta(minutes=15)).isoformat(),
+            }
 
-                save_btc_rsi_cache(cache_data)
-                asyncio.create_task(record_metric_snapshot("btc_rsi", rsi))
-                return cache_data
+            save_btc_rsi_cache(cache_data)
+            asyncio.create_task(record_metric_snapshot("btc_rsi", rsi))
+            return cache_data
 
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching BTC RSI candles")
@@ -924,23 +888,6 @@ async def get_altseason_index(current_user: User = Depends(get_current_user)):
     return await fetch_altseason_index()
 
 
-@router.get("/funding-rates")
-async def get_funding_rates(current_user: User = Depends(get_current_user)):
-    """
-    Get BTC and ETH perpetual futures funding rates.
-
-    Positive rates = longs pay shorts (market overleveraged long, correction risk)
-    Negative rates = shorts pay longs (market overleveraged short, squeeze potential)
-    """
-    cache = load_funding_rates_cache()
-    if cache:
-        logger.info("Serving funding rates from cache")
-        return cache
-
-    logger.info("Fetching fresh funding rates...")
-    return await fetch_funding_rates()
-
-
 @router.get("/stablecoin-mcap")
 async def get_stablecoin_mcap(current_user: User = Depends(get_current_user)):
     """
@@ -987,16 +934,14 @@ async def get_btc_supply(current_user: User = Depends(get_current_user)):
     cache = load_block_height_cache()
     if not cache:
         try:
-            async with aiohttp.ClientSession() as session:
-                headers = {"User-Agent": "ZenithGrid/1.0"}
-                async with session.get(
-                    "https://blockchain.info/q/getblockcount",
-                    headers=headers,
-                    timeout=10
-                ) as response:
-                    if response.status == 200:
-                        height = int(await response.text())
-                        cache = {"height": height}
+            session = await get_shared_session()
+            async with session.get(
+                "https://blockchain.info/q/getblockcount",
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                if response.status == 200:
+                    height = int(await response.text())
+                    cache = {"height": height}
         except Exception:
             pass
 
@@ -1127,7 +1072,7 @@ async def get_metric_history(
     if metric_name not in VALID_METRIC_NAMES:
         raise HTTPException(status_code=400, detail=f"Invalid metric: {metric_name}")
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     async with async_session_maker() as db:
         result = await db.execute(
             select(MetricSnapshot.value, MetricSnapshot.recorded_at)

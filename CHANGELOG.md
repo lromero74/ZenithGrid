@@ -5,6 +5,29 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.9.5] - 2026-02-17
+
+### Fixed
+- **Carousel re-render storm**: Moved `liveDebt` (100ms) and `liveCountdown` (1s) timer state from parent into `USDebtCard` and `HalvingCard` — eliminates ~11 unnecessary re-renders/sec across all 14 cards
+- **Deprecated `datetime.utcnow()`**: Replaced 3 calls with `datetime.now(timezone.utc)` in metric snapshot recording, pruning, and history queries
+- **Prune on every read**: Metric snapshot pruning now guarded by 1-hour timestamp — no longer fires on every `/metric-history` request
+
+### Changed
+- **Monolith split**: `MarketSentimentCards.tsx` (1,948 lines) split into 17 individual card components in `components/cards/` with barrel export
+- **Season detection extracted**: `determineMarketSeason` moved to `utils/seasonDetection.ts`; `useMarketSeason` hook updated to import from utility
+- **Shared aiohttp session**: All 11 external API fetch functions now share a single `aiohttp.ClientSession` instead of creating per-request sessions
+- **React.memo on all cards**: All 14 carousel card components wrapped in `React.memo` to prevent unnecessary re-renders
+- **Resize debounce**: Carousel resize handler debounced with 150ms timeout
+- **Fear/Greed color caching**: `getFearGreedColor()` result cached in variable instead of recalculated
+
+### Added
+- **Error states**: All cards accept `isError` prop and render `CardError` fallback when data fetch fails
+- **Escape key handler**: `DebtCeilingModal` now closes on Escape key press
+
+### Removed
+- **Dead `funding_rates` code**: Removed `fetch_funding_rates()`, `/funding-rates` endpoint, and cache functions (CoinGlass API was non-functional)
+- **Dead `exchange_flows` cache**: Removed `EXCHANGE_FLOWS_CACHE_FILE` and load/save functions (never used)
+
 ## [v2.9.4] - 2026-02-17
 
 ### Fixed
