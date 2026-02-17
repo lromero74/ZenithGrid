@@ -81,6 +81,7 @@ export function ArticleReaderMiniPlayer() {
   const settingsRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const prevHighlightRef = useRef<number>(-1)
   const progressBarRef = useRef<HTMLDivElement>(null)
   const progressRafRef = useRef<number | null>(null)
   const getPlaybackStateRef = useRef(getPlaybackState)
@@ -157,6 +158,22 @@ export function ArticleReaderMiniPlayer() {
       }
     }
   }, [currentWordIndex, isExpanded])
+
+  // O(1) word highlighting via direct DOM manipulation (P1)
+  useEffect(() => {
+    const prev = prevHighlightRef.current
+    if (prev >= 0 && wordRefs.current[prev]) {
+      const el = wordRefs.current[prev]!
+      el.classList.remove('bg-yellow-500/40', 'text-white', 'font-medium')
+      el.classList.add('text-slate-300')
+    }
+    if (currentWordIndex >= 0 && wordRefs.current[currentWordIndex]) {
+      const el = wordRefs.current[currentWordIndex]!
+      el.classList.remove('text-slate-300')
+      el.classList.add('bg-yellow-500/40', 'text-white', 'font-medium')
+    }
+    prevHighlightRef.current = currentWordIndex
+  }, [currentWordIndex])
 
   // Toggle play/pause - also handles retry on error
   const togglePlayPause = useCallback(() => {
@@ -332,8 +349,6 @@ export function ArticleReaderMiniPlayer() {
       }
 
       const ttsIndices = textToTTSMap.get(twIndex)
-      // Highlight if current TTS word is ANY of the indices that map to this text word
-      const isCurrentWord = ttsIndices !== undefined && ttsIndices.has(currentWordIndex)
       // Use the first TTS index for seeking/refs
       const firstTTSIndex = ttsIndices ? Math.min(...ttsIndices) : undefined
 
@@ -350,11 +365,7 @@ export function ArticleReaderMiniPlayer() {
               seekToWord(firstTTSIndex)
             }
           }}
-          className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
-            isCurrentWord
-              ? 'bg-yellow-500/40 text-white font-medium'
-              : 'text-slate-300'
-          }`}
+          className="text-slate-300 transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50"
         >
           {tw.text}
         </span>
@@ -373,7 +384,7 @@ export function ArticleReaderMiniPlayer() {
     }
 
     return <p className="leading-relaxed whitespace-pre-wrap">{elements}</p>
-  }, [words, plainText, currentWordIndex, seekToWord])
+  }, [words, plainText, seekToWord])
 
   // Don't render if not showing
   if (!isPlaying || !showMiniPlayer || !currentArticle) {
