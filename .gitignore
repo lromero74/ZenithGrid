@@ -28,6 +28,12 @@ backend/static/news_images/*
 !backend/static/news_images/.gitkeep
 backend/news_images/
 
+# TTS audio cache (generated at runtime)
+backend/tts_cache/
+
+# Domain blacklist cache (downloaded at runtime)
+backend/blacklists/
+
 # Environment variables
 .env
 .env.local

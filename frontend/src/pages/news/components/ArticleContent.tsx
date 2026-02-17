@@ -22,6 +22,7 @@ export function ArticleContent({
   onSeekToWord,
 }: ArticleContentProps) {
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const prevHighlightRef = useRef<number>(-1)
   const lastScrolledIndex = useRef(-1)
 
   // Convert markdown to plain text
@@ -42,6 +43,22 @@ export function ArticleContent({
         }
       }
     }
+  }, [currentWordIndex])
+
+  // O(1) word highlighting via direct DOM manipulation (P2)
+  useEffect(() => {
+    const prev = prevHighlightRef.current
+    if (prev >= 0 && wordRefs.current[prev]) {
+      const el = wordRefs.current[prev]!
+      el.classList.remove('bg-yellow-500/40', 'text-white', 'font-medium')
+      el.classList.add('text-slate-300')
+    }
+    if (currentWordIndex >= 0 && wordRefs.current[currentWordIndex]) {
+      const el = wordRefs.current[currentWordIndex]!
+      el.classList.remove('text-slate-300')
+      el.classList.add('bg-yellow-500/40', 'text-white', 'font-medium')
+    }
+    prevHighlightRef.current = currentWordIndex
   }, [currentWordIndex])
 
   // Build word-wrapped text from TTS words
@@ -90,18 +107,13 @@ export function ArticleContent({
             )
           }
 
-          const isCurrentWord = index === currentWordIndex
           const wordIndex = index
           elements.push(
             <span
               key={`word-${index}`}
               ref={(el) => { wordRefs.current[index] = el }}
               onClick={() => onSeekToWord(wordIndex)}
-              className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
-                isCurrentWord
-                  ? 'bg-yellow-500/40 text-white font-medium'
-                  : 'text-slate-300'
-              }`}
+              className="text-slate-300 transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50"
             >
               {plainText.slice(foundIndex, foundIndex + word.text.length)}
             </span>
@@ -128,18 +140,13 @@ export function ArticleContent({
             )
           }
 
-          const isCurrentWord = index === currentWordIndex
           const wordIndex = index
           elements.push(
             <span
               key={`word-${index}`}
               ref={(el) => { wordRefs.current[index] = el }}
               onClick={() => onSeekToWord(wordIndex)}
-              className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
-                isCurrentWord
-                  ? 'bg-yellow-500/40 text-white font-medium'
-                  : 'text-slate-300'
-              }`}
+              className="text-slate-300 transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50"
             >
               {plainText.slice(foundIndex, foundIndex + word.text.length)}
             </span>
@@ -177,18 +184,13 @@ export function ArticleContent({
               )
             }
 
-            const isCurrentWord = index === currentWordIndex
             const wordIndex = index
             elements.push(
               <span
                 key={`word-${index}`}
                 ref={(el) => { wordRefs.current[index] = el }}
                 onClick={() => onSeekToWord(wordIndex)}
-                className={`transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50 ${
-                  isCurrentWord
-                    ? 'bg-yellow-500/40 text-white font-medium'
-                    : 'text-slate-300'
-                }`}
+                className="text-slate-300 transition-all duration-150 rounded px-0.5 cursor-pointer hover:bg-slate-600/50"
               >
                 {plainText.slice(wordStart, wordEnd)}
               </span>
@@ -217,7 +219,7 @@ export function ArticleContent({
     }
 
     return <p className="leading-relaxed whitespace-pre-wrap">{elements}</p>
-  }, [words, plainText, currentWordIndex, onSeekToWord])
+  }, [words, plainText, onSeekToWord])
 
   return (
     <div className="prose prose-invert prose-slate max-w-none">

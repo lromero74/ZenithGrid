@@ -32,7 +32,9 @@ from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import ContentSource, NewsArticle, User, VideoArticle
+from app.models import (
+    ContentSource, NewsArticle, User, UserSourceSubscription, VideoArticle,
+)
 from app.routers.auth_dependencies import get_current_user
 from app.routers.news import (
     CACHE_FILE,
@@ -189,15 +191,111 @@ async def get_all_sources_from_db() -> Dict[str, List[Dict]]:
     return {"news": news_sources, "video": video_sources}
 
 
+async def _get_source_key_to_id_map(source_type: Optional[str] = None) -> Dict[str, int]:
+    """Build a mapping of source_key -> content_sources.id for linking articles/videos."""
+    async with async_session_maker() as db:
+        query = select(ContentSource.source_key, ContentSource.id)
+        if source_type:
+            query = query.where(ContentSource.type == source_type)
+        result = await db.execute(query)
+        return {row[0]: row[1] for row in result.all()}
+
+
 # =============================================================================
 # Database Functions for News Articles
 # =============================================================================
 
 
-async def get_articles_from_db(
-    db: AsyncSession, page: int = 1, page_size: int = 50, category: Optional[str] = None
+async def get_articles_for_user(
+    db: AsyncSession,
+    user_id: int,
+    page: int = 1,
+    page_size: int = 50,
+    category: Optional[str] = None,
 ) -> tuple[List[NewsArticle], int]:
-    """Get paginated news articles from database, sorted by published date."""
+    """Get paginated news articles filtered by user's subscriptions and retention.
+
+    - System sources: shown unless user explicitly unsubscribed
+    - Custom sources: shown only if user is subscribed
+    - Per-user retention_days: filters visibility (query-time only)
+    - user_category override applied in response layer, not here
+    """
+    from sqlalchemy import func
+
+    default_cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+
+    # Base query: articles with source_id JOIN through ContentSource
+    # LEFT JOIN subscription for per-user overrides
+    query = (
+        select(NewsArticle)
+        .outerjoin(
+            ContentSource, NewsArticle.source_id == ContentSource.id
+        )
+        .outerjoin(
+            UserSourceSubscription,
+            (UserSourceSubscription.source_id == ContentSource.id)
+            & (UserSourceSubscription.user_id == user_id),
+        )
+        .where(
+            # Subscription filter:
+            # System sources: show unless explicitly unsubscribed
+            # Custom sources: show only if explicitly subscribed
+            # Articles with no source_id: always show (legacy)
+            (NewsArticle.source_id.is_(None))
+            | (
+                (ContentSource.is_system.is_(True))
+                & (
+                    UserSourceSubscription.is_subscribed.is_(None)
+                    | UserSourceSubscription.is_subscribed.is_(True)
+                )
+            )
+            | (
+                (ContentSource.is_system.is_(False))
+                & (UserSourceSubscription.is_subscribed.is_(True))
+            )
+        )
+        .where(
+            # Retention filter: per-user override or system default
+            NewsArticle.published_at >= func.coalesce(
+                func.datetime(
+                    'now',
+                    func.printf(
+                        '-%d days',
+                        UserSourceSubscription.retention_days,
+                    ),
+                ),
+                default_cutoff,
+            )
+        )
+    )
+
+    if category:
+        query = query.where(NewsArticle.category == category)
+
+    # Count
+    from sqlalchemy import literal_column
+    count_query = select(
+        func.count(literal_column('1'))
+    ).select_from(query.subquery())
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
+
+    # Paginate
+    offset = (page - 1) * page_size
+    query = query.order_by(
+        desc(NewsArticle.published_at)
+    ).offset(offset).limit(page_size)
+    result = await db.execute(query)
+    return list(result.scalars().all()), total_count
+
+
+async def get_articles_from_db(
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 50,
+    category: Optional[str] = None,
+) -> tuple[List[NewsArticle], int]:
+    """Legacy: get articles without user filtering (for internal use)."""
     from sqlalchemy import func
 
     cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
@@ -216,7 +314,9 @@ async def get_articles_from_db(
     query = select(NewsArticle)
     for condition in conditions:
         query = query.where(condition)
-    query = query.order_by(desc(NewsArticle.published_at)).offset(offset).limit(page_size)
+    query = query.order_by(
+        desc(NewsArticle.published_at)
+    ).offset(offset).limit(page_size)
     result = await db.execute(query)
     return list(result.scalars().all()), total_count
 
@@ -225,7 +325,8 @@ async def store_article_in_db(
     db: AsyncSession,
     item: NewsItem,
     cached_thumbnail_path: Optional[str] = None,
-    category: str = "CryptoCurrency"
+    category: str = "CryptoCurrency",
+    source_id: Optional[int] = None,
 ) -> Optional[NewsArticle]:
     """Store a news article in the database. Returns None if already exists."""
     result = await db.execute(
@@ -256,24 +357,73 @@ async def store_article_in_db(
         original_thumbnail_url=thumbnail_url,
         cached_thumbnail_path=cached_thumbnail_path,
         category=category,
+        source_id=source_id,
         fetched_at=datetime.utcnow(),
     )
     db.add(article)
     return article
 
 
-async def cleanup_old_articles(db: AsyncSession, max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS) -> int:
-    """Delete articles older than max_age_days. Returns count deleted."""
+async def cleanup_old_articles(
+    db: AsyncSession,
+    max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS,
+    min_keep: int = 5,
+) -> int:
+    """Delete old articles using per-source retention: keep the greater of
+    min_keep articles or articles within max_age_days, per source.
+    Articles with no source_id use flat max_age_days cutoff."""
     from sqlalchemy import delete
+
     cutoff = datetime.utcnow() - timedelta(days=max_age_days)
-    result = await db.execute(
-        delete(NewsArticle).where(NewsArticle.fetched_at < cutoff)
+    total_deleted = 0
+
+    # Per-source cleanup: for each source_id, keep newer of min_keep or age
+    source_ids_result = await db.execute(
+        select(NewsArticle.source_id).where(
+            NewsArticle.source_id.isnot(None)
+        ).group_by(NewsArticle.source_id)
     )
-    await db.commit()
-    deleted_count = result.rowcount
-    if deleted_count > 0:
-        logger.info(f"Cleaned up {deleted_count} old news articles from database")
-    return deleted_count
+    source_ids = [row[0] for row in source_ids_result.all()]
+
+    for sid in source_ids:
+        # Get the published_at of the min_keep-th newest article
+        nth_result = await db.execute(
+            select(NewsArticle.published_at)
+            .where(NewsArticle.source_id == sid)
+            .order_by(desc(NewsArticle.published_at))
+            .offset(min_keep - 1)
+            .limit(1)
+        )
+        nth_date = nth_result.scalar()
+
+        # Effective cutoff: keep articles newer than whichever is older
+        # (the age cutoff or the min_keep boundary)
+        if nth_date and nth_date < cutoff:
+            effective_cutoff = nth_date
+        else:
+            effective_cutoff = cutoff
+
+        result = await db.execute(
+            delete(NewsArticle).where(
+                NewsArticle.source_id == sid,
+                NewsArticle.published_at < effective_cutoff,
+            )
+        )
+        total_deleted += result.rowcount
+
+    # Flat cutoff for articles with no source_id (legacy/orphan)
+    result = await db.execute(
+        delete(NewsArticle).where(
+            NewsArticle.source_id.is_(None),
+            NewsArticle.fetched_at < cutoff,
+        )
+    )
+    total_deleted += result.rowcount
+
+    if total_deleted > 0:
+        await db.commit()
+        logger.info(f"Cleaned up {total_deleted} old news articles")
+    return total_deleted
 
 
 def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
@@ -284,11 +434,17 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
     else:
         thumbnail = article.original_thumbnail_url
     return {
+        "id": article.id,
         "title": article.title,
         "url": article.url,
         "source": article.source,
-        "source_name": source_map.get(article.source, {}).get("name", article.source),
-        "published": article.published_at.isoformat() + "Z" if article.published_at else None,
+        "source_name": source_map.get(
+            article.source, {}
+        ).get("name", article.source),
+        "published": (
+            article.published_at.isoformat() + "Z"
+            if article.published_at else None
+        ),
         "summary": article.summary,
         "thumbnail": thumbnail,
         "category": getattr(article, 'category', 'CryptoCurrency'),
@@ -303,7 +459,8 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
 async def store_video_in_db(
     db: AsyncSession,
     item: VideoItem,
-    category: str = "CryptoCurrency"
+    category: str = "CryptoCurrency",
+    source_id: Optional[int] = None,
 ) -> Optional[VideoArticle]:
     """Store a video article in the database. Returns None if already exists."""
     result = await db.execute(
@@ -331,14 +488,73 @@ async def store_video_in_db(
         description=item.description,
         thumbnail_url=item.thumbnail,
         category=category,
+        source_id=source_id,
         fetched_at=datetime.utcnow(),
     )
     db.add(video)
     return video
 
 
-async def get_videos_from_db_list(db: AsyncSession, category: Optional[str] = None) -> List[VideoArticle]:
-    """Get all recent videos from database within max age, sorted by published date."""
+async def get_videos_for_user(
+    db: AsyncSession,
+    user_id: int,
+    category: Optional[str] = None,
+) -> List[VideoArticle]:
+    """Get videos filtered by user's subscriptions and retention."""
+    from sqlalchemy import func
+
+    default_cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+
+    query = (
+        select(VideoArticle)
+        .outerjoin(
+            ContentSource, VideoArticle.source_id == ContentSource.id
+        )
+        .outerjoin(
+            UserSourceSubscription,
+            (UserSourceSubscription.source_id == ContentSource.id)
+            & (UserSourceSubscription.user_id == user_id),
+        )
+        .where(
+            (VideoArticle.source_id.is_(None))
+            | (
+                (ContentSource.is_system.is_(True))
+                & (
+                    UserSourceSubscription.is_subscribed.is_(None)
+                    | UserSourceSubscription.is_subscribed.is_(True)
+                )
+            )
+            | (
+                (ContentSource.is_system.is_(False))
+                & (UserSourceSubscription.is_subscribed.is_(True))
+            )
+        )
+        .where(
+            VideoArticle.published_at >= func.coalesce(
+                func.datetime(
+                    'now',
+                    func.printf(
+                        '-%d days',
+                        UserSourceSubscription.retention_days,
+                    ),
+                ),
+                default_cutoff,
+            )
+        )
+    )
+
+    if category:
+        query = query.where(VideoArticle.category == category)
+
+    query = query.order_by(desc(VideoArticle.published_at))
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_videos_from_db_list(
+    db: AsyncSession, category: Optional[str] = None
+) -> List[VideoArticle]:
+    """Legacy: get videos without user filtering (for internal use)."""
     cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
     conditions = [VideoArticle.published_at >= cutoff]
     if category:
@@ -353,18 +569,63 @@ async def get_videos_from_db_list(db: AsyncSession, category: Optional[str] = No
     return list(result.scalars().all())
 
 
-async def cleanup_old_videos(db: AsyncSession, max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS) -> int:
-    """Delete videos older than max_age_days. Returns count deleted."""
+async def cleanup_old_videos(
+    db: AsyncSession,
+    max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS,
+    min_keep: int = 5,
+) -> int:
+    """Delete old videos using per-source retention: keep the greater of
+    min_keep videos or videos within max_age_days, per source.
+    Videos with no source_id use flat max_age_days cutoff."""
     from sqlalchemy import delete
+
     cutoff = datetime.utcnow() - timedelta(days=max_age_days)
-    result = await db.execute(
-        delete(VideoArticle).where(VideoArticle.fetched_at < cutoff)
+    total_deleted = 0
+
+    # Per-source cleanup
+    source_ids_result = await db.execute(
+        select(VideoArticle.source_id).where(
+            VideoArticle.source_id.isnot(None)
+        ).group_by(VideoArticle.source_id)
     )
-    await db.commit()
-    deleted_count = result.rowcount
-    if deleted_count > 0:
-        logger.info(f"Cleaned up {deleted_count} old videos from database")
-    return deleted_count
+    source_ids = [row[0] for row in source_ids_result.all()]
+
+    for sid in source_ids:
+        nth_result = await db.execute(
+            select(VideoArticle.published_at)
+            .where(VideoArticle.source_id == sid)
+            .order_by(desc(VideoArticle.published_at))
+            .offset(min_keep - 1)
+            .limit(1)
+        )
+        nth_date = nth_result.scalar()
+
+        if nth_date and nth_date < cutoff:
+            effective_cutoff = nth_date
+        else:
+            effective_cutoff = cutoff
+
+        result = await db.execute(
+            delete(VideoArticle).where(
+                VideoArticle.source_id == sid,
+                VideoArticle.published_at < effective_cutoff,
+            )
+        )
+        total_deleted += result.rowcount
+
+    # Flat cutoff for videos with no source_id
+    result = await db.execute(
+        delete(VideoArticle).where(
+            VideoArticle.source_id.is_(None),
+            VideoArticle.fetched_at < cutoff,
+        )
+    )
+    total_deleted += result.rowcount
+
+    if total_deleted > 0:
+        await db.commit()
+        logger.info(f"Cleaned up {total_deleted} old videos")
+    return total_deleted
 
 
 def video_to_item(video: VideoArticle, sources: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
@@ -384,18 +645,34 @@ def video_to_item(video: VideoArticle, sources: Optional[Dict[str, Dict]] = None
     }
 
 
-async def get_videos_from_db(category: Optional[str] = None) -> Dict[str, Any]:
+async def get_videos_from_db(
+    category: Optional[str] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Get videos from database and format for API response."""
     db_sources = await get_video_sources_from_db()
     sources_to_use = db_sources if db_sources else VIDEO_SOURCES
 
     async with async_session_maker() as db:
-        videos = await get_videos_from_db_list(db, category=category)
+        if user_id:
+            videos = await get_videos_for_user(
+                db, user_id, category=category,
+            )
+        else:
+            videos = await get_videos_from_db_list(
+                db, category=category,
+            )
 
-    video_items = [video_to_item(video, sources_to_use) for video in videos]
+    video_items = [
+        video_to_item(video, sources_to_use) for video in videos
+    ]
 
     sources_list = [
-        {"id": sid, "name": cfg["name"], "website": cfg["website"], "description": cfg.get("description", "")}
+        {
+            "id": sid, "name": cfg["name"],
+            "website": cfg["website"],
+            "description": cfg.get("description", ""),
+        }
         for sid, cfg in sources_to_use.items()
     ]
 
@@ -404,7 +681,9 @@ async def get_videos_from_db(category: Optional[str] = None) -> Dict[str, Any]:
         "videos": video_items,
         "sources": sources_list,
         "cached_at": now.isoformat() + "Z",
-        "cache_expires_at": (now + timedelta(minutes=VIDEO_CACHE_CHECK_MINUTES)).isoformat() + "Z",
+        "cache_expires_at": (
+            now + timedelta(minutes=VIDEO_CACHE_CHECK_MINUTES)
+        ).isoformat() + "Z",
         "total_items": len(video_items),
     }
 
@@ -480,6 +759,9 @@ async def fetch_all_videos() -> Dict[str, Any]:
     db_sources = await get_video_sources_from_db()
     sources_to_use = db_sources if db_sources else VIDEO_SOURCES
 
+    # Build source_key -> source_id map for linking videos to content_sources
+    source_key_to_id = await _get_source_key_to_id_map("video")
+
     async with aiohttp.ClientSession() as session:
         tasks = []
         for source_id, config in sources_to_use.items():
@@ -496,7 +778,10 @@ async def fetch_all_videos() -> Dict[str, Any]:
     new_count = 0
     async with async_session_maker() as db:
         for item in fresh_items:
-            video = await store_video_in_db(db, item, category=item.category)
+            video = await store_video_in_db(
+                db, item, category=item.category,
+                source_id=source_key_to_id.get(item.source),
+            )
             if video:
                 new_count += 1
         await db.commit()
@@ -714,7 +999,10 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
                 if (not item.thumbnail or not item.summary) and item.url
             ]
             if items_needing_og:
-                logger.info(f"Fetching og:meta for {len(items_needing_og)} {source_id} articles missing thumbnail/summary")
+                logger.info(
+                    f"Fetching og:meta for {len(items_needing_og)} "
+                    f"{source_id} articles missing thumbnail/summary"
+                )
                 og_tasks = [fetch_og_meta(session, item.url) for _, item in items_needing_og]
                 og_results = await asyncio.gather(*og_tasks, return_exceptions=True)
                 for (idx, item), og_meta in zip(items_needing_og, og_results):
@@ -749,6 +1037,9 @@ async def fetch_all_news() -> None:
     db_sources = await get_news_sources_from_db()
     sources_to_use = db_sources if db_sources else NEWS_SOURCES
 
+    # Build source_key -> source_id map for linking articles to content_sources
+    source_key_to_id = await _get_source_key_to_id_map("news")
+
     connector = aiohttp.TCPConnector()
     async with aiohttp.ClientSession(connector=connector, max_field_size=16384) as session:
         tasks = []
@@ -774,7 +1065,10 @@ async def fetch_all_news() -> None:
                 if item.url in seen_urls:
                     continue
                 seen_urls.add(item.url)
-                article = await store_article_in_db(db, item, category=item.category)
+                article = await store_article_in_db(
+                    db, item, category=item.category,
+                    source_id=source_key_to_id.get(item.source),
+                )
                 if article:
                     new_articles_count += 1
 
@@ -807,10 +1101,23 @@ async def fetch_all_news() -> None:
         if new_articles_count > 0:
             logger.info(f"Added {new_articles_count} new news articles to database")
 
+    # Run per-source retention cleanup (articles + images)
+    try:
+        deleted, imgs = await cleanup_articles_with_images()
+        if deleted > 0:
+            logger.info(f"Post-fetch cleanup: {deleted} articles, {imgs} images")
+    except Exception as e:
+        logger.warning(f"Post-fetch article cleanup failed: {e}")
+
     _last_news_refresh = datetime.utcnow()
 
 
-async def get_news_from_db(page: int = 1, page_size: int = 50, category: Optional[str] = None) -> Dict[str, Any]:
+async def get_news_from_db(
+    page: int = 1,
+    page_size: int = 50,
+    category: Optional[str] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Get paginated news articles from database and format for API response."""
     import math
 
@@ -818,23 +1125,38 @@ async def get_news_from_db(page: int = 1, page_size: int = 50, category: Optiona
     sources_to_use = db_sources if db_sources else NEWS_SOURCES
 
     async with async_session_maker() as db:
-        articles, total_count = await get_articles_from_db(db, page=page, page_size=page_size, category=category)
+        if user_id:
+            articles, total_count = await get_articles_for_user(
+                db, user_id, page=page, page_size=page_size,
+                category=category,
+            )
+        else:
+            articles, total_count = await get_articles_from_db(
+                db, page=page, page_size=page_size, category=category,
+            )
 
-    news_items = [article_to_news_item(article, sources_to_use) for article in articles]
+    news_items = [
+        article_to_news_item(article, sources_to_use)
+        for article in articles
+    ]
 
     sources_list = [
         {"id": sid, "name": cfg["name"], "website": cfg["website"]}
         for sid, cfg in sources_to_use.items()
     ]
 
-    total_pages = math.ceil(total_count / page_size) if total_count > 0 else 1
+    total_pages = (
+        math.ceil(total_count / page_size) if total_count > 0 else 1
+    )
 
     now = datetime.utcnow()
     return {
         "news": news_items,
         "sources": sources_list,
         "cached_at": now.isoformat() + "Z",
-        "cache_expires_at": (now + timedelta(minutes=NEWS_CACHE_CHECK_MINUTES)).isoformat() + "Z",
+        "cache_expires_at": (
+            now + timedelta(minutes=NEWS_CACHE_CHECK_MINUTES)
+        ).isoformat() + "Z",
         "total_items": total_count,
         "page": page,
         "page_size": page_size,
@@ -870,7 +1192,10 @@ async def get_news(
         asyncio.create_task(fetch_all_news())
 
     try:
-        data = await get_news_from_db(page=page, page_size=page_size, category=category)
+        data = await get_news_from_db(
+            page=page, page_size=page_size,
+            category=category, user_id=current_user.id,
+        )
         if data["news"] or data["total_items"] > 0:
             logger.debug(f"Serving page {page} with {len(data['news'])} news articles from database")
             return NewsResponse(**data)
@@ -985,20 +1310,84 @@ async def get_cache_stats(current_user: User = Depends(get_current_user)):
 
 @router.post("/cleanup")
 async def cleanup_cache(current_user: User = Depends(get_current_user)):
-    """Manually trigger cleanup of old news articles (older than 7 days)."""
+    """Manually trigger cleanup of old news articles and videos."""
+    articles_deleted, image_files_deleted = await cleanup_articles_with_images()
+    async with async_session_maker() as db:
+        videos_deleted = await cleanup_old_videos(db)
+    return {
+        "articles_deleted": articles_deleted,
+        "videos_deleted": videos_deleted,
+        "image_files_deleted": image_files_deleted,
+        "message": (
+            f"Cleaned up {articles_deleted} articles, "
+            f"{videos_deleted} videos, and "
+            f"{image_files_deleted} image files"
+        ),
+    }
+
+
+async def cleanup_articles_with_images(
+    max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS,
+    min_keep: int = 5,
+) -> tuple:
+    """Run per-source article cleanup and delete associated image files.
+    Returns (articles_deleted, image_files_deleted)."""
     from app.services.news_image_cache import NEWS_IMAGES_DIR
 
     image_files_deleted = 0
     async with async_session_maker() as db:
-        cutoff = datetime.utcnow() - timedelta(days=NEWS_ITEM_MAX_AGE_DAYS)
+        # Collect image paths of articles that will be deleted
+        # We need to query before deleting
+        cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+        paths_to_delete = []
+
+        # Per-source: find articles beyond effective cutoff
+        source_ids_result = await db.execute(
+            select(NewsArticle.source_id).where(
+                NewsArticle.source_id.isnot(None)
+            ).group_by(NewsArticle.source_id)
+        )
+        source_ids = [row[0] for row in source_ids_result.all()]
+
+        for sid in source_ids:
+            nth_result = await db.execute(
+                select(NewsArticle.published_at)
+                .where(NewsArticle.source_id == sid)
+                .order_by(desc(NewsArticle.published_at))
+                .offset(min_keep - 1)
+                .limit(1)
+            )
+            nth_date = nth_result.scalar()
+            effective_cutoff = (
+                nth_date if nth_date and nth_date < cutoff else cutoff
+            )
+
+            result = await db.execute(
+                select(NewsArticle.cached_thumbnail_path).where(
+                    NewsArticle.source_id == sid,
+                    NewsArticle.published_at < effective_cutoff,
+                    NewsArticle.cached_thumbnail_path.isnot(None),
+                )
+            )
+            paths_to_delete.extend(
+                row[0] for row in result.fetchall() if row[0]
+            )
+
+        # Orphan articles (no source_id)
         result = await db.execute(
             select(NewsArticle.cached_thumbnail_path).where(
+                NewsArticle.source_id.is_(None),
                 NewsArticle.fetched_at < cutoff,
                 NewsArticle.cached_thumbnail_path.isnot(None),
             )
         )
-        paths_to_delete = [row[0] for row in result.fetchall() if row[0]]
-        articles_deleted = await cleanup_old_articles(db)
+        paths_to_delete.extend(
+            row[0] for row in result.fetchall() if row[0]
+        )
+
+        articles_deleted = await cleanup_old_articles(
+            db, max_age_days=max_age_days, min_keep=min_keep
+        )
 
     for filename in paths_to_delete:
         filepath = NEWS_IMAGES_DIR / filename
@@ -1009,11 +1398,7 @@ async def cleanup_cache(current_user: User = Depends(get_current_user)):
             except OSError:
                 pass
 
-    return {
-        "articles_deleted": articles_deleted,
-        "image_files_deleted": image_files_deleted,
-        "message": f"Cleaned up {articles_deleted} articles and {image_files_deleted} image files older than {NEWS_ITEM_MAX_AGE_DAYS} days"
-    }
+    return articles_deleted, image_files_deleted
 
 
 @router.get("/videos", response_model=VideoResponse)
@@ -1034,7 +1419,9 @@ async def get_videos(
         asyncio.create_task(fetch_all_videos())
 
     try:
-        data = await get_videos_from_db(category=category)
+        data = await get_videos_from_db(
+            category=category, user_id=current_user.id,
+        )
         if data["videos"]:
             logger.debug(f"Serving {len(data['videos'])} videos from database")
             return VideoResponse(**data)
@@ -1142,7 +1529,10 @@ async def get_article_content(
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                               "AppleWebKit/537.36 (KHTML, like Gecko) "
                               "Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;"
+                    "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+                ),
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept-Encoding": "gzip, deflate",
                 "Cache-Control": "no-cache",
