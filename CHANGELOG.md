@@ -5,6 +5,14 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.9.1] - 2026-02-17
+
+### Fixed
+- **Recharts width/height -1 warnings**: PnLChart container changed from `min-h-[300px]` to explicit `h-[300px]`; added `minHeight={1}` to all `ResponsiveContainer` components in PnLChart and Sparkline
+
+### Added
+- **Debt ceiling countdown**: US National Debt card now shows countdown to when debt hits the ceiling, or time since exceeded if already past
+
 ## [v2.9.0] - 2026-02-17
 
 ### Added
