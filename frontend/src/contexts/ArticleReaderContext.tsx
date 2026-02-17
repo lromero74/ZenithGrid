@@ -368,7 +368,6 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     keepaliveAudioRef.current = audio
     return () => {
       audio.pause()
-      audio.src = ''
       URL.revokeObjectURL(url)
       keepaliveAudioRef.current = null
     }

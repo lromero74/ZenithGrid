@@ -82,6 +82,11 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Tiny silent WAV (44 bytes) — used to clear audio source without "Invalid URI" errors
+  // Firefox fires console errors for removeAttribute('src')+load() and src='', but a valid
+  // data URI loads silently and properly clears the media session (AirPods, lock screen, etc.)
+  const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
   const wordsRef = useRef<WordTiming[]>([])  // Ref to avoid stale closure
   const isAnimatingRef = useRef(false)  // Track if animation loop should run
   const lastFoundIndexRef = useRef(0)  // Track last word index for O(1) search
@@ -239,8 +244,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     return () => {
       stopAnimationLoop()
       audio.pause()
-      audio.removeAttribute('src')
-      audio.load()
+      audio.src = SILENT_WAV
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
@@ -274,8 +278,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     // This prevents stale audio from being playable via media controls
     stopAnimationLoop()
     audio.pause()
-    audio.removeAttribute('src')
-    audio.load()  // Reset audio element without triggering load error
+    audio.src = SILENT_WAV  // Clear previous audio without "Invalid URI" errors
 
     // Abort any in-flight requests
     if (abortControllerRef.current) {
@@ -523,7 +526,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       audioRef.current.currentTime = 0
       // CRITICAL: Clear the audio source to fully release the old audio
       // This prevents AirPods/media controls from playing stale audio
-      audioRef.current.src = ''
+      audioRef.current.src = SILENT_WAV
     }
     setIsPlaying(false)
     setIsPaused(false)
