@@ -263,8 +263,20 @@ async def execute_sell_short(
     except Exception as e:
         logger.warning(f"Failed to log short sell to history: {e}")
 
-    # Send WebSocket update
-    await ws_manager.broadcast_position_update(position)
+    # Broadcast short sell notification via WebSocket (best-effort)
+    try:
+        await ws_manager.broadcast({
+            "type": "order_fill",
+            "fill_type": "short_sell",
+            "product_id": product_id,
+            "base_amount": actual_base_sold,
+            "quote_amount": quote_received,
+            "price": actual_price,
+            "position_id": position.id,
+            "timestamp": datetime.utcnow().isoformat(),
+        }, user_id=position.user_id)
+    except Exception as e:
+        logger.warning(f"Failed to broadcast short sell WebSocket notification: {e}")
 
     logger.info(
         f"  SHORT SELL EXECUTED: {actual_base_sold:.8f} BTC @ {actual_price:.8f} "

@@ -222,7 +222,7 @@ class PerpsMonitor:
                 f"PnL {profit:+.2f} USDC ({profit_pct:+.2f}%)"
             )
 
-            # Broadcast via WebSocket
+            # Broadcast via WebSocket (scoped to position owner)
             try:
                 from app.services.websocket_manager import ws_manager
                 await ws_manager.broadcast({
@@ -232,7 +232,7 @@ class PerpsMonitor:
                     "exit_reason": filled_by,
                     "profit_usdc": profit,
                     "profit_pct": profit_pct,
-                })
+                }, user_id=position.user_id)
             except Exception:
                 pass
         else:

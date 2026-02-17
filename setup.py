@@ -1286,12 +1286,14 @@ def initialize_database(project_root):
                 is_system BOOLEAN DEFAULT 1,
                 is_enabled BOOLEAN DEFAULT 1,
                 category TEXT NOT NULL DEFAULT 'CryptoCurrency',
+                user_id INTEGER REFERENCES users(id),
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_content_sources_type ON content_sources(type)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_content_sources_is_enabled ON content_sources(is_enabled)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_content_sources_category ON content_sources(category)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_content_sources_user_id ON content_sources(user_id)")
 
         # User source subscriptions (per-user preferences)
         cursor.execute("""

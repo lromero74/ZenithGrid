@@ -19,11 +19,8 @@ from app.coinbase_api import perpetuals_api
 
 logger = logging.getLogger(__name__)
 
-# Global rate limiter state for Coinbase API
-# Coinbase allows ~10 requests/second, we'll use 7/sec to be safe
-_last_request_time = 0
-_rate_limit_lock = asyncio.Lock()
-_min_interval = 0.15  # 150ms between requests = ~6.6 req/sec
+# Minimum interval between requests per client (150ms = ~6.6 req/sec)
+_MIN_REQUEST_INTERVAL = 0.15
 
 
 class CoinbaseClient:
@@ -107,22 +104,25 @@ class CoinbaseClient:
         # Store account_id for per-user cache scoping
         self.account_id = account_id
 
+        # Per-instance rate limiter (each user's API credentials have independent rate limits)
+        self._last_request_time = 0
+        self._rate_limit_lock = asyncio.Lock()
+
     async def _request(
         self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Make authenticated request with rate limiting"""
-        global _last_request_time
+        """Make authenticated request with per-instance rate limiting"""
 
-        # Rate limiting: ensure minimum interval between requests
-        async with _rate_limit_lock:
+        # Rate limiting: ensure minimum interval between requests for this client
+        async with self._rate_limit_lock:
             now = time.time()
-            time_since_last = now - _last_request_time
+            time_since_last = now - self._last_request_time
 
-            if time_since_last < _min_interval:
-                delay = _min_interval - time_since_last
+            if time_since_last < _MIN_REQUEST_INTERVAL:
+                delay = _MIN_REQUEST_INTERVAL - time_since_last
                 await asyncio.sleep(delay)
 
-            _last_request_time = time.time()
+            self._last_request_time = time.time()
 
         return await auth.authenticated_request(
             method,
@@ -156,7 +156,7 @@ class CoinbaseClient:
 
     async def get_btc_balance(self) -> float:
         """Get BTC balance"""
-        return await account_balance_api.get_btc_balance(self._request, self.auth_type)
+        return await account_balance_api.get_btc_balance(self._request, self.auth_type, account_id=self.account_id)
 
     async def get_eth_balance(self) -> float:
         """Get ETH balance"""

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import BlacklistedCoin, Settings, User
-from app.routers.auth_dependencies import get_current_user
+from app.routers.auth_dependencies import get_current_user, require_superuser
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ async def get_category_settings(db: AsyncSession = Depends(get_db), current_user
 async def update_category_settings(
     request: CategorySettingsRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_superuser)
 ):
     """
     Update which categories are allowed to trade.

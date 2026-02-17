@@ -141,6 +141,7 @@ def create_exchange_client_from_bot_config(bot_config: dict) -> ExchangeClient:
                 exchange_name="coinbase",
                 coinbase_key_name=bot_config["coinbase_key_name"],
                 coinbase_private_key=bot_config["coinbase_private_key"],
+                account_id=bot_config.get("account_id"),
             )
     elif exchange_type == "dex":
         return create_exchange_client(

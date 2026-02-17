@@ -23,12 +23,17 @@ _volume_sma_cache: Dict[str, Tuple[float, datetime]] = {}
 VOLUME_SMA_CACHE_HOURS = 4
 
 
-async def get_tradeable_usd_coins(db: AsyncSession) -> List[str]:
+async def get_tradeable_usd_coins(db: AsyncSession, user_id: Optional[int] = None) -> List[str]:
     """
     Get USD pairs for coins in allowed categories.
 
     Queries the BlacklistedCoin table for coins in allowed categories,
     then builds product_ids like "{symbol}-USD".
+
+    Args:
+        db: Database session
+        user_id: If provided, include both global entries (user_id IS NULL)
+                 and this user's entries. If None, only global entries.
 
     Returns:
         List of product IDs (e.g., ["ETH-USD", "SOL-USD", ...])
@@ -61,8 +66,13 @@ async def get_tradeable_usd_coins(db: AsyncSession) -> List[str]:
     if not conditions:
         return []
 
-    # Query coins matching any allowed category
-    query = select(BlacklistedCoin.symbol).where(or_(*conditions))
+    # Query coins matching any allowed category, scoped to global + user
+    category_filter = or_(*conditions)
+    if user_id is not None:
+        ownership_filter = or_(BlacklistedCoin.user_id.is_(None), BlacklistedCoin.user_id == user_id)
+        query = select(BlacklistedCoin.symbol).where(category_filter, ownership_filter)
+    else:
+        query = select(BlacklistedCoin.symbol).where(category_filter, BlacklistedCoin.user_id.is_(None))
     result = await db.execute(query)
     symbols = [row[0] for row in result.fetchall()]
 
@@ -503,7 +513,8 @@ async def scan_for_bull_flag_opportunities(
     exchange_client: Any,
     config: Dict[str, Any],
     max_coins: int = 200,
-    bot_id: Optional[int] = None
+    bot_id: Optional[int] = None,
+    user_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     Scan allowed USD coins for bull flag opportunities.
@@ -519,14 +530,15 @@ async def scan_for_bull_flag_opportunities(
         config: Strategy configuration
         max_coins: Maximum coins to scan (default 200 to cover all approved)
         bot_id: Bot ID for logging scanner decisions (optional)
+        user_id: User ID for scoping blacklist/category queries (optional)
 
     Returns:
         List of opportunities with product_id and pattern data
     """
     opportunities = []
 
-    # Get tradeable coins from allowed categories
-    product_ids = await get_tradeable_usd_coins(db)
+    # Get tradeable coins from allowed categories (scoped to user)
+    product_ids = await get_tradeable_usd_coins(db, user_id=user_id)
     if not product_ids:
         logger.warning("No tradeable USD coins found")
         return []

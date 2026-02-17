@@ -297,7 +297,7 @@
     ],
 
     "migrations": {
-      "count": 15,
+      "count": 16,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -317,7 +317,8 @@
         "add_prop_firm_support.py",
         "extract_bot_products.py",
         "move_news_images_to_filesystem.py",
-        "bot_name_per_user_unique.py"
+        "bot_name_per_user_unique.py",
+        "add_content_source_user_id.py"
       ]
     }
   },
@@ -563,6 +564,8 @@
       "paper_trading": "Users without Coinbase credentials get PublicMarketDataClient (no-auth public endpoints) instead of failing CoinbaseClient"
     },
     "background_services": "Bot monitor, limit order monitor, and reconciliation services intentionally process all users (no user filter) but use per-account exchange clients and route notifications to the correct user",
-    "hardened_in_v2_7_0": "Whitebox audit fixed: order_history user scoping, perps position ownership checks, scanner logs user filter, signals user scoping, news cleanup auth, account balance ownership, bot name per-user uniqueness, delisted pair monitor account selection"
+    "hardened_in_v2_7_0": "Round 1: order_history user scoping, perps position ownership checks, scanner logs user filter, signals user scoping, news cleanup auth, account balance ownership, bot name per-user uniqueness, delisted pair monitor account selection",
+    "hardened_in_v2_7_1": "Round 2: settings/seasonality/blacklist admin-gated, source ownership with user_id, template seed-defaults auth, strategy endpoints auth, position active count scoped, perps monitor broadcast scoped, AI service per-user credentials + Gemini race fix",
+    "hardened_in_v2_7_2": "Round 3: balance cache isolation (account_id passed to all get_accounts/get_btc_balance calls), per-instance rate limiter (no cross-user throttling), bull_flag_scanner BlacklistedCoin scoped to user, broadcast_position_update crash fix in sell/buy executors, factory account_id passthrough"
   }
 }

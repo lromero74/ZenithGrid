@@ -238,7 +238,7 @@ async def delete_template(
 
 
 @router.post("/seed-defaults")
-async def seed_default_templates(db: AsyncSession = Depends(get_db)):
+async def seed_default_templates(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Seed the database with default bot templates (one-time setup)"""
 
     # Check if defaults already exist

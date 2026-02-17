@@ -92,7 +92,7 @@ async def get_portfolio_breakdown(request_func: Callable, portfolio_uuid: Option
     return result.get("breakdown", {})
 
 
-async def get_btc_balance(request_func: Callable, auth_type: str) -> float:
+async def get_btc_balance(request_func: Callable, auth_type: str, account_id: Optional[int] = None) -> float:
     """
     Get BTC balance - always fetches fresh data from Coinbase (no caching)
 
@@ -112,7 +112,7 @@ async def get_btc_balance(request_func: Callable, auth_type: str) -> float:
 
         # Fallback to get_accounts() if portfolio fails
         try:
-            accounts = await get_accounts(request_func)
+            accounts = await get_accounts(request_func, account_id=account_id)
             for account in accounts:
                 if account.get("currency") == "BTC":
                     available = account.get("available_balance", {})
@@ -124,7 +124,7 @@ async def get_btc_balance(request_func: Callable, auth_type: str) -> float:
         return 0.0
     else:
         # Use accounts for HMAC
-        accounts = await get_accounts(request_func)
+        accounts = await get_accounts(request_func, account_id=account_id)
         balance = 0.0
         for account in accounts:
             if account.get("currency") == "BTC":
@@ -163,7 +163,7 @@ async def get_eth_balance(request_func: Callable, auth_type: str, account_id: Op
         return 0.0
     else:
         # Use accounts for HMAC
-        accounts = await get_accounts(request_func)
+        accounts = await get_accounts(request_func, account_id=account_id)
         balance = 0.0
         for account in accounts:
             if account.get("currency") == "ETH":
@@ -183,7 +183,7 @@ async def get_usd_balance(request_func: Callable, account_id: Optional[int] = No
     if cached is not None:
         return cached
 
-    accounts = await get_accounts(request_func)
+    accounts = await get_accounts(request_func, account_id=account_id)
     balance = 0.0
     for account in accounts:
         if account.get("currency") == "USD":
@@ -203,7 +203,7 @@ async def get_usdc_balance(request_func: Callable, account_id: Optional[int] = N
     if cached is not None:
         return cached
 
-    accounts = await get_accounts(request_func)
+    accounts = await get_accounts(request_func, account_id=account_id)
     balance = 0.0
     for account in accounts:
         if account.get("currency") == "USDC":
@@ -223,7 +223,7 @@ async def get_usdt_balance(request_func: Callable, account_id: Optional[int] = N
     if cached is not None:
         return cached
 
-    accounts = await get_accounts(request_func)
+    accounts = await get_accounts(request_func, account_id=account_id)
     balance = 0.0
     for account in accounts:
         if account.get("currency") == "USDT":
@@ -299,7 +299,7 @@ async def calculate_aggregate_btc_value(
         logger.info("📊 Calculating aggregate BTC value for budget allocation...")
 
     # Get available BTC balance from Coinbase
-    available_btc = await get_btc_balance(request_func, auth_type)
+    available_btc = await get_btc_balance(request_func, auth_type, account_id=account_id)
     total_btc_value = available_btc
     logger.debug(f"  💰 Available BTC: {available_btc:.8f} BTC")
 
@@ -417,7 +417,7 @@ async def calculate_aggregate_usd_value(
 
     # Use get_accounts() as primary method (more reliable than portfolio endpoint)
     try:
-        accounts = await get_accounts(request_func)
+        accounts = await get_accounts(request_func, account_id=account_id)
         btc_usd_price = await get_btc_usd_price_func()
         total_usd_value = 0.0
 
