@@ -73,9 +73,11 @@ async def get_order_history(
     Similar to 3Commas order history.
     """
     # Build query - include account_id from Bot for filtering
+    # CRITICAL: Always filter by current user's bots for multi-user isolation
     query = (
         select(OrderHistory, Bot.name.label("bot_name"), Bot.account_id.label("account_id"))
         .join(Bot, OrderHistory.bot_id == Bot.id)
+        .where(Bot.user_id == current_user.id)
         .order_by(desc(OrderHistory.timestamp))
     )
 
@@ -136,7 +138,7 @@ async def get_failed_orders(
 
     Useful for debugging and troubleshooting.
     """
-    return await get_order_history(db=db, bot_id=bot_id, account_id=account_id, status="failed", limit=limit, offset=0)
+    return await get_order_history(db=db, current_user=current_user, bot_id=bot_id, account_id=account_id, status="failed", limit=limit, offset=0)
 
 
 @router.get("/failed/paginated")
@@ -153,17 +155,17 @@ async def get_failed_orders_paginated(
 
     Returns items plus pagination metadata for UI controls.
     """
-    # Build base query for counting - need to join with Bot to filter by account_id
+    # Build base query for counting - always filter by current user's bots
+    count_query = (
+        select(func.count())
+        .select_from(OrderHistory)
+        .join(Bot, OrderHistory.bot_id == Bot.id)
+        .where(OrderHistory.status == "failed")
+        .where(Bot.user_id == current_user.id)
+    )
+
     if account_id is not None:
-        count_query = (
-            select(func.count())
-            .select_from(OrderHistory)
-            .join(Bot, OrderHistory.bot_id == Bot.id)
-            .where(OrderHistory.status == "failed")
-            .where(Bot.account_id == account_id)
-        )
-    else:
-        count_query = select(func.count()).select_from(OrderHistory).where(OrderHistory.status == "failed")
+        count_query = count_query.where(Bot.account_id == account_id)
 
     if bot_id is not None:
         count_query = count_query.where(OrderHistory.bot_id == bot_id)
@@ -177,7 +179,7 @@ async def get_failed_orders_paginated(
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
 
     # Get paginated items
-    items = await get_order_history(db=db, bot_id=bot_id, account_id=account_id, status="failed", limit=page_size, offset=offset)
+    items = await get_order_history(db=db, current_user=current_user, bot_id=bot_id, account_id=account_id, status="failed", limit=page_size, offset=offset)
 
     return {
         "items": items,
@@ -198,11 +200,15 @@ async def get_order_stats(
     """
     Get order statistics (success rate, failure rate, etc.)
     """
-    # Build base query
+    # Build base query - always filter by current user's bots
+    query = (
+        select(OrderHistory)
+        .join(Bot, OrderHistory.bot_id == Bot.id)
+        .where(Bot.user_id == current_user.id)
+    )
+
     if account_id is not None:
-        query = select(OrderHistory).join(Bot, OrderHistory.bot_id == Bot.id).where(Bot.account_id == account_id)
-    else:
-        query = select(OrderHistory)
+        query = query.where(Bot.account_id == account_id)
 
     if bot_id is not None:
         query = query.where(OrderHistory.bot_id == bot_id)

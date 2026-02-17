@@ -58,12 +58,17 @@ class TradingPairMonitor:
             Set of product IDs (e.g., {"ETH-BTC", "SOL-USD", ...})
         """
         try:
-            # Get primary account (account_id=1)
-            result = await db.execute(select(Account).where(Account.id == 1))
+            # Get any active CEX account for API credentials (products are global on Coinbase)
+            result = await db.execute(
+                select(Account).where(
+                    Account.type == "cex",
+                    Account.is_active.is_(True),
+                ).limit(1)
+            )
             account = result.scalars().first()
 
             if not account:
-                logger.warning("No primary account found for pair check")
+                logger.warning("No active CEX account found for pair check")
                 return set()
 
             exchange = await get_exchange_client_for_account(db, account.id)

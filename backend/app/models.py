@@ -222,7 +222,7 @@ class Bot(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner (nullable for migration)
-    name = Column(String, unique=True, index=True)  # User-defined bot name
+    name = Column(String, index=True)  # User-defined bot name (unique per user, not globally)
     description = Column(Text, nullable=True)  # Optional description
 
     # Account reference (links bot to CEX or DEX account)
@@ -277,6 +277,9 @@ class Bot(Base):
 
     # Relationships
     user = relationship("User", back_populates="bots")
+    # Bot name must be unique per user, not globally
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_bot_user_name"),)
+
     account = relationship("Account", back_populates="bots")
     positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
     pending_orders = relationship("PendingOrder", back_populates="bot", cascade="all, delete-orphan")
