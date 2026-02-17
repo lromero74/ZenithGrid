@@ -81,7 +81,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const allPositions = [...openPositions, ...closedPositions]
 
   // Fetch portfolio for account value - account-specific for CEX/DEX switching
-  const { data: portfolio, isLoading: isPortfolioLoading } = useQuery({
+  const { data: portfolio } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
       const response = await authFetch(`/api/accounts/${selectedAccount!.id}/portfolio`)
@@ -235,7 +235,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <p className="text-slate-400 text-sm font-medium">Account Value</p>
             <DollarSign className="w-5 h-5 text-green-500" />
           </div>
-          {isPortfolioLoading && !portfolio ? (
+          {!portfolio ? (
             <>
               <div className="h-8 w-36 bg-slate-700 rounded animate-pulse" />
               <div className="h-5 w-20 bg-slate-700 rounded animate-pulse mt-1" />

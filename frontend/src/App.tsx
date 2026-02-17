@@ -100,7 +100,7 @@ function AppContent() {
 
   // Fetch full portfolio data (all coins) - account-specific for CEX/DEX switching
   // Gated on selectedAccount so it doesn't fire before accounts have loaded
-  const { data: portfolio, isLoading: isPortfolioLoading } = useQuery({
+  const { data: portfolio } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
       const response = await authFetch(`/api/accounts/${selectedAccount!.id}/portfolio`)
@@ -293,7 +293,7 @@ function AppContent() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-slate-400">Account Value</p>
-                  {isPortfolioLoading && !portfolio ? (
+                  {!portfolio ? (
                     <>
                       <div className="h-7 w-32 bg-slate-700 rounded animate-pulse ml-auto" />
                       <div className="h-5 w-16 bg-slate-700 rounded animate-pulse ml-auto mt-1" />
@@ -350,7 +350,7 @@ function AppContent() {
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] text-slate-400 leading-tight">Account Value</p>
-                  {isPortfolioLoading && !portfolio ? (
+                  {!portfolio ? (
                     <>
                       <div className="h-5 w-28 bg-slate-700 rounded animate-pulse ml-auto" />
                       <div className="h-4 w-14 bg-slate-700 rounded animate-pulse ml-auto mt-0.5" />

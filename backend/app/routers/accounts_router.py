@@ -784,6 +784,7 @@ async def get_default_account(
                 select(Account)
                 .where(Account.is_active, Account.user_id == current_user.id)
                 .order_by(Account.created_at.asc())
+                .limit(1)
             )
             result = await db.execute(query)
             account = result.scalar_one_or_none()

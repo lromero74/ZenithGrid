@@ -156,6 +156,7 @@ async def get_exchange_client_for_account(
                     Account.api_key_name.isnot(None),
                     Account.api_private_key.isnot(None)
                 ).order_by(Account.is_default.desc(), Account.created_at)
+                .limit(1)
             )
             cex_account = cex_result.scalar_one_or_none()
 
@@ -328,6 +329,7 @@ async def get_exchange_client_for_user(
                 Account.type == account_type,
                 Account.is_active.is_(True)
             ).order_by(Account.created_at)
+            .limit(1)
         )
         account = result.scalar_one_or_none()
 
@@ -347,7 +349,7 @@ async def get_default_cex_account(db: AsyncSession, user_id: int) -> Optional[Ac
             Account.type == "cex",
             Account.is_default.is_(True),
             Account.is_active.is_(True)
-        )
+        ).limit(1)
     )
     account = result.scalar_one_or_none()
 
@@ -358,6 +360,7 @@ async def get_default_cex_account(db: AsyncSession, user_id: int) -> Optional[Ac
                 Account.type == "cex",
                 Account.is_active.is_(True)
             ).order_by(Account.created_at)
+            .limit(1)
         )
         account = result.scalar_one_or_none()
 

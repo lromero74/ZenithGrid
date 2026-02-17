@@ -143,6 +143,7 @@ async def get_balances(
                     Account.is_active.is_(True),
                     Account.user_id == current_user.id,
                 ).order_by(Account.is_default.desc(), Account.created_at)
+                .limit(1)
             )
             account = account_result.scalar_one_or_none()
             if not account:

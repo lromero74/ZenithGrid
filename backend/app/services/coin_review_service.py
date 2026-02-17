@@ -108,6 +108,7 @@ async def get_coinbase_client_from_db() -> CoinbaseClient:
                 Account.type == "cex",
                 Account.is_active.is_(True)
             ).order_by(Account.is_default.desc(), Account.created_at)
+            .limit(1)
         )
         account = result.scalar_one_or_none()
 

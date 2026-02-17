@@ -5,6 +5,12 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.12.4] - 2026-02-17
+
+### Fixed
+- **Balances 500 error with multiple accounts**: `scalar_one_or_none()` crashed when a user had multiple active CEX accounts ("Multiple rows were found when one or none was required"). Added `.limit(1)` to 9 queries across 7 files — fixes "In Pos.", "In Grids", and "Available" columns showing "..." on the Active Deals page
+- **Portfolio loading skeleton condition**: Changed from `isLoading && !portfolio` to `!portfolio` — React Query sets `isLoading=false` for disabled queries, so the skeleton never appeared when waiting for account selection
+
 ## [v2.12.3] - 2026-02-17
 
 ### Added
