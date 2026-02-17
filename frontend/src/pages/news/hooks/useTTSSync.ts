@@ -211,7 +211,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
     audio.onerror = () => {
       // Only set error if we have a valid blob URL audio source
-      // Ignore errors from clearing src (audio.src = '') which can trigger spurious errors
+      // Ignore errors from clearing src which can trigger spurious errors
       if (audio.src && audio.src.startsWith('blob:')) {
         setError('Audio playback failed')
         setIsPlaying(false)
@@ -238,7 +238,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     return () => {
       stopAnimationLoop()
       audio.pause()
-      audio.src = ''
+      audio.removeAttribute('src')
+      audio.load()
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
@@ -272,7 +273,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     // This prevents stale audio from being playable via media controls
     stopAnimationLoop()
     audio.pause()
-    audio.src = ''  // Clear old audio immediately
+    audio.removeAttribute('src')
+    audio.load()  // Reset audio element without triggering load error
 
     // Abort any in-flight requests
     if (abortControllerRef.current) {
