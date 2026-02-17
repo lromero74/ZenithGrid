@@ -5,6 +5,16 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.12.5] - 2026-02-17
+
+### Fixed
+- **MFA mobile page eviction**: Switching to authenticator app on mobile caused the browser to evict the page from memory, losing MFA state and trapping users in a login loop. MFA challenge state now persists to `sessionStorage` (survives page reload, cleared on browser close)
+- **News "1/500" on fresh mobile browsers**: Default category filter was `CryptoCurrency` only, so fresh browsers with no saved preferences saw nearly no articles. Default now selects all categories
+- **Tab badges showed unfiltered count**: Article/video tab badges showed raw API total instead of filtered count, creating a confusing mismatch (e.g., badge "500" but only 1 article visible)
+
+### Added
+- **News retention info visible**: Pagination footer now shows "(last 14 days, min 5 per source)" so users understand the article retention policy. Backend includes `retention_days` in API response
+
 ## [v2.12.4] - 2026-02-17
 
 ### Fixed

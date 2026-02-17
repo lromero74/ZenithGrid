@@ -81,6 +81,12 @@ const STORAGE_KEYS = {
   DEVICE_TRUST_TOKEN: 'auth_device_trust_token',
 }
 
+// Session storage keys (survive page reload within same tab, but not browser close)
+const SESSION_KEYS = {
+  MFA_TOKEN: 'auth_mfa_token',
+  MFA_METHODS: 'auth_mfa_methods',
+}
+
 // API base URL
 const API_BASE = '/api/auth'
 
@@ -179,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Initialize auth state from localStorage
+  // Initialize auth state from localStorage (and MFA state from sessionStorage)
   useEffect(() => {
     const initializeAuth = async () => {
       const storedUser = localStorage.getItem(STORAGE_KEYS.USER)
@@ -199,6 +205,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Token is valid, restore session
           setUser(JSON.parse(storedUser))
           setTokenExpiry(expiry)
+        }
+      } else {
+        // No active session — check for pending MFA challenge
+        // (survives mobile browser page eviction via sessionStorage)
+        const savedMfaToken = sessionStorage.getItem(SESSION_KEYS.MFA_TOKEN)
+        if (savedMfaToken) {
+          setMfaPending(true)
+          setMfaToken(savedMfaToken)
+          try {
+            const methods = JSON.parse(
+              sessionStorage.getItem(SESSION_KEYS.MFA_METHODS) || '[]'
+            )
+            setMfaMethods(methods)
+          } catch {
+            setMfaMethods([])
+          }
         }
       }
 
@@ -255,6 +277,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Check if MFA is required
     if (data.mfa_required && data.mfa_token) {
+      // Persist to sessionStorage so MFA survives mobile page eviction
+      sessionStorage.setItem(SESSION_KEYS.MFA_TOKEN, data.mfa_token)
+      sessionStorage.setItem(
+        SESSION_KEYS.MFA_METHODS,
+        JSON.stringify(data.mfa_methods || [])
+      )
       setMfaPending(true)
       setMfaToken(data.mfa_token)
       setMfaMethods(data.mfa_methods || [])
@@ -318,6 +346,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user)
     }
 
+    // Clear MFA state from both React and sessionStorage
+    sessionStorage.removeItem(SESSION_KEYS.MFA_TOKEN)
+    sessionStorage.removeItem(SESSION_KEYS.MFA_METHODS)
     setMfaPending(false)
     setMfaToken(null)
     setMfaMethods([])
@@ -388,6 +419,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Cancel MFA (go back to login form)
   const cancelMFA = useCallback(() => {
+    sessionStorage.removeItem(SESSION_KEYS.MFA_TOKEN)
+    sessionStorage.removeItem(SESSION_KEYS.MFA_METHODS)
     setMfaPending(false)
     setMfaToken(null)
     setMfaMethods([])
@@ -430,6 +463,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
     localStorage.removeItem(STORAGE_KEYS.TOKEN_EXPIRY)
     localStorage.removeItem(STORAGE_KEYS.USER)
+
+    // Clear any pending MFA session
+    sessionStorage.removeItem(SESSION_KEYS.MFA_TOKEN)
+    sessionStorage.removeItem(SESSION_KEYS.MFA_METHODS)
 
     // Clear state
     setUser(null)

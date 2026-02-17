@@ -317,7 +317,7 @@ export default function News() {
           <Newspaper className="w-4 h-4" />
           <span>Articles</span>
           <span className="bg-slate-700 px-1.5 py-0.5 rounded text-xs">
-            {newsData?.total_items || 0}
+            {totalFilteredItems || newsData?.total_items || 0}
           </span>
         </button>
         <button
@@ -331,7 +331,7 @@ export default function News() {
           <Video className="w-4 h-4" />
           <span>Videos</span>
           <span className="bg-slate-700 px-1.5 py-0.5 rounded text-xs">
-            {videoData?.total_items || 0}
+            {filteredVideos.length || videoData?.total_items || 0}
           </span>
         </button>
       </div>
@@ -731,6 +731,11 @@ export default function News() {
           {totalFilteredItems > 0 && (
             <div className="text-center text-sm text-slate-500">
               Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalFilteredItems)} of {totalFilteredItems} articles
+              {newsData?.retention_days && (
+                <span className="ml-2 text-slate-600">
+                  (last {newsData.retention_days} days, min 5 per source)
+                </span>
+              )}
             </div>
           )}
 

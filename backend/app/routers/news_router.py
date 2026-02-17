@@ -1154,6 +1154,7 @@ async def get_news_from_db(
         "page": page,
         "page_size": page_size,
         "total_pages": total_pages,
+        "retention_days": NEWS_ITEM_MAX_AGE_DAYS,
     }
 
 
