@@ -22,7 +22,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, Position, User
 from app.position_routers.dependencies import get_coinbase
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 

@@ -31,8 +31,8 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
     """
     try:
         # Use the same portfolio calculation that the header/dashboard uses
-        from app.routers.accounts.portfolio_utils import get_cex_portfolio, get_dex_portfolio
-        from app.routers.accounts_router import get_coinbase_for_account
+        from app.services.portfolio_service import get_cex_portfolio, get_dex_portfolio
+        from app.services.exchange_service import get_coinbase_for_account
 
         if account.is_paper_trading:
             # Paper trading - use exchange client directly

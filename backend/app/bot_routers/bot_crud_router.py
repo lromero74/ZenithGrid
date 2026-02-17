@@ -19,7 +19,7 @@ from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.models import Account, Bot, BotProduct, Position, User
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 from app.strategies import StrategyDefinition, StrategyRegistry
 
 logger = logging.getLogger(__name__)

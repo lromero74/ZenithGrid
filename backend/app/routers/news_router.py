@@ -35,8 +35,8 @@ from app.database import async_session_maker
 from app.models import (
     ContentSource, NewsArticle, User, UserSourceSubscription, VideoArticle,
 )
-from app.routers.auth_dependencies import get_current_user
-from app.routers.news import (
+from app.auth.dependencies import get_current_user
+from app.news_data import (
     CACHE_FILE,
     NEWS_CACHE_CHECK_MINUTES,
     NEWS_CATEGORIES,

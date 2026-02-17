@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Account, User
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)

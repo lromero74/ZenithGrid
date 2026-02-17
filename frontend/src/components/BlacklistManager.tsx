@@ -24,6 +24,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { blacklistApi, BlacklistEntry, marketDataApi, CategorySettings, AIProviderSettings } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import CoinIcon from './CoinIcon'
 
 // Category display config
@@ -44,6 +45,7 @@ interface CoinInfo {
 }
 
 export function BlacklistManager() {
+  const { user } = useAuth()
   const [blacklistedCoins, setBlacklistedCoins] = useState<BlacklistEntry[]>([])
   const [allCoins, setAllCoins] = useState<CoinInfo[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -341,33 +343,35 @@ export function BlacklistManager() {
             <h4 className="font-medium text-white text-sm">Coin Categorization</h4>
             <p className="text-xs text-slate-400">AI-reviewed coin safety categories. Category filters are set per-bot when creating/editing bots.</p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* AI Provider Selector */}
-            {aiProviderSettings && (
-              <select
-                value={aiProviderSettings.provider}
-                onChange={(e) => updateAIProvider(e.target.value)}
-                disabled={savingAIProvider || runningAIReview}
-                className="px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500 disabled:opacity-50"
-                title="Select AI provider for coin review"
+          {user?.is_superuser && (
+            <div className="flex items-center gap-2">
+              {/* AI Provider Selector */}
+              {aiProviderSettings && (
+                <select
+                  value={aiProviderSettings.provider}
+                  onChange={(e) => updateAIProvider(e.target.value)}
+                  disabled={savingAIProvider || runningAIReview}
+                  className="px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                  title="Select AI provider for coin review"
+                >
+                  {aiProviderSettings.available_providers.map((provider) => (
+                    <option key={provider} value={provider}>
+                      {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                onClick={triggerAIReview}
+                disabled={runningAIReview}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
+                title="Run AI to re-categorize all coins"
               >
-                {aiProviderSettings.available_providers.map((provider) => (
-                  <option key={provider} value={provider}>
-                    {provider.charAt(0).toUpperCase() + provider.slice(1)}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              onClick={triggerAIReview}
-              disabled={runningAIReview}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg transition-colors"
-              title="Run AI to re-categorize all coins"
-            >
-              <Sparkles className={`w-4 h-4 ${runningAIReview ? 'animate-pulse' : ''}`} />
-              {runningAIReview ? 'Reviewing...' : 'AI Review'}
-            </button>
-          </div>
+                <Sparkles className={`w-4 h-4 ${runningAIReview ? 'animate-pulse' : ''}`} />
+                {runningAIReview ? 'Reviewing...' : 'AI Review'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

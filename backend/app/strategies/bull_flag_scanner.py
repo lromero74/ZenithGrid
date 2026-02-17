@@ -39,7 +39,7 @@ async def get_tradeable_usd_coins(db: AsyncSession, user_id: Optional[int] = Non
         List of product IDs (e.g., ["ETH-USD", "SOL-USD", ...])
     """
     # Import here to avoid circular import
-    from app.routers.blacklist_router import get_allowed_categories
+    from app.services.settings_service import get_allowed_categories
 
     # Get allowed categories from Settings
     allowed = await get_allowed_categories(db)

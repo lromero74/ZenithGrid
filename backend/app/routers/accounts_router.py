@@ -23,12 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.encryption import encrypt_value, decrypt_value, is_encrypted
 from app.models import Account, Bot, User
-from app.routers.auth_dependencies import get_current_user
-from app.exchange_clients.factory import create_exchange_client
-from app.coinbase_unified_client import CoinbaseClient
-from app.routers.accounts import get_cex_portfolio, get_dex_portfolio
+from app.auth.dependencies import get_current_user
+from app.services.portfolio_service import get_cex_portfolio, get_dex_portfolio
 from app.services.exchange_service import (
     clear_exchange_client_cache,
+    get_coinbase_for_account,
     get_exchange_client_for_account,
 )
 
@@ -45,52 +44,6 @@ def _mask_key_name(val: Optional[str]) -> Optional[str]:
         return "****"
     return plain[:4] + "****" + plain[-4:]
 
-
-async def get_coinbase_for_account(
-    account: Account,
-) -> CoinbaseClient:
-    """
-    Create a Coinbase client for a specific account.
-
-    Args:
-        account: The CEX account with API credentials
-
-    Returns:
-        CoinbaseClient instance
-    """
-    if account.type != "cex":
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot create Coinbase client for non-CEX account"
-        )
-
-    if not account.api_key_name or not account.api_private_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Coinbase account missing API credentials. Please update in Settings."
-        )
-
-    # Decrypt credentials if encrypted
-    key_name = account.api_key_name
-    if is_encrypted(key_name):
-        key_name = decrypt_value(key_name)
-    private_key = account.api_private_key
-    if is_encrypted(private_key):
-        private_key = decrypt_value(private_key)
-
-    client = create_exchange_client(
-        exchange_type="cex",
-        coinbase_key_name=key_name,
-        coinbase_private_key=private_key,
-    )
-
-    if not client:
-        raise HTTPException(
-            status_code=503,
-            detail="Failed to create Coinbase client. Please check your API credentials."
-        )
-
-    return client
 
 VALID_EXCHANGES = {"coinbase", "bybit", "mt5_bridge"}
 VALID_PROP_FIRMS = {"hyrotrader", "ftmo"}

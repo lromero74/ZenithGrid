@@ -21,7 +21,7 @@ from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.models import Account, Settings, User
-from app.routers.auth_dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_superuser
 from app.schemas import SettingsUpdate, TestConnectionRequest
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,11 @@ async def get_settings(current_user: User = Depends(require_superuser)):
 
 
 @router.post("/settings")
-async def update_settings(settings_update: SettingsUpdate, coinbase: CoinbaseClient = Depends(get_coinbase), current_user: User = Depends(require_superuser)):
+async def update_settings(
+    settings_update: SettingsUpdate,
+    coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: User = Depends(require_superuser),
+):
     """Update trading settings"""
     # Update API credentials in .env file if provided
     if settings_update.coinbase_api_key is not None:
@@ -208,8 +212,12 @@ async def test_connection(request: TestConnectionRequest, current_user: User = D
 
 
 @router.get("/settings/{key}")
-async def get_setting_by_key(key: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_superuser)):
-    """Get a single database setting by key"""
+async def get_setting_by_key(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a single database setting by key (any authenticated user can read)."""
     query = select(Settings).where(Settings.key == key)
     result = await db.execute(query)
     setting = result.scalars().first()
@@ -227,7 +235,12 @@ async def get_setting_by_key(key: str, db: AsyncSession = Depends(get_db), curre
 
 
 @router.put("/settings/{key}")
-async def update_setting_by_key(key: str, value: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_superuser)):
+async def update_setting_by_key(
+    key: str,
+    value: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
     """Update a single database setting by key"""
     query = select(Settings).where(Settings.key == key)
     result = await db.execute(query)

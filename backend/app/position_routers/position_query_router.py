@@ -17,7 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import Account, AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails, LimitOrderFill
 

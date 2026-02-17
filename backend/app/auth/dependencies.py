@@ -1,26 +1,59 @@
 """
-Authentication dependencies for routers
+Authentication dependencies for routers.
 
 Provides easy-to-use dependencies for protecting routes with authentication.
+This module lives at the auth-utility layer (no router imports) so that
+routers, services, strategies, and indicators can all import it without
+creating circular dependencies.
 """
 
+import logging
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models import User
-from app.routers.auth_router import decode_token, get_user_by_id
+
+logger = logging.getLogger(__name__)
 
 # Security scheme - auto_error=False allows optional auth
 security = HTTPBearer(auto_error=False)
 
 
+def decode_token(token: str) -> dict:
+    """Decode and validate a JWT token."""
+    try:
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+        return payload
+    except JWTError as e:
+        logger.warning(f"JWT decode error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
+    """Get a user by ID."""
+    query = select(User).where(User.id == user_id)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> User:
     """
     Require authentication - returns current user or raises 401.
@@ -67,7 +100,7 @@ async def get_current_user(
 
 
 async def require_superuser(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> User:
     """
     Require superuser (admin) authentication.

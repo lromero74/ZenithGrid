@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Bot, Settings, User
-from app.routers.auth_dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_superuser
 from app.services.season_detector import get_seasonality_status, SeasonalityStatus
 
 logger = logging.getLogger(__name__)

@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models import Account, User
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 
 
 async def get_coinbase(

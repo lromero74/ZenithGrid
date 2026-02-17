@@ -28,7 +28,11 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $5T (One Big Beautiful Bill)",
         "legislation": "One Big Beautiful Bill Act (P.L. 119-21)",
-        "political_context": "Largest reconciliation package in history. Passed via budget reconciliation with Republican majority. Extended Trump-era tax cuts, added spending on border security, defense, and energy. CBO estimates $3.4T added to deficits 2025-2034 plus ~$700B interest costs.",
+        "political_context": (
+            "Largest reconciliation package in history. Passed via budget reconciliation with Republican majority. "
+            "Extended Trump-era tax cuts, added spending on border security, defense, and energy. CBO estimates $3.4T "
+            "added to deficits 2025-2034 plus ~$700B interest costs."
+        ),
         "source_url": "https://www.congress.gov/bill/119th-congress/house-bill/1",
     },
     {
@@ -38,7 +42,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Reset after suspension ended",
         "legislation": "Fiscal Responsibility Act of 2023",
-        "political_context": "Automatic reset per the 2023 deal. Debt ceiling reinstated at actual debt level. New Republican House expected to demand spending cuts for next increase.",
+        "political_context": (
+            "Automatic reset per the 2023 deal. Debt ceiling reinstated at actual debt level. New Republican House "
+            "expected to demand spending cuts for next increase."
+        ),
         "source_url": "https://www.congress.gov/bill/118th-congress/house-bill/3746",
     },
     # 2023
@@ -49,7 +56,11 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2025-01-01",
         "note": "Suspended until January 1, 2025",
         "legislation": "Fiscal Responsibility Act of 2023",
-        "political_context": "Result of tense 2023 debt ceiling standoff. Biden vs. McCarthy negotiations. Republicans demanded spending caps in exchange for raising limit. Deal included work requirements for some benefits and clawback of COVID funds.",
+        "political_context": (
+            "Result of tense 2023 debt ceiling standoff. Biden vs. McCarthy negotiations. Republicans demanded "
+            "spending caps in exchange for raising limit. Deal included work requirements for some benefits and "
+            "clawback of COVID funds."
+        ),
         "source_url": "https://www.congress.gov/bill/118th-congress/house-bill/3746",
     },
     # 2021
@@ -60,7 +71,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $2.5T",
         "legislation": "P.L. 117-73",
-        "political_context": "Democrats used reconciliation to pass without Republican votes. McConnell agreed to procedural workaround after threatening default. Avoided filibuster through special expedited process.",
+        "political_context": (
+            "Democrats used reconciliation to pass without Republican votes. McConnell agreed to procedural workaround "
+            "after threatening default. Avoided filibuster through special expedited process."
+        ),
         "source_url": "https://www.congress.gov/bill/117th-congress/senate-bill/3273",
     },
     {
@@ -70,7 +84,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $480B (short-term)",
         "legislation": "P.L. 117-50",
-        "political_context": "Emergency short-term fix after summer 2021 standoff. Republicans initially refused to cooperate. Treasury used extraordinary measures. McConnell eventually allowed 11 Republicans to break filibuster.",
+        "political_context": (
+            "Emergency short-term fix after summer 2021 standoff. Republicans initially refused to cooperate. Treasury "
+            "used extraordinary measures. McConnell eventually allowed 11 Republicans to break filibuster."
+        ),
         "source_url": "https://www.congress.gov/bill/117th-congress/senate-bill/1301",
     },
     {
@@ -80,7 +97,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Reset after suspension ended",
         "legislation": "Bipartisan Budget Act of 2019",
-        "political_context": "Automatic reset when 2019 suspension expired. Treasury immediately began extraordinary measures. Set stage for fall 2021 debt ceiling crisis.",
+        "political_context": (
+            "Automatic reset when 2019 suspension expired. Treasury immediately began extraordinary measures. Set "
+            "stage for fall 2021 debt ceiling crisis."
+        ),
         "source_url": "https://www.congress.gov/bill/116th-congress/house-bill/3877",
     },
     # 2019
@@ -91,7 +111,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2021-07-31",
         "note": "Suspended until July 31, 2021",
         "legislation": "Bipartisan Budget Act of 2019",
-        "political_context": "Bipartisan deal between Trump administration and Democratic House. Pelosi negotiated with Mnuchin. Suspended ceiling through 2021 election cycle to avoid political volatility.",
+        "political_context": (
+            "Bipartisan deal between Trump administration and Democratic House. Pelosi negotiated with Mnuchin. "
+            "Suspended ceiling through 2021 election cycle to avoid political volatility."
+        ),
         "source_url": "https://www.congress.gov/bill/116th-congress/house-bill/3877",
     },
     {
@@ -101,7 +124,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Reset after suspension ended",
         "legislation": "Bipartisan Budget Act of 2018",
-        "political_context": "Automatic reset from 2018 suspension. Treasury began extraordinary measures immediately while Congress negotiated new deal.",
+        "political_context": (
+            "Automatic reset from 2018 suspension. Treasury began extraordinary measures immediately while Congress "
+            "negotiated new deal."
+        ),
         "source_url": "https://www.congress.gov/bill/115th-congress/house-bill/1892",
     },
     # 2018
@@ -112,7 +138,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2019-03-01",
         "note": "Suspended until March 1, 2019",
         "legislation": "Bipartisan Budget Act of 2018",
-        "political_context": "Part of deal ending brief government shutdown. Trump era with Republican Congress. Increased defense and domestic spending. Rand Paul objected, causing temporary lapse.",
+        "political_context": (
+            "Part of deal ending brief government shutdown. Trump era with Republican Congress. Increased defense and "
+            "domestic spending. Rand Paul objected, causing temporary lapse."
+        ),
         "source_url": "https://www.congress.gov/bill/115th-congress/house-bill/1892",
     },
     # 2017
@@ -123,7 +152,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2018-01-31",
         "note": "Suspended until January 31, 2018",
         "legislation": "P.L. 115-96",
-        "political_context": "Short-term suspension tied to continuing resolution. Part of year-end budget negotiations. First Trump-era ceiling suspension.",
+        "political_context": (
+            "Short-term suspension tied to continuing resolution. Part of year-end budget negotiations. First "
+            "Trump-era ceiling suspension."
+        ),
         "source_url": "https://www.congress.gov/bill/115th-congress/house-bill/1370",
     },
     {
@@ -133,7 +165,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2017-12-08",
         "note": "Suspended until December 8, 2017",
         "legislation": "P.L. 115-56",
-        "political_context": "Trump shocked Republicans by cutting deal with Pelosi and Schumer. Harvey disaster relief attached. Ryan and McConnell blindsided by bipartisan approach.",
+        "political_context": (
+            "Trump shocked Republicans by cutting deal with Pelosi and Schumer. Harvey disaster relief attached. Ryan "
+            "and McConnell blindsided by bipartisan approach."
+        ),
         "source_url": "https://www.congress.gov/bill/115th-congress/house-bill/601",
     },
     {
@@ -143,7 +178,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Reset after suspension ended",
         "legislation": "Bipartisan Budget Act of 2015",
-        "political_context": "Automatic reset from Obama-era suspension. Trump inherited debt ceiling issue. Republicans controlled both chambers but struggled to raise limit they had previously opposed under Obama.",
+        "political_context": (
+            "Automatic reset from Obama-era suspension. Trump inherited debt ceiling issue. Republicans controlled "
+            "both chambers but struggled to raise limit they had previously opposed under Obama."
+        ),
         "source_url": "https://www.congress.gov/bill/114th-congress/house-bill/1314",
     },
     # 2015
@@ -154,7 +192,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2017-03-15",
         "note": "Suspended until March 15, 2017",
         "legislation": "Bipartisan Budget Act of 2015",
-        "political_context": "Boehner's final major act as Speaker. Negotiated with Obama before resigning. Passed with mostly Democratic votes. Cleared debt ceiling issue through 2016 election.",
+        "political_context": (
+            "Boehner's final major act as Speaker. Negotiated with Obama before resigning. Passed with mostly "
+            "Democratic votes. Cleared debt ceiling issue through 2016 election."
+        ),
         "source_url": "https://www.congress.gov/bill/114th-congress/house-bill/1314",
     },
     {
@@ -164,7 +205,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Reset after suspension ended",
         "legislation": "Temporary Debt Limit Extension Act",
-        "political_context": "Automatic reset from 2014 suspension. Treasury began extraordinary measures while Congress debated.",
+        "political_context": (
+            "Automatic reset from 2014 suspension. Treasury began extraordinary measures while Congress debated."
+        ),
         "source_url": "https://www.congress.gov/bill/113th-congress/senate-bill/540",
     },
     # 2014
@@ -175,7 +218,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2015-03-15",
         "note": "Suspended until March 15, 2015",
         "legislation": "Temporary Debt Limit Extension Act",
-        "political_context": "Clean debt ceiling increase with no conditions. House Republicans allowed vote without majority support from their caucus. Boehner faced Tea Party backlash.",
+        "political_context": (
+            "Clean debt ceiling increase with no conditions. House Republicans allowed vote without majority support "
+            "from their caucus. Boehner faced Tea Party backlash."
+        ),
         "source_url": "https://www.congress.gov/bill/113th-congress/senate-bill/540",
     },
     # 2013
@@ -186,7 +232,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2014-02-07",
         "note": "Suspended until February 7, 2014",
         "legislation": "Continuing Appropriations Act, 2014",
-        "political_context": "Ended 16-day government shutdown. Cruz-led effort to defund Obamacare failed. Republicans suffered political damage. Clean increase with no conditions attached.",
+        "political_context": (
+            "Ended 16-day government shutdown. Cruz-led effort to defund Obamacare failed. Republicans suffered "
+            "political damage. Clean increase with no conditions attached."
+        ),
         "source_url": "https://www.congress.gov/bill/113th-congress/house-bill/2775",
     },
     {
@@ -206,7 +255,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": "2013-05-18",
         "note": "Suspended until May 18, 2013",
         "legislation": "No Budget, No Pay Act of 2013",
-        "political_context": "Novel approach: suspended ceiling but withheld congressional pay if no budget passed. Attempt to force budget process. First use of suspension mechanism.",
+        "political_context": (
+            "Novel approach: suspended ceiling but withheld congressional pay if no budget passed. Attempt to force "
+            "budget process. First use of suspension mechanism."
+        ),
         "source_url": "https://www.congress.gov/bill/113th-congress/house-bill/325",
     },
     # 2012
@@ -217,7 +269,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $1.2T (final tranche)",
         "legislation": "Budget Control Act of 2011",
-        "political_context": "Final automatic increase under 2011 deal. Congress could have blocked via disapproval resolution but didn't have votes to override veto.",
+        "political_context": (
+            "Final automatic increase under 2011 deal. Congress could have blocked via disapproval resolution but "
+            "didn't have votes to override veto."
+        ),
         "source_url": "https://www.congress.gov/bill/112th-congress/senate-bill/365",
     },
     # 2011
@@ -228,7 +283,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $500B (second tranche)",
         "legislation": "Budget Control Act of 2011",
-        "political_context": "Automatic increase per BCA. Part of staged increases. House voted to disapprove but Senate did not take up resolution.",
+        "political_context": (
+            "Automatic increase per BCA. Part of staged increases. House voted to disapprove but Senate did not take "
+            "up resolution."
+        ),
         "source_url": "https://www.congress.gov/bill/112th-congress/senate-bill/365",
     },
     {
@@ -238,7 +296,11 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $400B (first tranche)",
         "legislation": "Budget Control Act of 2011",
-        "political_context": "HISTORIC CRISIS: Resolved hours before X-date. Tea Party Republicans demanded spending cuts. S&P downgraded US credit for first time ever. Created sequester mechanism. Obama called it 'manufactured crisis.'",
+        "political_context": (
+            "HISTORIC CRISIS: Resolved hours before X-date. Tea Party Republicans demanded spending cuts. S&P "
+            "downgraded US credit for first time ever. Created sequester mechanism. Obama called it 'manufactured "
+            "crisis.'"
+        ),
         "source_url": "https://www.congress.gov/bill/112th-congress/senate-bill/365",
     },
     # 2010
@@ -249,7 +311,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $1.9T",
         "legislation": "P.L. 111-139",
-        "political_context": "Passed with only Democratic votes. Republicans uniformly opposed despite voting for increases under Bush. First Obama-era increase. Used PAYGO rules.",
+        "political_context": (
+            "Passed with only Democratic votes. Republicans uniformly opposed despite voting for increases under Bush. "
+            "First Obama-era increase. Used PAYGO rules."
+        ),
         "source_url": "https://www.congress.gov/bill/111th-congress/house-joint-resolution/45",
     },
     # 2009
@@ -260,7 +325,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $290B (short-term)",
         "legislation": "P.L. 111-123",
-        "political_context": "Emergency increase during financial crisis recovery. Democratic Congress, Obama administration. Passed quietly to avoid political fight.",
+        "political_context": (
+            "Emergency increase during financial crisis recovery. Democratic Congress, Obama administration. Passed "
+            "quietly to avoid political fight."
+        ),
         "source_url": "https://www.congress.gov/bill/111th-congress/house-joint-resolution/64",
     },
     {
@@ -270,7 +338,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $789B (ARRA)",
         "legislation": "American Recovery and Reinvestment Act",
-        "political_context": "Included in Obama's stimulus package responding to 2008 financial crisis. Largest fiscal stimulus in US history at the time. Passed with minimal Republican support.",
+        "political_context": (
+            "Included in Obama's stimulus package responding to 2008 financial crisis. Largest fiscal stimulus in US "
+            "history at the time. Passed with minimal Republican support."
+        ),
         "source_url": "https://www.congress.gov/bill/111th-congress/house-bill/1",
     },
     # 2008
@@ -281,7 +352,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $700B (TARP)",
         "legislation": "Emergency Economic Stabilization Act",
-        "political_context": "FINANCIAL CRISIS: Attached to TARP bank bailout. First House vote failed, markets crashed. Bush/Paulson scrambled for votes. Eventually passed after adding sweeteners.",
+        "political_context": (
+            "FINANCIAL CRISIS: Attached to TARP bank bailout. First House vote failed, markets crashed. Bush/Paulson "
+            "scrambled for votes. Eventually passed after adding sweeteners."
+        ),
         "source_url": "https://www.congress.gov/bill/110th-congress/house-bill/1424",
     },
     {
@@ -291,7 +365,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $800B",
         "legislation": "Housing and Economic Recovery Act",
-        "political_context": "Attached to housing rescue bill during subprime crisis. Created Fannie/Freddie conservatorship authority. Passed with bipartisan support as crisis deepened.",
+        "political_context": (
+            "Attached to housing rescue bill during subprime crisis. Created Fannie/Freddie conservatorship authority. "
+            "Passed with bipartisan support as crisis deepened."
+        ),
         "source_url": "https://www.congress.gov/bill/110th-congress/house-bill/3221",
     },
     # 2007
@@ -302,7 +379,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $850B",
         "legislation": "P.L. 110-91",
-        "political_context": "Democratic Congress, Bush administration. Routine increase but tension building over Iraq war spending and deficit concerns.",
+        "political_context": (
+            "Democratic Congress, Bush administration. Routine increase but tension building over Iraq war spending "
+            "and deficit concerns."
+        ),
         "source_url": "https://www.congress.gov/bill/110th-congress/house-joint-resolution/43",
     },
     # 2006
@@ -313,7 +393,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $781B",
         "legislation": "P.L. 109-182",
-        "political_context": "Republican Congress, Bush administration. Democrats opposed, calling it 'fiscal irresponsibility.' Every Senate Democrat voted no. Passed on party-line vote.",
+        "political_context": (
+            "Republican Congress, Bush administration. Democrats opposed, calling it 'fiscal irresponsibility.' Every "
+            "Senate Democrat voted no. Passed on party-line vote."
+        ),
         "source_url": "https://www.congress.gov/bill/109th-congress/house-joint-resolution/47",
     },
     # 2004
@@ -324,7 +407,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $800B",
         "legislation": "P.L. 108-415",
-        "political_context": "Republican Congress, Bush administration. Third major increase under Bush. Democrats criticized Iraq war costs and tax cuts for wealthy.",
+        "political_context": (
+            "Republican Congress, Bush administration. Third major increase under Bush. Democrats criticized Iraq war "
+            "costs and tax cuts for wealthy."
+        ),
         "source_url": "https://www.congress.gov/bill/108th-congress/senate-bill/2986",
     },
     # 2003
@@ -335,7 +421,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $984B",
         "legislation": "P.L. 108-24",
-        "political_context": "Republican Congress, Bush administration. Second increase in two years. Iraq War begun two months earlier. Economy still recovering from dot-com bust.",
+        "political_context": (
+            "Republican Congress, Bush administration. Second increase in two years. Iraq War begun two months "
+            "earlier. Economy still recovering from dot-com bust."
+        ),
         "source_url": "https://www.congress.gov/bill/108th-congress/house-joint-resolution/51",
     },
     # 2002
@@ -346,7 +435,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $450B",
         "legislation": "P.L. 107-199",
-        "political_context": "Post-9/11 era, Bush administration. War on Terror began. First Bush-era increase after inheriting Clinton surpluses. Bipartisan support given national security context.",
+        "political_context": (
+            "Post-9/11 era, Bush administration. War on Terror began. First Bush-era increase after inheriting Clinton "
+            "surpluses. Bipartisan support given national security context."
+        ),
         "source_url": "https://www.congress.gov/bill/107th-congress/house-joint-resolution/111",
     },
     # 1997
@@ -357,7 +449,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $450B",
         "legislation": "Balanced Budget Act of 1997",
-        "political_context": "Clinton-Gingrich balanced budget deal. Economy booming, deficits shrinking toward surplus. Bipartisan agreement after 1995-96 shutdown battles.",
+        "political_context": (
+            "Clinton-Gingrich balanced budget deal. Economy booming, deficits shrinking toward surplus. Bipartisan "
+            "agreement after 1995-96 shutdown battles."
+        ),
         "source_url": "https://www.congress.gov/bill/105th-congress/house-bill/2015",
     },
     # 1996
@@ -368,7 +463,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $600B",
         "legislation": "Contract With America Advancement Act",
-        "political_context": "Resolved 1995-96 debt ceiling crisis and government shutdowns. Gingrich vs. Clinton battles. Republicans eventually backed down after public blamed them for shutdowns.",
+        "political_context": (
+            "Resolved 1995-96 debt ceiling crisis and government shutdowns. Gingrich vs. Clinton battles. Republicans "
+            "eventually backed down after public blamed them for shutdowns."
+        ),
         "source_url": "https://www.congress.gov/bill/104th-congress/house-bill/3136",
     },
     # 1993
@@ -379,7 +477,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $530B",
         "legislation": "Omnibus Budget Reconciliation Act of 1993",
-        "political_context": "Clinton's deficit reduction package. Passed without a single Republican vote. Raised taxes on wealthy, cut spending. Set stage for late-90s balanced budgets.",
+        "political_context": (
+            "Clinton's deficit reduction package. Passed without a single Republican vote. Raised taxes on wealthy, "
+            "cut spending. Set stage for late-90s balanced budgets."
+        ),
         "source_url": "https://www.congress.gov/bill/103rd-congress/house-bill/2264",
     },
     # 1990
@@ -390,7 +491,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $915B",
         "legislation": "Omnibus Budget Reconciliation Act of 1990",
-        "political_context": "Bush Sr. broke 'read my lips, no new taxes' pledge. Bipartisan budget deal with tax increases and spending cuts. Cost Bush politically but reduced deficit.",
+        "political_context": (
+            "Bush Sr. broke 'read my lips, no new taxes' pledge. Bipartisan budget deal with tax increases and "
+            "spending cuts. Cost Bush politically but reduced deficit."
+        ),
         "source_url": "https://www.congress.gov/bill/101st-congress/house-bill/5835",
     },
     # 1989
@@ -401,7 +505,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $203B",
         "legislation": "P.L. 101-140",
-        "political_context": "Bush Sr. first year. Routine increase. Gramm-Rudman-Hollings deficit targets still in effect.",
+        "political_context": (
+            "Bush Sr. first year. Routine increase. Gramm-Rudman-Hollings deficit targets still in effect."
+        ),
         "source_url": "https://www.congress.gov/bill/101st-congress/house-joint-resolution/280",
     },
     # 1987
@@ -412,7 +518,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $520B",
         "legislation": "P.L. 100-119",
-        "political_context": "Reagan era. Black Monday stock market crash occurred weeks later. Revised Gramm-Rudman deficit targets. Iran-Contra scandal ongoing.",
+        "political_context": (
+            "Reagan era. Black Monday stock market crash occurred weeks later. Revised Gramm-Rudman deficit targets. "
+            "Iran-Contra scandal ongoing."
+        ),
         "source_url": "https://www.congress.gov/bill/100th-congress/house-joint-resolution/324",
     },
     # 1986
@@ -423,7 +532,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $189B",
         "legislation": "P.L. 99-384",
-        "political_context": "Reagan administration, Democratic House. Deficits rising despite Gramm-Rudman. Tax Reform Act of 1986 passed same year.",
+        "political_context": (
+            "Reagan administration, Democratic House. Deficits rising despite Gramm-Rudman. Tax Reform Act of 1986 "
+            "passed same year."
+        ),
         "source_url": "https://www.congress.gov/bill/99th-congress/house-joint-resolution/668",
     },
     # 1985
@@ -434,7 +546,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $80B",
         "legislation": "Gramm-Rudman-Hollings Balanced Budget Act",
-        "political_context": "Historic deficit control legislation. Automatic spending cuts (sequester) if targets missed. Attempt to force balanced budgets. Supreme Court later struck down key provisions.",
+        "political_context": (
+            "Historic deficit control legislation. Automatic spending cuts (sequester) if targets missed. Attempt to "
+            "force balanced budgets. Supreme Court later struck down key provisions."
+        ),
         "source_url": "https://www.congress.gov/bill/99th-congress/house-joint-resolution/372",
     },
     {
@@ -455,7 +570,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $171B",
         "legislation": "Deficit Reduction Act of 1984",
-        "political_context": "Reagan's 'Morning in America' re-election year. Deficits controversial but economy booming. Democrats controlled House.",
+        "political_context": (
+            "Reagan's 'Morning in America' re-election year. Deficits controversial but economy booming. Democrats "
+            "controlled House."
+        ),
         "source_url": "https://www.congress.gov/bill/98th-congress/house-bill/4170",
     },
     # 1983
@@ -466,7 +584,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $101B",
         "legislation": "P.L. 98-161",
-        "political_context": "Economy recovering from 1981-82 recession. Reagan tax cuts increasing deficits. Social Security rescue legislation passed earlier in year.",
+        "political_context": (
+            "Economy recovering from 1981-82 recession. Reagan tax cuts increasing deficits. Social Security rescue "
+            "legislation passed earlier in year."
+        ),
         "source_url": "https://www.congress.gov/bill/98th-congress/house-joint-resolution/308",
     },
     {
@@ -476,7 +597,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $99B",
         "legislation": "P.L. 98-34",
-        "political_context": "Continued Reagan-era deficit expansion. Supply-side economics tested. Unemployment still high from recession.",
+        "political_context": (
+            "Continued Reagan-era deficit expansion. Supply-side economics tested. Unemployment still high from "
+            "recession."
+        ),
         "source_url": "https://www.congress.gov/bill/98th-congress/house-joint-resolution/190",
     },
     # 1982
@@ -487,7 +611,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $98B",
         "legislation": "P.L. 97-270",
-        "political_context": "Deep recession. Volcker fighting inflation with high interest rates. Reagan's deficits growing. TEFRA tax increase passed to offset some revenue loss.",
+        "political_context": (
+            "Deep recession. Volcker fighting inflation with high interest rates. Reagan's deficits growing. TEFRA tax "
+            "increase passed to offset some revenue loss."
+        ),
         "source_url": "https://www.congress.gov/bill/97th-congress/house-joint-resolution/520",
     },
     {
@@ -508,7 +635,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $79B",
         "legislation": "P.L. 97-49",
-        "political_context": "Reagan's first major budget. Economic Recovery Tax Act cut taxes dramatically. Deficits projected to rise significantly.",
+        "political_context": (
+            "Reagan's first major budget. Economic Recovery Tax Act cut taxes dramatically. Deficits projected to rise "
+            "significantly."
+        ),
         "source_url": "https://www.congress.gov/bill/97th-congress/house-joint-resolution/266",
     },
     {
@@ -529,7 +659,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $45B",
         "legislation": "P.L. 96-286",
-        "political_context": "Carter administration, election year. Stagflation crisis. Iran hostage crisis ongoing. Fed fighting inflation.",
+        "political_context": (
+            "Carter administration, election year. Stagflation crisis. Iran hostage crisis ongoing. Fed fighting "
+            "inflation."
+        ),
         "source_url": "https://www.congress.gov/bill/96th-congress/house-bill/7428",
     },
     # 1979
@@ -540,7 +673,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $49B",
         "legislation": "P.L. 96-78",
-        "political_context": "Carter administration. Energy crisis, 'malaise' speech. Volcker appointed Fed chair to fight inflation.",
+        "political_context": (
+            "Carter administration. Energy crisis, 'malaise' speech. Volcker appointed Fed chair to fight inflation."
+        ),
         "source_url": "https://www.congress.gov/bill/96th-congress/house-joint-resolution/375",
     },
     {
@@ -550,7 +685,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $29B",
         "legislation": "P.L. 96-5",
-        "political_context": "Three Mile Island nuclear accident occurred same week. Carter struggling with energy policy.",
+        "political_context": (
+            "Three Mile Island nuclear accident occurred same week. Carter struggling with energy policy."
+        ),
         "source_url": "https://www.congress.gov/bill/96th-congress/house-joint-resolution/214",
     },
     # 1978
@@ -582,7 +719,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $52B",
         "legislation": "P.L. 95-120",
-        "political_context": "Carter's first year. Democratic Congress. New budget process from 1974 reform still being implemented.",
+        "political_context": (
+            "Carter's first year. Democratic Congress. New budget process from 1974 reform still being implemented."
+        ),
         "source_url": "https://www.congress.gov/bill/95th-congress/house-joint-resolution/487",
     },
     # 1976
@@ -593,7 +732,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $95B",
         "legislation": "P.L. 94-334",
-        "political_context": "Ford administration, bicentennial year. Post-Watergate era. First budget under reformed budget process.",
+        "political_context": (
+            "Ford administration, bicentennial year. Post-Watergate era. First budget under reformed budget process."
+        ),
         "source_url": "https://www.congress.gov/bill/94th-congress/house-joint-resolution/803",
     },
     # 1975
@@ -604,7 +745,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $38B",
         "legislation": "P.L. 94-132",
-        "political_context": "Ford administration. Recession ending. New York City fiscal crisis. Congressional Budget Act of 1974 restructuring budget process.",
+        "political_context": (
+            "Ford administration. Recession ending. New York City fiscal crisis. Congressional Budget Act of 1974 "
+            "restructuring budget process."
+        ),
         "source_url": "https://www.congress.gov/bill/94th-congress/house-joint-resolution/662",
     },
     {
@@ -624,7 +768,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $24B",
         "legislation": "P.L. 94-3",
-        "political_context": "Ford administration. Deep recession (worst since 1930s at the time). Tax cuts to stimulate economy.",
+        "political_context": (
+            "Ford administration. Deep recession (worst since 1930s at the time). Tax cuts to stimulate economy."
+        ),
         "source_url": "https://www.congress.gov/bill/94th-congress/house-joint-resolution/79",
     },
     # 1974
@@ -635,7 +781,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $18B",
         "legislation": "P.L. 93-325",
-        "political_context": "Nixon's final months before resignation. Watergate crisis. Congress passed landmark budget reform act same year.",
+        "political_context": (
+            "Nixon's final months before resignation. Watergate crisis. Congress passed landmark budget reform act "
+            "same year."
+        ),
         "source_url": "https://www.congress.gov/bill/93rd-congress/house-joint-resolution/981",
     },
     # 1973
@@ -646,7 +795,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $10B",
         "legislation": "P.L. 93-173",
-        "political_context": "Nixon administration. Arab oil embargo causing energy crisis. Watergate hearings ongoing.",
+        "political_context": (
+            "Nixon administration. Arab oil embargo causing energy crisis. Watergate hearings ongoing."
+        ),
         "source_url": "https://www.congress.gov/bill/93rd-congress/house-joint-resolution/763",
     },
     {
@@ -656,7 +807,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $15B",
         "legislation": "P.L. 93-53",
-        "political_context": "Watergate scandal deepening. Saturday Night Massacre months away. Economy still strong but inflation rising.",
+        "political_context": (
+            "Watergate scandal deepening. Saturday Night Massacre months away. Economy still strong but inflation "
+            "rising."
+        ),
         "source_url": "https://www.congress.gov/bill/93rd-congress/house-joint-resolution/523",
     },
     # 1972
@@ -677,7 +831,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $20B",
         "legislation": "P.L. 92-336",
-        "political_context": "Nixon administration. Watergate break-in occurred two weeks earlier (not yet public scandal). Price controls in effect.",
+        "political_context": (
+            "Nixon administration. Watergate break-in occurred two weeks earlier (not yet public scandal). Price "
+            "controls in effect."
+        ),
         "source_url": "https://www.congress.gov/bill/92nd-congress/house-bill/12910",
     },
     # 1971
@@ -688,7 +845,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $30B",
         "legislation": "P.L. 92-5",
-        "political_context": "Nixon administration. Vietnam War costs mounting. Gold standard about to end (August). Budget moving toward deficit.",
+        "political_context": (
+            "Nixon administration. Vietnam War costs mounting. Gold standard about to end (August). Budget moving "
+            "toward deficit."
+        ),
         "source_url": "https://www.congress.gov/bill/92nd-congress/house-resolution/287",
     },
     # 1970
@@ -699,7 +859,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $18B",
         "legislation": "P.L. 91-301",
-        "political_context": "Nixon administration. Vietnam War escalation (Cambodia). Student protests. Recession beginning.",
+        "political_context": (
+            "Nixon administration. Vietnam War escalation (Cambodia). Student protests. Recession beginning."
+        ),
         "source_url": "https://www.congress.gov/bill/91st-congress/house-bill/17889",
     },
     # 1969
@@ -710,7 +872,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $12B",
         "legislation": "P.L. 91-8",
-        "political_context": "Nixon's first months in office. Vietnam War ongoing. Inherited LBJ's 'guns and butter' deficit spending.",
+        "political_context": (
+            "Nixon's first months in office. Vietnam War ongoing. Inherited LBJ's 'guns and butter' deficit spending."
+        ),
         "source_url": "https://www.congress.gov/bill/91st-congress/house-resolution/328",
     },
     # 1967
@@ -721,7 +885,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $22B",
         "legislation": "P.L. 90-39",
-        "political_context": "LBJ administration. Vietnam War escalation. Great Society spending. 'Guns and butter' deficit spending began.",
+        "political_context": (
+            "LBJ administration. Vietnam War escalation. Great Society spending. 'Guns and butter' deficit spending "
+            "began."
+        ),
         "source_url": "https://www.congress.gov/bill/90th-congress/house-joint-resolution/510",
     },
     # 1965
@@ -732,7 +899,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $4B",
         "legislation": "P.L. 89-49",
-        "political_context": "LBJ's Great Society in full swing. Medicare/Medicaid passed. Vietnam War buildup beginning. Economy booming.",
+        "political_context": (
+            "LBJ's Great Society in full swing. Medicare/Medicaid passed. Vietnam War buildup beginning. Economy "
+            "booming."
+        ),
         "source_url": "https://www.congress.gov/bill/89th-congress/house-bill/8467",
     },
     # 1963
@@ -743,7 +913,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $4B (temporary)",
         "legislation": "P.L. 88-30",
-        "political_context": "JFK administration. Civil rights movement growing. Kennedy tax cuts being debated. Assassination months away.",
+        "political_context": (
+            "JFK administration. Civil rights movement growing. Kennedy tax cuts being debated. Assassination months "
+            "away."
+        ),
         "source_url": "https://www.congress.gov/bill/88th-congress/house-joint-resolution/383",
     },
     # 1962
@@ -754,7 +927,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $10B",
         "legislation": "P.L. 87-512",
-        "political_context": "JFK administration. Cuban Missile Crisis months away. Space race with Soviets. Economy recovering from 1960-61 recession.",
+        "political_context": (
+            "JFK administration. Cuban Missile Crisis months away. Space race with Soviets. Economy recovering from "
+            "1960-61 recession."
+        ),
         "source_url": "https://www.congress.gov/bill/87th-congress/house-joint-resolution/767",
     },
     # 1961
@@ -765,7 +941,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $5B (temporary)",
         "legislation": "P.L. 87-69",
-        "political_context": "JFK's first months in office. Bay of Pigs fiasco. Berlin Wall built months later. Recession inherited from Eisenhower.",
+        "political_context": (
+            "JFK's first months in office. Bay of Pigs fiasco. Berlin Wall built months later. Recession inherited "
+            "from Eisenhower."
+        ),
         "source_url": "https://www.congress.gov/bill/87th-congress/house-joint-resolution/396",
     },
     # 1959
@@ -776,7 +955,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $10B",
         "legislation": "P.L. 86-74",
-        "political_context": "Eisenhower administration. Post-Sputnik spending. Alaska and Hawaii becoming states. Recession recovery.",
+        "political_context": (
+            "Eisenhower administration. Post-Sputnik spending. Alaska and Hawaii becoming states. Recession recovery."
+        ),
         "source_url": "https://www.congress.gov/bill/86th-congress/house-joint-resolution/390",
     },
     # 1958
@@ -787,7 +968,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $8B",
         "legislation": "P.L. 85-912",
-        "political_context": "Eisenhower administration. Post-Sputnik panic. Defense spending surge. Recession underway.",
+        "political_context": (
+            "Eisenhower administration. Post-Sputnik panic. Defense spending surge. Recession underway."
+        ),
         "source_url": "https://www.congress.gov/bill/85th-congress/house-joint-resolution/688",
     },
     {
@@ -808,7 +991,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $3B",
         "legislation": "P.L. 84-678",
-        "political_context": "Eisenhower re-election year. Interstate Highway System authorized. Suez Crisis months away. Economy prosperous.",
+        "political_context": (
+            "Eisenhower re-election year. Interstate Highway System authorized. Suez Crisis months away. Economy "
+            "prosperous."
+        ),
         "source_url": "https://www.congress.gov/bill/84th-congress/house-joint-resolution/580",
     },
     # 1954
@@ -819,7 +1005,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised by $6B",
         "legislation": "P.L. 83-686",
-        "political_context": "Eisenhower administration. Korean War ended. McCarthy hearings. Post-war economic adjustment.",
+        "political_context": (
+            "Eisenhower administration. Korean War ended. McCarthy hearings. Post-war economic adjustment."
+        ),
         "source_url": "https://www.congress.gov/bill/83rd-congress/house-joint-resolution/506",
     },
     # 1946
@@ -830,7 +1018,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Reduced from wartime peak",
         "legislation": "P.L. 79-472",
-        "political_context": "Post-WWII demobilization. Ceiling actually lowered as war debt being paid down. Truman administration. Economy transitioning to peacetime.",
+        "political_context": (
+            "Post-WWII demobilization. Ceiling actually lowered as war debt being paid down. Truman administration. "
+            "Economy transitioning to peacetime."
+        ),
         "source_url": None,
     },
     # 1945
@@ -841,7 +1032,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised for final war push",
         "legislation": "P.L. 79-28",
-        "political_context": "WWII final months. FDR died weeks later. Germany surrendered May 8. Japan surrendered in August after atomic bombs.",
+        "political_context": (
+            "WWII final months. FDR died weeks later. Germany surrendered May 8. Japan surrendered in August after "
+            "atomic bombs."
+        ),
         "source_url": None,
     },
     # 1944
@@ -852,7 +1046,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised for D-Day campaign",
         "legislation": "P.L. 78-333",
-        "political_context": "D-Day invasion (June 6) days earlier. Massive war spending. FDR's fourth term campaign. War bonds heavily promoted.",
+        "political_context": (
+            "D-Day invasion (June 6) days earlier. Massive war spending. FDR's fourth term campaign. War bonds heavily "
+            "promoted."
+        ),
         "source_url": None,
     },
     # 1943
@@ -863,7 +1060,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised for war production",
         "legislation": "P.L. 78-34",
-        "political_context": "Peak of WWII production. Stalingrad victory. North Africa campaign. War mobilization in full swing.",
+        "political_context": (
+            "Peak of WWII production. Stalingrad victory. North Africa campaign. War mobilization in full swing."
+        ),
         "source_url": None,
     },
     # 1942
@@ -874,7 +1073,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Massive wartime increase",
         "legislation": "P.L. 77-510",
-        "political_context": "WWII after Pearl Harbor. Massive war mobilization. Debt ceiling raised dramatically to fund war. Rationing began.",
+        "political_context": (
+            "WWII after Pearl Harbor. Massive war mobilization. Debt ceiling raised dramatically to fund war. "
+            "Rationing began."
+        ),
         "source_url": None,
     },
     # 1941
@@ -885,7 +1087,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Pre-war defense buildup",
         "legislation": "P.L. 77-3",
-        "political_context": "Defense spending increasing before Pearl Harbor. Lend-Lease to Britain. FDR's third term began.",
+        "political_context": (
+            "Defense spending increasing before Pearl Harbor. Lend-Lease to Britain. FDR's third term began."
+        ),
         "source_url": None,
     },
     # 1940
@@ -896,7 +1100,9 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "Raised for defense",
         "legislation": "P.L. 76-672",
-        "political_context": "France had just fallen to Germany. War in Europe. FDR beginning defense buildup. Still officially neutral.",
+        "political_context": (
+            "France had just fallen to Germany. War in Europe. FDR beginning defense buildup. Still officially neutral."
+        ),
         "source_url": None,
     },
     # 1939 - First aggregate statutory debt limit
@@ -907,7 +1113,10 @@ DEBT_CEILING_HISTORY: List[Dict[str, Any]] = [
         "suspension_end": None,
         "note": "First aggregate debt limit",
         "legislation": "P.L. 76-201",
-        "political_context": "HISTORIC: First statutory debt ceiling. Combined all previous separate debt categories. WWII began in Europe two months later. Depression ending.",
+        "political_context": (
+            "HISTORIC: First statutory debt ceiling. Combined all previous separate debt categories. WWII began in "
+            "Europe two months later. Depression ending."
+        ),
         "source_url": None,
     },
 ]

@@ -1,7 +1,9 @@
 - if you create bots while we are developing, please do not create them started.
 - Always think "How does 3Commas do it?" and do that.
 - new work should be done in dev branches and merged after I confirm good
-- always do git diff check before new git add to make sure we didn't lose functionality we want to keep
+- CRITICAL: Always `git diff` against the previous version before staging. Verify you are not losing functionality you did not explicitly intend to remove. If a diff shows deleted logic, confirm it was intentional — never silently drop working code.
+- CRITICAL: Do the right thing, not the lazy thing. No re-export shims, backwards-compat wrappers, or proxy modules as permanent solutions. When moving code, actually move it — update all consumers to point at the new canonical location and delete the old one. A little extra work now gives us a solid, clean pattern. This applies everywhere: imports, migrations, refactors, file moves. Fix pre-existing bugs and lint errors you encounter — you are the only coder on this project, so there is no "someone else's problem". If you touch a file and see broken code, fix it.
+- CRITICAL: No spaghetti code. We write properly hierarchical, layered, modularized code with a clear dependency graph. Think layer cake / tree structure: auth utilities → services → routers (never upward). No circular imports, no cross-layer reaches, no god files. If a file is growing beyond ~1200 lines, split it into logical modules.
 - CRITICAL: Always update CHANGELOG.md as part of every commit that will be tagged. The changelog entry must be included in the same commit as the code changes so that users pulling a tagged version see what's in it. Use Keep a Changelog format (Added/Changed/Fixed/Removed sections). Never tag without a changelog entry.
 
 ## "Ship It" — Full Release Process

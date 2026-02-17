@@ -33,7 +33,8 @@ You are auditing this area of the ZenithGrid application with the following stan
 - **Modularize as you go**: If any file you touch is approaching or beyond ~1200 lines, split it into logical modules as part of your changes.
 - **Watch for circular imports**: When refactoring or splitting files, verify import graphs don't create cycles. Test with `python -c "from app.routers.X import router"` after changes.
 - **Lint everything**: `flake8 --max-line-length=120` for Python, `tsc --noEmit` for TypeScript. All code you touch or create must pass.
-- **No regressions**: Your fixes must not break existing functionality. If unsure, state what you'd need to test.
+- **No regressions**: Your fixes must not break existing functionality. If unsure, state what you'd need to test. Always `git diff` against previous before staging — verify you are not losing functionality you did not explicitly intend to remove.
+- **Do the right thing, not the lazy thing**: Don't use re-export shims, backwards-compat wrappers, or proxy modules as permanent solutions. When moving code, actually move it — update all consumers to point at the new canonical location and delete the old one. A little extra work now gives us a solid, clean pattern. Fix pre-existing bugs and lint errors you encounter — you are the only coder on this project, so there is no "someone else's problem". If you touch a file and see broken code, fix it.
 
 ### Output Format
 

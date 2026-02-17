@@ -16,7 +16,7 @@ from app.database import get_db
 from app.models import Account, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import AddFundsRequest, UpdateNotesRequest
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 from app.trading_client import TradingClient
 from app.trading_engine.buy_executor import execute_buy
 

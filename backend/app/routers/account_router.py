@@ -23,7 +23,7 @@ from app.database import get_db
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.models import Account, Bot, PendingOrder, Position, User
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 from app.services import portfolio_conversion_service as pcs
 from app.services.exchange_service import get_exchange_client_for_account
 
@@ -162,10 +162,13 @@ async def get_balances(
             usdc_balance = balances.get("USDC", 0.0)
             usdt_balance = balances.get("USDT", 0.0)
 
-            # Still need real prices for calculations
-            coinbase = await get_coinbase_from_db(db, current_user.id)
-            current_price = await coinbase.get_current_price()
-            btc_usd_price = await coinbase.get_btc_usd_price()
+            # Use public market data for prices (no auth needed for paper trading)
+            from app.coinbase_api.public_market_data import (
+                get_btc_usd_price as get_public_btc_price,
+                get_current_price as get_public_price,
+            )
+            current_price = await get_public_price("ETH-BTC")
+            btc_usd_price = await get_public_btc_price()
         else:
             # Live account - fetch from Coinbase
             coinbase = await get_coinbase_from_db(db, current_user.id)
@@ -340,10 +343,18 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
                             "total_balance": balance,
                             "available_balance": balance,
                             "hold_balance": 0.0,
-                            "usd_value": balance * btc_usd_price if currency == "BTC" else balance if currency in ("USD", "USDC") else 0.0,
+                            "usd_value": (
+                                balance * btc_usd_price if currency == "BTC"
+                                else balance if currency in ("USD", "USDC")
+                                else 0.0
+                            ),
                             "btc_value": balance if currency == "BTC" else 0.0,
                             "allocation_pct": 0.0,
-                            "price_usd": btc_usd_price if currency == "BTC" else 1.0 if currency in ("USD", "USDC") else 0.0,
+                            "price_usd": (
+                                btc_usd_price if currency == "BTC"
+                                else 1.0 if currency in ("USD", "USDC")
+                                else 0.0
+                            ),
                             "change_24h": 0.0,
                         })
                 return {
@@ -353,7 +364,11 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
                     "btc_usd_price": btc_usd_price,
                     "is_paper_trading": True,
                 }
-            return {"assets": [], "total_usd_value": 0, "total_btc_value": 0, "btc_usd_price": 0, "is_paper_trading": True}
+            return {
+                "assets": [], "total_usd_value": 0,
+                "total_btc_value": 0, "btc_usd_price": 0,
+                "is_paper_trading": True,
+            }
 
         # Check response cache first (60s TTL) to avoid slow re-computation
         cache_key = f"portfolio_response_{current_user.id}"
@@ -687,7 +702,10 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
                         pnl_today_btc += position.profit_quote
 
         # Log portfolio summary for debugging inconsistent results
-        logger.info(f"Portfolio summary: {len(spot_positions)} raw positions -> {len(portfolio_holdings)} after filtering (${total_usd_value:.2f} total)")
+        logger.info(
+            f"Portfolio summary: {len(spot_positions)} raw positions -> "
+            f"{len(portfolio_holdings)} after filtering (${total_usd_value:.2f} total)"
+        )
 
         result = {
             "total_usd_value": total_usd_value,
@@ -843,7 +861,10 @@ async def _run_portfolio_conversion(
                             )
                             sold_count += 1
                             progress_pct = int((idx / total_to_process) * 100)
-                            logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to BTC directly")
+                            logger.info(
+                                f"✅ [{idx}/{total_to_process}] ({progress_pct}%) "
+                                f"Sold {available} {currency} to BTC directly"
+                            )
                             await asyncio.sleep(0.2)
                         except Exception as direct_error:
                             if "403" in str(direct_error) or "400" in str(direct_error):
@@ -856,7 +877,10 @@ async def _run_portfolio_conversion(
                                 converted_via_usd.append(currency)
                                 sold_count += 1
                                 progress_pct = int((idx / total_to_process) * 100)
-                                logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to USD")
+                                logger.info(
+                                    f"✅ [{idx}/{total_to_process}] ({progress_pct}%) "
+                                    f"Sold {available} {currency} to USD"
+                                )
                                 await asyncio.sleep(0.2)
                             else:
                                 raise direct_error
@@ -871,7 +895,10 @@ async def _run_portfolio_conversion(
                             )
                             sold_count += 1
                             progress_pct = int((idx / total_to_process) * 100)
-                            logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to USD directly")
+                            logger.info(
+                                f"✅ [{idx}/{total_to_process}] ({progress_pct}%) "
+                                f"Sold {available} {currency} to USD directly"
+                            )
                             await asyncio.sleep(0.2)
                         except Exception as direct_error:
                             if "403" in str(direct_error) or "400" in str(direct_error):
@@ -884,7 +911,10 @@ async def _run_portfolio_conversion(
                                 converted_via_btc.append(currency)
                                 sold_count += 1
                                 progress_pct = int((idx / total_to_process) * 100)
-                                logger.info(f"✅ [{idx}/{total_to_process}] ({progress_pct}%) Sold {available} {currency} to BTC")
+                                logger.info(
+                                    f"✅ [{idx}/{total_to_process}] ({progress_pct}%) "
+                                    f"Sold {available} {currency} to BTC"
+                                )
                                 await asyncio.sleep(0.2)
                             else:
                                 raise direct_error
@@ -960,7 +990,10 @@ async def _run_portfolio_conversion(
                 errors=errors
             )
 
-            logger.warning(f"🚨 Task {task_id}: PORTFOLIO CONVERSION completed: {sold_count}/{total_to_process} sold, {failed_count} failed")
+            logger.warning(
+                f"🚨 Task {task_id}: PORTFOLIO CONVERSION completed: "
+                f"{sold_count}/{total_to_process} sold, {failed_count} failed"
+            )
             break  # Exit the async for loop
 
     except Exception as e:

@@ -20,7 +20,7 @@ import time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import httpx
 
@@ -28,12 +28,17 @@ import bcrypt
 import pyotp
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import (  # noqa: F401
+    decode_token,
+    get_current_user,
+    get_user_by_id,
+)
 from app.config import settings
 from app.database import get_db
 from app.encryption import decrypt_value, encrypt_value
@@ -455,80 +460,11 @@ async def _create_device_trust(
     return device_trust
 
 
-def decode_token(token: str) -> dict:
-    """Decode and validate a JWT token"""
-    try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        return payload
-    except JWTError as e:
-        logger.warning(f"JWT decode error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
     """Get a user by email address"""
     query = select(User).where(User.email == email)
     result = await db.execute(query)
     return result.scalar_one_or_none()
-
-
-async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
-    """Get a user by ID"""
-    query = select(User).where(User.id == user_id)
-    result = await db.execute(query)
-    return result.scalar_one_or_none()
-
-
-async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> User:
-    """
-    Dependency to get the current authenticated user from JWT token.
-
-    Usage in routes:
-        @router.get("/protected")
-        async def protected_route(current_user: User = Depends(get_current_user)):
-            ...
-    """
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = credentials.credentials
-    payload = decode_token(token)
-
-    if payload.get("type") != "access":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token type",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user_id = int(payload.get("sub"))
-    user = await get_user_by_id(db, user_id)
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled",
-        )
-
-    return user
 
 
 # =============================================================================

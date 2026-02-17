@@ -21,6 +21,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { aiCredentialsApi, AIProviderStatus } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 // Provider color configuration
 const PROVIDER_COLORS: Record<string, string> = {
@@ -32,6 +33,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 }
 
 export function AIProvidersManager() {
+  const { user } = useAuth()
   const [providerStatus, setProviderStatus] = useState<AIProviderStatus[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -212,12 +214,12 @@ export function AIProvidersManager() {
                         Your Key
                       </span>
                     )}
-                    {info.has_system_key && !info.has_user_key && (
+                    {user?.is_superuser && info.has_system_key && !info.has_user_key && (
                       <span className="px-2 py-1 text-xs bg-blue-600/20 text-blue-400 rounded-full">
                         System Key
                       </span>
                     )}
-                    {!info.has_user_key && !info.has_system_key && (
+                    {!info.has_user_key && (!info.has_system_key || !user?.is_superuser) && (
                       <span className="px-2 py-1 text-xs bg-slate-600/50 text-slate-400 rounded-full">
                         Not Configured
                       </span>
@@ -321,10 +323,12 @@ export function AIProvidersManager() {
             <span className="text-green-400">Your Key</span> - Your personal API key, required for
             AI trading bots
           </li>
-          <li>
-            <span className="text-blue-400">System Key</span> - System-wide key for coin
-            categorization only (not available for your bots)
-          </li>
+          {user?.is_superuser && (
+            <li>
+              <span className="text-blue-400">System Key</span> - System-wide key for coin
+              categorization only (not available for your bots)
+            </li>
+          )}
           <li>
             <span className="text-slate-400">Not Configured</span> - No key set, you cannot use
             this provider for AI trading

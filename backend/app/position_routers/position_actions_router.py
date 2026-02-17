@@ -16,7 +16,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, Bot, Position, User
 from app.position_routers.dependencies import get_coinbase
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 from app.schemas.position import UpdatePositionSettingsRequest
 from app.trading_engine.position_manager import calculate_expected_position_budget, calculate_max_deal_cost
 from app.trading_engine_v2 import StrategyTradingEngine

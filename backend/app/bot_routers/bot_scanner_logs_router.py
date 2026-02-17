@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import ScannerLog, Bot, User
 from app.bot_routers.schemas import ScannerLogCreate, ScannerLogResponse
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

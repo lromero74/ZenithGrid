@@ -32,8 +32,8 @@ from sqlalchemy import select
 from app.database import async_session_maker
 from app.indicator_calculator import IndicatorCalculator
 from app.models import MetricSnapshot, User
-from app.routers.auth_dependencies import get_current_user
-from app.routers.news import (
+from app.auth.dependencies import get_current_user
+from app.news_data import (
     DEBT_CEILING_HISTORY,
     FEAR_GREED_CACHE_MINUTES,
     US_DEBT_CACHE_HOURS,

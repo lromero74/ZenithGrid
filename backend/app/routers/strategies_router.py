@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.models import User
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 from app.strategies import StrategyRegistry
 
 router = APIRouter(prefix="/api/strategies", tags=["strategies"])

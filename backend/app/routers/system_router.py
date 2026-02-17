@@ -27,7 +27,7 @@ from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.factory import create_exchange_client
 from app.models import Account, MarketData, Position, Signal, Trade, User
 from app.multi_bot_monitor import MultiBotMonitor
-from app.routers.auth_dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_superuser
 from app.schemas import (
     DashboardStats,
     MarketDataResponse,

@@ -1,7 +1,8 @@
 """
-News router package.
+News data package.
 
-This package contains the news router and its supporting modules.
+Contains data models, sources, cache utilities, and historical data
+for the news subsystem. No router or FastAPI dependencies.
 """
 
 from .debt_ceiling_data import DEBT_CEILING_HISTORY

@@ -52,7 +52,7 @@ class ContentRefreshService:
     async def _refresh_loop(self):
         """Main loop that handles periodic content refresh."""
         # Import here to avoid circular imports
-        from app.routers.news_router import fetch_all_news, fetch_all_videos
+        from app.services.news_fetch_service import fetch_all_news, fetch_all_videos
 
         # Wait a bit after startup before first refresh
         await asyncio.sleep(INITIAL_DELAY)

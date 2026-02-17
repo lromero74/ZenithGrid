@@ -215,7 +215,7 @@ class AISpotOpinionEvaluator:
         Returns (signal, confidence, reasoning)
         """
         # Get user's API key from database
-        from app.routers.ai_credentials_router import get_user_api_key
+        from app.services.ai_credential_service import get_user_api_key
 
         # Map ai_model to provider name
         provider_map = {

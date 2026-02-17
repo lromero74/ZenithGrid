@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from app.routers.news import DEBT_CEILING_HISTORY
+from app.news_data import DEBT_CEILING_HISTORY
 from app.services.coin_review_service import (
     _call_claude,
     _call_gemini,

@@ -1,13 +1,14 @@
 """
-Portfolio utility functions for account management.
+Portfolio Service
 
-Handles portfolio calculations for both CEX and DEX accounts.
+Provides portfolio calculation functions for CEX and DEX accounts.
+Extracted from routers/accounts/portfolio_utils.py to live at the proper
+service layer.
 """
 
 import asyncio
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,9 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache import api_cache
 from app.models import Account, Bot, Position
 from app.services.dex_wallet_service import dex_wallet_service
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -183,18 +181,24 @@ async def get_cex_portfolio(
                 return (product_id, None)
 
         # Get unique product_ids to avoid duplicate fetches
-        unique_products = list({f"{p.get_base_currency()}-{p.get_quote_currency()}" for p in open_positions})
+        unique_products = list(
+            {f"{p.get_base_currency()}-{p.get_quote_currency()}" for p in open_positions}
+        )
 
         # Batch price fetching for positions: 15 concurrent, then 0.2s delay
         position_price_results = []
         for i in range(0, len(unique_products), batch_size):
             batch = unique_products[i:i + batch_size]
-            batch_results = await asyncio.gather(*[fetch_price_for_product(pid) for pid in batch])
+            batch_results = await asyncio.gather(
+                *[fetch_price_for_product(pid) for pid in batch]
+            )
             position_price_results.extend(batch_results)
             if i + batch_size < len(unique_products):
                 await asyncio.sleep(0.2)
 
-        position_prices = {pid: price for pid, price in position_price_results if price is not None}
+        position_prices = {
+            pid: price for pid, price in position_price_results if price is not None
+        }
 
     asset_pnl = {}
     for position in open_positions:
@@ -230,7 +234,9 @@ async def get_cex_portfolio(
             pnl_data = asset_pnl[asset]
             holding["unrealized_pnl_usd"] = pnl_data["pnl_usd"]
             if pnl_data["cost_usd"] > 0:
-                holding["unrealized_pnl_percentage"] = (pnl_data["pnl_usd"] / pnl_data["cost_usd"]) * 100
+                holding["unrealized_pnl_percentage"] = (
+                    pnl_data["pnl_usd"] / pnl_data["cost_usd"]
+                ) * 100
 
     portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
 

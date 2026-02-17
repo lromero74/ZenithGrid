@@ -5,6 +5,30 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.11.0] - 2026-02-17
+
+### Added
+- **Admin-only UI guards**: "AI Review" button (system-wide AI categorization) and "System Key" badges on AI providers are now hidden from non-superuser accounts. Regular users still see all providers and can manage their own API keys
+- **Auth dependencies package** (`app/auth/`): Canonical home for `get_current_user`, `require_superuser`, `decode_token`, `get_user_by_id` — eliminates 57-module cascade load from router-level imports
+- **Service layer extractions**: `ai_credential_service`, `settings_service`, `portfolio_service`, `news_fetch_service` — utility functions moved from routers to proper service layer
+- **News data package** (`app/news_data/`): News models, sources, cache utilities, and debt ceiling data moved out of routers into dedicated data package
+- **Paper trading validation**: Bot config validation now works for paper trading accounts using public market data
+
+### Fixed
+- **Settings 403 for non-admin users**: `GET /settings/{key}` was gated to superusers only — regular users couldn't load `decision_log_retention_days` on the Settings page. Changed to `get_current_user` (read access for all authenticated users, write remains admin-only)
+
+### Changed
+- **Import architecture overhaul**: Zero service→router imports remaining. All cross-package dependencies flow downward (auth → services → routers). ~3000 lines net reduction
+- **`routers/__init__.py` gutted**: No longer eagerly imports 8+ routers — `main.py` imports each router directly
+- **`main.py` cleanup**: All `noqa: E402` inline imports moved to top-level import section
+- **Paper trading balance lookups**: `account_router.py` uses public market data API instead of requiring authenticated client for paper accounts
+- **CLAUDE.md & whitebox command**: Added "do the right thing" and "no spaghetti code" architecture rules
+
+### Removed
+- **`routers/auth_dependencies.py`**: Replaced by `app/auth/dependencies.py` (all 30 consumers updated)
+- **`routers/accounts/` subpackage**: Portfolio utils moved to `services/portfolio_service.py`
+- **`routers/news/` subpackage**: Data files moved to `app/news_data/`
+
 ## [v2.10.1] - 2026-02-17
 
 ### Fixed

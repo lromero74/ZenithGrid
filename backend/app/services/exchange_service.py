@@ -12,6 +12,9 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import HTTPException
+
+from app.coinbase_unified_client import CoinbaseClient
 from app.encryption import decrypt_value, is_encrypted
 from app.exchange_clients.base import ExchangeClient
 from app.exchange_clients.factory import create_exchange_client
@@ -23,6 +26,53 @@ logger = logging.getLogger(__name__)
 # Cache for exchange clients (key: account_id)
 # This avoids recreating clients on every request
 _exchange_client_cache: dict[int, ExchangeClient] = {}
+
+
+async def get_coinbase_for_account(
+    account: Account,
+) -> CoinbaseClient:
+    """
+    Create a Coinbase client for a specific account.
+
+    Args:
+        account: The CEX account with API credentials
+
+    Returns:
+        CoinbaseClient instance
+    """
+    if account.type != "cex":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot create Coinbase client for non-CEX account",
+        )
+
+    if not account.api_key_name or not account.api_private_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Coinbase account missing API credentials. Please update in Settings.",
+        )
+
+    # Decrypt credentials if encrypted
+    key_name = account.api_key_name
+    if is_encrypted(key_name):
+        key_name = decrypt_value(key_name)
+    private_key = account.api_private_key
+    if is_encrypted(private_key):
+        private_key = decrypt_value(private_key)
+
+    client = create_exchange_client(
+        exchange_type="cex",
+        coinbase_key_name=key_name,
+        coinbase_private_key=private_key,
+    )
+
+    if not client:
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to create Coinbase client. Please check your API credentials.",
+        )
+
+    return client
 
 
 def clear_exchange_client_cache(account_id: Optional[int] = None):

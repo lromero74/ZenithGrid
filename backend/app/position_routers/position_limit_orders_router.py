@@ -21,7 +21,7 @@ from app.database import get_db
 from app.models import Account, PendingOrder, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import LimitCloseRequest, UpdateLimitCloseRequest
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

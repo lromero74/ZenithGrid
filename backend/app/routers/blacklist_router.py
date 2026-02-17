@@ -20,7 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import BlacklistedCoin, Settings, User
-from app.routers.auth_dependencies import get_current_user, require_superuser
+from app.auth.dependencies import get_current_user, require_superuser
+from app.services.settings_service import (
+    ALLOWED_CATEGORIES_KEY,
+    get_allowed_categories,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +32,6 @@ router = APIRouter(prefix="/api/blacklist", tags=["blacklist"])
 
 # Valid coin categories
 VALID_CATEGORIES = ["APPROVED", "BORDERLINE", "QUESTIONABLE", "BLACKLISTED"]
-# Default: only APPROVED can trade
-DEFAULT_ALLOWED_CATEGORIES = ["APPROVED"]
-# Settings key for storing allowed categories
-ALLOWED_CATEGORIES_KEY = "allowed_coin_categories"
-
 # AI Provider settings
 VALID_AI_PROVIDERS = ["claude", "openai", "gemini", "grok"]
 DEFAULT_AI_PROVIDER = "claude"
@@ -119,21 +118,6 @@ class CategorySettingsResponse(BaseModel):
     """Response model for category settings"""
     allowed_categories: List[str]
     all_categories: List[str] = VALID_CATEGORIES
-
-
-async def get_allowed_categories(db: AsyncSession) -> List[str]:
-    """Get list of categories allowed to trade from database."""
-    query = select(Settings).where(Settings.key == ALLOWED_CATEGORIES_KEY)
-    result = await db.execute(query)
-    setting = result.scalars().first()
-
-    if setting and setting.value:
-        try:
-            return json.loads(setting.value)
-        except json.JSONDecodeError:
-            pass
-
-    return DEFAULT_ALLOWED_CATEGORIES
 
 
 async def get_ai_review_provider(db: AsyncSession) -> str:

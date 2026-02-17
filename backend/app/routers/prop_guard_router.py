@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Query
 from app.database import get_db
 from app.models import Account, PropFirmState, PropFirmEquitySnapshot
-from app.routers.auth_router import get_current_user
+from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 

@@ -32,7 +32,7 @@ from app.database import async_session_maker, get_db
 from app.models import (
     ArticleTTS, User, UserArticleTTSHistory, UserVoiceSubscription,
 )
-from app.routers.auth_dependencies import get_current_user
+from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 

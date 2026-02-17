@@ -35,7 +35,7 @@ async def get_ai_client(provider: str = "anthropic", user_id: Optional[int] = No
     api_key = None
     if user_id and db:
         try:
-            from app.routers.ai_credentials_router import get_user_api_key
+            from app.services.ai_credential_service import get_user_api_key
             # Map provider names to credential table names
             provider_map = {
                 "anthropic": "claude",

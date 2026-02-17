@@ -26,22 +26,26 @@ from app.routers import trading_router  # Manual trading operations
 from app.routers import (
     account_router,
     blacklist_router,
-    bots_router,
     market_data_router,
     news_router,
-    order_history_router,
     positions_router,
     settings_router,
     strategies_router,
     system_router,
-    templates_router,
 )
+from app.routers.order_history import router as order_history_router
+from app.routers.templates import router as templates_router
+from app.routers import prop_guard_router
+from app.routers.bots import router as bots_router
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
+from app.services.auto_buy_monitor import AutoBuyMonitor
 from app.services.content_refresh_service import content_refresh_service
 from app.services.debt_ceiling_monitor import debt_ceiling_monitor
-from app.services.domain_blacklist_service import domain_blacklist_service
 from app.services.delisted_pair_monitor import TradingPairMonitor
+from app.services.domain_blacklist_service import domain_blacklist_service
 from app.services.limit_order_monitor import LimitOrderMonitor
+from app.services.perps_monitor import PerpsMonitor
+from app.services.prop_guard_monitor import start_prop_guard_monitor, stop_prop_guard_monitor
 from app.services.shutdown_manager import shutdown_manager
 from app.services.websocket_manager import ws_manager
 
@@ -82,17 +86,10 @@ trading_pair_monitor = TradingPairMonitor(check_interval_seconds=86400)  # 24 ho
 set_trading_pair_monitor(trading_pair_monitor)  # Make accessible via API
 
 # Auto-buy BTC monitor - converts stablecoins to BTC based on account settings
-from app.services.auto_buy_monitor import AutoBuyMonitor  # noqa: E402
-
 auto_buy_monitor = AutoBuyMonitor()
 
 # Perpetual futures position monitor - syncs open perps positions with exchange
-from app.services.perps_monitor import PerpsMonitor  # noqa: E402
-
 perps_monitor = PerpsMonitor(interval_seconds=60)
-
-# PropGuard safety monitor - monitors prop firm equity/drawdown
-from app.services.prop_guard_monitor import start_prop_guard_monitor, stop_prop_guard_monitor  # noqa: E402
 
 # Background task handles
 limit_order_monitor_task = None
@@ -131,7 +128,6 @@ app.include_router(trading_router.router)  # Manual trading operations
 app.include_router(seasonality_router.router)  # Seasonality-based bot management
 app.include_router(perps_router.router)  # Perpetual futures (INTX) management
 
-from app.routers import prop_guard_router  # noqa: E402
 app.include_router(prop_guard_router.router)  # PropGuard safety monitoring
 
 # Mount static files for cached news images
@@ -570,7 +566,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
 
     try:
         from app.database import async_session_maker
-        from app.routers.auth_router import decode_token, get_user_by_id
+        from app.auth.dependencies import decode_token, get_user_by_id
 
         payload = decode_token(token)
         if payload.get("type") != "access":
