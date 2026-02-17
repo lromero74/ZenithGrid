@@ -5,6 +5,19 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.12.0] - 2026-02-17
+
+### Added
+- **Mode-aware bot.sh restart**: `./bot.sh restart` now requires `--dev` or `--prod` flag. Manages nginx routing, frontend service, and backend as a single atomic operation
+- **Mode-switch guard**: Warns when switching between dev/prod modes and requires `--force` to prevent accidental deployment changes ("Did you mean to switch to PROD deployment?")
+- **Mixed-mode detection**: Detects inconsistent infrastructure state (e.g., nginx in dev but frontend service stopped) and warns on `restart` and `status`
+- **Dynamic nginx discovery**: `bot.sh` searches standard nginx directories (`conf.d`, `sites-enabled`, `sites-available`) for the app's config — no hardcoded paths
+- **Status enhancements**: `./bot.sh status` now shows current mode (DEV/PROD), nginx config path, and mixed-mode warnings
+
+### Changed
+- **All restart references in CLAUDE.md**: Replaced direct `systemctl` calls with `./bot.sh restart --dev/--prod`. The script is now the single source of truth for service management
+- **`.gitignore` updated**: Added SQLite WAL files (`*.db-shm`, `*.db-wal`) and root-level cache files (`*_cache.json`)
+
 ## [v2.11.1] - 2026-02-17
 
 ### Fixed

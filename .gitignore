@@ -15,12 +15,15 @@ build/
 *.sqlite
 *.sqlite3
 *.db-journal
+*.db-shm
+*.db-wal
 *.db.backup*
 *.db.bak*
 **/trading.db.backup*
 **/trading.db.bak*
 
 # Runtime caches (news, fear/greed, etc.)
+*_cache.json
 backend/*_cache.json
 
 # Cached news images (downloaded at runtime)
