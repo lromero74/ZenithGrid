@@ -5,6 +5,16 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.9.6] - 2026-02-17
+
+### Changed
+- **Track `.claude/commands/`**: Removed blanket `.claude/` gitignore so slash command definitions (shipit, setdev, setprod, whitebox) are shared with other users
+- **Updated `/shipit` command**: Added frontend deployment mode detection step and mode-aware deploy instructions
+
+### Added
+- **Coin icon cache gitignore**: `backend/coin_icons_cache/` now ignored (runtime-downloaded assets)
+- **Whitebox audit command**: `.claude/commands/whitebox.md` — reusable slash command for structured security/performance audits
+
 ## [v2.9.5] - 2026-02-17
 
 ### Fixed

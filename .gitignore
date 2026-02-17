@@ -28,6 +28,9 @@ backend/static/news_images/*
 !backend/static/news_images/.gitkeep
 backend/news_images/
 
+# Coin icon cache (downloaded at runtime)
+backend/coin_icons_cache/
+
 # TTS audio cache (generated at runtime)
 backend/tts_cache/
 
@@ -74,8 +77,8 @@ htmlcov/
 backend/scripts/*
 !backend/scripts/README.md
 
-# Claude Code
-.claude/
+# Claude Code user-specific settings (commands are tracked, local settings are not)
+.claude/settings.local.json
 
 # Process IDs
 .pids/
