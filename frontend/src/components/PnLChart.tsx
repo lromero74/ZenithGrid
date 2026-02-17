@@ -894,11 +894,11 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
             </button>
           </div>
 
-          {/* Chart Container */}
-          <div className="flex-1 min-h-[300px]">
+          {/* Chart Container — explicit height needed for ResponsiveContainer */}
+          <div className="flex-1 h-[300px]">
         {activeTab === 'by_day' ? (
           // Daily P&L bar chart - uses filled data to show all dates including days with no trades
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minHeight={1}>
             <BarChart data={getFilledByDayData()} margin={{ top: 5, right: 30, left: 20, bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
@@ -979,7 +979,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
           </ResponsiveContainer>
         ) : activeTab === 'by_pair' ? (
           // Pair P&L bar chart (filtered by time range)
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minHeight={1}>
             <BarChart data={stats.filteredByPair} margin={{ top: 5, right: 30, left: 20, bottom: 80 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
