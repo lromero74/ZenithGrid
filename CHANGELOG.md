@@ -5,6 +5,11 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.9.3] - 2026-02-17
+
+### Fixed
+- **Recharts width/height warnings (proper fix)**: Sparkline defers `ResponsiveContainer` render via `ResizeObserver` until parent has real dimensions — eliminates all 24 width(-1)/height(-1) warnings from off-screen cards in horizontal scroll
+
 ## [v2.9.2] - 2026-02-17
 
 ### Fixed
