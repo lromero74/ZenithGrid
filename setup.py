@@ -927,6 +927,32 @@ def initialize_database(project_root):
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_bot_templates_user_id ON bot_templates(user_id)")
 
+        # Bot products junction table (normalized trading pairs)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bot_id INTEGER NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+                product_id TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(bot_id, product_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_bot_products_bot_id ON bot_products(bot_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_bot_products_product_id ON bot_products(product_id)")
+
+        # Bot template products junction table (normalized trading pairs)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_template_products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                template_id INTEGER NOT NULL REFERENCES bot_templates(id) ON DELETE CASCADE,
+                product_id TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(template_id, product_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_bot_template_products_template_id ON bot_template_products(template_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_bot_template_products_product_id ON bot_template_products(product_id)")
+
         # Positions table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS positions (

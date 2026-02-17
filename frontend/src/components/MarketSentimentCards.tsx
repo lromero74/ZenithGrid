@@ -1051,7 +1051,7 @@ function HalvingCard({
 
       {halvingCountdown && blockHeight ? (
         <div className="flex flex-col items-center">
-          <div className="text-3xl font-mono font-bold text-orange-400 mb-2">{liveCountdown || 'Calculating...'}</div>
+          <div className="text-2xl sm:text-3xl font-mono font-bold text-orange-400 mb-2 whitespace-nowrap">{liveCountdown || 'Calculating...'}</div>
           <div className="text-sm text-slate-400 mb-4">
             {halvingCountdown.estimatedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           </div>
@@ -1104,7 +1104,7 @@ function USDebtCard({
       {usDebtData ? (
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-2 mb-2">
-            <div className="text-2xl font-mono font-bold text-red-400 tracking-tight">${formatDebt(liveDebt)}</div>
+            <div className="text-xl sm:text-2xl font-mono font-bold text-red-400 tracking-tighter whitespace-nowrap">${formatDebt(liveDebt)}</div>
             <button onClick={onShowHistory} className="w-5 h-5 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors" title="View debt ceiling history">
               <Info className="w-3 h-3 text-slate-400" />
             </button>

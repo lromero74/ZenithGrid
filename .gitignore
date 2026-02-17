@@ -26,6 +26,7 @@ backend/*_cache.json
 # Cached news images (downloaded at runtime)
 backend/static/news_images/*
 !backend/static/news_images/.gitkeep
+backend/news_images/
 
 # Environment variables
 .env
