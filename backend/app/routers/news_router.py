@@ -1516,7 +1516,12 @@ async def get_article_content(
         )
 
     try:
-        async with aiohttp.ClientSession() as session:
+        # Increase max_field_size: some sites (Yahoo Finance) return huge
+        # Set-Cookie headers (~27KB) that exceed aiohttp's 8190-byte default.
+        async with aiohttp.ClientSession(
+            max_line_size=32768,
+            max_field_size=32768,
+        ) as session:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                               "AppleWebKit/537.36 (KHTML, like Gecko) "

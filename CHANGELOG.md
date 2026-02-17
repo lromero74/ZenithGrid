@@ -5,6 +5,13 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.10.1] - 2026-02-17
+
+### Fixed
+- **Empty article bodies (Yahoo Finance, etc.)**: aiohttp's default 8KB header limit rejected responses with large Set-Cookie headers (~27KB). Increased `max_field_size` to 32KB in article-content endpoint
+- **"Invalid URI" console errors (Firefox)**: Replaced `audio.src = ''` and `removeAttribute('src')+load()` with a tiny silent WAV data URI to properly clear the audio element without triggering browser console errors
+- **Keepalive audio cleanup**: Removed unnecessary `audio.src = ''` on unmount that triggered spurious errors
+
 ## [v2.10.0] - 2026-02-17
 
 ### Added
