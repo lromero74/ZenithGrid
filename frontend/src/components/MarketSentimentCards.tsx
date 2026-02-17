@@ -1134,6 +1134,21 @@ function USDebtCard({
                 </span>
               </div>
             )}
+            {!usDebtData.debt_ceiling_suspended && usDebtData.debt_ceiling && usDebtData.debt_per_second > 0 && (() => {
+              const remaining = usDebtData.debt_ceiling - liveDebt
+              const exceeded = remaining <= 0
+              const seconds = Math.abs(remaining / usDebtData.debt_per_second)
+              return (
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-[10px] text-slate-600">{exceeded ? 'Exceeded by' : 'Hits ceiling in'}</span>
+                  <span className={`text-[10px] font-mono ${exceeded ? 'text-red-400' : 'text-orange-400'}`}>
+                    {exceeded
+                      ? formatDebtCountdown(seconds) + ' ago'
+                      : formatDebtCountdown(seconds)}
+                  </span>
+                </div>
+              )
+            })()}
           </div>
 
           <div className="w-full bg-slate-900/50 rounded-lg p-2">
