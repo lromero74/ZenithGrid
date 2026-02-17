@@ -5,6 +5,13 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.12.1] - 2026-02-17
+
+### Fixed
+- **Firefox silent WAV decode error**: Replaced 44-byte empty WAV (header only) with 844-byte WAV containing actual audio samples. Firefox requires real sample data to decode without `NS_ERROR_DOM_MEDIA_METADATA_ERR`
+- **blob: ERR_FILE_NOT_FOUND on page refresh**: Delayed keepalive audio `src` assignment via `setTimeout(0)` so React Strict Mode cleanup can cancel it before the browser starts loading a blob URL that gets immediately revoked
+- **WebSocket "closed before established" warning**: Delayed initial WebSocket connect via `setTimeout(0)` so React Strict Mode's immediate cleanup cancels the first attempt, preventing a connection that would be immediately closed
+
 ## [v2.12.0] - 2026-02-17
 
 ### Added

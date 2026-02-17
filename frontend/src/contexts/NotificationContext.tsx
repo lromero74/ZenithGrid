@@ -197,15 +197,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, [handleOrderFill])
 
-  // Connect on mount
+  // Connect on mount (delayed to avoid React StrictMode "closed before established")
   useEffect(() => {
-    connect()
+    // setTimeout(0) ensures Strict Mode's immediate cleanup cancels this before it fires,
+    // so only the second (real) mount actually creates the WebSocket connection.
+    const connectTimer = setTimeout(connect, 0)
 
     return () => {
+      clearTimeout(connectTimer)
       const ws = wsRef.current
       if (ws) {
-        // Detach all handlers to prevent reconnection and state updates after unmount
-        // (React StrictMode double-invokes effects, causing "closed before established" otherwise)
         ws.onopen = null
         ws.onmessage = null
         ws.onerror = null

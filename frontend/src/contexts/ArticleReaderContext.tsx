@@ -362,12 +362,18 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     for (let i = 0; i < numSamples; i++) view.setUint8(44 + i, 128) // 128 = silence for 8-bit WAV
     const blob = new Blob([buffer], { type: 'audio/wav' })
     const url = URL.createObjectURL(blob)
-    const audio = new Audio(url)
+    const audio = new Audio()
     audio.loop = true
     audio.volume = 0.01 // Near-silent (some browsers optimize away volume=0)
     keepaliveAudioRef.current = audio
+    // Delay src assignment so React Strict Mode cleanup can prevent the load
+    // (avoids ERR_FILE_NOT_FOUND when the blob URL is revoked during unmount)
+    const srcTimer = setTimeout(() => { audio.src = url }, 0)
     return () => {
+      clearTimeout(srcTimer)
       audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
       URL.revokeObjectURL(url)
       keepaliveAudioRef.current = null
     }
