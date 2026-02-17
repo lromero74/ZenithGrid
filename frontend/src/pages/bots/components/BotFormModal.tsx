@@ -59,11 +59,15 @@ export function BotFormModal({
     BLACKLISTED: 0,
   })
 
+  // Track which coins have user overrides
+  const [overriddenCoins, setOverriddenCoins] = useState<Set<string>>(new Set())
+
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const blacklist = await blacklistApi.getAll()
         const categoryMap: Record<string, string> = {}
+        const overridden = new Set<string>()
         const counts: Record<string, number> = {
           APPROVED: 0,
           BORDERLINE: 0,
@@ -74,19 +78,27 @@ export function BotFormModal({
 
         blacklist.forEach((entry: BlacklistEntry) => {
           const reason = entry.reason || ''
-          let category = 'BLACKLISTED'
+          let globalCategory = 'BLACKLISTED'
 
-          if (reason.startsWith('[APPROVED]')) category = 'APPROVED'
-          else if (reason.startsWith('[BORDERLINE]')) category = 'BORDERLINE'
-          else if (reason.startsWith('[QUESTIONABLE]')) category = 'QUESTIONABLE'
-          else if (reason.startsWith('[MEME]')) category = 'MEME'
+          if (reason.startsWith('[APPROVED]')) globalCategory = 'APPROVED'
+          else if (reason.startsWith('[BORDERLINE]')) globalCategory = 'BORDERLINE'
+          else if (reason.startsWith('[QUESTIONABLE]')) globalCategory = 'QUESTIONABLE'
+          else if (reason.startsWith('[MEME]')) globalCategory = 'MEME'
 
-          categoryMap[entry.symbol] = category
-          counts[category]++
+          // Use user override if present, otherwise global
+          const effectiveCategory = entry.user_override_category || globalCategory
+          categoryMap[entry.symbol] = effectiveCategory
+
+          if (entry.user_override_category) {
+            overridden.add(entry.symbol)
+          }
+
+          counts[effectiveCategory]++
         })
 
         setCoinCategories(categoryMap)
         setCategoryCounts(counts)
+        setOverriddenCoins(overridden)
       } catch (err) {
         console.error('Failed to load coin categories:', err)
       }
@@ -101,6 +113,7 @@ export function BotFormModal({
   const getCategoryBadge = (pairId: string) => {
     const baseCurrency = pairId.split('-')[0]
     const category = coinCategories[baseCurrency] || 'APPROVED'
+    const isOverridden = overriddenCoins.has(baseCurrency)
 
     const badgeStyles: Record<string, { bg: string; text: string; label: string }> = {
       APPROVED: { bg: 'bg-green-600/20', text: 'text-green-400', label: 'A' },
@@ -113,10 +126,10 @@ export function BotFormModal({
     const style = badgeStyles[category]
     return (
       <span
-        className={`inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded ${style.bg} ${style.text}`}
-        title={category}
+        className={`inline-flex items-center justify-center ${isOverridden ? 'w-6' : 'w-4'} h-4 text-[10px] font-bold rounded ${style.bg} ${style.text}`}
+        title={isOverridden ? `${category} (personal override)` : category}
       >
-        {style.label}
+        {style.label}{isOverridden ? '*' : ''}
       </span>
     )
   }

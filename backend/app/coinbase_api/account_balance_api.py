@@ -4,6 +4,7 @@ Handles accounts, portfolios, balances, and aggregate calculations
 """
 
 import logging
+import os
 from typing import Any, Callable, Dict, List, Optional
 
 from app.cache import api_cache
@@ -12,14 +13,15 @@ from app.constants import BALANCE_CACHE_TTL, AGGREGATE_VALUE_CACHE_TTL, MIN_USD_
 logger = logging.getLogger(__name__)
 
 
-async def get_accounts(request_func: Callable, force_fresh: bool = False) -> List[Dict[str, Any]]:
+async def get_accounts(request_func: Callable, force_fresh: bool = False, account_id: Optional[int] = None) -> List[Dict[str, Any]]:
     """
     Get all accounts with pagination support (cached to reduce API calls unless force_fresh=True).
 
     Coinbase API may paginate results. This function fetches all pages to ensure
     no accounts are missed.
     """
-    cache_key = "accounts_list"
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"accounts_list_{acct_suffix}"
 
     if not force_fresh:
         cached = await api_cache.get(cache_key)
@@ -133,14 +135,15 @@ async def get_btc_balance(request_func: Callable, auth_type: str) -> float:
         return balance
 
 
-async def get_eth_balance(request_func: Callable, auth_type: str) -> float:
+async def get_eth_balance(request_func: Callable, auth_type: str, account_id: Optional[int] = None) -> float:
     """
     Get ETH balance
 
     Uses portfolio breakdown for CDP auth, individual accounts for HMAC auth.
     Both methods are cached to reduce API calls.
     """
-    cache_key = "balance_eth"
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"balance_eth_{acct_suffix}"
     cached = await api_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -172,9 +175,10 @@ async def get_eth_balance(request_func: Callable, auth_type: str) -> float:
         return balance
 
 
-async def get_usd_balance(request_func: Callable) -> float:
+async def get_usd_balance(request_func: Callable, account_id: Optional[int] = None) -> float:
     """Get USD balance (cached to reduce API calls)"""
-    cache_key = "balance_usd"
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"balance_usd_{acct_suffix}"
     cached = await api_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -191,9 +195,10 @@ async def get_usd_balance(request_func: Callable) -> float:
     return balance
 
 
-async def get_usdc_balance(request_func: Callable) -> float:
+async def get_usdc_balance(request_func: Callable, account_id: Optional[int] = None) -> float:
     """Get USDC balance (cached to reduce API calls)"""
-    cache_key = "balance_usdc"
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"balance_usdc_{acct_suffix}"
     cached = await api_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -210,9 +215,10 @@ async def get_usdc_balance(request_func: Callable) -> float:
     return balance
 
 
-async def get_usdt_balance(request_func: Callable) -> float:
+async def get_usdt_balance(request_func: Callable, account_id: Optional[int] = None) -> float:
     """Get USDT balance (cached to reduce API calls)"""
-    cache_key = "balance_usdt"
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"balance_usdt_{acct_suffix}"
     cached = await api_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -229,23 +235,35 @@ async def get_usdt_balance(request_func: Callable) -> float:
     return balance
 
 
-async def invalidate_balance_cache():
-    """Invalidate balance cache (call after trades)"""
-    await api_cache.delete("balance_btc")
-    await api_cache.delete("balance_eth")
-    await api_cache.delete("balance_usd")
-    await api_cache.delete("balance_usdc")
-    await api_cache.delete("balance_usdt")
-    await api_cache.delete("accounts_list")
-    await api_cache.delete("aggregate_btc_value")
-    await api_cache.delete("aggregate_usd_value")
+async def invalidate_balance_cache(account_id: Optional[int] = None):
+    """Invalidate balance cache (call after trades).
+
+    If account_id is provided, only that account's scoped keys are cleared.
+    If None, all balance/accounts/aggregate keys are cleared (global invalidation).
+    """
+    if account_id is not None:
+        suffix = str(account_id)
+        await api_cache.delete(f"balance_btc_{suffix}")
+        await api_cache.delete(f"balance_eth_{suffix}")
+        await api_cache.delete(f"balance_usd_{suffix}")
+        await api_cache.delete(f"balance_usdc_{suffix}")
+        await api_cache.delete(f"balance_usdt_{suffix}")
+        await api_cache.delete(f"accounts_list_{suffix}")
+        await api_cache.delete(f"aggregate_btc_{suffix}")
+        await api_cache.delete(f"aggregate_usd_{suffix}")
+    else:
+        # Global invalidation — clear all scoped keys
+        await api_cache.delete_prefix("balance_")
+        await api_cache.delete_prefix("accounts_list_")
+        await api_cache.delete_prefix("aggregate_")
     # Also invalidate cached portfolio responses (stale after trades)
     await api_cache.delete("portfolio_response")
     await api_cache.delete_prefix("portfolio_response_")
 
 
 async def calculate_aggregate_btc_value(
-    request_func: Callable, auth_type: str, get_current_price_func: Callable = None, bypass_cache: bool = False
+    request_func: Callable, auth_type: str, get_current_price_func: Callable = None,
+    bypass_cache: bool = False, account_id: Optional[int] = None
 ) -> float:
     """
     Calculate total BTC value of entire account (available BTC + liquidation value of all BTC-pair positions).
@@ -259,6 +277,7 @@ async def calculate_aggregate_btc_value(
         auth_type: Authentication type
         get_current_price_func: Optional function to fetch current prices
         bypass_cache: If True, skip cache and force fresh calculation (use for critical operations like position creation)
+        account_id: Scoping key for per-user cache isolation
 
     Returns:
         Total BTC value across all holdings (available + current value of positions)
@@ -266,7 +285,8 @@ async def calculate_aggregate_btc_value(
     import asyncio
 
     # Check cache first to reduce API spam (unless bypassed for critical operations)
-    cache_key = "aggregate_btc_value"
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"aggregate_btc_{acct_suffix}"
     if not bypass_cache:
         cached = await api_cache.get(cache_key)
         if cached is not None:
@@ -287,18 +307,30 @@ async def calculate_aggregate_btc_value(
     try:
         import sqlite3
 
-        db_path = "/home/ec2-user/ZenithGrid/backend/trading.db"
+        # Use relative path from this file's location (backend/app/coinbase_api/ -> backend/)
+        _backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        db_path = os.path.join(_backend_dir, "trading.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        # Query all open positions in BTC pairs
-        cursor.execute(
-            """
-            SELECT product_id, total_base_acquired, average_buy_price
-            FROM positions
-            WHERE status = 'open' AND product_id LIKE '%-BTC'
-        """
-        )
+        # Query open BTC-pair positions, scoped to account via bots table
+        if account_id is not None:
+            cursor.execute(
+                """
+                SELECT p.product_id, p.total_base_acquired, p.average_buy_price
+                FROM positions p JOIN bots b ON p.bot_id = b.id
+                WHERE p.status = 'open' AND p.product_id LIKE '%-BTC' AND b.account_id = ?
+                """,
+                (account_id,)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT product_id, total_base_acquired, average_buy_price
+                FROM positions
+                WHERE status = 'open' AND product_id LIKE '%-BTC'
+                """
+            )
 
         positions = cursor.fetchall()
         conn.close()
@@ -363,7 +395,8 @@ async def calculate_aggregate_btc_value(
 
 
 async def calculate_aggregate_usd_value(
-    request_func: Callable, get_btc_usd_price_func: Callable, get_current_price_func: Callable
+    request_func: Callable, get_btc_usd_price_func: Callable, get_current_price_func: Callable,
+    account_id: Optional[int] = None
 ) -> float:
     """
     Calculate aggregate USD value of entire portfolio (USD + all pairs converted to USD).
@@ -375,7 +408,8 @@ async def calculate_aggregate_usd_value(
     import asyncio
 
     # Check cache first to reduce API spam
-    cache_key = "aggregate_usd_value"
+    acct_suffix = str(account_id) if account_id is not None else "none"
+    cache_key = f"aggregate_usd_{acct_suffix}"
     cached = await api_cache.get(cache_key)
     if cached is not None:
         logger.info(f"✅ Using cached aggregate USD value: ${cached:.2f}")

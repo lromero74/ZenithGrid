@@ -120,6 +120,7 @@ async def get_exchange_client_for_account(
                     exchange_type="cex",
                     coinbase_key_name=kn,
                     coinbase_private_key=pk,
+                    account_id=cex_account.id,
                 )
                 logger.info(f"Using CEX account {cex_account.id} for paper trading price data")
         except Exception as e:
@@ -186,6 +187,7 @@ async def get_exchange_client_for_account(
                 exchange_type="cex",
                 coinbase_key_name=kn,
                 coinbase_private_key=pk,
+                account_id=account_id,
             )
 
     elif account.type == "dex":

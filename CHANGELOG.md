@@ -5,6 +5,31 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.5.0] - 2026-02-17
+
+### Added
+- **Per-user coin category overrides**: Users can override the global AI-generated coin category (APPROVED/BORDERLINE/QUESTIONABLE/BLACKLISTED) for themselves; overrides are marked with an asterisk (*) in the UI
+- **Override API endpoints**: `GET/PUT/DELETE /api/blacklist/overrides/{symbol}` for managing per-user overrides
+- **Public market data fallback**: Paper trading and market data endpoints now fall back to Coinbase public API (no auth required) when no user credentials are available
+- **Multi-user audit plan**: Comprehensive audit document (`MULTI_USER_AUDIT_PLAN.md`) tracking all data isolation work across 5 phases
+
+### Changed
+- **Multi-user data isolation (Phases 1-5)**: All user-facing queries now scoped by `user_id` or `account_id` — positions, trades, portfolio, dashboard stats, bots, WebSocket notifications, and balance caches are fully isolated between users
+- **Balance cache keys scoped by account_id**: Cache keys like `balance_eth`, `aggregate_btc_value` now include account_id suffix (e.g., `balance_eth_3`) to prevent cross-user cache pollution
+- **Aggregate BTC position query scoped**: `calculate_aggregate_btc_value()` now JOINs through bots table to scope positions to the correct account
+- **Hardcoded DB path removed**: `account_balance_api.py` now uses `os.path.dirname` instead of `/home/ec2-user/...`
+- **WebSocket manager user-scoped**: Connections stored as `(websocket, user_id)` tuples; `broadcast_order_fill` routes notifications only to the owning user
+- **Portfolio/account queries strictly scoped**: Removed legacy `account_id IS NULL` fallbacks in `portfolio_utils.py` and `accounts_router.py`
+- **Signal processor override-aware**: Buy decisions check per-user coin category overrides before falling back to global entries
+- **Bot monitor category filtering**: `filter_pairs_by_allowed_categories()` now respects per-user overrides via `user_id` parameter
+- **Paper trading client**: All 10 fallback methods now use public API instead of system credentials
+- **Blacklist list endpoint**: Returns `user_override_category` field when current user has an override
+
+### Fixed
+- **Cross-user balance cache pollution**: User A's cached balances could be returned for User B (critical multi-user bug)
+- **Unscoped position queries**: Dashboard stats, trades, portfolio PnL, and bot budget pre-fetch now filtered to current user's accounts
+- **`get_coinbase_from_db()` not user-scoped**: Bot CRUD and validation routers now pass `user_id` to get the correct user's exchange client
+
 ## [v2.4.0] - 2026-02-16
 
 ### Added

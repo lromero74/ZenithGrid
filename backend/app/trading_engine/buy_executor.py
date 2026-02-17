@@ -423,6 +423,7 @@ async def execute_buy(
             quote_amount=actual_quote_amount,
             price=actual_price,
             position_id=position.id,
+            user_id=position.user_id,
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")

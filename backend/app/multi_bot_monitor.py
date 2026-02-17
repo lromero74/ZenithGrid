@@ -59,7 +59,8 @@ def clear_monitor_exchange_cache(account_id: Optional[int] = None):
 async def filter_pairs_by_allowed_categories(
     db: AsyncSession,
     trading_pairs: List[str],
-    allowed_categories: Optional[List[str]] = None
+    allowed_categories: Optional[List[str]] = None,
+    user_id: Optional[int] = None,
 ) -> List[str]:
     """
     Filter trading pairs based on allowed coin categories from blacklist table.
@@ -69,6 +70,8 @@ async def filter_pairs_by_allowed_categories(
         trading_pairs: List of pairs to filter (e.g., ["ETH-BTC", "ADA-BTC"])
         allowed_categories: List of allowed categories (e.g., ["APPROVED", "BORDERLINE"])
                           If None or empty, no filtering is applied.
+        user_id: Optional user ID. If provided, per-user overrides take precedence
+                 over global entries.
 
     Returns:
         Filtered list of trading pairs that match allowed categories
@@ -96,23 +99,33 @@ async def filter_pairs_by_allowed_categories(
     result = await db.execute(query)
     blacklist_entries = result.scalars().all()
 
-    # Build map of currency -> category
+    def _category_from_reason(reason: str) -> str:
+        if reason.startswith("[APPROVED]"):
+            return "APPROVED"
+        elif reason.startswith("[BORDERLINE]"):
+            return "BORDERLINE"
+        elif reason.startswith("[QUESTIONABLE]"):
+            return "QUESTIONABLE"
+        elif reason.startswith("[MEME]"):
+            return "MEME"
+        return "BLACKLISTED"
+
+    # Build map of currency -> category (global entries first)
     currency_categories = {}
     for entry in blacklist_entries:
         reason = entry.reason or ""
-        # Extract category from reason (format: "[CATEGORY] reason" or just "reason" for BLACKLISTED)
-        if reason.startswith("[APPROVED]"):
-            category = "APPROVED"
-        elif reason.startswith("[BORDERLINE]"):
-            category = "BORDERLINE"
-        elif reason.startswith("[QUESTIONABLE]"):
-            category = "QUESTIONABLE"
-        elif reason.startswith("[MEME]"):
-            category = "MEME"
-        else:
-            category = "BLACKLISTED"
+        currency_categories[entry.symbol] = _category_from_reason(reason)
 
-        currency_categories[entry.symbol] = category
+    # Apply per-user overrides if user_id is provided
+    if user_id is not None:
+        override_query = select(BlacklistedCoin).where(
+            BlacklistedCoin.symbol.in_(base_currencies),
+            BlacklistedCoin.user_id == user_id,
+        )
+        override_result = await db.execute(override_query)
+        for entry in override_result.scalars().all():
+            reason = entry.reason or ""
+            currency_categories[entry.symbol] = _category_from_reason(reason)
 
     # Filter pairs based on allowed categories
     filtered_pairs = []
@@ -398,7 +411,7 @@ class MultiBotMonitor:
             # BUT always include pairs with existing positions
             allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None
             if allowed_categories:
-                filtered_pairs = await filter_pairs_by_allowed_categories(db, trading_pairs, allowed_categories)
+                filtered_pairs = await filter_pairs_by_allowed_categories(db, trading_pairs, allowed_categories, user_id=bot.user_id)
                 # Add back any pairs with open positions (must monitor existing positions!)
                 trading_pairs = list(set(filtered_pairs) | pairs_with_positions)
                 print(f"🔍 After category filter: {len(trading_pairs)} trading pairs: {trading_pairs}")
@@ -1568,7 +1581,7 @@ class MultiBotMonitor:
             if allowed_categories and opportunities:
                 # Extract pairs from opportunities
                 opportunity_pairs = [o.get("product_id") for o in opportunities if o.get("product_id")]
-                filtered_pairs = await filter_pairs_by_allowed_categories(db, opportunity_pairs, allowed_categories)
+                filtered_pairs = await filter_pairs_by_allowed_categories(db, opportunity_pairs, allowed_categories, user_id=bot.user_id)
                 filtered_pairs_set = set(filtered_pairs)
                 # Filter opportunities to only include allowed pairs
                 opportunities = [o for o in opportunities if o.get("product_id") in filtered_pairs_set]

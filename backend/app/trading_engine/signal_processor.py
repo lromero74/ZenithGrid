@@ -421,9 +421,24 @@ async def process_signal(
                 # Check if coin is blacklisted before considering a buy (skip if cooldown blocked)
                 if not buy_reason:
                     base_symbol = product_id.split("-")[0]  # "ETH-BTC" -> "ETH"
-                    blacklist_query = select(BlacklistedCoin).where(BlacklistedCoin.symbol == base_symbol)
-                    blacklist_result = await db.execute(blacklist_query)
-                    blacklisted_entry = blacklist_result.scalars().first()
+
+                    # Check for user-specific override first, then fall back to global
+                    user_override_query = select(BlacklistedCoin).where(
+                        BlacklistedCoin.symbol == base_symbol,
+                        BlacklistedCoin.user_id == bot.user_id,
+                    )
+                    user_override_result = await db.execute(user_override_query)
+                    user_override_entry = user_override_result.scalars().first()
+
+                    if user_override_entry:
+                        blacklisted_entry = user_override_entry
+                    else:
+                        global_query = select(BlacklistedCoin).where(
+                            BlacklistedCoin.symbol == base_symbol,
+                            BlacklistedCoin.user_id.is_(None),
+                        )
+                        global_result = await db.execute(global_query)
+                        blacklisted_entry = global_result.scalars().first()
 
                     if blacklisted_entry:
                         # Determine coin's category from reason prefix

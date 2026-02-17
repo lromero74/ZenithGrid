@@ -2,11 +2,12 @@
 WebSocket Connection Manager for real-time notifications
 
 Manages WebSocket connections and broadcasts order fill events to connected clients.
+Connections are scoped by user_id so notifications only reach the owning user.
 """
 
 import logging
 import asyncio
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime
 
 from fastapi import WebSocket
@@ -18,46 +19,55 @@ class WebSocketManager:
     """Manages WebSocket connections and broadcasts messages to clients"""
 
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        # Store (websocket, user_id) tuples
+        self.active_connections: List[Tuple[WebSocket, int]] = []
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket):
-        """Accept a new WebSocket connection"""
+    async def connect(self, websocket: WebSocket, user_id: int):
+        """Accept a new WebSocket connection for a specific user"""
         await websocket.accept()
         async with self._lock:
-            self.active_connections.append(websocket)
-        logger.info(f"WebSocket connected. Total connections: {len(self.active_connections)}")
+            self.active_connections.append((websocket, user_id))
+        logger.info(f"WebSocket connected for user {user_id}. Total connections: {len(self.active_connections)}")
 
     async def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection"""
         async with self._lock:
-            if websocket in self.active_connections:
-                self.active_connections.remove(websocket)
+            self.active_connections = [
+                (ws, uid) for ws, uid in self.active_connections if ws is not websocket
+            ]
         logger.info(f"WebSocket disconnected. Total connections: {len(self.active_connections)}")
 
-    async def broadcast(self, message: dict):
-        """Broadcast a message to all connected clients"""
-        if not self.active_connections:
+    async def broadcast(self, message: dict, user_id: Optional[int] = None):
+        """
+        Broadcast a message to connected clients.
+
+        If user_id is provided, only send to that user's connections.
+        If user_id is None, send to all (for system-wide messages).
+        """
+        async with self._lock:
+            if user_id is not None:
+                connections = [(ws, uid) for ws, uid in self.active_connections if uid == user_id]
+            else:
+                connections = list(self.active_connections)
+
+        if not connections:
             return
 
-        # Create a copy of connections to avoid modification during iteration
-        async with self._lock:
-            connections = list(self.active_connections)
-
         disconnected = []
-        for connection in connections:
+        for ws, uid in connections:
             try:
-                await connection.send_json(message)
+                await ws.send_json(message)
             except Exception as e:
-                logger.warning(f"Failed to send message to client: {e}")
-                disconnected.append(connection)
+                logger.warning(f"Failed to send message to user {uid}: {e}")
+                disconnected.append(ws)
 
         # Clean up disconnected clients
         if disconnected:
             async with self._lock:
-                for conn in disconnected:
-                    if conn in self.active_connections:
-                        self.active_connections.remove(conn)
+                self.active_connections = [
+                    (ws, uid) for ws, uid in self.active_connections if ws not in disconnected
+                ]
 
     async def broadcast_order_fill(
         self,
@@ -69,8 +79,9 @@ class WebSocketManager:
         position_id: int,
         profit: Optional[float] = None,
         profit_percentage: Optional[float] = None,
+        user_id: Optional[int] = None,
     ):
-        """Broadcast an order fill event to all connected clients"""
+        """Broadcast an order fill event to the owning user's connections"""
         message = {
             "type": "order_fill",
             "fill_type": fill_type,  # base_order, dca_order, sell_order, partial_fill
@@ -83,8 +94,8 @@ class WebSocketManager:
             "profit_percentage": profit_percentage,
             "timestamp": datetime.utcnow().isoformat(),
         }
-        logger.info(f"📢 Broadcasting order fill: {fill_type} for {product_id}")
-        await self.broadcast(message)
+        logger.info(f"Broadcasting order fill: {fill_type} for {product_id} (user_id={user_id})")
+        await self.broadcast(message, user_id=user_id)
 
 
 # Global singleton instance

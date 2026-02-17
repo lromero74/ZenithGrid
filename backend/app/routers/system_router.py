@@ -382,9 +382,17 @@ async def get_dashboard(
 ):
     """Get dashboard statistics"""
     try:
-        # Get current position
+        # Get current user's account IDs for scoping queries
+        user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+        user_accounts_r = await db.execute(user_accounts_q)
+        user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+
+        # Get current position (scoped to user)
         current_position = None
-        query = select(Position).where(Position.status == "open").order_by(desc(Position.opened_at))
+        query = select(Position).where(
+            Position.status == "open",
+            Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+        ).order_by(desc(Position.opened_at))
         result = await db.execute(query)
         pos = result.scalars().first()
 
@@ -397,18 +405,26 @@ async def get_dashboard(
             current_position = PositionResponse.model_validate(pos)
             current_position.trade_count = trade_count
 
-        # Total positions
-        total_positions_query = select(func.count(Position.id))
+        # Total positions (scoped to user)
+        total_positions_query = select(func.count(Position.id)).where(
+            Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+        )
         total_positions_result = await db.execute(total_positions_query)
         total_positions = total_positions_result.scalar() or 0
 
-        # Total profit (closed positions only)
-        profit_query = select(func.sum(Position.profit_btc)).where(Position.status == "closed")
+        # Total profit (closed positions only, scoped to user)
+        profit_query = select(func.sum(Position.profit_btc)).where(
+            Position.status == "closed",
+            Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+        )
         profit_result = await db.execute(profit_query)
         total_profit_btc = profit_result.scalar() or 0.0
 
-        # Win rate
-        closed_positions_query = select(Position).where(Position.status == "closed")
+        # Win rate (scoped to user)
+        closed_positions_query = select(Position).where(
+            Position.status == "closed",
+            Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+        )
         closed_result = await db.execute(closed_positions_query)
         closed_positions = closed_result.scalars().all()
 
@@ -461,8 +477,20 @@ async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monito
 
 @router.get("/api/trades", response_model=List[TradeResponse])
 async def get_trades(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get recent trades"""
-    query = select(Trade).order_by(desc(Trade.timestamp)).limit(limit)
+    """Get recent trades (scoped to current user)"""
+    # Get user's account IDs to scope trades via positions
+    user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+    user_accounts_r = await db.execute(user_accounts_q)
+    user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+
+    # Get position IDs for user's accounts
+    user_position_ids_q = select(Position.id).where(
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
+
+    query = select(Trade).where(
+        Trade.position_id.in_(user_position_ids_q)
+    ).order_by(desc(Trade.timestamp)).limit(limit)
     result = await db.execute(query)
     trades = result.scalars().all()
 

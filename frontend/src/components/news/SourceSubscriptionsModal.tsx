@@ -115,8 +115,6 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
     }
   }
 
-  if (!isOpen) return null
-
   const newsSources = sources.filter(s => s.type === 'news')
   const videoSources = sources.filter(s => s.type === 'video')
   const currentSources = activeTab === 'news' ? newsSources : videoSources
@@ -137,6 +135,8 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
     })
     return sortedCategories.map(cat => ({ category: cat, sources: groups[cat] }))
   }, [currentSources])
+
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

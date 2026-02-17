@@ -18,13 +18,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
-from app.models import PendingOrder, Position, User
+from app.models import Account, PendingOrder, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import LimitCloseRequest, UpdateLimitCloseRequest
 from app.routers.auth_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _get_user_position(db: AsyncSession, position_id: int, user_id: int) -> Position:
+    """Fetch a position that belongs to the given user, or raise 404."""
+    accounts_q = select(Account.id).where(Account.user_id == user_id)
+    accounts_r = await db.execute(accounts_q)
+    user_account_ids = [row[0] for row in accounts_r.fetchall()]
+
+    if not user_account_ids:
+        raise HTTPException(status_code=404, detail="Position not found")
+
+    query = select(Position).where(
+        Position.id == position_id,
+        Position.account_id.in_(user_account_ids),
+    )
+    result = await db.execute(query)
+    position = result.scalars().first()
+    if not position:
+        raise HTTPException(status_code=404, detail="Position not found")
+    return position
 
 
 @router.post("/{position_id}/limit-close")
@@ -37,12 +57,7 @@ async def limit_close_position(
 ):
     """Close a position via limit order"""
     try:
-        query = select(Position).where(Position.id == position_id)
-        result = await db.execute(query)
-        position = result.scalars().first()
-
-        if not position:
-            raise HTTPException(status_code=404, detail="Position not found")
+        position = await _get_user_position(db, position_id, current_user.id)
 
         if position.status != "open":
             raise HTTPException(status_code=400, detail="Position is not open")
@@ -153,12 +168,7 @@ async def get_position_ticker(
 ):
     """Get current bid/ask/mark prices for a position"""
     try:
-        query = select(Position).where(Position.id == position_id)
-        result = await db.execute(query)
-        position = result.scalars().first()
-
-        if not position:
-            raise HTTPException(status_code=404, detail="Position not found")
+        position = await _get_user_position(db, position_id, current_user.id)
 
         # Get ticker data including bid/ask
         ticker = await coinbase.get_ticker(position.product_id)
@@ -187,12 +197,7 @@ async def check_market_close_slippage(
 ):
     """Check if closing at market would result in significant slippage"""
     try:
-        query = select(Position).where(Position.id == position_id)
-        result = await db.execute(query)
-        position = result.scalars().first()
-
-        if not position:
-            raise HTTPException(status_code=404, detail="Position not found")
+        position = await _get_user_position(db, position_id, current_user.id)
 
         if position.status != "open":
             raise HTTPException(status_code=400, detail="Position is not open")
@@ -248,12 +253,7 @@ async def cancel_limit_close(
 ):
     """Cancel a pending limit close order"""
     try:
-        query = select(Position).where(Position.id == position_id)
-        result = await db.execute(query)
-        position = result.scalars().first()
-
-        if not position:
-            raise HTTPException(status_code=404, detail="Position not found")
+        position = await _get_user_position(db, position_id, current_user.id)
 
         if not position.closing_via_limit:
             raise HTTPException(status_code=400, detail="Position does not have a pending limit close order")
@@ -294,12 +294,7 @@ async def update_limit_close(
 ):
     """Update the limit price for a pending limit close order using Coinbase's native Edit Order API"""
     try:
-        query = select(Position).where(Position.id == position_id)
-        result = await db.execute(query)
-        position = result.scalars().first()
-
-        if not position:
-            raise HTTPException(status_code=404, detail="Position not found")
+        position = await _get_user_position(db, position_id, current_user.id)
 
         if not position.closing_via_limit:
             raise HTTPException(status_code=400, detail="Position does not have a pending limit close order")

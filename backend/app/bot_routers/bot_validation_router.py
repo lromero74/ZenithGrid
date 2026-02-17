@@ -24,15 +24,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
-    """Get Coinbase client from the first active CEX account in the database."""
-    result = await db.execute(
-        select(Account).where(
-            Account.type == "cex",
-            Account.is_active.is_(True),
-            Account.is_paper_trading.is_not(True)  # Exclude paper trading accounts
-        ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
+async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> CoinbaseClient:
+    """Get Coinbase client from the first active CEX account for a user."""
+    query = select(Account).where(
+        Account.type == "cex",
+        Account.is_active.is_(True),
+        Account.is_paper_trading.is_not(True),
     )
+    if user_id:
+        query = query.where(Account.user_id == user_id)
+    query = query.order_by(Account.is_default.desc(), Account.created_at).limit(1)
+
+    result = await db.execute(query)
     account = result.scalar_one_or_none()
 
     if not account or not account.api_key_name or not account.api_private_key:
@@ -59,7 +62,7 @@ async def validate_bot_config(request: ValidateBotConfigRequest, db: AsyncSessio
 
     Returns warnings with suggested minimum percentages if validation fails.
     """
-    coinbase = await get_coinbase_from_db(db)
+    coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
     if not coinbase:
         raise HTTPException(
             status_code=503,

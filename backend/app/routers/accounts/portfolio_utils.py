@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, or_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import api_cache
@@ -163,18 +163,11 @@ async def get_cex_portfolio(
         if total_usd_value > 0:
             holding["percentage"] = (holding["usd_value"] / total_usd_value) * 100
 
-    # Get PnL from positions for this account
-    # Include positions with NULL account_id for CEX default accounts (legacy positions)
-    if account.is_default and account.type == "cex":
-        positions_query = select(Position).where(
-            Position.status == "open",
-            or_(Position.account_id == account.id, Position.account_id.is_(None))
-        )
-    else:
-        positions_query = select(Position).where(
-            Position.status == "open",
-            Position.account_id == account.id
-        )
+    # Get PnL from positions for this account (strictly scoped)
+    positions_query = select(Position).where(
+        Position.status == "open",
+        Position.account_id == account.id
+    )
     positions_result = await db.execute(positions_query)
     open_positions = positions_result.scalars().all()
 
@@ -241,12 +234,8 @@ async def get_cex_portfolio(
 
     portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
 
-    # Get balance breakdown for this account's bots
-    # Include bots with NULL account_id for CEX default accounts (legacy bots)
-    if account.is_default and account.type == "cex":
-        bots_query = select(Bot).where(or_(Bot.account_id == account.id, Bot.account_id.is_(None)))
-    else:
-        bots_query = select(Bot).where(Bot.account_id == account.id)
+    # Get balance breakdown for this account's bots (strictly scoped)
+    bots_query = select(Bot).where(Bot.account_id == account.id)
     bots_result = await db.execute(bots_query)
     account_bots = bots_result.scalars().all()
 
@@ -285,18 +274,11 @@ async def get_cex_portfolio(
     free_usd = max(0.0, total_usd_portfolio - (total_reserved_usd + total_in_positions_usd))
     free_usdc = max(0.0, total_usdc_portfolio - total_in_positions_usdc)
 
-    # Calculate PnL
-    # Include closed positions with NULL account_id for CEX default accounts (legacy positions)
-    if account.is_default and account.type == "cex":
-        closed_positions_query = select(Position).where(
-            Position.status == "closed",
-            or_(Position.account_id == account.id, Position.account_id.is_(None))
-        )
-    else:
-        closed_positions_query = select(Position).where(
-            Position.status == "closed",
-            Position.account_id == account.id
-        )
+    # Calculate PnL (strictly scoped to this account)
+    closed_positions_query = select(Position).where(
+        Position.status == "closed",
+        Position.account_id == account.id
+    )
     closed_positions_result = await db.execute(closed_positions_query)
     closed_positions = closed_positions_result.scalars().all()
 

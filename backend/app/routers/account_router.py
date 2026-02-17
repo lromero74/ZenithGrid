@@ -25,6 +25,7 @@ from app.exchange_clients.factory import create_exchange_client
 from app.models import Account, Bot, PendingOrder, Position, User
 from app.routers.auth_dependencies import get_current_user
 from app.services import portfolio_conversion_service as pcs
+from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,31 @@ async def calculate_available_balance(
 
     # Ensure non-negative
     return max(0, available)
+
+
+async def get_user_paper_account(db: AsyncSession, user_id: int) -> Optional[Account]:
+    """Get user's paper trading account if they have no live CEX account."""
+    # Check if user has a live CEX account
+    live_result = await db.execute(
+        select(Account).where(
+            Account.user_id == user_id,
+            Account.type == "cex",
+            Account.is_active.is_(True),
+            Account.is_paper_trading.is_not(True)
+        ).limit(1)
+    )
+    if live_result.scalar_one_or_none():
+        return None  # Has live account, not paper-only
+
+    # Get paper trading account
+    paper_result = await db.execute(
+        select(Account).where(
+            Account.user_id == user_id,
+            Account.is_paper_trading.is_(True),
+            Account.is_active.is_(True),
+        ).limit(1)
+    )
+    return paper_result.scalar_one_or_none()
 
 
 async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> CoinbaseClient:
@@ -329,6 +355,26 @@ async def get_balances(
 async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get aggregate portfolio value (BTC + USD) for bot budgeting"""
     try:
+        # Check if user is paper-only
+        paper_account = await get_user_paper_account(db, current_user.id)
+        if paper_account:
+            client = await get_exchange_client_for_account(db, paper_account.id)
+            if client:
+                aggregate_btc = await client.calculate_aggregate_btc_value()
+                aggregate_usd = await client.calculate_aggregate_usd_value()
+                btc_usd_price = await client.get_btc_usd_price()
+                return {
+                    "aggregate_btc_value": aggregate_btc,
+                    "aggregate_usd_value": aggregate_usd,
+                    "btc_usd_price": btc_usd_price,
+                }
+            # Paper account but client creation failed — return defaults
+            return {
+                "aggregate_btc_value": 0.0,
+                "aggregate_usd_value": 0.0,
+                "btc_usd_price": 0.0,
+            }
+
         coinbase = await get_coinbase_from_db(db, current_user.id)
         aggregate_btc = await coinbase.calculate_aggregate_btc_value()
         aggregate_usd = await coinbase.calculate_aggregate_usd_value()
@@ -339,6 +385,8 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
             "aggregate_usd_value": aggregate_usd,
             "btc_usd_price": btc_usd_price,
         }
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
@@ -347,8 +395,41 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
 async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get full portfolio breakdown (all coins like 3Commas)"""
     try:
+        # Paper-only users get a simulated portfolio from their virtual balances
+        paper_account = await get_user_paper_account(db, current_user.id)
+        if paper_account:
+            client = await get_exchange_client_for_account(db, paper_account.id)
+            if client and hasattr(client, 'balances'):
+                btc_usd_price = 0.0
+                try:
+                    btc_usd_price = await client.get_btc_usd_price()
+                except Exception:
+                    pass
+                assets = []
+                for currency, balance in client.balances.items():
+                    if balance > 0:
+                        assets.append({
+                            "asset": currency,
+                            "total_balance": balance,
+                            "available_balance": balance,
+                            "hold_balance": 0.0,
+                            "usd_value": balance * btc_usd_price if currency == "BTC" else balance if currency in ("USD", "USDC") else 0.0,
+                            "btc_value": balance if currency == "BTC" else 0.0,
+                            "allocation_pct": 0.0,
+                            "price_usd": btc_usd_price if currency == "BTC" else 1.0 if currency in ("USD", "USDC") else 0.0,
+                            "change_24h": 0.0,
+                        })
+                return {
+                    "assets": assets,
+                    "total_usd_value": sum(a["usd_value"] for a in assets),
+                    "total_btc_value": sum(a["btc_value"] for a in assets),
+                    "btc_usd_price": btc_usd_price,
+                    "is_paper_trading": True,
+                }
+            return {"assets": [], "total_usd_value": 0, "total_btc_value": 0, "btc_usd_price": 0, "is_paper_trading": True}
+
         # Check response cache first (60s TTL) to avoid slow re-computation
-        cache_key = "portfolio_response"
+        cache_key = f"portfolio_response_{current_user.id}"
         cached = await api_cache.get(cache_key)
         if cached is not None:
             logger.debug("Using cached portfolio response")
@@ -496,9 +577,15 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
             if total_usd_value > 0:
                 holding["percentage"] = (holding["usd_value"] / total_usd_value) * 100
 
-        # Calculate unrealized PnL from open positions
-        # Get all open positions
-        positions_query = select(Position).where(Position.status == "open")
+        # Calculate unrealized PnL from open positions (scoped to current user)
+        user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+        user_accounts_r = await db.execute(user_accounts_q)
+        user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+
+        positions_query = select(Position).where(
+            Position.status == "open",
+            Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+        )
         positions_result = await db.execute(positions_query)
         open_positions_for_pnl = positions_result.scalars().all()
 
@@ -555,16 +642,21 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
         # Calculate free (unreserved) balances for BTC and USD
         # Free = Total Portfolio - (Bot Reservations + Open Position Balances)
 
-        # Get all bots and sum their reservations
-        bots_query = select(Bot)
+        # Get bots for current user and sum their reservations
+        bots_query = select(Bot).where(
+            Bot.account_id.in_(user_account_ids) if user_account_ids else Bot.id < 0,
+        )
         bots_result = await db.execute(bots_query)
         all_bots = bots_result.scalars().all()
 
         total_reserved_btc = sum(bot.reserved_btc_balance for bot in all_bots)
         total_reserved_usd = sum(bot.reserved_usd_balance for bot in all_bots)
 
-        # Get all open positions and calculate their current values
-        positions_query = select(Position).where(Position.status == "open")
+        # Get current user's open positions and calculate their current values
+        positions_query = select(Position).where(
+            Position.status == "open",
+            Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+        )
         positions_result = await db.execute(positions_query)
         open_positions = positions_result.scalars().all()
 
@@ -618,9 +710,11 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
         free_usd = max(0.0, free_usd)
         free_usdc = max(0.0, free_usdc)
 
-        # Calculate realized PnL from closed positions
-        # All-time PnL
-        closed_positions_query = select(Position).where(Position.status == "closed")
+        # Calculate realized PnL from closed positions (scoped to current user)
+        closed_positions_query = select(Position).where(
+            Position.status == "closed",
+            Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+        )
         closed_positions_result = await db.execute(closed_positions_query)
         closed_positions = closed_positions_result.scalars().all()
 
@@ -725,7 +819,6 @@ async def _run_portfolio_conversion(
         # Get database session
         async for db in get_db():
             # Get exchange client
-            from app.services.exchange_service import get_exchange_client_for_account
             exchange = await get_exchange_client_for_account(db, account_id)
             if not exchange:
                 pcs.update_task_progress(

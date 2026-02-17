@@ -884,7 +884,6 @@ async def _get_generic_cex_portfolio(
     Uses the exchange adapter's get_accounts() for balances and
     the database for position-level P&L.
     """
-    from sqlalchemy import or_
     from app.models import Position, Bot
 
     exchange = await get_exchange_client_for_account(db, account.id)
@@ -990,25 +989,15 @@ async def _get_generic_cex_portfolio(
 
     portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
 
-    # Get position P&L from database
-    if account.is_default and account.type == "cex":
-        positions_q = select(Position).where(
-            Position.status == "open",
-            or_(Position.account_id == account.id, Position.account_id.is_(None)),
-        )
-        closed_q = select(Position).where(
-            Position.status == "closed",
-            or_(Position.account_id == account.id, Position.account_id.is_(None)),
-        )
-    else:
-        positions_q = select(Position).where(
-            Position.status == "open",
-            Position.account_id == account.id,
-        )
-        closed_q = select(Position).where(
-            Position.status == "closed",
-            Position.account_id == account.id,
-        )
+    # Get position P&L from database (strictly scoped to this account)
+    positions_q = select(Position).where(
+        Position.status == "open",
+        Position.account_id == account.id,
+    )
+    closed_q = select(Position).where(
+        Position.status == "closed",
+        Position.account_id == account.id,
+    )
 
     open_result = await db.execute(positions_q)
     open_positions = open_result.scalars().all()

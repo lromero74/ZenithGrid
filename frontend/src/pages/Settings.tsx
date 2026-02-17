@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect, useCallback } from 'react'
-import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Shield, ShieldCheck, ShieldOff, Copy, CheckSquare, Monitor, MapPin, Clock, X as XIcon, Mail } from 'lucide-react'
+import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Shield, Copy, CheckSquare, Monitor, MapPin, Clock, X as XIcon, Mail, Smartphone } from 'lucide-react'
 import { AccountsManagement } from '../components/AccountsManagement'
 import { PaperTradingManager } from '../components/PaperTradingManager'
 import { AddAccountModal } from '../components/AddAccountModal'
@@ -476,43 +476,168 @@ export default function Settings() {
           </form>
         </div>
 
-        {/* Two-Factor Authentication Section */}
+        {/* Multi-Factor Authentication Section */}
         <div className="border-t border-slate-700 pt-6">
           <div className="flex items-center space-x-2 mb-4">
             <Shield className="w-5 h-5 text-slate-400" />
-            <h4 className="text-lg font-medium">Two-Factor Authentication</h4>
+            <h4 className="text-lg font-medium">Multi-Factor Authentication</h4>
           </div>
 
-          {/* MFA Success Message */}
+          {/* Success Messages */}
           {mfaSetupSuccess && (
             <div className="mb-4 p-4 bg-green-500/10 border border-green-500/50 rounded-lg flex items-center space-x-3">
               <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-              <p className="text-green-400 text-sm">Two-factor authentication enabled successfully!</p>
+              <p className="text-green-400 text-sm">Authenticator app enabled successfully!</p>
             </div>
           )}
 
-          {user?.mfa_enabled ? (
-            /* MFA is enabled — show status + disable option */
-            <div>
-              <div className="flex items-center space-x-3 mb-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-                <ShieldCheck className="w-6 h-6 text-green-400 flex-shrink-0" />
-                <div>
-                  <p className="text-green-400 font-medium">2FA is enabled</p>
-                  <p className="text-slate-400 text-sm">Your account is protected with an authenticator app.</p>
+          {emailMfaSuccess && (
+            <div className="mb-4 p-4 bg-green-500/10 border border-green-500/50 rounded-lg flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+              <p className="text-green-400 text-sm">Email MFA enabled successfully!</p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {/* Authenticator App Row */}
+            <div className="bg-slate-700/50 rounded-lg border border-slate-600 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Smartphone className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-white">Authenticator App</p>
+                    <p className="text-xs text-slate-400">Use Google Authenticator, Authy, etc.</p>
+                  </div>
                 </div>
+                <button
+                  onClick={() => {
+                    if (user?.mfa_enabled) {
+                      setShowDisableMFA(true)
+                      setMfaDisableError(null)
+                    } else if (mfaSetupStep === 'idle') {
+                      handleMFASetup()
+                    }
+                  }}
+                  disabled={mfaSetupStep !== 'idle' && !user?.mfa_enabled}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-800 ${
+                    user?.mfa_enabled ? 'bg-green-600' : 'bg-slate-600'
+                  } ${(mfaSetupStep !== 'idle' && !user?.mfa_enabled) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  role="switch"
+                  aria-checked={!!user?.mfa_enabled}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      user?.mfa_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
 
-              {!showDisableMFA ? (
-                <button
-                  onClick={() => { setShowDisableMFA(true); setMfaDisableError(null) }}
-                  className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 rounded-lg transition-colors text-sm"
-                >
-                  Disable 2FA
-                </button>
-              ) : (
-                <div className="mt-4 p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+              {/* Authenticator Setup Flow — Loading */}
+              {!user?.mfa_enabled && mfaSetupStep === 'loading' && (
+                <div className="mt-4 pt-4 border-t border-slate-600/50 flex items-center space-x-3">
+                  <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span className="text-slate-300 text-sm">Setting up authenticator...</span>
+                </div>
+              )}
+
+              {/* Authenticator Setup Flow — QR Code + Verify */}
+              {!user?.mfa_enabled && (mfaSetupStep === 'scanning' || mfaSetupStep === 'verifying') && (
+                <div className="mt-4 pt-4 border-t border-slate-600/50 space-y-4">
+                  <p className="text-sm text-slate-300">
+                    Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):
+                  </p>
+
+                  {mfaQrCode && (
+                    <div className="flex justify-center p-4 bg-white rounded-lg w-fit mx-auto">
+                      <img
+                        src={`data:image/png;base64,${mfaQrCode}`}
+                        alt="MFA QR Code"
+                        className="w-48 h-48"
+                      />
+                    </div>
+                  )}
+
+                  {mfaSecretKey && (
+                    <div className="p-3 bg-slate-700/50 rounded-lg border border-slate-600">
+                      <p className="text-xs text-slate-400 mb-1">Can't scan? Enter this key manually:</p>
+                      <div className="flex items-center space-x-2">
+                        <code className="text-sm text-blue-300 font-mono tracking-wider flex-1 break-all">
+                          {mfaSecretKey}
+                        </code>
+                        <button
+                          onClick={copySecretKey}
+                          className="p-1.5 text-slate-400 hover:text-white transition-colors flex-shrink-0"
+                          title="Copy to clipboard"
+                        >
+                          {secretCopied ? <CheckSquare className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {mfaSetupError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <p className="text-red-400 text-sm">{mfaSetupError}</p>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleMFAVerifySetup} className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Enter the 6-digit code from your app to verify:
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]{6}"
+                        maxLength={6}
+                        value={mfaSetupCode}
+                        onChange={(e) => setMfaSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        required
+                        autoComplete="one-time-code"
+                        autoFocus
+                        placeholder="000000"
+                        className="w-full max-w-xs px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-lg tracking-[0.3em] font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        type="submit"
+                        disabled={mfaSetupStep === 'verifying' || mfaSetupCode.length !== 6}
+                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+                      >
+                        {mfaSetupStep === 'verifying' ? 'Verifying...' : 'Verify & Enable'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelMFASetup}
+                        className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Error from failed setup attempt (shown when idle) */}
+              {!user?.mfa_enabled && mfaSetupStep === 'idle' && mfaSetupError && (
+                <div className="mt-3 p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <p className="text-red-400 text-sm">{mfaSetupError}</p>
+                </div>
+              )}
+
+              {/* Authenticator Disable Flow */}
+              {user?.mfa_enabled && showDisableMFA && (
+                <div className="mt-4 pt-4 border-t border-slate-600/50">
                   <p className="text-sm text-slate-300 mb-4">
-                    To disable two-factor authentication, enter your password and a code from your authenticator app.
+                    Enter your password and a code from your authenticator app to disable.
                   </p>
 
                   {mfaDisableError && (
@@ -564,264 +689,99 @@ export default function Settings() {
                 </div>
               )}
             </div>
-          ) : mfaSetupStep === 'idle' ? (
-            /* MFA not enabled, not setting up — show enable button */
-            <div>
-              <div className="flex items-center space-x-3 mb-4 p-4 bg-slate-700/50 border border-slate-600 rounded-lg">
-                <ShieldOff className="w-6 h-6 text-slate-400 flex-shrink-0" />
-                <div>
-                  <p className="text-slate-300 font-medium">2FA is not enabled</p>
-                  <p className="text-slate-400 text-sm">Add an extra layer of security with an authenticator app.</p>
-                </div>
-              </div>
 
-              {mfaSetupError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <p className="text-red-400 text-sm">{mfaSetupError}</p>
-                </div>
-              )}
-
-              <button
-                onClick={handleMFASetup}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-sm"
-              >
-                Enable 2FA
-              </button>
-            </div>
-          ) : mfaSetupStep === 'loading' ? (
-            /* Loading setup */
-            <div className="flex items-center space-x-3 p-4">
-              <svg className="animate-spin h-5 w-5 text-blue-400" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <span className="text-slate-300">Setting up two-factor authentication...</span>
-            </div>
-          ) : (
-            /* Scanning QR / Verifying setup code */
-            <div className="space-y-4">
-              <p className="text-sm text-slate-300">
-                Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):
-              </p>
-
-              {/* QR Code */}
-              {mfaQrCode && (
-                <div className="flex justify-center p-4 bg-white rounded-lg w-fit mx-auto">
-                  <img
-                    src={`data:image/png;base64,${mfaQrCode}`}
-                    alt="MFA QR Code"
-                    className="w-48 h-48"
-                  />
-                </div>
-              )}
-
-              {/* Manual Entry Key */}
-              {mfaSecretKey && (
-                <div className="p-3 bg-slate-700/50 rounded-lg border border-slate-600">
-                  <p className="text-xs text-slate-400 mb-1">Can't scan? Enter this key manually:</p>
-                  <div className="flex items-center space-x-2">
-                    <code className="text-sm text-blue-300 font-mono tracking-wider flex-1 break-all">
-                      {mfaSecretKey}
-                    </code>
-                    <button
-                      onClick={copySecretKey}
-                      className="p-1.5 text-slate-400 hover:text-white transition-colors flex-shrink-0"
-                      title="Copy to clipboard"
-                    >
-                      {secretCopied ? <CheckSquare className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Verify Setup Code */}
-              {mfaSetupError && (
-                <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <p className="text-red-400 text-sm">{mfaSetupError}</p>
-                </div>
-              )}
-
-              <form onSubmit={handleMFAVerifySetup} className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Enter the 6-digit code from your app to verify:
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    value={mfaSetupCode}
-                    onChange={(e) => setMfaSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    required
-                    autoComplete="one-time-code"
-                    autoFocus
-                    placeholder="000000"
-                    className="w-full max-w-xs px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-center text-lg tracking-[0.3em] font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    type="submit"
-                    disabled={mfaSetupStep === 'verifying' || mfaSetupCode.length !== 6}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
-                  >
-                    {mfaSetupStep === 'verifying' ? 'Verifying...' : 'Verify & Enable'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelMFASetup}
-                    className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* Email MFA Section */}
-          <div className="mt-6 pt-4 border-t border-slate-600/50">
-            <div className="flex items-center space-x-2 mb-4">
-              <Mail className="w-5 h-5 text-slate-400" />
-              <h5 className="text-sm font-medium text-slate-300">Email Verification</h5>
-            </div>
-
-            {emailMfaSuccess && (
-              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/50 rounded-lg flex items-center space-x-2">
-                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
-                <p className="text-green-400 text-sm">Email MFA enabled successfully!</p>
-              </div>
-            )}
-
-            {user?.mfa_email_enabled ? (
-              <div>
-                <div className="flex items-center space-x-3 mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <ShieldCheck className="w-5 h-5 text-green-400 flex-shrink-0" />
+            {/* Email Verification Row */}
+            <div className={`bg-slate-700/50 rounded-lg border border-slate-600 p-4${!user?.email_verified ? ' opacity-75' : ''}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Mail className="w-5 h-5 text-blue-400 flex-shrink-0" />
                   <div>
-                    <p className="text-green-400 font-medium text-sm">Email verification is enabled</p>
-                    <p className="text-slate-400 text-xs">A verification code and link will be sent to your email during login.</p>
+                    <p className="text-sm font-medium text-white">Email Verification</p>
+                    <p className="text-xs text-slate-400">Receive a code and link via email</p>
                   </div>
                 </div>
-
-                {showEmailMfaConfirm !== 'disable' ? (
-                  <button
-                    onClick={() => { setShowEmailMfaConfirm('disable'); setEmailMfaError(null); setEmailMfaPassword('') }}
-                    className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 rounded-lg transition-colors text-sm"
-                  >
-                    Disable Email MFA
-                  </button>
-                ) : (
-                  <div className="mt-3 p-4 bg-slate-700/50 rounded-lg border border-slate-600">
-                    <p className="text-sm text-slate-300 mb-3">
-                      Enter your password to disable email MFA.
-                    </p>
-
-                    {emailMfaError && (
-                      <div className="mb-3 p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
-                        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                        <p className="text-red-400 text-sm">{emailMfaError}</p>
-                      </div>
-                    )}
-
-                    <form onSubmit={handleEmailMfaToggle} className="space-y-3">
-                      <input
-                        type="password"
-                        value={emailMfaPassword}
-                        onChange={(e) => setEmailMfaPassword(e.target.value)}
-                        required
-                        autoComplete="current-password"
-                        placeholder="Current password"
-                        className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      />
-                      <div className="flex space-x-3">
-                        <button
-                          type="submit"
-                          disabled={isTogglingEmailMfa || !emailMfaPassword}
-                          className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
-                        >
-                          {isTogglingEmailMfa ? 'Disabling...' : 'Confirm Disable'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setShowEmailMfaConfirm(null); setEmailMfaError(null); setEmailMfaPassword('') }}
-                          className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
+                <button
+                  onClick={() => {
+                    if (!user?.email_verified) return
+                    if (user?.mfa_email_enabled) {
+                      setShowEmailMfaConfirm('disable')
+                    } else {
+                      setShowEmailMfaConfirm('enable')
+                    }
+                    setEmailMfaError(null)
+                    setEmailMfaPassword('')
+                  }}
+                  disabled={!user?.email_verified || isTogglingEmailMfa}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-800 ${
+                    user?.mfa_email_enabled ? 'bg-green-600' : 'bg-slate-600'
+                  } ${(!user?.email_verified || isTogglingEmailMfa) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  role="switch"
+                  aria-checked={!!user?.mfa_email_enabled}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      user?.mfa_email_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
-            ) : (
-              <div>
-                <div className="flex items-center space-x-3 mb-4 p-3 bg-slate-700/50 border border-slate-600 rounded-lg">
-                  <ShieldOff className="w-5 h-5 text-slate-400 flex-shrink-0" />
-                  <div>
-                    <p className="text-slate-300 text-sm font-medium">Email verification is not enabled</p>
-                    <p className="text-slate-400 text-xs">Receive a verification code and link via email when logging in.</p>
-                  </div>
+
+              {!user?.email_verified && (
+                <p className="text-xs text-amber-400 mt-2 ml-8">Verify your email address first to enable email MFA.</p>
+              )}
+
+              {/* Email MFA Enable/Disable Form */}
+              {showEmailMfaConfirm && (
+                <div className="mt-4 pt-4 border-t border-slate-600/50">
+                  <p className="text-sm text-slate-300 mb-3">
+                    Enter your password to {showEmailMfaConfirm === 'enable' ? 'enable' : 'disable'} email MFA.
+                  </p>
+
+                  {emailMfaError && (
+                    <div className="mb-3 p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <p className="text-red-400 text-sm">{emailMfaError}</p>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleEmailMfaToggle} className="space-y-3">
+                    <input
+                      type="password"
+                      value={emailMfaPassword}
+                      onChange={(e) => setEmailMfaPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                      placeholder="Current password"
+                      className={`w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 ${
+                        showEmailMfaConfirm === 'disable' ? 'focus:ring-red-500' : 'focus:ring-blue-500'
+                      } focus:border-transparent`}
+                    />
+                    <div className="flex space-x-3">
+                      <button
+                        type="submit"
+                        disabled={isTogglingEmailMfa || !emailMfaPassword}
+                        className={`px-4 py-2 ${
+                          showEmailMfaConfirm === 'disable'
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        } disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm`}
+                      >
+                        {isTogglingEmailMfa
+                          ? (showEmailMfaConfirm === 'enable' ? 'Enabling...' : 'Disabling...')
+                          : (showEmailMfaConfirm === 'enable' ? 'Confirm Enable' : 'Confirm Disable')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowEmailMfaConfirm(null); setEmailMfaError(null); setEmailMfaPassword('') }}
+                        className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
                 </div>
-
-                {!user?.email_verified && (
-                  <p className="text-xs text-amber-400 mb-3">You must verify your email address before enabling email MFA.</p>
-                )}
-
-                {showEmailMfaConfirm !== 'enable' ? (
-                  <button
-                    onClick={() => { setShowEmailMfaConfirm('enable'); setEmailMfaError(null); setEmailMfaPassword('') }}
-                    disabled={!user?.email_verified}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
-                  >
-                    Enable Email MFA
-                  </button>
-                ) : (
-                  <div className="mt-3 p-4 bg-slate-700/50 rounded-lg border border-slate-600">
-                    <p className="text-sm text-slate-300 mb-3">
-                      Enter your password to enable email MFA.
-                    </p>
-
-                    {emailMfaError && (
-                      <div className="mb-3 p-3 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center space-x-2">
-                        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                        <p className="text-red-400 text-sm">{emailMfaError}</p>
-                      </div>
-                    )}
-
-                    <form onSubmit={handleEmailMfaToggle} className="space-y-3">
-                      <input
-                        type="password"
-                        value={emailMfaPassword}
-                        onChange={(e) => setEmailMfaPassword(e.target.value)}
-                        required
-                        autoComplete="current-password"
-                        placeholder="Current password"
-                        className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <div className="flex space-x-3">
-                        <button
-                          type="submit"
-                          disabled={isTogglingEmailMfa || !emailMfaPassword}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
-                        >
-                          {isTogglingEmailMfa ? 'Enabling...' : 'Confirm Enable'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setShowEmailMfaConfirm(null); setEmailMfaError(null); setEmailMfaPassword('') }}
-                          className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Trusted Devices — only show when any MFA is enabled */}

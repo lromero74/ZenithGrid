@@ -32,6 +32,8 @@ def create_exchange_client(
     private_key: Optional[str] = None,
     rpc_url: Optional[str] = None,
     dex_router: Optional[str] = None,
+    # Multi-user scoping
+    account_id: Optional[int] = None,
 ) -> Optional[ExchangeClient]:
     """
     Factory function to create the appropriate exchange client.
@@ -83,6 +85,7 @@ def create_exchange_client(
             coinbase = CoinbaseClient(
                 key_name=coinbase_key_name,
                 private_key=coinbase_private_key,
+                account_id=account_id,
             )
             return CoinbaseAdapter(coinbase)
 

@@ -171,6 +171,7 @@ class LimitOrderMonitor:
                         quote_amount=new_fill_value,
                         price=avg_fill_price,
                         position_id=position.id,
+                        user_id=position.user_id,
                     )
 
                     # Update position totals (reduce remaining base, add quote received)
@@ -600,6 +601,7 @@ class LimitOrderMonitor:
                     position_id=position.id,
                     profit=position.profit_quote,
                     profit_percentage=position.profit_percentage,
+                    user_id=position.user_id,
                 )
 
             elif order_status in ["CANCELLED", "EXPIRED", "FAILED"]:

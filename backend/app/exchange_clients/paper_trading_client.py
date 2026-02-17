@@ -71,20 +71,17 @@ class PaperTradingClient(ExchangeClient):
         Get current market price from real exchange.
 
         Paper trading uses real price data for realistic simulation.
+        Falls back to the public (no-auth) Coinbase API when no real_client.
         """
         if self.real_client:
             return await self.real_client.get_price(product_id)
 
-        # Fallback: import and use Coinbase client
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        # Use system API key for price data
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_price(product_id)
+        try:
+            from app.coinbase_api import public_market_data
+            return await public_market_data.get_current_price(product_id)
+        except Exception as e:
+            logger.warning(f"Public API price fetch failed for {product_id}: {e}")
+            return None
 
     async def get_all_balances(self) -> Dict[str, float]:
         """Get all virtual balances."""
@@ -260,74 +257,54 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_products()
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_products()
+        try:
+            from app.coinbase_api import public_market_data
+            return await public_market_data.list_products()
+        except Exception as e:
+            logger.warning(f"Public API product list fetch failed: {e}")
+            return []
 
     async def get_order_book(self, product_id: str, level: int = 2) -> Dict[str, Any]:
-        """Get order book from real exchange."""
+        """Get order book — no public endpoint available, return empty."""
         if self.real_client:
             return await self.real_client.get_order_book(product_id, level)
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_order_book(product_id, level)
+        return {"bids": [], "asks": []}
 
     async def get_recent_trades(
         self,
         product_id: str,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """Get recent trades from real exchange."""
+        """Get recent trades — no public endpoint available, return empty."""
         if self.real_client:
             return await self.real_client.get_recent_trades(product_id, limit)
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_recent_trades(product_id, limit)
+        return []
 
     async def get_btc_usd_price(self) -> float:
         """Get BTC/USD price from real exchange."""
         if self.real_client:
             return await self.real_client.get_btc_usd_price()
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_btc_usd_price()
+        try:
+            from app.coinbase_api import public_market_data
+            return await public_market_data.get_btc_usd_price()
+        except Exception as e:
+            logger.warning(f"Public API BTC-USD price fetch failed: {e}")
+            return 0.0
 
     async def get_eth_usd_price(self) -> float:
         """Get ETH/USD price from real exchange."""
         if self.real_client:
             return await self.real_client.get_eth_usd_price()
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_eth_usd_price()
+        try:
+            from app.coinbase_api import public_market_data
+            return await public_market_data.get_eth_usd_price()
+        except Exception as e:
+            logger.warning(f"Public API ETH-USD price fetch failed: {e}")
+            return 0.0
 
     def is_paper_trading(self) -> bool:
         """Returns True to indicate this is a paper trading client."""
@@ -465,28 +442,24 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_product(product_id)
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_product(product_id)
+        try:
+            from app.coinbase_api import public_market_data
+            return await public_market_data.get_product(product_id)
+        except Exception as e:
+            logger.warning(f"Public API product fetch failed for {product_id}: {e}")
+            return {}
 
     async def get_ticker(self, product_id: str = "ETH-BTC") -> Dict[str, Any]:
         """Get ticker data from real exchange."""
         if self.real_client:
             return await self.real_client.get_ticker(product_id)
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_ticker(product_id)
+        try:
+            from app.coinbase_api import public_market_data
+            return await public_market_data.get_ticker(product_id)
+        except Exception as e:
+            logger.warning(f"Public API ticker fetch failed for {product_id}: {e}")
+            return {}
 
     async def get_current_price(self, product_id: str = "ETH-BTC") -> float:
         """Get current price from real exchange."""
@@ -497,14 +470,12 @@ class PaperTradingClient(ExchangeClient):
         if self.real_client:
             return await self.real_client.get_product_stats(product_id)
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_product_stats(product_id)
+        try:
+            from app.coinbase_api import public_market_data
+            return await public_market_data.get_product_stats(product_id)
+        except Exception as e:
+            logger.warning(f"Public API stats fetch failed for {product_id}: {e}")
+            return {}
 
     async def get_candles(
         self,
@@ -513,18 +484,16 @@ class PaperTradingClient(ExchangeClient):
         end: int,
         granularity: str,
     ) -> List[Dict[str, Any]]:
-        """Get candle data from real exchange (updated signature)."""
+        """Get candle data from real exchange."""
         if self.real_client:
             return await self.real_client.get_candles(product_id, start, end, granularity)
 
-        from app.coinbase_unified_client import CoinbaseClient
-        from app.config import settings
-
-        real_client = CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
-        return await real_client.get_candles(product_id, start, end, granularity)
+        try:
+            from app.coinbase_api import public_market_data
+            return await public_market_data.get_candles(product_id, start, end, granularity)
+        except Exception as e:
+            logger.warning(f"Public API candles fetch failed for {product_id}: {e}")
+            return []
 
     async def create_market_order(
         self,

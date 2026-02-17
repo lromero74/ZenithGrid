@@ -21,6 +21,7 @@ import {
   Sparkles,
   ChevronDown,
   Coins,
+  RotateCcw,
 } from 'lucide-react'
 import { blacklistApi, BlacklistEntry, marketDataApi, CategorySettings, AIProviderSettings } from '../services/api'
 import CoinIcon from './CoinIcon'
@@ -126,13 +127,17 @@ export function BlacklistManager() {
 
     return allCoins.map(coin => {
       const entry = blacklistMap.get(coin.symbol)
-      const category = entry ? getCategoryFromReason(entry.reason) : 'APPROVED'
+      const globalCategory = entry ? getCategoryFromReason(entry.reason) : 'APPROVED'
+      const overrideCategory = entry?.user_override_category || null
+      const effectiveCategory = overrideCategory || globalCategory
       const reasonText = entry ? getReasonText(entry.reason) : ''
 
       return {
         symbol: coin.symbol,
         markets: coin.markets,
-        category,
+        category: effectiveCategory,
+        globalCategory,
+        overrideCategory,
         reasonText,
         id: entry?.id,
         created_at: entry?.created_at,
@@ -197,6 +202,37 @@ export function BlacklistManager() {
       await fetchData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update category')
+    } finally {
+      setSavingSymbol(null)
+    }
+  }
+
+  // Set user override
+  const setOverride = async (symbol: string, category: string) => {
+    setSavingSymbol(symbol)
+    setError(null)
+    setOpenDropdown(null)
+
+    try {
+      await blacklistApi.setOverride(symbol, category)
+      await fetchData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set override')
+    } finally {
+      setSavingSymbol(null)
+    }
+  }
+
+  // Remove user override
+  const removeOverride = async (symbol: string) => {
+    setSavingSymbol(symbol)
+    setError(null)
+
+    try {
+      await blacklistApi.removeOverride(symbol)
+      await fetchData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove override')
     } finally {
       setSavingSymbol(null)
     }
@@ -392,10 +428,11 @@ export function BlacklistManager() {
         </div>
 
         {/* Table Header */}
-        <div className="grid grid-cols-[140px_80px_130px_1fr] gap-4 px-4 py-2 bg-slate-900 border-b border-slate-700 text-xs font-medium text-slate-400 uppercase">
+        <div className="grid grid-cols-[140px_80px_130px_110px_1fr] gap-4 px-4 py-2 bg-slate-900 border-b border-slate-700 text-xs font-medium text-slate-400 uppercase">
           <span>Symbol</span>
           <span>Markets</span>
-          <span>Category</span>
+          <span>Global</span>
+          <span>My Override</span>
           <span>Reason</span>
         </div>
 
@@ -407,22 +444,25 @@ export function BlacklistManager() {
             </div>
           ) : (
             filteredCoins.map((coin) => {
-              const config = CATEGORY_CONFIG[coin.category]
+              const globalConfig = CATEGORY_CONFIG[coin.globalCategory] || CATEGORY_CONFIG['BLACKLISTED']
+              const effectiveConfig = CATEGORY_CONFIG[coin.category] || CATEGORY_CONFIG['BLACKLISTED']
               const isSaving = savingSymbol === coin.symbol
               const isEditing = editingSymbol === coin.symbol
+              const hasOverride = !!coin.overrideCategory
 
               return (
                 <div
                   key={coin.symbol}
-                  className={`grid grid-cols-[140px_80px_130px_1fr] gap-4 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 items-center ${
+                  className={`grid grid-cols-[140px_80px_130px_110px_1fr] gap-4 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 items-center ${
                     isSaving ? 'opacity-50' : ''
                   }`}
                 >
-                  {/* Symbol with Icon */}
+                  {/* Symbol with Icon + asterisk for overridden */}
                   <div className="flex items-center gap-2">
                     <CoinIcon symbol={coin.symbol} size="sm" />
-                    <span className={`font-mono font-medium ${config.color}`}>
+                    <span className={`font-mono font-medium ${effectiveConfig.color}`}>
                       {coin.symbol}
+                      {hasOverride && <span className="text-cyan-400 ml-0.5" title="You have a personal override for this coin">*</span>}
                     </span>
                   </div>
 
@@ -442,7 +482,7 @@ export function BlacklistManager() {
                     ))}
                   </div>
 
-                  {/* Category Dropdown */}
+                  {/* Global Category Dropdown (admin only) */}
                   <div className="relative">
                     <button
                       onClick={(e) => {
@@ -450,18 +490,19 @@ export function BlacklistManager() {
                         setOpenDropdown(openDropdown === coin.symbol ? null : coin.symbol)
                       }}
                       disabled={isSaving}
-                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-medium ${config.bgColor} ${config.color} border ${config.borderColor} hover:opacity-80 transition-opacity`}
+                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-medium ${globalConfig.bgColor} ${globalConfig.color} border ${globalConfig.borderColor} hover:opacity-80 transition-opacity`}
                     >
-                      <span>{config.label}</span>
+                      <span>{globalConfig.label}</span>
                       <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === coin.symbol ? 'rotate-180' : ''}`} />
                     </button>
 
                     {/* Dropdown Menu */}
                     {openDropdown === coin.symbol && (
                       <div className="absolute z-20 top-full left-0 mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-xl overflow-hidden">
+                        <div className="px-3 py-1.5 text-[10px] font-medium text-slate-500 uppercase border-b border-slate-700">Global (Admin)</div>
                         {CATEGORIES.map((cat) => {
                           const catConfig = CATEGORY_CONFIG[cat]
-                          const isSelected = cat === coin.category
+                          const isSelected = cat === coin.globalCategory
                           return (
                             <button
                               key={cat}
@@ -483,7 +524,63 @@ export function BlacklistManager() {
                             </button>
                           )
                         })}
+                        <div className="px-3 py-1.5 text-[10px] font-medium text-slate-500 uppercase border-y border-slate-700">My Override</div>
+                        {CATEGORIES.map((cat) => {
+                          const catConfig = CATEGORY_CONFIG[cat]
+                          const isSelected = coin.overrideCategory === cat
+                          return (
+                            <button
+                              key={`override-${cat}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setOverride(coin.symbol, cat)
+                              }}
+                              className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-700 transition-colors ${
+                                isSelected ? catConfig.bgColor : ''
+                              }`}
+                            >
+                              <div className={`w-2 h-2 rounded-full ${catConfig.bgColor} ${catConfig.borderColor} border`} />
+                              <span className={isSelected ? catConfig.color : 'text-slate-300'}>
+                                {catConfig.label}
+                              </span>
+                              {isSelected && <Check className={`w-3 h-3 ml-auto ${catConfig.color}`} />}
+                            </button>
+                          )
+                        })}
+                        {hasOverride && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeOverride(coin.symbol)
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-red-900/30 text-slate-400 border-t border-slate-700"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Remove Override</span>
+                          </button>
+                        )}
                       </div>
+                    )}
+                  </div>
+
+                  {/* User Override Badge */}
+                  <div>
+                    {hasOverride ? (
+                      <div className="flex items-center gap-1">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${effectiveConfig.bgColor} ${effectiveConfig.color} border ${effectiveConfig.borderColor}`}>
+                          {effectiveConfig.label}*
+                        </span>
+                        <button
+                          onClick={() => removeOverride(coin.symbol)}
+                          className="p-0.5 text-slate-500 hover:text-red-400 transition-colors"
+                          title="Remove override"
+                          disabled={isSaving}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-600 italic">None</span>
                     )}
                   </div>
 
@@ -499,12 +596,12 @@ export function BlacklistManager() {
                           className="flex-1 px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded focus:outline-none focus:border-blue-500"
                           autoFocus
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEditReason(coin.symbol, coin.category)
+                            if (e.key === 'Enter') saveEditReason(coin.symbol, coin.globalCategory)
                             if (e.key === 'Escape') setEditingSymbol(null)
                           }}
                         />
                         <button
-                          onClick={() => saveEditReason(coin.symbol, coin.category)}
+                          onClick={() => saveEditReason(coin.symbol, coin.globalCategory)}
                           className="p-1 text-green-400 hover:text-green-300"
                         >
                           <Check className="w-4 h-4" />

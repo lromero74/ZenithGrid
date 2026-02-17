@@ -9,6 +9,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true, // Fail if port 5173 is already in use
+    allowedHosts: ['tradebot.romerotechsolutions.com'],
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8100',

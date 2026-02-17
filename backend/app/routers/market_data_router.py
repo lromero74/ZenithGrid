@@ -49,13 +49,18 @@ async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
     )
     account = result.scalar_one_or_none()
 
-    # If no user account found, use system credentials
+    # If no user account found, try system credentials, then fall back to public API
     if not account or not account.api_key_name or not account.api_private_key:
-        logger.info("No user CEX account found, using system Coinbase credentials for market data")
-        return CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
+        if settings.coinbase_api_key and settings.coinbase_api_secret:
+            logger.info("No user CEX account found, using system Coinbase credentials for market data")
+            return CoinbaseClient(
+                api_key=settings.coinbase_api_key,
+                api_secret=settings.coinbase_api_secret
+            )
+        # No credentials at all — use public (no-auth) API
+        logger.info("No Coinbase credentials available, using public market data API")
+        from app.coinbase_api.public_market_data import PublicMarketDataClient
+        return PublicMarketDataClient()
 
     # Create and return client using user's credentials
     private_key = account.api_private_key
@@ -69,11 +74,15 @@ async def get_coinbase(db: AsyncSession = Depends(get_db)) -> CoinbaseClient:
 
     if not client:
         # Fallback to system credentials if user client fails
-        logger.warning("Failed to create user Coinbase client, using system credentials")
-        return CoinbaseClient(
-            api_key=settings.coinbase_api_key,
-            api_secret=settings.coinbase_api_secret
-        )
+        if settings.coinbase_api_key and settings.coinbase_api_secret:
+            logger.warning("Failed to create user Coinbase client, using system credentials")
+            return CoinbaseClient(
+                api_key=settings.coinbase_api_key,
+                api_secret=settings.coinbase_api_secret
+            )
+        logger.warning("Failed to create user Coinbase client, using public market data API")
+        from app.coinbase_api.public_market_data import PublicMarketDataClient
+        return PublicMarketDataClient()
 
     return client
 

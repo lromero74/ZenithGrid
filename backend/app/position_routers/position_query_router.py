@@ -10,15 +10,13 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, AIBotLog, BlacklistedCoin, Bot, PendingOrder, Position, Trade, User
-from app.position_routers.dependencies import get_coinbase
 from app.routers.auth_dependencies import get_current_user
 from app.schemas import AIBotLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails, LimitOrderFill
@@ -33,7 +31,6 @@ async def get_positions(
     status: Optional[str] = None,
     limit: int = Query(50, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(get_current_user),
 ):
     """Get positions with optional status filter"""
@@ -723,7 +720,20 @@ async def get_position(
 
 @router.get("/{position_id}/trades", response_model=List[TradeResponse])
 async def get_position_trades(position_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get all trades for a position"""
+    """Get all trades for a position (verifies ownership)"""
+    # Verify position belongs to current user
+    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_result = await db.execute(accounts_query)
+    user_account_ids = [row[0] for row in accounts_result.fetchall()]
+
+    pos_query = select(Position).where(
+        Position.id == position_id,
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
+    pos_result = await db.execute(pos_query)
+    if not pos_result.scalars().first():
+        raise HTTPException(status_code=404, detail="Position not found")
+
     query = select(Trade).where(Trade.position_id == position_id).order_by(Trade.timestamp)
     result = await db.execute(query)
     trades = result.scalars().all()
@@ -740,10 +750,15 @@ async def get_position_ai_logs(position_id: int, include_before_open: bool = Tru
     30 seconds after position closed. This captures the AI's complete
     decision-making process including what led to opening and closing.
     """
-    from fastapi import HTTPException
+    # Verify position belongs to current user
+    accounts_query = select(Account.id).where(Account.user_id == current_user.id)
+    accounts_result = await db.execute(accounts_query)
+    user_account_ids = [row[0] for row in accounts_result.fetchall()]
 
-    # Get the position to know when it was opened/closed
-    pos_query = select(Position).where(Position.id == position_id)
+    pos_query = select(Position).where(
+        Position.id == position_id,
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
     pos_result = await db.execute(pos_query)
     position = pos_result.scalars().first()
 

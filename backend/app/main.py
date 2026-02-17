@@ -579,7 +579,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
         await websocket.close(code=4001, reason="Authentication failed")
         return
 
-    await ws_manager.connect(websocket)
+    await ws_manager.connect(websocket, user_id)
     try:
         while True:
             # Keep connection alive and wait for messages

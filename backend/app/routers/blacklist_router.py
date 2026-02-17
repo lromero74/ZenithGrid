@@ -67,6 +67,7 @@ class BlacklistEntry(BaseModel):
     reason: Optional[str] = None
     created_at: str
     is_global: bool = False  # True if this is an AI-generated global entry
+    user_override_category: Optional[str] = None  # Non-null if current user has an override
 
     class Config:
         from_attributes = True
@@ -95,6 +96,19 @@ class BlacklistUpdateRequest(BaseModel):
 # ============================================================================
 # Category Trading Settings (MUST be before /{symbol} routes to avoid conflicts)
 # ============================================================================
+
+class UserOverrideRequest(BaseModel):
+    """Request model for creating/updating a per-user category override"""
+    category: str  # APPROVED, BORDERLINE, QUESTIONABLE, BLACKLISTED
+    reason: Optional[str] = None
+
+
+class UserOverrideResponse(BaseModel):
+    """Response model for a user override"""
+    symbol: str
+    category: str
+    reason: Optional[str] = None
+
 
 class CategorySettingsRequest(BaseModel):
     """Request model for updating allowed categories"""
@@ -288,6 +302,120 @@ async def update_ai_provider_setting(
 
 
 # ============================================================================
+# Per-User Category Overrides
+# ============================================================================
+
+
+def _extract_category(reason: Optional[str]) -> str:
+    """Extract category from reason prefix."""
+    if not reason:
+        return "BLACKLISTED"
+    for cat in VALID_CATEGORIES:
+        if reason.startswith(f"[{cat}]"):
+            return cat
+    return "BLACKLISTED"
+
+
+@router.get("/overrides/", response_model=List[UserOverrideResponse])
+async def list_user_overrides(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all category overrides for the current user."""
+    query = select(BlacklistedCoin).where(
+        BlacklistedCoin.user_id == current_user.id
+    ).order_by(BlacklistedCoin.symbol)
+    result = await db.execute(query)
+    overrides = result.scalars().all()
+
+    return [
+        UserOverrideResponse(
+            symbol=o.symbol,
+            category=_extract_category(o.reason),
+            reason=o.reason.split("] ", 1)[1] if o.reason and "] " in o.reason else o.reason,
+        )
+        for o in overrides
+    ]
+
+
+@router.put("/overrides/{symbol}", response_model=UserOverrideResponse)
+async def set_user_override(
+    symbol: str,
+    request: UserOverrideRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create or update a per-user category override for a coin."""
+    normalized_symbol = symbol.upper().strip()
+    if not normalized_symbol:
+        raise HTTPException(status_code=400, detail="Symbol cannot be empty")
+
+    category = request.category.upper()
+    if category not in VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid category: {category}. Valid: {VALID_CATEGORIES}",
+        )
+
+    # Build reason with category prefix
+    reason_text = request.reason or "User override"
+    full_reason = f"[{category}] {reason_text}"
+
+    # Check for existing user override
+    query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol == normalized_symbol,
+        BlacklistedCoin.user_id == current_user.id,
+    )
+    result = await db.execute(query)
+    existing = result.scalars().first()
+
+    if existing:
+        existing.reason = full_reason
+    else:
+        entry = BlacklistedCoin(
+            symbol=normalized_symbol,
+            reason=full_reason,
+            user_id=current_user.id,
+        )
+        db.add(entry)
+
+    await db.commit()
+    logger.info(f"User {current_user.id} set override for {normalized_symbol}: {category}")
+
+    return UserOverrideResponse(
+        symbol=normalized_symbol,
+        category=category,
+        reason=reason_text,
+    )
+
+
+@router.delete("/overrides/{symbol}")
+async def remove_user_override(
+    symbol: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove a per-user category override (revert to global category)."""
+    normalized_symbol = symbol.upper().strip()
+
+    query = select(BlacklistedCoin).where(
+        BlacklistedCoin.symbol == normalized_symbol,
+        BlacklistedCoin.user_id == current_user.id,
+    )
+    result = await db.execute(query)
+    entry = result.scalars().first()
+
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"No override found for {normalized_symbol}")
+
+    await db.delete(entry)
+    await db.commit()
+    logger.info(f"User {current_user.id} removed override for {normalized_symbol}")
+
+    return {"message": f"Override removed for {normalized_symbol}, reverted to global category"}
+
+
+# ============================================================================
 # Blacklist CRUD Operations
 # ============================================================================
 
@@ -300,16 +428,22 @@ async def list_blacklisted_coins(
     Get all coin categorizations.
 
     Returns global AI-generated entries (visible to all users).
-    Users can view categories but cannot modify them - only admins can.
+    Includes user_override_category if the current user has an override for that coin.
     """
     # Show global entries (user_id IS NULL) to everyone
-    # These are the AI-generated categorizations
     query = select(BlacklistedCoin).where(
         BlacklistedCoin.user_id.is_(None)
     ).order_by(BlacklistedCoin.symbol)
 
     result = await db.execute(query)
     coins = result.scalars().all()
+
+    # Fetch current user's overrides to annotate entries
+    override_query = select(BlacklistedCoin).where(
+        BlacklistedCoin.user_id == current_user.id
+    )
+    override_result = await db.execute(override_query)
+    user_overrides = {o.symbol: _extract_category(o.reason) for o in override_result.scalars().all()}
 
     return [
         BlacklistEntry(
@@ -318,6 +452,7 @@ async def list_blacklisted_coins(
             reason=coin.reason,
             created_at=coin.created_at.isoformat() if coin.created_at else "",
             is_global=True,
+            user_override_category=user_overrides.get(coin.symbol),
         )
         for coin in coins
     ]

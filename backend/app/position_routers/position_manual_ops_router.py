@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.coinbase_unified_client import CoinbaseClient
 from app.currency_utils import get_quote_currency
 from app.database import get_db
-from app.models import Position, User
+from app.models import Account, Position, User
 from app.position_routers.dependencies import get_coinbase
 from app.position_routers.schemas import AddFundsRequest, UpdateNotesRequest
 from app.routers.auth_dependencies import get_current_user
@@ -35,7 +35,17 @@ async def add_funds_to_position(
     """Manually add funds to a position (manual safety order)"""
     quote_amount = request.btc_amount  # Multi-currency: actually quote amount (BTC or USD)
     try:
-        query = select(Position).where(Position.id == position_id)
+        # Verify position belongs to current user
+        accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+        accounts_r = await db.execute(accounts_q)
+        user_account_ids = [row[0] for row in accounts_r.fetchall()]
+        if not user_account_ids:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        query = select(Position).where(
+            Position.id == position_id,
+            Position.account_id.in_(user_account_ids),
+        )
         result = await db.execute(query)
         position = result.scalars().first()
 
@@ -101,7 +111,17 @@ async def add_funds_to_position(
 async def update_position_notes(position_id: int, request: UpdateNotesRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update notes for a position (like 3Commas)"""
     try:
-        query = select(Position).where(Position.id == position_id)
+        # Verify position belongs to current user
+        accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+        accounts_r = await db.execute(accounts_q)
+        user_account_ids = [row[0] for row in accounts_r.fetchall()]
+        if not user_account_ids:
+            raise HTTPException(status_code=404, detail="Position not found")
+
+        query = select(Position).where(
+            Position.id == position_id,
+            Position.account_id.in_(user_account_ids),
+        )
         result = await db.execute(query)
         position = result.scalars().first()
 

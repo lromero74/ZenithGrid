@@ -707,6 +707,7 @@ async def execute_sell(
             position_id=position.id,
             profit=profit_quote,
             profit_percentage=profit_percentage,
+            user_id=position.user_id,
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")

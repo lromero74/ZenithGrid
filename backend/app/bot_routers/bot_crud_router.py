@@ -25,17 +25,20 @@ from app.strategies import StrategyDefinition, StrategyRegistry
 logger = logging.getLogger(__name__)
 
 
-async def get_coinbase_from_db(db: AsyncSession) -> CoinbaseClient:
-    """Get Coinbase client from the first active CEX account in the database."""
+async def get_coinbase_from_db(db: AsyncSession, user_id: int = None) -> CoinbaseClient:
+    """Get Coinbase client from the first active CEX account for a user."""
     from sqlalchemy import select
 
-    result = await db.execute(
-        select(Account).where(
-            Account.type == "cex",
-            Account.is_active.is_(True),
-            Account.is_paper_trading.is_not(True)  # Exclude paper trading accounts
-        ).order_by(Account.is_default.desc(), Account.created_at).limit(1)
+    query = select(Account).where(
+        Account.type == "cex",
+        Account.is_active.is_(True),
+        Account.is_paper_trading.is_not(True),
     )
+    if user_id:
+        query = query.where(Account.user_id == user_id)
+    query = query.order_by(Account.is_default.desc(), Account.created_at).limit(1)
+
+    result = await db.execute(query)
     account = result.scalar_one_or_none()
 
     if not account or not account.api_key_name or not account.api_private_key:
@@ -260,7 +263,7 @@ async def list_bots(
     bots = result.scalars().all()
 
     # Initialize coinbase client for budget calculations (from database)
-    coinbase = await get_coinbase_from_db(db)
+    coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
     if not coinbase:
         # Return bots without budget calculations if no CEX account configured
         bot_responses = []
@@ -299,8 +302,15 @@ async def list_bots(
         fetch_btc_aggregate(), fetch_usd_aggregate()
     )
 
-    # Pre-fetch all open position prices in parallel
-    all_open_positions_query = select(Position).where(Position.status == "open")
+    # Pre-fetch current user's open position prices in parallel
+    user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
+    user_accounts_r = await db.execute(user_accounts_q)
+    user_account_ids = [row[0] for row in user_accounts_r.fetchall()]
+
+    all_open_positions_query = select(Position).where(
+        Position.status == "open",
+        Position.account_id.in_(user_account_ids) if user_account_ids else Position.id < 0,
+    )
     all_open_result = await db.execute(all_open_positions_query)
     all_open_positions = all_open_result.scalars().all()
 
@@ -979,7 +989,7 @@ async def get_bot_stats(
     )
 
     try:
-        coinbase = await get_coinbase_from_db(db)
+        coinbase = await get_coinbase_from_db(db, user_id=current_user.id)
         if not coinbase:
             raise ValueError("No CEX account configured")
 

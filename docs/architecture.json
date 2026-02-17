@@ -1,6 +1,6 @@
 {
   "project": "ZenithGrid",
-  "version": "v2.4.0",
+  "version": "v2.5.0",
   "updated": "2026-02-16",
   "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -183,7 +183,8 @@
         { "file": "coinbase_api/account_balance_api.py", "purpose": "Account balance and portfolio queries" },
         { "file": "coinbase_api/market_data_api.py", "purpose": "Prices, candles, product listings" },
         { "file": "coinbase_api/order_api.py", "purpose": "Order placement, cancellation, and status" },
-        { "file": "coinbase_api/perpetuals_api.py", "purpose": "Perpetual futures positions, portfolio, allocations" }
+        { "file": "coinbase_api/perpetuals_api.py", "purpose": "Perpetual futures positions, portfolio, allocations" },
+        { "file": "coinbase_api/public_market_data.py", "purpose": "Public (no-auth) market data endpoints for paper trading and fallback; includes PublicMarketDataClient" }
       ],
       "unified_client": "coinbase_unified_client.py (CoinbaseClient wrapper coordinating all API modules)"
     },
@@ -540,8 +541,22 @@
   "data_flow": {
     "request_flow": "React Page -> Custom Hook -> API Module (Axios) -> FastAPI Router -> Service/Engine -> SQLAlchemy Model -> SQLite",
     "trading_flow": "MultiBotMonitor -> TradingStrategy.check_signals() -> TradingEngineV2.process_signal() -> TradingClient -> ExchangeClient (-> PropGuard for prop firms) -> Exchange API",
-    "websocket_flow": "Exchange order fill -> WebSocketManager.broadcast() -> NotificationContext -> Toast component + Audio notification",
+    "websocket_flow": "Exchange order fill -> WebSocketManager.broadcast(user_id) -> NotificationContext -> Toast component + Audio notification",
     "ai_decision_flow": "MultiBotMonitor -> AIService.get_recommendation() -> AI Provider API -> TradingEngine -> OrderValidation -> Exchange",
     "background_task_flow": "FastAPI startup -> asyncio.create_task() -> Periodic loop with sleep interval -> Database operations"
+  },
+
+  "multi_user_data_isolation": {
+    "description": "All user-facing API endpoints scope queries by current_user.id or their account IDs. Background services process all users intentionally.",
+    "ownership_chain": "User -> Account(s) -> Bot(s) -> Position(s) -> Trade(s)",
+    "patterns": {
+      "router_queries": "Filter by user_account_ids: select(Account.id).where(Account.user_id == current_user.id), then Position.account_id.in_(user_account_ids)",
+      "position_ownership": "Helper function _get_user_position() in position_limit_orders_router.py verifies position belongs to user's accounts before any operation",
+      "websocket_scoping": "WebSocketManager stores (websocket, user_id) tuples; broadcast() filters by user_id so notifications only reach the owning user",
+      "exchange_clients": "Each account has its own API credentials; get_exchange_client_for_account(db, account_id) creates per-account clients",
+      "paper_trading": "Users without Coinbase credentials get PublicMarketDataClient (no-auth public endpoints) instead of failing CoinbaseClient"
+    },
+    "background_services": "Bot monitor, limit order monitor, and reconciliation services intentionally process all users (no user filter) but use per-account exchange clients and route notifications to the correct user",
+    "audit_tracking": "MULTI_USER_AUDIT_PLAN.md tracks all query scoping work across 5 phases"
   }
 }

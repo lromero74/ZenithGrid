@@ -487,6 +487,13 @@ export interface BlacklistEntry {
   symbol: string;
   reason: string | null;
   created_at: string;
+  user_override_category?: string | null;
+}
+
+export interface UserOverrideResponse {
+  symbol: string;
+  category: string;
+  reason: string | null;
 }
 
 export interface CategorySettings {
@@ -520,6 +527,13 @@ export const blacklistApi = {
     api.get<AIProviderSettings>('/blacklist/ai-provider').then((res) => res.data),
   updateAIProvider: (provider: string) =>
     api.put<AIProviderSettings>('/blacklist/ai-provider', { provider }).then((res) => res.data),
+  // Per-user category overrides
+  getOverrides: () =>
+    api.get<UserOverrideResponse[]>('/blacklist/overrides/').then((res) => res.data),
+  setOverride: (symbol: string, category: string, reason?: string) =>
+    api.put<UserOverrideResponse>(`/blacklist/overrides/${symbol}`, { category, reason }).then((res) => res.data),
+  removeOverride: (symbol: string) =>
+    api.delete<{ message: string }>(`/blacklist/overrides/${symbol}`).then((res) => res.data),
 };
 
 export interface AIProviderSettings {

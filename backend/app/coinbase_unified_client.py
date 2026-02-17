@@ -45,6 +45,8 @@ class CoinbaseClient:
         # HMAC auth params
         api_key: Optional[str] = None,
         api_secret: Optional[str] = None,
+        # Multi-user scoping
+        account_id: Optional[int] = None,
     ):
         """
         Initialize Coinbase client with auto-detection of auth method
@@ -102,6 +104,9 @@ class CoinbaseClient:
                 self.api_secret = settings.coinbase_api_secret
                 logger.info("Using HMAC authentication (from settings)")
 
+        # Store account_id for per-user cache scoping
+        self.account_id = account_id
+
     async def _request(
         self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -135,7 +140,7 @@ class CoinbaseClient:
 
     async def get_accounts(self, force_fresh: bool = False) -> List[Dict[str, Any]]:
         """Get all accounts (cached to reduce API calls unless force_fresh=True)"""
-        return await account_balance_api.get_accounts(self._request, force_fresh)
+        return await account_balance_api.get_accounts(self._request, force_fresh, account_id=self.account_id)
 
     async def get_account(self, account_id: str) -> Dict[str, Any]:
         """Get specific account details"""
@@ -155,23 +160,23 @@ class CoinbaseClient:
 
     async def get_eth_balance(self) -> float:
         """Get ETH balance"""
-        return await account_balance_api.get_eth_balance(self._request, self.auth_type)
+        return await account_balance_api.get_eth_balance(self._request, self.auth_type, account_id=self.account_id)
 
     async def get_usd_balance(self) -> float:
         """Get USD balance"""
-        return await account_balance_api.get_usd_balance(self._request)
+        return await account_balance_api.get_usd_balance(self._request, account_id=self.account_id)
 
     async def get_usdc_balance(self) -> float:
         """Get USDC balance"""
-        return await account_balance_api.get_usdc_balance(self._request)
+        return await account_balance_api.get_usdc_balance(self._request, account_id=self.account_id)
 
     async def get_usdt_balance(self) -> float:
         """Get USDT balance"""
-        return await account_balance_api.get_usdt_balance(self._request)
+        return await account_balance_api.get_usdt_balance(self._request, account_id=self.account_id)
 
     async def invalidate_balance_cache(self):
         """Invalidate balance cache (call after trades)"""
-        await account_balance_api.invalidate_balance_cache()
+        await account_balance_api.invalidate_balance_cache(account_id=self.account_id)
 
     async def calculate_aggregate_btc_value(self, bypass_cache: bool = False) -> float:
         """
@@ -181,13 +186,15 @@ class CoinbaseClient:
             bypass_cache: If True, skip cache and force fresh calculation (use for critical operations)
         """
         return await account_balance_api.calculate_aggregate_btc_value(
-            self._request, self.auth_type, self.get_current_price, bypass_cache=bypass_cache
+            self._request, self.auth_type, self.get_current_price, bypass_cache=bypass_cache,
+            account_id=self.account_id
         )
 
     async def calculate_aggregate_usd_value(self) -> float:
         """Calculate aggregate USD value of entire portfolio"""
         return await account_balance_api.calculate_aggregate_usd_value(
-            self._request, self.get_btc_usd_price, self.get_current_price
+            self._request, self.get_btc_usd_price, self.get_current_price,
+            account_id=self.account_id
         )
 
     # ===== Product & Market Data Methods =====
