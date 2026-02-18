@@ -84,6 +84,10 @@ backend/scripts/*
 # Claude Code user-specific settings (commands are tracked, local settings are not)
 .claude/settings.local.json
 
+# Branding — track template, ignore custom brand and served images
+branding/custom/
+frontend/public/branding/
+
 # Process IDs
 .pids/
 *.pid

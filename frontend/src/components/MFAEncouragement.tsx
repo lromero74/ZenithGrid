@@ -6,8 +6,8 @@
  * Once dismissed, stores flag in localStorage and never shows again.
  */
 
-import { Shield, ArrowRight, Clock } from 'lucide-react'
-import { Activity } from 'lucide-react'
+import { Shield, ArrowRight, Clock, Truck } from 'lucide-react'
+import { useBrand } from '../contexts/BrandContext'
 
 interface MFAEncouragementProps {
   onSetupMFA: () => void
@@ -17,6 +17,7 @@ interface MFAEncouragementProps {
 export const MFA_DISMISSED_KEY = 'mfa_encouragement_dismissed'
 
 export function MFAEncouragement({ onSetupMFA, onSkip }: MFAEncouragementProps) {
+  const { brand } = useBrand()
   const handleSkip = () => {
     localStorage.setItem(MFA_DISMISSED_KEY, 'true')
     onSkip()
@@ -35,8 +36,8 @@ export function MFAEncouragement({ onSetupMFA, onSkip }: MFAEncouragementProps) 
       </div>
 
       <div className="flex items-center space-x-3 mb-8">
-        <Activity className="w-9 h-9 text-blue-500" />
-        <h1 className="text-3xl font-bold text-white tracking-tight">Zenith Grid</h1>
+        <Truck className="w-9 h-9 text-theme-primary" />
+        <h1 className="text-3xl font-bold text-white tracking-tight">{brand.shortName}</h1>
       </div>
 
       <div className="w-full max-w-md bg-slate-800/80 backdrop-blur-sm rounded-xl shadow-2xl border border-slate-700/50 p-8 text-center">

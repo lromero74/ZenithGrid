@@ -1,9 +1,23 @@
 # Changelog
 
-All notable changes to ZenithGrid will be documented in this file.
+All notable changes to BTC-Bot will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [v2.16.0] - 2026-02-18
+
+### Added
+- **Full rebrand to BTC-Bot**: "Big Truckin' Crypto Bot" identity across login, header, emails, maintenance page, favicon, about modal, and all auth screens. Truck icon replaces Activity icon throughout
+- **Dynamic branding system**: All brand values (name, tagline, colors, images) loaded from `branding/custom/brand.json` — no hardcoded strings. New users copy `branding/template/` to get started. Backend serves `/api/brand` (public) and `/api/brand/images/` endpoints
+- **Theme toggle**: Electric Blue Neon (`#00d4ff`) and Classic Blue (`#3b82f6`) themes via CSS custom properties. Toggle in Settings > Appearance, persists to localStorage. Brand config sets default theme for new users
+- **BrandContext + ThemeContext**: React contexts provide `useBrand()` and `useTheme()` hooks to all components. Brand config fetched once from API, theme applied via CSS class on document root
+- **Branding folder structure**: `branding/template/` (tracked, Zenith Grid defaults) + `branding/custom/` (gitignored, user's brand). README with full setup instructions
+
+### Changed
+- Email templates now use brand service for name, tagline, and copyright instead of hardcoded values
+- FastAPI title, API root message, and TOTP issuer all read from brand config dynamically
+- Tailwind extended with `theme-*` color utilities mapped to CSS variables and `neon`/`neon-sm` box shadows
 
 ## [v2.15.0] - 2026-02-18
 

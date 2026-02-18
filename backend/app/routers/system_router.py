@@ -20,6 +20,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi.responses import FileResponse
+
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
 from app.database import get_db
@@ -28,6 +30,7 @@ from app.exchange_clients.factory import create_exchange_client
 from app.models import Account, MarketData, Position, Signal, Trade, User
 from app.multi_bot_monitor import MultiBotMonitor
 from app.auth.dependencies import get_current_user, require_superuser
+from app.services.brand_service import get_brand, get_brand_images_dir
 from app.schemas import (
     DashboardStats,
     MarketDataResponse,
@@ -315,13 +318,36 @@ def get_price_monitor() -> MultiBotMonitor:
 async def root():
     current_version = get_git_version()
     latest_version = get_latest_git_tag()
+    brand = get_brand()
     return {
-        "message": "ETH/BTC Trading Bot API",
+        "message": f"{brand['shortName']} Trading API",
         "status": "running",
         "version": current_version,
         "latest_version": latest_version,
         "update_available": latest_version != current_version and current_version != "dev"
     }
+
+
+@router.get("/api/brand")
+async def get_brand_config():
+    """Get active brand configuration. Public endpoint (needed before login)."""
+    return get_brand()
+
+
+@router.get("/api/brand/images/{filename}")
+async def get_brand_image(filename: str):
+    """Serve a brand image. Public endpoint (needed for login page)."""
+    # Sanitize filename to prevent path traversal
+    safe_name = filename.replace("/", "").replace("\\", "").replace("..", "")
+    if not safe_name or safe_name != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    images_dir = get_brand_images_dir()
+    file_path = images_dir / safe_name
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return FileResponse(file_path)
 
 
 @router.get("/api/ai-providers")

@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect, useCallback } from 'react'
-import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Shield, Copy, CheckSquare, Monitor, MapPin, Clock, X as XIcon, Mail, Smartphone } from 'lucide-react'
+import { User, Lock, CheckCircle, AlertCircle, Database, Trash2, Shield, Copy, CheckSquare, Monitor, MapPin, Clock, X as XIcon, Mail, Smartphone, Palette } from 'lucide-react'
 import { AccountsManagement } from '../components/AccountsManagement'
 import { PaperTradingManager } from '../components/PaperTradingManager'
 import { AddAccountModal } from '../components/AddAccountModal'
@@ -8,12 +8,14 @@ import { AutoBuySettings } from '../components/AutoBuySettings'
 import { BlacklistManager } from '../components/BlacklistManager'
 import { useAccount } from '../contexts/AccountContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { settingsApi } from '../services/api'
 
 export default function Settings() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const { user, changePassword, getAccessToken, updateUser, enableEmailMFA, disableEmailMFA } = useAuth()
   const { accounts, selectedAccount } = useAccount()
+  const { theme, toggleTheme } = useTheme()
 
   // Check if paper trading is currently active
   const isPaperTradingActive = Boolean(selectedAccount?.is_paper_trading)
@@ -360,6 +362,44 @@ export default function Settings() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold">Settings</h2>
+      </div>
+
+      {/* Appearance Section */}
+      <div className="card p-6">
+        <div className="flex items-center space-x-3 mb-6">
+          <Palette className="w-6 h-6 text-cyan-400" />
+          <h3 className="text-xl font-semibold">Appearance</h3>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-white">Theme</p>
+            <p className="text-xs text-slate-400 mt-0.5">Switch between neon and classic color schemes</p>
+          </div>
+          <button
+            onClick={toggleTheme}
+            className="flex items-center rounded-full bg-slate-700 p-1 border border-slate-600"
+          >
+            <span
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                theme === 'neon'
+                  ? 'bg-cyan-600 text-white'
+                  : 'text-slate-400'
+              }`}
+            >
+              Electric Blue Neon
+            </span>
+            <span
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                theme === 'classic'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400'
+              }`}
+            >
+              Classic Blue
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* User Profile & Security Section */}

@@ -6,8 +6,9 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Activity, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
+import { Truck, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useBrand } from '../contexts/BrandContext'
 
 interface VerifyEmailProps {
   token: string
@@ -16,6 +17,7 @@ interface VerifyEmailProps {
 
 export function VerifyEmail({ token, onComplete }: VerifyEmailProps) {
   const { verifyEmail } = useAuth()
+  const { brand } = useBrand()
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying')
   const [error, setError] = useState<string | null>(null)
 
@@ -46,8 +48,8 @@ export function VerifyEmail({ token, onComplete }: VerifyEmailProps) {
       </div>
 
       <div className="flex items-center space-x-3 mb-8">
-        <Activity className="w-9 h-9 text-blue-500" />
-        <h1 className="text-3xl font-bold text-white tracking-tight">Zenith Grid</h1>
+        <Truck className="w-9 h-9 text-theme-primary" />
+        <h1 className="text-3xl font-bold text-white tracking-tight">{brand.shortName}</h1>
       </div>
 
       <div className="w-full max-w-md bg-slate-800/80 backdrop-blur-sm rounded-xl shadow-2xl border border-slate-700/50 p-8 text-center">

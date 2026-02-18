@@ -6,8 +6,9 @@
  */
 
 import { useState, FormEvent } from 'react'
-import { Activity, Lock, AlertCircle, CheckCircle, Check } from 'lucide-react'
+import { Truck, Lock, AlertCircle, CheckCircle, Check } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useBrand } from '../contexts/BrandContext'
 import { PasswordStrengthMeter, isPasswordValid } from './PasswordStrengthMeter'
 
 interface ResetPasswordProps {
@@ -17,6 +18,7 @@ interface ResetPasswordProps {
 
 export function ResetPassword({ token, onComplete }: ResetPasswordProps) {
   const { resetPassword } = useAuth()
+  const { brand } = useBrand()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -51,8 +53,8 @@ export function ResetPassword({ token, onComplete }: ResetPasswordProps) {
       </div>
 
       <div className="flex items-center space-x-3 mb-8">
-        <Activity className="w-9 h-9 text-blue-500" />
-        <h1 className="text-3xl font-bold text-white tracking-tight">Zenith Grid</h1>
+        <Truck className="w-9 h-9 text-theme-primary" />
+        <h1 className="text-3xl font-bold text-white tracking-tight">{brand.shortName}</h1>
       </div>
 
       <div className="w-full max-w-md bg-slate-800/80 backdrop-blur-sm rounded-xl shadow-2xl border border-slate-700/50 p-8">

@@ -12,6 +12,16 @@ export default {
         success: '#10b981',
         danger: '#ef4444',
         warning: '#f59e0b',
+        'theme-primary': 'var(--color-primary)',
+        'theme-base': 'var(--color-bg-base)',
+        'theme-card': 'var(--color-bg-card)',
+        'theme-header': 'var(--color-bg-header)',
+        'theme-border': 'var(--color-border)',
+        'theme-border-light': 'var(--color-border-light)',
+      },
+      boxShadow: {
+        'neon': 'var(--neon-shadow)',
+        'neon-sm': 'var(--neon-shadow-sm)',
       },
       animation: {
         'pulse-ring': 'pulse-ring 0.5s ease-in-out 5',

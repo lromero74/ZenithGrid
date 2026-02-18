@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle, Shield, TrendingDown, DollarSign } from 'lucide-react'
+import { useBrand } from '../contexts/BrandContext'
 
 interface RiskDisclaimerProps {
   onAccept: () => void
@@ -8,6 +9,7 @@ interface RiskDisclaimerProps {
 }
 
 export function RiskDisclaimer({ onAccept, onDecline, isLoading }: RiskDisclaimerProps) {
+  const { brand } = useBrand()
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false)
   const [hasCheckedBox, setHasCheckedBox] = useState(false)
 
@@ -98,7 +100,7 @@ export function RiskDisclaimer({ onAccept, onDecline, isLoading }: RiskDisclaime
             <h3 className="font-semibold text-white">Terms of Use</h3>
             <div className="text-sm text-slate-300 space-y-3 leading-relaxed">
               <p>
-                By using Zenith Grid, you acknowledge and agree that:
+                By using {brand.shortName}, you acknowledge and agree that:
               </p>
               <ol className="list-decimal list-inside space-y-2 pl-2">
                 <li>You are at least 18 years of age or the age of majority in your jurisdiction.</li>

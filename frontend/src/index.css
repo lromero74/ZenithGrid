@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme: Electric Blue Neon */
+.theme-neon {
+  --color-primary: #00d4ff;
+  --color-primary-hover: #00b8e6;
+  --color-bg-base: #050d1a;
+  --color-bg-card: #0a1628;
+  --color-bg-header: #081020;
+  --color-border: #0f2847;
+  --color-border-light: #132d4f;
+  --neon-shadow: 0 0 15px rgba(0, 212, 255, 0.15), 0 0 30px rgba(0, 212, 255, 0.05);
+  --neon-shadow-sm: 0 0 8px rgba(0, 212, 255, 0.1);
+}
+
+/* Theme: Classic Blue */
+.theme-classic {
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-bg-base: #0f172a;
+  --color-bg-card: #1e293b;
+  --color-bg-header: #1e293b;
+  --color-border: #334155;
+  --color-border-light: #475569;
+  --neon-shadow: none;
+  --neon-shadow-sm: none;
+}
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -9,7 +35,7 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #0f172a;
+  background-color: var(--color-bg-base, #0f172a);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
