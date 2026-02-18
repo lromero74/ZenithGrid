@@ -449,6 +449,7 @@ export default function News() {
                   published: item.published,
                   thumbnail: item.thumbnail,
                   summary: item.summary,
+                  has_issue: item.has_issue,
                 }))
                 startArticlePlaylist(articles, 0)
               }}
@@ -525,6 +526,7 @@ export default function News() {
                         key={`${article.source}-${idx}`}
                         onClick={() => {
                           const articles: ArticleItem[] = filteredNews.map(item => ({
+                            id: item.id,
                             title: item.title,
                             url: item.url,
                             source: item.source,
@@ -532,6 +534,7 @@ export default function News() {
                             published: item.published,
                             thumbnail: item.thumbnail,
                             summary: item.summary,
+                            has_issue: item.has_issue,
                           }))
                           startArticlePlaylist(articles, idx, true)
                           setShowArticleDropdown(false)
@@ -662,6 +665,12 @@ export default function News() {
                     <span>Now Reading</span>
                   </div>
                 )}
+                {/* Issue badge */}
+                {item.has_issue && !isCurrentlyReading && !item.is_seen && (
+                  <div className="absolute top-2 left-2 z-20 w-6 h-6 bg-amber-600/80 rounded-full flex items-center justify-center" title="Playback issue">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-200" />
+                  </div>
+                )}
                 {/* Seen badge */}
                 {item.is_seen && !isCurrentlyReading && (
                   <div className="absolute top-2 left-2 z-20 w-6 h-6 bg-slate-700/80 rounded-full flex items-center justify-center">
@@ -684,6 +693,7 @@ export default function News() {
                   <button
                     onClick={() => {
                       const articleItem: ArticleItem = {
+                        id: item.id,
                         title: item.title,
                         url: item.url,
                         source: item.source,
@@ -691,6 +701,7 @@ export default function News() {
                         published: item.published,
                         thumbnail: item.thumbnail,
                         summary: item.summary,
+                        has_issue: item.has_issue,
                       }
                       const allArticles: ArticleItem[] = filteredNews.map(n => ({
                         id: n.id,
@@ -701,6 +712,7 @@ export default function News() {
                         published: n.published,
                         thumbnail: n.thumbnail,
                         summary: n.summary,
+                        has_issue: n.has_issue,
                       }))
                       openArticle(articleItem, allArticles)
                     }}
@@ -722,6 +734,7 @@ export default function News() {
                 <button
                   onClick={() => {
                     const articleItem: ArticleItem = {
+                      id: item.id,
                       title: item.title,
                       url: item.url,
                       source: item.source,
@@ -729,8 +742,10 @@ export default function News() {
                       published: item.published,
                       thumbnail: item.thumbnail,
                       summary: item.summary,
+                      has_issue: item.has_issue,
                     }
                     const allArticles: ArticleItem[] = filteredNews.map(n => ({
+                      id: n.id,
                       title: n.title,
                       url: n.url,
                       source: n.source,
@@ -738,6 +753,7 @@ export default function News() {
                       published: n.published,
                       thumbnail: n.thumbnail,
                       summary: n.summary,
+                      has_issue: n.has_issue,
                     }))
                     openArticle(articleItem, allArticles)
                   }}

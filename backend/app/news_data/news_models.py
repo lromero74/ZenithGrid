@@ -19,6 +19,7 @@ class NewsItem(BaseModel):
     thumbnail: Optional[str] = None
     category: str = "CryptoCurrency"
     is_seen: bool = False
+    has_issue: bool = False
 
 
 class VideoItem(BaseModel):

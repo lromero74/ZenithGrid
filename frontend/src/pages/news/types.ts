@@ -13,6 +13,7 @@ export interface NewsItem {
   thumbnail: string | null
   category: string
   is_seen?: boolean
+  has_issue?: boolean
 }
 
 export interface VideoItem {

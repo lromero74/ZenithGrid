@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2, Volume1, VolumeX, RefreshCw } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2, Volume1, VolumeX, RefreshCw, Repeat, AlertCircle } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useArticleReader } from '../contexts/ArticleReaderContext'
 import { sourceColors } from './news'
@@ -56,6 +56,11 @@ export function ArticleReaderMiniPlayer() {
     articleContentLoading,
     voiceCycleEnabled,
     toggleVoiceCycle,
+    continuousPlay,
+    setContinuousPlay,
+    pendingResume,
+    resumeSession,
+    dismissResume,
     nextArticle,
     previousArticle,
     closeMiniPlayer,
@@ -178,7 +183,7 @@ export function ArticleReaderMiniPlayer() {
     prevHighlightRef.current = currentWordIndex
   }, [currentWordIndex])
 
-  // Toggle play/pause - also handles retry on error
+  // Toggle play/pause - also handles retry on error and stopped state
   const togglePlayPause = useCallback(() => {
     if (error) {
       // On error, retry the current article
@@ -189,9 +194,11 @@ export function ArticleReaderMiniPlayer() {
       play()
     } else if (isPlaying) {
       pause()
+    } else if (!isPlaying && !isPaused && !isReady && !isLoading) {
+      // Stopped state (continuous play off, article finished) — replay current article
+      playArticle(currentIndex)
     }
-    // If not playing, paused, ready, or error, do nothing (prevents weird state issues)
-  }, [error, isPaused, isReady, isPlaying, play, pause, resume, playArticle, currentIndex])
+  }, [error, isPaused, isReady, isPlaying, isLoading, play, pause, resume, playArticle, currentIndex])
 
   // Find current article - navigate to news page if needed, then scroll
   const findCurrentArticle = useCallback(() => {
@@ -397,8 +404,40 @@ export function ArticleReaderMiniPlayer() {
     return <p className="leading-relaxed whitespace-pre-wrap">{elements}</p>
   }, [words, plainText])
 
+  // Resume prompt banner — shown when there's a pending session and player isn't active
+  if (pendingResume && !showMiniPlayer) {
+    const resumeArticle = pendingResume.playlist[Math.min(pendingResume.currentIndex, pendingResume.playlist.length - 1)]
+    return (
+      <>
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-800 border-t border-slate-700 shadow-2xl">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-slate-300">Continue where you left off?</p>
+              <p className="text-xs text-slate-500 truncate">
+                {resumeArticle?.title} ({pendingResume.currentIndex + 1}/{pendingResume.playlist.length})
+              </p>
+            </div>
+            <button
+              onClick={resumeSession}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+            >
+              Resume
+            </button>
+            <button
+              onClick={dismissResume}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+        <div className="h-16" />
+      </>
+    )
+  }
+
   // Don't render if not showing
-  if (!isPlaying || !showMiniPlayer || !currentArticle) {
+  if (!showMiniPlayer || !currentArticle) {
     return null
   }
 
@@ -763,6 +802,19 @@ export function ArticleReaderMiniPlayer() {
                     {playbackRate}x
                   </span>
                 </button>
+
+                {/* Continuous play toggle */}
+                <button
+                  onClick={() => setContinuousPlay(!continuousPlay)}
+                  className={`flex items-center justify-center rounded-full transition-colors ${
+                    continuousPlay
+                      ? 'bg-green-600/30 text-green-400 hover:bg-green-600/40'
+                      : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                  } ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
+                  title={continuousPlay ? 'Continuous play: ON' : 'Continuous play: OFF'}
+                >
+                  <Repeat className={isExpanded ? 'w-5 h-5' : 'w-4 h-4'} />
+                </button>
               </div>
 
               {/* Secondary controls */}
@@ -834,6 +886,11 @@ export function ArticleReaderMiniPlayer() {
                           }`}>
                             {idx + 1}
                           </span>
+                          {article.has_issue && (
+                            <span title="Playback issue" className="flex-shrink-0">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                            </span>
+                          )}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-white truncate">{article.title}</p>
                             <p className="text-xs text-slate-500">{article.source_name}</p>

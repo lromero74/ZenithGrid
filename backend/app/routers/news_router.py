@@ -464,6 +464,7 @@ def article_to_news_item(
         "thumbnail": thumbnail,
         "category": getattr(article, 'category', 'CryptoCurrency'),
         "is_seen": article.id in seen_ids if seen_ids else False,
+        "has_issue": bool(getattr(article, 'has_issue', False)),
     }
 
 
@@ -1346,6 +1347,29 @@ async def bulk_mark_content_seen(
         await db.commit()
 
     return {"ok": True, "count": len(content_ids)}
+
+
+@router.post("/article-issue")
+async def mark_article_issue(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    """Flag an article as having a playback/content issue."""
+    article_id = payload.get("article_id")
+    has_issue = payload.get("has_issue", True)
+
+    if not isinstance(article_id, int):
+        raise HTTPException(400, "article_id must be an integer")
+
+    async with async_session_maker() as db:
+        await db.execute(
+            update(NewsArticle)
+            .where(NewsArticle.id == article_id)
+            .values(has_issue=bool(has_issue))
+        )
+        await db.commit()
+
+    return {"ok": True}
 
 
 @router.get("/image/{article_id}")
