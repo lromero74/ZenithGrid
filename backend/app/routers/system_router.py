@@ -52,8 +52,8 @@ def get_repo_root():
     return current_file.parent.parent.parent.parent  # routers -> app -> backend -> repo root
 
 
-def get_git_version() -> str:
-    """Get the current git version tag (what we're running)"""
+def _resolve_git_version() -> str:
+    """Resolve the git version tag from the repository."""
     try:
         result = subprocess.run(
             ["git", "describe", "--tags", "--always"],
@@ -66,8 +66,18 @@ def get_git_version() -> str:
             return result.stdout.strip()
     except Exception:
         pass
-
     return "dev"
+
+
+# Snapshot the running version at import time (startup).
+# This ensures /api/ always reports the version that's actually running,
+# not whatever tag happens to exist in the git repo on disk.
+_RUNNING_VERSION = _resolve_git_version()
+
+
+def get_git_version() -> str:
+    """Get the version this process was started with (cached at startup)."""
+    return _RUNNING_VERSION
 
 
 def get_latest_git_tag() -> str:
