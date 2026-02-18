@@ -7,7 +7,7 @@ Follow every step of the "Ship It — Full Release Process" section in CLAUDE.md
 3. **Detect frontend deployment mode**: Run `./bot.sh status` to check current mode (DEV or PROD). This determines step 7 behavior.
 4. Database & schema: if models changed, back up DB, stop services, run migrations, update setup.py and database.py
 5. Update all version references (CHANGELOG.md, docs/architecture.json) in the same commit
-6. Commit, tag, merge dev branch into main
+6. Commit, merge dev branch into main, then tag the merge commit on main
 7. Delete dev branch locally and on remote
 8. Push main with tags, deploy:
    - **Backend changes**: `./bot.sh restart --dev --back-end` (or `--prod`)

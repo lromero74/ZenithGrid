@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { X, RefreshCw, Check, ArrowUp, ChevronDown } from 'lucide-react'
+import { api } from '../services/api'
 
 interface VersionInfo {
   version: string
@@ -53,9 +54,9 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
     setError(null)
 
     try {
-      const response = await fetch(`/api/changelog?limit=${PAGE_SIZE}&offset=${currentOffset}`)
-      if (!response.ok) throw new Error('Failed to fetch changelog')
-      const data: ChangelogData = await response.json()
+      const { data } = await api.get<ChangelogData>('/changelog', {
+        params: { limit: PAGE_SIZE, offset: currentOffset },
+      })
 
       if (isInitial) {
         setChangelog(data)

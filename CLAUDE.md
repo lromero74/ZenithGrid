@@ -39,13 +39,13 @@ All of these must match the new tag version:
 | `CHANGELOG.md` | Add `## [vX.Y.Z] - YYYY-MM-DD` section (Keep a Changelog format: Added/Changed/Fixed/Removed/Security) |
 | `docs/architecture.json` | `"version"` field at top of file |
 
-### 5. Commit, Tag, Merge
+### 5. Commit, Merge, Tag
 ```
 git add <all changed files>
 git commit -m "vX.Y.Z: <concise summary>"
-git tag vX.Y.Z
 git checkout main
 git merge <dev-branch> --no-ff -m "Merge <dev-branch>: <summary>"
+git tag vX.Y.Z
 git push origin main --tags
 ```
 
