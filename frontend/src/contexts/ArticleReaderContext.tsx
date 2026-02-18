@@ -476,14 +476,22 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
   }, [isPlaying, tts.isLoading, tts.isPlaying, tts.isPaused])
 
-  // Persist TTS session to localStorage for auto-resume after tab kill
+  // Persist TTS session to localStorage for auto-resume after tab kill.
+  // Only save a window around the current position to stay within localStorage quota
+  // (full playlist can be 12k+ articles = ~6MB, exceeding the 5MB limit).
+  const SESSION_WINDOW = 50  // articles ahead of current position to save
   useEffect(() => {
     if (isPlaying && playlist.length > 0) {
       try {
+        const windowStart = currentIndex
+        const windowEnd = Math.min(playlist.length, currentIndex + SESSION_WINDOW + 1)
+        const windowPlaylist = playlist.slice(windowStart, windowEnd).map(
+          ({ id, title, url, source, source_name, published, thumbnail, summary, has_issue }) =>
+            ({ id, title, url, source, source_name, published, thumbnail, summary, has_issue })
+        )
         const session: TTSSession = {
-          playlist: playlist.map(({ id, title, url, source, source_name, published, thumbnail, summary, has_issue }) =>
-            ({ id, title, url, source, source_name, published, thumbnail, summary, has_issue })),
-          currentIndex,
+          playlist: windowPlaylist,
+          currentIndex: 0,  // current article is always index 0 in the window
           timestamp: Date.now(),
           continuousPlay,
         }
