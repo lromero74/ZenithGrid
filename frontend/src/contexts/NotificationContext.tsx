@@ -113,15 +113,18 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           serverVersion !== loadedVersionRef.current &&
           updateToastShownForRef.current !== serverVersion
         ) {
-          // Re-verify after a delay to ensure the server is fully ready
-          setTimeout(() => {
+          // Verify the server is fully stable: check 3 times over 15 seconds.
+          // All checks must return the same new version before we notify.
+          const verifyVersion = (checksRemaining: number) => {
             fetch('/api/')
               .then(res => res.json())
-              .then(verify => {
-                if (
-                  verify.version === serverVersion &&
-                  updateToastShownForRef.current !== serverVersion
-                ) {
+              .then(data => {
+                if (data.version !== serverVersion) return  // Version changed mid-check, abort
+                if (updateToastShownForRef.current === serverVersion) return  // Already shown
+                if (checksRemaining > 1) {
+                  setTimeout(() => verifyVersion(checksRemaining - 1), 5000)
+                } else {
+                  // All checks passed — server is stable
                   updateToastShownForRef.current = serverVersion
                   addToast({
                     type: 'update',
@@ -133,8 +136,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
                   })
                 }
               })
-              .catch(() => {})
-          }, 5000)
+              .catch(() => {})  // Server not responding — don't notify yet
+          }
+          setTimeout(() => verifyVersion(3), 5000)  // Start after 5s, then 3 checks × 5s = 20s total
         }
       })
       .catch(() => {
