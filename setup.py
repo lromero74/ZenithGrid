@@ -1204,7 +1204,8 @@ def initialize_database(project_root):
                 category TEXT NOT NULL DEFAULT 'CryptoCurrency',
                 source_id INTEGER REFERENCES content_sources(id),
                 fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                has_issue BOOLEAN DEFAULT 0
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_url ON news_articles(url)")

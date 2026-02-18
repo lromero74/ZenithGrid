@@ -982,6 +982,9 @@ class NewsArticle(Base):
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # TTS issue flag (article failed to load/play)
+    has_issue = Column(Boolean, default=False)
+
 
 class VideoArticle(Base):
     """

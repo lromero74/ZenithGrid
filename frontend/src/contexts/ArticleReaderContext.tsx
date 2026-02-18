@@ -21,6 +21,7 @@ export interface ArticleItem {
   summary: string | null
   content?: string  // Full article content (markdown)
   is_seen?: boolean
+  has_issue?: boolean
 }
 
 interface ArticleVoiceCache {
@@ -57,9 +58,18 @@ interface ArticleReaderContextType {
   voiceCycleEnabled: boolean
   toggleVoiceCycle: () => void
 
+  // Continuous play
+  continuousPlay: boolean
+  setContinuousPlay: (enabled: boolean) => void
+
+  // Resume prompt
+  pendingResume: TTSSession | null
+  resumeSession: () => void
+  dismissResume: () => void
+
   // Actions
   openArticle: (article: ArticleItem, allArticles?: ArticleItem[]) => void
-  startPlaylist: (articles: ArticleItem[], startIndex?: number, startExpanded?: boolean) => void
+  startPlaylist: (articles: ArticleItem[], startIndex?: number, startExpanded?: boolean, startContinuousPlay?: boolean) => void
   stopPlaylist: () => void
   playArticle: (index: number) => void
   nextArticle: () => void
@@ -112,6 +122,7 @@ interface TTSSession {
   playlist: ArticleItem[]
   currentIndex: number
   timestamp: number
+  continuousPlay: boolean
 }
 
 export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) {
@@ -124,8 +135,11 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const [articleContentLoading, setArticleContentLoading] = useState(false)
   const [voiceCache, setVoiceCache] = useState<ArticleVoiceCache>({})
   const [voiceCycleEnabled, setVoiceCycleEnabled] = useState(true)
+  const [continuousPlay, setContinuousPlay] = useState(true)
+  const [pendingResume, setPendingResume] = useState<TTSSession | null>(null)
 
   const playlistRef = useRef<ArticleItem[]>([])
+  const continuousPlayRef = useRef(true)
   const hasPlaybackStartedRef = useRef(false)  // Track if audio ever started for current article
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wakeLockRef = useRef<any>(null)
@@ -136,10 +150,14 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   // Use TTS hook
   const tts = useTTSSync()
 
-  // Keep playlist ref in sync
+  // Keep refs in sync
   useEffect(() => {
     playlistRef.current = playlist
   }, [playlist])
+
+  useEffect(() => {
+    continuousPlayRef.current = continuousPlay
+  }, [continuousPlay])
 
   // Keep a ref to the latest loadAndPlayArticle (for use in timeout callbacks)
   const loadAndPlayRef = useRef<typeof loadAndPlayArticle | null>(null)
@@ -224,9 +242,37 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
   }, [])
 
+  // Flag an article as having an issue (fire-and-forget)
+  const flagArticleIssue = useCallback((articleId: number | undefined) => {
+    if (!articleId) return
+    authFetch('/api/news/article-issue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article_id: articleId, has_issue: true }),
+    }).catch(() => {})
+  }, [])
+
   // Load and play an article
   // articleIndex is the position in the playlist (used for voice cycling)
   const loadAndPlayArticle = useCallback(async (article: ArticleItem, articleIndex: number) => {
+    // Skip known-bad articles automatically
+    if (article.has_issue) {
+      console.log(`[TTS] Skipping known-bad article: ${article.title}`)
+      setTimeout(() => {
+        if (articleIndex < playlistRef.current.length - 1) {
+          if (loadAndPlayRef.current) {
+            const nextIdx = articleIndex + 1
+            setCurrentIndex(nextIdx)
+            loadAndPlayRef.current(playlistRef.current[nextIdx], nextIdx)
+          }
+        } else {
+          tts.stop()
+          setIsPlaying(false)
+        }
+      }, 300)
+      return
+    }
+
     // Reset playback tracking for new article
     hasPlaybackStartedRef.current = false
 
@@ -251,6 +297,26 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content_type: 'article', content_id: article.id, seen: true }),
       }).catch(() => {})
+    }
+
+    // If no content AND no summary, flag as issue and skip
+    if (!content && !article.summary) {
+      console.log(`[TTS] No content or summary for article: ${article.title}`)
+      flagArticleIssue(article.id)
+      article.has_issue = true
+      setTimeout(() => {
+        if (articleIndex < playlistRef.current.length - 1) {
+          if (loadAndPlayRef.current) {
+            const nextIdx = articleIndex + 1
+            setCurrentIndex(nextIdx)
+            loadAndPlayRef.current(playlistRef.current[nextIdx], nextIdx)
+          }
+        } else {
+          tts.stop()
+          setIsPlaying(false)
+        }
+      }, 1000)
+      return
     }
 
     // Child voice content filter: if a child voice would read adult content,
@@ -292,7 +358,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
         await tts.loadAndPlay(article.summary, voiceToUse, article.id)
       }
     }
-  }, [voiceCycleEnabled, voiceCache, saveVoiceCache, fetchArticleContent, tts])
+  }, [voiceCycleEnabled, voiceCache, saveVoiceCache, fetchArticleContent, tts, flagArticleIssue])
 
   // Keep loadAndPlayRef in sync so timeout callbacks always get the latest version
   useEffect(() => {
@@ -408,17 +474,18 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     if (isPlaying && playlist.length > 0) {
       try {
         const session: TTSSession = {
-          playlist: playlist.map(({ title, url, source, source_name, published, thumbnail, summary }) =>
-            ({ title, url, source, source_name, published, thumbnail, summary })),
+          playlist: playlist.map(({ id, title, url, source, source_name, published, thumbnail, summary, has_issue }) =>
+            ({ id, title, url, source, source_name, published, thumbnail, summary, has_issue })),
           currentIndex,
           timestamp: Date.now(),
+          continuousPlay,
         }
         localStorage.setItem(TTS_SESSION_KEY, JSON.stringify(session))
       } catch { /* ignore */ }
     }
-  }, [isPlaying, playlist, currentIndex])
+  }, [isPlaying, playlist, currentIndex, continuousPlay])
 
-  // Auto-resume TTS session after page reload (tab was killed by browser)
+  // Check for saved TTS session on mount — show resume prompt instead of auto-resuming
   useEffect(() => {
     if (autoResumeTriggeredRef.current) return
     autoResumeTriggeredRef.current = true
@@ -427,38 +494,17 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       const saved = localStorage.getItem(TTS_SESSION_KEY)
       if (!saved) return
 
-      // Clear session BEFORE attempting resume to prevent crash loops
+      // Clear session BEFORE showing prompt to prevent crash loops
       localStorage.removeItem(TTS_SESSION_KEY)
 
       const session: TTSSession = JSON.parse(saved)
-      // Only resume if saved within last 10 minutes and has content
+      // Only offer resume if saved within last 10 minutes and has content
       if (Date.now() - session.timestamp > 10 * 60 * 1000 || session.playlist.length === 0) {
         return
       }
 
-      console.log('[TTS] Auto-resuming session:', session.playlist.length, 'articles, index', session.currentIndex)
-
-      // Delay to let voice cache and other mount effects settle
-      const timer = setTimeout(() => {
-        try {
-          stopVideoPlayer()
-          tts.stop()
-          const idx = Math.min(session.currentIndex, session.playlist.length - 1)
-          setPlaylist(session.playlist)
-          setCurrentIndex(idx)
-          setIsPlaying(true)
-          setShowMiniPlayer(true)
-          if (loadAndPlayRef.current) {
-            loadAndPlayRef.current(session.playlist[idx], idx)
-          }
-        } catch (err) {
-          console.error('[TTS] Auto-resume failed:', err)
-          setIsPlaying(false)
-          setShowMiniPlayer(false)
-        }
-      }, 1000)
-
-      return () => clearTimeout(timer)
+      console.log('[TTS] Found saved session:', session.playlist.length, 'articles, index', session.currentIndex)
+      setPendingResume(session)
     } catch { /* ignore parse errors */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Mount only — intentionally omit deps
@@ -466,7 +512,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   // ===========================================================================
 
   // Start a new playlist
-  const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false) => {
+  const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false, startContinuousPlay: boolean = true) => {
     if (articles.length === 0) return
     // Stop video player if playing (mutually exclusive)
     stopVideoPlayer()
@@ -479,23 +525,25 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setIsPlaying(true)
     setShowMiniPlayer(true)
     setIsExpanded(startExpanded)
+    setContinuousPlay(startContinuousPlay)
 
     // Load and play the first article (pass index for voice cycling)
     loadAndPlayArticle(articles[clampedIndex], clampedIndex)
   }, [loadAndPlayArticle, tts])
 
   // Open a single article (expanded view) - optionally with surrounding articles for navigation
+  // Single article click → continuous play OFF by default
   const openArticle = useCallback((article: ArticleItem, allArticles?: ArticleItem[]) => {
     if (allArticles && allArticles.length > 0) {
       // Find the index of the clicked article in the full list
       const index = allArticles.findIndex(a => a.url === article.url)
       if (index >= 0) {
-        startPlaylist(allArticles, index, true)
+        startPlaylist(allArticles, index, true, false)
         return
       }
     }
     // Single article, create a one-item playlist
-    startPlaylist([article], 0, true)
+    startPlaylist([article], 0, true, false)
   }, [startPlaylist])
 
   // Stop playlist
@@ -529,13 +577,20 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
   // Go to next article
   const nextArticle = useCallback(() => {
-    if (currentIndex < playlistRef.current.length - 1) {
-      playArticle(currentIndex + 1)
+    if (continuousPlayRef.current) {
+      if (currentIndex < playlistRef.current.length - 1) {
+        playArticle(currentIndex + 1)
+      } else {
+        // End of playlist
+        stopPlaylist()
+      }
     } else {
-      // End of playlist
-      stopPlaylist()
+      // Continuous play OFF: stop playback but keep mini-player visible
+      tts.stop()
+      setIsPlaying(false)
+      // showMiniPlayer stays true so user can toggle continuous play or manually advance
     }
-  }, [currentIndex, playArticle, stopPlaylist])
+  }, [currentIndex, playArticle, stopPlaylist, tts])
 
   // Go to previous article
   const previousArticle = useCallback(() => {
@@ -585,6 +640,32 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       return () => clearTimeout(timer)
     }
   }, [isPlaying, tts.isPlaying, tts.isPaused, tts.isLoading, tts.isReady, tts.words.length, nextArticle, currentIndex])
+
+  // Auto-skip on TTS error: flag article, advance after 2s delay
+  useEffect(() => {
+    if (!isPlaying || !tts.error) return
+
+    const article = playlistRef.current[currentIndex]
+    if (!article) return
+
+    console.log(`[TTS] Error on article "${article.title}": ${tts.error}`)
+
+    // Flag the article as having an issue
+    flagArticleIssue(article.id)
+    article.has_issue = true
+
+    const timer = setTimeout(() => {
+      if (currentIndex < playlistRef.current.length - 1) {
+        // Skip directly (even if continuous play is off — failures always skip)
+        playArticle(currentIndex + 1)
+      } else {
+        stopPlaylist()
+      }
+    }, 2000)
+
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, tts.error, currentIndex])
 
   // P1: Prefetch next article's TTS while current article is playing
   useEffect(() => {
@@ -667,6 +748,36 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isExpanded])
 
+  // Resume a previously saved session (from pendingResume prompt)
+  const resumeSession = useCallback(() => {
+    if (!pendingResume) return
+    const session = pendingResume
+    setPendingResume(null)
+
+    try {
+      stopVideoPlayer()
+      tts.stop()
+      const idx = Math.min(session.currentIndex, session.playlist.length - 1)
+      setPlaylist(session.playlist)
+      setCurrentIndex(idx)
+      setIsPlaying(true)
+      setShowMiniPlayer(true)
+      setContinuousPlay(session.continuousPlay ?? true)
+      if (loadAndPlayRef.current) {
+        loadAndPlayRef.current(session.playlist[idx], idx)
+      }
+    } catch (err) {
+      console.error('[TTS] Resume failed:', err)
+      setIsPlaying(false)
+      setShowMiniPlayer(false)
+    }
+  }, [pendingResume, tts])
+
+  // Dismiss the resume prompt
+  const dismissResume = useCallback(() => {
+    setPendingResume(null)
+  }, [])
+
   const value: ArticleReaderContextType = useMemo(() => ({
     // Playlist state
     playlist,
@@ -696,6 +807,15 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     // Voice cycling
     voiceCycleEnabled,
     toggleVoiceCycle,
+
+    // Continuous play
+    continuousPlay,
+    setContinuousPlay,
+
+    // Resume prompt
+    pendingResume,
+    resumeSession,
+    dismissResume,
 
     // Actions
     openArticle,
@@ -731,6 +851,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     tts.isLoading, tts.isPaused, tts.isReady, tts.error, tts.words,
     tts.currentWordIndex, tts.currentTime, tts.duration, tts.currentVoice, tts.playbackRate, tts.volume,
     articleContent, articleContentLoading, voiceCycleEnabled, toggleVoiceCycle,
+    continuousPlay, pendingResume, resumeSession, dismissResume,
     openArticle, startPlaylist, stopPlaylist, playArticle, nextArticle, previousArticle,
     toggleExpanded, closeMiniPlayer,
     tts.play, tts.pause, tts.resume, tts.stop, tts.replay,
