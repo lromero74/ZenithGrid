@@ -123,6 +123,9 @@ interface TTSSession {
   currentIndex: number
   timestamp: number
   continuousPlay: boolean
+  currentTime?: number    // Playback position in seconds
+  voice?: string          // Voice ID used for the current article
+  playbackRate?: number   // Playback speed
 }
 
 export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) {
@@ -255,7 +258,8 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
   // Load and play an article
   // articleIndex is the position in the playlist (used for voice cycling)
-  const loadAndPlayArticle = useCallback(async (article: ArticleItem, articleIndex: number) => {
+  // overrideVoice: optional voice ID to use instead of cycling (for resume)
+  const loadAndPlayArticle = useCallback(async (article: ArticleItem, articleIndex: number, overrideVoice?: string) => {
     // Skip known-bad articles automatically
     if (article.has_issue) {
       console.log(`[TTS] Skipping known-bad article: ${article.title}`)
@@ -277,13 +281,11 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     // Reset playback tracking for new article
     hasPlaybackStartedRef.current = false
 
-    // Determine voice based on cycling preference
-    let voiceToUse: string | undefined
-    if (voiceCycleEnabled) {
-      // Use position-based voice cycling: article 0 = voice 0, article 1 = voice 1, etc.
+    // Determine voice: override (for resume) > cycling > current voice
+    let voiceToUse: string | undefined = overrideVoice
+    if (!voiceToUse && voiceCycleEnabled) {
       voiceToUse = VOICE_CYCLE_IDS[articleIndex % VOICE_CYCLE_IDS.length]
     }
-    // If voice cycling is disabled, voiceToUse is undefined and TTS will use current voice
 
     // Fetch content if not already present (retry once on failure)
     let content = article.content
@@ -477,27 +479,40 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   }, [isPlaying, tts.isLoading, tts.isPlaying, tts.isPaused])
 
   // Persist TTS session to localStorage for auto-resume after tab kill.
-  // Only save a window around the current position to stay within localStorage quota
-  // (full playlist can be 12k+ articles = ~6MB, exceeding the 5MB limit).
-  const SESSION_WINDOW = 50  // articles ahead of current position to save
+  // Saves every 5s while playing to capture current position accurately.
+  // Only saves a window around the current position to stay within localStorage quota.
+  const SESSION_WINDOW = 50
+  const saveSessionRef = useRef<() => void>(() => {})
+  saveSessionRef.current = () => {
+    if (!isPlaying || playlist.length === 0) return
+    try {
+      const windowStart = currentIndex
+      const windowEnd = Math.min(playlist.length, currentIndex + SESSION_WINDOW + 1)
+      const windowPlaylist = playlist.slice(windowStart, windowEnd).map(
+        ({ id, title, url, source, source_name, published, thumbnail, summary, has_issue }) =>
+          ({ id, title, url, source, source_name, published, thumbnail, summary, has_issue })
+      )
+      const currentArticleUrl = playlist[currentIndex]?.url
+      const currentVoice = currentArticleUrl ? voiceCache[currentArticleUrl] : undefined
+      const { currentTime } = tts.getPlaybackState()
+      const session: TTSSession = {
+        playlist: windowPlaylist,
+        currentIndex: 0,
+        timestamp: Date.now(),
+        continuousPlay,
+        currentTime,
+        voice: currentVoice || tts.currentVoice,
+        playbackRate: tts.playbackRate,
+      }
+      localStorage.setItem(TTS_SESSION_KEY, JSON.stringify(session))
+    } catch { /* ignore quota errors */ }
+  }
   useEffect(() => {
-    if (isPlaying && playlist.length > 0) {
-      try {
-        const windowStart = currentIndex
-        const windowEnd = Math.min(playlist.length, currentIndex + SESSION_WINDOW + 1)
-        const windowPlaylist = playlist.slice(windowStart, windowEnd).map(
-          ({ id, title, url, source, source_name, published, thumbnail, summary, has_issue }) =>
-            ({ id, title, url, source, source_name, published, thumbnail, summary, has_issue })
-        )
-        const session: TTSSession = {
-          playlist: windowPlaylist,
-          currentIndex: 0,  // current article is always index 0 in the window
-          timestamp: Date.now(),
-          continuousPlay,
-        }
-        localStorage.setItem(TTS_SESSION_KEY, JSON.stringify(session))
-      } catch { /* ignore */ }
-    }
+    if (!isPlaying) return
+    // Save immediately on state changes, then every 5s for position updates
+    saveSessionRef.current()
+    const interval = setInterval(() => saveSessionRef.current(), 5000)
+    return () => clearInterval(interval)
   }, [isPlaying, playlist, currentIndex, continuousPlay])
 
   // Check for saved TTS session on mount — show resume prompt instead of auto-resuming
@@ -797,13 +812,27 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       stopVideoPlayer()
       tts.stop()
       const idx = Math.min(session.currentIndex, session.playlist.length - 1)
+      const article = session.playlist[idx]
       setPlaylist(session.playlist)
       setCurrentIndex(idx)
       setIsPlaying(true)
       setShowMiniPlayer(true)
       setContinuousPlay(session.continuousPlay ?? true)
+
+      // Restore playback rate before loading
+      if (session.playbackRate && session.playbackRate !== tts.playbackRate) {
+        tts.setRate(session.playbackRate)
+      }
+
+      // Load the article with saved voice, then seek to saved position
+      const savedTime = session.currentTime ?? 0
       if (loadAndPlayRef.current) {
-        loadAndPlayRef.current(session.playlist[idx], idx)
+        loadAndPlayRef.current(article, idx, session.voice).then(() => {
+          if (savedTime > 0) {
+            // Small delay to let audio buffer before seeking
+            setTimeout(() => tts.seekToTime(savedTime), 500)
+          }
+        })
       }
     } catch (err) {
       console.error('[TTS] Resume failed:', err)
