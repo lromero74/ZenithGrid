@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.18.9] - 2026-02-18
+
+### Fixed
+- **Version reporting accuracy**: Backend now snapshots the git version at startup and serves it from memory. Previously, `git describe --tags` ran on every API call, so pushing a new tag caused the old (still-running) backend to report the new version before being restarted — triggering premature update toasts
+
 ## [v2.18.8] - 2026-02-18
 
 ### Fixed
