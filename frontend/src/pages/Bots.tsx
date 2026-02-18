@@ -19,6 +19,8 @@ import { useBotsData } from './bots/hooks/useBotsData'
 import { useBotMutations } from './bots/hooks/useBotMutations'
 import { BotFormModal } from './bots/components/BotFormModal'
 import { BotListItem } from './bots/components/BotListItem'
+import { SampleBotsSection } from './bots/components/SampleBotsSection'
+import type { SampleBot } from './bots/data/sampleBots'
 
 function Bots() {
   const location = useLocation()
@@ -35,6 +37,8 @@ function Bots() {
   const [projectionBasis, setProjectionBasis] = useState<TimeRange>(() => {
     try { const saved = localStorage.getItem('zenith-bots-projection-basis'); return (saved as TimeRange) || '7d' } catch { return '7d' }
   })
+  const [readOnly, setReadOnly] = useState(false)
+  const [readOnlyTitle, setReadOnlyTitle] = useState('')
   const [showImportModal, setShowImportModal] = useState(false)
   const [importMode, setImportMode] = useState<'file' | 'paste'>('file')
   const [pasteInput, setPasteInput] = useState('')
@@ -79,6 +83,8 @@ function Bots() {
       const bot = state.editBot
       // Open modal and set bot for editing
       setEditingBot(bot)
+      setReadOnly(false)
+      setReadOnlyTitle('')
       // Handle both legacy single pair and new multi-pair bots
       const productIds = (bot as any).product_ids || (bot.product_id ? [bot.product_id] : [])
       setFormData({
@@ -123,6 +129,8 @@ function Bots() {
     // Open the cloned bot in edit modal so user can review/modify
     const productIds = (clonedBot as any).product_ids || (clonedBot.product_id ? [clonedBot.product_id] : [])
     setEditingBot(clonedBot)
+    setReadOnly(false)
+    setReadOnlyTitle('')
     setFormData({
       name: clonedBot.name,
       description: clonedBot.description || '',
@@ -192,11 +200,15 @@ function Bots() {
 
   const handleOpenCreate = () => {
     resetForm()
+    setReadOnly(false)
+    setReadOnlyTitle('')
     setShowModal(true)
   }
 
   const handleOpenEdit = (bot: Bot) => {
     setEditingBot(bot)
+    setReadOnly(false)
+    setReadOnlyTitle('')
     // Handle both legacy single pair and new multi-pair bots
     const productIds = (bot as any).product_ids || (bot.product_id ? [bot.product_id] : [])
     setFormData({
@@ -366,6 +378,8 @@ function Bots() {
     // Close import modal and open create modal
     closeImportModal()
     setEditingBot(null) // Ensure it's a new bot, not editing
+    setReadOnly(false)
+    setReadOnlyTitle('')
     setShowModal(true)
   }
 
@@ -374,6 +388,39 @@ function Bots() {
     setPasteInput('')
     setImportValidation({ isValid: null, errors: [], warnings: [], parsedData: null })
     setImportMode('file')
+  }
+
+  // Sample bot handlers
+  const handleSampleView = (sample: SampleBot) => {
+    // Resolve pairs for display
+    const fd = { ...sample.formData }
+    if (sample.selectAllMarket) {
+      const marketPairs = TRADING_PAIRS.filter(p => p.group === sample.selectAllMarket).map(p => p.value)
+      fd.product_ids = marketPairs
+      fd.product_id = marketPairs[0] || fd.product_id
+    }
+    setFormData(fd)
+    setEditingBot(null)
+    setReadOnly(true)
+    setReadOnlyTitle(`Sample Bot: ${sample.name}`)
+    setShowModal(true)
+  }
+
+  const handleSampleCopy = (sample: SampleBot) => {
+    const fd = { ...sample.formData }
+    fd.name = `${sample.name} (Copy)`
+    fd.exchange_type = selectedAccount?.type === 'dex' ? 'dex' : 'cex'
+    // Resolve pairs for selectAllMarket samples
+    if (sample.selectAllMarket) {
+      const marketPairs = TRADING_PAIRS.filter(p => p.group === sample.selectAllMarket).map(p => p.value)
+      fd.product_ids = marketPairs
+      fd.product_id = marketPairs[0] || fd.product_id
+    }
+    setFormData(fd)
+    setEditingBot(null)
+    setReadOnly(false)
+    setReadOnlyTitle('')
+    setShowModal(true)
   }
 
   if (botsLoading && bots.length === 0) {
@@ -441,6 +488,9 @@ function Bots() {
           onTimeRangeChange={setProjectionBasis}
         />
       </div>
+
+      {/* Sample Bots */}
+      <SampleBotsSection onView={handleSampleView} onCopy={handleSampleCopy} />
 
       {/* Bot List - 3Commas-style Table */}
       {bots.length === 0 ? (
@@ -558,6 +608,8 @@ function Bots() {
         updateBot={updateBot}
         resetForm={resetForm}
         aggregateData={aggregateData}
+        readOnly={readOnly}
+        readOnlyTitle={readOnlyTitle}
       />
 
       {/* AI Bot Logs Modal */}

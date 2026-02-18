@@ -29,6 +29,8 @@ interface BotFormModalProps {
   updateBot: any
   resetForm: () => void
   aggregateData: any
+  readOnly?: boolean
+  readOnlyTitle?: string
 }
 
 export function BotFormModal({
@@ -48,6 +50,8 @@ export function BotFormModal({
   updateBot,
   resetForm,
   aggregateData,
+  readOnly = false,
+  readOnlyTitle,
 }: BotFormModalProps) {
   // Fetch blacklist/category data for badges and counts
   const [coinCategories, setCoinCategories] = useState<Record<string, string>>({})
@@ -401,13 +405,14 @@ export function BotFormModal({
       }`}>
         <div className="p-6 border-b border-slate-700">
           <h3 className="text-xl font-bold">
-            {editingBot ? 'Edit Bot' : 'Create New Bot'}
+            {readOnly ? (readOnlyTitle || 'View Bot') : editingBot ? 'Edit Bot' : 'Create New Bot'}
           </h3>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={readOnly ? (e) => { e.preventDefault(); setShowModal(false); resetForm() } : handleSubmit} className="p-6 space-y-6">
+          <fieldset disabled={readOnly} className={readOnly ? 'opacity-80' : ''}>
           {/* Template Selector - Only show when creating new bot */}
-          {!editingBot && templates.length > 0 && (
+          {!editingBot && !readOnly && templates.length > 0 && (
             <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-700/50 rounded-lg p-4">
               <label className="block text-sm font-medium mb-2">
                 📝 Start from Template (Optional)
@@ -1386,8 +1391,10 @@ export function BotFormModal({
           </div>
           )}
 
+          </fieldset>
+
           {/* Validation Errors (Block Save) */}
-          {validationErrors.length > 0 && (
+          {!readOnly && validationErrors.length > 0 && (
             <div className="bg-red-900/40 border-2 border-red-600 rounded-lg p-4 mb-4">
               <div className="flex items-start gap-3">
                 <div className="text-red-500 text-2xl flex-shrink-0">🚫</div>
@@ -1419,7 +1426,7 @@ export function BotFormModal({
           )}
 
           {/* Validation Warnings */}
-          {validationWarnings.length > 0 && (
+          {!readOnly && validationWarnings.length > 0 && (
             <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 mb-4">
               <div className="flex items-start gap-3">
                 <div className="text-yellow-500 text-xl flex-shrink-0">⚠️</div>
@@ -1453,33 +1460,44 @@ export function BotFormModal({
 
           {/* Actions */}
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-700">
-            <button
-              type="button"
-              onClick={() => {
-                setShowModal(false)
-                resetForm()
-              }}
-              className="px-4 py-2 rounded border border-slate-600 hover:bg-slate-700 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className={`px-4 py-2 rounded transition-colors ${
-                validationErrors.length > 0
-                  ? 'bg-slate-600 cursor-not-allowed opacity-50'
-                  : 'bg-blue-600 hover:bg-blue-700'
-              }`}
-              disabled={createBot.isPending || updateBot.isPending || validationErrors.length > 0}
-            >
-              {createBot.isPending || updateBot.isPending
-                ? 'Saving...'
-                : validationErrors.length > 0
-                ? 'Fix Errors First'
-                : editingBot
-                ? 'Update Bot'
-                : 'Create Bot'}
-            </button>
+            {readOnly ? (
+              <button
+                type="submit"
+                className="px-4 py-2 rounded bg-slate-600 hover:bg-slate-500 transition-colors"
+              >
+                Close
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModal(false)
+                    resetForm()
+                  }}
+                  className="px-4 py-2 rounded border border-slate-600 hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-4 py-2 rounded transition-colors ${
+                    validationErrors.length > 0
+                      ? 'bg-slate-600 cursor-not-allowed opacity-50'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                  disabled={createBot.isPending || updateBot.isPending || validationErrors.length > 0}
+                >
+                  {createBot.isPending || updateBot.isPending
+                    ? 'Saving...'
+                    : validationErrors.length > 0
+                    ? 'Fix Errors First'
+                    : editingBot
+                    ? 'Update Bot'
+                    : 'Create Bot'}
+                </button>
+              </>
+            )}
           </div>
         </form>
       </div>

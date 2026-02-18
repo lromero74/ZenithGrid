@@ -5,6 +5,16 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.14.0] - 2026-02-18
+
+### Added
+- **Sample bots section**: Bots page now shows 8 pre-built bot templates (4 BTC + 4 USD) between the P&L chart and bot list — BB% Recovery, RSI Runner, AI Autonomous, and MACD Crossover strategies with real configs. View opens read-only modal, Copy pre-fills the create form. Collapsible with state saved in localStorage
+- **Read-only modal mode**: BotFormModal now supports `readOnly` prop — disables all inputs via fieldset, hides validation, changes submit to "Close"
+
+### Fixed
+- **Changelog 401 error**: AboutModal used raw `fetch()` without JWT token to hit the auth-protected `/api/changelog` endpoint. Replaced with authenticated `api.get()` — changelog now loads correctly
+- **Ship-it tag placement**: Tags were placed on dev branch commits before merging, causing `git describe` to show `vX.Y.Z-1-g<hash>` on main. Moved tag step to after merge so it lands on the merge commit. Fixed existing v2.13.0 tag
+
 ## [v2.13.0] - 2026-02-18
 
 ### Added
