@@ -117,7 +117,11 @@ async def get_bidirectional_reservations(
             raise HTTPException(status_code=400, detail="No exchange client for account")
 
         # Get raw balances (use individual cached balance methods, not get_account)
-        raw_usd = await exchange.get_usd_balance() + await exchange.get_usdc_balance() + await exchange.get_usdt_balance()
+        raw_usd = (
+            await exchange.get_usd_balance()
+            + await exchange.get_usdc_balance()
+            + await exchange.get_usdt_balance()
+        )
         raw_btc = await exchange.get_btc_balance()
 
         # Get current BTC price for calculations

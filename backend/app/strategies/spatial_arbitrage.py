@@ -34,7 +34,10 @@ class SpatialArbitrageStrategy(TradingStrategy):
         return StrategyDefinition(
             id="spatial_arbitrage",
             name="Spatial Arbitrage (Cross-Exchange)",
-            description="Profit from price differences between CEX and DEX by buying low and selling high across venues",
+            description=(
+                "Profit from price differences between CEX and DEX"
+                " by buying low and selling high across venues"
+            ),
             parameters=[
                 # Profit thresholds
                 StrategyParameter(
@@ -234,7 +237,8 @@ class SpatialArbitrageStrategy(TradingStrategy):
 
         # Calculate position size based on available liquidity and config
         max_size_usd = Decimal(str(self.config["max_position_size_usd"]))
-        _min_size_usd = Decimal(str(self.config["min_position_size_usd"]))  # noqa: F841 - reserved for future validation
+        # Reserved for future validation
+        _min_size_usd = Decimal(str(self.config["min_position_size_usd"]))  # noqa: F841
 
         # Use position_size_pct of max to be conservative
         target_size_usd = max_size_usd * Decimal(str(self.config["position_size_pct"])) / 100

@@ -13,7 +13,10 @@ from app.constants import BALANCE_CACHE_TTL, AGGREGATE_VALUE_CACHE_TTL, MIN_USD_
 logger = logging.getLogger(__name__)
 
 
-async def get_accounts(request_func: Callable, force_fresh: bool = False, account_id: Optional[int] = None) -> List[Dict[str, Any]]:
+async def get_accounts(
+    request_func: Callable, force_fresh: bool = False,
+    account_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
     """
     Get all accounts with pagination support (cached to reduce API calls unless force_fresh=True).
 
@@ -57,7 +60,10 @@ async def get_accounts(request_func: Callable, force_fresh: bool = False, accoun
 
     # Cache for 60 seconds (same as BALANCE_CACHE_TTL)
     await api_cache.set(cache_key, all_accounts, BALANCE_CACHE_TTL)
-    logger.info(f"Fetched {len(all_accounts)} total accounts across {page_count} page(s), cached for {BALANCE_CACHE_TTL}s")
+    logger.info(
+        f"Fetched {len(all_accounts)} total accounts across {page_count} page(s), "
+        f"cached for {BALANCE_CACHE_TTL}s"
+    )
     return all_accounts
 
 
@@ -276,7 +282,8 @@ async def calculate_aggregate_btc_value(
         request_func: Function to make API requests
         auth_type: Authentication type
         get_current_price_func: Optional function to fetch current prices
-        bypass_cache: If True, skip cache and force fresh calculation (use for critical operations like position creation)
+        bypass_cache: If True, skip cache and force fresh calculation
+            (use for critical operations like position creation)
         account_id: Scoping key for per-user cache isolation
 
     Returns:
@@ -366,11 +373,17 @@ async def calculate_aggregate_btc_value(
                     current_price = price_map.get(product_id)
                     if current_price is not None:
                         btc_value = amount * current_price
-                        logger.debug(f"  💰 Position {product_id}: {amount:.8f} × {current_price:.8f} BTC = {btc_value:.8f} BTC")
+                        logger.debug(
+                            f"  💰 Position {product_id}: {amount:.8f} × "
+                            f"{current_price:.8f} BTC = {btc_value:.8f} BTC"
+                        )
                     elif avg_price:
                         # Fallback to avg_price if price fetch failed
                         btc_value = amount * float(avg_price)
-                        logger.debug(f"  💰 Position {product_id}: {amount:.8f} × {avg_price:.8f} BTC (fallback) = {btc_value:.8f} BTC")
+                        logger.debug(
+                            f"  💰 Position {product_id}: {amount:.8f} × "
+                            f"{avg_price:.8f} BTC (fallback) = {btc_value:.8f} BTC"
+                        )
                     else:
                         btc_value = 0.0
                     btc_in_positions += btc_value
@@ -390,7 +403,10 @@ async def calculate_aggregate_btc_value(
 
     # Cache the result using configured TTL
     await api_cache.set(cache_key, total_btc_value, ttl_seconds=AGGREGATE_VALUE_CACHE_TTL)
-    logger.info(f"✅ Total account BTC value (liquidation): {total_btc_value:.8f} BTC (cached for {AGGREGATE_VALUE_CACHE_TTL}s)")
+    logger.info(
+        f"✅ Total account BTC value (liquidation): {total_btc_value:.8f} BTC "
+        f"(cached for {AGGREGATE_VALUE_CACHE_TTL}s)"
+    )
     return total_btc_value
 
 
@@ -485,7 +501,10 @@ async def calculate_aggregate_usd_value(
 
         # Cache the result using configured TTL
         await api_cache.set(cache_key, total_usd_value, ttl_seconds=AGGREGATE_VALUE_CACHE_TTL)
-        logger.info(f"✅ Calculated aggregate USD value: ${total_usd_value:.2f} (cached for {AGGREGATE_VALUE_CACHE_TTL}s)")
+        logger.info(
+            f"✅ Calculated aggregate USD value: ${total_usd_value:.2f} "
+            f"(cached for {AGGREGATE_VALUE_CACHE_TTL}s)"
+        )
         return total_usd_value
 
     except Exception as e:

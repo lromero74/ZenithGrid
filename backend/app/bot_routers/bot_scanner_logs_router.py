@@ -22,7 +22,10 @@ router = APIRouter()
 
 
 @router.post("/{bot_id}/scanner-logs", response_model=ScannerLogResponse, status_code=201)
-async def create_scanner_log(bot_id: int, log_data: ScannerLogCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_scanner_log(
+    bot_id: int, log_data: ScannerLogCreate,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """Save scanner/monitor reasoning log"""
     # Verify bot exists
     bot_query = select(Bot).where(Bot.id == bot_id, Bot.user_id == current_user.id)

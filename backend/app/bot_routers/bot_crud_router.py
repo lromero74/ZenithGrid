@@ -111,8 +111,12 @@ async def create_bot(
         if len(quote_currencies) > 1:
             raise HTTPException(
                 status_code=400,
-                detail=f"All trading pairs must use the same quote currency. Found: {', '.join(sorted(quote_currencies))}. "
-                f"Please use only BTC-based pairs OR only USD-based pairs, not a mix.",
+                detail=(
+                    f"All trading pairs must use the same quote currency."
+                    f" Found: {', '.join(sorted(quote_currencies))}."
+                    f" Please use only BTC-based pairs OR only"
+                    f" USD-based pairs, not a mix."
+                ),
             )
 
         # Set quote_currency for market_focus correction
@@ -123,8 +127,10 @@ async def create_bot(
         if "market_focus" in bot_data.strategy_config:
             if bot_data.strategy_config["market_focus"] != quote_currency:
                 logger.warning(
-                    f"Auto-correcting market_focus from '{bot_data.strategy_config['market_focus']}' to '{quote_currency}' "
-                    f"to match {quote_currency}-based trading pairs"
+                    f"Auto-correcting market_focus from "
+                    f"'{bot_data.strategy_config['market_focus']}'"
+                    f" to '{quote_currency}' to match "
+                    f"{quote_currency}-based trading pairs"
                 )
                 bot_data.strategy_config["market_focus"] = quote_currency
 
@@ -157,7 +163,11 @@ async def create_bot(
         if abs((long_pct + short_pct) - 100.0) > 0.01:
             raise HTTPException(
                 status_code=400,
-                detail=f"Long and short budget percentages must sum to 100% (got {long_pct}% + {short_pct}% = {long_pct + short_pct}%)"
+                detail=(
+                    f"Long and short budget percentages must sum"
+                    f" to 100% (got {long_pct}% + {short_pct}%"
+                    f" = {long_pct + short_pct}%)"
+                )
             )
 
         # Get exchange client for this bot's account
@@ -379,7 +389,8 @@ async def list_bots(
 
         # Calculate avg daily PnL based on selected projection timeframe
         # This prevents wild projections when portfolio value changes due to withdrawals
-        # Timeframe mapping: '7d' -> 7 days, '14d' -> 14, '30d' -> 30, '3m' -> 90, '6m' -> 180, '1y' -> 365, 'all' -> all-time
+        # Timeframe mapping: '7d' -> 7 days, '14d' -> 14, '30d' -> 30,
+        # '3m' -> 90, '6m' -> 180, '1y' -> 365, 'all' -> all-time
         timeframe_days_map = {
             '7d': 7,
             '14d': 14,
@@ -504,7 +515,11 @@ async def list_bots(
                 total_capital_deployed_usd += quote_spent * btc_price
             else:
                 total_capital_deployed_usd += quote_spent
-        total_pnl_percentage = (total_pnl_usd / total_capital_deployed_usd * 100) if total_capital_deployed_usd > 0 else 0.0
+        total_pnl_percentage = (
+            (total_pnl_usd / total_capital_deployed_usd * 100)
+            if total_capital_deployed_usd > 0
+            else 0.0
+        )
 
         bot_response = BotResponse.model_validate(bot)
         bot_response.open_positions_count = len(open_positions)
@@ -634,8 +649,12 @@ async def update_bot(
         if len(quote_currencies) > 1:
             raise HTTPException(
                 status_code=400,
-                detail=f"All trading pairs must use the same quote currency. Found: {', '.join(sorted(quote_currencies))}. "
-                f"Please use only BTC-based pairs OR only USD-based pairs, not a mix.",
+                detail=(
+                    f"All trading pairs must use the same quote currency."
+                    f" Found: {', '.join(sorted(quote_currencies))}."
+                    f" Please use only BTC-based pairs OR only"
+                    f" USD-based pairs, not a mix."
+                ),
             )
 
         # Set quote_currency for market_focus correction
@@ -667,7 +686,11 @@ async def update_bot(
         if abs((long_pct + short_pct) - 100.0) > 0.01:
             raise HTTPException(
                 status_code=400,
-                detail=f"Long and short budget percentages must sum to 100% (got {long_pct}% + {short_pct}% = {long_pct + short_pct}%)"
+                detail=(
+                    f"Long and short budget percentages must sum"
+                    f" to 100% (got {long_pct}% + {short_pct}%"
+                    f" = {long_pct + short_pct}%)"
+                )
             )
 
         # Get exchange client
@@ -762,7 +785,11 @@ async def delete_bot(
 
     # Release bidirectional reservations before deletion
     if bot.strategy_config.get("enable_bidirectional", False):
-        logger.info(f"Releasing bidirectional reservations for bot '{bot.name}' (${bot.reserved_usd_for_longs:.2f} USD, {bot.reserved_btc_for_shorts:.8f} BTC)")
+        logger.info(
+            f"Releasing bidirectional reservations for bot "
+            f"'{bot.name}' (${bot.reserved_usd_for_longs:.2f} USD, "
+            f"{bot.reserved_btc_for_shorts:.8f} BTC)"
+        )
         bot.reserved_usd_for_longs = 0.0
         bot.reserved_btc_for_shorts = 0.0
 

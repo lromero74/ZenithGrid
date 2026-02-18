@@ -93,7 +93,10 @@ def _calculate_market_context_with_indicators(
     for timeframe, tf_candles in candles_by_timeframe.items():
         if not tf_candles or len(tf_candles) < 20:
             # Not enough data - set neutral defaults for this timeframe
-            logger.debug(f"  📊 {timeframe}: Not enough candles ({len(tf_candles) if tf_candles else 0} < 20), using defaults")
+            candle_count = len(tf_candles) if tf_candles else 0
+            logger.debug(
+                f"  📊 {timeframe}: Not enough candles ({candle_count} < 20), using defaults"
+            )
             result[f"{timeframe}_bb_percent"] = 50.0
             result[f"{timeframe}_bb_upper_20_2"] = current_price
             result[f"{timeframe}_bb_lower_20_2"] = current_price
@@ -262,7 +265,10 @@ async def process_signal(
 
                 # If trade is None, a limit order was placed - position stays open
                 if trade is None:
-                    logger.warning(f"  🛡️ Failsafe limit close order placed for position #{position.id}, waiting for fill")
+                    logger.warning(
+                        f"  🛡️ Failsafe limit close order placed for position #{position.id},"
+                        " waiting for fill"
+                    )
                     return {
                         "action": "failsafe_limit_close_pending",
                         "reason": failsafe_reason,
@@ -323,7 +329,8 @@ async def process_signal(
         # Check if budget should be split across concurrent deals
         max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
 
-        # Only split budget if split_budget_across_pairs is enabled (3Commas style: each deal gets full budget by default)
+        # Only split budget if split_budget_across_pairs is enabled
+        # (3Commas style: each deal gets full budget by default)
         if bot.split_budget_across_pairs:
             per_position_budget = reserved_balance / max_concurrent_deals
         else:
@@ -347,11 +354,20 @@ async def process_signal(
         split_mode = "SPLIT" if bot.split_budget_across_pairs else "FULL"
         if bot.budget_percentage > 0:
             logger.info(
-                f"  💰 Bot budget ({split_mode}): {bot.budget_percentage}% of aggregate ({reserved_balance:.8f}), Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions:.8f}, Available: {quote_balance:.8f}"
+                f"  💰 Bot budget ({split_mode}):"
+                f" {bot.budget_percentage}% of aggregate ({reserved_balance:.8f}),"
+                f" Max deals: {max_concurrent_deals},"
+                f" Per-position: {per_position_budget:.8f},"
+                f" In positions: {total_in_positions:.8f},"
+                f" Available: {quote_balance:.8f}"
             )
         else:
             logger.info(
-                f"  💰 Bot reserved balance ({split_mode}): {reserved_balance}, Max deals: {max_concurrent_deals}, Per-position: {per_position_budget:.8f}, In positions: {total_in_positions}, Available: {quote_balance}"
+                f"  💰 Bot reserved balance ({split_mode}): {reserved_balance},"
+                f" Max deals: {max_concurrent_deals},"
+                f" Per-position: {per_position_budget:.8f},"
+                f" In positions: {total_in_positions},"
+                f" Available: {quote_balance}"
             )
     else:
         # No reserved balance - use total portfolio balance (backward compatibility)
@@ -468,20 +484,48 @@ async def process_signal(
                             # Category is allowed to trade
                             print(f"🔍 {base_symbol} is {coin_category} (allowed): {reason}")
                             logger.info(f"  ✅ {coin_category}: {base_symbol} - allowed to trade")
-                            agg_str = f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
-                            print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}, aggregate={agg_str}")
-                            should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
-                            print(f"🔍 Should buy result: {should_buy}, amount: {(quote_amount if quote_amount else 0):.8f}, reason: {buy_reason}")
+                            agg_str = (
+                                f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
+                            )
+                            print(
+                                f"🔍 Calling strategy.should_buy() with"
+                                f" quote_balance={quote_balance:.8f}, aggregate={agg_str}"
+                            )
+                            should_buy, quote_amount, buy_reason = await strategy.should_buy(
+                                signal_data, position, quote_balance,
+                                aggregate_value=aggregate_value
+                            )
+                            amt = quote_amount if quote_amount else 0
+                            print(
+                                f"🔍 Should buy result: {should_buy},"
+                                f" amount: {amt:.8f}, reason: {buy_reason}"
+                            )
                         else:
                             should_buy = False
-                            buy_reason = f"{base_symbol} is {coin_category}: {reason.replace(f'[{coin_category}] ', '')}"
+                            category_tag = f'[{coin_category}] '
+                            buy_reason = (
+                                f"{base_symbol} is {coin_category}:"
+                                f" {reason.replace(category_tag, '')}"
+                            )
                             print(f"🔍 Should buy: FALSE - {buy_reason}")
                             logger.info(f"  🚫 {coin_category} (blocked): {buy_reason}")
                     else:
-                        agg_str = f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
-                        print(f"🔍 Calling strategy.should_buy() with quote_balance={quote_balance:.8f}, aggregate={agg_str}")
-                        should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
-                        print(f"🔍 Should buy result: {should_buy}, amount: {(quote_amount if quote_amount else 0):.8f}, reason: {buy_reason}")
+                        agg_str = (
+                            f"{aggregate_value:.8f}" if aggregate_value is not None else "None"
+                        )
+                        print(
+                            f"🔍 Calling strategy.should_buy() with"
+                            f" quote_balance={quote_balance:.8f}, aggregate={agg_str}"
+                        )
+                        should_buy, quote_amount, buy_reason = await strategy.should_buy(
+                            signal_data, position, quote_balance,
+                            aggregate_value=aggregate_value
+                        )
+                        amt = quote_amount if quote_amount else 0
+                        print(
+                            f"🔍 Should buy result: {should_buy},"
+                            f" amount: {amt:.8f}, reason: {buy_reason}"
+                        )
 
                         # Log budget blockers to indicator_logs so they show in GUI
                         if not should_buy and ("insufficient" in buy_reason.lower() or "budget" in buy_reason.lower()):
@@ -514,7 +558,10 @@ async def process_signal(
                                 await db.commit()
         else:
             # Position already exists for this pair - check for DCA
-            should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
+            should_buy, quote_amount, buy_reason = await strategy.should_buy(
+                signal_data, position, quote_balance,
+                aggregate_value=aggregate_value
+            )
 
             # Log budget blockers to indicator_logs so they show in GUI
             if not should_buy and ("insufficient" in buy_reason.lower() or "budget" in buy_reason.lower()):
@@ -536,7 +583,11 @@ async def process_signal(
                     indicators_snapshot=signal_data.get("indicators", {}),
                     current_price=current_price
                 )
-                if not await _is_duplicate_failed_order(db, bot.id, product_id, "safety_order", buy_reason, position):
+                is_dup = await _is_duplicate_failed_order(
+                    db, bot.id, product_id, "safety_order",
+                    buy_reason, position
+                )
+                if not is_dup:
                     await log_order_to_history(
                         db=db, bot=bot, product_id=product_id,
                         position=position, side="BUY", order_type="MARKET",
@@ -551,7 +602,10 @@ async def process_signal(
             buy_reason = "Bot is stopped - not opening new positions"
         else:
             # Still check DCA conditions for existing positions even when stopped
-            should_buy, quote_amount, buy_reason = await strategy.should_buy(signal_data, position, quote_balance, aggregate_value=aggregate_value)
+            should_buy, quote_amount, buy_reason = await strategy.should_buy(
+                signal_data, position, quote_balance,
+                aggregate_value=aggregate_value
+            )
             if not should_buy:
                 buy_reason = f"Bot stopped, DCA check: {buy_reason}"
 
@@ -575,7 +629,11 @@ async def process_signal(
                         indicators_snapshot=signal_data.get("indicators", {}),
                         current_price=current_price
                     )
-                    if not await _is_duplicate_failed_order(db, bot.id, product_id, "safety_order", buy_reason, position):
+                    is_dup = await _is_duplicate_failed_order(
+                        db, bot.id, product_id, "safety_order",
+                        buy_reason, position
+                    )
+                    if not is_dup:
                         await log_order_to_history(
                             db=db, bot=bot, product_id=product_id,
                             position=position, side="BUY", order_type="MARKET",
@@ -605,7 +663,10 @@ async def process_signal(
 
         if is_new_position:
             action_verb = "SELL" if is_short else "BUY"
-            logger.info(f"  🔨 Executing {trade_type} {action_verb} order FIRST (position will be created after success)...")
+            logger.info(
+                f"  🔨 Executing {trade_type} {action_verb} order FIRST"
+                " (position will be created after success)..."
+            )
         else:
             action_verb = "sell" if is_short else "buy"
             logger.info(f"  🔨 Executing {trade_type} {action_verb} order for existing position...")
@@ -627,7 +688,11 @@ async def process_signal(
                         "take_profit_target": indicators.get("bull_flag_target"),
                         "pattern_type": "bull_flag",
                     }
-                    logger.info(f"  🎯 Bull flag pattern detected - using pattern targets: SL={pattern_data['stop_loss']:.4f}, TP={pattern_data['take_profit_target']:.4f}")
+                    logger.info(
+                        f"  🎯 Bull flag pattern detected - using pattern targets:"
+                        f" SL={pattern_data['stop_loss']:.4f},"
+                        f" TP={pattern_data['take_profit_target']:.4f}"
+                    )
 
                 position = await create_position(
                     db, exchange, bot, product_id, quote_balance, quote_amount, aggregate_value,
@@ -676,7 +741,10 @@ async def process_signal(
                 # SHORT ORDER: Sell BTC for USD
                 # Calculate how much BTC to sell based on quote_amount (USD value)
                 base_amount = quote_amount / current_price
-                logger.info(f"  📉 SHORT: Selling {base_amount:.8f} BTC (${quote_amount:.2f} worth) @ ${current_price:.2f}")
+                logger.info(
+                    f"  📉 SHORT: Selling {base_amount:.8f} BTC"
+                    f" (${quote_amount:.2f} worth) @ ${current_price:.2f}"
+                )
 
                 # Execute short order using existing sell infrastructure
                 # For base orders (trade_type="initial"), we execute market sell
@@ -817,19 +885,27 @@ async def process_signal(
                             macd_histogram=signal_data.get("macd_histogram", 0),
                             price=current_price,
                             action_taken="hold",
-                            reason=f"Conditions met but mark profit {mark_profit_pct:.2f}% < {min_profit_for_conditions}%",
+                            reason=(
+                                f"Conditions met but mark profit"
+                                f" {mark_profit_pct:.2f}% < {min_profit_for_conditions}%"
+                            ),
                         )
                         db.add(signal)
                         await db.commit()
                         return {
                             "action": "hold",
-                            "reason": f"Sell blocked: mark profit {mark_profit_pct:.2f}% < {min_profit_for_conditions}%",
+                            "reason": (
+                                f"Sell blocked: mark profit"
+                                f" {mark_profit_pct:.2f}% < {min_profit_for_conditions}%"
+                            ),
                             "signal": signal_data,
                             "position": position,
                         }
                     else:
                         logger.info(
-                            f"  ✓ Mark price profit ({mark_profit_pct:.2f}%) >= min_profit ({min_profit_for_conditions}%) - proceeding"
+                            f"  ✓ Mark price profit ({mark_profit_pct:.2f}%)"
+                            f" >= min_profit ({min_profit_for_conditions}%)"
+                            " - proceeding"
                         )
                 except Exception as e:
                     logger.warning(f"Could not verify mark price profit, proceeding with sell: {e}")

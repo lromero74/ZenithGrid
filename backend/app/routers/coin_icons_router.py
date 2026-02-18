@@ -77,7 +77,8 @@ async def get_coin_icon(symbol: str) -> Response:
     letter = symbol[0].upper() if symbol else "?"
     fallback_svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
         <circle cx="32" cy="32" r="30" fill="#3b82f6" opacity="0.2"/>
-        <text x="32" y="40" font-family="sans-serif" font-size="24" font-weight="bold" fill="#3b82f6" text-anchor="middle">{letter}</text>
+        <text x="32" y="40" font-family="sans-serif" font-size="24" font-weight="bold"
+              fill="#3b82f6" text-anchor="middle">{letter}</text>
     </svg>'''
 
     return Response(

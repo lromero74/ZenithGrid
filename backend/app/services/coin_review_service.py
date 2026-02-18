@@ -67,9 +67,12 @@ COIN_REVIEW_PROMPT = """You are a cryptocurrency analyst evaluating coins for a 
 
 Analyze each coin and categorize it into one of FIVE categories:
 - APPROVED: Legitimate projects with strong fundamentals, active development, clear utility
-- BORDERLINE: Projects with concerns but not outright bad - declining relevance, slow development, etc.
-- QUESTIONABLE: Projects with significant red flags - unclear utility, heavy selling pressure, overshadowed by competitors
-- MEME: Meme coins and tokens with primarily community-driven value, high volatility, speculative (DOGE, SHIB, PEPE, WIF, etc.)
+- BORDERLINE: Projects with concerns but not outright bad -
+  declining relevance, slow development, etc.
+- QUESTIONABLE: Projects with significant red flags -
+  unclear utility, heavy selling pressure, overshadowed by competitors
+- MEME: Meme coins and tokens with primarily community-driven value,
+  high volatility, speculative (DOGE, SHIB, PEPE, WIF, etc.)
 - BLACKLISTED: Projects with serious issues - SEC problems, abandoned, security vulnerabilities, scams, rugpulls
 
 For each coin, provide:
@@ -85,7 +88,9 @@ Consider factors like:
 - Team credibility and project longevity
 - Tokenomics and unlock schedules
 
-IMPORTANT: Categorize ALL meme coins as MEME, not BLACKLISTED. Reserve BLACKLISTED for truly problematic projects (scams, abandoned, security issues).
+IMPORTANT: Categorize ALL meme coins as MEME, not BLACKLISTED.
+Reserve BLACKLISTED for truly problematic projects
+(scams, abandoned, security issues).
 
 Here are the coins to analyze (available on Coinbase across BTC, USD, and USDC markets):
 {coins_list}

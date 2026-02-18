@@ -71,7 +71,7 @@ async def get_ai_client(provider: str = "anthropic", user_id: Optional[int] = No
     elif provider == "gemini":
         # Return a wrapper that creates per-request model instances
         # (avoids module-global genai.configure() race condition between users)
-        import google.generativeai as genai
+        import google.generativeai as genai  # noqa: F401
         return GeminiClientWrapper(api_key=api_key)
     else:
         raise ValueError(f"Unsupported AI provider: {provider}")

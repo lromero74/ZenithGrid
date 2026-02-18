@@ -164,7 +164,9 @@ class DebtCeilingMonitor:
         - legislation: str (if found)
         - summary: str
         """
-        prompt = f"""You are a financial analyst assistant. Check if there has been any new US debt ceiling legislation passed after {latest_date or '2025-01-01'}.
+        cutoff_date = latest_date or '2025-01-01'
+        prompt = f"""You are a financial analyst assistant. \
+Check if there has been any new US debt ceiling legislation passed after {cutoff_date}.
 
 The last recorded debt ceiling in our database is:
 - Date: {latest_date or 'Unknown'}
@@ -239,7 +241,10 @@ Respond in JSON format only:
             "last_check": self._last_check.isoformat() if self._last_check else None,
             "last_result": self._last_result,
             "check_interval_days": CHECK_INTERVAL // (24 * 60 * 60),
-            "current_ceiling_trillion": DEBT_CEILING_HISTORY[0].get("amount_trillion") if DEBT_CEILING_HISTORY else None,
+            "current_ceiling_trillion": (
+                DEBT_CEILING_HISTORY[0].get("amount_trillion")
+                if DEBT_CEILING_HISTORY else None
+            ),
         }
 
 

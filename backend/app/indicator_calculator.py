@@ -114,7 +114,8 @@ class IndicatorCalculator:
                 # bb_upper_20_2, bb_middle_20_2, bb_lower_20_2
                 parts = indicator_key.split("_")
                 if len(parts) >= 4:
-                    _band_type = parts[1]  # upper, middle, lower (parsed but not used - returns all bands)  # noqa: F841
+                    # upper, middle, lower (parsed but not used - returns all bands)
+                    _band_type = parts[1]  # noqa: F841
                     period = int(parts[2])
                     std_dev_str = parts[3]  # Keep original format for key (avoids 2.0 vs 2 mismatch)
                     std_dev = float(std_dev_str)

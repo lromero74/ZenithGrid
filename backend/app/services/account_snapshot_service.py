@@ -239,7 +239,11 @@ async def get_latest_snapshot(db: AsyncSession, user_id: int, include_paper_trad
     if not include_paper_trading:
         query = query.where(Account.is_paper_trading.is_(False))
 
-    query = query.group_by(AccountValueSnapshot.snapshot_date).order_by(AccountValueSnapshot.snapshot_date.desc()).limit(1)
+    query = (
+        query.group_by(AccountValueSnapshot.snapshot_date)
+        .order_by(AccountValueSnapshot.snapshot_date.desc())
+        .limit(1)
+    )
 
     result = await db.execute(query)
 

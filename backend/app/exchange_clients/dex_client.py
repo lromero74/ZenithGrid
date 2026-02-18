@@ -431,7 +431,10 @@ class DEXClient(ExchangeClient):
             return amount_out
 
         except Exception as e:
-            logger.error(f"Quoter call failed: token_in={token_in}, token_out={token_out}, amount={amount_in_wei}, error={e}")
+            logger.error(
+                f"Quoter call failed: token_in={token_in}, token_out={token_out}, "
+                f"amount={amount_in_wei}, error={e}"
+            )
             raise
 
     async def get_current_price(self, product_id: str = "WETH-USDC") -> float:
@@ -750,10 +753,21 @@ class DEXClient(ExchangeClient):
                 'product_id': product_id,
                 'side': side.upper(),
                 'status': 'FILLED',
-                'size': str(amount_in_float) if side.upper() == "SELL" else str(actual_amount_out / (10 ** decimals_out)),
-                'filled_size': str(amount_in_float) if side.upper() == "SELL" else str(actual_amount_out / (10 ** decimals_out)),
-                'price': str((expected_amount_out_wei / (10 ** decimals_out)) / amount_in_float),
-                'funds': str(amount_in_float) if side.upper() == "BUY" else str(actual_amount_out / (10 ** decimals_out)),
+                'size': (
+                    str(amount_in_float) if side.upper() == "SELL"
+                    else str(actual_amount_out / (10 ** decimals_out))
+                ),
+                'filled_size': (
+                    str(amount_in_float) if side.upper() == "SELL"
+                    else str(actual_amount_out / (10 ** decimals_out))
+                ),
+                'price': str(
+                    (expected_amount_out_wei / (10 ** decimals_out)) / amount_in_float
+                ),
+                'funds': (
+                    str(amount_in_float) if side.upper() == "BUY"
+                    else str(actual_amount_out / (10 ** decimals_out))
+                ),
                 'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                 'tx_hash': tx_hash.hex(),
                 'gas_used': receipt['gasUsed'],

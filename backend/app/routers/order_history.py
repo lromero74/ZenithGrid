@@ -138,7 +138,10 @@ async def get_failed_orders(
 
     Useful for debugging and troubleshooting.
     """
-    return await get_order_history(db=db, current_user=current_user, bot_id=bot_id, account_id=account_id, status="failed", limit=limit, offset=0)
+    return await get_order_history(
+        db=db, current_user=current_user, bot_id=bot_id,
+        account_id=account_id, status="failed", limit=limit, offset=0
+    )
 
 
 @router.get("/failed/paginated")
@@ -179,7 +182,10 @@ async def get_failed_orders_paginated(
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
 
     # Get paginated items
-    items = await get_order_history(db=db, current_user=current_user, bot_id=bot_id, account_id=account_id, status="failed", limit=page_size, offset=offset)
+    items = await get_order_history(
+        db=db, current_user=current_user, bot_id=bot_id,
+        account_id=account_id, status="failed", limit=page_size, offset=offset
+    )
 
     return {
         "items": items,

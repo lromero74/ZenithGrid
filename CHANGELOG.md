@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.19.0] - 2026-02-18
+
+### Added
+- **Summary-only indicator**: Amber "Summary only" badge in mini-player (expanded + collapsed) when content extraction fails and falls back to RSS summary
+- **Content fetch retry with backoff**: Article content now retries 4 times with exponential backoff (0s, 1.5s, 3s, 6s) before falling back to summary
+
+### Changed
+- Articles that fall back to summary are now auto-flagged as `has_issue` (appear in Broken filter)
+
+### Fixed
+- **Flake8 lint cleanup**: Fixed all 145 E501 (line too long) violations and 1 F401 (unused import) across 28 backend files. Formatting only — no logic changes
+
 ## [v2.18.9] - 2026-02-18
 
 ### Fixed

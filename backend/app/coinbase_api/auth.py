@@ -174,7 +174,8 @@ async def authenticated_request(
                         # Exponential backoff: 1s, 2s, 4s
                         wait_time = 2**attempt
                         logger.warning(
-                            f"⚠️  Rate limited (429) on {method} {endpoint}, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})"
+                            f"⚠️  Rate limited (429) on {method} {endpoint}, "
+                            f"retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})"
                         )
                         await asyncio.sleep(wait_time)
                         continue
@@ -185,9 +186,15 @@ async def authenticated_request(
                     # Non-429 error, log detailed error and raise
                     try:
                         error_body = e.response.json()
-                        logger.error(f"❌ Coinbase API error {e.response.status_code} on {method} {endpoint}: {error_body}")
+                        logger.error(
+                            f"❌ Coinbase API error {e.response.status_code} on "
+                            f"{method} {endpoint}: {error_body}"
+                        )
                     except Exception:
-                        logger.error(f"❌ Coinbase API error {e.response.status_code} on {method} {endpoint}: {e.response.text}")
+                        logger.error(
+                            f"❌ Coinbase API error {e.response.status_code} on "
+                            f"{method} {endpoint}: {e.response.text}"
+                        )
                     raise
 
     # Should never reach here (all paths return or raise)
