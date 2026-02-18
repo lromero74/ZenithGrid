@@ -188,7 +188,7 @@ DEFAULT_VOICE = "aria"
 # =============================================================================
 
 class TTSSyncRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=15000)
+    text: str = Field(..., min_length=1, max_length=50000)
     voice: str = Field(default="aria")
     rate: str = Field(default="+0%")
     article_id: Optional[int] = Field(
@@ -592,7 +592,7 @@ async def update_voice_subscriptions(
 
 
 class TTSPrepareRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=15000)
+    text: str = Field(..., min_length=1, max_length=50000)
     voice: str = Field(default="aria")
     rate: str = Field(default="+0%")
     article_id: int = Field(..., description="Article ID (required for cache)")

@@ -5,6 +5,15 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.14.1] - 2026-02-18
+
+### Fixed
+- **TTS fails on long articles**: Increased TTS text limit from 15,000 to 50,000 characters — long review articles (e.g. drone roundups) no longer return 422 Unprocessable Entity
+- **Maintenance page 403**: Moved `maintenance.html` to `/usr/share/nginx/html/` so nginx can serve it without traversing the user's home directory (was getting 403 Forbidden due to `700` perms on `/home/ec2-user`)
+
+### Changed
+- **Maintenance page auto-retry**: Page now counts down from 60 seconds and auto-reloads, in addition to the manual Retry button
+
 ## [v2.14.0] - 2026-02-18
 
 ### Added
