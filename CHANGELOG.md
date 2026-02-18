@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.18.6] - 2026-02-18
+
+### Fixed
+- **Version update toast timing**: Toast now waits 5 seconds and re-verifies the server is responding before prompting. Prevents showing "New Version Available" while the backend is still restarting
+
 ## [v2.18.5] - 2026-02-18
 
 ### Added
