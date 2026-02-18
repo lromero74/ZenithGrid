@@ -33,7 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
 from app.models import (
-    ContentSource, NewsArticle, User, UserSourceSubscription, VideoArticle,
+    ContentSource, NewsArticle, User, UserContentSeenStatus,
+    UserSourceSubscription, VideoArticle,
 )
 from app.auth.dependencies import get_current_user
 from app.news_data import (
@@ -423,7 +424,24 @@ async def cleanup_old_articles(
     return total_deleted
 
 
-def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
+async def get_seen_content_ids(
+    db: AsyncSession, user_id: int, content_type: str,
+) -> set:
+    """Return set of content IDs the user has marked as seen."""
+    result = await db.execute(
+        select(UserContentSeenStatus.content_id).where(
+            UserContentSeenStatus.user_id == user_id,
+            UserContentSeenStatus.content_type == content_type,
+        )
+    )
+    return {row[0] for row in result.all()}
+
+
+def article_to_news_item(
+    article: NewsArticle,
+    sources: Optional[Dict[str, Dict]] = None,
+    seen_ids: Optional[set] = None,
+) -> Dict[str, Any]:
     """Convert a NewsArticle database object to a NewsItem dict for API response."""
     source_map = sources if sources else NEWS_SOURCES
     if article.cached_thumbnail_path:
@@ -445,6 +463,7 @@ def article_to_news_item(article: NewsArticle, sources: Optional[Dict[str, Dict]
         "summary": article.summary,
         "thumbnail": thumbnail,
         "category": getattr(article, 'category', 'CryptoCurrency'),
+        "is_seen": article.id in seen_ids if seen_ids else False,
     }
 
 
@@ -621,10 +640,15 @@ async def cleanup_old_videos(
     return total_deleted
 
 
-def video_to_item(video: VideoArticle, sources: Optional[Dict[str, Dict]] = None) -> Dict[str, Any]:
+def video_to_item(
+    video: VideoArticle,
+    sources: Optional[Dict[str, Dict]] = None,
+    seen_ids: Optional[set] = None,
+) -> Dict[str, Any]:
     """Convert a VideoArticle database object to a VideoItem dict for API response."""
     source_map = sources if sources else VIDEO_SOURCES
     return {
+        "id": video.id,
         "title": video.title,
         "url": video.url,
         "video_id": video.video_id,
@@ -635,6 +659,7 @@ def video_to_item(video: VideoArticle, sources: Optional[Dict[str, Dict]] = None
         "thumbnail": video.thumbnail_url,
         "description": video.description,
         "category": getattr(video, 'category', 'CryptoCurrency'),
+        "is_seen": video.id in seen_ids if seen_ids else False,
     }
 
 
@@ -651,13 +676,15 @@ async def get_videos_from_db(
             videos = await get_videos_for_user(
                 db, user_id, category=category,
             )
+            seen_ids = await get_seen_content_ids(db, user_id, "video")
         else:
             videos = await get_videos_from_db_list(
                 db, category=category,
             )
+            seen_ids = set()
 
     video_items = [
-        video_to_item(video, sources_to_use) for video in videos
+        video_to_item(video, sources_to_use, seen_ids) for video in videos
     ]
 
     sources_list = [
@@ -1123,13 +1150,15 @@ async def get_news_from_db(
                 db, user_id, page=page, page_size=page_size,
                 category=category,
             )
+            seen_ids = await get_seen_content_ids(db, user_id, "article")
         else:
             articles, total_count = await get_articles_from_db(
                 db, page=page, page_size=page_size, category=category,
             )
+            seen_ids = set()
 
     news_items = [
-        article_to_news_item(article, sources_to_use)
+        article_to_news_item(article, sources_to_use, seen_ids)
         for article in articles
     ]
 
@@ -1234,6 +1263,89 @@ async def get_categories(current_user: User = Depends(get_current_user)):
         "categories": NEWS_CATEGORIES,
         "default": "CryptoCurrency",
     }
+
+
+@router.post("/seen")
+async def mark_content_seen(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    """Mark a single article or video as seen/unseen."""
+    content_type = payload.get("content_type")
+    content_id = payload.get("content_id")
+    seen = payload.get("seen", True)
+
+    if content_type not in ("article", "video"):
+        raise HTTPException(400, "content_type must be 'article' or 'video'")
+    if not isinstance(content_id, int):
+        raise HTTPException(400, "content_id must be an integer")
+
+    async with async_session_maker() as db:
+        if seen:
+            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+            stmt = sqlite_insert(UserContentSeenStatus).values(
+                user_id=current_user.id,
+                content_type=content_type,
+                content_id=content_id,
+            ).on_conflict_do_nothing(
+                index_elements=["user_id", "content_type", "content_id"],
+            )
+            await db.execute(stmt)
+        else:
+            from sqlalchemy import delete
+            await db.execute(
+                delete(UserContentSeenStatus).where(
+                    UserContentSeenStatus.user_id == current_user.id,
+                    UserContentSeenStatus.content_type == content_type,
+                    UserContentSeenStatus.content_id == content_id,
+                )
+            )
+        await db.commit()
+
+    return {"ok": True}
+
+
+@router.post("/seen/bulk")
+async def bulk_mark_content_seen(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    """Bulk mark articles or videos as seen/unseen."""
+    content_type = payload.get("content_type")
+    content_ids = payload.get("content_ids", [])
+    seen = payload.get("seen", True)
+
+    if content_type not in ("article", "video"):
+        raise HTTPException(400, "content_type must be 'article' or 'video'")
+    if not isinstance(content_ids, list) or not content_ids:
+        raise HTTPException(400, "content_ids must be a non-empty list")
+
+    async with async_session_maker() as db:
+        if seen:
+            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+            for cid in content_ids:
+                stmt = sqlite_insert(UserContentSeenStatus).values(
+                    user_id=current_user.id,
+                    content_type=content_type,
+                    content_id=cid,
+                ).on_conflict_do_nothing(
+                    index_elements=[
+                        "user_id", "content_type", "content_id",
+                    ],
+                )
+                await db.execute(stmt)
+        else:
+            from sqlalchemy import delete
+            await db.execute(
+                delete(UserContentSeenStatus).where(
+                    UserContentSeenStatus.user_id == current_user.id,
+                    UserContentSeenStatus.content_type == content_type,
+                    UserContentSeenStatus.content_id.in_(content_ids),
+                )
+            )
+        await db.commit()
+
+    return {"ok": True, "count": len(content_ids)}
 
 
 @router.get("/image/{article_id}")

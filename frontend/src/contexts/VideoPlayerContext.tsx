@@ -5,8 +5,10 @@
 
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react'
 import { registerVideoPlayer, stopArticleReader } from './mediaCoordinator'
+import { authFetch } from '../services/api'
 
 export interface VideoItem {
+  id?: number  // DB video ID (for seen tracking)
   title: string
   url: string
   video_id: string
@@ -16,6 +18,7 @@ export interface VideoItem {
   published: string | null
   thumbnail: string | null
   description: string | null
+  is_seen?: boolean
 }
 
 interface VideoPlayerContextType {
@@ -183,9 +186,20 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
 
         // YouTube Player API event: state 0 = ended
-        if (data.event === 'onStateChange' && data.info === 0) {
-          nextVideo()
-        } else if (data.event === 'infoDelivery' && data.info?.playerState === 0) {
+        const videoEnded =
+          (data.event === 'onStateChange' && data.info === 0) ||
+          (data.event === 'infoDelivery' && data.info?.playerState === 0)
+
+        if (videoEnded) {
+          // Mark current video as seen (fire-and-forget)
+          const video = playlistRef.current[currentIndex]
+          if (video?.id) {
+            authFetch('/api/news/seen', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content_type: 'video', content_id: video.id, seen: true }),
+            }).catch(() => {})
+          }
           nextVideo()
         }
       } catch {
@@ -195,7 +209,7 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [isPlaying, nextVideo])
+  }, [isPlaying, nextVideo, currentIndex])
 
   const value: VideoPlayerContextType = {
     playlist,

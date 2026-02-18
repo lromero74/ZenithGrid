@@ -8,7 +8,7 @@
  * - Source extraction
  */
 
-import { NewsItem, VideoItem } from './types'
+import { NewsItem, VideoItem, SeenFilter } from './types'
 
 /**
  * Clean up hover highlights from dropdown interactions
@@ -256,6 +256,21 @@ export const unhighlightArticle = (articleUrl: string): void => {
  * @param markdown - Markdown formatted text
  * @returns Plain text suitable for text-to-speech
  */
+/**
+ * Filter items by seen/unseen status
+ * @param items - News or video items with is_seen field
+ * @param filter - 'all' | 'unseen' | 'seen'
+ * @returns Filtered items
+ */
+export const filterBySeen = <T extends { is_seen?: boolean }>(
+  items: T[],
+  filter: SeenFilter,
+): T[] => {
+  if (filter === 'all') return items
+  if (filter === 'unseen') return items.filter(item => !item.is_seen)
+  return items.filter(item => item.is_seen)
+}
+
 export const markdownToPlainText = (markdown: string): string => {
   let text = markdown
 
