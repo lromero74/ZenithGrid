@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.18.0] - 2026-02-18
+
+### Added
+- **Continuous play toggle**: ON by default for "Read All", OFF for single article clicks. Repeat icon button in mini-player controls. When OFF, playback stops after each article but mini-player stays visible for manual control
+- **Resume-on-refresh prompt**: Instead of silently auto-resuming TTS after page refresh, shows "Continue where you left off?" banner with Resume/Dismiss buttons
+- **Article issue tracking**: `has_issue` flag on news articles for TTS failures. Amber AlertCircle badge on affected cards and playlist items. Backend `POST /api/news/article-issue` endpoint
+- **Auto-skip failed articles**: TTS errors auto-flag the article and skip after 2s delay. Content fetch failures (no content AND no summary) skip after 1s. Known-bad articles skipped instantly (300ms) on future plays
+- **Full retention period in News**: Removed 500-article cap — users now see all articles within their retention window (14 days default or custom override). Backend `page_size=0` returns all articles; client-side filtering + pagination handles display
+
+### Fixed
+- Mini-player now stays visible when article finishes with continuous play OFF (was disappearing)
+- Missing `id` field in 2 of 4 ArticleItem construction points in News.tsx (article dropdown, text body click)
+- `togglePlayPause` now handles stopped-but-visible state (replays current article)
+
 ## [v2.17.0] - 2026-02-18
 
 ### Added
