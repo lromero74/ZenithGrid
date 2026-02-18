@@ -92,7 +92,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     localStorage.setItem('audio-notifications-enabled', enabled ? 'true' : 'false')
   }, [setAudioHookEnabled])
 
-  // Check for new version and show update toast
+  // Check for new version and show update toast.
+  // After detecting a new version, waits and re-verifies the server is stable
+  // before prompting — avoids showing the toast while the backend is still starting.
   const checkForNewVersion = useCallback(() => {
     fetch('/api/')
       .then(res => res.json())
@@ -111,15 +113,28 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           serverVersion !== loadedVersionRef.current &&
           updateToastShownForRef.current !== serverVersion
         ) {
-          updateToastShownForRef.current = serverVersion
-          addToast({
-            type: 'update',
-            title: 'New Version Available',
-            message: `Version ${serverVersion} is ready. Reload to get the latest updates.`,
-            persistent: true,
-            actionLabel: 'Reload',
-            onAction: () => window.location.reload(),
-          })
+          // Re-verify after a delay to ensure the server is fully ready
+          setTimeout(() => {
+            fetch('/api/')
+              .then(res => res.json())
+              .then(verify => {
+                if (
+                  verify.version === serverVersion &&
+                  updateToastShownForRef.current !== serverVersion
+                ) {
+                  updateToastShownForRef.current = serverVersion
+                  addToast({
+                    type: 'update',
+                    title: 'New Version Available',
+                    message: `Version ${serverVersion} is ready. Reload to get the latest updates.`,
+                    persistent: true,
+                    actionLabel: 'Reload',
+                    onAction: () => window.location.reload(),
+                  })
+                }
+              })
+              .catch(() => {})
+          }, 5000)
         }
       })
       .catch(() => {
