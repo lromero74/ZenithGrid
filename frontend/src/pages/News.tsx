@@ -381,11 +381,14 @@ export default function News() {
 
       {/* Seen filter + bulk actions */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Three-state pill: All / Unread / Read */}
+        {/* Filter pills: All / Unread / Read / Broken (articles only) */}
         <div className="flex space-x-0.5 bg-slate-800 rounded-lg p-0.5">
-          {(['all', 'unseen', 'seen'] as SeenFilter[]).map(f => {
+          {(activeTab === 'articles'
+            ? ['all', 'unseen', 'seen', 'broken'] as SeenFilter[]
+            : ['all', 'unseen', 'seen'] as SeenFilter[]
+          ).map(f => {
             const active = (activeTab === 'articles' ? seenFilter : seenVideoFilter) === f
-            const label = f === 'all' ? 'All' : f === 'unseen' ? 'Unread' : 'Read'
+            const label = f === 'all' ? 'All' : f === 'unseen' ? 'Unread' : f === 'broken' ? 'Broken' : 'Read'
             return (
               <button
                 key={f}
@@ -399,7 +402,7 @@ export default function News() {
                 }}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   active
-                    ? 'bg-slate-600 text-white'
+                    ? f === 'broken' ? 'bg-amber-700/60 text-amber-200' : 'bg-slate-600 text-white'
                     : 'text-slate-400 hover:text-white hover:bg-slate-700'
                 }`}
               >
@@ -665,14 +668,14 @@ export default function News() {
                     <span>Now Reading</span>
                   </div>
                 )}
-                {/* Issue badge */}
-                {item.has_issue && !isCurrentlyReading && !item.is_seen && (
+                {/* Issue badge (takes priority over seen badge) */}
+                {item.has_issue && !isCurrentlyReading && (
                   <div className="absolute top-2 left-2 z-20 w-6 h-6 bg-amber-600/80 rounded-full flex items-center justify-center" title="Playback issue">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-200" />
                   </div>
                 )}
-                {/* Seen badge */}
-                {item.is_seen && !isCurrentlyReading && (
+                {/* Seen badge (only if no issue badge) */}
+                {item.is_seen && !item.has_issue && !isCurrentlyReading && (
                   <div className="absolute top-2 left-2 z-20 w-6 h-6 bg-slate-700/80 rounded-full flex items-center justify-center">
                     <Check className="w-3.5 h-3.5 text-slate-400" />
                   </div>

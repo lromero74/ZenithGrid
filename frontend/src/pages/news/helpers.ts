@@ -257,17 +257,18 @@ export const unhighlightArticle = (articleUrl: string): void => {
  * @returns Plain text suitable for text-to-speech
  */
 /**
- * Filter items by seen/unseen status
- * @param items - News or video items with is_seen field
- * @param filter - 'all' | 'unseen' | 'seen'
+ * Filter items by seen/unseen/broken status
+ * @param items - News or video items with is_seen and has_issue fields
+ * @param filter - 'all' | 'unseen' | 'seen' | 'broken'
  * @returns Filtered items
  */
-export const filterBySeen = <T extends { is_seen?: boolean }>(
+export const filterBySeen = <T extends { is_seen?: boolean; has_issue?: boolean }>(
   items: T[],
   filter: SeenFilter,
 ): T[] => {
   if (filter === 'all') return items
   if (filter === 'unseen') return items.filter(item => !item.is_seen)
+  if (filter === 'broken') return items.filter(item => item.has_issue)
   return items.filter(item => item.is_seen)
 }
 

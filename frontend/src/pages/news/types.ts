@@ -31,7 +31,7 @@ export interface VideoItem {
   is_seen?: boolean
 }
 
-export type SeenFilter = 'all' | 'unseen' | 'seen'
+export type SeenFilter = 'all' | 'unseen' | 'seen' | 'broken'
 
 export type NewsCategory =
   | 'CryptoCurrency'
