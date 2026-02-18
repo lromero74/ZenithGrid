@@ -47,6 +47,8 @@ interface NotificationProviderProps {
   children: ReactNode
 }
 
+const VERSION_CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutes
+
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const [toasts, setToasts] = useState<ToastData[]>([])
   const [isConnected, setIsConnected] = useState(false)
@@ -56,6 +58,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   })
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
+  const loadedVersionRef = useRef<string | null>(null)
+  const updateToastShownForRef = useRef<string | null>(null)
+  const versionCheckIntervalRef = useRef<number | null>(null)
   const { playOrderSound, setAudioEnabled: setAudioHookEnabled } = useAudio()
 
   // Add a new toast
@@ -70,7 +75,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   // Dismiss a toast
   const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
+    setToasts((prev) => {
+      const toast = prev.find((t) => t.id === id)
+      // If dismissing an update toast, allow it to re-appear on next version check
+      if (toast?.type === 'update') {
+        updateToastShownForRef.current = null
+      }
+      return prev.filter((t) => t.id !== id)
+    })
   }, [])
 
   // Toggle audio
@@ -79,6 +91,41 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     setAudioHookEnabled(enabled)
     localStorage.setItem('audio-notifications-enabled', enabled ? 'true' : 'false')
   }, [setAudioHookEnabled])
+
+  // Check for new version and show update toast
+  const checkForNewVersion = useCallback(() => {
+    fetch('/api/')
+      .then(res => res.json())
+      .then(data => {
+        const serverVersion = data.version
+        if (!serverVersion) return
+
+        // Capture the initially loaded version on first check
+        if (!loadedVersionRef.current) {
+          loadedVersionRef.current = serverVersion
+          return
+        }
+
+        // If version differs from what was loaded and we haven't shown this toast yet
+        if (
+          serverVersion !== loadedVersionRef.current &&
+          updateToastShownForRef.current !== serverVersion
+        ) {
+          updateToastShownForRef.current = serverVersion
+          addToast({
+            type: 'update',
+            title: 'New Version Available',
+            message: `Version ${serverVersion} is ready. Reload to get the latest updates.`,
+            persistent: true,
+            actionLabel: 'Reload',
+            onAction: () => window.location.reload(),
+          })
+        }
+      })
+      .catch(() => {
+        // Silently ignore — server may be restarting
+      })
+  }, [addToast])
 
   // Handle incoming order fill events
   const handleOrderFill = useCallback((event: OrderFillEvent) => {
@@ -158,6 +205,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           clearTimeout(reconnectTimeoutRef.current)
           reconnectTimeoutRef.current = null
         }
+        // Check for new version on every connect/reconnect
+        checkForNewVersion()
       }
 
       ws.onmessage = (event) => {
@@ -195,13 +244,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         connect()
       }, 5000)
     }
-  }, [handleOrderFill])
+  }, [handleOrderFill, checkForNewVersion])
 
   // Connect on mount (delayed to avoid React StrictMode "closed before established")
   useEffect(() => {
     // setTimeout(0) ensures Strict Mode's immediate cleanup cancels this before it fires,
     // so only the second (real) mount actually creates the WebSocket connection.
     const connectTimer = setTimeout(connect, 0)
+
+    // Periodic version check as fallback (covers non-restart version bumps)
+    versionCheckIntervalRef.current = window.setInterval(checkForNewVersion, VERSION_CHECK_INTERVAL)
 
     return () => {
       clearTimeout(connectTimer)
@@ -218,8 +270,12 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
       }
+      if (versionCheckIntervalRef.current) {
+        clearInterval(versionCheckIntervalRef.current)
+        versionCheckIntervalRef.current = null
+      }
     }
-  }, [connect])
+  }, [connect, checkForNewVersion])
 
   const value: NotificationContextType = {
     addToast,

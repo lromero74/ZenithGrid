@@ -4,9 +4,9 @@
  */
 
 import { useEffect, useState } from 'react'
-import { TrendingUp, TrendingDown, DollarSign, ArrowDownCircle, X, CheckCircle } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, ArrowDownCircle, X, CheckCircle, ArrowUpCircle } from 'lucide-react'
 
-export type ToastType = 'base_order' | 'dca_order' | 'sell_order' | 'partial_fill' | 'info' | 'error' | 'success'
+export type ToastType = 'base_order' | 'dca_order' | 'sell_order' | 'partial_fill' | 'info' | 'error' | 'success' | 'update'
 
 export interface ToastData {
   id: string
@@ -18,6 +18,9 @@ export interface ToastData {
   price?: string
   profit?: string
   timestamp: number
+  persistent?: boolean
+  actionLabel?: string
+  onAction?: () => void
 }
 
 interface ToastProps {
@@ -31,13 +34,15 @@ export function Toast({ toast, onDismiss }: ToastProps) {
   const [isExiting, setIsExiting] = useState(false)
 
   useEffect(() => {
+    if (toast.persistent) return // Persistent toasts don't auto-dismiss
+
     const timer = setTimeout(() => {
       setIsExiting(true)
       setTimeout(() => onDismiss(toast.id), 300) // Wait for exit animation
     }, TOAST_DURATION)
 
     return () => clearTimeout(timer)
-  }, [toast.id, onDismiss])
+  }, [toast.id, toast.persistent, onDismiss])
 
   const handleDismiss = () => {
     setIsExiting(true)
@@ -95,6 +100,14 @@ export function Toast({ toast, onDismiss }: ToastProps) {
           iconColor: 'text-emerald-400',
           titleColor: 'text-emerald-300',
         }
+      case 'update':
+        return {
+          icon: <ArrowUpCircle className="w-6 h-6" />,
+          bgColor: 'bg-amber-900/90',
+          borderColor: 'border-amber-500',
+          iconColor: 'text-amber-400',
+          titleColor: 'text-amber-300',
+        }
       default:
         return {
           icon: <TrendingUp className="w-6 h-6" />,
@@ -143,6 +156,20 @@ export function Toast({ toast, onDismiss }: ToastProps) {
               {toast.message}
             </p>
 
+            {/* Action button */}
+            {toast.actionLabel && toast.onAction && (
+              <button
+                onClick={toast.onAction}
+                className={`mt-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  toast.type === 'update'
+                    ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                    : 'bg-slate-600 hover:bg-slate-500 text-white'
+                }`}
+              >
+                {toast.actionLabel}
+              </button>
+            )}
+
             {/* Order details */}
             {(toast.productId || toast.amount || toast.price) && (
               <div className="mt-2 text-xs text-slate-400 space-y-0.5">
@@ -180,22 +207,26 @@ export function Toast({ toast, onDismiss }: ToastProps) {
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="h-1 bg-slate-700/50 overflow-hidden">
-        <div
-          className={`h-full ${styles.borderColor.replace('border', 'bg')}`}
-          style={{
-            animation: `shrink ${TOAST_DURATION}ms linear forwards`,
-          }}
-        />
-      </div>
+      {/* Progress bar (hidden for persistent toasts) */}
+      {!toast.persistent && (
+        <>
+          <div className="h-1 bg-slate-700/50 overflow-hidden">
+            <div
+              className={`h-full ${styles.borderColor.replace('border', 'bg')}`}
+              style={{
+                animation: `shrink ${TOAST_DURATION}ms linear forwards`,
+              }}
+            />
+          </div>
 
-      <style>{`
-        @keyframes shrink {
-          from { width: 100%; }
-          to { width: 0%; }
-        }
-      `}</style>
+          <style>{`
+            @keyframes shrink {
+              from { width: 100%; }
+              to { width: 0%; }
+            }
+          `}</style>
+        </>
+      )}
     </div>
   )
 }
