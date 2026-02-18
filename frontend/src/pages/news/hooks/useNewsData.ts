@@ -37,7 +37,8 @@ const REFETCH_INTERVAL = 1000 * 60 * 15 // 15 minutes
 export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => {
   const isUserEngaged = options?.isUserEngaged ?? false
 
-  // Fetch recent news articles (limited to reduce memory on mobile devices)
+  // Fetch all news articles within retention period (page_size=0 = no limit)
+  // Client-side filtering + pagination handles display (50 per page)
   const {
     data: newsData,
     isLoading: newsLoading,
@@ -47,7 +48,7 @@ export const useNewsData = (options?: UseNewsDataOptions): UseNewsDataReturn => 
   } = useQuery<NewsResponse>({
     queryKey: ['crypto-news'],
     queryFn: async () => {
-      const response = await authFetch('/api/news/?page=1&page_size=500')
+      const response = await authFetch('/api/news/?page_size=0')
       if (!response.ok) throw new Error('Failed to fetch news')
       return response.json()
     },

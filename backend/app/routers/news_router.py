@@ -278,11 +278,11 @@ async def get_articles_for_user(
     count_result = await db.execute(count_query)
     total_count = count_result.scalar() or 0
 
-    # Paginate
-    offset = (page - 1) * page_size
-    query = query.order_by(
-        desc(NewsArticle.published_at)
-    ).offset(offset).limit(page_size)
+    # Paginate (page_size=0 means return all)
+    query = query.order_by(desc(NewsArticle.published_at))
+    if page_size > 0:
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size)
     result = await db.execute(query)
     return list(result.scalars().all()), total_count
 
@@ -308,13 +308,13 @@ async def get_articles_from_db(
     count_result = await db.execute(count_query)
     total_count = count_result.scalar() or 0
 
-    offset = (page - 1) * page_size
     query = select(NewsArticle)
     for condition in conditions:
         query = query.where(condition)
-    query = query.order_by(
-        desc(NewsArticle.published_at)
-    ).offset(offset).limit(page_size)
+    query = query.order_by(desc(NewsArticle.published_at))
+    if page_size > 0:
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size)
     result = await db.execute(query)
     return list(result.scalars().all()), total_count
 
@@ -1169,7 +1169,9 @@ async def get_news_from_db(
     ]
 
     total_pages = (
-        math.ceil(total_count / page_size) if total_count > 0 else 1
+        1 if page_size == 0
+        else math.ceil(total_count / page_size) if total_count > 0
+        else 1
     )
 
     now = datetime.now(timezone.utc)
@@ -1208,7 +1210,9 @@ async def get_news(
     Returns immediately from database. Background refresh runs every 30 minutes.
     Use force_refresh=true to trigger immediate refresh (runs in background).
     """
-    page_size = max(10, page_size)
+    # page_size=0 means "return all articles" (no LIMIT)
+    if page_size != 0:
+        page_size = max(10, page_size)
     page = max(1, page)
 
     if force_refresh:
