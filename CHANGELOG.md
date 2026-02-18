@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.18.1] - 2026-02-18
+
+### Added
+- **"Powered by Zenith Grid" branding**: Subtle footer text on Login page, About modal, main app footer, and maintenance page
+
+### Fixed
+- **TTS retry before flagging**: Articles now get one retry before being flagged as having issues. First TTS error retries after 3s; only flags and skips on second failure (4s delay). Content fetch also retries once (1.5s) before giving up
+- **Maintenance page branding**: Updated and synced `maintenance.html` to nginx server root
+
 ## [v2.18.0] - 2026-02-18
 
 ### Added

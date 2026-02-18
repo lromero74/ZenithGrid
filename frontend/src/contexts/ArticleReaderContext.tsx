@@ -146,6 +146,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const keepaliveAudioRef = useRef<HTMLAudioElement | null>(null)
   const autoResumeTriggeredRef = useRef(false)
   const prefetchAbortRef = useRef<AbortController | null>(null)
+  const retriedArticlesRef = useRef<Set<string>>(new Set())  // Track articles that already got a retry
 
   // Use TTS hook
   const tts = useTTSSync()
@@ -284,10 +285,16 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
     // If voice cycling is disabled, voiceToUse is undefined and TTS will use current voice
 
-    // Fetch content if not already present
+    // Fetch content if not already present (retry once on failure)
     let content = article.content
     if (!content) {
       content = await fetchArticleContent(article.url) || undefined
+      if (!content) {
+        // Retry once after a brief delay
+        console.log(`[TTS] First content fetch failed for "${article.title}", retrying...`)
+        await new Promise(r => setTimeout(r, 1500))
+        content = await fetchArticleContent(article.url) || undefined
+      }
     }
 
     // Mark article as seen when opened in reader mode (fire-and-forget)
@@ -299,9 +306,9 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       }).catch(() => {})
     }
 
-    // If no content AND no summary, flag as issue and skip
+    // If no content AND no summary after retry, flag as issue and skip
     if (!content && !article.summary) {
-      console.log(`[TTS] No content or summary for article: ${article.title}`)
+      console.log(`[TTS] No content or summary for article after retry: ${article.title}`)
       flagArticleIssue(article.id)
       article.has_issue = true
       setTimeout(() => {
@@ -315,7 +322,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
           tts.stop()
           setIsPlaying(false)
         }
-      }, 1000)
+      }, 2000)
       return
     }
 
@@ -557,6 +564,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setIsPlaying(false)
     setShowMiniPlayer(false)
     setArticleContent(null)
+    retriedArticlesRef.current.clear()
     // Clear saved session so auto-resume doesn't trigger after intentional stop
     try { localStorage.removeItem(TTS_SESSION_KEY) } catch { /* ignore */ }
   }, [tts])
@@ -641,16 +649,33 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
   }, [isPlaying, tts.isPlaying, tts.isPaused, tts.isLoading, tts.isReady, tts.words.length, nextArticle, currentIndex])
 
-  // Auto-skip on TTS error: flag article, advance after 2s delay
+  // Auto-skip on TTS error: retry once, then flag article and advance
   useEffect(() => {
     if (!isPlaying || !tts.error) return
 
     const article = playlistRef.current[currentIndex]
     if (!article) return
 
-    console.log(`[TTS] Error on article "${article.title}": ${tts.error}`)
+    const articleKey = article.url
 
-    // Flag the article as having an issue
+    // First failure: retry the article before flagging
+    if (!retriedArticlesRef.current.has(articleKey)) {
+      retriedArticlesRef.current.add(articleKey)
+      console.log(`[TTS] Error on article "${article.title}": ${tts.error} — retrying...`)
+
+      const timer = setTimeout(() => {
+        tts.stop()
+        if (loadAndPlayRef.current) {
+          loadAndPlayRef.current(article, currentIndex)
+        }
+      }, 3000)
+
+      return () => clearTimeout(timer)
+    }
+
+    // Second failure: flag and skip
+    console.log(`[TTS] Retry also failed for "${article.title}": ${tts.error} — flagging and skipping`)
+
     flagArticleIssue(article.id)
     article.has_issue = true
 
@@ -661,7 +686,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       } else {
         stopPlaylist()
       }
-    }, 2000)
+    }, 4000)
 
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps

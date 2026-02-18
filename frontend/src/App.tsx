@@ -584,6 +584,9 @@ function AppContent() {
           <p className="text-sm text-slate-400">
             &copy; {new Date().getFullYear()} Romero Tech Solutions. All rights reserved.
           </p>
+          <p className="text-xs text-slate-600 mt-1">
+            Powered by <span className="text-slate-500">Zenith Grid</span>: a Romero Tech Solutions Open Source Project
+          </p>
         </div>
       </footer>
 

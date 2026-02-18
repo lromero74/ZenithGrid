@@ -548,9 +548,14 @@ export default function Login() {
       </div>
 
       {/* Footer */}
-      <p className="mt-8 text-sm text-slate-500">
-        &copy; {new Date().getFullYear()} Romero Tech Solutions
-      </p>
+      <div className="mt-8 text-center">
+        <p className="text-sm text-slate-500">
+          &copy; {new Date().getFullYear()} Romero Tech Solutions
+        </p>
+        <p className="text-xs text-slate-600 mt-1">
+          Powered by <span className="text-slate-500">Zenith Grid</span>: a Romero Tech Solutions Open Source Project
+        </p>
+      </div>
 
       {/* Forgot Password Modal */}
       {showForgotPassword && (
