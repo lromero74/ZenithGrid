@@ -69,7 +69,11 @@ class IndicatorBasedStrategy(TradingStrategy):
                 StrategyParameter(
                     name="max_simultaneous_same_pair",
                     display_name="Max Simultaneous Deals (Same Pair)",
-                    description="Maximum concurrent positions allowed on the same trading pair. New deals open only after all existing deals have used all their safety orders.",
+                    description=(
+                        "Maximum concurrent positions allowed on the same trading pair."
+                        " New deals open only after all existing deals have used all"
+                        " their safety orders."
+                    ),
                     type="int",
                     default=1,
                     min_value=1,
@@ -79,7 +83,10 @@ class IndicatorBasedStrategy(TradingStrategy):
                 StrategyParameter(
                     name="deal_cooldown_seconds",
                     display_name="Deal Cooldown (seconds)",
-                    description="Wait time before opening a new deal on the same pair after the previous deal closes. 0 or empty = no cooldown.",
+                    description=(
+                        "Wait time before opening a new deal on the same pair"
+                        " after the previous deal closes. 0 or empty = no cooldown."
+                    ),
                     type="int",
                     default=0,
                     min_value=0,
@@ -671,7 +678,9 @@ class IndicatorBasedStrategy(TradingStrategy):
                 # Use cached AI values from previous check
                 current_indicators["ai_opinion"] = previous_indicators_cache.get("ai_opinion", "hold")
                 current_indicators["ai_confidence"] = previous_indicators_cache.get("ai_confidence", 0)
-                current_indicators["ai_reasoning"] = previous_indicators_cache.get("ai_reasoning", "Using cached AI values")
+                current_indicators["ai_reasoning"] = previous_indicators_cache.get(
+                    "ai_reasoning", "Using cached AI values"
+                )
                 current_indicators["ai_buy"] = previous_indicators_cache.get("ai_buy", 0)
                 current_indicators["ai_sell"] = previous_indicators_cache.get("ai_sell", 0)
             else:
@@ -682,7 +691,10 @@ class IndicatorBasedStrategy(TradingStrategy):
                 # Evaluate AI opinion for buy or sell
                 # We call it once - for buy checks (no position) or sell checks (with position)
                 product_id = kwargs.get("product_id", "UNKNOWN")
-                is_sell_check = position is not None and (needs["ai_sell"] or "ai_opinion" in str(self.take_profit_conditions))
+                is_sell_check = (
+                    position is not None
+                    and (needs["ai_sell"] or "ai_opinion" in str(self.take_profit_conditions))
+                )
 
                 if needs["ai_buy"] or needs["ai_sell"]:
                     # Get db and user_id from kwargs (passed from signal_processor)
@@ -1115,7 +1127,8 @@ class IndicatorBasedStrategy(TradingStrategy):
 
                 if amount <= 0:
                     logger.warning("💰 BUDGET BLOCKER: Calculated amount is zero or negative")
-                    logger.warning(f"   Per-position budget: {per_position_budget if 'per_position_budget' in locals() else balance:.8f} BTC")
+                    ppb = per_position_budget if 'per_position_budget' in locals() else balance
+                    logger.warning(f"   Per-position budget: {ppb:.8f} BTC")
                     logger.warning(f"   Calculated amount: {amount:.8f} BTC")
                     return False, 0.0, f"Calculated {direction} entry amount is invalid ({amount:.8f} BTC)"
 
@@ -1123,8 +1136,16 @@ class IndicatorBasedStrategy(TradingStrategy):
                     logger.warning(f"💰 BUDGET BLOCKER: Insufficient balance for {direction} entry")
                     logger.warning(f"   Available balance: {balance:.8f} BTC")
                     logger.warning(f"   Required amount: {amount:.8f} BTC")
-                    logger.warning(f"   Shortfall: {(amount - balance):.8f} BTC ({((amount - balance) / amount * 100):.1f}%)")
-                    return False, 0.0, f"Insufficient balance for {direction} entry (need {amount:.8f} BTC, have {balance:.8f} BTC)"
+                    shortfall = amount - balance
+                    shortfall_pct = shortfall / amount * 100
+                    logger.warning(
+                        f"   Shortfall: {shortfall:.8f} BTC ({shortfall_pct:.1f}%)"
+                    )
+                    return (
+                        False, 0.0,
+                        f"Insufficient balance for {direction} entry"
+                        f" (need {amount:.8f} BTC, have {balance:.8f} BTC)"
+                    )
 
                 # Store direction in signal data for position creation
                 # This will be picked up by the signal processor
@@ -1149,8 +1170,16 @@ class IndicatorBasedStrategy(TradingStrategy):
                     logger.warning("💰 BUDGET BLOCKER: Insufficient balance for base order")
                     logger.warning(f"   Available balance: {balance:.8f} BTC")
                     logger.warning(f"   Required amount: {amount:.8f} BTC")
-                    logger.warning(f"   Shortfall: {(amount - balance):.8f} BTC ({((amount - balance) / amount * 100):.1f}%)")
-                    return False, 0.0, f"Insufficient balance for base order (need {amount:.8f} BTC, have {balance:.8f} BTC)"
+                    shortfall = amount - balance
+                    shortfall_pct = shortfall / amount * 100
+                    logger.warning(
+                        f"   Shortfall: {shortfall:.8f} BTC ({shortfall_pct:.1f}%)"
+                    )
+                    return (
+                        False, 0.0,
+                        f"Insufficient balance for base order"
+                        f" (need {amount:.8f} BTC, have {balance:.8f} BTC)"
+                    )
 
                 return True, amount, f"Base order (conditions met): {amount:.8f}"
         else:
@@ -1231,13 +1260,23 @@ class IndicatorBasedStrategy(TradingStrategy):
                 logger.warning(f"   Base order size: {base_order_size:.8f} BTC")
                 logger.warning(f"   Position allocated budget: {position.max_quote_allowed:.8f} BTC")
                 logger.warning(f"   Position spent so far: {position.total_quote_spent:.8f} BTC")
-                logger.warning(f"   Shortfall: {(safety_size - balance):.8f} BTC ({((safety_size - balance) / safety_size * 100):.1f}%)")
-                return False, 0.0, f"Insufficient balance for safety order #{next_order_number} (need {safety_size:.8f} BTC, have {balance:.8f} BTC)"
+                shortfall = safety_size - balance
+                shortfall_pct = shortfall / safety_size * 100
+                logger.warning(
+                    f"   Shortfall: {shortfall:.8f} BTC ({shortfall_pct:.1f}%)"
+                )
+                return (
+                    False, 0.0,
+                    f"Insufficient balance for safety order #{next_order_number}"
+                    f" (need {safety_size:.8f} BTC, have {balance:.8f} BTC)"
+                )
 
             return True, safety_size, f"Safety order #{next_order_number}"
 
     async def should_sell(
-        self, signal_data: Dict[str, Any], position: Any, current_price: float, market_context: Optional[Dict[str, Any]] = None
+        self, signal_data: Dict[str, Any], position: Any,
+        current_price: float,
+        market_context: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str]:
         """Determine if we should sell based on signal data and TP/SL settings."""
         take_profit_signal = signal_data.get("take_profit_signal", False)
@@ -1282,7 +1321,11 @@ class IndicatorBasedStrategy(TradingStrategy):
 
             # Check TSL hit
             if current_price <= current_tsl:
-                return True, f"Pattern TSL triggered: ${current_price:.4f} <= TSL ${current_tsl:.4f} (profit: {profit_pct:.2f}%)"
+                return (
+                    True,
+                    f"Pattern TSL triggered: ${current_price:.4f}"
+                    f" <= TSL ${current_tsl:.4f} (profit: {profit_pct:.2f}%)"
+                )
 
             # Check TTP (Trailing Take Profit)
             if entry_tp is not None:
@@ -1307,9 +1350,19 @@ class IndicatorBasedStrategy(TradingStrategy):
                     ttp_trigger = highest_since_tp * (1.0 - ttp_deviation / 100.0)
 
                     if current_price <= ttp_trigger:
-                        return True, f"Pattern TTP triggered: ${current_price:.4f} (peak ${highest_since_tp:.4f}, profit: {profit_pct:.2f}%)"
+                        return (
+                            True,
+                            f"Pattern TTP triggered: ${current_price:.4f}"
+                            f" (peak ${highest_since_tp:.4f},"
+                            f" profit: {profit_pct:.2f}%)"
+                        )
 
-                    return False, f"Pattern TTP active: holding for more (profit: {profit_pct:.2f}%, peak ${highest_since_tp:.4f})"
+                    return (
+                        False,
+                        f"Pattern TTP active: holding for more"
+                        f" (profit: {profit_pct:.2f}%,"
+                        f" peak ${highest_since_tp:.4f})"
+                    )
 
             # Pattern position still open
             return False, f"Pattern position: TSL ${current_tsl:.4f}, TP ${entry_tp:.4f}, profit: {profit_pct:.2f}%"

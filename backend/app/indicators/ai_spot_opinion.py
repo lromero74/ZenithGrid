@@ -237,14 +237,23 @@ class AISpotOpinionEvaluator:
 
         # Build prompt
         action_type = "SELL" if is_sell_check else "BUY"
+        ma20_val = metrics.get('price_vs_ma20', 0)
+        ma50_val = metrics.get('price_vs_ma50', 0)
+        ma20_dir = "above" if ma20_val > 0 else "below"
+        ma50_dir = "above" if ma50_val > 0 else "below"
+        macd_str = (
+            "Bullish" if metrics.get('macd_bullish')
+            else "Bearish" if metrics.get('macd_bearish')
+            else "Neutral"
+        )
 
         prompt = f"""You are a cryptocurrency trading AI analyzing {product_id}.
 
 Current Technical Metrics:
 - RSI: {metrics.get('rsi', 'N/A'):.1f} (14-period)
-- MACD: {"Bullish" if metrics.get('macd_bullish') else "Bearish" if metrics.get('macd_bearish') else "Neutral"}
-- Price vs 20-period MA: {metrics.get('price_vs_ma20', 0):.2f}% {"above" if metrics.get('price_vs_ma20', 0) > 0 else "below"}
-- Price vs 50-period MA: {metrics.get('price_vs_ma50', 0):.2f}% {"above" if metrics.get('price_vs_ma50', 0) > 0 else "below"}
+- MACD: {macd_str}
+- Price vs 20-period MA: {ma20_val:.2f}% {ma20_dir}
+- Price vs 50-period MA: {ma50_val:.2f}% {ma50_dir}
 - Bollinger Band Position: {metrics.get('bb_position', 50):.1f}% (0=lower band, 100=upper band)
 - Volume: {metrics.get('volume_ratio', 0):.2f}x average
 - 24h Price Change: {metrics.get('price_change_24h', 0):.2f}%

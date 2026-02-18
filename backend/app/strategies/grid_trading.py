@@ -196,7 +196,11 @@ async def calculate_volume_weighted_levels(
         trades = await exchange_client.get_recent_trades(product_id, hours=lookback_hours)
 
         if not trades or len(trades) < 100:
-            logger.warning(f"Insufficient trade data ({len(trades) if trades else 0} trades), falling back to arithmetic grid")
+            trade_count = len(trades) if trades else 0
+            logger.warning(
+                f"Insufficient trade data ({trade_count} trades),"
+                " falling back to arithmetic grid"
+            )
             return calculate_arithmetic_levels(lower, upper, num_levels)
 
         # Create price buckets (100 buckets for fine granularity)
@@ -652,18 +656,25 @@ class GridTradingStrategy(TradingStrategy):
             min_size = 0.0001
             if order_size_per_level < min_size:
                 logger.warning(
-                    f"⚠️  Grid order size per level ({order_size_per_level:.8f} BTC) may be below Coinbase minimum ({min_size} BTC). "
-                    f"Consider increasing total_investment_quote or reducing num_grid_levels."
+                    f"⚠️  Grid order size per level ({order_size_per_level:.8f} BTC)"
+                    f" may be below Coinbase minimum ({min_size} BTC)."
+                    " Consider increasing total_investment_quote"
+                    " or reducing num_grid_levels."
                 )
         elif "-USD" in product_id:
             min_size = 1.0
             if order_size_per_level < min_size:
                 logger.warning(
-                    f"⚠️  Grid order size per level (${order_size_per_level:.2f}) may be below Coinbase minimum (${min_size}). "
-                    f"Consider increasing total_investment_quote or reducing num_grid_levels."
+                    f"⚠️  Grid order size per level (${order_size_per_level:.2f})"
+                    f" may be below Coinbase minimum (${min_size})."
+                    " Consider increasing total_investment_quote"
+                    " or reducing num_grid_levels."
                 )
 
-        logger.info(f"Grid config validated: {self.config.get('grid_type')} grid, {num_levels} levels, range_mode={range_mode}")
+        logger.info(
+            f"Grid config validated: {self.config.get('grid_type')} grid,"
+            f" {num_levels} levels, range_mode={range_mode}"
+        )
 
     async def analyze_signal(
         self, candles: List[Dict[str, Any]], current_price: float, **kwargs
@@ -749,7 +760,11 @@ class GridTradingStrategy(TradingStrategy):
                 volume_hours = self.config.get("volume_analysis_hours", 24)
                 clustering_strength = self.config.get("volume_clustering_strength", 1.5)
 
-                logger.info(f"Using volume-weighted grid levels (lookback: {volume_hours}h, strength: {clustering_strength})")
+                logger.info(
+                    f"Using volume-weighted grid levels"
+                    f" (lookback: {volume_hours}h,"
+                    f" strength: {clustering_strength})"
+                )
 
                 # Get product_id from kwargs
                 product_id = kwargs.get("product_id")
@@ -1010,7 +1025,12 @@ If the auto-calculated range is already good, return the same values with high c
                 logger.warning(f"AI range confidence too low ({confidence}%), using auto range")
                 return None
 
-            logger.info(f"AI range suggestions: upper={suggestions.get('suggested_upper'):.8f}, lower={suggestions.get('suggested_lower'):.8f}, confidence={confidence}%")
+            logger.info(
+                f"AI range suggestions:"
+                f" upper={suggestions.get('suggested_upper'):.8f},"
+                f" lower={suggestions.get('suggested_lower'):.8f},"
+                f" confidence={confidence}%"
+            )
 
             return suggestions
 
@@ -1058,4 +1078,9 @@ If the auto-calculated range is already good, return the same values with high c
         return (False, "Grid monitoring - no sell action")
 
 
-__all__ = ["GridTradingStrategy", "calculate_arithmetic_levels", "calculate_geometric_levels", "calculate_auto_range_from_volatility"]
+__all__ = [
+    "GridTradingStrategy",
+    "calculate_arithmetic_levels",
+    "calculate_geometric_levels",
+    "calculate_auto_range_from_volatility",
+]

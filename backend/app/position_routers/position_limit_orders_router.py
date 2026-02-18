@@ -164,7 +164,9 @@ async def limit_close_position(
 
 @router.get("/{position_id}/ticker")
 async def get_position_ticker(
-    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase), current_user: User = Depends(get_current_user)
+    position_id: int, db: AsyncSession = Depends(get_db),
+    coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: User = Depends(get_current_user)
 ):
     """Get current bid/ask/mark prices for a position"""
     try:
@@ -193,7 +195,9 @@ async def get_position_ticker(
 
 @router.get("/{position_id}/slippage-check")
 async def check_market_close_slippage(
-    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase), current_user: User = Depends(get_current_user)
+    position_id: int, db: AsyncSession = Depends(get_db),
+    coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: User = Depends(get_current_user)
 ):
     """Check if closing at market would result in significant slippage"""
     try:
@@ -249,7 +253,9 @@ async def check_market_close_slippage(
 
 @router.post("/{position_id}/cancel-limit-close")
 async def cancel_limit_close(
-    position_id: int, db: AsyncSession = Depends(get_db), coinbase: CoinbaseClient = Depends(get_coinbase), current_user: User = Depends(get_current_user)
+    position_id: int, db: AsyncSession = Depends(get_db),
+    coinbase: CoinbaseClient = Depends(get_coinbase),
+    current_user: User = Depends(get_current_user)
 ):
     """Cancel a pending limit close order"""
     try:

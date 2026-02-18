@@ -728,7 +728,10 @@ async def get_position(
 
 
 @router.get("/{position_id}/trades", response_model=List[TradeResponse])
-async def get_position_trades(position_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_position_trades(
+    position_id: int, db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get all trades for a position (verifies ownership)"""
     # Verify position belongs to current user
     accounts_query = select(Account.id).where(Account.user_id == current_user.id)
@@ -751,7 +754,10 @@ async def get_position_trades(position_id: int, db: AsyncSession = Depends(get_d
 
 
 @router.get("/{position_id}/ai-logs", response_model=List[AIBotLogResponse])
-async def get_position_ai_logs(position_id: int, include_before_open: bool = True, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_position_ai_logs(
+    position_id: int, include_before_open: bool = True,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     Get AI reasoning logs for a position.
 

@@ -86,7 +86,10 @@ async def market_sell(
                 detail="Size must be greater than 0"
             )
 
-        logger.info(f"User {current_user.email} executing market sell: {request.size} {base_asset} on {request.product_id}")
+        logger.info(
+            f"User {current_user.email} executing market sell: "
+            f"{request.size} {base_asset} on {request.product_id}"
+        )
 
         # Execute market sell order
         order = await exchange.create_market_order(

@@ -240,7 +240,9 @@ def detect_bull_flag_pattern(
     reward_risk_ratio = config.get("reward_risk_ratio", 2.0)
 
     if not candles or len(candles) < (min_pole_candles + min_pullback_candles + 1):
-        return (None, f"Not enough candles: {len(candles) if candles else 0} < {min_pole_candles + min_pullback_candles + 1}")
+        needed = min_pole_candles + min_pullback_candles + 1
+        have = len(candles) if candles else 0
+        return (None, f"Not enough candles: {have} < {needed}")
 
     # Ensure candles are in chronological order (oldest first for analysis)
     # API usually returns newest first, so we may need to reverse
@@ -292,7 +294,12 @@ def detect_bull_flag_pattern(
     if confirmation_idx is None:
         return (None, "No green confirmation candle found in recent history")
     if confirmation_idx < min_pullback_candles + min_pole_candles:
-        return (None, f"Confirmation at idx {confirmation_idx} too early, need {min_pullback_candles + min_pole_candles} candles before it")
+        min_before = min_pullback_candles + min_pole_candles
+        return (
+            None,
+            f"Confirmation at idx {confirmation_idx} too early,"
+            f" need {min_before} candles before it"
+        )
 
     confirmation_candle = candles[confirmation_idx]
     _, _, _, entry_price = get_ohlc(confirmation_candle)
@@ -401,7 +408,12 @@ def detect_bull_flag_pattern(
     # Step 4.5: Validate volume confirmation - pullback (sell) volume should be lower than pole (buy) volume
     # This indicates weak selling pressure during pullback, a healthy bull flag characteristic
     if pole_avg_volume > 0 and pullback_avg_volume >= pole_avg_volume:
-        return (None, f"Volume confirmation failed: pullback_avg_vol {pullback_avg_volume:.0f} >= pole_avg_vol {pole_avg_volume:.0f}")
+        return (
+            None,
+            f"Volume confirmation failed: pullback_avg_vol"
+            f" {pullback_avg_volume:.0f} >= pole_avg_vol"
+            f" {pole_avg_volume:.0f}"
+        )
 
     # Step 5: Calculate stop loss and take profit target
     stop_loss = pullback_low
@@ -587,7 +599,12 @@ async def scan_for_bull_flag_opportunities(
                         product_id=product_id,
                         scan_type="volume_check",
                         decision="rejected",
-                        reason=f"Volume {current_vol:.0f} below {volume_multiplier}x threshold ({avg_vol * volume_multiplier:.0f}). Ratio: {vol_ratio:.2f}x",
+                        reason=(
+                            f"Volume {current_vol:.0f} below"
+                            f" {volume_multiplier}x threshold"
+                            f" ({avg_vol * volume_multiplier:.0f})."
+                            f" Ratio: {vol_ratio:.2f}x"
+                        ),
                         volume_ratio=vol_ratio,
                     )
                 return None
@@ -620,7 +637,13 @@ async def scan_for_bull_flag_opportunities(
                 product_id=vp["product_id"],
                 scan_type="volume_check",
                 decision="passed",
-                reason=f"Volume spike detected: {vp['current_vol']:.0f} >= {volume_multiplier}x avg ({vp['avg_vol']:.0f}). Ratio: {vp['vol_ratio']:.2f}x",
+                reason=(
+                    f"Volume spike detected:"
+                    f" {vp['current_vol']:.0f} >="
+                    f" {volume_multiplier}x avg"
+                    f" ({vp['avg_vol']:.0f})."
+                    f" Ratio: {vp['vol_ratio']:.2f}x"
+                ),
                 volume_ratio=vp["vol_ratio"],
             )
 
@@ -665,7 +688,13 @@ async def scan_for_bull_flag_opportunities(
 
             # Get current price for logging
             current_price = None
-            last_candle = candles[-1] if not isinstance(candles[0], dict) or candles[0].get("start", 0) < candles[-1].get("start", 0) else candles[0]
+            if (
+                not isinstance(candles[0], dict)
+                or candles[0].get("start", 0) < candles[-1].get("start", 0)
+            ):
+                last_candle = candles[-1]
+            else:
+                last_candle = candles[0]
             if isinstance(last_candle, dict):
                 current_price = float(last_candle.get("close", 0))
             elif len(last_candle) > 4:

@@ -108,7 +108,10 @@ async def add_funds_to_position(
 
 
 @router.patch("/{position_id}/notes")
-async def update_position_notes(position_id: int, request: UpdateNotesRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_position_notes(
+    position_id: int, request: UpdateNotesRequest,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """Update notes for a position (like 3Commas)"""
     try:
         # Verify position belongs to current user

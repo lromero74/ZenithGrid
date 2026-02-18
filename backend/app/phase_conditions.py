@@ -61,11 +61,16 @@ class PhaseConditionEvaluator:
 
         # Check if new grouped format (dict with 'groups' key)
         if isinstance(expression, dict) and "groups" in expression:
-            return self._evaluate_grouped_expression(expression, current_indicators, previous_indicators, capture_details)
+            return self._evaluate_grouped_expression(
+                expression, current_indicators, previous_indicators, capture_details
+            )
 
         # Legacy flat list format
         if isinstance(expression, list):
-            return self.evaluate_phase_conditions(expression, legacy_logic, current_indicators, previous_indicators, capture_details)
+            return self.evaluate_phase_conditions(
+                expression, legacy_logic, current_indicators,
+                previous_indicators, capture_details
+            )
 
         # Unknown format
         print(f"[WARNING] Unknown expression format: {type(expression)}")
@@ -94,7 +99,10 @@ class PhaseConditionEvaluator:
         all_details = []
         for group in groups:
             if capture_details:
-                group_result, group_details = self._evaluate_group(group, current_indicators, previous_indicators, capture_details=True)
+                group_result, group_details = self._evaluate_group(
+                    group, current_indicators, previous_indicators,
+                    capture_details=True
+                )
                 all_details.extend(group_details)
             else:
                 group_result = self._evaluate_group(group, current_indicators, previous_indicators)
@@ -132,10 +140,15 @@ class PhaseConditionEvaluator:
         details = []
         for condition in conditions:
             if capture_details:
-                result, detail = self._evaluate_single_condition(condition, current_indicators, previous_indicators, capture_details=True)
+                result, detail = self._evaluate_single_condition(
+                    condition, current_indicators, previous_indicators,
+                    capture_details=True
+                )
                 details.append(detail)
             else:
-                result = self._evaluate_single_condition(condition, current_indicators, previous_indicators)
+                result = self._evaluate_single_condition(
+                    condition, current_indicators, previous_indicators
+                )
 
             # Handle NOT (negate) modifier
             if condition.get("negate", False):
@@ -183,10 +196,15 @@ class PhaseConditionEvaluator:
         details = []
         for condition in conditions:
             if capture_details:
-                result, detail = self._evaluate_single_condition(condition, current_indicators, previous_indicators, capture_details=True)
+                result, detail = self._evaluate_single_condition(
+                    condition, current_indicators, previous_indicators,
+                    capture_details=True
+                )
                 details.append(detail)
             else:
-                result = self._evaluate_single_condition(condition, current_indicators, previous_indicators)
+                result = self._evaluate_single_condition(
+                    condition, current_indicators, previous_indicators
+                )
 
             # Handle NOT (negate) modifier
             if condition.get("negate", False):
@@ -217,12 +235,18 @@ class PhaseConditionEvaluator:
         if condition_direction and self.position_direction:
             if condition_direction != self.position_direction:
                 # Condition doesn't apply to this position direction
-                print(f"[DEBUG] Skipping condition (direction mismatch: condition={condition_direction}, position={self.position_direction})")
+                print(
+                    f"[DEBUG] Skipping condition (direction mismatch: "
+                    f"condition={condition_direction}, position={self.position_direction})"
+                )
                 if capture_details:
                     detail = {
                         "type": condition.get("type"),
                         "result": False,
-                        "error": f"Direction mismatch (condition={condition_direction}, position={self.position_direction})"
+                        "error": (
+                            f"Direction mismatch (condition={condition_direction}, "
+                            f"position={self.position_direction})"
+                        )
                     }
                     return False, detail
                 return False
@@ -273,7 +297,10 @@ class PhaseConditionEvaluator:
                 previous_val = self._get_previous_indicator_value(condition_type, condition, current_indicators)
 
             if previous_val is None:
-                print("[DEBUG] Crossing check: no previous indicator value available (need prev_ values or previous_indicators)")
+                print(
+                    "[DEBUG] Crossing check: no previous indicator value available "
+                    "(need prev_ values or previous_indicators)"
+                )
                 if capture_details:
                     detail["error"] = "no previous indicator for crossing"
                     return False, detail
@@ -307,12 +334,14 @@ class PhaseConditionEvaluator:
             if operator == "crossing_above":
                 result = previous_val <= value and current_val > value
                 print(
-                    f"[DEBUG] Crossing above result: {result} (was {previous_val} <= {value} and now {current_val} > {value})"
+                    f"[DEBUG] Crossing above result: {result} "
+                    f"(was {previous_val} <= {value} and now {current_val} > {value})"
                 )
             else:  # crossing_below
                 result = previous_val >= value and current_val < value
                 print(
-                    f"[DEBUG] Crossing below result: {result} (was {previous_val} >= {value} and now {current_val} < {value})"
+                    f"[DEBUG] Crossing below result: {result} "
+                    f"(was {previous_val} >= {value} and now {current_val} < {value})"
                 )
 
             if capture_details:

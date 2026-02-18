@@ -214,7 +214,10 @@ def build_changelog_cache() -> None:
 
 
 @router.get("/api/changelog")
-async def get_changelog(limit: int = Query(20, ge=1, le=100), offset: int = 0, refresh: bool = False, current_user: User = Depends(get_current_user)):
+async def get_changelog(
+    limit: int = Query(20, ge=1, le=100), offset: int = 0,
+    refresh: bool = False, current_user: User = Depends(get_current_user)
+):
     """
     Get changelog showing commits between version tags.
     Similar to 'python3 update.py --changelog' output.
@@ -495,7 +498,10 @@ async def get_dashboard(
 
 
 @router.post("/api/monitor/start")
-async def start_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor), current_user: User = Depends(require_superuser)):
+async def start_monitor(
+    price_monitor: MultiBotMonitor = Depends(get_price_monitor),
+    current_user: User = Depends(require_superuser)
+):
     """Start the price monitor (admin only)"""
     if not price_monitor.running:
         price_monitor.start()
@@ -504,7 +510,10 @@ async def start_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monit
 
 
 @router.post("/api/monitor/stop")
-async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monitor), current_user: User = Depends(require_superuser)):
+async def stop_monitor(
+    price_monitor: MultiBotMonitor = Depends(get_price_monitor),
+    current_user: User = Depends(require_superuser)
+):
     """Stop the price monitor (admin only)"""
     if price_monitor.running:
         await price_monitor.stop()
@@ -513,7 +522,10 @@ async def stop_monitor(price_monitor: MultiBotMonitor = Depends(get_price_monito
 
 
 @router.get("/api/trades", response_model=List[TradeResponse])
-async def get_trades(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_trades(
+    limit: int = Query(100, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """Get recent trades (scoped to current user)"""
     # Get user's account IDs to scope trades via positions
     user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
@@ -535,7 +547,10 @@ async def get_trades(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = 
 
 
 @router.get("/api/signals", response_model=List[SignalResponse])
-async def get_signals(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_signals(
+    limit: int = Query(100, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """Get recent signals (scoped to current user)"""
     # Get user's account IDs to scope signals via positions
     user_accounts_q = select(Account.id).where(Account.user_id == current_user.id)
@@ -557,7 +572,10 @@ async def get_signals(limit: int = Query(100, ge=1, le=1000), db: AsyncSession =
 
 
 @router.get("/api/market-data", response_model=List[MarketDataResponse])
-async def get_market_data(hours: int = 24, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_market_data(
+    hours: int = 24, db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get market data for charting (global — price/indicator data is not user-specific)"""
     start_time = datetime.utcnow() - timedelta(hours=hours)
     query = select(MarketData).where(MarketData.timestamp >= start_time).order_by(MarketData.timestamp)

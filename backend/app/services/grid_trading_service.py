@@ -383,7 +383,12 @@ async def handle_grid_order_fill(
             # Buy filled → place sell order above
             # Find next sell level from grid_state
             levels = grid_state.get("grid_levels", [])
-            sell_levels = [level for level in levels if level["order_type"] == "sell" and level["price"] > filled_price and level["status"] == "pending"]
+            sell_levels = [
+                level for level in levels
+                if level["order_type"] == "sell"
+                and level["price"] > filled_price
+                and level["status"] == "pending"
+            ]
 
             if sell_levels:
                 # Place sell at next available level
@@ -402,7 +407,10 @@ async def handle_grid_order_fill(
                         time_in_force="gtc",
                     )
 
-                    order_id = order_response.get("order_id") or order_response.get("success_response", {}).get("order_id")
+                    order_id = (
+                        order_response.get("order_id")
+                        or order_response.get("success_response", {}).get("order_id")
+                    )
 
                     if order_id:
                         # Create new pending order
@@ -436,7 +444,12 @@ async def handle_grid_order_fill(
         elif filled_side == "SELL":
             # Sell filled → place buy order below
             levels = grid_state.get("grid_levels", [])
-            buy_levels = [level for level in levels if level["order_type"] == "buy" and level["price"] < filled_price and level["status"] == "pending"]
+            buy_levels = [
+                level for level in levels
+                if level["order_type"] == "buy"
+                and level["price"] < filled_price
+                and level["status"] == "pending"
+            ]
 
             if buy_levels:
                 target_level = max(buy_levels, key=lambda x: x["price"])
@@ -454,7 +467,10 @@ async def handle_grid_order_fill(
                         time_in_force="gtc",
                     )
 
-                    order_id = order_response.get("order_id") or order_response.get("success_response", {}).get("order_id")
+                    order_id = (
+                        order_response.get("order_id")
+                        or order_response.get("success_response", {}).get("order_id")
+                    )
 
                     if order_id:
                         new_buy_order = PendingOrder(
@@ -526,7 +542,9 @@ async def rebalance_grid_on_breakout(
         Updated grid_state dict
     """
     logger.warning(f"🔄 REBALANCING GRID: {breakout_direction} breakout detected")
-    logger.info(f"   Old range: {bot.bot_config['grid_state']['current_range_lower']:.8f} - {bot.bot_config['grid_state']['current_range_upper']:.8f}")
+    old_lower = bot.bot_config['grid_state']['current_range_lower']
+    old_upper = bot.bot_config['grid_state']['current_range_upper']
+    logger.info(f"   Old range: {old_lower:.8f} - {old_upper:.8f}")
     logger.info(f"   New range: {new_lower:.8f} - {new_upper:.8f}")
     logger.info(f"   Current price: {current_price:.8f}")
 

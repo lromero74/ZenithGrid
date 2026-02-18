@@ -340,7 +340,8 @@ class MultiBotMonitor:
                         )
                     else:
                         logger.debug(
-                            f"Aggregated {len(base_candles)} {base_timeframe} into {len(candles)} {granularity} for {product_id}"
+                            f"Aggregated {len(base_candles)} {base_timeframe} into "
+                            f"{len(candles)} {granularity} for {product_id}"
                         )
                     # Cache the aggregated result
                     self._candle_cache[cache_key] = (now, candles)
@@ -411,12 +412,18 @@ class MultiBotMonitor:
             # BUT always include pairs with existing positions
             allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None
             if allowed_categories:
-                filtered_pairs = await filter_pairs_by_allowed_categories(db, trading_pairs, allowed_categories, user_id=bot.user_id)
+                filtered_pairs = await filter_pairs_by_allowed_categories(
+                    db, trading_pairs, allowed_categories, user_id=bot.user_id
+                )
                 # Add back any pairs with open positions (must monitor existing positions!)
                 trading_pairs = list(set(filtered_pairs) | pairs_with_positions)
                 print(f"🔍 After category filter: {len(trading_pairs)} trading pairs: {trading_pairs}")
                 if pairs_with_positions - set(filtered_pairs):
-                    logger.info(f"  Including {len(pairs_with_positions - set(filtered_pairs))} pairs with open positions despite category filter")
+                    extra = len(pairs_with_positions - set(filtered_pairs))
+                    logger.info(
+                        f"  Including {extra} pairs with open positions"
+                        " despite category filter"
+                    )
 
             logger.info(
                 f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})"
@@ -467,7 +474,11 @@ class MultiBotMonitor:
                     logger.info(f"  📊 Bot at max capacity ({open_count}/{max_concurrent_deals} positions)")
                     logger.info(f"  🎯 Analyzing only {len(trading_pairs)} pairs with open positions")
                     if original_count > len(trading_pairs):
-                        logger.info(f"  ⏭️  Skipping {original_count - len(trading_pairs)} pairs without positions (no room for new entries)")
+                        skipped = original_count - len(trading_pairs)
+                        logger.info(
+                            f"  ⏭️  Skipping {skipped} pairs without"
+                            " positions (no room for new entries)"
+                        )
                 else:
                     logger.info(f"  📊 Bot below capacity ({open_count}/{max_concurrent_deals} positions)")
 
@@ -574,7 +585,8 @@ class MultiBotMonitor:
             # Defensive logging: Warn if aggregate value is suspiciously low
             if aggregate_value < 0.0001:
                 logger.warning(
-                    f"  ⚠️  SUSPICIOUS: Aggregate {quote_currency} value is very low ({aggregate_value:.8f}). This may indicate API issues."
+                    f"  ⚠️  SUSPICIOUS: Aggregate {quote_currency} value is very low"
+                    f" ({aggregate_value:.8f}). This may indicate API issues."
                 )
                 logger.warning("  ⚠️  Bot may be unable to open new positions due to insufficient calculated balance.")
 
@@ -603,7 +615,8 @@ class MultiBotMonitor:
                 f"  💰 Budget: {reserved_balance:.8f} {quote_currency} reserved ({budget_pct}% of {aggregate_value:.8f})"
             )
             logger.warning(
-                f"  💰 In positions: {total_in_positions:.8f} {quote_currency}, Available allocation: {available_budget:.8f} {quote_currency}"
+                f"  💰 In positions: {total_in_positions:.8f} {quote_currency},"
+                f" Available allocation: {available_budget:.8f} {quote_currency}"
             )
             logger.warning(
                 f"  💰 Actual {quote_currency} balance: {actual_available:.8f} {quote_currency}"
@@ -612,7 +625,9 @@ class MultiBotMonitor:
                 f"  💰 Min per position: {min_per_position:.8f} {quote_currency}"
             )
             logger.warning(
-                f"  💰 Has allocation room: {has_allocation_room}, Has actual balance: {has_actual_balance}, Can open new: {has_budget_for_new}"
+                f"  💰 Has allocation room: {has_allocation_room},"
+                f" Has actual balance: {has_actual_balance},"
+                f" Can open new: {has_budget_for_new}"
             )
 
             # Determine which pairs to analyze
@@ -622,7 +637,10 @@ class MultiBotMonitor:
             if not bot.is_active:
                 pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
                 pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
-                logger.info(f"  ⏸️  Bot is STOPPED - analyzing only {len(pairs_to_analyze)} pairs with open positions for DCA/exit")
+                logger.info(
+                    f"  ⏸️  Bot is STOPPED - analyzing only {len(pairs_to_analyze)}"
+                    " pairs with open positions for DCA/exit"
+                )
                 if len(pairs_to_analyze) == 0:
                     logger.info("  ℹ️  No open positions to manage - skipping analysis")
                     return {"action": "skip", "reason": "Bot stopped with no open positions"}
@@ -644,10 +662,12 @@ class MultiBotMonitor:
                 pairs_to_analyze = [p for p in trading_pairs if p in pairs_with_positions]
 
                 logger.warning(
-                    f"  ⚠️  INSUFFICIENT FUNDS: Only {available_budget:.8f} {quote_currency} available, need {min_per_position:.8f}"
+                    f"  ⚠️  INSUFFICIENT FUNDS: Only {available_budget:.8f}"
+                    f" {quote_currency} available, need {min_per_position:.8f}"
                 )
                 logger.info(
-                    f"  💰 Skipping new position analysis - analyzing only {len(pairs_to_analyze)} pairs with open positions for sell signals"
+                    f"  💰 Skipping new position analysis - analyzing only"
+                    f" {len(pairs_to_analyze)} pairs with open positions for sell signals"
                 )
                 logger.info("  ℹ️  Will resume looking for new opportunities once funds are available")
             else:
@@ -680,7 +700,10 @@ class MultiBotMonitor:
                             else:
                                 logger.info(f"    ⏭️  {product_id}: Volume {volume_24h:.2f} (below {min_daily_volume})")
                         except Exception as e:
-                            logger.warning(f"    ⚠️  {product_id}: Could not fetch volume stats ({e}), including anyway")
+                            logger.warning(
+                                f"    ⚠️  {product_id}: Could not fetch volume"
+                                f" stats ({e}), including anyway"
+                            )
                             filtered_pairs.append(product_id)  # Include pairs where we can't get stats
 
                     pairs_to_analyze = filtered_pairs
@@ -837,10 +860,19 @@ class MultiBotMonitor:
             # Otherwise each deal gets the full budget (3Commas style)
             if bot.split_budget_across_pairs and max_concurrent_deals > 0:
                 per_position_budget = total_bot_budget / max_concurrent_deals
-                print(f"💰 Budget calculation (SPLIT): Total={total_bot_budget:.8f}, MaxDeals={max_concurrent_deals}, PerPosition={per_position_budget:.8f}")
+                print(
+                    f"💰 Budget calculation (SPLIT): Total={total_bot_budget:.8f},"
+                    f" MaxDeals={max_concurrent_deals},"
+                    f" PerPosition={per_position_budget:.8f}"
+                )
             else:
                 per_position_budget = total_bot_budget
-                print(f"💰 Budget calculation (FULL): Total={total_bot_budget:.8f}, MaxDeals={max_concurrent_deals}, PerPosition={per_position_budget:.8f} (each deal gets full budget)")
+                print(
+                    f"💰 Budget calculation (FULL): Total={total_bot_budget:.8f},"
+                    f" MaxDeals={max_concurrent_deals},"
+                    f" PerPosition={per_position_budget:.8f}"
+                    " (each deal gets full budget)"
+                )
 
             # Call batch AI analysis (1 API call for ALL pairs!) - or skip if technical-only check
             if skip_ai_analysis:
@@ -872,7 +904,9 @@ class MultiBotMonitor:
 
                     # Debug logging to track duplicate opinions
                     logger.info(
-                        f"    Processing {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)"
+                        f"    Processing {product_id}:"
+                        f" {signal_data.get('signal_type')}"
+                        f" ({signal_data.get('confidence')}%)"
                     )
 
                     # Add current_price to signal_data for DCA logic (AI response doesn't include it)
@@ -884,7 +918,9 @@ class MultiBotMonitor:
                     if signal_data.get("reasoning") != "Technical-only check (no AI)":
                         print(f"🔍 Logging AI decision for {product_id}...")
                         # Log AI decision with position info if one exists
-                        ai_log_entry = await self.log_ai_decision(db, bot, product_id, signal_data, pair_info, open_positions)
+                        ai_log_entry = await self.log_ai_decision(
+                            db, bot, product_id, signal_data, pair_info, open_positions
+                        )
                         print(f"✅ Logged AI decision for {product_id}")
 
                         # Mark signal as already logged to prevent duplicate logging in trading_engine_v2.py
@@ -956,7 +992,9 @@ class MultiBotMonitor:
             return {"error": str(e)}
 
     async def log_ai_decision(
-        self, db: AsyncSession, bot: Bot, product_id: str, signal_data: Dict[str, Any], pair_data: Dict[str, Any], open_positions: List = None
+        self, db: AsyncSession, bot: Bot, product_id: str,
+        signal_data: Dict[str, Any], pair_data: Dict[str, Any],
+        open_positions: List = None
     ):
         """Log AI decision to database and return the log entry"""
         try:
@@ -967,7 +1005,9 @@ class MultiBotMonitor:
             # DEBUG: Log stack trace to find duplicate calls
             stack = "".join(traceback.format_stack()[-5:-1])
             logger.info(
-                f"  📝 Logging AI decision for Bot #{bot.id} {product_id}: {signal_data.get('signal_type')} ({signal_data.get('confidence')}%)"
+                f"  📝 Logging AI decision for Bot #{bot.id} {product_id}:"
+                f" {signal_data.get('signal_type')}"
+                f" ({signal_data.get('confidence')}%)"
             )
             logger.debug(f"  Call stack:\n{stack}")
 
@@ -1019,7 +1059,9 @@ class MultiBotMonitor:
         )
 
     async def process_bot_pair(
-        self, db: AsyncSession, bot: Bot, product_id: str, pre_analyzed_signal=None, pair_data=None, commit=True, skip_ai_analysis: bool = False
+        self, db: AsyncSession, bot: Bot, product_id: str,
+        pre_analyzed_signal=None, pair_data=None, commit=True,
+        skip_ai_analysis: bool = False
     ) -> Dict[str, Any]:
         """
         Process signals for a single bot/pair combination
@@ -1131,7 +1173,10 @@ class MultiBotMonitor:
                             and all_positions_exhausted_safety_orders(all_pair_positions, max_safety)):
                         # Need both DCA/exit for existing AND entry for potential new deal
                         phases_to_check = ["base_order_conditions", "safety_order_conditions", "take_profit_conditions"]
-                        print(f"  📊 {same_pair_count} position(s), all SOs exhausted - checking entry + DCA + exit phases")
+                        print(
+                            f"  📊 {same_pair_count} position(s), all SOs exhausted"
+                            " - checking entry + DCA + exit phases"
+                        )
                     else:
                         # Open position: check safety orders (DCA) + take profit (exit)
                         phases_to_check = ["safety_order_conditions", "take_profit_conditions"]
@@ -1205,7 +1250,11 @@ class MultiBotMonitor:
                 if not candles_by_timeframe or len(candles_by_timeframe) == 0:
                     candles_by_timeframe = {timeframe: candles}
                 else:
-                    logger.info(f"  📊 Using pre-fetched candles_by_timeframe with {len(candles_by_timeframe)} timeframes: {list(candles_by_timeframe.keys())}")
+                    logger.info(
+                        f"  📊 Using pre-fetched candles_by_timeframe with"
+                        f" {len(candles_by_timeframe)} timeframes:"
+                        f" {list(candles_by_timeframe.keys())}"
+                    )
 
             # Use pre-analyzed signal if provided (from batch analysis), otherwise analyze now
             if pre_analyzed_signal:
@@ -1273,7 +1322,10 @@ class MultiBotMonitor:
                 return {"action": "none", "reason": "No signal"}
 
             logger.info(
-                f"  Signal data: base_order={signal_data.get('base_order_signal')}, safety_order={signal_data.get('safety_order_signal')}, take_profit={signal_data.get('take_profit_signal')}"
+                f"  Signal data:"
+                f" base_order={signal_data.get('base_order_signal')},"
+                f" safety_order={signal_data.get('safety_order_signal')},"
+                f" take_profit={signal_data.get('take_profit_signal')}"
             )
 
             signal_type = signal_data.get("signal_type")
@@ -1367,7 +1419,10 @@ class MultiBotMonitor:
                     config = existing_position.strategy_config_snapshot or bot.strategy_config or {}
                     max_safety_orders = config.get("max_safety_orders", 5)
                     # Count completed safety orders (buy trades - 1 for base order)
-                    buy_trades = [t for t in existing_position.trades if t.side == "buy"] if existing_position.trades else []
+                    buy_trades = (
+                        [t for t in existing_position.trades if t.side == "buy"]
+                        if existing_position.trades else []
+                    )
                     safety_orders_completed = max(0, len(buy_trades) - 1)
                     dca_slots_available = safety_orders_completed < max_safety_orders
 
@@ -1407,7 +1462,11 @@ class MultiBotMonitor:
             result = {"action": "none", "reason": "No signal"}
             for pos in all_pair_positions:
                 # For each position, use ITS frozen config if available
-                pos_strategy_config = pos.strategy_config_snapshot.copy() if pos.strategy_config_snapshot else bot.strategy_config.copy()
+                pos_strategy_config = (
+                    pos.strategy_config_snapshot.copy()
+                    if pos.strategy_config_snapshot
+                    else bot.strategy_config.copy()
+                )
                 pos_strategy_config["user_id"] = bot.user_id
                 pos_strategy = StrategyRegistry.get_strategy(bot.strategy_type, pos_strategy_config)
 
@@ -1582,7 +1641,9 @@ class MultiBotMonitor:
             if allowed_categories and opportunities:
                 # Extract pairs from opportunities
                 opportunity_pairs = [o.get("product_id") for o in opportunities if o.get("product_id")]
-                filtered_pairs = await filter_pairs_by_allowed_categories(db, opportunity_pairs, allowed_categories, user_id=bot.user_id)
+                filtered_pairs = await filter_pairs_by_allowed_categories(
+                    db, opportunity_pairs, allowed_categories, user_id=bot.user_id
+                )
                 filtered_pairs_set = set(filtered_pairs)
                 # Filter opportunities to only include allowed pairs
                 opportunities = [o for o in opportunities if o.get("product_id") in filtered_pairs_set]
@@ -1717,7 +1778,10 @@ class MultiBotMonitor:
                                 self._current_exchange = await self.get_exchange_for_bot(db, bot)
                                 self._current_account_id = bot.account_id
                                 if not self._current_exchange:
-                                    logger.warning(f"No exchange client for bot {bot.name} (account_id={bot.account_id})")
+                                    logger.warning(
+                                        f"No exchange client for bot {bot.name}"
+                                        f" (account_id={bot.account_id})"
+                                    )
                                     continue
 
                                 # Phase 2 Optimization: Smart check scheduling

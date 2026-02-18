@@ -55,7 +55,11 @@ async def analyze_grid_performance(
     avg_profit_per_level = (total_profit / filled_levels) if filled_levels > 0 else 0
 
     # Time since initialization
-    initialized_at = datetime.fromisoformat(grid_state["initialized_at"]) if "initialized_at" in grid_state else datetime.utcnow()
+    initialized_at = (
+        datetime.fromisoformat(grid_state["initialized_at"])
+        if "initialized_at" in grid_state
+        else datetime.utcnow()
+    )
     hours_running = (datetime.utcnow() - initialized_at).total_seconds() / 3600
 
     # Breakout frequency
@@ -112,7 +116,12 @@ async def calculate_market_metrics(
         mid = len(prices) // 2
         first_half_avg = sum(prices[:mid]) / mid
         second_half_avg = sum(prices[mid:]) / (len(prices) - mid)
-        trend = "upward" if second_half_avg > first_half_avg * 1.02 else "downward" if second_half_avg < first_half_avg * 0.98 else "sideways"
+        if second_half_avg > first_half_avg * 1.02:
+            trend = "upward"
+        elif second_half_avg < first_half_avg * 0.98:
+            trend = "downward"
+        else:
+            trend = "sideways"
 
         return {
             "current_price": current_price,
@@ -197,11 +206,13 @@ async def get_ai_grid_recommendations(
 Analyze this grid's performance and market conditions. Recommend specific adjustments to optimize profitability.
 
 Consider:
-1. **Grid Level Count**: Is {current_config.get('num_grid_levels')} optimal? Should we increase (capture more small moves) or decrease (reduce capital lock-up)?
+1. **Grid Level Count**: Is {current_config.get('num_grid_levels')} optimal?
+   Increase (capture more small moves) or decrease (reduce capital lock-up)?
 2. **Grid Type**: Should we switch between arithmetic/geometric based on volatility?
 3. **Range Adjustment**: Is the current range too tight (frequent breakouts) or too wide (low fill rate)?
 4. **Grid Mode**: Given the {market_metrics.get('trend', 'unknown')} trend, should we switch between neutral/long?
-5. **Breakout Threshold**: With {grid_performance.get('breakouts_per_day', 0):.2f} breakouts/day, should we adjust sensitivity?
+5. **Breakout Threshold**: With {grid_performance.get('breakouts_per_day', 0):.2f} breakouts/day,
+   should we adjust sensitivity?
 
 **Output Format (JSON):**
 ```json
