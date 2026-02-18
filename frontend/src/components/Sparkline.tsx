@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { ResponsiveContainer, AreaChart, Area, YAxis } from 'recharts'
 
 interface SparklineProps {
@@ -8,19 +8,13 @@ interface SparklineProps {
   timeLabel?: string
 }
 
-export function Sparkline({ data, color, height = 40, timeLabel }: SparklineProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [hasSize, setHasSize] = useState(false)
-
-  // Defer chart render until container has real dimensions
+export function Sparkline({ data, color, height = 54, timeLabel }: SparklineProps) {
+  // Defer chart mount by one frame so the container has layout dimensions
+  // before ResponsiveContainer measures itself
+  const [mounted, setMounted] = useState(false)
   useEffect(() => {
-    if (!containerRef.current) return
-    const observer = new ResizeObserver((entries) => {
-      const { width, height: h } = entries[0].contentRect
-      if (width > 0 && h > 0) setHasSize(true)
-    })
-    observer.observe(containerRef.current)
-    return () => observer.disconnect()
+    const id = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(id)
   }, [])
 
   if (!data || data.length < 2) return null
@@ -29,8 +23,8 @@ export function Sparkline({ data, color, height = 40, timeLabel }: SparklineProp
 
   return (
     <div className="w-full">
-      <div ref={containerRef} className="w-full opacity-60 hover:opacity-100 transition-opacity" style={{ height }}>
-        {hasSize && (
+      <div className="w-full opacity-60 hover:opacity-100 transition-opacity" style={{ height }}>
+        {mounted && (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
               <defs>

@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2, RefreshCw } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2, Volume1, VolumeX, RefreshCw } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useArticleReader } from '../contexts/ArticleReaderContext'
 import { sourceColors } from './news'
@@ -69,6 +69,8 @@ export function ArticleReaderMiniPlayer() {
     getPlaybackState,
     setVoice,
     setRate,
+    volume,
+    setVolume,
   } = useArticleReader()
 
   const navigate = useNavigate()
@@ -125,6 +127,7 @@ export function ArticleReaderMiniPlayer() {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowPlaylistDropdown(false)
         setHoveredPlaylistIndex(null)
+        window.dispatchEvent(new CustomEvent('article-playlist-hover-cleanup'))
       }
       if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
         setShowSettingsDropdown(false)
@@ -650,6 +653,34 @@ export function ArticleReaderMiniPlayer() {
                             <option value="2">2x</option>
                           </select>
                         </div>
+
+                        {/* Volume slider */}
+                        <div>
+                          <label className="text-xs text-slate-400 block mb-1">Volume</label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setVolume(volume > 0 ? 0 : 1)}
+                              className="text-slate-400 hover:text-white transition-colors flex-shrink-0"
+                              title={volume > 0 ? 'Mute' : 'Unmute'}
+                            >
+                              {volume === 0 ? <VolumeX className="w-4 h-4" /> :
+                               volume < 0.5 ? <Volume1 className="w-4 h-4" /> :
+                               <Volume2 className="w-4 h-4" />}
+                            </button>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={volume}
+                              onChange={(e) => setVolume(parseFloat(e.target.value))}
+                              className="flex-1 h-1.5 bg-slate-600 rounded-full appearance-none cursor-pointer accent-green-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:hover:bg-green-400 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-green-500 [&::-moz-range-thumb]:border-0"
+                            />
+                            <span className="text-xs text-slate-400 w-8 text-right flex-shrink-0">
+                              {Math.round(volume * 100)}%
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -761,7 +792,12 @@ export function ArticleReaderMiniPlayer() {
                 {/* Playlist dropdown (reading queue) */}
                 <div className="relative" ref={dropdownRef}>
                   <button
-                    onClick={() => setShowPlaylistDropdown(!showPlaylistDropdown)}
+                    onClick={() => {
+                      if (showPlaylistDropdown) {
+                        window.dispatchEvent(new CustomEvent('article-playlist-hover-cleanup'))
+                      }
+                      setShowPlaylistDropdown(!showPlaylistDropdown)
+                    }}
                     className={`flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors ${isExpanded ? 'w-10 h-10' : 'w-8 h-8'}`}
                     title="Reading queue"
                   >
@@ -771,7 +807,7 @@ export function ArticleReaderMiniPlayer() {
                   {showPlaylistDropdown && (
                     <div className="fixed bottom-24 right-4 w-80 max-h-96 overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-[60]">
                       <div className="p-2 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
-                        <p className="text-xs text-slate-400">Reading queue ({playlist.length} articles)</p>
+                        <p className="text-xs text-slate-400">Reading queue ({playlist.length} articles) - Hover to scroll</p>
                       </div>
                       {playlist.map((article, idx) => (
                         <button
@@ -779,9 +815,16 @@ export function ArticleReaderMiniPlayer() {
                           onClick={() => {
                             playArticle(idx)
                             setShowPlaylistDropdown(false)
+                            window.dispatchEvent(new CustomEvent('article-playlist-hover-cleanup'))
                           }}
-                          onMouseEnter={() => setHoveredPlaylistIndex(idx)}
-                          onMouseLeave={() => setHoveredPlaylistIndex(null)}
+                          onMouseEnter={() => {
+                            setHoveredPlaylistIndex(idx)
+                            window.dispatchEvent(new CustomEvent('article-playlist-hover', { detail: { url: article.url } }))
+                          }}
+                          onMouseLeave={() => {
+                            setHoveredPlaylistIndex(null)
+                            window.dispatchEvent(new CustomEvent('article-playlist-hover-leave', { detail: { url: article.url } }))
+                          }}
                           className={`w-full flex items-start gap-3 p-3 hover:bg-slate-700 transition-colors text-left ${
                             idx === currentIndex ? 'bg-green-500/10 border-l-2 border-green-500' : ''
                           } ${hoveredPlaylistIndex === idx ? 'bg-blue-500/10' : ''}`}

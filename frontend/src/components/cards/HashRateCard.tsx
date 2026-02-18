@@ -14,7 +14,7 @@ interface HashRateCardProps {
 
 function HashRateCardInner({ data, isError, spark, sparkTimeLabel }: HashRateCardProps) {
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full flex flex-col">
       <div className="flex items-center space-x-2 mb-4">
         <Cpu className="w-5 h-5 text-cyan-400" />
         <h3 className="font-medium text-white">Network Hash Rate</h3>
@@ -22,7 +22,7 @@ function HashRateCardInner({ data, isError, spark, sparkTimeLabel }: HashRateCar
       </div>
 
       {isError ? <CardError /> : data ? (
-        <div className="flex flex-col items-center">
+        <div className="flex-1 flex flex-col items-center">
           <div className="text-3xl font-bold text-cyan-400 mb-1">
             {data.hash_rate_eh.toFixed(0)} EH/s
           </div>
@@ -44,9 +44,11 @@ function HashRateCardInner({ data, isError, spark, sparkTimeLabel }: HashRateCar
             />
           </div>
 
-          <Sparkline data={spark} color="#22d3ee" height={36} timeLabel={sparkTimeLabel} />
-          <div className="text-[10px] text-slate-600 text-center">
-            Higher = more secure network
+          <div className="mt-auto w-full pt-2">
+            <Sparkline data={spark} color="#22d3ee" height={54} timeLabel={sparkTimeLabel} />
+            <div className="text-[10px] text-slate-600 text-center">
+              Higher = more secure network
+            </div>
           </div>
         </div>
       ) : <CardLoading />}

@@ -20,7 +20,7 @@ function getSeasonColor(season: string) {
 
 function AltseasonCardInner({ data, isError, spark, sparkTimeLabel }: AltseasonCardProps) {
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full flex flex-col">
       <div className="flex items-center space-x-2 mb-4">
         <TrendingUp className="w-5 h-5 text-purple-400" />
         <h3 className="font-medium text-white">Altcoin Season Index</h3>
@@ -28,7 +28,7 @@ function AltseasonCardInner({ data, isError, spark, sparkTimeLabel }: AltseasonC
       </div>
 
       {isError ? <CardError /> : data ? (
-        <div className="flex flex-col items-center">
+        <div className="flex-1 flex flex-col items-center">
           <div className={`text-4xl font-bold mb-2 ${data.season === 'Altcoin Season' ? 'text-purple-400' : data.season === 'Bitcoin Season' ? 'text-orange-400' : 'text-slate-300'}`}>
             {data.altseason_index}
           </div>
@@ -60,9 +60,11 @@ function AltseasonCardInner({ data, isError, spark, sparkTimeLabel }: AltseasonC
             </div>
           </div>
 
-          <Sparkline data={spark} color="#a855f7" height={36} timeLabel={sparkTimeLabel} />
-          <div className="text-xs text-slate-500">
-            {data.outperformers}/{data.total_altcoins} alts beat BTC (30d)
+          <div className="mt-auto w-full pt-2">
+            <Sparkline data={spark} color="#a855f7" height={54} timeLabel={sparkTimeLabel} />
+            <div className="text-xs text-slate-500 text-center">
+              {data.outperformers}/{data.total_altcoins} alts beat BTC (30d)
+            </div>
           </div>
         </div>
       ) : <CardLoading />}

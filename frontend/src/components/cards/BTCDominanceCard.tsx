@@ -14,7 +14,7 @@ interface BTCDominanceCardProps {
 
 function BTCDominanceCardInner({ data, isError, spark, sparkTimeLabel }: BTCDominanceCardProps) {
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full flex flex-col">
       <div className="flex items-center space-x-2 mb-4">
         <PieChart className="w-5 h-5 text-orange-500" />
         <h3 className="font-medium text-white">BTC Dominance</h3>
@@ -22,7 +22,7 @@ function BTCDominanceCardInner({ data, isError, spark, sparkTimeLabel }: BTCDomi
       </div>
 
       {isError ? <CardError /> : data ? (
-        <div className="flex flex-col items-center">
+        <div className="flex-1 flex flex-col items-center">
           <div className="text-4xl font-bold text-orange-500 mb-2">{data.btc_dominance.toFixed(1)}%</div>
           <div className="text-xs text-slate-400 mb-4">of total crypto market cap</div>
 
@@ -50,9 +50,11 @@ function BTCDominanceCardInner({ data, isError, spark, sparkTimeLabel }: BTCDomi
             </div>
           </div>
 
-          <Sparkline data={spark} color="#f97316" height={36} timeLabel={sparkTimeLabel} />
-          <div className="text-[10px] text-slate-600">
-            Total MCap: ${(data.total_market_cap / 1_000_000_000_000).toFixed(2)}T
+          <div className="mt-auto w-full pt-2">
+            <Sparkline data={spark} color="#f97316" height={54} timeLabel={sparkTimeLabel} />
+            <div className="text-[10px] text-slate-600 text-center">
+              Total MCap: ${(data.total_market_cap / 1_000_000_000_000).toFixed(2)}T
+            </div>
           </div>
         </div>
       ) : <CardLoading />}

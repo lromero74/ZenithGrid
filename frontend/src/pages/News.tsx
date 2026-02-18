@@ -196,6 +196,42 @@ export default function News() {
     }
   }, [filteredNews, currentPage, setCurrentPage])
 
+  // Listen for playlist hover events from the TTS mini player
+  useEffect(() => {
+    const handleHover = (e: Event) => {
+      const url = (e as CustomEvent).detail?.url
+      if (!url || activeTab !== 'articles') return
+      cleanupArticleHoverHighlights()
+      const idx = filteredNews.findIndex(n => n.url === url)
+      if (idx === -1) return
+      const targetPage = Math.floor(idx / PAGE_SIZE) + 1
+      if (targetPage !== currentPage) {
+        setCurrentPage(targetPage)
+        setTimeout(() => {
+          scrollToArticle(url)
+          highlightArticle(url)
+        }, 100)
+      } else {
+        scrollToArticle(url)
+        highlightArticle(url)
+      }
+    }
+    const handleLeave = (e: Event) => {
+      const url = (e as CustomEvent).detail?.url
+      if (url) unhighlightArticle(url)
+    }
+    const handleCleanup = () => cleanupArticleHoverHighlights()
+
+    window.addEventListener('article-playlist-hover', handleHover)
+    window.addEventListener('article-playlist-hover-leave', handleLeave)
+    window.addEventListener('article-playlist-hover-cleanup', handleCleanup)
+    return () => {
+      window.removeEventListener('article-playlist-hover', handleHover)
+      window.removeEventListener('article-playlist-hover-leave', handleLeave)
+      window.removeEventListener('article-playlist-hover-cleanup', handleCleanup)
+    }
+  }, [filteredNews, currentPage, setCurrentPage, activeTab])
+
   // Scroll to currently playing video (centered in viewport) with pulse effect
   const scrollToPlayingVideo = () => {
     if (!currentVideo) return

@@ -81,14 +81,19 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const allPositions = [...openPositions, ...closedPositions]
 
   // Fetch portfolio for account value - account-specific for CEX/DEX switching
+  // Falls back to singular endpoint if selectedAccount hasn't resolved yet
   const { data: portfolio } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
-      const response = await authFetch(`/api/accounts/${selectedAccount!.id}/portfolio`)
+      if (selectedAccount) {
+        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        if (!response.ok) throw new Error('Failed to fetch portfolio')
+        return response.json()
+      }
+      const response = await authFetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
-    enabled: !!selectedAccount,
     refetchInterval: 120000, // Match header timing
     staleTime: 60000,
     refetchOnWindowFocus: false,

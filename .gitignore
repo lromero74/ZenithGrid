@@ -25,6 +25,7 @@ build/
 # Runtime caches (news, fear/greed, etc.)
 *_cache.json
 backend/*_cache.json
+backend/.portfolio_cache/
 
 # Cached news images (downloaded at runtime)
 backend/static/news_images/*

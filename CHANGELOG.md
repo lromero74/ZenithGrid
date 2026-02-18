@@ -5,6 +5,21 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.13.0] - 2026-02-18
+
+### Added
+- **TTS volume slider**: Volume control in the TTS player settings dropdown — slider from 0-100% with mute/unmute toggle, persists across sessions via localStorage
+- **Article playlist hover-to-scroll**: Hovering over articles in the TTS reading queue now scrolls to and highlights the article in the news list, automatically navigating to the correct pagination page if needed (matches video player behavior)
+- **Persistent portfolio cache**: Portfolio data survives backend restarts via JSON file cache at `backend/.portfolio_cache/` — loads in ~1ms instead of re-fetching from Coinbase
+
+### Changed
+- **40x portfolio speed improvement**: Portfolio endpoint now uses Coinbase breakdown's built-in `total_balance_fiat` instead of making 30+ individual price API calls. Fresh fetch dropped from ~25s to ~0.6-1.4s
+- **Sparkline charts 50% taller**: Dashboard carousel sparklines increased from 36px to 54px height, now pinned to card bottom with consistent positioning so eyes don't scan up and down when scrolling through cards
+
+### Fixed
+- **Dashboard/Bots portfolio skeleton stuck**: App header and Dashboard showed infinite pulsing grey boxes because the portfolio query was gated on `selectedAccount` (null during initial render). Added fallback to singular endpoint like Positions/Bots pages already use
+- **Sparkline charts not rendering in PROD**: ResizeObserver never fired in production builds; replaced with `requestAnimationFrame` deferred mount
+
 ## [v2.12.5] - 2026-02-17
 
 ### Fixed
