@@ -99,15 +99,19 @@ function AppContent() {
   }, [])
 
   // Fetch full portfolio data (all coins) - account-specific for CEX/DEX switching
-  // Gated on selectedAccount so it doesn't fire before accounts have loaded
+  // Falls back to singular endpoint if selectedAccount hasn't resolved yet
   const { data: portfolio } = useQuery({
     queryKey: ['account-portfolio', selectedAccount?.id],
     queryFn: async () => {
-      const response = await authFetch(`/api/accounts/${selectedAccount!.id}/portfolio`)
+      if (selectedAccount) {
+        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
+        if (!response.ok) throw new Error('Failed to fetch portfolio')
+        return response.json()
+      }
+      const response = await authFetch('/api/account/portfolio')
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json()
     },
-    enabled: !!selectedAccount,
     refetchInterval: 120000, // Update prices every 2 minutes
     staleTime: 60000, // Consider data fresh for 60 seconds
     refetchOnWindowFocus: false, // Don't refetch when window regains focus

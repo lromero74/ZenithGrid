@@ -46,6 +46,7 @@ interface UseTTSSyncReturn {
   duration: number
   currentVoice: string
   playbackRate: number
+  volume: number
 
   // Direct audio access (bypasses React state for smooth animations)
   getPlaybackState: () => { currentTime: number; duration: number }
@@ -62,6 +63,7 @@ interface UseTTSSyncReturn {
   skipWords: (count: number) => void
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
+  setVolume: (volume: number) => void
 }
 
 export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
@@ -78,6 +80,13 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const [duration, setDuration] = useState(0)
   const [currentVoice, setCurrentVoice] = useState(defaultVoice)
   const [playbackRate, setPlaybackRate] = useState(defaultRate)
+  const [volume, setVolumeState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tts-volume')
+      if (saved !== null) return parseFloat(saved)
+    } catch { /* ignore */ }
+    return 1.0
+  })
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const animationFrameRef = useRef<number | null>(null)
@@ -277,6 +286,13 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       audioRef.current.playbackRate = playbackRate
     }
   }, [playbackRate])
+
+  // Update volume when it changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume
+    }
+  }, [volume])
 
   const loadAndPlay = useCallback(async (text: string, overrideVoice?: string, articleId?: number) => {
     const audio = audioRef.current
@@ -642,6 +658,14 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setPlaybackRate(rate)
   }, [])
 
+  const setVolume = useCallback((vol: number) => {
+    const clamped = Math.max(0, Math.min(1, vol))
+    setVolumeState(clamped)
+    try {
+      localStorage.setItem('tts-volume', String(clamped))
+    } catch { /* ignore */ }
+  }, [])
+
   // Direct audio element access — reads currentTime/duration without React state delay
   const getPlaybackState = useCallback(() => {
     const audio = audioRef.current
@@ -663,6 +687,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     duration,
     currentVoice,
     playbackRate,
+    volume,
     getPlaybackState,
     loadAndPlay,
     play,
@@ -675,5 +700,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     skipWords,
     setVoice,
     setRate,
+    setVolume,
   }
 }

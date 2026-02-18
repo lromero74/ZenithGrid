@@ -6,14 +6,13 @@ Extracted from routers/accounts/portfolio_utils.py to live at the proper
 service layer.
 """
 
-import asyncio
 import logging
 from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache import api_cache
+from app.cache import api_cache, portfolio_cache
 from app.models import Account, Bot, Position
 from app.services.dex_wallet_service import dex_wallet_service
 
@@ -28,79 +27,42 @@ async def get_cex_portfolio(
     """
     Get portfolio for a CEX (Coinbase) account.
 
-    Args:
-        account: The CEX account to get portfolio for
-        db: Database session
-        get_coinbase_for_account_func: Function to create a Coinbase client for an account
-
-    Returns:
-        Dict with portfolio data including holdings, balances, and PnL
+    Uses Coinbase's portfolio breakdown which returns USD values for every
+    position in a single API call — no individual price fetches needed.
     """
-    # Check response cache first (60s TTL) to avoid slow re-computation
+    # Check in-memory cache first (60s TTL)
     cache_key = f"portfolio_response_{account.id}"
     cached = await api_cache.get(cache_key)
     if cached is not None:
         logger.debug(f"Using cached portfolio response for account {account.id}")
         return cached
 
+    # Check persistent cache (survives restarts)
+    persistent = await portfolio_cache.get(account.user_id)
+    if persistent is not None:
+        await api_cache.set(cache_key, persistent, 60)
+        logger.info(f"Serving persistent portfolio cache for account {account.id}")
+        return persistent
+
     coinbase = await get_coinbase_for_account_func(account)
 
-    # Get portfolio breakdown with all holdings
+    # Single API call: breakdown has USD values for every position
     breakdown = await coinbase.get_portfolio_breakdown()
     spot_positions = breakdown.get("spot_positions", [])
 
-    # Get BTC/USD price for valuations
+    # Get BTC/USD price for BTC value column (uses cache, very fast)
     btc_usd_price = await coinbase.get_btc_usd_price()
 
-    # Prepare list of assets that need pricing
-    assets_to_price = []
-    for position in spot_positions:
-        asset = position.get("asset", "")
-        total_balance = float(position.get("total_balance_crypto", 0))
-
-        if total_balance == 0:
-            continue
-
-        if asset not in ["USD", "USDC", "BTC"]:
-            assets_to_price.append((asset, total_balance, position))
-
-    # Fetch prices in batches to avoid rate limiting
-    async def fetch_price(asset: str):
-        try:
-            price = await coinbase.get_current_price(f"{asset}-USD")
-            return (asset, price)
-        except Exception as e:
-            # 404 errors are expected for delisted pairs - log at DEBUG level
-            # Other errors (rate limits, network issues, etc.) are WARNING level
-            error_str = str(e)
-            if "404" in error_str or "Not Found" in error_str:
-                logger.debug(f"Could not get USD price for {asset}: {e}")
-            else:
-                logger.warning(f"Could not get USD price for {asset}: {e}")
-            return (asset, None)
-
-    # Batch price fetching: 15 concurrent requests, then 0.2s delay, repeat
-    batch_size = 15
-    price_results = []
-    for i in range(0, len(assets_to_price), batch_size):
-        batch = assets_to_price[i:i + batch_size]
-        batch_results = await asyncio.gather(
-            *[fetch_price(asset) for asset, _, _ in batch]
-        )
-        price_results.extend(batch_results)
-        # Small delay between batches (not between individual requests)
-        if i + batch_size < len(assets_to_price):
-            await asyncio.sleep(0.2)
-
-    prices = {asset: price for asset, price in price_results if price is not None}
-
-    # Build portfolio with all prices
+    # Build portfolio directly from breakdown data
     portfolio_holdings = []
     total_usd_value = 0.0
     total_btc_value = 0.0
     actual_usd_balance = 0.0
     actual_usdc_balance = 0.0
     actual_btc_balance = 0.0
+
+    # Price lookup derived from breakdown (for position PnL)
+    breakdown_prices = {}
 
     for position in spot_positions:
         asset = position.get("asset", "")
@@ -111,33 +73,40 @@ async def get_cex_portfolio(
         if total_balance == 0:
             continue
 
-        usd_value = 0.0
-        btc_value = 0.0
-        current_price_usd = 0.0
+        # Use Coinbase's pre-calculated fiat value
+        usd_value = float(position.get("total_balance_fiat", 0))
 
-        if asset == "USD":
-            usd_value = total_balance
-            btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
+        # Derive current price from fiat/crypto ratio
+        if total_balance > 0 and usd_value > 0:
+            current_price_usd = usd_value / total_balance
+        elif asset == "USD":
             current_price_usd = 1.0
+            usd_value = total_balance
+        elif asset == "USDC":
+            current_price_usd = 1.0
+            usd_value = total_balance
+        elif asset == "BTC":
+            current_price_usd = btc_usd_price
+            usd_value = total_balance * btc_usd_price
+        else:
+            current_price_usd = 0.0
+
+        # Track actual quote currency balances
+        if asset == "USD":
             actual_usd_balance += total_balance
         elif asset == "USDC":
-            usd_value = total_balance
-            btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
-            current_price_usd = 1.0
             actual_usdc_balance += total_balance
         elif asset == "BTC":
-            usd_value = total_balance * btc_usd_price
-            btc_value = total_balance
-            current_price_usd = btc_usd_price
             actual_btc_balance += total_balance
-        else:
-            if asset not in prices:
-                continue
-            current_price_usd = prices[asset]
-            usd_value = total_balance * current_price_usd
-            btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
 
-        if usd_value < 0.01:
+        # Store derived price for position PnL calculations
+        if current_price_usd > 0:
+            breakdown_prices[asset] = current_price_usd
+
+        btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
+
+        # Skip dust (< $0.01)
+        if usd_value < 0.01 and current_price_usd > 0:
             continue
 
         total_usd_value += usd_value
@@ -169,44 +138,23 @@ async def get_cex_portfolio(
     positions_result = await db.execute(positions_query)
     open_positions = positions_result.scalars().all()
 
-    # Fetch all position prices in PARALLEL to avoid slow sequential API calls
-    position_prices = {}
-    if open_positions:
-        async def fetch_price_for_product(product_id: str):
-            try:
-                price = await coinbase.get_current_price(product_id)
-                return (product_id, price)
-            except Exception as e:
-                logger.warning(f"Could not get price for {product_id}: {e}")
-                return (product_id, None)
-
-        # Get unique product_ids to avoid duplicate fetches
-        unique_products = list(
-            {f"{p.get_base_currency()}-{p.get_quote_currency()}" for p in open_positions}
-        )
-
-        # Batch price fetching for positions: 15 concurrent, then 0.2s delay
-        position_price_results = []
-        for i in range(0, len(unique_products), batch_size):
-            batch = unique_products[i:i + batch_size]
-            batch_results = await asyncio.gather(
-                *[fetch_price_for_product(pid) for pid in batch]
-            )
-            position_price_results.extend(batch_results)
-            if i + batch_size < len(unique_products):
-                await asyncio.sleep(0.2)
-
-        position_prices = {
-            pid: price for pid, price in position_price_results if price is not None
-        }
-
+    # Use prices derived from breakdown — no additional API calls
     asset_pnl = {}
     for position in open_positions:
         base = position.get_base_currency()
         quote = position.get_quote_currency()
-        product_id = f"{base}-{quote}"
 
-        current_price = position_prices.get(product_id)
+        if quote == "USD":
+            current_price = breakdown_prices.get(base)
+        elif quote == "BTC":
+            base_usd = breakdown_prices.get(base)
+            if base_usd and btc_usd_price > 0:
+                current_price = base_usd / btc_usd_price
+            else:
+                current_price = None
+        else:
+            current_price = None
+
         if current_price is None:
             continue
 
@@ -252,17 +200,22 @@ async def get_cex_portfolio(
     total_in_positions_usd = 0.0
     total_in_positions_usdc = 0.0
 
-    # Use cached prices from earlier parallel fetch
     for position in open_positions:
         quote = position.get_quote_currency()
         base = position.get_base_currency()
-        product_id = f"{base}-{quote}"
 
-        current_price = position_prices.get(product_id)
-        if current_price is not None:
-            current_value = position.total_base_acquired * current_price
+        # Derive position price from breakdown data
+        if quote == "USD" or quote == "USDC":
+            pos_price = breakdown_prices.get(base)
+        elif quote == "BTC":
+            base_usd = breakdown_prices.get(base)
+            pos_price = base_usd / btc_usd_price if base_usd and btc_usd_price > 0 else None
         else:
-            # Fallback to quote spent if price unavailable
+            pos_price = None
+
+        if pos_price is not None:
+            current_value = position.total_base_acquired * pos_price
+        else:
             current_value = position.total_quote_spent
 
         if quote == "USD":
@@ -339,8 +292,9 @@ async def get_cex_portfolio(
         "is_dex": False,
     }
 
-    # Cache the response for 60s
+    # Cache in-memory (60s) and persist to disk (survives restarts)
     await api_cache.set(cache_key, result, 60)
+    await portfolio_cache.save(account.user_id, result)
     return result
 
 

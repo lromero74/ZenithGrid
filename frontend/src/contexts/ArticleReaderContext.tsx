@@ -46,6 +46,7 @@ interface ArticleReaderContextType {
   duration: number
   currentVoice: string
   playbackRate: number
+  volume: number
 
   // Content state
   articleContent: string | null
@@ -77,6 +78,7 @@ interface ArticleReaderContextType {
   skipWords: (count: number) => void
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
+  setVolume: (volume: number) => void
 
   // Direct audio access (for smooth progress bar animation)
   getPlaybackState: () => { currentTime: number; duration: number }
@@ -666,6 +668,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     duration: tts.duration,
     currentVoice: tts.currentVoice,
     playbackRate: tts.playbackRate,
+    volume: tts.volume,
 
     // Content state
     articleContent,
@@ -697,6 +700,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     skipWords: tts.skipWords,
     setVoice: tts.setVoice,
     setRate: tts.setRate,
+    setVolume: tts.setVolume,
 
     // Direct audio access
     getPlaybackState: tts.getPlaybackState,
@@ -706,12 +710,12 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   }), [
     playlist, currentIndex, isPlaying, showMiniPlayer, isExpanded, currentArticle,
     tts.isLoading, tts.isPaused, tts.isReady, tts.error, tts.words,
-    tts.currentWordIndex, tts.currentTime, tts.duration, tts.currentVoice, tts.playbackRate,
+    tts.currentWordIndex, tts.currentTime, tts.duration, tts.currentVoice, tts.playbackRate, tts.volume,
     articleContent, articleContentLoading, voiceCycleEnabled, toggleVoiceCycle,
     openArticle, startPlaylist, stopPlaylist, playArticle, nextArticle, previousArticle,
     toggleExpanded, closeMiniPlayer,
     tts.play, tts.pause, tts.resume, tts.stop, tts.replay,
-    tts.seekToWord, tts.seekToTime, tts.skipWords, tts.setVoice, tts.setRate,
+    tts.seekToWord, tts.seekToTime, tts.skipWords, tts.setVoice, tts.setRate, tts.setVolume,
     tts.getPlaybackState, getVoiceForArticle,
   ])
 

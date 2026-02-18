@@ -14,7 +14,7 @@ interface TotalMarketCapCardProps {
 
 function TotalMarketCapCardInner({ data, isError, spark, sparkTimeLabel }: TotalMarketCapCardProps) {
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full flex flex-col">
       <div className="flex items-center space-x-2 mb-4">
         <Globe className="w-5 h-5 text-blue-400" />
         <h3 className="font-medium text-white">Total Crypto Market</h3>
@@ -22,7 +22,7 @@ function TotalMarketCapCardInner({ data, isError, spark, sparkTimeLabel }: Total
       </div>
 
       {isError ? <CardError /> : data ? (
-        <div className="flex flex-col items-center">
+        <div className="flex-1 flex flex-col items-center">
           <div className="text-4xl font-bold text-blue-400 mb-2">
             ${(data.total_market_cap / 1_000_000_000_000).toFixed(2)}T
           </div>
@@ -38,9 +38,11 @@ function TotalMarketCapCardInner({ data, isError, spark, sparkTimeLabel }: Total
             </div>
           </div>
 
-          <Sparkline data={spark} color="#60a5fa" height={36} timeLabel={sparkTimeLabel} />
-          <div className="text-[10px] text-slate-600 text-center">
-            All cryptocurrencies combined
+          <div className="mt-auto w-full pt-2">
+            <Sparkline data={spark} color="#60a5fa" height={54} timeLabel={sparkTimeLabel} />
+            <div className="text-[10px] text-slate-600 text-center">
+              All cryptocurrencies combined
+            </div>
           </div>
         </div>
       ) : <CardLoading />}

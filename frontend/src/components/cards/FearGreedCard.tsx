@@ -18,7 +18,7 @@ function FearGreedCardInner({ data, isError, spark, sparkTimeLabel }: FearGreedC
   const colors = data ? getFearGreedColor(data.data.value) : null
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full">
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 h-full flex flex-col">
       <div className="flex items-center space-x-2 mb-4">
         <Gauge className="w-5 h-5 text-slate-400" />
         <h3 className="font-medium text-white">Fear & Greed Index</h3>
@@ -26,7 +26,7 @@ function FearGreedCardInner({ data, isError, spark, sparkTimeLabel }: FearGreedC
       </div>
 
       {isError ? <CardError /> : data && colors ? (
-        <div className="flex flex-col items-center">
+        <div className="flex-1 flex flex-col items-center">
           <div className="relative w-48 h-24 mb-2">
             <svg viewBox="0 0 200 100" className="w-full h-full">
               <defs>
@@ -55,7 +55,9 @@ function FearGreedCardInner({ data, isError, spark, sparkTimeLabel }: FearGreedC
             <span>Neutral</span>
             <span>Extreme Greed</span>
           </div>
-          <Sparkline data={spark} color="#eab308" height={36} timeLabel={sparkTimeLabel} />
+          <div className="mt-auto w-full pt-2">
+            <Sparkline data={spark} color="#eab308" height={54} timeLabel={sparkTimeLabel} />
+          </div>
         </div>
       ) : <CardLoading />}
     </div>
