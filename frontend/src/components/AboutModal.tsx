@@ -254,6 +254,9 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
           <p className="text-xs text-slate-500 text-center">
             &copy; {new Date().getFullYear()} Romero Tech Solutions. All rights reserved.
           </p>
+          <p className="text-xs text-slate-600 text-center mt-1">
+            Powered by <span className="text-slate-500">Zenith Grid</span>: a Romero Tech Solutions Open Source Project
+          </p>
         </div>
       </div>
     </div>
