@@ -6,12 +6,13 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { NewsItem, VideoItem, NewsResponse, VideoResponse, NEWS_CATEGORIES } from '../types'
+import { NewsItem, VideoItem, NewsResponse, VideoResponse, NEWS_CATEGORIES, SeenFilter } from '../types'
 import {
   filterNewsBySource,
   filterNewsByCategory,
   filterVideosBySource,
   filterVideosByCategory,
+  filterBySeen,
   paginateItems,
   calculateTotalPages,
   shouldResetPage,
@@ -34,6 +35,10 @@ export interface UseNewsFiltersReturn {
   toggleVideoCategory: (category: string) => void
   toggleAllVideoCategories: () => void
   allVideoCategoriesSelected: boolean
+  seenFilter: SeenFilter
+  setSeenFilter: (filter: SeenFilter) => void
+  seenVideoFilter: SeenFilter
+  setSeenVideoFilter: (filter: SeenFilter) => void
   currentPage: number
   setCurrentPage: (page: number | ((prev: number) => number)) => void
   filteredNews: NewsItem[]
@@ -90,6 +95,8 @@ export const useNewsFilters = ({
     () => new Set(saved?.selectedVideoCategories?.length ? saved.selectedVideoCategories : NEWS_CATEGORIES)
   )
   const [currentPage, setCurrentPage] = useState(saved?.currentPage ?? 1)
+  const [seenFilter, setSeenFilter] = useState<SeenFilter>(saved?.seenFilter ?? 'all')
+  const [seenVideoFilter, setSeenVideoFilter] = useState<SeenFilter>(saved?.seenVideoFilter ?? 'all')
 
   // Persist filter state to localStorage
   useEffect(() => {
@@ -99,8 +106,10 @@ export const useNewsFilters = ({
       selectedVideoSources: Array.from(selectedVideoSources),
       selectedVideoCategories: Array.from(selectedVideoCategories),
       currentPage,
+      seenFilter,
+      seenVideoFilter,
     })
-  }, [selectedSources, selectedCategories, selectedVideoSources, selectedVideoCategories, currentPage])
+  }, [selectedSources, selectedCategories, selectedVideoSources, selectedVideoCategories, currentPage, seenFilter, seenVideoFilter])
 
   const allCategoriesSelected = selectedCategories.size === NEWS_CATEGORIES.length
   const allVideoCategoriesSelected = selectedVideoCategories.size === NEWS_CATEGORIES.length
@@ -194,17 +203,19 @@ export const useNewsFilters = ({
     setSelectedVideoSources(new Set())
   }, [])
 
-  // Filter news by selected categories first, then by source
+  // Filter news by selected categories, then source, then seen status
   const filteredNews = useMemo(() => {
     const byCategory = filterNewsByCategory(newsData?.news || [], selectedCategories)
-    return filterNewsBySource(byCategory, selectedSources)
-  }, [newsData?.news, selectedCategories, selectedSources])
+    const bySource = filterNewsBySource(byCategory, selectedSources)
+    return filterBySeen(bySource, seenFilter)
+  }, [newsData?.news, selectedCategories, selectedSources, seenFilter])
 
-  // Filter videos by selected categories first, then by source
+  // Filter videos by selected categories, then source, then seen status
   const filteredVideos = useMemo(() => {
     const byCategory = filterVideosByCategory(videoData?.videos || [], selectedVideoCategories)
-    return filterVideosBySource(byCategory, selectedVideoSources)
-  }, [videoData?.videos, selectedVideoCategories, selectedVideoSources])
+    const bySource = filterVideosBySource(byCategory, selectedVideoSources)
+    return filterBySeen(bySource, seenVideoFilter)
+  }, [videoData?.videos, selectedVideoCategories, selectedVideoSources, seenVideoFilter])
 
   // Client-side pagination - slice filtered news for current page (instant page changes)
   const totalFilteredItems = filteredNews.length
@@ -242,6 +253,10 @@ export const useNewsFilters = ({
     toggleVideoCategory,
     toggleAllVideoCategories,
     allVideoCategoriesSelected,
+    seenFilter,
+    setSeenFilter,
+    seenVideoFilter,
+    setSeenVideoFilter,
     currentPage,
     setCurrentPage,
     filteredNews,

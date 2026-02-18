@@ -13,3 +13,6 @@ export type { UseNewsFiltersReturn } from './useNewsFilters'
 
 export { useTTSSync } from './useTTSSync'
 export type { WordTiming } from './useTTSSync'
+
+export { useSeenStatus } from './useSeenStatus'
+export type { UseSeenStatusReturn } from './useSeenStatus'

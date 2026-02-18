@@ -22,6 +22,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -1136,6 +1137,32 @@ class UserArticleTTSHistory(Base):
     __table_args__ = (
         UniqueConstraint(
             "user_id", "article_id", name="uq_user_article_tts"
+        ),
+    )
+
+
+class UserContentSeenStatus(Base):
+    """Per-user seen/read tracking for articles and videos."""
+
+    __tablename__ = "user_content_seen_status"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    content_type = Column(String, nullable=False)   # "article" | "video"
+    content_id = Column(Integer, nullable=False)     # news_articles.id or video_articles.id
+    seen_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "content_type", "content_id",
+            name="uq_user_content_seen",
+        ),
+        Index(
+            "ix_user_content_seen_lookup",
+            "user_id", "content_type",
         ),
     )
 

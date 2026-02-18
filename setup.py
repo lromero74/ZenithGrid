@@ -1357,6 +1357,23 @@ def initialize_database(project_root):
             )
         """)
 
+        # User content seen/read status (articles & videos)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_content_seen_status (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL
+                    REFERENCES users(id) ON DELETE CASCADE,
+                content_type TEXT NOT NULL,
+                content_id INTEGER NOT NULL,
+                seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, content_type, content_id)
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_user_content_seen_lookup "
+            "ON user_content_seen_status(user_id, content_type)"
+        )
+
         # Account value snapshots (daily historical tracking)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS account_value_snapshots (

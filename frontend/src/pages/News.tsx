@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair, Volume2 } from 'lucide-react'
+import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair, Volume2, Check, Eye, EyeOff, CheckCheck } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
 import { useVideoPlayer, VideoItem as ContextVideoItem } from '../contexts/VideoPlayerContext'
@@ -21,8 +21,8 @@ import {
   SOURCE_CATEGORY,
   VIDEO_SOURCE_CATEGORY,
 } from '../components/news'
-import { NewsItem, TabType, NEWS_CATEGORIES, CATEGORY_COLORS } from './news/types'
-import { useNewsData, useArticleContent, useNewsFilters } from './news/hooks'
+import { NewsItem, TabType, NEWS_CATEGORIES, CATEGORY_COLORS, SeenFilter } from './news/types'
+import { useNewsData, useArticleContent, useNewsFilters, useSeenStatus } from './news/hooks'
 import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource, cleanupArticleHoverHighlights, scrollToArticle, highlightArticle, unhighlightArticle } from './news/helpers'
 import { ArticleContent, TTSControls } from './news/components'
 import { useTTSSync } from './news/hooks'
@@ -125,6 +125,10 @@ export default function News() {
     toggleVideoCategory,
     toggleAllVideoCategories,
     allVideoCategoriesSelected,
+    seenFilter,
+    setSeenFilter,
+    seenVideoFilter,
+    setSeenVideoFilter,
     currentPage,
     setCurrentPage,
     filteredNews,
@@ -133,6 +137,9 @@ export default function News() {
     totalPages,
     totalFilteredItems,
   } = useNewsFilters({ newsData, videoData, pageSize: PAGE_SIZE })
+
+  // Seen status mutations
+  const { markSeen, bulkMarkSeen } = useSeenStatus()
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -372,6 +379,57 @@ export default function News() {
         </button>
       </div>
 
+      {/* Seen filter + bulk actions */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Three-state pill: All / Unread / Read */}
+        <div className="flex space-x-0.5 bg-slate-800 rounded-lg p-0.5">
+          {(['all', 'unseen', 'seen'] as SeenFilter[]).map(f => {
+            const active = (activeTab === 'articles' ? seenFilter : seenVideoFilter) === f
+            const label = f === 'all' ? 'All' : f === 'unseen' ? 'Unread' : 'Read'
+            return (
+              <button
+                key={f}
+                onClick={() => {
+                  if (activeTab === 'articles') {
+                    setSeenFilter(f)
+                    setCurrentPage(1)
+                  } else {
+                    setSeenVideoFilter(f)
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  active
+                    ? 'bg-slate-600 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Bulk mark all read/unread */}
+        {(() => {
+          const items = activeTab === 'articles' ? filteredNews : filteredVideos
+          const currentSeenFilter = activeTab === 'articles' ? seenFilter : seenVideoFilter
+          const contentType = activeTab === 'articles' ? 'article' as const : 'video' as const
+          const ids = items.map(i => i.id).filter((id): id is number => id != null)
+          // Show "Mark all read" when not filtering to only read items, otherwise "Mark all unread"
+          const markAsRead = currentSeenFilter !== 'seen'
+          return ids.length > 0 ? (
+            <button
+              onClick={() => bulkMarkSeen(contentType, ids, markAsRead)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700"
+              title={markAsRead ? 'Mark all visible as read' : 'Mark all visible as unread'}
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              <span>{markAsRead ? 'Mark all read' : 'Mark all unread'}</span>
+            </button>
+          ) : null
+        })()}
+      </div>
+
       {/* Articles Tab */}
       {activeTab === 'articles' && (
         <>
@@ -604,6 +662,12 @@ export default function News() {
                     <span>Now Reading</span>
                   </div>
                 )}
+                {/* Seen badge */}
+                {item.is_seen && !isCurrentlyReading && (
+                  <div className="absolute top-2 left-2 z-20 w-6 h-6 bg-slate-700/80 rounded-full flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 text-slate-400" />
+                  </div>
+                )}
                 {/* Thumbnail with preview/external link buttons */}
                 <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
                   {item.thumbnail && (
@@ -696,7 +760,7 @@ export default function News() {
                   </div>
 
                   {/* Title */}
-                  <h3 className="font-medium text-white group-hover:text-blue-400 transition-colors line-clamp-3">
+                  <h3 className={`font-medium group-hover:text-blue-400 transition-colors line-clamp-3 ${item.is_seen ? 'text-slate-400' : 'text-white'}`}>
                     {item.title}
                   </h3>
 
@@ -705,12 +769,30 @@ export default function News() {
                     <p className="text-sm text-slate-400 line-clamp-2">{item.summary}</p>
                   )}
 
-                  {/* Click to preview indicator */}
-                  <div className="flex items-center space-x-1 text-xs text-slate-500 group-hover:text-blue-400 transition-colors">
-                    <Newspaper className="w-3 h-3" />
-                    <span>Click to preview</span>
+                  {/* Footer: preview indicator + seen toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-1 text-xs text-slate-500 group-hover:text-blue-400 transition-colors">
+                      <Newspaper className="w-3 h-3" />
+                      <span>Click to preview</span>
+                    </div>
                   </div>
                 </button>
+                {/* Seen toggle button */}
+                {item.id != null && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      markSeen('article', item.id!, !item.is_seen)
+                    }}
+                    className="absolute bottom-3 right-3 w-7 h-7 rounded-full flex items-center justify-center bg-slate-700/80 hover:bg-slate-600 transition-colors z-10"
+                    title={item.is_seen ? 'Mark as unread' : 'Mark as read'}
+                  >
+                    {item.is_seen
+                      ? <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                      : <Eye className="w-3.5 h-3.5 text-slate-400" />
+                    }
+                  </button>
+                )}
               </div>
             )})}
           </div>
@@ -1010,6 +1092,12 @@ export default function News() {
                         <span className="text-xs font-medium text-white">Playing</span>
                       </div>
                     )}
+                    {/* Seen badge */}
+                    {video.is_seen && !isCurrentlyPlaying && (
+                      <div className="absolute top-2 left-2 z-10 w-6 h-6 bg-slate-700/80 rounded-full flex items-center justify-center">
+                        <Check className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    )}
                     {/* Play button overlay - click to open in expanded modal */}
                     <button
                       onClick={handlePlayVideo}
@@ -1050,7 +1138,7 @@ export default function News() {
                     </div>
 
                     {/* Title */}
-                    <h3 className="font-medium text-white line-clamp-2">
+                    <h3 className={`font-medium line-clamp-2 ${video.is_seen ? 'text-slate-400' : 'text-white'}`}>
                       {video.title}
                     </h3>
 
@@ -1059,16 +1147,33 @@ export default function News() {
                       <p className="text-sm text-slate-400 line-clamp-2">{video.description}</p>
                     )}
 
-                    {/* Action link */}
-                    <a
-                      href={video.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center space-x-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      <span>Open on YouTube</span>
-                    </a>
+                    {/* Footer: link + seen toggle */}
+                    <div className="flex items-center justify-between">
+                      <a
+                        href={video.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Open on YouTube</span>
+                      </a>
+                      {video.id != null && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            markSeen('video', video.id!, !video.is_seen)
+                          }}
+                          className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-700/80 hover:bg-slate-600 transition-colors"
+                          title={video.is_seen ? 'Mark as unread' : 'Mark as read'}
+                        >
+                          {video.is_seen
+                            ? <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                            : <Eye className="w-3.5 h-3.5 text-slate-400" />
+                          }
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )

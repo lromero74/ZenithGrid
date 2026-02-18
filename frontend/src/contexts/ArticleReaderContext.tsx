@@ -20,6 +20,7 @@ export interface ArticleItem {
   thumbnail: string | null
   summary: string | null
   content?: string  // Full article content (markdown)
+  is_seen?: boolean
 }
 
 interface ArticleVoiceCache {
@@ -241,6 +242,15 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     let content = article.content
     if (!content) {
       content = await fetchArticleContent(article.url) || undefined
+    }
+
+    // Mark article as seen when opened in reader mode (fire-and-forget)
+    if (article.id) {
+      authFetch('/api/news/seen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content_type: 'article', content_id: article.id, seen: true }),
+      }).catch(() => {})
     }
 
     // Child voice content filter: if a child voice would read adult content,
@@ -559,13 +569,22 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     // 3. TTS is now idle (not playing, paused, loading, or ready)
     // 4. Words were loaded (proves content was fetched)
     if (isPlaying && hasPlaybackStartedRef.current && !tts.isPlaying && !tts.isPaused && !tts.isLoading && !tts.isReady && tts.words.length > 0) {
+      // Mark current article as seen (fire-and-forget)
+      const article = playlistRef.current[currentIndex]
+      if (article?.id) {
+        authFetch('/api/news/seen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content_type: 'article', content_id: article.id, seen: true }),
+        }).catch(() => {})
+      }
       // Small delay before advancing to next article
       const timer = setTimeout(() => {
         nextArticle()
       }, 1500)
       return () => clearTimeout(timer)
     }
-  }, [isPlaying, tts.isPlaying, tts.isPaused, tts.isLoading, tts.isReady, tts.words.length, nextArticle])
+  }, [isPlaying, tts.isPlaying, tts.isPaused, tts.isLoading, tts.isReady, tts.words.length, nextArticle, currentIndex])
 
   // P1: Prefetch next article's TTS while current article is playing
   useEffect(() => {

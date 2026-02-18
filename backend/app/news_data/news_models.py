@@ -18,10 +18,12 @@ class NewsItem(BaseModel):
     summary: Optional[str] = None
     thumbnail: Optional[str] = None
     category: str = "CryptoCurrency"
+    is_seen: bool = False
 
 
 class VideoItem(BaseModel):
     """Individual video item from YouTube"""
+    id: Optional[int] = None
     title: str
     url: str
     video_id: str
@@ -32,6 +34,7 @@ class VideoItem(BaseModel):
     thumbnail: Optional[str] = None
     description: Optional[str] = None
     category: str = "CryptoCurrency"
+    is_seen: bool = False
 
 
 class NewsResponse(BaseModel):

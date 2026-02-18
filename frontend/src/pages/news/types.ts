@@ -12,9 +12,11 @@ export interface NewsItem {
   summary: string | null
   thumbnail: string | null
   category: string
+  is_seen?: boolean
 }
 
 export interface VideoItem {
+  id?: number  // DB video ID (for seen tracking)
   title: string
   url: string
   video_id: string
@@ -25,7 +27,10 @@ export interface VideoItem {
   thumbnail: string | null
   description: string | null
   category: string
+  is_seen?: boolean
 }
+
+export type SeenFilter = 'all' | 'unseen' | 'seen'
 
 export type NewsCategory =
   | 'CryptoCurrency'

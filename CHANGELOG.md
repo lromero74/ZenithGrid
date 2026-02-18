@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.17.0] - 2026-02-18
+
+### Added
+- **Read/seen tracking for news articles and videos**: Per-user tracking of which articles and videos have been consumed. Polymorphic `user_content_seen_status` table with `content_type` discriminator scoped by `user_id`
+- **Seen filter pills**: Three-state toggle (All / Unread / Read) above the news grid, with separate state for articles and videos tabs. Filter state persisted to localStorage
+- **Seen indicators on cards**: Subtle check badge (top-left corner) and dimmed title on read articles/videos. Full card remains clickable
+- **Per-card seen toggle**: Eye/EyeOff button on each article and video card to manually mark as read/unread
+- **Bulk mark read/unread**: "Mark all read" / "Mark all unread" button operates on all currently filtered and visible items
+- **Auto-mark on TTS completion**: Articles automatically marked as read when TTS finishes playing them
+- **Auto-mark on reader open**: Articles marked as read when opened in the article reader
+- **Auto-mark on video end**: Videos marked as read when YouTube player reaches the end
+- **Backend API endpoints**: `POST /api/news/seen` (single) and `POST /api/news/seen/bulk` for marking content seen/unseen, with SQLite upsert-on-conflict handling
+- **Video ID in API response**: `video_to_item()` now includes `id` field for seen tracking
+
 ## [v2.16.0] - 2026-02-18
 
 ### Added
