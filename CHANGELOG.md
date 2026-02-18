@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.18.2] - 2026-02-18
+
+### Fixed
+- **Optimistic mark-as-read**: Clicking the eye button now updates the UI instantly instead of waiting for a full data refetch (was re-downloading ~6MB of articles on every click). Reverts automatically if the API call fails
+- **Nginx gzip compression**: Enabled gzip for JSON, JS, CSS, and other text types. News API response compressed from 6.5MB to 1.8MB (72% reduction)
+
 ## [v2.18.1] - 2026-02-18
 
 ### Added
