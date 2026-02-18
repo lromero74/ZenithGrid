@@ -541,6 +541,12 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   // Open a single article (expanded view) - optionally with surrounding articles for navigation
   // Single article click → continuous play OFF by default
   const openArticle = useCallback((article: ArticleItem, allArticles?: ArticleItem[]) => {
+    // If this article is already loaded, just expand the mini-player
+    if (showMiniPlayer && currentArticle?.url === article.url) {
+      setIsExpanded(true)
+      return
+    }
+
     if (allArticles && allArticles.length > 0) {
       // Find the index of the clicked article in the full list
       const index = allArticles.findIndex(a => a.url === article.url)
@@ -551,7 +557,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
     // Single article, create a one-item playlist
     startPlaylist([article], 0, true, false)
-  }, [startPlaylist])
+  }, [startPlaylist, showMiniPlayer, currentArticle?.url])
 
   // Stop playlist
   const stopPlaylist = useCallback(() => {
