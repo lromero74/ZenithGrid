@@ -54,6 +54,7 @@ export function ArticleReaderMiniPlayer() {
     playbackRate,
     articleContent,
     articleContentLoading,
+    isSummaryOnly,
     voiceCycleEnabled,
     toggleVoiceCycle,
     continuousPlay,
@@ -500,6 +501,11 @@ export function ArticleReaderMiniPlayer() {
                 }`}>
                   {currentArticle.source_name}
                 </span>
+                {isSummaryOnly && (
+                  <span className="px-2 py-1 rounded text-sm font-medium bg-amber-600/20 text-amber-400 border border-amber-500/30">
+                    Summary only
+                  </span>
+                )}
                 {currentArticle.published && (
                   <span className="text-sm text-slate-400">
                     {new Date(currentArticle.published).toLocaleDateString(undefined, {
@@ -581,6 +587,11 @@ export function ArticleReaderMiniPlayer() {
                 }`}>
                   {currentArticle.source_name}
                 </span>
+                {isSummaryOnly && (
+                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-600/20 text-amber-400 border border-amber-500/30 flex-shrink-0">
+                    Summary
+                  </span>
+                )}
                 <h4 className="text-sm font-medium text-white truncate flex-1">
                   {currentArticle.title}
                 </h4>

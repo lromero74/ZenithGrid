@@ -53,6 +53,7 @@ interface ArticleReaderContextType {
   // Content state
   articleContent: string | null
   articleContentLoading: boolean
+  isSummaryOnly: boolean
 
   // Voice cycling
   voiceCycleEnabled: boolean
@@ -136,6 +137,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const [isExpanded, setIsExpanded] = useState(false)
   const [articleContent, setArticleContent] = useState<string | null>(null)
   const [articleContentLoading, setArticleContentLoading] = useState(false)
+  const [isSummaryOnly, setIsSummaryOnly] = useState(false)
   const [voiceCache, setVoiceCache] = useState<ArticleVoiceCache>({})
   const [voiceCycleEnabled, setVoiceCycleEnabled] = useState(true)
   const [continuousPlay, setContinuousPlay] = useState(true)
@@ -280,6 +282,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
     // Reset playback tracking for new article
     hasPlaybackStartedRef.current = false
+    setIsSummaryOnly(false)
 
     // Determine voice: override (for resume) > cycling > current voice
     let voiceToUse: string | undefined = overrideVoice
@@ -287,15 +290,17 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       voiceToUse = VOICE_CYCLE_IDS[articleIndex % VOICE_CYCLE_IDS.length]
     }
 
-    // Fetch content if not already present (retry once on failure)
+    // Fetch content with exponential backoff retries
     let content = article.content
     if (!content) {
-      content = await fetchArticleContent(article.url) || undefined
-      if (!content) {
-        // Retry once after a brief delay
-        console.log(`[TTS] First content fetch failed for "${article.title}", retrying...`)
-        await new Promise(r => setTimeout(r, 1500))
+      const BACKOFF_DELAYS = [0, 1500, 3000, 6000]  // immediate, 1.5s, 3s, 6s
+      for (let attempt = 0; attempt < BACKOFF_DELAYS.length; attempt++) {
+        if (attempt > 0) {
+          console.log(`[TTS] Content fetch attempt ${attempt + 1} for "${article.title}", backoff ${BACKOFF_DELAYS[attempt]}ms`)
+          await new Promise(r => setTimeout(r, BACKOFF_DELAYS[attempt]))
+        }
         content = await fetchArticleContent(article.url) || undefined
+        if (content) break
       }
     }
 
@@ -356,16 +361,19 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     }
 
     if (content) {
+      setIsSummaryOnly(false)
       setArticleContent(content)
       const plainText = markdownToPlainText(content)
       // Pass voice and article ID for server-side TTS caching
       await tts.loadAndPlay(plainText, voiceToUse, article.id)
-    } else {
-      // No content available, try to read summary
-      if (article.summary) {
-        setArticleContent(article.summary)
-        await tts.loadAndPlay(article.summary, voiceToUse, article.id)
-      }
+    } else if (article.summary) {
+      // All retries exhausted — fall back to summary and flag as broken
+      console.warn(`[TTS] Content extraction failed after retries for "${article.title}", using summary`)
+      setIsSummaryOnly(true)
+      setArticleContent(article.summary)
+      flagArticleIssue(article.id)
+      article.has_issue = true
+      await tts.loadAndPlay(article.summary, voiceToUse, article.id)
     }
   }, [voiceCycleEnabled, voiceCache, saveVoiceCache, fetchArticleContent, tts, flagArticleIssue])
 
@@ -871,6 +879,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     // Content state
     articleContent,
     articleContentLoading,
+    isSummaryOnly,
 
     // Voice cycling
     voiceCycleEnabled,
@@ -918,7 +927,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     playlist, currentIndex, isPlaying, showMiniPlayer, isExpanded, currentArticle,
     tts.isLoading, tts.isPaused, tts.isReady, tts.error, tts.words,
     tts.currentWordIndex, tts.currentTime, tts.duration, tts.currentVoice, tts.playbackRate, tts.volume,
-    articleContent, articleContentLoading, voiceCycleEnabled, toggleVoiceCycle,
+    articleContent, articleContentLoading, isSummaryOnly, voiceCycleEnabled, toggleVoiceCycle,
     continuousPlay, pendingResume, resumeSession, dismissResume,
     openArticle, startPlaylist, stopPlaylist, playArticle, nextArticle, previousArticle,
     toggleExpanded, closeMiniPlayer,
