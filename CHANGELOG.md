@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.18.5] - 2026-02-18
+
+### Added
+- **"Broken" filter pill**: New filter option alongside All/Unread/Read to show articles flagged with playback issues. Amber-tinted when active. Articles tab only
+
+### Fixed
+- **Issue badge always visible**: Amber AlertCircle badge now shows on flagged articles regardless of read/unread status (was hidden on read articles). Takes visual priority over the seen checkmark
+
 ## [v2.18.4] - 2026-02-18
 
 ### Fixed
