@@ -113,8 +113,15 @@ function SampleBotCard({
         </div>
       </div>
 
-      {/* Description */}
-      <p className="text-xs text-slate-400 mb-3 line-clamp-2">{bot.description}</p>
+      {/* Description with hover tooltip */}
+      <div className="relative mb-3 group/desc">
+        <p className="text-xs text-slate-400 line-clamp-2 cursor-default">{bot.description}</p>
+        <div className="absolute left-0 right-0 top-full mt-1 z-50 hidden group-hover/desc:block">
+          <div className="bg-slate-900 border border-slate-600 rounded-lg p-3 shadow-xl shadow-black/40 text-xs text-slate-300 leading-relaxed">
+            {bot.description}
+          </div>
+        </div>
+      </div>
 
       {/* Action buttons */}
       <div className="flex gap-2">
