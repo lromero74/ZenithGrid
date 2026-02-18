@@ -5,6 +5,11 @@ All notable changes to ZenithGrid will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.15.0] - 2026-02-18
+
+### Added
+- **"New Version Available" reload notification**: After a deployment, users with the app already open see a persistent amber toast prompting them to reload. Detected via WebSocket reconnect (fires ~5s after backend restart) and periodic 5-minute polling. Dismissing the toast allows it to reappear on the next check until the user actually reloads. Extends the Toast system with `persistent` flag, action buttons, and `'update'` type styling
+
 ## [v2.14.1] - 2026-02-18
 
 ### Fixed
