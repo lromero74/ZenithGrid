@@ -1,8 +1,8 @@
 {
-  "project": "ZenithGrid",
-  "version": "v2.15.0",
+  "project": "BTC-Bot",
+  "version": "v2.16.0",
   "updated": "2026-02-18",
-  "description": "Cryptocurrency trading bot platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
+  "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
   "stack": {
     "backend": {

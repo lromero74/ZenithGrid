@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { Routes, Route, Link, useLocation, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout } from 'lucide-react'
+import { Activity, Settings as SettingsIcon, TrendingUp, DollarSign, Bot, BarChart3, Wallet, History, Newspaper, LogOut, AlertTriangle, X, Sun, Snowflake, Leaf, Sprout, Truck } from 'lucide-react'
 import { useMarketSeason } from './hooks/useMarketSeason'
 import { positionsApi, authFetch } from './services/api'
 import { AccountSwitcher } from './components/AccountSwitcher'
@@ -13,6 +13,8 @@ import { VideoPlayerProvider } from './contexts/VideoPlayerContext'
 import { ArticleReaderProvider } from './contexts/ArticleReaderContext'
 import { AccountProvider, useAccount } from './contexts/AccountContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { BrandProvider, useBrand } from './contexts/BrandContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import { MiniPlayer } from './components/MiniPlayer'
 import { ArticleReaderMiniPlayer } from './components/ArticleReaderMiniPlayer'
 import { RiskDisclaimer } from './components/RiskDisclaimer'
@@ -43,6 +45,7 @@ function AppContent() {
   const navigate = useNavigate()
   const { selectedAccount } = useAccount()
   const { user, logout, getAccessToken } = useAuth()
+  const { brand } = useBrand()
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [showAboutModal, setShowAboutModal] = useState(false)
@@ -213,11 +216,11 @@ function AppContent() {
             {/* Desktop layout */}
             <div className="hidden sm:flex flex-row items-center justify-between">
               <div className="flex items-center space-x-3">
-                <Activity className="w-8 h-8 text-blue-500" />
+                <Truck className="w-8 h-8 text-theme-primary" />
                 <div>
-                  <h1 className="text-2xl font-bold">Zenith Grid</h1>
+                  <h1 className="text-2xl font-bold">{brand.shortName}</h1>
                   <p className="text-sm text-slate-400">
-                    Multi-Strategy Trading Platform{' '}
+                    {brand.tagline}{' '}
                     <button
                       onClick={() => setShowAboutModal(true)}
                       className={`${updateAvailable ? 'text-yellow-500' : 'text-slate-500'} hover:text-blue-400 hover:underline transition-colors cursor-pointer`}
@@ -335,9 +338,9 @@ function AppContent() {
               {/* Row 1: Brand left, Account Value right */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <Activity className="w-6 h-6 text-blue-500" />
+                  <Truck className="w-6 h-6 text-theme-primary" />
                   <div>
-                    <h1 className="text-lg font-bold leading-tight">Zenith Grid</h1>
+                    <h1 className="text-lg font-bold leading-tight">{brand.shortName}</h1>
                     <button
                       onClick={() => setShowAboutModal(true)}
                       className={`text-[10px] ${updateAvailable ? 'text-yellow-500' : 'text-slate-500'} hover:text-blue-400 transition-colors`}
@@ -801,9 +804,13 @@ function App() {
 // Export with AuthProvider wrapper
 function AppWithAuth() {
   return (
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <BrandProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </ThemeProvider>
+    </BrandProvider>
   )
 }
 

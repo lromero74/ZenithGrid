@@ -47,11 +47,13 @@ from app.services.limit_order_monitor import LimitOrderMonitor
 from app.services.perps_monitor import PerpsMonitor
 from app.services.prop_guard_monitor import start_prop_guard_monitor, stop_prop_guard_monitor
 from app.services.shutdown_manager import shutdown_manager
+from app.services.brand_service import get_brand
 from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Zenith Grid Trading Bot")
+_brand = get_brand()
+app = FastAPI(title=f"{_brand['shortName']} Trading Platform")
 
 # CORS middleware
 app.add_middleware(

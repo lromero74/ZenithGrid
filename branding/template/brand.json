@@ -1,0 +1,18 @@
+{
+  "name": "Zenith Grid",
+  "shortName": "Zenith Grid",
+  "tagline": "Multi-Strategy Trading Platform",
+  "loginTitle": "Zenith Grid",
+  "loginTagline": "Multi-Strategy Trading Platform",
+  "company": "",
+  "companyLine": "",
+  "copyright": "Zenith Grid",
+  "defaultTheme": "classic",
+  "colors": {
+    "primary": "#3b82f6",
+    "primaryHover": "#2563eb"
+  },
+  "images": {
+    "loginBackground": ""
+  }
+}

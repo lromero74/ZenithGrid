@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { X, RefreshCw, Check, ArrowUp, ChevronDown } from 'lucide-react'
 import { api } from '../services/api'
+import { useBrand } from '../contexts/BrandContext'
 
 interface VersionInfo {
   version: string
@@ -26,6 +27,7 @@ interface AboutModalProps {
 const PAGE_SIZE = 20
 
 export function AboutModal({ isOpen, onClose }: AboutModalProps) {
+  const { brand } = useBrand()
   const [changelog, setChangelog] = useState<ChangelogData | null>(null)
   const [versions, setVersions] = useState<VersionInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -91,8 +93,8 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
         {/* Header */}
         <div className="p-6 border-b border-slate-700 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-white">About Zenith Grid</h2>
-            <p className="text-sm text-slate-400 mt-1">Multi-Strategy Trading Platform</p>
+            <h2 className="text-xl font-bold text-white">About {brand.shortName}</h2>
+            <p className="text-sm text-slate-400 mt-1">{brand.tagline}</p>
           </div>
           <button
             onClick={onClose}

@@ -43,6 +43,7 @@ from app.config import settings
 from app.database import get_db
 from app.encryption import decrypt_value, encrypt_value
 from app.models import EmailVerificationToken, TrustedDevice, User
+from app.services.brand_service import get_brand
 
 logger = logging.getLogger(__name__)
 
@@ -1339,7 +1340,7 @@ async def mfa_setup(
     # Build the provisioning URI for authenticator apps
     provisioning_uri = totp.provisioning_uri(
         name=current_user.email,
-        issuer_name="Zenith Grid",
+        issuer_name=get_brand()["shortName"],
     )
 
     # Generate QR code as base64 PNG

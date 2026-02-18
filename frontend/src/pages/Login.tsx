@@ -6,13 +6,15 @@
  */
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import { Activity, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap, Check, Smartphone, RefreshCw } from 'lucide-react'
+import { Truck, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap, Check, Smartphone, RefreshCw } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useBrand } from '../contexts/BrandContext'
 import { PasswordStrengthMeter, isPasswordValid } from '../components/PasswordStrengthMeter'
 import { ForgotPassword } from '../components/ForgotPassword'
 
 export default function Login() {
   const { login, signup, mfaPending, mfaMethods, verifyMFA, verifyMFAEmailCode, resendMFAEmail, cancelMFA } = useAuth()
+  const { brand, brandImageUrl } = useBrand()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -182,9 +184,16 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center px-4 relative overflow-hidden">
+      {/* Brand background image */}
+      {brand.images.loginBackground && (
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-[0.07] pointer-events-none"
+          style={{ backgroundImage: `url(${brandImageUrl(brand.images.loginBackground)})` }}
+        />
+      )}
       {/* Subtle background gradient accents */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-[var(--color-primary,#00d4ff)]/5 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl" />
       </div>
 
@@ -192,12 +201,13 @@ export default function Login() {
       <div className="flex flex-col items-center mb-8 relative">
         <div className="flex items-center space-x-3 mb-3">
           <div className="relative">
-            <Activity className="w-11 h-11 text-blue-500" />
-            <div className="absolute inset-0 w-11 h-11 bg-blue-500/20 rounded-full blur-md" />
+            <Truck className="w-11 h-11 text-theme-primary" />
+            <div className="absolute inset-0 w-11 h-11 bg-[var(--color-primary,#00d4ff)]/20 rounded-full blur-md" />
           </div>
-          <h1 className="text-4xl font-bold text-white tracking-tight">Zenith Grid</h1>
+          <h1 className="text-4xl font-bold text-white tracking-tight">{brand.loginTitle}</h1>
         </div>
-        <p className="text-slate-400 text-sm tracking-wide">Multi-Strategy Trading Platform</p>
+        <p className="text-slate-400 text-sm tracking-wide">{brand.loginTagline}</p>
+        {brand.companyLine && <p className="text-slate-500 text-xs mt-1">{brand.companyLine}</p>}
         <div className="flex items-center space-x-6 mt-4 text-xs text-slate-500">
           <span className="flex items-center space-x-1.5">
             <TrendingUp className="w-3.5 h-3.5 text-emerald-500/70" />
@@ -678,7 +688,7 @@ export default function Login() {
                   <div className="text-xs text-slate-300 space-y-2 max-h-48 overflow-y-auto mb-4 pr-2">
                     <p className="font-semibold text-slate-200">END USER LICENSE AGREEMENT</p>
                     <p>
-                      This End User License Agreement ("Agreement") is a legal agreement between you ("User") and Romero Tech Solutions ("Company") for the use of Zenith Grid automated trading bot software ("Software").
+                      This End User License Agreement ("Agreement") is a legal agreement between you ("User") and {brand.company || 'the provider'} ("Company") for the use of {brand.shortName} automated trading bot software ("Software").
                     </p>
                     <p>
                       <strong>1. License Grant:</strong> Subject to the terms of this Agreement, the Company grants you a limited, non-exclusive, non-transferable, revocable license to use the Software for your personal trading activities.
