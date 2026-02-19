@@ -1370,6 +1370,8 @@ def initialize_database(project_root):
                 is_system BOOLEAN DEFAULT 1,
                 is_enabled BOOLEAN DEFAULT 1,
                 category TEXT NOT NULL DEFAULT 'CryptoCurrency',
+                content_scrape_allowed BOOLEAN DEFAULT 1,
+                crawl_delay_seconds INTEGER DEFAULT 0,
                 user_id INTEGER REFERENCES users(id),
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -1511,26 +1513,6 @@ def initialize_database(project_root):
         default_sources = [
             # ===== CryptoCurrency News =====
             (
-                'reddit_crypto',
-                'Reddit r/CryptoCurrency',
-                'news',
-                'https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15',
-                'https://www.reddit.com/r/CryptoCurrency',
-                'Community-driven crypto discussion',
-                None,
-                'CryptoCurrency',
-            ),
-            (
-                'reddit_bitcoin',
-                'Reddit r/Bitcoin',
-                'news',
-                'https://www.reddit.com/r/Bitcoin/hot.json?limit=10',
-                'https://www.reddit.com/r/Bitcoin',
-                'Bitcoin-focused community news',
-                None,
-                'CryptoCurrency',
-            ),
-            (
                 'bitcoin_magazine',
                 'Bitcoin Magazine',
                 'news',
@@ -1591,16 +1573,6 @@ def initialize_database(project_root):
                 'CryptoCurrency',
             ),
             (
-                'theblock',
-                'The Block',
-                'news',
-                'https://www.theblock.co/rss.xml',
-                'https://www.theblock.co',
-                'Institutional crypto news',
-                None,
-                'CryptoCurrency',
-            ),
-            (
                 'cryptoslate',
                 'CryptoSlate',
                 'news',
@@ -1609,6 +1581,42 @@ def initialize_database(project_root):
                 'Crypto news & data',
                 None,
                 'CryptoCurrency',
+            ),
+            (
+                'newsbtc', 'NewsBTC', 'news', 'https://www.newsbtc.com/feed/',
+                'https://www.newsbtc.com', 'Bitcoin & crypto news', None, 'CryptoCurrency',
+            ),
+            (
+                'cryptopotato', 'CryptoPotato', 'news', 'https://cryptopotato.com/feed/',
+                'https://cryptopotato.com', 'Crypto news & analysis', None, 'CryptoCurrency',
+            ),
+            (
+                'bitcoinist', 'Bitcoinist', 'news', 'https://bitcoinist.com/feed/',
+                'https://bitcoinist.com', 'Bitcoin & blockchain news', None, 'CryptoCurrency',
+            ),
+            (
+                'u_today', 'U.Today', 'news', 'https://u.today/rss',
+                'https://u.today', 'Crypto market news', None, 'CryptoCurrency',
+            ),
+            (
+                'coinjournal', 'CoinJournal', 'news', 'https://coinjournal.net/feed/',
+                'https://coinjournal.net', 'Crypto news & guides', None, 'CryptoCurrency',
+            ),
+            (
+                'the_crypto_basic', 'The Crypto Basic', 'news', 'https://thecryptobasic.com/feed/',
+                'https://thecryptobasic.com', 'Crypto news & education', None, 'CryptoCurrency',
+            ),
+            (
+                'crypto_briefing', 'Crypto Briefing', 'news', 'https://cryptobriefing.com/feed/',
+                'https://cryptobriefing.com', 'Crypto research & analysis', None, 'CryptoCurrency',
+            ),
+            (
+                'watcher_guru', 'Watcher Guru', 'news', 'https://watcher.guru/news/feed',
+                'https://watcher.guru', 'Crypto & finance news', None, 'CryptoCurrency',
+            ),
+            (
+                'blockchain_news', 'Blockchain.News', 'news', 'https://blockchain.news/rss/',
+                'https://blockchain.news', 'Blockchain & crypto news', None, 'CryptoCurrency',
             ),
             # CryptoCurrency Video sources
             (
@@ -1753,16 +1761,6 @@ def initialize_database(project_root):
             ),
             # ===== AI =====
             (
-                'reddit_artificial',
-                'Reddit r/artificial',
-                'news',
-                'https://www.reddit.com/r/artificial/hot.json?limit=15',
-                'https://www.reddit.com/r/artificial',
-                'AI community discussion',
-                None,
-                'AI',
-            ),
-            (
                 'openai_blog',
                 'OpenAI Blog',
                 'news',
@@ -1885,34 +1883,24 @@ def initialize_database(project_root):
             ),
             # ===== World =====
             (
-                'guardian_world',
-                'The Guardian World',
-                'news',
-                'https://www.theguardian.com/world/rss',
-                'https://www.theguardian.com/world',
-                'International news coverage',
-                None,
-                'World',
+                'voa_news', 'VOA News', 'news', 'https://www.voanews.com/api/z-pqpevi$mqe',
+                'https://www.voanews.com', 'Voice of America world news', None, 'World',
             ),
             (
-                'bbc_world',
-                'BBC World',
-                'news',
-                'https://feeds.bbci.co.uk/news/world/rss.xml',
-                'https://www.bbc.com/news/world',
-                'Global news from BBC',
-                None,
-                'World',
+                'global_voices', 'Global Voices', 'news', 'https://globalvoices.org/feed/',
+                'https://globalvoices.org', 'Citizen media & global news', None, 'World',
             ),
             (
-                'al_jazeera',
-                'Al Jazeera',
-                'news',
-                'https://www.aljazeera.com/xml/rss/all.xml',
-                'https://www.aljazeera.com',
-                'International news coverage',
-                None,
-                'World',
+                'rferl', 'RFE/RL', 'news', 'https://www.rferl.org/api/z-pqpevi$mqe',
+                'https://www.rferl.org', 'Radio Free Europe / Radio Liberty', None, 'World',
+            ),
+            (
+                'africanews', 'Africanews', 'news', 'https://www.africanews.com/feed',
+                'https://www.africanews.com', 'African continent news', None, 'World',
+            ),
+            (
+                'scmp', 'SCMP', 'news', 'https://www.scmp.com/rss/91/feed',
+                'https://www.scmp.com', 'South China Morning Post', None, 'World',
             ),
             (
                 'wion',
@@ -2281,14 +2269,30 @@ def initialize_database(project_root):
                 'Science',
             ),
             (
-                'new_scientist',
-                'New Scientist',
-                'news',
-                'https://www.newscientist.com/feed/home/',
-                'https://www.newscientist.com',
-                'Science & technology news',
-                None,
-                'Science',
+                'quanta_magazine', 'Quanta Magazine', 'news',
+                'https://www.quantamagazine.org/feed/',
+                'https://www.quantamagazine.org', 'Math, physics & CS research', None, 'Science',
+            ),
+            (
+                'sciencealert', 'ScienceAlert', 'news', 'https://www.sciencealert.com/feed',
+                'https://www.sciencealert.com', 'Science news & discoveries', None, 'Science',
+            ),
+            (
+                'futurism', 'Futurism', 'news', 'https://futurism.com/feed',
+                'https://futurism.com', 'Science & future tech', None, 'Science',
+            ),
+            (
+                'live_science', 'Live Science', 'news', 'https://www.livescience.com/feeds/all',
+                'https://www.livescience.com', 'Science news & features', None, 'Science',
+            ),
+            (
+                'space_com', 'Space.com', 'news', 'https://www.space.com/feeds/all',
+                'https://www.space.com', 'Space & astronomy news', None, 'Science',
+            ),
+            (
+                'smithsonian', 'Smithsonian Magazine', 'news',
+                'https://www.smithsonianmag.com/rss/latest_articles/',
+                'https://www.smithsonianmag.com', 'Science, history & culture', None, 'Science',
             ),
             (
                 'veritasium',

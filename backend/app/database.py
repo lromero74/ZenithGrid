@@ -47,14 +47,6 @@ async def get_db():
 DEFAULT_CONTENT_SOURCES = [
     # ===== CryptoCurrency =====
     (
-        'reddit_crypto', 'Reddit r/CryptoCurrency', 'news', 'https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15',
-        'https://www.reddit.com/r/CryptoCurrency', 'Community-driven crypto discussion', None, 'CryptoCurrency',
-    ),
-    (
-        'reddit_bitcoin', 'Reddit r/Bitcoin', 'news', 'https://www.reddit.com/r/Bitcoin/hot.json?limit=10',
-        'https://www.reddit.com/r/Bitcoin', 'Bitcoin-focused community news', None, 'CryptoCurrency',
-    ),
-    (
         'bitcoin_magazine', 'Bitcoin Magazine', 'news', 'https://bitcoinmagazine.com/feed',
         'https://bitcoinmagazine.com', 'Bitcoin news, analysis & culture', None, 'CryptoCurrency',
     ),
@@ -79,12 +71,44 @@ DEFAULT_CONTENT_SOURCES = [
         'CryptoCurrency',
     ),
     (
-        'theblock', 'The Block', 'news', 'https://www.theblock.co/rss.xml', 'https://www.theblock.co',
-        'Institutional crypto news', None, 'CryptoCurrency',
-    ),
-    (
         'cryptoslate', 'CryptoSlate', 'news', 'https://cryptoslate.com/feed/', 'https://cryptoslate.com',
         'Crypto news & data', None, 'CryptoCurrency',
+    ),
+    (
+        'newsbtc', 'NewsBTC', 'news', 'https://www.newsbtc.com/feed/',
+        'https://www.newsbtc.com', 'Bitcoin & crypto news', None, 'CryptoCurrency',
+    ),
+    (
+        'cryptopotato', 'CryptoPotato', 'news', 'https://cryptopotato.com/feed/',
+        'https://cryptopotato.com', 'Crypto news & analysis', None, 'CryptoCurrency',
+    ),
+    (
+        'bitcoinist', 'Bitcoinist', 'news', 'https://bitcoinist.com/feed/',
+        'https://bitcoinist.com', 'Bitcoin & blockchain news', None, 'CryptoCurrency',
+    ),
+    (
+        'u_today', 'U.Today', 'news', 'https://u.today/rss',
+        'https://u.today', 'Crypto market news', None, 'CryptoCurrency',
+    ),
+    (
+        'coinjournal', 'CoinJournal', 'news', 'https://coinjournal.net/feed/',
+        'https://coinjournal.net', 'Crypto news & guides', None, 'CryptoCurrency',
+    ),
+    (
+        'the_crypto_basic', 'The Crypto Basic', 'news', 'https://thecryptobasic.com/feed/',
+        'https://thecryptobasic.com', 'Crypto news & education', None, 'CryptoCurrency',
+    ),
+    (
+        'crypto_briefing', 'Crypto Briefing', 'news', 'https://cryptobriefing.com/feed/',
+        'https://cryptobriefing.com', 'Crypto research & analysis', None, 'CryptoCurrency',
+    ),
+    (
+        'watcher_guru', 'Watcher Guru', 'news', 'https://watcher.guru/news/feed',
+        'https://watcher.guru', 'Crypto & finance news', None, 'CryptoCurrency',
+    ),
+    (
+        'blockchain_news', 'Blockchain.News', 'news', 'https://blockchain.news/rss/',
+        'https://blockchain.news', 'Blockchain & crypto news', None, 'CryptoCurrency',
     ),
     # CryptoCurrency video sources
     (
@@ -168,10 +192,6 @@ DEFAULT_CONTENT_SOURCES = [
     ),
     # ===== AI =====
     (
-        'reddit_artificial', 'Reddit r/artificial', 'news', 'https://www.reddit.com/r/artificial/hot.json?limit=15',
-        'https://www.reddit.com/r/artificial', 'Community-driven AI discussion', None, 'AI',
-    ),
-    (
         'openai_blog', 'OpenAI Blog', 'news', 'https://openai.com/blog/rss.xml', 'https://openai.com/blog',
         'OpenAI announcements & research', None, 'AI',
     ),
@@ -227,16 +247,24 @@ DEFAULT_CONTENT_SOURCES = [
     ),
     # ===== World =====
     (
-        'guardian_world', 'The Guardian World', 'news', 'https://www.theguardian.com/world/rss',
-        'https://www.theguardian.com/world', 'International news coverage', None, 'World',
+        'voa_news', 'VOA News', 'news', 'https://www.voanews.com/api/z-pqpevi$mqe',
+        'https://www.voanews.com', 'Voice of America world news', None, 'World',
     ),
     (
-        'bbc_world', 'BBC World', 'news', 'https://feeds.bbci.co.uk/news/world/rss.xml',
-        'https://www.bbc.com/news/world', 'Global news from BBC', None, 'World',
+        'global_voices', 'Global Voices', 'news', 'https://globalvoices.org/feed/',
+        'https://globalvoices.org', 'Citizen media & global news', None, 'World',
     ),
     (
-        'al_jazeera', 'Al Jazeera', 'news', 'https://www.aljazeera.com/xml/rss/all.xml', 'https://www.aljazeera.com',
-        'International news coverage', None, 'World',
+        'rferl', 'RFE/RL', 'news', 'https://www.rferl.org/api/z-pqpevi$mqe',
+        'https://www.rferl.org', 'Radio Free Europe / Radio Liberty', None, 'World',
+    ),
+    (
+        'africanews', 'Africanews', 'news', 'https://www.africanews.com/feed',
+        'https://www.africanews.com', 'African continent news', None, 'World',
+    ),
+    (
+        'scmp', 'SCMP', 'news', 'https://www.scmp.com/rss/91/feed',
+        'https://www.scmp.com', 'South China Morning Post', None, 'World',
     ),
     # ===== Nation (US) =====
     (
@@ -314,8 +342,28 @@ DEFAULT_CONTENT_SOURCES = [
         'Space & science updates', None, 'Science',
     ),
     (
-        'new_scientist', 'New Scientist', 'news', 'https://www.newscientist.com/feed/home/',
-        'https://www.newscientist.com', 'Science & technology news', None, 'Science',
+        'quanta_magazine', 'Quanta Magazine', 'news', 'https://www.quantamagazine.org/feed/',
+        'https://www.quantamagazine.org', 'Math, physics & CS research', None, 'Science',
+    ),
+    (
+        'sciencealert', 'ScienceAlert', 'news', 'https://www.sciencealert.com/feed',
+        'https://www.sciencealert.com', 'Science news & discoveries', None, 'Science',
+    ),
+    (
+        'futurism', 'Futurism', 'news', 'https://futurism.com/feed',
+        'https://futurism.com', 'Science & future tech', None, 'Science',
+    ),
+    (
+        'live_science', 'Live Science', 'news', 'https://www.livescience.com/feeds/all',
+        'https://www.livescience.com', 'Science news & features', None, 'Science',
+    ),
+    (
+        'space_com', 'Space.com', 'news', 'https://www.space.com/feeds/all',
+        'https://www.space.com', 'Space & astronomy news', None, 'Science',
+    ),
+    (
+        'smithsonian', 'Smithsonian Magazine', 'news', 'https://www.smithsonianmag.com/rss/latest_articles/',
+        'https://www.smithsonianmag.com', 'Science, history & culture', None, 'Science',
     ),
     # ===== Health =====
     (
@@ -490,7 +538,50 @@ DEAD_SOURCES = [
     'reuters_world', 'techcrunch', 'ew', 'bleacher_report',
     'sports_illustrated', 'medical_news_today', 'healthline', 'webmd',
     'medical_xpress',  # IP-banned our EC2; still 400 as of 2026-02-19. Re-test after 2026-02-26.
+    # Dropped in robots.txt audit — explicit legal/ToS prohibitions or broken feeds
+    'reddit_artificial', 'reddit_bitcoin', 'reddit_crypto',
+    'bbc_world', 'guardian_world', 'al_jazeera',
+    'new_scientist', 'theblock',
 ]
+
+# Per-source scraping policies based on robots.txt audit.
+# Default (not listed) = scrape allowed, 0 delay.
+# 'scrape': False  → RSS-only, never fetch article body
+# 'delay': N       → minimum seconds between fetches from same domain
+SOURCE_SCRAPE_POLICIES = {
+    # RSS-only (robots.txt blocks AI bots/scrapers)
+    'coindesk': {'scrape': False},
+    'mit_tech_ai': {'scrape': False},
+    'the_ai_beat': {'scrape': False},
+    'yahoo_finance_news': {'scrape': False},
+    'npr_news': {'scrape': False},
+    'npr_health': {'scrape': False},
+    'ap_news': {'scrape': False},
+    'cnbc_business': {'scrape': False},
+    'engadget': {'scrape': False},
+    'ars_technica': {'scrape': False},
+    'the_verge': {'scrape': False},
+    'wired': {'scrape': False},
+    'variety': {'scrape': False},
+    'hollywood_reporter': {'scrape': False},
+    'deadline': {'scrape': False},
+    'espn': {'scrape': False},
+    'yahoo_sports': {'scrape': False},
+    'stat_news': {'scrape': False},
+    'the_lancet': {'scrape': False, 'delay': 1},
+    'nature_medicine': {'scrape': False},
+    'self_wellness': {'scrape': False},
+    'business_insider': {'scrape': False},
+    'genetic_engineering_news': {'scrape': False, 'delay': 10},
+    'who_news': {'scrape': False},
+    'pbs_newshour': {'scrape': False, 'delay': 1},
+    'cbs_sports': {'scrape': False},
+    # Permissive but with crawl delays
+    'bitcoin_magazine': {'delay': 5},
+    'global_voices': {'delay': 10},
+    'scmp': {'delay': 10},
+    'blockchain_news': {'delay': 1},
+}
 
 
 async def seed_default_sources():
@@ -515,10 +606,14 @@ async def seed_default_sources():
         result = await db.execute(select(ContentSource.source_key))
         existing_keys = set(result.scalars().all())
 
-        # Insert missing sources and update category on existing ones
+        # Insert missing sources and update category/policies on existing ones
         added = 0
         updated = 0
         for source_key, name, source_type, url, website, description, channel_id, category in DEFAULT_CONTENT_SOURCES:
+            policy = SOURCE_SCRAPE_POLICIES.get(source_key, {})
+            scrape_allowed = policy.get('scrape', True)
+            crawl_delay = policy.get('delay', 0)
+
             if source_key not in existing_keys:
                 source = ContentSource(
                     source_key=source_key,
@@ -531,11 +626,13 @@ async def seed_default_sources():
                     is_system=True,
                     is_enabled=True,
                     category=category,
+                    content_scrape_allowed=scrape_allowed,
+                    crawl_delay_seconds=crawl_delay,
                 )
                 db.add(source)
                 added += 1
             else:
-                # Update category and URL on existing sources
+                # Update category, URL, and scrape policies on existing sources
                 result = await db.execute(
                     select(ContentSource).where(ContentSource.source_key == source_key)
                 )
@@ -547,6 +644,12 @@ async def seed_default_sources():
                         changed = True
                     if existing.url != url:
                         existing.url = url
+                        changed = True
+                    if existing.content_scrape_allowed != scrape_allowed:
+                        existing.content_scrape_allowed = scrape_allowed
+                        changed = True
+                    if existing.crawl_delay_seconds != crawl_delay:
+                        existing.crawl_delay_seconds = crawl_delay
                         changed = True
                     if changed:
                         updated += 1

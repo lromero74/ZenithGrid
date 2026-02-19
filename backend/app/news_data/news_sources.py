@@ -33,20 +33,6 @@ NEWS_CATEGORIES = [
 # News sources configuration
 NEWS_SOURCES = {
     # ===== CryptoCurrency =====
-    "reddit_crypto": {
-        "name": "Reddit r/CryptoCurrency",
-        "url": "https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15",
-        "type": "reddit",
-        "website": "https://www.reddit.com/r/CryptoCurrency",
-        "category": "CryptoCurrency",
-    },
-    "reddit_bitcoin": {
-        "name": "Reddit r/Bitcoin",
-        "url": "https://www.reddit.com/r/Bitcoin/hot.json?limit=10",
-        "type": "reddit",
-        "website": "https://www.reddit.com/r/Bitcoin",
-        "category": "CryptoCurrency",
-    },
     "coindesk": {
         "name": "CoinDesk",
         "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
@@ -66,13 +52,6 @@ NEWS_SOURCES = {
         "url": "https://decrypt.co/feed",
         "type": "rss",
         "website": "https://decrypt.co",
-        "category": "CryptoCurrency",
-    },
-    "theblock": {
-        "name": "The Block",
-        "url": "https://www.theblock.co/rss.xml",
-        "type": "rss",
-        "website": "https://www.theblock.co",
         "category": "CryptoCurrency",
     },
     "cryptoslate": {
@@ -96,15 +75,71 @@ NEWS_SOURCES = {
         "website": "https://blockworks.co",
         "category": "CryptoCurrency",
     },
+    "newsbtc": {
+        "name": "NewsBTC",
+        "url": "https://www.newsbtc.com/feed/",
+        "type": "rss",
+        "website": "https://www.newsbtc.com",
+        "category": "CryptoCurrency",
+    },
+    "cryptopotato": {
+        "name": "CryptoPotato",
+        "url": "https://cryptopotato.com/feed/",
+        "type": "rss",
+        "website": "https://cryptopotato.com",
+        "category": "CryptoCurrency",
+    },
+    "bitcoinist": {
+        "name": "Bitcoinist",
+        "url": "https://bitcoinist.com/feed/",
+        "type": "rss",
+        "website": "https://bitcoinist.com",
+        "category": "CryptoCurrency",
+    },
+    "u_today": {
+        "name": "U.Today",
+        "url": "https://u.today/rss",
+        "type": "rss",
+        "website": "https://u.today",
+        "category": "CryptoCurrency",
+    },
+    "coinjournal": {
+        "name": "CoinJournal",
+        "url": "https://coinjournal.net/feed/",
+        "type": "rss",
+        "website": "https://coinjournal.net",
+        "category": "CryptoCurrency",
+    },
+    "the_crypto_basic": {
+        "name": "The Crypto Basic",
+        "url": "https://thecryptobasic.com/feed/",
+        "type": "rss",
+        "website": "https://thecryptobasic.com",
+        "category": "CryptoCurrency",
+    },
+    "crypto_briefing": {
+        "name": "Crypto Briefing",
+        "url": "https://cryptobriefing.com/feed/",
+        "type": "rss",
+        "website": "https://cryptobriefing.com",
+        "category": "CryptoCurrency",
+    },
+    "watcher_guru": {
+        "name": "Watcher Guru",
+        "url": "https://watcher.guru/news/feed",
+        "type": "rss",
+        "website": "https://watcher.guru",
+        "category": "CryptoCurrency",
+    },
+    "blockchain_news": {
+        "name": "Blockchain.News",
+        "url": "https://blockchain.news/rss/",
+        "type": "rss",
+        "website": "https://blockchain.news",
+        "category": "CryptoCurrency",
+    },
 
     # ===== AI =====
-    "reddit_artificial": {
-        "name": "Reddit r/artificial",
-        "url": "https://www.reddit.com/r/artificial/hot.json?limit=15",
-        "type": "reddit",
-        "website": "https://www.reddit.com/r/artificial",
-        "category": "AI",
-    },
     "openai_blog": {
         "name": "OpenAI Blog",
         "url": "https://openai.com/blog/rss.xml",
@@ -151,25 +186,39 @@ NEWS_SOURCES = {
     },
 
     # ===== World =====
-    "guardian_world": {
-        "name": "The Guardian World",
-        "url": "https://www.theguardian.com/world/rss",
+    "voa_news": {
+        "name": "VOA News",
+        "url": "https://www.voanews.com/api/z-pqpevi$mqe",
         "type": "rss",
-        "website": "https://www.theguardian.com/world",
+        "website": "https://www.voanews.com",
         "category": "World",
     },
-    "bbc_world": {
-        "name": "BBC World",
-        "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "global_voices": {
+        "name": "Global Voices",
+        "url": "https://globalvoices.org/feed/",
         "type": "rss",
-        "website": "https://www.bbc.com/news/world",
+        "website": "https://globalvoices.org",
         "category": "World",
     },
-    "al_jazeera": {
-        "name": "Al Jazeera",
-        "url": "https://www.aljazeera.com/xml/rss/all.xml",
+    "rferl": {
+        "name": "RFE/RL",
+        "url": "https://www.rferl.org/api/z-pqpevi$mqe",
         "type": "rss",
-        "website": "https://www.aljazeera.com",
+        "website": "https://www.rferl.org",
+        "category": "World",
+    },
+    "africanews": {
+        "name": "Africanews",
+        "url": "https://www.africanews.com/feed",
+        "type": "rss",
+        "website": "https://www.africanews.com",
+        "category": "World",
+    },
+    "scmp": {
+        "name": "SCMP",
+        "url": "https://www.scmp.com/rss/91/feed",
+        "type": "rss",
+        "website": "https://www.scmp.com",
         "category": "World",
     },
 
@@ -303,11 +352,46 @@ NEWS_SOURCES = {
         "website": "https://www.nasa.gov",
         "category": "Science",
     },
-    "new_scientist": {
-        "name": "New Scientist",
-        "url": "https://www.newscientist.com/feed/home/",
+    "quanta_magazine": {
+        "name": "Quanta Magazine",
+        "url": "https://www.quantamagazine.org/feed/",
         "type": "rss",
-        "website": "https://www.newscientist.com",
+        "website": "https://www.quantamagazine.org",
+        "category": "Science",
+    },
+    "sciencealert": {
+        "name": "ScienceAlert",
+        "url": "https://www.sciencealert.com/feed",
+        "type": "rss",
+        "website": "https://www.sciencealert.com",
+        "category": "Science",
+    },
+    "futurism": {
+        "name": "Futurism",
+        "url": "https://futurism.com/feed",
+        "type": "rss",
+        "website": "https://futurism.com",
+        "category": "Science",
+    },
+    "live_science": {
+        "name": "Live Science",
+        "url": "https://www.livescience.com/feeds/all",
+        "type": "rss",
+        "website": "https://www.livescience.com",
+        "category": "Science",
+    },
+    "space_com": {
+        "name": "Space.com",
+        "url": "https://www.space.com/feeds/all",
+        "type": "rss",
+        "website": "https://www.space.com",
+        "category": "Science",
+    },
+    "smithsonian": {
+        "name": "Smithsonian Magazine",
+        "url": "https://www.smithsonianmag.com/rss/latest_articles/",
+        "type": "rss",
+        "website": "https://www.smithsonianmag.com",
         "category": "Science",
     },
 

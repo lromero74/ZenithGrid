@@ -231,34 +231,39 @@ import { CATEGORY_COLORS, NEWS_CATEGORIES } from '../../pages/news/types'
 
 export const SOURCE_CATEGORY: Record<string, string> = {
   // CryptoCurrency
-  reddit_crypto: 'CryptoCurrency', reddit_bitcoin: 'CryptoCurrency',
   bitcoin_magazine: 'CryptoCurrency', blockworks: 'CryptoCurrency',
   coindesk: 'CryptoCurrency', cointelegraph: 'CryptoCurrency',
-  decrypt: 'CryptoCurrency', theblock: 'CryptoCurrency',
-  cryptoslate: 'CryptoCurrency', beincrypto: 'CryptoCurrency',
-  unchained: 'CryptoCurrency',
+  decrypt: 'CryptoCurrency', cryptoslate: 'CryptoCurrency',
+  beincrypto: 'CryptoCurrency', unchained: 'CryptoCurrency',
+  newsbtc: 'CryptoCurrency', cryptopotato: 'CryptoCurrency',
+  bitcoinist: 'CryptoCurrency', u_today: 'CryptoCurrency',
+  coinjournal: 'CryptoCurrency', the_crypto_basic: 'CryptoCurrency',
+  crypto_briefing: 'CryptoCurrency', watcher_guru: 'CryptoCurrency',
+  blockchain_news: 'CryptoCurrency',
   // AI
-  reddit_artificial: 'AI', openai_blog: 'AI',
-  mit_tech_ai: 'AI', the_ai_beat: 'AI',
+  openai_blog: 'AI', mit_tech_ai: 'AI', the_ai_beat: 'AI',
   // Finance
   yahoo_finance_news: 'Finance', motley_fool: 'Finance', kiplinger: 'Finance',
-  ft_markets: 'Finance', marketwatch: 'Finance', reuters_finance: 'Finance',
   // World
-  guardian_world: 'World', bbc_world: 'World', al_jazeera: 'World',
+  voa_news: 'World', global_voices: 'World', rferl: 'World',
+  africanews: 'World', scmp: 'World',
   // Nation
   npr_news: 'Nation', pbs_newshour: 'Nation', ap_news: 'Nation',
   // Business
   cnbc_business: 'Business', business_insider: 'Business',
   // Technology
   engadget: 'Technology', ars_technica: 'Technology',
-  the_verge: 'Technology', wired: 'Technology', techcrunch: 'Technology',
+  the_verge: 'Technology', wired: 'Technology',
   // Entertainment
   variety: 'Entertainment', hollywood_reporter: 'Entertainment',
   deadline: 'Entertainment',
   // Sports
   espn: 'Sports', cbs_sports: 'Sports', yahoo_sports: 'Sports',
   // Science
-  science_daily: 'Science', nasa: 'Science', new_scientist: 'Science',
+  science_daily: 'Science', nasa: 'Science',
+  quanta_magazine: 'Science', sciencealert: 'Science',
+  futurism: 'Science', live_science: 'Science',
+  space_com: 'Science', smithsonian: 'Science',
   // Health
   stat_news: 'Health', npr_health: 'Health', science_daily_health: 'Health',
   genetic_engineering_news: 'Health',
