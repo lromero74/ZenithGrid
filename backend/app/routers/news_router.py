@@ -1631,6 +1631,22 @@ async def get_video_sources(current_user: User = Depends(get_current_user)):
 # =============================================================================
 
 
+async def _mark_content_fetch_failed(url: str):
+    """Persist that content extraction failed so we never re-fetch."""
+    try:
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(NewsArticle).where(NewsArticle.url == url)
+            )
+            db_article = result.scalar_one_or_none()
+            if db_article:
+                db_article.content_fetch_failed = True
+                db_article.content_fetched_at = datetime.utcnow()
+                await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to mark content_fetch_failed for {url}: {e}")
+
+
 @router.get("/article-content", response_model=ArticleContentResponse)
 async def get_article_content(
     url: str,
@@ -1658,18 +1674,32 @@ async def get_article_content(
                 select(NewsArticle).where(NewsArticle.url == url)
             )
             db_article = result.scalar_one_or_none()
-            if db_article and db_article.content:
-                db_response = ArticleContentResponse(
-                    url=url,
-                    title=db_article.title,
-                    content=db_article.content,
-                    author=db_article.author,
-                    success=True,
-                )
-                # Promote to L1 cache
-                async with _article_cache_lock:
-                    _article_cache[url] = (db_response, time.time())
-                return db_response
+            if db_article:
+                # Already have content — return it
+                if db_article.content:
+                    db_response = ArticleContentResponse(
+                        url=url,
+                        title=db_article.title,
+                        content=db_article.content,
+                        author=db_article.author,
+                        success=True,
+                    )
+                    # Promote to L1 cache
+                    async with _article_cache_lock:
+                        _article_cache[url] = (db_response, time.time())
+                    return db_response
+
+                # Previous fetch failed — don't re-fetch from external source
+                if db_article.content_fetch_failed:
+                    fail_response = ArticleContentResponse(
+                        url=url,
+                        success=False,
+                        error="Content extraction previously failed for this article.",
+                    )
+                    # Promote to L1 cache so subsequent requests are instant
+                    async with _article_cache_lock:
+                        _article_cache[url] = (fail_response, time.time())
+                    return fail_response
     except Exception as e:
         logger.warning(f"DB content cache lookup failed: {e}")
 
@@ -1742,6 +1772,7 @@ async def get_article_content(
             }
             async with session.get(url, headers=headers, timeout=15, allow_redirects=True) as response:
                 if response.status != 200:
+                    await _mark_content_fetch_failed(url)
                     return ArticleContentResponse(
                         url=url,
                         success=False,
@@ -1771,6 +1802,7 @@ async def get_article_content(
         )
 
         if not extracted:
+            await _mark_content_fetch_failed(url)
             return ArticleContentResponse(
                 url=url,
                 success=False,
@@ -1786,6 +1818,7 @@ async def get_article_content(
         ]
         paywall_hits = sum(1 for phrase in paywall_phrases if phrase in extracted_lower)
         if paywall_hits >= 2 and len(extracted) < 1500:
+            await _mark_content_fetch_failed(url)
             return ArticleContentResponse(
                 url=url,
                 success=False,
@@ -1838,6 +1871,7 @@ async def get_article_content(
 
     except asyncio.TimeoutError:
         logger.warning(f"Timeout fetching article: {url}")
+        await _mark_content_fetch_failed(url)
         return ArticleContentResponse(
             url=url,
             success=False,
@@ -1845,6 +1879,7 @@ async def get_article_content(
         )
     except Exception as e:
         logger.error(f"Error extracting article content: {e}")
+        await _mark_content_fetch_failed(url)
         return ArticleContentResponse(
             url=url,
             success=False,

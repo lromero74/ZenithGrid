@@ -331,10 +331,6 @@ DEFAULT_CONTENT_SOURCES = [
         'https://www.sciencedaily.com', 'Health & medicine research', None, 'Health',
     ),
     (
-        'medical_xpress', 'Medical Xpress', 'news', 'https://medicalxpress.com/rss-feed/', 'https://medicalxpress.com',
-        'Medical research news', None, 'Health',
-    ),
-    (
         'the_lancet', 'The Lancet', 'news', 'https://www.thelancet.com/rssfeed/lancet_online.xml',
         'https://www.thelancet.com', 'Medical journal articles', None, 'Health',
     ),
@@ -493,6 +489,7 @@ DEFAULT_CONTENT_SOURCES = [
 DEAD_SOURCES = [
     'reuters_world', 'techcrunch', 'ew', 'bleacher_report',
     'sports_illustrated', 'medical_news_today', 'healthline', 'webmd',
+    'medical_xpress',
 ]
 
 
