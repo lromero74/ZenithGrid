@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.25.3] - 2026-02-19
+
+### Fixed
+- **"Full articles" filter now works**: The `content_scrape_allowed` field was being stripped from API responses by the Pydantic response model, so the frontend filter had no data to filter on — added the field to the response schema
+
 ## [v2.25.2] - 2026-02-19
 
 ### Changed
