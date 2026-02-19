@@ -36,7 +36,7 @@ from app.models import (
     ContentSource, NewsArticle, User, UserContentSeenStatus,
     UserSourceSubscription, VideoArticle,
 )
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_superuser
 from app.news_data import (
     CACHE_FILE,
     NEWS_CACHE_CHECK_MINUTES,
@@ -83,6 +83,11 @@ _ARTICLE_CACHE_MAX = 100
 # Per-domain crawl delay tracking: domain -> last_fetch_timestamp
 _domain_last_fetch: Dict[str, float] = {}
 _domain_last_fetch_lock = asyncio.Lock()
+
+# S13: Per-user article fetch rate limiting (30 fetches/hour)
+_article_fetch_counts: Dict[int, List[float]] = {}
+_ARTICLE_FETCH_MAX = 30
+_ARTICLE_FETCH_WINDOW = 3600  # 1 hour
 
 
 # =============================================================================
@@ -1265,9 +1270,10 @@ async def get_news(
     Returns immediately from database. Background refresh runs every 30 minutes.
     Use force_refresh=true to trigger immediate refresh (runs in background).
     """
-    # page_size=0 means "return all articles" (no LIMIT)
-    if page_size != 0:
-        page_size = max(10, page_size)
+    # S8: Clamp page_size to prevent resource exhaustion
+    if page_size <= 0:
+        raise HTTPException(400, "page_size must be positive")
+    page_size = min(page_size, 200)
     page = max(1, page)
 
     if force_refresh:
@@ -1411,9 +1417,9 @@ async def bulk_mark_content_seen(
 @router.post("/article-issue")
 async def mark_article_issue(
     payload: Dict[str, Any],
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_superuser),
 ):
-    """Flag an article as having a playback/content issue."""
+    """Flag an article as having a playback/content issue (superuser only)."""
     article_id = payload.get("article_id")
     has_issue = payload.get("has_issue", True)
 
@@ -1715,6 +1721,7 @@ async def get_article_content(
     Only allows fetching from domains in the content_sources database table.
     """
     # L1: Check in-memory cache (fast, short-lived)
+    # Note: cache hits bypass rate limiting — only external fetches count
     now = time.time()
     async with _article_cache_lock:
         if url in _article_cache:
@@ -1770,6 +1777,20 @@ async def get_article_content(
         async with _article_cache_lock:
             _article_cache[url] = (no_scrape_response, time.time())
         return no_scrape_response
+
+    # S13: Per-user rate limit on external article fetches (10/hour)
+    now_ts = time.time()
+    uid = current_user.id
+    user_fetches = _article_fetch_counts.get(uid, [])
+    user_fetches = [t for t in user_fetches if now_ts - t < _ARTICLE_FETCH_WINDOW]
+    _article_fetch_counts[uid] = user_fetches
+    if len(user_fetches) >= _ARTICLE_FETCH_MAX:
+        return ArticleContentResponse(
+            url=url,
+            success=False,
+            error="Rate limit reached. You can fetch up to 30 articles per hour.",
+        )
+    _article_fetch_counts[uid].append(now_ts)
 
     # Known paywalled domains
     PAYWALLED_DOMAINS = {
