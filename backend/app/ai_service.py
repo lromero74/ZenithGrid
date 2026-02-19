@@ -89,7 +89,7 @@ class GeminiClientWrapper:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-    def GenerativeModel(self, model_name: str = "gemini-1.5-pro"):
+    def GenerativeModel(self, model_name: str = "gemini-2.0-flash"):
         """Create a model instance with per-request API key."""
         import google.generativeai as genai
         # Configure with this specific key before creating the model
@@ -144,7 +144,7 @@ async def get_ai_analysis(
 
     elif provider == "gemini":
         if not model:
-            model = "gemini-1.5-pro"
+            model = "gemini-2.0-flash"
 
         model_instance = client.GenerativeModel(model)
         response = await model_instance.generate_content_async(prompt)

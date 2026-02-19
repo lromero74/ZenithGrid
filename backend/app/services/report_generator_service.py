@@ -3,62 +3,95 @@ Report Generator Service
 
 Builds HTML report content and generates PDF from it.
 Reuses brand styling from email_service (dark theme).
+
+Supports tiered AI summaries (beginner/comfortable/experienced) and
+uses the brand's primary accent color instead of hardcoded blue.
 """
 
+import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from app.services.brand_service import get_brand
 
 logger = logging.getLogger(__name__)
 
+# Tier display labels
+_TIER_LABELS = {
+    "beginner": "Summary (Simplified)",
+    "comfortable": "AI Performance Analysis",
+    "experienced": "Technical Analysis",
+}
+
+
+def _normalize_ai_summary(
+    ai_summary: Union[None, str, dict],
+) -> Optional[dict]:
+    """
+    Normalize ai_summary to a tiered dict.
+
+    Handles:
+      - None → None
+      - str → {"comfortable": str, "beginner": None, "experienced": None}
+      - dict → pass through
+      - JSON string of a dict → parsed dict
+    """
+    if ai_summary is None:
+        return None
+
+    if isinstance(ai_summary, dict):
+        return ai_summary
+
+    if isinstance(ai_summary, str):
+        # Try to parse as JSON dict (stored in DB as json.dumps)
+        try:
+            parsed = json.loads(ai_summary)
+            if isinstance(parsed, dict) and "comfortable" in parsed:
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+        # Plain text — wrap as comfortable tier
+        return {
+            "beginner": None,
+            "comfortable": ai_summary,
+            "experienced": None,
+        }
+
+    return None
+
 
 def build_report_html(
     report_data: Dict[str, Any],
-    ai_summary: Optional[str],
+    ai_summary: Union[None, str, dict],
     user_name: str,
     period_label: str,
+    default_level: str = "comfortable",
 ) -> str:
     """
     Build the full HTML report.
 
     Args:
         report_data: Metrics dictionary
-        ai_summary: AI-generated summary text (or None)
+        ai_summary: AI-generated summary — dict of tiers, plain string, or None
         user_name: User's display name or email
         period_label: e.g. "January 1 - January 7, 2026"
+        default_level: Which tier gets visual prominence
 
     Returns:
         Complete HTML string
     """
     b = get_brand()
+    brand_color = b["colors"]["primary"]
 
-    # Key metrics section
     metrics_html = _build_metrics_section(report_data)
-
-    # Goal progress section
     goals_html = _build_goals_section(report_data.get("goals", []))
-
-    # Period comparison section
     comparison_html = _build_comparison_section(report_data)
 
-    # AI summary section
+    tiered = _normalize_ai_summary(ai_summary)
     ai_html = ""
-    if ai_summary:
-        paragraphs = ai_summary.strip().split("\n\n")
-        ai_paragraphs = "".join(
-            f'<p style="color: #cbd5e1; line-height: 1.7; margin: 0 0 12px 0;">'
-            f'{p.strip()}</p>'
-            for p in paragraphs if p.strip()
-        )
-        ai_html = f"""
-        <div style="margin: 25px 0; padding: 20px; background-color: #1e293b;
-                    border-radius: 8px; border: 1px solid #334155;">
-            <h3 style="color: #3b82f6; margin: 0 0 15px 0; font-size: 16px;">
-                AI Performance Analysis</h3>
-            {ai_paragraphs}
-        </div>"""
+    if tiered:
+        ai_html = _build_tiered_ai_section(tiered, default_level, brand_color)
     elif ai_summary is None:
         ai_html = """
         <div style="margin: 25px 0; padding: 15px; background-color: #1e293b;
@@ -77,7 +110,7 @@ def build_report_html(
 <body style="margin: 0; padding: 0; background-color: #0f172a; color: #e2e8f0;
              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
 <div style="max-width: 700px; margin: 0 auto; padding: 20px;">
-    {_report_header(b, user_name, period_label)}
+    {_report_header(b, user_name, period_label, brand_color)}
     {metrics_html}
     {goals_html}
     {comparison_html}
@@ -88,11 +121,69 @@ def build_report_html(
 </html>"""
 
 
-def _report_header(brand: dict, user_name: str, period_label: str) -> str:
+def _build_tiered_ai_section(
+    ai_summary: dict,
+    default_level: str,
+    brand_color: str,
+) -> str:
+    """
+    Render all available tiers as stacked sections.
+
+    The default_level tier gets brand-colored left border and full prominence.
+    Other tiers are visually secondary (gray border, muted text).
+    Email-safe — no JS, no interactive elements.
+    """
+    sections = []
+    tier_order = ["beginner", "comfortable", "experienced"]
+
+    for tier in tier_order:
+        text = ai_summary.get(tier)
+        if not text:
+            continue
+
+        label = _TIER_LABELS.get(tier, tier.capitalize())
+        is_default = tier == default_level
+
+        paragraphs = text.strip().split("\n\n")
+        rendered_paragraphs = "".join(
+            f'<p style="color: {"#cbd5e1" if is_default else "#94a3b8"}; '
+            f'line-height: 1.7; margin: 0 0 12px 0; '
+            f'font-size: {"14px" if is_default else "13px"};">'
+            f"{p.strip()}</p>"
+            for p in paragraphs
+            if p.strip()
+        )
+
+        if is_default:
+            sections.append(f"""
+        <div style="margin: 25px 0; padding: 20px; background-color: #1e293b;
+                    border-radius: 8px; border: 1px solid #334155;
+                    border-left: 4px solid {brand_color};">
+            <h3 style="color: {brand_color}; margin: 0 0 15px 0; font-size: 16px;">
+                {label}</h3>
+            {rendered_paragraphs}
+        </div>""")
+        else:
+            sections.append(f"""
+        <div style="margin: 15px 0; padding: 16px; background-color: #1a2332;
+                    border-radius: 8px; border: 1px solid #2d3a4a;
+                    border-left: 4px solid #475569;">
+            <h4 style="color: #94a3b8; margin: 0 0 10px 0; font-size: 13px;
+                       text-transform: uppercase; letter-spacing: 0.5px;">
+                {label}</h4>
+            {rendered_paragraphs}
+        </div>""")
+
+    return "\n".join(sections)
+
+
+def _report_header(
+    brand: dict, user_name: str, period_label: str, brand_color: str,
+) -> str:
     """Report header with brand name and period."""
     return f"""
     <div style="text-align: center; padding: 25px 0; border-bottom: 1px solid #334155;">
-        <h1 style="color: #3b82f6; margin: 0; font-size: 26px;">{brand['shortName']}</h1>
+        <h1 style="color: {brand_color}; margin: 0; font-size: 26px;">{brand['shortName']}</h1>
         <p style="color: #94a3b8; margin: 5px 0 0 0; font-size: 14px;">
             {brand['tagline']}</p>
     </div>
@@ -397,12 +488,15 @@ def _build_comparison_section(data: Dict[str, Any]) -> str:
     </div>"""
 
 
-def generate_pdf(html_content: str, report_data: Optional[Dict] = None) -> Optional[bytes]:
+def generate_pdf(
+    html_content: str,
+    report_data: Optional[Dict] = None,
+) -> Optional[bytes]:
     """
     Generate a PDF report using fpdf2.
 
-    Since fpdf2 is not an HTML-to-PDF converter, we build the PDF
-    directly from report_data (or extract key info from the HTML).
+    Supports tiered AI summaries passed via report_data["_ai_summary"]
+    (dict with beginner/comfortable/experienced keys, or plain string).
 
     Returns PDF bytes, or None on failure.
     """
@@ -416,13 +510,17 @@ def generate_pdf(html_content: str, report_data: Optional[Dict] = None) -> Optio
         from fpdf import FPDF
 
         b = get_brand()
+        # Parse brand color hex to RGB for fpdf
+        brand_hex = b["colors"]["primary"]
+        br, bg, bb = _hex_to_rgb(brand_hex)
+
         pdf = FPDF()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
 
         # Header
         pdf.set_font("Helvetica", "B", 22)
-        pdf.set_text_color(59, 130, 246)  # blue-500
+        pdf.set_text_color(br, bg, bb)
         pdf.cell(0, 12, b["shortName"], new_x="LMARGIN", new_y="NEXT", align="C")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(148, 163, 184)  # slate-400
@@ -543,9 +641,13 @@ def generate_pdf(html_content: str, report_data: Optional[Dict] = None) -> Optio
                 pdf.cell(0, 7, f"{label}: {current} (prev: {previous})",
                          new_x="LMARGIN", new_y="NEXT")
 
-        # AI Summary
-        ai_summary = report_data.get("_ai_summary")
-        if ai_summary:
+        # AI Summary — render all tiers in PDF
+        raw_summary = report_data.get("_ai_summary")
+        tiered = _normalize_ai_summary(raw_summary)
+        if tiered:
+            _render_pdf_tiers(pdf, tiered, br, bg, bb)
+        elif isinstance(raw_summary, str) and raw_summary:
+            # Legacy plain string
             pdf.ln(6)
             pdf.set_font("Helvetica", "B", 12)
             pdf.set_text_color(30, 30, 30)
@@ -553,7 +655,7 @@ def generate_pdf(html_content: str, report_data: Optional[Dict] = None) -> Optio
             pdf.ln(2)
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(60, 60, 60)
-            pdf.multi_cell(0, 6, ai_summary)
+            pdf.multi_cell(0, 6, raw_summary)
 
         # Footer
         pdf.ln(10)
@@ -571,3 +673,34 @@ def generate_pdf(html_content: str, report_data: Optional[Dict] = None) -> Optio
     except Exception as e:
         logger.error(f"PDF generation failed: {e}")
         return None
+
+
+def _render_pdf_tiers(pdf, tiered: dict, br: int, bg: int, bb: int):
+    """Render all three AI tiers into the PDF."""
+    tier_order = ["beginner", "comfortable", "experienced"]
+
+    for tier in tier_order:
+        text = tiered.get(tier)
+        if not text:
+            continue
+
+        label = _TIER_LABELS.get(tier, tier.capitalize())
+
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(br, bg, bb)
+        pdf.cell(0, 8, label, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(60, 60, 60)
+        pdf.multi_cell(0, 6, text)
+
+
+def _hex_to_rgb(hex_color: str) -> tuple:
+    """Convert hex color string to RGB tuple."""
+    hex_color = hex_color.lstrip("#")
+    return (
+        int(hex_color[0:2], 16),
+        int(hex_color[2:4], 16),
+        int(hex_color[4:6], 16),
+    )

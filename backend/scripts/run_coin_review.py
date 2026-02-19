@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Weekly Coin Review Runner
+Weekly Coin Review Runner (standalone)
 
-Run this script via cron or systemd timer to update coin categorizations.
+The coin review now runs automatically as a backend background task.
+This script is kept for manual/one-off runs only.
 
 Usage:
     ./venv/bin/python scripts/run_coin_review.py
@@ -32,13 +33,13 @@ if __name__ == "__main__":
     print("Using Claude AI to analyze cryptocurrency fundamentals")
     print("=" * 60)
 
-    result = asyncio.run(run_weekly_review())
+    result = asyncio.run(run_weekly_review(standalone=True))
 
     if result["status"] == "error":
         print(f"\n❌ Review failed: {result.get('message', 'Unknown error')}")
         sys.exit(1)
     else:
-        print(f"\n✅ Review complete!")
+        print("\nReview complete!")
         print(f"   🟢 APPROVED: {result['categories'].get('APPROVED', 0)}")
         print(f"   🟡 BORDERLINE: {result['categories'].get('BORDERLINE', 0)}")
         print(f"   🟠 QUESTIONABLE: {result['categories'].get('QUESTIONABLE', 0)}")

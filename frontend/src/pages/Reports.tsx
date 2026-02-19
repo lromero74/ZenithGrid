@@ -4,6 +4,7 @@ import {
   Target, Calendar, FileText, Plus, Pencil, Trash2, Play, Eye, Download,
   CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
 import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
 import { ScheduleForm, type ScheduleFormData } from '../components/reports/ScheduleForm'
@@ -19,9 +20,17 @@ const TABS: { id: TabId; label: string; icon: typeof Target }[] = [
   { id: 'history', label: 'Report History', icon: FileText },
 ]
 
+const VALID_TABS = new Set<string>(['goals', 'schedules', 'history'])
+
 export default function Reports() {
-  const [activeTab, setActiveTab] = useState<TabId>('goals')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab: TabId = (tabParam && VALID_TABS.has(tabParam) ? tabParam : 'goals') as TabId
   const queryClient = useQueryClient()
+
+  const setActiveTab = (tab: TabId) => {
+    setSearchParams({ tab }, { replace: true })
+  }
 
   // Goal state
   const [showGoalForm, setShowGoalForm] = useState(false)
@@ -97,6 +106,11 @@ export default function Reports() {
     },
   })
 
+  const deleteReport = useMutation({
+    mutationFn: (id: number) => reportsApi.deleteReport(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['report-history'] }),
+  })
+
   // ---------- Handlers ----------
 
   const handleViewReport = useCallback(async (reportId: number) => {
@@ -113,6 +127,12 @@ export default function Reports() {
     a.click()
     URL.revokeObjectURL(url)
   }, [])
+
+  const handleDeleteReport = useCallback((reportId: number) => {
+    if (confirm('Delete this report? This cannot be undone.')) {
+      deleteReport.mutate(reportId)
+    }
+  }, [deleteReport])
 
   // ---------- Render Helpers ----------
 
@@ -401,6 +421,13 @@ export default function Reports() {
                               <Download className="w-4 h-4" />
                             </button>
                           )}
+                          <button
+                            onClick={() => handleDeleteReport(report.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
+                            title="Delete Report"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -438,6 +465,13 @@ export default function Reports() {
                           <Download className="w-4 h-4" />
                         </button>
                       )}
+                      <button
+                        onClick={() => handleDeleteReport(report.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-400"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 </div>

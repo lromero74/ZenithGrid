@@ -16,6 +16,7 @@ from app.cleanup_jobs import (
     cleanup_old_failed_orders,
     cleanup_old_reports,
 )
+from app.services.coin_review_service import run_coin_review_scheduler
 from app.services.report_scheduler import run_report_scheduler
 from app.config import settings
 from app.database import init_db
@@ -486,6 +487,10 @@ async def startup_event():
     print("🚀 Starting report cleanup job...")
     report_cleanup_task = asyncio.create_task(cleanup_old_reports())
     print("🚀 Report cleanup job started - removing reports older than 2 years weekly")
+
+    print("🚀 Starting coin review scheduler...")
+    coin_review_task = asyncio.create_task(run_coin_review_scheduler())  # noqa: F841
+    print("🚀 Coin review scheduler started - full review every 7 days")
 
     print("🚀 Startup complete!")
     print("🚀 ========================================")
