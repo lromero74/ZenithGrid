@@ -273,7 +273,7 @@ export const filterBySeen = <T extends { is_seen?: boolean; has_issue?: boolean 
 }
 
 /**
- * Filter to only full-article sources (exclude RSS-only)
+ * Filter to only full-article sources (exclude summary-only sources that block scraping)
  */
 export const filterByFullArticle = (items: NewsItem[]): NewsItem[] =>
   items.filter(item => item.content_scrape_allowed !== false)
