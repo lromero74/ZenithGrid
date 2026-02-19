@@ -35,6 +35,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import (  # noqa: F401
+    check_token_revocation,
     decode_token,
     get_current_user,
     get_user_by_id,
@@ -42,7 +43,7 @@ from app.auth.dependencies import (  # noqa: F401
 from app.config import settings
 from app.database import get_db
 from app.encryption import decrypt_value, encrypt_value
-from app.models import EmailVerificationToken, TrustedDevice, User
+from app.models import EmailVerificationToken, RevokedToken, TrustedDevice, User
 from app.services.brand_service import get_brand
 
 logger = logging.getLogger(__name__)
@@ -428,7 +429,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(user_id: int, email: str) -> str:
-    """Create a JWT access token"""
+    """Create a JWT access token with unique JTI for revocation support"""
     expires_delta = timedelta(minutes=settings.jwt_access_token_expire_minutes)
     expire = datetime.utcnow() + expires_delta
 
@@ -436,6 +437,7 @@ def create_access_token(user_id: int, email: str) -> str:
         "sub": str(user_id),
         "email": email,
         "type": "access",
+        "jti": str(uuid.uuid4()),
         "exp": expire,
         "iat": datetime.utcnow(),
     }
@@ -444,13 +446,14 @@ def create_access_token(user_id: int, email: str) -> str:
 
 
 def create_refresh_token(user_id: int) -> str:
-    """Create a JWT refresh token (longer-lived)"""
+    """Create a JWT refresh token (longer-lived) with unique JTI for revocation support"""
     expires_delta = timedelta(days=settings.jwt_refresh_token_expire_days)
     expire = datetime.utcnow() + expires_delta
 
     payload = {
         "sub": str(user_id),
         "type": "refresh",
+        "jti": str(uuid.uuid4()),
         "exp": expire,
         "iat": datetime.utcnow(),
     }
@@ -759,6 +762,9 @@ async def refresh_token(
             detail="Invalid token type",
         )
 
+    # Check individual token revocation (JTI)
+    await check_token_revocation(payload, db)
+
     user_id = int(payload.get("sub"))
     user = await get_user_by_id(db, user_id)
 
@@ -773,6 +779,16 @@ async def refresh_token(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled",
         )
+
+    # Check bulk revocation (password change)
+    iat = payload.get("iat")
+    if user.tokens_valid_after and iat:
+        token_issued = datetime.utcfromtimestamp(iat)
+        if token_issued < user.tokens_valid_after:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired — please log in again",
+            )
 
     # Generate new tokens
     access_token = create_access_token(user.id, user.email)
@@ -810,11 +826,15 @@ async def change_password(
     current_user.hashed_password = hash_password(request.new_password)
     current_user.updated_at = datetime.utcnow()
 
+    # Invalidate all existing sessions by setting tokens_valid_after
+    # Any token with iat < this timestamp will be rejected by decode_token()
+    current_user.tokens_valid_after = datetime.utcnow()
+
     await db.commit()
 
-    logger.info(f"Password changed for user: {current_user.email}")
+    logger.info(f"Password changed for user: {current_user.email} — all sessions invalidated")
 
-    return {"message": "Password changed successfully"}
+    return {"message": "Password changed successfully. Please log in again."}
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -899,14 +919,41 @@ async def get_current_user_info(
 
 
 @router.post("/logout")
-async def logout():
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Logout the current user.
+    Logout the current user and revoke the current access token server-side.
 
-    Note: JWT tokens are stateless, so this endpoint is mainly for client-side
-    confirmation. The client should discard the tokens after calling this.
-    For true token invalidation, implement a token blacklist (not included here).
+    The token's JTI is added to the revoked_tokens table so it cannot be reused.
+    The client should also discard both access and refresh tokens after calling this.
     """
+    # Extract JTI from the current token
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token_str = auth_header[7:]
+        try:
+            payload = jwt.decode(
+                token_str,
+                settings.jwt_secret_key,
+                algorithms=[settings.jwt_algorithm],
+            )
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            if jti and exp:
+                revoked = RevokedToken(
+                    jti=jti,
+                    user_id=current_user.id,
+                    expires_at=datetime.utcfromtimestamp(exp),
+                )
+                db.add(revoked)
+                await db.commit()
+                logger.info(f"Token revoked for user: {current_user.email}")
+        except JWTError:
+            pass  # Token already invalid — nothing to revoke
+
     return {"message": "Logged out successfully"}
 
 
@@ -1325,14 +1372,15 @@ async def reset_password(
             detail="User not found.",
         )
 
-    # Update password
+    # Update password and invalidate all existing sessions
     user.hashed_password = hash_password(request.new_password)
     user.updated_at = datetime.utcnow()
+    user.tokens_valid_after = datetime.utcnow()
     token_record.used_at = datetime.utcnow()
 
     await db.commit()
 
-    logger.info(f"Password reset for user: {user.email}")
+    logger.info(f"Password reset for user: {user.email} — all sessions invalidated")
 
     return {"message": "Password reset successfully. Please log in with your new password."}
 

@@ -8,6 +8,7 @@ creating circular dependencies.
 """
 
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -18,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.models import User
+from app.models import RevokedToken, User
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ security = HTTPBearer(auto_error=False)
 
 
 def decode_token(token: str) -> dict:
-    """Decode and validate a JWT token."""
+    """Decode and validate a JWT token (signature + expiry only)."""
     try:
         payload = jwt.decode(
             token,
@@ -42,6 +43,27 @@ def decode_token(token: str) -> dict:
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def check_token_revocation(payload: dict, db: AsyncSession) -> None:
+    """
+    Check if a token has been revoked. Raises 401 if revoked.
+
+    Two revocation mechanisms:
+    1. Individual JTI revocation (logout) — exact match in revoked_tokens table
+    2. Bulk revocation (password change) — user.tokens_valid_after > token.iat
+    """
+    jti = payload.get("jti")
+    if jti:
+        result = await db.execute(
+            select(RevokedToken.id).where(RevokedToken.jti == jti)
+        )
+        if result.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
@@ -80,6 +102,9 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Check individual token revocation (JTI)
+    await check_token_revocation(payload, db)
+
     user_id = int(payload.get("sub"))
     user = await get_user_by_id(db, user_id)
 
@@ -95,6 +120,17 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled",
         )
+
+    # Check bulk revocation (password change sets tokens_valid_after)
+    iat = payload.get("iat")
+    if user.tokens_valid_after and iat:
+        token_issued = datetime.utcfromtimestamp(iat)
+        if token_issued < user.tokens_valid_after:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired — please log in again",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     return user
 

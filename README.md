@@ -46,6 +46,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Password Reset**: Secure email-based password recovery
 - **Multi-User**: Full data isolation between users with per-user encrypted credentials
 - **Encrypted at Rest**: All API keys and secrets encrypted with Fernet (AES-128-CBC + HMAC-SHA256)
+- **Token Revocation**: Server-side JWT revocation on logout; password change invalidates all sessions
 - **Rate Limiting**: Multi-layer — nginx (per-IP) + application (per-user/per-email/per-token)
 - **Timing-Safe Auth**: Constant-time login prevents username enumeration
 

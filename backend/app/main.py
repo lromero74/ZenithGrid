@@ -9,7 +9,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from app.cleanup_jobs import cleanup_failed_condition_logs, cleanup_old_decision_logs, cleanup_old_failed_orders
+from app.cleanup_jobs import (
+    cleanup_expired_revoked_tokens,
+    cleanup_failed_condition_logs,
+    cleanup_old_decision_logs,
+    cleanup_old_failed_orders,
+)
 from app.config import settings
 from app.database import init_db
 from app.multi_bot_monitor import MultiBotMonitor
@@ -101,6 +106,7 @@ decision_log_cleanup_task = None
 failed_condition_cleanup_task = None
 failed_order_cleanup_task = None
 account_snapshot_task = None
+revoked_token_cleanup_task = None
 
 
 def override_get_price_monitor():
@@ -382,7 +388,7 @@ async def startup_event():
     global limit_order_monitor_task, order_reconciliation_monitor_task
     global missing_order_detector_task, decision_log_cleanup_task
     global failed_condition_cleanup_task, failed_order_cleanup_task
-    global account_snapshot_task
+    global account_snapshot_task, revoked_token_cleanup_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -461,6 +467,10 @@ async def startup_event():
     print("🚀 Starting account snapshot capture job...")
     account_snapshot_task = asyncio.create_task(run_account_snapshot_capture())
     print("🚀 Account snapshot capture job started - capturing daily account values")
+
+    print("🚀 Starting revoked token cleanup job...")
+    revoked_token_cleanup_task = asyncio.create_task(cleanup_expired_revoked_tokens())
+    print("🚀 Revoked token cleanup job started - pruning expired entries daily")
 
     print("🚀 Startup complete!")
     print("🚀 ========================================")
@@ -551,6 +561,13 @@ async def shutdown_event():
         except asyncio.CancelledError:
             pass
 
+    if revoked_token_cleanup_task:
+        revoked_token_cleanup_task.cancel()
+        try:
+            await revoked_token_cleanup_task
+        except asyncio.CancelledError:
+            pass
+
     # Close all cached exchange clients (releases httpx connections etc.)
     from app.services.exchange_service import clear_exchange_client_cache
     clear_exchange_client_cache()
@@ -568,7 +585,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
 
     try:
         from app.database import async_session_maker
-        from app.auth.dependencies import decode_token, get_user_by_id
+        from app.auth.dependencies import (
+            check_token_revocation, decode_token, get_user_by_id,
+        )
 
         payload = decode_token(token)
         if payload.get("type") != "access":
@@ -577,21 +596,53 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
 
         user_id = int(payload.get("sub"))
         async with async_session_maker() as db:
+            # Check token revocation (JTI + bulk)
+            await check_token_revocation(payload, db)
+
             user = await get_user_by_id(db, user_id)
             if not user or not user.is_active:
                 await websocket.close(code=4001, reason="Invalid user")
                 return
+
+            # Check bulk revocation (password change)
+            from datetime import datetime
+            iat = payload.get("iat")
+            if user.tokens_valid_after and iat:
+                token_issued = datetime.utcfromtimestamp(iat)
+                if token_issued < user.tokens_valid_after:
+                    await websocket.close(code=4001, reason="Session expired")
+                    return
     except Exception:
         await websocket.close(code=4001, reason="Authentication failed")
         return
 
-    await ws_manager.connect(websocket, user_id)
+    from app.services.websocket_manager import MAX_MESSAGE_SIZE, RECEIVE_TIMEOUT_SECONDS
+
+    connected = await ws_manager.connect(websocket, user_id)
+    if not connected:
+        return  # rejected — too many connections (4008 already sent)
+
     try:
         while True:
-            # Keep connection alive and wait for messages
-            data = await websocket.receive_text()
+            # Receive with timeout so idle connections get cleaned up
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(),
+                    timeout=RECEIVE_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                await websocket.close(code=4010, reason="Idle timeout")
+                break
+
+            # Enforce message size limit
+            if len(data) > MAX_MESSAGE_SIZE:
+                await websocket.close(code=4009, reason="Message too large")
+                break
+
             await websocket.send_json({"type": "echo", "message": f"Received: {data}"})
     except WebSocketDisconnect:
+        pass
+    finally:
         await ws_manager.disconnect(websocket)
 
 
