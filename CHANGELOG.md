@@ -5,6 +5,22 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.26.2] - 2026-02-19
+
+### Security
+- **Login timing attack fixed**: Response time is now identical whether an email exists or not, preventing username enumeration
+- **MFA brute-force protection**: TOTP and email MFA verification endpoints now rate-limit to 5 attempts per token within 5 minutes
+- **Nginx security headers**: Added HSTS (Strict-Transport-Security) and Content-Security-Policy headers
+- **Nginx rate limiting**: Auth endpoints limited to 5 req/min, API endpoints to 30 req/s per IP — floods are blocked before reaching the application
+- **Request size limit**: Added 10MB max body size in nginx to prevent memory exhaustion from oversized POST bodies
+- **Unbounded page_size fixed**: News endpoint now clamps page_size to 200 max, preventing full-table dumps
+- **Settings endpoint restricted**: Individual settings lookup now requires superuser access
+- **Article flagging restricted**: Mark-article-issue endpoint now requires superuser access
+- **Per-user article fetch rate limit**: External article content extraction limited to 10 per user per hour
+- **Per-username login rate limiting**: Login attempts now tracked by both IP and email — rotating IPs can't bypass the limit
+- **Per-email forgot-password rate limiting**: Password reset requests limited to 3 per email per hour
+- **WebSocket timeout reduced**: Idle WebSocket connections now timeout after 5 minutes instead of 24 hours
+
 ## [v2.26.1] - 2026-02-19
 
 ### Changed

@@ -58,8 +58,17 @@ security = HTTPBearer(auto_error=False)
 
 # {ip: [(timestamp, ...)] }
 _login_attempts: dict = defaultdict(list)
+_login_attempts_by_username: dict = defaultdict(list)
 _RATE_LIMIT_MAX = 5  # max attempts
 _RATE_LIMIT_WINDOW = 900  # 15 minutes in seconds
+
+# Pre-computed dummy bcrypt hash for timing-safe login (S1)
+_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()
+
+# MFA verification rate limiting (S2/S3): keyed by mfa_token
+_mfa_attempts: dict = defaultdict(list)
+_MFA_RATE_LIMIT_MAX = 5  # max attempts per token
+_MFA_RATE_LIMIT_WINDOW = 300  # 5 minutes
 
 # Track last global prune time (shared across all rate limiters)
 _last_prune_time: float = 0.0
@@ -77,9 +86,12 @@ def _prune_all_rate_limiters():
     total_pruned = 0
     for store, window in [
         (_login_attempts, _RATE_LIMIT_WINDOW),
+        (_login_attempts_by_username, _RATE_LIMIT_WINDOW),
         (_signup_attempts, _SIGNUP_RATE_LIMIT_WINDOW),
         (_forgot_pw_attempts, _FORGOT_PW_RATE_LIMIT_WINDOW),
+        (_forgot_pw_by_email, _FORGOT_PW_RATE_LIMIT_WINDOW),
         (_resend_attempts, _RESEND_RATE_LIMIT_WINDOW),
+        (_mfa_attempts, _MFA_RATE_LIMIT_WINDOW),
     ]:
         stale_keys = [
             k for k, timestamps in store.items()
@@ -92,17 +104,30 @@ def _prune_all_rate_limiters():
         logger.debug("Pruned %d stale rate limiter entries", total_pruned)
 
 
-def _check_rate_limit(ip: str):
-    """Check if IP has exceeded login rate limit. Raises 429 if exceeded."""
+def _check_rate_limit(ip: str, username: Optional[str] = None):
+    """Check if IP or username has exceeded login rate limit. Raises 429."""
     _prune_all_rate_limiters()
     now = time.time()
-    # Clean old entries
+    # Clean old entries for IP
     _login_attempts[ip] = [
         t for t in _login_attempts[ip]
         if now - t < _RATE_LIMIT_WINDOW
     ]
-    if len(_login_attempts[ip]) >= _RATE_LIMIT_MAX:
-        oldest = min(_login_attempts[ip])
+    exceeded = len(_login_attempts[ip]) >= _RATE_LIMIT_MAX
+    timestamps = _login_attempts[ip]
+
+    # Also check per-username (S11)
+    if username and not exceeded:
+        _login_attempts_by_username[username] = [
+            t for t in _login_attempts_by_username[username]
+            if now - t < _RATE_LIMIT_WINDOW
+        ]
+        if len(_login_attempts_by_username[username]) >= _RATE_LIMIT_MAX:
+            exceeded = True
+            timestamps = _login_attempts_by_username[username]
+
+    if exceeded:
+        oldest = min(timestamps)
         retry_after = int(oldest + _RATE_LIMIT_WINDOW - now)
         minutes = (retry_after + 59) // 60  # round up
         raise HTTPException(
@@ -115,9 +140,11 @@ def _check_rate_limit(ip: str):
         )
 
 
-def _record_attempt(ip: str):
-    """Record a login attempt for rate limiting."""
+def _record_attempt(ip: str, username: Optional[str] = None):
+    """Record a login attempt for rate limiting (IP + username)."""
     _login_attempts[ip].append(time.time())
+    if username:
+        _login_attempts_by_username[username].append(time.time())
 
 
 # Signup rate limiting: 3 per IP per hour
@@ -152,8 +179,9 @@ def _record_signup_attempt(ip: str):
     _signup_attempts[ip].append(time.time())
 
 
-# Forgot-password rate limiting: 3 per IP per hour
+# Forgot-password rate limiting: 3 per IP per hour + 3 per email per hour
 _forgot_pw_attempts: dict = defaultdict(list)
+_forgot_pw_by_email: dict = defaultdict(list)
 _FORGOT_PW_RATE_LIMIT_MAX = 3
 _FORGOT_PW_RATE_LIMIT_WINDOW = 3600
 
@@ -219,6 +247,41 @@ def _check_resend_rate_limit(user_id: int):
 def _record_resend_attempt(user_id: int):
     """Record a resend verification attempt for rate limiting."""
     _resend_attempts[str(user_id)].append(time.time())
+
+
+def _check_mfa_rate_limit(mfa_token: str):
+    """Check MFA verification attempts per token. Raises 429 after 5 attempts."""
+    now = time.time()
+    _mfa_attempts[mfa_token] = [
+        t for t in _mfa_attempts[mfa_token]
+        if now - t < _MFA_RATE_LIMIT_WINDOW
+    ]
+    if len(_mfa_attempts[mfa_token]) >= _MFA_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many MFA attempts. Please login again.",
+        )
+
+
+def _record_mfa_attempt(mfa_token: str):
+    """Record an MFA verification attempt."""
+    _mfa_attempts[mfa_token].append(time.time())
+
+
+def _is_forgot_pw_email_rate_limited(email: str) -> bool:
+    """Check if email has exceeded forgot-password rate limit (S15).
+    Returns True if rate limited (caller should return generic success)."""
+    now = time.time()
+    _forgot_pw_by_email[email] = [
+        t for t in _forgot_pw_by_email[email]
+        if now - t < _FORGOT_PW_RATE_LIMIT_WINDOW
+    ]
+    return len(_forgot_pw_by_email[email]) >= _FORGOT_PW_RATE_LIMIT_MAX
+
+
+def _record_forgot_pw_email_attempt(email: str):
+    """Record a forgot-password attempt by email."""
+    _forgot_pw_by_email[email].append(time.time())
 
 
 # =============================================================================
@@ -560,15 +623,19 @@ async def login(
     If MFA is enabled, returns mfa_required=True with a short-lived mfa_token.
     The client must then call POST /api/auth/mfa/verify with the mfa_token + TOTP code.
     """
-    # Rate limiting by IP
+    # Rate limiting by IP + username (S11)
     client_ip = http_request.client.host if http_request.client else "unknown"
-    _check_rate_limit(client_ip)
-    _record_attempt(client_ip)
+    email_lower = request.email.lower()
+    _check_rate_limit(client_ip, username=email_lower)
+    _record_attempt(client_ip, username=email_lower)
 
     # Find user by email
-    user = await get_user_by_email(db, request.email.lower())
+    user = await get_user_by_email(db, email_lower)
 
     if not user:
+        # S1: Timing equalization — run bcrypt on dummy hash so response
+        # time is indistinguishable from a real password check.
+        bcrypt.checkpw(request.password.encode('utf-8'), _DUMMY_HASH.encode())
         logger.warning(f"Login attempt for unknown email: {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -1168,7 +1235,13 @@ async def forgot_password(
     # Always return the same message regardless of whether email exists
     success_message = {"message": "If an account exists with that email, we've sent a password reset link."}
 
-    user = await get_user_by_email(db, request.email.lower())
+    # S15: Per-email rate limiting — silently return success to avoid leaking
+    email_lower = request.email.lower()
+    if _is_forgot_pw_email_rate_limited(email_lower):
+        return success_message
+    _record_forgot_pw_email_attempt(email_lower)
+
+    user = await get_user_by_email(db, email_lower)
     if not user:
         return success_message
 
@@ -1501,6 +1574,10 @@ async def mfa_verify(
     Called after /login returns mfa_required=true with an mfa_token.
     On success, returns full access and refresh tokens.
     """
+    # S2: Rate limit MFA attempts per token
+    _check_mfa_rate_limit(request.mfa_token)
+    _record_mfa_attempt(request.mfa_token)
+
     # Decode the MFA token
     try:
         payload = jwt.decode(
@@ -1655,6 +1732,10 @@ async def mfa_verify_email_code(
     Called after /login returns mfa_required=true with "email_code" in mfa_methods.
     User enters the 6-digit code from their email.
     """
+    # S3: Rate limit MFA attempts per token
+    _check_mfa_rate_limit(request.mfa_token)
+    _record_mfa_attempt(request.mfa_token)
+
     user_id = await _decode_mfa_token(request.mfa_token)
     user = await get_user_by_id(db, user_id)
 

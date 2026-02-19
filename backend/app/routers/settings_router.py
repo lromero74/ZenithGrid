@@ -216,9 +216,9 @@ async def test_connection(request: TestConnectionRequest, current_user: User = D
 async def get_setting_by_key(
     key: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_superuser),
 ):
-    """Get a single database setting by key (any authenticated user can read)."""
+    """Get a single database setting by key (superuser only)."""
     query = select(Settings).where(Settings.key == key)
     result = await db.execute(query)
     setting = result.scalars().first()
