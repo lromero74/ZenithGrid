@@ -12,6 +12,7 @@ export interface NewsItem {
   summary: string | null
   thumbnail: string | null
   category: string
+  content_scrape_allowed?: boolean
   is_seen?: boolean
   has_issue?: boolean
 }

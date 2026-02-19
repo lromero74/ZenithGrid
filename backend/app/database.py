@@ -247,6 +247,30 @@ DEFAULT_CONTENT_SOURCES = [
     ),
     # ===== World =====
     (
+        'bbc_world', 'BBC World', 'news', 'https://feeds.bbci.co.uk/news/world/rss.xml',
+        'https://www.bbc.com/news/world', 'BBC international news', None, 'World',
+    ),
+    (
+        'npr_world', 'NPR World', 'news', 'https://feeds.npr.org/1004/rss.xml',
+        'https://www.npr.org/sections/world', 'NPR international coverage', None, 'World',
+    ),
+    (
+        'cbs_news_world', 'CBS News World', 'news', 'https://www.cbsnews.com/latest/rss/world',
+        'https://www.cbsnews.com/world', 'CBS world news', None, 'World',
+    ),
+    (
+        'nbc_news_world', 'NBC News World', 'news', 'https://feeds.nbcnews.com/nbcnews/public/world',
+        'https://www.nbcnews.com/world', 'NBC world news', None, 'World',
+    ),
+    (
+        'abc_news_world', 'ABC News World', 'news', 'https://abcnews.go.com/abcnews/internationalheadlines',
+        'https://abcnews.com/international', 'ABC international headlines', None, 'World',
+    ),
+    (
+        'pbs_world', 'PBS NewsHour World', 'news', 'https://www.pbs.org/newshour/feeds/rss/world',
+        'https://www.pbs.org/newshour/world', 'PBS world coverage', None, 'World',
+    ),
+    (
         'voa_news', 'VOA News', 'news', 'https://www.voanews.com/api/z-pqpevi$mqe',
         'https://www.voanews.com', 'Voice of America world news', None, 'World',
     ),
@@ -266,20 +290,41 @@ DEFAULT_CONTENT_SOURCES = [
         'scmp', 'SCMP', 'news', 'https://www.scmp.com/rss/91/feed',
         'https://www.scmp.com', 'South China Morning Post', None, 'World',
     ),
-    (
-        'cnn_world', 'CNN World', 'news', 'http://rss.cnn.com/rss/cnn_world.rss',
-        'https://www.cnn.com/world', 'CNN international news', None, 'World',
-    ),
     # ===== Politics =====
     (
-        'cnn_politics', 'CNN Politics', 'news', 'http://rss.cnn.com/rss/cnn_allpolitics.rss',
-        'https://www.cnn.com/politics', 'US political news & analysis', None, 'Politics',
+        'npr_politics', 'NPR Politics', 'news', 'https://feeds.npr.org/1014/rss.xml',
+        'https://www.npr.org/sections/politics', 'NPR political coverage', None, 'Politics',
+    ),
+    (
+        'the_hill', 'The Hill', 'news', 'https://thehill.com/feed/',
+        'https://thehill.com', 'US political news & policy', None, 'Politics',
+    ),
+    (
+        'politico', 'Politico', 'news', 'https://rss.politico.com/politics-news.xml',
+        'https://www.politico.com', 'Political news & analysis', None, 'Politics',
+    ),
+    (
+        'cbs_news_politics', 'CBS News Politics', 'news', 'https://www.cbsnews.com/latest/rss/politics',
+        'https://www.cbsnews.com/politics', 'CBS political coverage', None, 'Politics',
+    ),
+    (
+        'nbc_news_politics', 'NBC News Politics', 'news',
+        'https://feeds.nbcnews.com/nbcnews/public/politics',
+        'https://www.nbcnews.com/politics', 'NBC political coverage', None, 'Politics',
+    ),
+    (
+        'abc_news_politics', 'ABC News Politics', 'news', 'https://abcnews.go.com/abcnews/politicsheadlines',
+        'https://abcnews.com/politics', 'ABC political headlines', None, 'Politics',
+    ),
+    (
+        'pbs_politics', 'PBS NewsHour Politics', 'news', 'https://www.pbs.org/newshour/feeds/rss/politics',
+        'https://www.pbs.org/newshour/politics', 'PBS political coverage', None, 'Politics',
+    ),
+    (
+        'bbc_politics', 'BBC Politics', 'news', 'https://feeds.bbci.co.uk/news/politics/rss.xml',
+        'https://www.bbc.com/news/politics', 'BBC UK & global politics', None, 'Politics',
     ),
     # ===== Nation (US) =====
-    (
-        'cnn_us', 'CNN US', 'news', 'http://rss.cnn.com/rss/cnn_us.rss',
-        'https://www.cnn.com/us', 'CNN US news', None, 'Nation',
-    ),
     (
         'npr_news', 'NPR News', 'news', 'https://feeds.npr.org/1001/rss.xml', 'https://www.npr.org',
         'US national public radio news', None, 'Nation',
@@ -292,11 +337,19 @@ DEFAULT_CONTENT_SOURCES = [
         'ap_news', 'AP News', 'news', 'https://feedx.net/rss/ap.xml', 'https://apnews.com',
         'Associated Press top stories', None, 'Nation',
     ),
-    # ===== Business =====
     (
-        'cnn_business', 'CNN Business', 'news', 'http://rss.cnn.com/rss/money_latest.rss',
-        'https://www.cnn.com/business', 'CNN business & financial news', None, 'Business',
+        'cbs_news_us', 'CBS News US', 'news', 'https://www.cbsnews.com/latest/rss/us',
+        'https://www.cbsnews.com/us', 'CBS US news', None, 'Nation',
     ),
+    (
+        'nbc_news_us', 'NBC News US', 'news', 'https://feeds.nbcnews.com/nbcnews/public/news',
+        'https://www.nbcnews.com/us-news', 'NBC US news', None, 'Nation',
+    ),
+    (
+        'abc_news_us', 'ABC News US', 'news', 'https://abcnews.go.com/abcnews/usheadlines',
+        'https://abcnews.com/us', 'ABC US headlines', None, 'Nation',
+    ),
+    # ===== Business =====
     (
         'cnbc_business', 'CNBC', 'news',
         'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147', 'https://www.cnbc.com',
@@ -306,11 +359,36 @@ DEFAULT_CONTENT_SOURCES = [
         'business_insider', 'Business Insider', 'news', 'https://www.businessinsider.com/rss',
         'https://www.businessinsider.com', 'Business & tech news', None, 'Business',
     ),
-    # ===== Technology =====
     (
-        'cnn_tech', 'CNN Tech', 'news', 'http://rss.cnn.com/rss/cnn_tech.rss',
-        'https://www.cnn.com/business/tech', 'CNN technology news', None, 'Technology',
+        'bbc_business', 'BBC Business', 'news', 'https://feeds.bbci.co.uk/news/business/rss.xml',
+        'https://www.bbc.com/news/business', 'BBC business news', None, 'Business',
     ),
+    (
+        'npr_business', 'NPR Business', 'news', 'https://feeds.npr.org/1006/rss.xml',
+        'https://www.npr.org/sections/business', 'NPR business coverage', None, 'Business',
+    ),
+    (
+        'cbs_news_business', 'CBS MoneyWatch', 'news', 'https://www.cbsnews.com/latest/rss/moneywatch',
+        'https://www.cbsnews.com/moneywatch', 'CBS financial news', None, 'Business',
+    ),
+    (
+        'nbc_news_business', 'NBC News Business', 'news',
+        'https://feeds.nbcnews.com/nbcnews/public/business',
+        'https://www.nbcnews.com/business', 'NBC business news', None, 'Business',
+    ),
+    (
+        'abc_news_business', 'ABC News Money', 'news', 'https://abcnews.go.com/abcnews/moneyheadlines',
+        'https://abcnews.com/business', 'ABC business headlines', None, 'Business',
+    ),
+    (
+        'pbs_economy', 'PBS NewsHour Economy', 'news', 'https://www.pbs.org/newshour/feeds/rss/economy',
+        'https://www.pbs.org/newshour/economy', 'PBS economic coverage', None, 'Business',
+    ),
+    (
+        'politico_economy', 'Politico Economy', 'news', 'https://rss.politico.com/economy.xml',
+        'https://www.politico.com/economy', 'Economic policy news', None, 'Business',
+    ),
+    # ===== Technology =====
     (
         'engadget', 'Engadget', 'news', 'https://www.engadget.com/rss.xml', 'https://www.engadget.com',
         'Consumer tech news & reviews', None, 'Technology',
@@ -327,11 +405,31 @@ DEFAULT_CONTENT_SOURCES = [
         'wired', 'Wired', 'news', 'https://www.wired.com/feed/rss', 'https://www.wired.com',
         'Technology & future trends', None, 'Technology',
     ),
-    # ===== Entertainment =====
     (
-        'cnn_entertainment', 'CNN Entertainment', 'news', 'http://rss.cnn.com/rss/cnn_showbiz.rss',
-        'https://www.cnn.com/entertainment', 'CNN entertainment news', None, 'Entertainment',
+        'bbc_tech', 'BBC Tech', 'news', 'https://feeds.bbci.co.uk/news/technology/rss.xml',
+        'https://www.bbc.com/news/technology', 'BBC technology news', None, 'Technology',
     ),
+    (
+        'npr_tech', 'NPR Tech', 'news', 'https://feeds.npr.org/1019/rss.xml',
+        'https://www.npr.org/sections/technology', 'NPR technology coverage', None, 'Technology',
+    ),
+    (
+        'cbs_news_tech', 'CBS News Tech', 'news', 'https://www.cbsnews.com/latest/rss/technology',
+        'https://www.cbsnews.com/technology', 'CBS tech news', None, 'Technology',
+    ),
+    (
+        'nbc_news_tech', 'NBC News Tech', 'news', 'https://feeds.nbcnews.com/nbcnews/public/tech',
+        'https://www.nbcnews.com/tech-media', 'NBC tech news', None, 'Technology',
+    ),
+    (
+        'abc_news_tech', 'ABC News Tech', 'news', 'https://abcnews.go.com/abcnews/technologyheadlines',
+        'https://abcnews.com/technology', 'ABC technology headlines', None, 'Technology',
+    ),
+    (
+        'politico_tech', 'Politico Tech', 'news', 'https://rss.politico.com/technology.xml',
+        'https://www.politico.com/technology', 'Tech policy news', None, 'Technology',
+    ),
+    # ===== Entertainment =====
     (
         'variety', 'Variety', 'news', 'https://variety.com/feed/', 'https://variety.com', 'Entertainment industry news',
         None, 'Entertainment',
@@ -343,6 +441,29 @@ DEFAULT_CONTENT_SOURCES = [
     (
         'deadline', 'Deadline', 'news', 'https://deadline.com/feed/', 'https://deadline.com',
         'Entertainment industry breaking news', None, 'Entertainment',
+    ),
+    (
+        'bbc_entertainment', 'BBC Entertainment', 'news',
+        'https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml',
+        'https://www.bbc.com/news/entertainment_and_arts', 'BBC entertainment & arts', None, 'Entertainment',
+    ),
+    (
+        'npr_culture', 'NPR Culture', 'news', 'https://feeds.npr.org/1008/rss.xml',
+        'https://www.npr.org/sections/culture', 'NPR arts & culture', None, 'Entertainment',
+    ),
+    (
+        'cbs_news_entertainment', 'CBS News Entertainment', 'news',
+        'https://www.cbsnews.com/latest/rss/entertainment',
+        'https://www.cbsnews.com/entertainment', 'CBS entertainment news', None, 'Entertainment',
+    ),
+    (
+        'abc_news_entertainment', 'ABC News Entertainment', 'news',
+        'https://abcnews.go.com/abcnews/entertainmentheadlines',
+        'https://abcnews.com/entertainment', 'ABC entertainment headlines', None, 'Entertainment',
+    ),
+    (
+        'pbs_arts', 'PBS NewsHour Arts', 'news', 'https://www.pbs.org/newshour/feeds/rss/arts',
+        'https://www.pbs.org/newshour/arts', 'PBS arts coverage', None, 'Entertainment',
     ),
     # ===== Sports =====
     (
@@ -356,6 +477,18 @@ DEFAULT_CONTENT_SOURCES = [
     (
         'yahoo_sports', 'Yahoo Sports', 'news', 'https://sports.yahoo.com/rss/', 'https://sports.yahoo.com',
         'Sports news & analysis', None, 'Sports',
+    ),
+    (
+        'bbc_sport', 'BBC Sport', 'news', 'https://feeds.bbci.co.uk/sport/rss.xml',
+        'https://www.bbc.com/sport', 'BBC sports coverage', None, 'Sports',
+    ),
+    (
+        'npr_sports', 'NPR Sports', 'news', 'https://feeds.npr.org/1055/rss.xml',
+        'https://www.npr.org/sections/sports', 'NPR sports coverage', None, 'Sports',
+    ),
+    (
+        'abc_news_sports', 'ABC News Sports', 'news', 'https://abcnews.go.com/abcnews/sportsheadlines',
+        'https://abcnews.com/sports', 'ABC sports headlines', None, 'Sports',
     ),
     # ===== Science =====
     (
@@ -390,11 +523,28 @@ DEFAULT_CONTENT_SOURCES = [
         'smithsonian', 'Smithsonian Magazine', 'news', 'https://www.smithsonianmag.com/rss/latest_articles/',
         'https://www.smithsonianmag.com', 'Science, history & culture', None, 'Science',
     ),
-    # ===== Health =====
     (
-        'cnn_health', 'CNN Health', 'news', 'http://rss.cnn.com/rss/cnn_health.rss',
-        'https://www.cnn.com/health', 'CNN health news', None, 'Health',
+        'bbc_science', 'BBC Science', 'news', 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml',
+        'https://www.bbc.com/news/science_and_environment', 'BBC science & environment news', None, 'Science',
     ),
+    (
+        'npr_science', 'NPR Science', 'news', 'https://feeds.npr.org/1007/rss.xml',
+        'https://www.npr.org/sections/science', 'NPR science coverage', None, 'Science',
+    ),
+    (
+        'cbs_news_science', 'CBS News Science', 'news', 'https://www.cbsnews.com/latest/rss/science',
+        'https://www.cbsnews.com/science', 'CBS News science reporting', None, 'Science',
+    ),
+    (
+        'nbc_news_science', 'NBC News Science', 'news',
+        'https://feeds.nbcnews.com/nbcnews/public/science',
+        'https://www.nbcnews.com/science', 'NBC News science coverage', None, 'Science',
+    ),
+    (
+        'pbs_science', 'PBS NewsHour Science', 'news', 'https://www.pbs.org/newshour/feeds/rss/science',
+        'https://www.pbs.org/newshour/science', 'PBS science reporting', None, 'Science',
+    ),
+    # ===== Health =====
     (
         'stat_news', 'STAT News', 'news', 'https://www.statnews.com/feed/', 'https://www.statnews.com',
         'Health & pharma reporting', None, 'Health',
@@ -430,6 +580,31 @@ DEFAULT_CONTENT_SOURCES = [
     (
         'self_wellness', 'SELF', 'news', 'https://www.self.com/feed/rss', 'https://www.self.com', 'Wellness & fitness',
         None, 'Health',
+    ),
+    (
+        'bbc_health', 'BBC Health', 'news', 'https://feeds.bbci.co.uk/news/health/rss.xml',
+        'https://www.bbc.com/news/health', 'BBC health news', None, 'Health',
+    ),
+    (
+        'cbs_news_health', 'CBS News Health', 'news', 'https://www.cbsnews.com/latest/rss/health',
+        'https://www.cbsnews.com/health', 'CBS News health reporting', None, 'Health',
+    ),
+    (
+        'nbc_news_health', 'NBC News Health', 'news',
+        'https://feeds.nbcnews.com/nbcnews/public/health',
+        'https://www.nbcnews.com/health', 'NBC News health coverage', None, 'Health',
+    ),
+    (
+        'abc_news_health', 'ABC News Health', 'news', 'https://abcnews.go.com/abcnews/healthheadlines',
+        'https://abcnews.go.com/Health', 'ABC News health reporting', None, 'Health',
+    ),
+    (
+        'pbs_health', 'PBS NewsHour Health', 'news', 'https://www.pbs.org/newshour/feeds/rss/health',
+        'https://www.pbs.org/newshour/health', 'PBS health reporting', None, 'Health',
+    ),
+    (
+        'politico_healthcare', 'Politico Healthcare', 'news', 'https://rss.politico.com/healthcare.xml',
+        'https://www.politico.com/healthcare', 'Healthcare policy news', None, 'Health',
     ),
     # ===== World video sources =====
     (
@@ -569,8 +744,11 @@ DEAD_SOURCES = [
     'medical_xpress',  # IP-banned our EC2; still 400 as of 2026-02-19. Re-test after 2026-02-26.
     # Dropped in robots.txt audit — explicit legal/ToS prohibitions or broken feeds
     'reddit_artificial', 'reddit_bitcoin', 'reddit_crypto',
-    'bbc_world', 'guardian_world', 'al_jazeera',
+    'guardian_world', 'al_jazeera',
     'new_scientist', 'theblock',
+    # CNN RSS feeds frozen since August 2024 — rss.cnn.com returns stale content
+    'cnn_world', 'cnn_politics', 'cnn_us', 'cnn_business',
+    'cnn_tech', 'cnn_entertainment', 'cnn_health',
 ]
 
 # Per-source scraping policies based on robots.txt audit.
@@ -605,6 +783,63 @@ SOURCE_SCRAPE_POLICIES = {
     'who_news': {'scrape': False},
     'pbs_newshour': {'scrape': False, 'delay': 1},
     'cbs_sports': {'scrape': False},
+    # BBC — main site blocks scrapers; RSS via feeds.bbci.co.uk is fine
+    'bbc_world': {'scrape': False},
+    'bbc_politics': {'scrape': False},
+    'bbc_business': {'scrape': False},
+    'bbc_tech': {'scrape': False},
+    'bbc_entertainment': {'scrape': False},
+    'bbc_sport': {'scrape': False},
+    'bbc_science': {'scrape': False},
+    'bbc_health': {'scrape': False},
+    # NPR — additional category feeds (npr_news & npr_health already above)
+    'npr_world': {'scrape': False},
+    'npr_politics': {'scrape': False},
+    'npr_business': {'scrape': False},
+    'npr_tech': {'scrape': False},
+    'npr_culture': {'scrape': False},
+    'npr_sports': {'scrape': False},
+    'npr_science': {'scrape': False},
+    # CBS News — blocks scrapers
+    'cbs_news_world': {'scrape': False},
+    'cbs_news_politics': {'scrape': False},
+    'cbs_news_us': {'scrape': False},
+    'cbs_news_business': {'scrape': False},
+    'cbs_news_tech': {'scrape': False},
+    'cbs_news_entertainment': {'scrape': False},
+    'cbs_news_science': {'scrape': False},
+    'cbs_news_health': {'scrape': False},
+    # NBC News — blocks scrapers
+    'nbc_news_world': {'scrape': False},
+    'nbc_news_politics': {'scrape': False},
+    'nbc_news_us': {'scrape': False},
+    'nbc_news_business': {'scrape': False},
+    'nbc_news_tech': {'scrape': False},
+    'nbc_news_science': {'scrape': False},
+    'nbc_news_health': {'scrape': False},
+    # ABC News — blocks scrapers
+    'abc_news_world': {'scrape': False},
+    'abc_news_politics': {'scrape': False},
+    'abc_news_us': {'scrape': False},
+    'abc_news_business': {'scrape': False},
+    'abc_news_tech': {'scrape': False},
+    'abc_news_entertainment': {'scrape': False},
+    'abc_news_sports': {'scrape': False},
+    'abc_news_health': {'scrape': False},
+    # PBS — blocks scrapers, 1s crawl delay (matching pbs_newshour above)
+    'pbs_world': {'scrape': False, 'delay': 1},
+    'pbs_politics': {'scrape': False, 'delay': 1},
+    'pbs_economy': {'scrape': False, 'delay': 1},
+    'pbs_arts': {'scrape': False, 'delay': 1},
+    'pbs_science': {'scrape': False, 'delay': 1},
+    'pbs_health': {'scrape': False, 'delay': 1},
+    # The Hill — blocks scrapers
+    'the_hill': {'scrape': False},
+    # Politico — blocks scrapers
+    'politico': {'scrape': False},
+    'politico_economy': {'scrape': False},
+    'politico_tech': {'scrape': False},
+    'politico_healthcare': {'scrape': False},
     # Permissive but with crawl delays
     'bitcoin_magazine': {'delay': 5},
     'global_voices': {'delay': 10},

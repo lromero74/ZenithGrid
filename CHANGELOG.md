@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.25.0] - 2026-02-19
+
+### Added
+- **47 mainstream news sources**: BBC, NPR, CBS News, NBC News, ABC News, PBS NewsHour, The Hill, and Politico across World, Politics, Nation, Business, Technology, Entertainment, Sports, Science, and Health categories
+- **RSS badge on article cards**: Articles from RSS-only sources (no in-app reader/TTS) now show a muted "RSS" badge next to the source name
+- **"Full articles" filter toggle**: Button in the filter bar hides RSS-only articles so users can browse only sources that support full in-app reading and TTS; persists to localStorage
+
+### Changed
+- **Replaced frozen CNN feeds**: CNN RSS feeds (stale since Aug 2024) replaced with active feeds from BBC, NPR, CBS, NBC, ABC, PBS, The Hill, and Politico
+
+### Removed
+- **CNN RSS feeds**: 7 CNN category feeds dropped (rss.cnn.com returns stale content frozen since August 2024)
+
 ## [v2.24.0] - 2026-02-19
 
 ### Added
