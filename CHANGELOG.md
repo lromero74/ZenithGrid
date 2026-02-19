@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.26.1] - 2026-02-19
+
+### Changed
+- **Architecture documentation overhaul**: Updated architecture.json, ARCHITECTURE.md, and README.md to reflect the current state of the application — added 13 missing migrations, 7 missing services, 5 missing models, 16 sentiment card components, multi-exchange support, MFA/email features, and TTS article reader
+- **README modernized**: Added Security & Multi-User section, Multi-Exchange Support section, expanded features comparison table, updated roadmap with completed milestones, fixed stale URLs and descriptions
+
 ## [v2.26.0] - 2026-02-19
 
 ### Added

@@ -10,8 +10,9 @@
 | Frontend | React 18 + TypeScript + Vite + TailwindCSS |
 | State | React Context (app) + React Query (server) |
 | Charts | TradingView Lightweight Charts |
-| Auth | JWT (python-jose) + bcrypt + TOTP MFA (pyotp) |
+| Auth | JWT (python-jose) + bcrypt + TOTP MFA (pyotp) + Email MFA (AWS SES) |
 | Encryption | Fernet (AES-128-CBC + HMAC-SHA256) |
+| Email | AWS SES (IAM role auth, us-east-1) |
 | Deployment | AWS EC2 (Amazon Linux 2023) + Nginx + Let's Encrypt SSL + systemd |
 | Exchange | Coinbase (HMAC/CDP), ByBit V5, MT5 Bridge |
 | AI | Anthropic Claude, OpenAI GPT, Google Gemini |
@@ -19,8 +20,9 @@
 The backend runs as a systemd service (`trading-bot-backend`) on port 8100.
 Nginx reverse-proxies HTTPS (port 443) to the backend, with Let's Encrypt SSL via Certbot.
 Public URL: `https://tradebot.romerotechsolutions.com`
-The frontend is a production build (`vite build`) served by the FastAPI backend — no separate frontend service needed.
-The service auto-starts on boot.
+In **PROD mode**, the frontend is a production build (`vite build`) served by the FastAPI backend.
+In **DEV mode**, a separate Vite dev server provides HMR for frontend development.
+Services auto-start on boot.
 
 ---
 
@@ -37,6 +39,7 @@ graph TB
         BE[FastAPI Backend<br/>:8100<br/>serves frontend + API]
         DB[(SQLite<br/>trading.db)]
         BG[Background Tasks<br/>14 scheduled jobs]
+        SES[AWS SES<br/>Email Service]
     end
 
     subgraph "External Services"
@@ -62,6 +65,7 @@ graph TB
     BG --> MKT
     BG --> CB
     BG --> BB
+    BE --> SES
 ```
 
 ---
@@ -70,13 +74,13 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "API Layer (20 routers)"
+    subgraph "API Layer (23 routers)"
         R_AUTH[auth]
         R_BOTS[bots<br/><small>crud / control / ai_logs<br/>indicator_logs / scanner_logs / validation</small>]
         R_POS[positions<br/><small>queries / actions / limit_orders<br/>manual_ops / perps</small>]
         R_ACCT[accounts]
         R_MKT[market_data]
-        R_NEWS[news<br/><small>sources / cache / models<br/>debt_ceiling</small>]
+        R_NEWS[news<br/><small>metrics / tts<br/>sources / articles</small>]
         R_TRADE[trading]
         R_OTHER[settings / templates<br/>order_history / blacklist<br/>seasonality / sources<br/>ai_credentials / ...]
     end
@@ -132,6 +136,7 @@ graph TB
         CB_MKT[market_data_api.py]
         CB_ORD[order_api.py]
         CB_PERP[perpetuals_api.py]
+        CB_PUB[public_market_data.py]
     end
 
     subgraph "ByBit Modules"
@@ -175,7 +180,7 @@ graph TB
     SVC_EXCH --> FACTORY
     FACTORY --> CADAP & BBADAP & MT5C & PAPER & DEXC
     PGUARD -.->|wraps| BBADAP & MT5C
-    CADAP --> CB_AUTH & CB_BAL & CB_MKT & CB_ORD & CB_PERP
+    CADAP --> CB_AUTH & CB_BAL & CB_MKT & CB_ORD & CB_PERP & CB_PUB
     BBADAP --> BB_CLIENT
     BB_WS -.->|real-time state| PGUARD
     BASE -.->|interface| CADAP & BBADAP & MT5C & PAPER & DEXC & PGUARD
@@ -214,6 +219,8 @@ graph TB
     subgraph "Contexts (global state)"
         CTX_AUTH[AuthContext]
         CTX_ACCT[AccountContext]
+        CTX_BRAND[BrandContext]
+        CTX_THEME[ThemeContext]
         CTX_NOTIF[NotificationContext]
         CTX_VIDEO[VideoPlayerContext]
         CTX_READER[ArticleReaderContext]
@@ -223,7 +230,7 @@ graph TB
         H_BOTS[useBotsData<br/>useBotMutations<br/>useValidation]
         H_POS[usePositionsData<br/>usePositionMutations<br/>usePositionFilters]
         H_CHART[useChartsData<br/>useChartManagement<br/>useIndicators]
-        H_NEWS[useNewsData<br/>useNewsFilters<br/>useTTS / useTTSSync]
+        H_NEWS[useNewsData<br/>useNewsFilters<br/>useTTSSync / useSeenStatus]
     end
 
     subgraph "API Layer (services/api.ts)"
@@ -321,6 +328,10 @@ erDiagram
     User ||--o{ UserSourceSubscription : "subscribes to"
     User ||--o{ TrustedDevice : "trusts"
     User ||--o{ Settings : "has many"
+    User ||--o{ EmailVerificationToken : "has tokens"
+    User ||--o{ UserContentSeenStatus : "tracks seen"
+    User ||--o{ UserArticleTTSHistory : "TTS history"
+    User ||--o{ UserVoiceSubscription : "voice prefs"
 
     Account ||--o{ Bot : "has many"
     Account ||--o{ OrderHistory : "has many"
@@ -341,12 +352,16 @@ erDiagram
     ContentSource ||--o{ NewsArticle : "produces"
     ContentSource ||--o{ VideoArticle : "produces"
 
+    NewsArticle ||--o{ ArticleTTS : "has audio"
+
     User {
         int id PK
         string email
         string hashed_password
         bool is_active
+        bool email_verified
         bool mfa_enabled
+        string mfa_method
         string totp_secret_encrypted
         bool terms_accepted
     }
@@ -447,10 +462,12 @@ erDiagram
 3. **If MFA enabled**: check for trusted device token
    - If valid trusted device: skip MFA, issue tokens directly
    - If no trusted device: return `mfa_required=true` with short-lived `mfa_token` (5-min JWT)
-   - User enters 6-digit TOTP code from authenticator app
+   - **TOTP MFA**: User enters 6-digit code from authenticator app
+   - **Email MFA**: Backend sends 6-digit code via AWS SES; user enters it
    - Optional: "Remember this device for 30 days" checkbox stores a `device_trust_token`
    - Trusted device record saved in DB with device name, IP, and geolocation (city, state, country)
 4. **If MFA not enabled**: issue JWT access + refresh tokens directly
+5. **Email verification**: New accounts must verify email before full access
 5. Frontend stores tokens in `localStorage` via `AuthContext`
 6. Every API request includes `Authorization: Bearer {token}` via Axios interceptor
 7. Backend `get_current_user` dependency validates JWT on protected routes
@@ -459,19 +476,23 @@ erDiagram
 
 ### MFA Management
 
-- Users enable/disable TOTP MFA from Settings > Account Security
-- Setup: QR code (backend-generated PNG) + manual key entry + verification code
-- Disable: requires current password + TOTP code
+- Users enable/disable MFA from Settings > Account Security
+- **TOTP MFA**: QR code (backend-generated PNG) + manual key entry + verification code
+- **Email MFA**: 6-digit code sent via AWS SES to verified email
+- Disable: requires current password + verification code
 - Trusted devices: viewable and revocable from Settings (device name, location, date added)
 - TOTP secrets encrypted at rest with Fernet (AES-128-CBC + HMAC-SHA256)
-- Public signup disabled; new users created by admin only
+- Email verification required for new accounts
+- Password reset via email link (time-limited token)
 
 ## Multi-Tenancy Model
 
-- Single-user deployment (owner-operator) but architected for multi-user
+- Multi-user platform with full data isolation between users
 - `User` -> `Account` -> `Bot` -> `Position` hierarchy enforces data isolation
 - Each user has their own encrypted exchange credentials, AI provider keys, and settings
 - All API routes require JWT authentication and scope queries to the authenticated user
+- Shared resources (news, market data, prices) are fetched once and served to all users
+- Bot processing uses parallel execution (Semaphore(5)) with per-task exchange client isolation via contextvars
 
 ## Background Task Scheduling
 

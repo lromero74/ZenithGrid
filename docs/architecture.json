@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.26.0",
+  "version": "v2.26.1",
   "updated": "2026-02-19",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -10,8 +10,9 @@
       "orm": "SQLAlchemy (async)",
       "database": "SQLite (aiosqlite)",
       "python": "3.x (venv)",
-      "auth": "JWT (python-jose) + TOTP MFA (pyotp)",
-      "encryption": "Fernet (cryptography)"
+      "auth": "JWT (python-jose) + TOTP MFA (pyotp) + Email MFA",
+      "encryption": "Fernet (cryptography)",
+      "email": "AWS SES (boto3, IAM role auth)"
     },
     "frontend": {
       "framework": "React 18",
@@ -26,10 +27,10 @@
     "deployment": {
       "platform": "AWS EC2 (Amazon Linux 2023)",
       "process_manager": "systemd",
-      "services": ["trading-bot-backend", "nginx"],
+      "services": ["trading-bot-backend", "trading-bot-frontend (dev mode only)", "nginx"],
       "reverse_proxy": "Nginx with Let's Encrypt SSL",
       "public_url": "https://tradebot.romerotechsolutions.com",
-      "frontend_serving": "Production build (vite build) served by FastAPI backend behind Nginx"
+      "frontend_serving": "PROD mode: built dist/ served by FastAPI backend behind Nginx. DEV mode: Vite dev server with HMR."
     }
   },
 
@@ -39,12 +40,14 @@
       { "file": "routers/account_value_router.py", "prefix": "/api/account-value", "purpose": "Historical account value snapshots for charting" },
       { "file": "routers/accounts_router.py", "prefix": "/api/accounts", "purpose": "CRUD for CEX and DEX trading accounts" },
       { "file": "routers/ai_credentials_router.py", "prefix": "/api/ai-credentials", "purpose": "Manage per-user AI provider API keys" },
-      { "file": "routers/auth_router.py", "prefix": "/api/auth", "purpose": "Login (with MFA), signup, token refresh, password change, TOTP MFA setup/verify/disable, trusted devices management" },
+      { "file": "routers/auth_router.py", "prefix": "/api/auth", "purpose": "Login (with MFA), signup, token refresh, password change, TOTP MFA setup/verify/disable, email MFA, trusted devices, email verification, password reset" },
       { "file": "routers/blacklist_router.py", "prefix": "/api/blacklist", "purpose": "Coin blacklist and category management" },
       { "file": "routers/bots.py", "prefix": "/api/bots", "purpose": "Aggregator for bot sub-routers (CRUD, control, logs, validation)" },
       { "file": "routers/coin_icons_router.py", "prefix": "/api/coin-icons", "purpose": "Proxy and cache cryptocurrency icons to avoid CORS" },
-      { "file": "routers/market_data_router.py", "prefix": "/api", "purpose": "Current prices, OHLCV candles, product listings" },
-      { "file": "routers/news_router.py", "prefix": "/api/news", "purpose": "Aggregated crypto news, video feeds, market sentiment data" },
+      { "file": "routers/market_data_router.py", "prefix": "/api", "purpose": "Current prices, OHLCV candles (cached), product listings" },
+      { "file": "routers/news_router.py", "prefix": "/api/news", "purpose": "Aggregated crypto news, video feeds, article content, source management" },
+      { "file": "routers/news_metrics_router.py", "prefix": "/api/news", "purpose": "Market sentiment & blockchain metrics endpoints (Fear & Greed, BTC dominance, etc.)" },
+      { "file": "routers/news_tts_router.py", "prefix": "/api/news", "purpose": "Text-to-speech generation, audio caching, voice subscriptions" },
       { "file": "routers/order_history.py", "prefix": "/api/order-history", "purpose": "Successful and failed order history with filtering" },
       { "file": "routers/paper_trading_router.py", "prefix": "/api/paper-trading", "purpose": "Virtual paper trading account management" },
       { "file": "routers/positions_router.py", "prefix": "/api/positions", "purpose": "Aggregator for position sub-routers (queries, actions, limit orders, manual ops, perps)" },
@@ -55,8 +58,7 @@
       { "file": "routers/system_router.py", "prefix": "/api", "purpose": "Health check, dashboard stats, monitor control, system status" },
       { "file": "routers/templates.py", "prefix": "/api/templates", "purpose": "Bot template CRUD" },
       { "file": "routers/trading_router.py", "prefix": "/api/trading", "purpose": "Manual buy/sell orders for portfolio management" },
-      { "file": "routers/prop_guard_router.py", "prefix": "/api/propguard", "purpose": "PropGuard safety monitoring: status, kill switch, reset, history" },
-      { "file": "routers/auth_dependencies.py", "prefix": null, "purpose": "Shared authentication dependencies for protecting routes" }
+      { "file": "routers/prop_guard_router.py", "prefix": "/api/propguard", "purpose": "PropGuard safety monitoring: status, kill switch, reset, history" }
     ],
 
     "sub_routers": {
@@ -78,20 +80,18 @@
         { "file": "position_routers/dependencies.py", "purpose": "Shared dependency functions for position routes" },
         { "file": "position_routers/schemas.py", "purpose": "Pydantic request/response schemas for position routes" }
       ],
-      "news_modules": [
-        { "file": "routers/news/news_sources.py", "purpose": "News and video source configurations by category" },
-        { "file": "routers/news/news_cache.py", "purpose": "Cache loading/saving for news and video data" },
-        { "file": "routers/news/news_models.py", "purpose": "Pydantic models for news router API" },
-        { "file": "routers/news/debt_ceiling_data.py", "purpose": "Historical US debt ceiling data (1939-present)" }
-      ],
-      "account_modules": [
-        { "file": "routers/accounts/portfolio_utils.py", "purpose": "Portfolio calculations for CEX and DEX accounts" }
+      "news_data_modules": [
+        { "file": "news_data/news_sources.py", "purpose": "News and video source configurations by category" },
+        { "file": "news_data/news_cache.py", "purpose": "Cache loading/saving for news and video data" },
+        { "file": "news_data/news_models.py", "purpose": "Pydantic models for news router API" },
+        { "file": "news_data/debt_ceiling_data.py", "purpose": "Historical US debt ceiling data (1939-present)" }
       ]
     },
 
     "models": [
-      { "name": "User", "table": "users", "key_fields": ["id", "email", "hashed_password", "is_active", "mfa_enabled", "totp_secret", "terms_accepted"] },
+      { "name": "User", "table": "users", "key_fields": ["id", "email", "hashed_password", "is_active", "mfa_enabled", "totp_secret", "terms_accepted", "email_verified"] },
       { "name": "TrustedDevice", "table": "trusted_devices", "key_fields": ["id", "user_id", "device_id", "device_name", "ip_address", "location", "expires_at"] },
+      { "name": "EmailVerificationToken", "table": "email_verification_tokens", "key_fields": ["id", "user_id", "token", "expires_at", "used"] },
       { "name": "Account", "table": "accounts", "key_fields": ["id", "user_id", "name", "exchange", "account_type", "api_key", "api_secret", "is_default"] },
       { "name": "Bot", "table": "bots", "key_fields": ["id", "account_id", "name", "strategy", "status", "trading_pairs", "budget_percentage", "max_concurrent_deals"] },
       { "name": "BotTemplate", "table": "bot_templates", "key_fields": ["id", "user_id", "name", "strategy", "config_json"] },
@@ -111,8 +111,12 @@
       { "name": "BotTemplateProduct", "table": "bot_template_products", "key_fields": ["id", "template_id", "product_id", "created_at"], "purpose": "Junction table normalizing template trading pairs (1NF)" },
       { "name": "NewsArticle", "table": "news_articles", "key_fields": ["id", "title", "url", "source", "category", "published_at", "cached_thumbnail_path"] },
       { "name": "VideoArticle", "table": "video_articles", "key_fields": ["id", "title", "video_id", "channel_name", "category", "published_at"] },
-      { "name": "ContentSource", "table": "content_sources", "key_fields": ["id", "source_key", "name", "source_type", "url", "category"] },
+      { "name": "ContentSource", "table": "content_sources", "key_fields": ["id", "source_key", "name", "source_type", "url", "category", "is_system", "user_id"] },
       { "name": "UserSourceSubscription", "table": "user_source_subscriptions", "key_fields": ["id", "user_id", "source_id", "is_subscribed"] },
+      { "name": "ArticleTTS", "table": "article_tts", "key_fields": ["id", "article_url", "voice_id", "audio_data", "content_hash"], "purpose": "Cached TTS audio per article and voice, shared across users" },
+      { "name": "UserVoiceSubscription", "table": "user_voice_subscriptions", "key_fields": ["id", "user_id", "voice_id", "is_subscribed"], "purpose": "Per-user TTS voice preferences" },
+      { "name": "UserArticleTTSHistory", "table": "user_article_tts_history", "key_fields": ["id", "user_id", "article_url", "voice_id"], "purpose": "Per-user last-played voice per article for auto-resume" },
+      { "name": "UserContentSeenStatus", "table": "user_content_seen_status", "key_fields": ["id", "user_id", "content_type", "content_id", "seen_at"], "purpose": "Tracks which articles/videos each user has seen" },
       { "name": "AccountValueSnapshot", "table": "account_value_snapshots", "key_fields": ["id", "account_id", "timestamp", "btc_value", "usd_value"] },
       { "name": "MetricSnapshot", "table": "metric_snapshots", "key_fields": ["id", "metric_type", "timestamp", "value_json"] },
       { "name": "PropFirmState", "table": "prop_firm_state", "key_fields": ["id", "account_id", "initial_deposit", "current_equity", "is_killed", "kill_reason"] },
@@ -121,26 +125,32 @@
 
     "services": [
       { "file": "services/account_snapshot_service.py", "purpose": "Captures daily account value snapshots for historical charting", "type": "background" },
+      { "file": "services/ai_credential_service.py", "purpose": "Per-user AI provider credential management and retrieval", "type": "infrastructure" },
       { "file": "services/ai_grid_optimizer.py", "purpose": "AI-powered grid parameter optimization", "type": "analysis" },
       { "file": "services/auto_buy_monitor.py", "purpose": "Auto-converts stablecoins to BTC when balances exceed minimums", "type": "background" },
+      { "file": "services/brand_service.py", "purpose": "White-label branding configuration and customization", "type": "infrastructure" },
       { "file": "services/budget_calculator.py", "purpose": "Calculates available capital for bidirectional bots with reservations", "type": "trading" },
       { "file": "services/coin_review_service.py", "purpose": "Weekly AI-powered coin status review and categorization", "type": "analysis" },
       { "file": "services/content_refresh_service.py", "purpose": "Periodically fetches news and video content from configured sources", "type": "background" },
       { "file": "services/debt_ceiling_monitor.py", "purpose": "Weekly check for US debt ceiling legislation changes", "type": "background" },
       { "file": "services/delisted_pair_monitor.py", "purpose": "Daily sync of trading pairs; removes delisted pairs from bots", "type": "background" },
       { "file": "services/dex_wallet_service.py", "purpose": "Fetches wallet balances from blockchain networks (Ethereum, L2s)", "type": "exchange" },
-      { "file": "services/exchange_service.py", "purpose": "Provides per-user, per-account exchange client instantiation", "type": "exchange" },
+      { "file": "services/domain_blacklist_service.py", "purpose": "Domain-level blocking for content sources that block our IP", "type": "infrastructure" },
+      { "file": "services/email_service.py", "purpose": "AWS SES email sending for verification, password reset, MFA codes", "type": "infrastructure" },
+      { "file": "services/exchange_service.py", "purpose": "Per-user, per-account exchange client instantiation with async locking and double-checked caching", "type": "exchange" },
       { "file": "services/grid_rotation_service.py", "purpose": "Periodic profit lock-in and grid refresh for winning positions", "type": "trading" },
       { "file": "services/grid_trading_service.py", "purpose": "Grid bot lifecycle: initialization, level management, order placement", "type": "trading" },
       { "file": "services/indicator_log_service.py", "purpose": "Logs indicator condition evaluations for non-AI bots", "type": "logging" },
       { "file": "services/limit_order_monitor.py", "purpose": "Monitors pending limit orders and updates positions on fill", "type": "background" },
+      { "file": "services/news_fetch_service.py", "purpose": "Fetches individual article content from source URLs with robots.txt compliance", "type": "background" },
       { "file": "services/news_image_cache.py", "purpose": "Downloads and saves news thumbnails as WebP files to backend/news_images/", "type": "background" },
-      { "file": "services/order_monitor.py", "purpose": "Checks pending limit orders and creates trades when filled", "type": "background" },
-      { "file": "services/order_reconciliation_monitor.py", "purpose": "Detects and fixes positions with missing fill data", "type": "background" },
+      { "file": "services/order_reconciliation_monitor.py", "purpose": "Detects and fixes positions with missing fill data; includes MissingOrderDetector", "type": "background" },
       { "file": "services/perps_monitor.py", "purpose": "Syncs perpetual futures positions with Coinbase INTX state", "type": "background" },
-      { "file": "services/prop_guard_monitor.py", "purpose": "Background equity monitoring for prop firm accounts every 30s", "type": "background" },
       { "file": "services/portfolio_conversion_service.py", "purpose": "Portfolio conversion with progress tracking", "type": "trading" },
+      { "file": "services/portfolio_service.py", "purpose": "Portfolio aggregation and balance calculations", "type": "trading" },
+      { "file": "services/prop_guard_monitor.py", "purpose": "Background equity monitoring for prop firm accounts every 30s", "type": "background" },
       { "file": "services/season_detector.py", "purpose": "Market season detection using halving cycles and multiple indicators", "type": "analysis" },
+      { "file": "services/settings_service.py", "purpose": "User settings retrieval and persistence", "type": "infrastructure" },
       { "file": "services/shutdown_manager.py", "purpose": "Tracks in-flight operations for graceful shutdown", "type": "infrastructure" },
       { "file": "services/websocket_manager.py", "purpose": "WebSocket connection manager for real-time order fill notifications", "type": "infrastructure" }
     ],
@@ -149,7 +159,7 @@
       "coordinators": [
         { "file": "trading_engine_v2.py", "purpose": "Strategy-based trading engine coordinator; wraps all trading modules" },
         { "file": "trading_client.py", "purpose": "Quote-currency agnostic buy/sell wrapper; works with any ExchangeClient" },
-        { "file": "multi_bot_monitor.py", "purpose": "Monitors prices for all active bots and dispatches strategy signals" },
+        { "file": "multi_bot_monitor.py", "purpose": "Monitors prices for all active bots and dispatches strategy signals; parallel processing with Semaphore(5) and per-task contextvars for exchange isolation" },
         { "file": "order_validation.py", "purpose": "Ensures orders meet exchange minimum size requirements" },
         { "file": "precision.py", "purpose": "Precision handling for exchange API order sizes" },
         { "file": "product_precision.py", "purpose": "Per-product increment specifications from exchange APIs" }
@@ -183,7 +193,7 @@
       "coinbase_modules": [
         { "file": "coinbase_api/auth.py", "purpose": "HMAC and CDP authentication for Coinbase API" },
         { "file": "coinbase_api/account_balance_api.py", "purpose": "Account balance and portfolio queries" },
-        { "file": "coinbase_api/market_data_api.py", "purpose": "Prices, candles, product listings" },
+        { "file": "coinbase_api/market_data_api.py", "purpose": "Prices, candles, product listings with single-flight caching" },
         { "file": "coinbase_api/order_api.py", "purpose": "Order placement, cancellation, and status" },
         { "file": "coinbase_api/perpetuals_api.py", "purpose": "Perpetual futures positions, portfolio, allocations" },
         { "file": "coinbase_api/public_market_data.py", "purpose": "Public (no-auth) market data endpoints for paper trading and fallback; includes PublicMarketDataClient" }
@@ -203,8 +213,9 @@
     ],
 
     "core_modules": [
+      { "file": "main.py", "purpose": "FastAPI application entry point, startup/shutdown events, background task orchestration" },
       { "file": "ai_service.py", "purpose": "Unified AI client interface (Anthropic, OpenAI, Google Gemini)" },
-      { "file": "cache.py", "purpose": "In-memory cache for API responses to reduce exchange API spam" },
+      { "file": "cache.py", "purpose": "In-memory cache with TTL, single-flight pattern (thundering herd prevention), and persistent portfolio cache" },
       { "file": "cleanup_jobs.py", "purpose": "Scheduled database cleanup for old decision logs, failed orders, noise logs" },
       { "file": "conditions.py", "purpose": "Flexible condition framework (3Commas-style) with indicator comparisons" },
       { "file": "config.py", "purpose": "Pydantic settings loaded from .env (database URL, JWT secret, CORS, etc.)" },
@@ -243,7 +254,9 @@
     ],
 
     "utils": [
-      { "file": "utils/candle_utils.py", "purpose": "Candle data utilities: timeframe aggregation, gap filling, synthetic timeframes" }
+      { "file": "utils/candle_utils.py", "purpose": "Candle data utilities: timeframe aggregation, gap filling, synthetic timeframes" },
+      { "file": "utils/robots_checker.py", "purpose": "Checks robots.txt compliance before scraping article content" },
+      { "file": "utils/url_utils.py", "purpose": "URL normalization and validation utilities" }
     ],
 
     "external_integrations": {
@@ -279,11 +292,18 @@
       },
       "market_data": {
         "sources": ["Fear & Greed Index", "BTC Dominance", "Altseason Index", "Market Cap", "Mempool", "Hash Rate", "Lightning Network"]
+      },
+      "email": {
+        "provider": "AWS SES",
+        "region": "us-east-1",
+        "sender": "noreply@romerotechsolutions.com",
+        "auth": "IAM role (ZenithGridEC2Role)",
+        "features": ["Email verification", "Password reset", "MFA codes"]
       }
     },
 
     "background_tasks": [
-      { "name": "MultiBotMonitor", "interval": "Per-strategy (15min for AI, varies for others)", "purpose": "Core bot loop: price monitoring and strategy signal dispatch" },
+      { "name": "MultiBotMonitor", "interval": "Per-strategy (15min for AI, varies for others)", "purpose": "Core bot loop: parallel price monitoring and strategy signal dispatch (Semaphore(5))" },
       { "name": "LimitOrderMonitor", "interval": "10 seconds", "purpose": "Check pending limit orders for fills" },
       { "name": "OrderReconciliationMonitor", "interval": "60 seconds", "purpose": "Auto-fix orphaned positions with missing fill data" },
       { "name": "MissingOrderDetector", "interval": "5 minutes", "purpose": "Detect unrecorded orders from exchange" },
@@ -299,28 +319,41 @@
     ],
 
     "migrations": {
-      "count": 16,
+      "count": 29,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
       "idempotent": true,
       "files": [
         "add_account_value_snapshots.py",
+        "add_article_content_cache.py",
+        "add_article_content_fetch_failed.py",
+        "add_article_has_issue.py",
+        "add_article_source_id_fk.py",
         "add_bidirectional_support.py",
         "add_bot_name_unique_index.py",
+        "add_content_scrape_policies.py",
+        "add_content_source_user_id.py",
+        "add_email_verification.py",
         "add_metric_snapshots_table.py",
+        "add_mfa_email_method.py",
+        "add_mfa_totp_support.py",
         "add_news_category_column.py",
         "add_paper_trading_accounts.py",
         "add_pending_order_reserves.py",
         "add_perpetual_futures_fields.py",
+        "add_prop_firm_support.py",
+        "add_subscription_category_retention.py",
+        "add_tts_content_hash.py",
+        "add_tts_tables.py",
+        "add_user_content_seen_status.py",
+        "bot_name_per_user_unique.py",
         "convert_coin_categories_to_global.py",
         "encrypt_existing_credentials.py",
-        "replace_paywalled_sources.py",
-        "add_prop_firm_support.py",
         "extract_bot_products.py",
         "move_news_images_to_filesystem.py",
-        "bot_name_per_user_unique.py",
-        "add_content_source_user_id.py"
+        "remove_medicalxpress_source.py",
+        "replace_paywalled_sources.py"
       ]
     }
   },
@@ -347,7 +380,10 @@
         { "file": "components/PhaseConditionSelector.tsx", "purpose": "Market phase condition selector (bull/bear/accumulation)" },
         { "file": "components/GridVisualizer.tsx", "purpose": "DCA grid level visualization" },
         { "file": "pages/bots/components/BotFormModal.tsx", "purpose": "Modal form for creating/editing bots" },
-        { "file": "pages/bots/components/BotListItem.tsx", "purpose": "Bot card component for bot list" }
+        { "file": "pages/bots/components/BotListItem.tsx", "purpose": "Bot card component for bot list" },
+        { "file": "pages/bots/components/SampleBotsSection.tsx", "purpose": "Pre-configured sample bot templates for quick setup" },
+        { "file": "pages/bots/data/sampleBots.ts", "purpose": "Sample bot template data definitions" },
+        { "file": "pages/bots/helpers.ts", "purpose": "Bot page helper functions" }
       ],
       "position_management": [
         { "file": "components/EditPositionSettingsModal.tsx", "purpose": "Edit TP, SL, trailing TP, max safety orders" },
@@ -361,7 +397,8 @@
         { "file": "pages/positions/components/PositionCard.tsx", "purpose": "Individual position display with P&L and actions" },
         { "file": "pages/positions/components/modals/CloseConfirmModal.tsx", "purpose": "Close position confirmation" },
         { "file": "pages/positions/components/modals/NotesModal.tsx", "purpose": "Position notes editor" },
-        { "file": "pages/positions/components/modals/TradeHistoryModal.tsx", "purpose": "Trade history for a position" }
+        { "file": "pages/positions/components/modals/TradeHistoryModal.tsx", "purpose": "Trade history for a position" },
+        { "file": "pages/positions/helpers.ts", "purpose": "Position page helper functions" }
       ],
       "charts": [
         { "file": "components/TradingChart.tsx", "purpose": "Lightweight price chart for position entry/exit" },
@@ -371,7 +408,8 @@
         { "file": "components/AccountValueChart.tsx", "purpose": "Account value over time line chart" },
         { "file": "components/PnLChart.tsx", "purpose": "P&L bar/line chart by time period" },
         { "file": "components/Sparkline.tsx", "purpose": "Minimal inline sparkline chart" },
-        { "file": "components/charts/IndicatorSettingsModal.tsx", "purpose": "Indicator parameter configuration" }
+        { "file": "components/charts/IndicatorSettingsModal.tsx", "purpose": "Indicator parameter configuration" },
+        { "file": "pages/charts/helpers.ts", "purpose": "Charts page helper functions" }
       ],
       "logs_and_analysis": [
         { "file": "components/AIBotLogs.tsx", "purpose": "AI bot decision logs with filtering" },
@@ -382,12 +420,42 @@
         { "file": "components/MiniPlayer.tsx", "purpose": "Persistent minimizable video player" },
         { "file": "components/ArticleReaderMiniPlayer.tsx", "purpose": "Persistent TTS article reader" },
         { "file": "pages/news/components/ArticleContent.tsx", "purpose": "Article content display" },
-        { "file": "pages/news/components/SyncedArticleReader.tsx", "purpose": "Article reader with synchronized TTS" },
         { "file": "pages/news/components/TTSControls.tsx", "purpose": "Text-to-speech playback controls" },
-        { "file": "components/news/SourceSubscriptionsModal.tsx", "purpose": "Subscribe/unsubscribe from news sources" }
+        { "file": "components/news/SourceSubscriptionsModal.tsx", "purpose": "Subscribe/unsubscribe from news sources" },
+        { "file": "pages/news/types.ts", "purpose": "TypeScript types for news page" },
+        { "file": "pages/news/helpers.ts", "purpose": "News page helper functions" }
+      ],
+      "market_sentiment_cards": [
+        { "file": "components/MarketSentimentCards.tsx", "purpose": "Card grid container for all sentiment indicators" },
+        { "file": "components/cards/CardStates.tsx", "purpose": "Shared loading/error/empty states for cards" },
+        { "file": "components/cards/InfoTooltip.tsx", "purpose": "Info tooltip component for card descriptions" },
+        { "file": "components/cards/FearGreedCard.tsx", "purpose": "Fear & Greed Index card" },
+        { "file": "components/cards/BTCDominanceCard.tsx", "purpose": "BTC dominance card" },
+        { "file": "components/cards/AltseasonCard.tsx", "purpose": "Altseason Index card" },
+        { "file": "components/cards/ATHCard.tsx", "purpose": "All-Time High distance card" },
+        { "file": "components/cards/BTCRSICard.tsx", "purpose": "BTC RSI indicator card" },
+        { "file": "components/cards/BTCSupplyCard.tsx", "purpose": "BTC supply metrics card" },
+        { "file": "components/cards/HalvingCard.tsx", "purpose": "BTC halving countdown card" },
+        { "file": "components/cards/SeasonCard.tsx", "purpose": "Market season indicator card" },
+        { "file": "components/cards/USDebtCard.tsx", "purpose": "US debt ceiling card" },
+        { "file": "components/cards/HashRateCard.tsx", "purpose": "Bitcoin hash rate card" },
+        { "file": "components/cards/LightningCard.tsx", "purpose": "Lightning Network stats card" },
+        { "file": "components/cards/MempoolCard.tsx", "purpose": "Bitcoin mempool stats card" },
+        { "file": "components/cards/StablecoinMcapCard.tsx", "purpose": "Stablecoin market cap card" },
+        { "file": "components/cards/TotalMarketCapCard.tsx", "purpose": "Total crypto market cap card" },
+        { "file": "components/DebtCeilingModal.tsx", "purpose": "Debt ceiling detail modal" }
       ],
       "prop_firm": [
         { "file": "components/PropGuardStatus.tsx", "purpose": "PropGuard drawdown monitoring dashboard for prop firm accounts" }
+      ],
+      "auth_and_security": [
+        { "file": "components/ForgotPassword.tsx", "purpose": "Password reset request form" },
+        { "file": "components/ResetPassword.tsx", "purpose": "Password reset with token form" },
+        { "file": "components/VerifyEmail.tsx", "purpose": "Email verification handler" },
+        { "file": "components/EmailVerificationPending.tsx", "purpose": "Pending email verification state" },
+        { "file": "components/MFAEmailVerify.tsx", "purpose": "Email-based MFA code verification" },
+        { "file": "components/MFAEncouragement.tsx", "purpose": "Prompt to enable MFA for security" },
+        { "file": "components/PasswordStrengthMeter.tsx", "purpose": "Visual password strength indicator" }
       ],
       "account_and_settings": [
         { "file": "components/AccountSwitcher.tsx", "purpose": "Header dropdown for switching accounts" },
@@ -406,7 +474,6 @@
         { "file": "components/LoadingSpinner.tsx", "purpose": "Animated loading spinner" },
         { "file": "components/Toast.tsx", "purpose": "Toast notifications for order fills and alerts" },
         { "file": "components/RiskDisclaimer.tsx", "purpose": "Terms acceptance modal on first login" },
-        { "file": "components/MarketSentimentCards.tsx", "purpose": "Fear/Greed, ATH distance, altseason, BTC dominance cards" },
         { "file": "components/SeasonalityToggle.tsx", "purpose": "Seasonality/market phase display toggle" }
       ],
       "sub_components": {
@@ -438,6 +505,8 @@
     "contexts": [
       { "file": "contexts/AuthContext.tsx", "exports": ["AuthProvider", "useAuth"], "purpose": "User authentication, JWT token management, session state" },
       { "file": "contexts/AccountContext.tsx", "exports": ["AccountProvider", "useAccount"], "purpose": "Multi-account state (CEX/DEX), account switching" },
+      { "file": "contexts/BrandContext.tsx", "exports": ["BrandProvider", "useBrand"], "purpose": "White-label branding configuration (app name, logo, colors)" },
+      { "file": "contexts/ThemeContext.tsx", "exports": ["ThemeProvider", "useTheme"], "purpose": "Dark/light theme state management" },
       { "file": "contexts/NotificationContext.tsx", "exports": ["NotificationProvider", "useNotifications"], "purpose": "WebSocket order fill notifications, toast alerts, audio" },
       { "file": "contexts/VideoPlayerContext.tsx", "exports": ["VideoPlayerProvider", "useVideoPlayer"], "purpose": "Persistent video player state across page navigation" },
       { "file": "contexts/ArticleReaderContext.tsx", "exports": ["ArticleReaderProvider", "useArticleReader"], "purpose": "Persistent article reader with TTS playback" },
@@ -470,8 +539,8 @@
           { "file": "pages/news/hooks/useArticleContent.ts", "purpose": "Fetch and cache article content by URL" },
           { "file": "pages/news/hooks/useNewsData.ts", "purpose": "Fetch news and video articles with caching" },
           { "file": "pages/news/hooks/useNewsFilters.ts", "purpose": "Filter news by source, date, category" },
-          { "file": "pages/news/hooks/useTTS.ts", "purpose": "Text-to-speech via Web Speech API" },
-          { "file": "pages/news/hooks/useTTSSync.ts", "purpose": "Advanced TTS with word timing, voice cycling, rate control" }
+          { "file": "pages/news/hooks/useTTSSync.ts", "purpose": "Text-to-speech with word timing, voice cycling, rate control" },
+          { "file": "pages/news/hooks/useSeenStatus.ts", "purpose": "Track and query user seen/unseen status for content" }
         ]
       }
     },
@@ -503,7 +572,7 @@
 
     "state_management": {
       "pattern": "React Context (app state) + React Query (server state)",
-      "contexts": ["AuthContext", "AccountContext", "NotificationContext", "VideoPlayerContext", "ArticleReaderContext"],
+      "contexts": ["AuthContext", "AccountContext", "BrandContext", "ThemeContext", "NotificationContext", "VideoPlayerContext", "ArticleReaderContext"],
       "react_query": {
         "purpose": "Centralized data caching with automatic refetch",
         "polling_intervals": {
@@ -538,6 +607,7 @@
     "utilities": [
       { "file": "utils/dateFormat.ts", "purpose": "Date/time formatting helpers" },
       { "file": "utils/marketSentiment.ts", "purpose": "Fear & Greed coloring, debt calculations, halving countdown" },
+      { "file": "utils/seasonDetection.ts", "purpose": "Client-side market season detection logic" },
       { "file": "utils/indicators/calculations.ts", "purpose": "MACD, RSI, Bollinger Bands, EMA, SMA calculations" },
       { "file": "utils/indicators/definitions.ts", "purpose": "Indicator metadata and default settings" },
       { "file": "utils/indicators/types.ts", "purpose": "Indicator type definitions (CandleData, IndicatorResult)" },
@@ -562,13 +632,14 @@
       "position_ownership": "Helper function _get_user_position() in position_limit_orders_router.py verifies position belongs to user's accounts before any operation",
       "bot_ownership": "All bot queries include Bot.user_id == current_user.id; bot names are unique per-user via composite constraint uq_bot_user_name(user_id, name)",
       "websocket_scoping": "WebSocketManager stores (websocket, user_id) tuples; broadcast() filters by user_id so notifications only reach the owning user",
-      "exchange_clients": "Each account has its own API credentials; get_exchange_client_for_account(db, account_id) creates per-account clients",
+      "exchange_clients": "Each account has its own API credentials; get_exchange_client_for_account(db, account_id) creates per-account clients with async locking",
       "paper_trading": "Users without Coinbase credentials get PublicMarketDataClient (no-auth public endpoints) instead of failing CoinbaseClient"
     },
     "background_services": "Bot monitor, limit order monitor, and reconciliation services intentionally process all users (no user filter) but use per-account exchange clients and route notifications to the correct user",
     "hardened_in_v2_7_0": "Round 1: order_history user scoping, perps position ownership checks, scanner logs user filter, signals user scoping, news cleanup auth, account balance ownership, bot name per-user uniqueness, delisted pair monitor account selection",
     "hardened_in_v2_7_1": "Round 2: settings/seasonality/blacklist admin-gated, source ownership with user_id, template seed-defaults auth, strategy endpoints auth, position active count scoped, perps monitor broadcast scoped, AI service per-user credentials + Gemini race fix",
     "hardened_in_v2_7_2": "Round 3: balance cache isolation (account_id passed to all get_accounts/get_btc_balance calls), per-instance rate limiter (no cross-user throttling), bull_flag_scanner BlacklistedCoin scoped to user, broadcast_position_update crash fix in sell/buy executors, factory account_id passthrough",
-    "hardened_in_v2_7_3": "Round 4: conversion-status endpoint auth, dead calculate_available_balance removed, OrderReconciliationMonitor+MissingOrderDetector scoped by account_id, ByBit per-instance rate limiter, monitor/shutdown/pair-sync endpoints admin-gated, market_data prefers system/public credentials, dead order_monitor.py + limit_order_monitor dead methods removed, TTS endpoints auth, changelog auth, DEX portfolio price lookup scoped to same user"
+    "hardened_in_v2_7_3": "Round 4: conversion-status endpoint auth, dead calculate_available_balance removed, OrderReconciliationMonitor+MissingOrderDetector scoped by account_id, ByBit per-instance rate limiter, monitor/shutdown/pair-sync endpoints admin-gated, market_data prefers system/public credentials, dead order_monitor.py + limit_order_monitor dead methods removed, TTS endpoints auth, changelog auth, DEX portfolio price lookup scoped to same user",
+    "scalability_v2_26_0": "Parallel bot processing (Semaphore(5) + contextvars), exchange client cache locking, candle cache shared across users, single-flight thundering herd prevention, rate limiter pruning"
   }
 }

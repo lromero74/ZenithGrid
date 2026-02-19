@@ -32,23 +32,42 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Portfolio Tracking**: Real-time portfolio value and allocation (CEX & DEX)
 - **Trade History**: Complete audit trail of all trades
 - **Performance Metrics**: Win rate, total profit, active deals
-- **News Aggregation**: Multi-source crypto news (Reddit, CoinDesk, CoinTelegraph, The Block, etc.)
-- **YouTube Integration**: Educational content from Coin Bureau, Benjamin Cowen, and more
-- **Market Intelligence**: Fear & Greed Index, US National Debt tracking
+- **News Aggregation**: Configurable multi-source crypto news with category filtering and subscription management
+- **Article Reader with TTS**: Full article content with text-to-speech, voice cycling, and word-level sync
+- **YouTube Integration**: Educational content from crypto channels
+- **Market Intelligence**: 16+ indicator cards — Fear & Greed, BTC Dominance, Altseason Index, ATH Distance, Hash Rate, Mempool, Lightning Network, Stablecoin Market Cap, BTC RSI, Halving Countdown, US Debt, and more
+
+### 🔐 Security & Multi-User
+- **HTTPS**: Nginx reverse proxy with Let's Encrypt SSL (auto-renewing)
+- **Multi-Factor Authentication**: TOTP (authenticator app) or Email-based MFA
+- **Email Verification**: Required for new account activation
+- **Trusted Devices**: 30-day device trust with geolocation tracking
+- **Password Reset**: Secure email-based password recovery
+- **Multi-User**: Full data isolation between users with per-user encrypted credentials
+- **Encrypted at Rest**: All API keys and secrets encrypted with Fernet (AES-128-CBC + HMAC-SHA256)
+
+### 🏦 Multi-Exchange Support
+- **Coinbase Advanced Trade**: Spot trading + perpetual futures (INTX) via HMAC or CDP auth
+- **ByBit V5**: Linear perpetual futures with real-time WebSocket equity tracking
+- **MT5 Bridge**: FTMO and prop firm trading via custom EA bridge
+- **DEX**: On-chain swaps on Ethereum, Arbitrum, Polygon, Base
+- **PropGuard**: Automated drawdown protection for prop firm accounts (daily + total limits, kill switch)
+- **Paper Trading**: Simulated exchange client for risk-free strategy testing
 
 ## 🏗️ Architecture
 
-- **Backend**: Python 3.13 + FastAPI + SQLAlchemy (async) + SQLite
+- **Backend**: Python 3.10+ + FastAPI + SQLAlchemy (async) + SQLite
 - **Frontend**: React 18 + TypeScript + Vite + TanStack Query + TradingView Charts
-- **Exchange**: Coinbase Advanced Trade API
+- **Exchanges**: Coinbase Advanced Trade (HMAC/CDP), ByBit V5 (linear perps), MT5 Bridge, DEX (Ethereum/L2s)
 - **AI**: Multi-provider support (Claude, GPT, Gemini, Grok, Groq)
-- **Deployment**: uvicorn + systemd/launchd (optional)
+- **Auth**: JWT + TOTP MFA + Email MFA + email verification + trusted devices
+- **Deployment**: Nginx + Let's Encrypt SSL + systemd (AWS EC2 or self-hosted)
 
 ## 📋 Prerequisites
 
 - **Python 3.10+** (Python 3.13 recommended)
 - **Node.js 18+** and npm
-- **Coinbase account** with API credentials
+- **Exchange account** — Coinbase (required for spot), ByBit/MT5 (optional for perps)
 - **AI API key** (optional, for AI bots - Claude, GPT, Gemini, Grok, or Groq)
 - **BTC and/or USD** in your Coinbase account
 
@@ -79,7 +98,7 @@ The setup wizard will:
 9. Optionally install systemd/launchd services for auto-start
 10. **Start the services automatically**
 
-That's it! Access the application at: **http://localhost:5173**
+That's it! Access the application at: **http://localhost:8100**
 
 #### Setup Wizard Options
 
@@ -121,6 +140,7 @@ Then configure API keys in `backend/.env` and create your admin user via the API
 
 **Get API Keys:**
 - **Coinbase**: https://portal.cdp.coinbase.com/
+- **ByBit** (optional, for perps): https://www.bybit.com/app/user/api-management
 - **AI Providers** (optional):
   - Claude: https://console.anthropic.com/
   - GPT: https://platform.openai.com/
@@ -130,7 +150,7 @@ Then configure API keys in `backend/.env` and create your admin user via the API
 
 ### Create Your First Bot
 
-1. Open http://localhost:5173
+1. Open http://localhost:8100
 2. Navigate to **"Bots"** page
 3. Click **"Create New Bot"**
 4. (Optional) Select a template: Conservative/Balanced/Aggressive
@@ -156,7 +176,7 @@ Then configure API keys in `backend/.env` and create your admin user via the API
 
 ### Step 1: Add Your AI Provider (One-Time Setup)
 
-1. Open the application at http://localhost:5173
+1. Open the application at http://localhost:8100
 2. Navigate to **Settings** page
 3. Click **"AI Provider Credentials"** button
 4. Choose your AI provider (Claude, GPT, Gemini, Grok, or Groq)
@@ -265,7 +285,12 @@ python3 update.py --yes
 | **Multi-AI Support** | ❌ | ✅ **Claude, GPT, Gemini, Grok, Groq** |
 | **Bull Flag Scanner** | ❌ | ✅ **Automated pattern detection** |
 | **Arbitrage Strategies** | Limited | ✅ **3 types** |
-| **News Aggregation** | ❌ | ✅ **8+ sources** |
+| **News + TTS Reader** | ❌ | ✅ **Multi-source with text-to-speech** |
+| **Market Sentiment** | ❌ | ✅ **16+ indicator cards** |
+| **Multi-Exchange** | ✅ | ✅ **Coinbase + ByBit + MT5 + DEX** |
+| **Prop Firm Safety** | ❌ | ✅ **PropGuard drawdown monitoring** |
+| **MFA / 2FA** | ✅ | ✅ **TOTP + Email MFA** |
+| **HTTPS / SSL** | ✅ | ✅ **Let's Encrypt auto-renewing** |
 | **Category Filtering** | ❌ | ✅ **5 categories** |
 | **Self-Hosted** | ❌ | ✅ |
 | **No Monthly Fees** | ❌ | ✅ |
@@ -275,6 +300,7 @@ python3 update.py --yes
 | Real-time Charts | ✅ | ✅ TradingView |
 | Position Management | ✅ | ✅ |
 | Portfolio Tracking | ✅ | ✅ **CEX + DEX** |
+| Paper Trading | ✅ | ✅ **Simulated exchange** |
 
 ## 🛡️ Safety Features
 
@@ -289,12 +315,17 @@ python3 update.py --yes
 - **Trailing Stop Loss** with deviation percentage
 - **Trailing Take Profit** with pullback protection
 - **Safety Order** ladder with configurable steps
-- **API Key Encryption** in database
-- **Multi-User Support** with account isolation
+- **PropGuard**: Automated prop firm drawdown monitoring with daily/total limits and kill switch
+- **API Key Encryption** (Fernet AES-128-CBC + HMAC-SHA256)
+- **Multi-User Support** with full data isolation
+- **MFA**: TOTP (authenticator app) or email-based two-factor authentication
+- **HTTPS**: Nginx + Let's Encrypt with auto-renewing certificates
+- **Real-time Notifications**: WebSocket order fill alerts with audio
 
 ## 📖 Documentation
 
 - **[🏗️ Architecture](docs/ARCHITECTURE.md)** - System architecture with Mermaid diagrams
+- **[📰 News Content Architecture](docs/NEWS_CONTENT_ARCHITECTURE.md)** - News, TTS, and content source rules
 - **[✅ Feature Checklist](docs/FEATURE_CHECKLIST.md)** - Progress tracker
 - **[📖 Quick Start](docs/QUICKSTART.md)** - Getting started guide
 - **[🔌 API Docs](http://localhost:8100/docs)** - FastAPI auto-docs (when running)
@@ -318,23 +349,35 @@ python3 update.py --yes
 - Bot configurations and templates
 - Market data and signals
 - Profit in BTC and USD
+- AI decision logs with reasoning
+- News articles, TTS audio cache, and seen status
+- Account value snapshots for historical charting
+- Prop firm equity snapshots and drawdown history
 
 ## 🌱 Roadmap
 
 - [x] Multi-pair bots
 - [x] Budget splitting
 - [x] Bot templates (Conservative/Balanced/Aggressive)
-- [x] **AI autonomous trading with multi-provider support** 🤖
+- [x] **AI autonomous trading with multi-provider support**
 - [x] **Bull Flag pattern scanner**
 - [x] **Arbitrage strategies** (Triangular, Spatial, Statistical)
-- [x] **News aggregation** (8+ sources)
+- [x] **News aggregation with TTS article reader**
+- [x] **Market sentiment dashboard** (16+ indicator cards)
 - [x] **Category filtering system**
 - [x] **Trailing take profit / stop loss**
 - [x] **Portfolio tracking** (CEX + DEX)
+- [x] **Multi-exchange support** (Coinbase, ByBit, MT5 Bridge, DEX)
+- [x] **MFA / 2FA** (TOTP + Email)
+- [x] **HTTPS with Let's Encrypt SSL**
+- [x] **Real-time WebSocket notifications** (toast + audio)
+- [x] **PropGuard** prop firm safety monitoring
+- [x] **Paper trading mode**
+- [x] **Email verification & password reset** (AWS SES)
 - [ ] **Enhanced sentiment analysis** (Twitter/X, social signals)
 - [ ] **Backtesting system** for strategy validation
-- [ ] **Multiple exchange support** (Binance, Kraken, etc.)
-- [ ] **Position notifications / alerts** (email, Telegram)
+- [ ] **Additional exchanges** (Binance, Kraken, etc.)
+- [ ] **Telegram / email alerts** for position events
 - [ ] **Performance analytics dashboard** (advanced metrics)
 - [ ] **Mobile app** (React Native)
 
@@ -379,7 +422,8 @@ npm run dev
 - ⚠️ **Never commit `.env`** to version control
 - ⚠️ **Test with small amounts** first
 - ⚠️ **Monitor regularly** for unexpected behavior
-- ⚠️ **Use SSH tunnel** for remote access
+- ⚠️ **Enable MFA** for all user accounts (TOTP or Email)
+- ⚠️ **Use HTTPS** in production (Nginx + Let's Encrypt included)
 - ⚠️ **Rotate API keys** periodically
 - ⚠️ **Trading involves risk** - only invest what you can afford to lose
 
