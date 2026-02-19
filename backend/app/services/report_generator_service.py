@@ -309,6 +309,9 @@ def _build_income_goal_card(g: Dict[str, Any]) -> str:
             </table>
             <p style="color: #64748b; font-size: 11px; margin: 8px 0 0 0;">
                 Based on {sample} trades over {lookback} days</p>
+            <p style="color: #475569; font-size: 10px; font-style: italic; margin: 6px 0 0 0;">
+                Past performance does not guarantee future results. Projections are
+                estimates based on historical data and actual results may vary.</p>
         </div>"""
 
 

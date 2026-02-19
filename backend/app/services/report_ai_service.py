@@ -139,6 +139,9 @@ Guidelines:
 - If there's prior period data, compare and note changes
 - Suggest 1-2 actionable items if relevant
 - Keep the tone professional but approachable
+- If income projections or forward-looking estimates are present, include a brief professional disclaimer:
+  past performance does not guarantee future results, projections are estimates based on historical
+  data, and actual results may vary due to market conditions
 - Do not hallucinate data not provided above"""
 
 

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.28.1] - 2026-02-19
+
+### Added
+- **Performance disclaimer**: Income goal projections now include a professional disclaimer that past performance does not guarantee future results, both in the HTML report card and in AI-generated summaries
+
 ## [v2.28.0] - 2026-02-19
 
 ### Added
