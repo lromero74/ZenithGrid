@@ -19,6 +19,7 @@ export interface ArticleItem {
   published: string | null
   thumbnail: string | null
   summary: string | null
+  category?: string
   content?: string  // Full article content (markdown)
   is_seen?: boolean
   has_issue?: boolean

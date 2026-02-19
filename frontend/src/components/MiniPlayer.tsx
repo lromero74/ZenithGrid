@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, Volume2, VolumeX } from 'lucide-react'
 import { useVideoPlayer } from '../contexts/VideoPlayerContext'
-import { videoSourceColors } from './news'
+import { CATEGORY_COLORS } from '../pages/news/types'
 
 // Format seconds to MM:SS or HH:MM:SS
 function formatTime(seconds: number): string {
@@ -354,7 +354,7 @@ export function MiniPlayer() {
             <div className={`min-w-0 ${isExpanded ? 'w-full sm:w-auto sm:flex-shrink-0 sm:max-w-[12rem]' : 'flex items-center gap-2'}`}>
               <span
                 className={`px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${
-                  videoSourceColors[currentVideo.source] || 'bg-slate-600 text-slate-300'
+                  CATEGORY_COLORS[currentVideo.category || ''] || 'bg-slate-600 text-slate-300 border-slate-500'
                 }`}
               >
                 {currentVideo.channel_name}

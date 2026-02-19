@@ -83,6 +83,7 @@ export interface NewsSource {
   id: string
   name: string
   website: string
+  category?: string
 }
 
 export interface VideoSource {
@@ -90,6 +91,7 @@ export interface VideoSource {
   name: string
   website: string
   description: string
+  category?: string
 }
 
 export interface NewsResponse {

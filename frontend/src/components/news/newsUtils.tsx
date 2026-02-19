@@ -226,119 +226,7 @@ export function formatRelativeTime(isoString: string | null): string {
   return date.toLocaleDateString()
 }
 
-// Source-to-category mapping (used to color sources by their category)
-import { CATEGORY_COLORS, NEWS_CATEGORIES } from '../../pages/news/types'
-
-export const SOURCE_CATEGORY: Record<string, string> = {
-  // CryptoCurrency
-  bitcoin_magazine: 'CryptoCurrency', blockworks: 'CryptoCurrency',
-  coindesk: 'CryptoCurrency', cointelegraph: 'CryptoCurrency',
-  decrypt: 'CryptoCurrency', cryptoslate: 'CryptoCurrency',
-  beincrypto: 'CryptoCurrency', unchained: 'CryptoCurrency',
-  newsbtc: 'CryptoCurrency', cryptopotato: 'CryptoCurrency',
-  bitcoinist: 'CryptoCurrency', u_today: 'CryptoCurrency',
-  coinjournal: 'CryptoCurrency', the_crypto_basic: 'CryptoCurrency',
-  crypto_briefing: 'CryptoCurrency', watcher_guru: 'CryptoCurrency',
-  blockchain_news: 'CryptoCurrency',
-  // AI
-  openai_blog: 'AI', mit_tech_ai: 'AI', the_ai_beat: 'AI',
-  // Finance
-  yahoo_finance_news: 'Finance', motley_fool: 'Finance', kiplinger: 'Finance',
-  // World
-  voa_news: 'World', global_voices: 'World', rferl: 'World',
-  africanews: 'World', scmp: 'World',
-  bbc_world: 'World', npr_world: 'World',
-  cbs_news_world: 'World', nbc_news_world: 'World',
-  abc_news_world: 'World', pbs_world: 'World',
-  // Politics
-  npr_politics: 'Politics', the_hill: 'Politics', politico: 'Politics',
-  cbs_news_politics: 'Politics', nbc_news_politics: 'Politics',
-  abc_news_politics: 'Politics', pbs_politics: 'Politics',
-  bbc_politics: 'Politics',
-  // Nation
-  npr_news: 'Nation', pbs_newshour: 'Nation', ap_news: 'Nation',
-  cbs_news_us: 'Nation', nbc_news_us: 'Nation', abc_news_us: 'Nation',
-  // Business
-  cnbc_business: 'Business', business_insider: 'Business',
-  bbc_business: 'Business', npr_business: 'Business',
-  cbs_news_business: 'Business', nbc_news_business: 'Business',
-  abc_news_business: 'Business', pbs_economy: 'Business',
-  politico_economy: 'Business',
-  // Technology
-  engadget: 'Technology', ars_technica: 'Technology',
-  the_verge: 'Technology', wired: 'Technology',
-  bbc_tech: 'Technology', npr_tech: 'Technology',
-  cbs_news_tech: 'Technology', nbc_news_tech: 'Technology',
-  abc_news_tech: 'Technology', politico_tech: 'Technology',
-  // Entertainment
-  variety: 'Entertainment', hollywood_reporter: 'Entertainment',
-  deadline: 'Entertainment',
-  bbc_entertainment: 'Entertainment', npr_culture: 'Entertainment',
-  cbs_news_entertainment: 'Entertainment',
-  abc_news_entertainment: 'Entertainment', pbs_arts: 'Entertainment',
-  // Sports
-  espn: 'Sports', cbs_sports: 'Sports', yahoo_sports: 'Sports',
-  bbc_sport: 'Sports', npr_sports: 'Sports', abc_news_sports: 'Sports',
-  // Science
-  science_daily: 'Science', nasa: 'Science',
-  quanta_magazine: 'Science', sciencealert: 'Science',
-  futurism: 'Science', live_science: 'Science',
-  space_com: 'Science', smithsonian: 'Science',
-  bbc_science: 'Science', npr_science: 'Science',
-  cbs_news_science: 'Science', nbc_news_science: 'Science',
-  pbs_science: 'Science',
-  // Health
-  stat_news: 'Health', npr_health: 'Health', science_daily_health: 'Health',
-  genetic_engineering_news: 'Health',
-  nature_medicine: 'Health', the_lancet: 'Health', who_news: 'Health',
-  nutrition_org: 'Health', self_wellness: 'Health',
-  bbc_health: 'Health', cbs_news_health: 'Health',
-  nbc_news_health: 'Health', abc_news_health: 'Health',
-  pbs_health: 'Health', politico_healthcare: 'Health',
-}
-
-export const VIDEO_SOURCE_CATEGORY: Record<string, string> = {
-  // CryptoCurrency
-  coin_bureau: 'CryptoCurrency', benjamin_cowen: 'CryptoCurrency',
-  altcoin_daily: 'CryptoCurrency', bankless: 'CryptoCurrency',
-  the_defiant: 'CryptoCurrency', crypto_banter: 'CryptoCurrency',
-  datadash: 'CryptoCurrency', cryptosrus: 'CryptoCurrency',
-  the_moon: 'CryptoCurrency', digital_asset_news: 'CryptoCurrency',
-  paul_barron: 'CryptoCurrency', lark_davis: 'CryptoCurrency',
-  pompliano: 'CryptoCurrency', whiteboard_crypto: 'CryptoCurrency',
-  // AI
-  two_minute_papers: 'AI', ai_explained: 'AI', matt_wolfe: 'AI',
-  // Finance
-  financial_times: 'Finance', graham_stephan: 'Finance',
-  // Business
-  cnbc_yt: 'Business', bloomberg: 'Business', yahoo_finance: 'Business',
-  // World
-  wion: 'World', dw_news: 'World', channel4_news: 'World',
-  // Nation
-  pbs_newshour_yt: 'Nation', nbc_news: 'Nation', abc_news: 'Nation',
-  // Technology
-  mkbhd: 'Technology', linus_tech_tips: 'Technology', the_verge_yt: 'Technology',
-  // Entertainment
-  screen_junkies: 'Entertainment', collider: 'Entertainment', ign: 'Entertainment',
-  // Sports
-  espn_yt: 'Sports', cbs_sports_yt: 'Sports', pat_mcafee: 'Sports',
-  // Science
-  veritasium: 'Science', kurzgesagt: 'Science', smarter_every_day: 'Science',
-  // Health
-  doctor_mike: 'Health', medlife_crisis: 'Health', dr_eric_berg: 'Health',
-}
-
-// Build source color maps from category colors
-function buildColorMap(mapping: Record<string, string>): Record<string, string> {
-  const result: Record<string, string> = {}
-  for (const [source, category] of Object.entries(mapping)) {
-    result[source] = CATEGORY_COLORS[category] || 'bg-slate-600 text-slate-300 border-slate-500'
-  }
-  return result
-}
-
-export const sourceColors: Record<string, string> = buildColorMap(SOURCE_CATEGORY)
-export const videoSourceColors: Record<string, string> = buildColorMap(VIDEO_SOURCE_CATEGORY)
+import { NEWS_CATEGORIES } from '../../pages/news/types'
 
 // Build a category-order index for fast sorting (lower index = earlier in list)
 const _categoryOrder: Record<string, number> = Object.fromEntries(
@@ -346,15 +234,12 @@ const _categoryOrder: Record<string, number> = Object.fromEntries(
 )
 
 /** Sort sources by their category order (matching NEWS_CATEGORIES), then alphabetically within a category */
-export function sortSourcesByCategory<T extends { id: string }>(
+export function sortSourcesByCategory<T extends { id: string; category?: string }>(
   sources: T[],
-  categoryMap: Record<string, string>,
 ): T[] {
   return [...sources].sort((a, b) => {
-    const catA = categoryMap[a.id] || 'zzz'
-    const catB = categoryMap[b.id] || 'zzz'
-    const orderA = _categoryOrder[catA] ?? 999
-    const orderB = _categoryOrder[catB] ?? 999
+    const orderA = _categoryOrder[a.category || ''] ?? 999
+    const orderB = _categoryOrder[b.category || ''] ?? 999
     if (orderA !== orderB) return orderA - orderB
     return a.id.localeCompare(b.id)
   })

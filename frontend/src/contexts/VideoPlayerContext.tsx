@@ -18,6 +18,7 @@ export interface VideoItem {
   published: string | null
   thumbnail: string | null
   description: string | null
+  category?: string
   is_seen?: boolean
 }
 

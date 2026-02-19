@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.25.1] - 2026-02-19
+
+### Changed
+- **Source badge colors now driven by API category**: Source badges on articles, videos, and mini-players derive their color from the backend category field instead of a hardcoded frontend mapping — new and custom sources automatically get correct category colors
+
+### Removed
+- **Hardcoded source-to-category dictionaries**: Deleted ~100 lines of duplicated frontend mappings (SOURCE_CATEGORY, VIDEO_SOURCE_CATEGORY) that had to be manually kept in sync with the database
+
 ## [v2.25.0] - 2026-02-19
 
 ### Added
