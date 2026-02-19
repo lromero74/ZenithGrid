@@ -247,6 +247,7 @@ async def _get_or_create_tts(
     When audio_needed=False and cache hit, skips reading audio file.
     """
     voice_name = TTS_VOICES.get(voice.lower(), TTS_VOICES[DEFAULT_VOICE])
+    text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
 
     # C1: Dedup lock — concurrent requests for same article+voice wait
     gen_lock = _get_generation_lock(f"{article_id}:{voice}")
@@ -261,6 +262,21 @@ async def _get_or_create_tts(
                 )
             )
             cached = result.scalars().first()
+
+        if cached:
+            # Content changed (e.g. retry fetched full text) — invalidate
+            if cached.content_hash != text_hash:
+                old_path = TTS_CACHE_DIR / cached.audio_path
+                if old_path.exists():
+                    old_path.unlink()
+                async with async_session_maker() as db:
+                    await db.execute(
+                        delete(ArticleTTS).where(
+                            ArticleTTS.id == cached.id,
+                        )
+                    )
+                    await db.commit()
+                cached = None  # fall through to regeneration
 
         if cached:
             cache_path = TTS_CACHE_DIR / cached.audio_path
@@ -303,6 +319,7 @@ async def _get_or_create_tts(
                 audio_path=audio_path,
                 word_timings=json.dumps(words),
                 file_size_bytes=len(audio_data),
+                content_hash=text_hash,
                 created_by_user_id=user_id,
             )
             try:

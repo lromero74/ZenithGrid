@@ -1095,6 +1095,7 @@ class ArticleTTS(Base):
     audio_path = Column(String, nullable=False)
     word_timings = Column(Text, nullable=True)  # JSON array
     file_size_bytes = Column(Integer, nullable=True)
+    content_hash = Column(String(8), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_user_id = Column(
         Integer, ForeignKey("users.id"), nullable=True,
