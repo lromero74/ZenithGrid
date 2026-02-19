@@ -10,9 +10,45 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
+import ssl
+
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+def _friendly_error(exc: Exception) -> str:
+    """Convert raw exceptions into user-friendly error messages."""
+    msg = str(exc)
+
+    # SSL errors
+    if isinstance(exc, ssl.SSLError) or "SSL" in msg or "ssl" in msg:
+        return "SSL/TLS connection failed — domain may have certificate issues"
+
+    # DNS resolution
+    if "Name or service not known" in msg or "getaddrinfo failed" in msg:
+        return "Domain not found — check the URL for typos"
+    if "No address associated" in msg:
+        return "Domain has no DNS records"
+
+    # Connection refused / reset
+    if "Connection refused" in msg:
+        return "Connection refused — server may be down"
+    if "Connection reset" in msg:
+        return "Connection reset by server"
+
+    # httpx-specific wrappers often nest the real error
+    if isinstance(exc, httpx.ConnectError):
+        cause = exc.__cause__
+        if cause:
+            return _friendly_error(cause)
+        return "Could not connect to domain"
+
+    # Fallback: truncate long messages
+    if len(msg) > 120:
+        return msg[:117] + "..."
+    return msg
+
 
 USER_AGENT = "ZenithGrid/1.0"
 MAX_ROBOTS_SIZE = 512 * 1024  # 512KB
@@ -189,6 +225,8 @@ async def check_robots_txt(url: str) -> RobotsPolicy:
         )
 
     except httpx.TimeoutException:
+        # Timeout is ambiguous — domain might work intermittently.
+        # Allow with warning so user can try adding.
         logger.warning(f"Timeout fetching robots.txt for {domain}")
         return RobotsPolicy(
             domain=domain,
@@ -199,14 +237,37 @@ async def check_robots_txt(url: str) -> RobotsPolicy:
             crawl_delay_seconds=0,
             summary=_build_summary(True, True, 0, "Connection timed out"),
         )
-    except Exception as exc:
-        logger.warning(f"Error fetching robots.txt for {domain}: {exc}")
+    except httpx.ConnectError as exc:
+        # Connection-level failure (SSL, DNS, refused) — domain is
+        # unreachable, so RSS won't work either. Block adding.
+        friendly = _friendly_error(exc)
+        logger.warning(f"Connection error for {domain}: {exc}")
         return RobotsPolicy(
             domain=domain,
             robots_found=False,
-            robots_fetch_error=str(exc),
-            rss_allowed=True,
-            scraping_allowed=True,
+            robots_fetch_error=friendly,
+            rss_allowed=False,
+            scraping_allowed=False,
             crawl_delay_seconds=0,
-            summary=_build_summary(True, True, 0, str(exc)),
+            summary=f"Domain unreachable: {friendly}",
+        )
+    except Exception as exc:
+        friendly = _friendly_error(exc)
+        logger.warning(f"Error fetching robots.txt for {domain}: {exc}")
+        # Generic errors — check if it's a connection-level issue
+        is_connection = any(kw in str(exc).lower() for kw in (
+            "ssl", "certificate", "dns", "name or service not known",
+            "connection refused", "no route to host",
+        ))
+        return RobotsPolicy(
+            domain=domain,
+            robots_found=False,
+            robots_fetch_error=friendly,
+            rss_allowed=not is_connection,
+            scraping_allowed=not is_connection,
+            crawl_delay_seconds=0,
+            summary=(
+                f"Domain unreachable: {friendly}" if is_connection
+                else _build_summary(True, True, 0, friendly)
+            ),
         )
