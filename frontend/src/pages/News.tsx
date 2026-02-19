@@ -381,14 +381,18 @@ export default function News() {
 
       {/* Seen filter + bulk actions */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Filter pills: All / Unread / Read / Broken (articles only) */}
+        {/* Filter pills: All / Unread|Unwatched / Read|Watched / Broken (articles only) */}
         <div className="flex space-x-0.5 bg-slate-800 rounded-lg p-0.5">
           {(activeTab === 'articles'
             ? ['all', 'unseen', 'seen', 'broken'] as SeenFilter[]
             : ['all', 'unseen', 'seen'] as SeenFilter[]
           ).map(f => {
             const active = (activeTab === 'articles' ? seenFilter : seenVideoFilter) === f
-            const label = f === 'all' ? 'All' : f === 'unseen' ? 'Unread' : f === 'broken' ? 'Broken' : 'Read'
+            const isVideo = activeTab === 'videos'
+            const label = f === 'all' ? 'All'
+              : f === 'unseen' ? (isVideo ? 'Unwatched' : 'Unread')
+              : f === 'broken' ? 'Broken'
+              : (isVideo ? 'Watched' : 'Read')
             return (
               <button
                 key={f}
@@ -418,16 +422,23 @@ export default function News() {
           const currentSeenFilter = activeTab === 'articles' ? seenFilter : seenVideoFilter
           const contentType = activeTab === 'articles' ? 'article' as const : 'video' as const
           const ids = items.map(i => i.id).filter((id): id is number => id != null)
-          // Show "Mark all read" when not filtering to only read items, otherwise "Mark all unread"
+          // Show "Mark all read/watched" when not filtering to only seen items, otherwise "Mark all unread/unwatched"
           const markAsRead = currentSeenFilter !== 'seen'
+          const isVideo = activeTab === 'videos'
+          const seenLabel = markAsRead
+            ? (isVideo ? 'Mark all watched' : 'Mark all read')
+            : (isVideo ? 'Mark all unwatched' : 'Mark all unread')
+          const seenTitle = markAsRead
+            ? (isVideo ? 'Mark all visible as watched' : 'Mark all visible as read')
+            : (isVideo ? 'Mark all visible as unwatched' : 'Mark all visible as unread')
           return ids.length > 0 ? (
             <button
               onClick={() => bulkMarkSeen(contentType, ids, markAsRead)}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700"
-              title={markAsRead ? 'Mark all visible as read' : 'Mark all visible as unread'}
+              title={seenTitle}
             >
               <CheckCheck className="w-3.5 h-3.5" />
-              <span>{markAsRead ? 'Mark all read' : 'Mark all unread'}</span>
+              <span>{seenLabel}</span>
             </button>
           ) : null
         })()}
@@ -1184,7 +1195,7 @@ export default function News() {
                             markSeen('video', video.id!, !video.is_seen)
                           }}
                           className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-700/80 hover:bg-slate-600 transition-colors"
-                          title={video.is_seen ? 'Mark as unread' : 'Mark as read'}
+                          title={video.is_seen ? 'Mark as unwatched' : 'Mark as watched'}
                         >
                           {video.is_seen
                             ? <EyeOff className="w-3.5 h-3.5 text-slate-400" />
