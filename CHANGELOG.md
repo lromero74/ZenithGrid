@@ -5,6 +5,21 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.30.0] - 2026-02-19
+
+### Added
+- **Goal date picker**: Set a specific target date for goals instead of just month presets — custom date input with prominent blue badge display on goal cards
+- **Deposit/withdrawal tracking**: Automatically fetches deposits and withdrawals from Coinbase and stores them locally for accurate performance analysis
+- **True PnL in reports**: Reports now show net deposits, adjusted account growth (excluding capital injections), and transfer counts — so you can see real trading performance separate from money added/removed
+- **AI summary awareness**: AI-generated report summaries now factor in deposits and withdrawals, explicitly noting when account growth includes capital movements
+- **Dashboard deposit note**: When deposits occurred in the last 30 days, a subtle info bar appears below the projection table explaining the capital context
+- **Account value chart markers**: Deposit and withdrawal events appear as arrow markers on the account value chart so you can see exactly when capital was added or removed
+- **Transfer management API**: Full REST API for syncing, listing, and manually entering transfers — with automatic daily background sync from Coinbase
+- **Manual transfer entry**: Add transfers manually for deposits/withdrawals the API can't see
+
+### Changed
+- **Report trade count label**: Now shows "Total Trades (last Nd)" with the actual period length for clarity
+
 ## [v2.29.0] - 2026-02-19
 
 ### Added

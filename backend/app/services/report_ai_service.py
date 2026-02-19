@@ -154,6 +154,21 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
                 )
         goals_section = "\nGoal Progress:\n" + "\n".join(goals_lines)
 
+    capital_section = ""
+    net_deposits = data.get("net_deposits_usd", 0)
+    if net_deposits != 0:
+        total_dep = data.get("total_deposits_usd", 0)
+        total_wth = data.get("total_withdrawals_usd", 0)
+        adj_growth = data.get("adjusted_account_growth_usd", 0)
+        capital_section = (
+            f"\nCapital Movements:"
+            f"\n  - Net deposits in period: ${net_deposits:,.2f}"
+            f"\n  - Adjusted account growth (excluding deposits): "
+            f"${adj_growth:,.2f}"
+            f"\n  - Total deposits: ${total_dep:,.2f} / "
+            f"Total withdrawals: ${total_wth:,.2f}"
+        )
+
     prior_section = ""
     prior = data.get("prior_period")
     if prior:
@@ -179,7 +194,7 @@ Report Data:
 - Total Trades: {data.get('total_trades', 0)}
 - Win/Loss: {data.get('winning_trades', 0)}W / {data.get('losing_trades', 0)}L
 - Win Rate: {data.get('win_rate', 0):.1f}%
-{goals_section}{prior_section}
+{goals_section}{capital_section}{prior_section}
 
 Write THREE versions of a concise 3-5 paragraph summary, separated by the exact \
 delimiters shown below. Each version targets a different audience:
@@ -202,7 +217,9 @@ Guidelines for ALL tiers:
 disclaimer: past performance does not guarantee future results, projections are \
 estimates based on historical data, and actual results may vary
 - If there's prior period data, compare and note changes
-- Note goal progress and whether the user is on track"""
+- Note goal progress and whether the user is on track
+- If deposits or withdrawals occurred, explicitly mention them and clarify the \
+difference between account value growth and actual trading performance"""
 
 
 async def _call_ai(client, provider: str, prompt: str) -> Optional[str]:

@@ -46,6 +46,7 @@ class GoalCreate(BaseModel):
     )
     lookback_days: Optional[int] = Field(None, ge=7, le=365)
     time_horizon_months: int = Field(..., ge=1, le=120)
+    target_date: Optional[datetime] = None
 
     @model_validator(mode="after")
     def validate_income_fields(self):
@@ -66,6 +67,7 @@ class GoalUpdate(BaseModel):
     )
     lookback_days: Optional[int] = Field(None, ge=7, le=365)
     time_horizon_months: Optional[int] = Field(None, ge=1, le=120)
+    target_date: Optional[datetime] = None
     is_active: Optional[bool] = None
 
 
@@ -271,7 +273,18 @@ async def create_goal(
     from dateutil.relativedelta import relativedelta
 
     start_date = datetime.utcnow()
-    target_date = start_date + relativedelta(months=body.time_horizon_months)
+
+    if body.target_date:
+        # Custom date provided — use it, back-compute horizon
+        if body.target_date <= start_date:
+            raise HTTPException(
+                status_code=400, detail="target_date must be in the future"
+            )
+        target_date = body.target_date
+        delta = relativedelta(target_date, start_date)
+        body.time_horizon_months = max(delta.years * 12 + delta.months, 1)
+    else:
+        target_date = start_date + relativedelta(months=body.time_horizon_months)
 
     goal = ReportGoal(
         user_id=current_user.id,
@@ -311,14 +324,31 @@ async def update_goal(
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
 
+    from dateutil.relativedelta import relativedelta
+
     update_data = body.model_dump(exclude_unset=True)
+
+    # Handle target_date vs time_horizon_months
+    custom_target_date = update_data.pop("target_date", None)
+    if custom_target_date is not None:
+        if custom_target_date <= datetime.utcnow():
+            raise HTTPException(
+                status_code=400, detail="target_date must be in the future"
+            )
+        # Set target_date directly, back-compute horizon
+        goal.target_date = custom_target_date
+        delta = relativedelta(custom_target_date, goal.start_date)
+        goal.time_horizon_months = max(delta.years * 12 + delta.months, 1)
+        update_data.pop("time_horizon_months", None)
+
     for key, value in update_data.items():
         setattr(goal, key, value)
 
-    # Recompute target_date if horizon changed
-    if "time_horizon_months" in update_data:
-        from dateutil.relativedelta import relativedelta
-        goal.target_date = goal.start_date + relativedelta(months=goal.time_horizon_months)
+    # Recompute target_date if horizon changed (and no custom date)
+    if custom_target_date is None and "time_horizon_months" in update_data:
+        goal.target_date = goal.start_date + relativedelta(
+            months=goal.time_horizon_months
+        )
 
     goal.updated_at = datetime.utcnow()
     await db.commit()

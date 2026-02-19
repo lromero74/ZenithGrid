@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { createChart, ColorType, IChartApi, Time, LineData } from 'lightweight-charts'
+import { createChart, ColorType, IChartApi, Time, LineData, SeriesMarker } from 'lightweight-charts'
 import { TrendingUp, DollarSign } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 import { useAccount } from '../contexts/AccountContext'
-import { accountValueApi } from '../services/api'
+import { accountValueApi, type TransferRecentSummary } from '../services/api'
 
 interface AccountValueSnapshot {
   date: string
@@ -17,9 +17,10 @@ export type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
 
 interface AccountValueChartProps {
   className?: string
+  transferSummary?: TransferRecentSummary | null
 }
 
-export function AccountValueChart({ className = '' }: AccountValueChartProps) {
+export function AccountValueChart({ className = '', transferSummary }: AccountValueChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [showAllAccounts, setShowAllAccounts] = useState(false)
   const chartContainerRef = useRef<HTMLDivElement>(null)
@@ -150,6 +151,25 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
     btcSeries.setData(btcData)
     usdSeries.setData(usdData)
 
+    // Add deposit/withdrawal markers on the USD series
+    if (transferSummary?.transfers && transferSummary.transfers.length > 0) {
+      const markers: SeriesMarker<Time>[] = transferSummary.transfers
+        .map(t => {
+          const dateStr = t.occurred_at.split('T')[0]
+          const isDeposit = t.type === 'deposit'
+          const amt = t.amount_usd ? `$${t.amount_usd.toLocaleString()}` : `${t.amount} ${t.currency}`
+          return {
+            time: dateStr as Time,
+            position: isDeposit ? 'belowBar' as const : 'aboveBar' as const,
+            color: isDeposit ? '#3b82f6' : '#f59e0b',
+            shape: isDeposit ? 'arrowUp' as const : 'arrowDown' as const,
+            text: `${isDeposit ? 'Deposit' : 'Withdrawal'}: ${amt}`,
+          }
+        })
+        .sort((a, b) => (a.time as string).localeCompare(b.time as string))
+      usdSeries.setMarkers(markers)
+    }
+
     // Fit content
     chart.timeScale().fitContent()
 
@@ -171,7 +191,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         chartRef.current = null
       }
     }
-  }, [history])
+  }, [history, transferSummary])
 
   // Calculate which time range buttons should be enabled based on data span
   const getEnabledTimeRanges = (): Set<TimeRange> => {

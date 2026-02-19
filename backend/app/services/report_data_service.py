@@ -15,7 +15,9 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Account, AccountValueSnapshot, Position, Report, ReportGoal
+from app.models import (
+    Account, AccountTransfer, AccountValueSnapshot, Position, Report, ReportGoal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +88,34 @@ async def gather_report_data(
         )
         goal_data.append(goal_progress)
 
+    # Query deposits/withdrawals in this period
+    transfer_filters = [
+        AccountTransfer.user_id == user_id,
+        AccountTransfer.occurred_at >= period_start,
+        AccountTransfer.occurred_at <= period_end,
+    ]
+    if account_id:
+        transfer_filters.append(AccountTransfer.account_id == account_id)
+
+    transfer_result = await db.execute(
+        select(AccountTransfer).where(and_(*transfer_filters))
+    )
+    all_transfers = transfer_result.scalars().all()
+
+    total_deposits_usd = sum(
+        t.amount_usd or 0 for t in all_transfers
+        if t.transfer_type == "deposit"
+    )
+    total_withdrawals_usd = sum(
+        t.amount_usd or 0 for t in all_transfers
+        if t.transfer_type == "withdrawal"
+    )
+    net_deposits_usd = round(total_deposits_usd - total_withdrawals_usd, 2)
+
+    # True trading-driven account growth = (end - start) - net deposits
+    account_growth_usd = end_value["usd"] - start_value["usd"]
+    adjusted_growth_usd = round(account_growth_usd - net_deposits_usd, 2)
+
     return {
         "account_value_usd": end_value["usd"],
         "account_value_btc": end_value["btc"],
@@ -99,6 +129,12 @@ async def gather_report_data(
         "win_rate": round(win_rate, 1),
         "goals": goal_data,
         "prior_period": None,  # Filled in by caller if prior report exists
+        # Deposit/withdrawal data
+        "net_deposits_usd": net_deposits_usd,
+        "total_deposits_usd": round(total_deposits_usd, 2),
+        "total_withdrawals_usd": round(total_withdrawals_usd, 2),
+        "adjusted_account_growth_usd": adjusted_growth_usd,
+        "transfer_count": len(all_transfers),
     }
 
 

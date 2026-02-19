@@ -207,12 +207,22 @@ export default function Reports() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h4 className="font-medium text-white">{goal.name}</h4>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {goal.target_type === 'balance' ? 'Balance' :
-                       goal.target_type === 'profit' ? 'Profit' :
-                       goal.target_type === 'income' ? 'Income' : 'Balance & Profit'} target
-                      {' '}&middot;{' '}{getTimeRemaining(goal.target_date)} remaining
-                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-slate-400">
+                        {goal.target_type === 'balance' ? 'Balance' :
+                         goal.target_type === 'profit' ? 'Profit' :
+                         goal.target_type === 'income' ? 'Income' : 'Balance & Profit'} target
+                      </span>
+                      {goal.target_date && (
+                        <span className="inline-flex items-center gap-1 text-xs bg-blue-900/40 text-blue-300 border border-blue-800/50 px-1.5 py-0.5 rounded">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(goal.target_date)}
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-500">
+                        {getTimeRemaining(goal.target_date)} remaining
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1">
                     {!goal.is_active && (

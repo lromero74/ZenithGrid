@@ -657,3 +657,32 @@ export const reportsApi = {
   deleteReport: (id: number) =>
     api.delete<{ detail: string }>(`/reports/${id}`).then(r => r.data),
 };
+
+// Transfers (deposit/withdrawal tracking)
+export interface TransferItem {
+  occurred_at: string
+  type: string
+  amount_usd: number | null
+  currency: string
+  amount: number
+}
+
+export interface TransferRecentSummary {
+  last_30d_net_deposits_usd: number
+  last_30d_deposit_count: number
+  last_30d_withdrawal_count: number
+  transfers: TransferItem[]
+}
+
+export const transfersApi = {
+  sync: () => api.post<{ status: string; new_transfers: number }>('/transfers/sync').then(r => r.data),
+  list: (params?: { start?: string; end?: string; account_id?: number; limit?: number; offset?: number }) =>
+    api.get<{ total: number; transfers: any[] }>('/transfers', { params }).then(r => r.data),
+  create: (data: { account_id: number; transfer_type: string; amount: number; currency: string; amount_usd?: number; occurred_at: string }) =>
+    api.post<any>('/transfers', data).then(r => r.data),
+  delete: (id: number) => api.delete<{ detail: string }>(`/transfers/${id}`).then(r => r.data),
+  getSummary: (params?: { start?: string; end?: string; account_id?: number }) =>
+    api.get<{ net_deposits_usd: number; total_deposits_usd: number; total_withdrawals_usd: number; deposit_count: number; withdrawal_count: number }>('/transfers/summary', { params }).then(r => r.data),
+  getRecentSummary: () =>
+    api.get<TransferRecentSummary>('/transfers/recent-summary').then(r => r.data),
+};

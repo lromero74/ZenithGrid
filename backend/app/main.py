@@ -45,6 +45,7 @@ from app.routers.order_history import router as order_history_router
 from app.routers.templates import router as templates_router
 from app.routers import prop_guard_router
 from app.routers import reports_router  # Reporting & goals
+from app.routers import transfers_router  # Deposit/withdrawal tracking
 from app.routers.bots import router as bots_router
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
 from app.services.auto_buy_monitor import AutoBuyMonitor
@@ -113,6 +114,7 @@ account_snapshot_task = None
 revoked_token_cleanup_task = None
 report_scheduler_task = None
 report_cleanup_task = None
+transfer_sync_task = None
 
 
 def override_get_price_monitor():
@@ -144,6 +146,7 @@ app.include_router(perps_router.router)  # Perpetual futures (INTX) management
 
 app.include_router(prop_guard_router.router)  # PropGuard safety monitoring
 app.include_router(reports_router.router)  # Reporting & goals
+app.include_router(transfers_router.router)  # Deposit/withdrawal tracking
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -389,6 +392,46 @@ async def run_account_snapshot_capture():
         await asyncio.sleep(86400)
 
 
+# Background task for syncing deposit/withdrawal transfers from Coinbase
+async def run_transfer_sync():
+    """Background task that syncs transfers once per day, after snapshots."""
+    from sqlalchemy import select
+
+    from app.database import async_session_maker
+    from app.models import User
+    from app.services.transfer_sync_service import sync_all_user_transfers
+
+    # Wait 20 minutes after startup (run after account snapshots)
+    await asyncio.sleep(1200)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                result = await db.execute(
+                    select(User).where(User.is_active.is_(True))
+                )
+                users = result.scalars().all()
+
+                for user in users:
+                    try:
+                        count = await sync_all_user_transfers(db, user.id)
+                        if count > 0:
+                            logger.info(
+                                f"Synced {count} new transfers for "
+                                f"user {user.id}"
+                            )
+                    except Exception as e:
+                        logger.error(
+                            f"Transfer sync failed for user {user.id}: {e}"
+                        )
+
+        except Exception as e:
+            logger.error(f"Error in transfer sync loop: {e}")
+
+        # Run once per day
+        await asyncio.sleep(86400)
+
+
 # Startup/Shutdown events
 @app.on_event("startup")
 async def startup_event():
@@ -397,6 +440,7 @@ async def startup_event():
     global failed_condition_cleanup_task, failed_order_cleanup_task
     global account_snapshot_task, revoked_token_cleanup_task
     global report_scheduler_task, report_cleanup_task
+    global transfer_sync_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -491,6 +535,10 @@ async def startup_event():
     print("🚀 Starting coin review scheduler...")
     coin_review_task = asyncio.create_task(run_coin_review_scheduler())  # noqa: F841
     print("🚀 Coin review scheduler started - full review every 7 days")
+
+    print("🚀 Starting transfer sync job...")
+    transfer_sync_task = asyncio.create_task(run_transfer_sync())
+    print("🚀 Transfer sync started - syncing deposits/withdrawals daily")
 
     print("🚀 Startup complete!")
     print("🚀 ========================================")
@@ -599,6 +647,13 @@ async def shutdown_event():
         report_cleanup_task.cancel()
         try:
             await report_cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+    if transfer_sync_task:
+        transfer_sync_task.cancel()
+        try:
+            await transfer_sync_task
         except asyncio.CancelledError:
             pass
 
