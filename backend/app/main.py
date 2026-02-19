@@ -14,7 +14,9 @@ from app.cleanup_jobs import (
     cleanup_failed_condition_logs,
     cleanup_old_decision_logs,
     cleanup_old_failed_orders,
+    cleanup_old_reports,
 )
+from app.services.report_scheduler import run_report_scheduler
 from app.config import settings
 from app.database import init_db
 from app.multi_bot_monitor import MultiBotMonitor
@@ -41,6 +43,7 @@ from app.routers import (
 from app.routers.order_history import router as order_history_router
 from app.routers.templates import router as templates_router
 from app.routers import prop_guard_router
+from app.routers import reports_router  # Reporting & goals
 from app.routers.bots import router as bots_router
 from app.routers.system_router import build_changelog_cache, set_trading_pair_monitor
 from app.services.auto_buy_monitor import AutoBuyMonitor
@@ -107,6 +110,8 @@ failed_condition_cleanup_task = None
 failed_order_cleanup_task = None
 account_snapshot_task = None
 revoked_token_cleanup_task = None
+report_scheduler_task = None
+report_cleanup_task = None
 
 
 def override_get_price_monitor():
@@ -137,6 +142,7 @@ app.include_router(seasonality_router.router)  # Seasonality-based bot managemen
 app.include_router(perps_router.router)  # Perpetual futures (INTX) management
 
 app.include_router(prop_guard_router.router)  # PropGuard safety monitoring
+app.include_router(reports_router.router)  # Reporting & goals
 
 # Mount static files for cached news images
 # Images are stored in backend/static/news_images/ and served at /static/news_images/
@@ -389,6 +395,7 @@ async def startup_event():
     global missing_order_detector_task, decision_log_cleanup_task
     global failed_condition_cleanup_task, failed_order_cleanup_task
     global account_snapshot_task, revoked_token_cleanup_task
+    global report_scheduler_task, report_cleanup_task
 
     print("🚀 ========================================")
     print("🚀 FastAPI startup event triggered")
@@ -471,6 +478,14 @@ async def startup_event():
     print("🚀 Starting revoked token cleanup job...")
     revoked_token_cleanup_task = asyncio.create_task(cleanup_expired_revoked_tokens())
     print("🚀 Revoked token cleanup job started - pruning expired entries daily")
+
+    print("🚀 Starting report scheduler...")
+    report_scheduler_task = asyncio.create_task(run_report_scheduler())
+    print("🚀 Report scheduler started - checking for due reports every 15 minutes")
+
+    print("🚀 Starting report cleanup job...")
+    report_cleanup_task = asyncio.create_task(cleanup_old_reports())
+    print("🚀 Report cleanup job started - removing reports older than 2 years weekly")
 
     print("🚀 Startup complete!")
     print("🚀 ========================================")
@@ -565,6 +580,20 @@ async def shutdown_event():
         revoked_token_cleanup_task.cancel()
         try:
             await revoked_token_cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+    if report_scheduler_task:
+        report_scheduler_task.cancel()
+        try:
+            await report_scheduler_task
+        except asyncio.CancelledError:
+            pass
+
+    if report_cleanup_task:
+        report_cleanup_task.cancel()
+        try:
+            await report_cleanup_task
         except asyncio.CancelledError:
             pass
 

@@ -10,7 +10,7 @@ from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import AIBotLog, IndicatorLog, OrderHistory, Position, RevokedToken, Settings
+from app.models import AIBotLog, IndicatorLog, OrderHistory, Position, Report, RevokedToken, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +224,41 @@ async def cleanup_expired_revoked_tokens():
 
         # Run daily
         await asyncio.sleep(86400)
+
+
+async def cleanup_old_reports():
+    """
+    Clean up generated reports older than 730 days (2 years).
+
+    Removes report rows including HTML and PDF content to reclaim space.
+    Runs weekly.
+    """
+    # Wait 45 minutes after startup
+    await asyncio.sleep(2700)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                cutoff_date = datetime.utcnow() - timedelta(days=730)
+
+                result = await db.execute(
+                    delete(Report).where(Report.created_at < cutoff_date)
+                )
+                deleted_count = result.rowcount
+                await db.commit()
+
+                if deleted_count > 0:
+                    logger.info(
+                        f"🧹 Cleaned up {deleted_count} reports older than 2 years"
+                    )
+                else:
+                    logger.debug("No old reports to clean up")
+
+        except Exception as e:
+            logger.error(f"Error in report cleanup job: {e}", exc_info=True)
+
+        # Run weekly (7 days)
+        await asyncio.sleep(604800)
 
 
 async def get_log_retention_days(db: AsyncSession) -> int:

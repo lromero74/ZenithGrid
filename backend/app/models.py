@@ -24,6 +24,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -90,6 +91,9 @@ class User(Base):
     email_verification_tokens = relationship(
         "EmailVerificationToken", back_populates="user", cascade="all, delete-orphan"
     )
+    report_goals = relationship("ReportGoal", back_populates="user", cascade="all, delete-orphan")
+    report_schedules = relationship("ReportSchedule", back_populates="user", cascade="all, delete-orphan")
+    reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
 
 
 class TrustedDevice(Base):
@@ -1311,3 +1315,119 @@ class PropFirmEquitySnapshot(Base):
     daily_pnl = Column(Float, default=0.0)
     is_killed = Column(Boolean, default=False)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ReportGoal(Base):
+    """
+    User financial targets for tracking in reports.
+
+    Goals define balance or profit targets with time horizons,
+    and progress is calculated in each generated report.
+    """
+    __tablename__ = "report_goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)  # e.g. "Reach 1 BTC"
+    target_type = Column(String, nullable=False)  # "balance" / "profit" / "both"
+    target_currency = Column(String, nullable=False, default="USD")  # "USD" / "BTC"
+    target_value = Column(Float, nullable=False)  # Primary target (for balance or profit)
+    target_balance_value = Column(Float, nullable=True)  # When target_type="both"
+    target_profit_value = Column(Float, nullable=True)  # When target_type="both"
+    time_horizon_months = Column(Integer, nullable=False)  # 1, 6, 12, 24, 60, 120
+    start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    target_date = Column(DateTime, nullable=False)  # Computed: start_date + horizon
+    is_active = Column(Boolean, default=True)
+    achieved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="report_goals")
+    schedule_links = relationship(
+        "ReportScheduleGoal", back_populates="goal", cascade="all, delete-orphan"
+    )
+
+
+class ReportSchedule(Base):
+    """
+    Report delivery configuration — defines when and how reports are generated.
+
+    Each schedule can link to multiple goals and deliver to multiple recipients.
+    """
+    __tablename__ = "report_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # null = all accounts
+    name = Column(String, nullable=False)  # e.g. "Weekly Performance Report"
+    periodicity = Column(String, nullable=False)  # daily/weekly/biweekly/monthly/quarterly/yearly
+    is_enabled = Column(Boolean, default=True)
+    recipients = Column(JSON, nullable=True)  # List of email addresses
+    ai_provider = Column(String, nullable=True)  # claude/openai/gemini — null = user's default
+    last_run_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="report_schedules")
+    account = relationship("Account")
+    goal_links = relationship(
+        "ReportScheduleGoal", back_populates="schedule", cascade="all, delete-orphan"
+    )
+    reports = relationship("Report", back_populates="schedule")
+
+
+class ReportScheduleGoal(Base):
+    """Junction table linking report schedules to goals (many-to-many)."""
+    __tablename__ = "report_schedule_goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    schedule_id = Column(
+        Integer, ForeignKey("report_schedules.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    goal_id = Column(
+        Integer, ForeignKey("report_goals.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("schedule_id", "goal_id", name="uq_schedule_goal"),
+    )
+
+    # Relationships
+    schedule = relationship("ReportSchedule", back_populates="goal_links")
+    goal = relationship("ReportGoal", back_populates="schedule_links")
+
+
+class Report(Base):
+    """
+    Generated report instance — stores metrics, HTML, PDF, and AI summary.
+
+    Reports are created either manually (on-demand) or by the scheduler,
+    and can be viewed in-app or downloaded as PDF.
+    """
+    __tablename__ = "reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    schedule_id = Column(Integer, ForeignKey("report_schedules.id", ondelete="SET NULL"), nullable=True)
+    period_start = Column(DateTime, nullable=False)
+    period_end = Column(DateTime, nullable=False)
+    periodicity = Column(String, nullable=False)  # Frozen copy from schedule
+    report_data = Column(JSON, nullable=True)  # All numeric metrics
+    html_content = Column(Text, nullable=True)  # Full rendered HTML
+    pdf_content = Column(LargeBinary, nullable=True)  # PDF bytes
+    ai_summary = Column(Text, nullable=True)  # AI-generated analysis
+    ai_provider_used = Column(String, nullable=True)  # Which provider generated summary
+    delivery_status = Column(String, nullable=False, default="pending")  # pending/sent/failed/manual
+    delivered_at = Column(DateTime, nullable=True)
+    delivery_recipients = Column(JSON, nullable=True)  # Snapshot of who received it
+    delivery_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="reports")
+    schedule = relationship("ReportSchedule", back_populates="reports")
