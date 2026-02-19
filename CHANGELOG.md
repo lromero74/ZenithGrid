@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.20.4] - 2026-02-19
+
+### Fixed
+- **TTS cache falsely invalidated for old records**: v2.20.2 content_hash check treated NULL hash (all pre-existing TTS) as a mismatch, causing regeneration on first play. For articles where the source site now blocks our server, this replaced full-content audio with summary-only audio. Fix: only invalidate when a hash exists AND differs
+
 ## [v2.20.3] - 2026-02-19
 
 ### Fixed

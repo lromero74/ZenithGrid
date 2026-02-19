@@ -263,20 +263,19 @@ async def _get_or_create_tts(
             )
             cached = result.scalars().first()
 
-        if cached:
-            # Content changed (e.g. retry fetched full text) — invalidate
-            if cached.content_hash != text_hash:
-                old_path = TTS_CACHE_DIR / cached.audio_path
-                if old_path.exists():
-                    old_path.unlink()
-                async with async_session_maker() as db:
-                    await db.execute(
-                        delete(ArticleTTS).where(
-                            ArticleTTS.id == cached.id,
-                        )
+        if cached and cached.content_hash and cached.content_hash != text_hash:
+            # Content genuinely changed — invalidate and regenerate
+            old_path = TTS_CACHE_DIR / cached.audio_path
+            if old_path.exists():
+                old_path.unlink()
+            async with async_session_maker() as db:
+                await db.execute(
+                    delete(ArticleTTS).where(
+                        ArticleTTS.id == cached.id,
                     )
-                    await db.commit()
-                cached = None  # fall through to regeneration
+                )
+                await db.commit()
+            cached = None  # fall through to regeneration
 
         if cached:
             cache_path = TTS_CACHE_DIR / cached.audio_path
