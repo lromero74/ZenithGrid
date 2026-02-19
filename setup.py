@@ -870,11 +870,15 @@ def initialize_database(project_root):
                 last_seen_history_count INTEGER DEFAULT 0,
                 last_seen_failed_count INTEGER DEFAULT 0,
                 terms_accepted_at DATETIME,
+                email_verified INTEGER DEFAULT 0,
+                email_verified_at DATETIME,
                 totp_secret TEXT DEFAULT NULL,
                 mfa_enabled INTEGER DEFAULT 0,
+                mfa_email_enabled INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                last_login_at DATETIME
+                last_login_at DATETIME,
+                tokens_valid_after DATETIME DEFAULT NULL
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_users_email ON users(email)")
@@ -894,6 +898,19 @@ def initialize_database(project_root):
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_trusted_devices_user_id ON trusted_devices(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_trusted_devices_device_id ON trusted_devices(device_id)")
+
+        # Revoked tokens table (server-side JWT revocation)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS revoked_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                jti TEXT UNIQUE NOT NULL,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                revoked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME NOT NULL
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_revoked_tokens_jti ON revoked_tokens(jti)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_revoked_tokens_user_id ON revoked_tokens(user_id)")
 
         # Accounts table
         cursor.execute("""

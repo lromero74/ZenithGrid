@@ -14,6 +14,11 @@ from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
+# Limits
+MAX_CONNECTIONS_PER_USER = 5
+MAX_MESSAGE_SIZE = 4096  # 4 KB
+RECEIVE_TIMEOUT_SECONDS = 300  # 5 minutes
+
 
 class WebSocketManager:
     """Manages WebSocket connections and broadcasts messages to clients"""
@@ -23,12 +28,35 @@ class WebSocketManager:
         self.active_connections: List[Tuple[WebSocket, int]] = []
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket, user_id: int):
-        """Accept a new WebSocket connection for a specific user"""
-        await websocket.accept()
+    def _count_user_connections(self, user_id: int) -> int:
+        """Count active connections for a specific user (must be called under lock)."""
+        return sum(1 for _, uid in self.active_connections if uid == user_id)
+
+    async def connect(self, websocket: WebSocket, user_id: int) -> bool:
+        """
+        Accept a new WebSocket connection for a specific user.
+
+        Returns True if connected, False if rejected (too many connections).
+        """
         async with self._lock:
+            if self._count_user_connections(user_id) >= MAX_CONNECTIONS_PER_USER:
+                await websocket.close(
+                    code=4008, reason="Too many connections"
+                )
+                logger.warning(
+                    f"WebSocket rejected for user {user_id}: "
+                    f"exceeded {MAX_CONNECTIONS_PER_USER} connections"
+                )
+                return False
+
+            await websocket.accept()
             self.active_connections.append((websocket, user_id))
-        logger.info(f"WebSocket connected for user {user_id}. Total connections: {len(self.active_connections)}")
+
+        logger.info(
+            f"WebSocket connected for user {user_id}. "
+            f"Total connections: {len(self.active_connections)}"
+        )
+        return True
 
     async def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection"""

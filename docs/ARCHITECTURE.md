@@ -329,6 +329,7 @@ erDiagram
     User ||--o{ TrustedDevice : "trusts"
     User ||--o{ Settings : "has many"
     User ||--o{ EmailVerificationToken : "has tokens"
+    User ||--o{ RevokedToken : "revoked JWTs"
     User ||--o{ UserContentSeenStatus : "tracks seen"
     User ||--o{ UserArticleTTSHistory : "TTS history"
     User ||--o{ UserVoiceSubscription : "voice prefs"
@@ -470,9 +471,16 @@ erDiagram
 5. **Email verification**: New accounts must verify email before full access
 5. Frontend stores tokens in `localStorage` via `AuthContext`
 6. Every API request includes `Authorization: Bearer {token}` via Axios interceptor
-7. Backend `get_current_user` dependency validates JWT on protected routes
+7. Backend `get_current_user` dependency validates JWT on protected routes (signature, expiry, JTI revocation check, `tokens_valid_after` check)
 8. On 401 response, frontend attempts token refresh before logout; queues concurrent requests during refresh
 9. On first login, `RiskDisclaimer` modal requires terms acceptance
+
+### Token Revocation
+
+- **Logout** (`POST /api/auth/logout`): Revokes the current access token's JTI in the `revoked_tokens` table — the token cannot be reused
+- **Password change/reset**: Sets `user.tokens_valid_after` to `utcnow()` — all tokens issued before this timestamp are rejected, forcing re-login on all sessions
+- **Revocation check**: `get_current_user()` and `refresh_token()` both check JTI against `revoked_tokens` table and `iat` against `user.tokens_valid_after`
+- **Cleanup**: Background task prunes expired revoked tokens daily (tokens past their JWT expiry don't need revocation records)
 
 ### MFA Management
 
@@ -500,7 +508,7 @@ erDiagram
 - **HSTS**: `Strict-Transport-Security: max-age=31536000; includeSubDomains` — browsers enforce HTTPS on subsequent visits
 - **CSP**: `Content-Security-Policy` restricts script/style/connect sources to `'self'`, prevents XSS payload loading
 - **Request size**: `client_max_body_size 10m` — prevents memory exhaustion from oversized POST bodies
-- **WebSocket timeout**: Idle connections timeout after 300s (client has auto-reconnect)
+- **WebSocket limits**: 5 connections per user max, 4KB message size limit, 300s idle timeout (client has auto-reconnect)
 - **TLS**: TLS 1.2/1.3 only, ECDHE + AES-GCM + CHACHA20, HTTP→HTTPS redirect
 
 ### Timing-Safe Authentication

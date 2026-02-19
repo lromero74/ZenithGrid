@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.26.3] - 2026-02-19
+
+### Fixed
+- **News page loading**: Fixed regression where news articles failed to load — page_size=0 (return all) was incorrectly rejected as invalid
+- **TTS audio playback**: Fixed Content-Security-Policy blocking blob: audio URLs used by the article reader
+
+### Security
+- **Server-side token revocation**: Logout now invalidates the token server-side — stolen tokens can no longer be reused
+- **Password change invalidates all sessions**: Changing or resetting your password immediately logs out all other devices
+- **WebSocket connection limits**: Each user is now limited to 5 concurrent WebSocket connections, with 4KB message size limit and 5-minute idle timeout
+- **Image path traversal guard**: Added defense-in-depth path validation on the article thumbnail endpoint
+
 ## [v2.26.2] - 2026-02-19
 
 ### Security

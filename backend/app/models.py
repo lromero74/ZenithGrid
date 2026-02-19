@@ -75,6 +75,10 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login_at = Column(DateTime, nullable=True)
 
+    # Token revocation: tokens issued before this timestamp are invalid
+    # Set on password change / reset to force re-login on all sessions
+    tokens_valid_after = Column(DateTime, nullable=True)
+
     # Relationships
     accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
     bots = relationship("Bot", back_populates="user", cascade="all, delete-orphan")
@@ -134,6 +138,27 @@ class EmailVerificationToken(Base):
 
     # Relationships
     user = relationship("User", back_populates="email_verification_tokens")
+
+
+class RevokedToken(Base):
+    """
+    Revoked JWT tokens for server-side token invalidation.
+
+    When a user logs out or changes their password, the token's JTI (JWT ID)
+    is recorded here. On every authenticated request, decode_token() checks
+    this table and rejects revoked tokens.
+
+    Expired entries (past their JWT expiry) are cleaned up by a periodic task.
+    """
+    __tablename__ = "revoked_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String, unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    revoked_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)  # JWT's original expiry — for cleanup
+
+    user = relationship("User")
 
 
 class Account(Base):

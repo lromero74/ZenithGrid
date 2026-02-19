@@ -1270,10 +1270,11 @@ async def get_news(
     Returns immediately from database. Background refresh runs every 30 minutes.
     Use force_refresh=true to trigger immediate refresh (runs in background).
     """
-    # S8: Clamp page_size to prevent resource exhaustion
-    if page_size <= 0:
-        raise HTTPException(400, "page_size must be positive")
-    page_size = min(page_size, 200)
+    # S8: Clamp page_size to prevent resource exhaustion (0 = return all for client-side pagination)
+    if page_size < 0:
+        raise HTTPException(400, "page_size must be non-negative")
+    if page_size > 0:
+        page_size = min(page_size, 200)
     page = max(1, page)
 
     if force_refresh:
@@ -1458,6 +1459,8 @@ async def get_article_image(
         raise HTTPException(status_code=404, detail="Image not found")
 
     filepath = NEWS_IMAGES_DIR / row[0]
+    if not filepath.resolve().is_relative_to(NEWS_IMAGES_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid image path")
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Image file missing")
 

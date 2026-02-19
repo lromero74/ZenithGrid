@@ -10,7 +10,7 @@ from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import AIBotLog, IndicatorLog, OrderHistory, Position, Settings
+from app.models import AIBotLog, IndicatorLog, OrderHistory, Position, RevokedToken, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +189,41 @@ async def cleanup_old_failed_orders():
 
         # Run every 6 hours
         await asyncio.sleep(21600)
+
+
+async def cleanup_expired_revoked_tokens():
+    """
+    Periodically remove expired entries from revoked_tokens table.
+
+    Once a JWT's original expiry time has passed, keeping the revocation
+    record is unnecessary — the token can't be used anyway.
+    Runs daily.
+    """
+    # Wait 30 minutes after startup
+    await asyncio.sleep(1800)
+
+    while True:
+        try:
+            async with async_session_maker() as db:
+                now = datetime.utcnow()
+                result = await db.execute(
+                    delete(RevokedToken).where(RevokedToken.expires_at < now)
+                )
+                deleted_count = result.rowcount
+                await db.commit()
+
+                if deleted_count > 0:
+                    logger.info(
+                        f"🧹 Cleaned up {deleted_count} expired revoked token records"
+                    )
+                else:
+                    logger.debug("No expired revoked tokens to clean up")
+
+        except Exception as e:
+            logger.error(f"Error in revoked token cleanup job: {e}", exc_info=True)
+
+        # Run daily
+        await asyncio.sleep(86400)
 
 
 async def get_log_retention_days(db: AsyncSession) -> int:

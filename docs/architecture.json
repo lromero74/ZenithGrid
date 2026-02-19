@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.26.2",
+  "version": "v2.26.3",
   "updated": "2026-02-19",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -92,6 +92,7 @@
       { "name": "User", "table": "users", "key_fields": ["id", "email", "hashed_password", "is_active", "mfa_enabled", "totp_secret", "terms_accepted", "email_verified"] },
       { "name": "TrustedDevice", "table": "trusted_devices", "key_fields": ["id", "user_id", "device_id", "device_name", "ip_address", "location", "expires_at"] },
       { "name": "EmailVerificationToken", "table": "email_verification_tokens", "key_fields": ["id", "user_id", "token", "expires_at", "used"] },
+      { "name": "RevokedToken", "table": "revoked_tokens", "key_fields": ["id", "jti", "user_id", "expires_at"], "purpose": "Revoked JWT tokens for server-side token invalidation on logout and password change" },
       { "name": "Account", "table": "accounts", "key_fields": ["id", "user_id", "name", "exchange", "account_type", "api_key", "api_secret", "is_default"] },
       { "name": "Bot", "table": "bots", "key_fields": ["id", "account_id", "name", "strategy", "status", "trading_pairs", "budget_percentage", "max_concurrent_deals"] },
       { "name": "BotTemplate", "table": "bot_templates", "key_fields": ["id", "user_id", "name", "strategy", "config_json"] },
@@ -319,7 +320,7 @@
     ],
 
     "migrations": {
-      "count": 29,
+      "count": 30,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -352,6 +353,7 @@
         "encrypt_existing_credentials.py",
         "extract_bot_products.py",
         "move_news_images_to_filesystem.py",
+        "add_revoked_tokens.py",
         "remove_medicalxpress_source.py",
         "replace_paywalled_sources.py"
       ]
@@ -588,6 +590,11 @@
       "websocket": {
         "endpoint": "/ws/notifications",
         "events": ["base_order", "dca_order", "sell_order", "partial_fill"],
+        "limits": {
+          "max_connections_per_user": 5,
+          "max_message_size_bytes": 4096,
+          "idle_timeout_seconds": 300
+        },
         "features": ["Audio notifications", "Toast alerts", "Auto-reconnect with exponential backoff"]
       }
     },
@@ -641,6 +648,7 @@
     "hardened_in_v2_7_2": "Round 3: balance cache isolation (account_id passed to all get_accounts/get_btc_balance calls), per-instance rate limiter (no cross-user throttling), bull_flag_scanner BlacklistedCoin scoped to user, broadcast_position_update crash fix in sell/buy executors, factory account_id passthrough",
     "hardened_in_v2_7_3": "Round 4: conversion-status endpoint auth, dead calculate_available_balance removed, OrderReconciliationMonitor+MissingOrderDetector scoped by account_id, ByBit per-instance rate limiter, monitor/shutdown/pair-sync endpoints admin-gated, market_data prefers system/public credentials, dead order_monitor.py + limit_order_monitor dead methods removed, TTS endpoints auth, changelog auth, DEX portfolio price lookup scoped to same user",
     "scalability_v2_26_0": "Parallel bot processing (Semaphore(5) + contextvars), exchange client cache locking, candle cache shared across users, single-flight thundering herd prevention, rate limiter pruning",
-    "security_audit_v2_26_2": "Internet-facing hardening: login timing equalization (constant-time bcrypt), MFA brute-force rate limiting (5 attempts/5min per token), nginx rate limiting (auth 5r/m + API 30r/s per IP), HSTS + CSP security headers, request size limit (10MB), per-username + per-IP login rate limiting, per-email forgot-password rate limiting, page_size clamped to 200 max, settings endpoint superuser-gated, article flagging superuser-gated, per-user article fetch rate limit (30/hr), WebSocket idle timeout 86400s→300s"
+    "security_audit_v2_26_2": "Internet-facing hardening: login timing equalization (constant-time bcrypt), MFA brute-force rate limiting (5 attempts/5min per token), nginx rate limiting (auth 5r/m + API 30r/s per IP), HSTS + CSP security headers, request size limit (10MB), per-username + per-IP login rate limiting, per-email forgot-password rate limiting, page_size clamped to 200 max, settings endpoint superuser-gated, article flagging superuser-gated, per-user article fetch rate limit (30/hr), WebSocket idle timeout 86400s→300s",
+    "security_audit_v2_26_3": "Token revocation (JTI-based revoked_tokens table + tokens_valid_after bulk invalidation on password change/reset), WebSocket per-user connection limit (5), message size limit (4KB), image endpoint path traversal guard (is_relative_to), CSP media-src blob: for TTS audio"
   }
 }
