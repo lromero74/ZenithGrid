@@ -15,11 +15,7 @@ import { useArticleReader, ArticleItem } from '../contexts/ArticleReaderContext'
 import { SourceSubscriptionsModal } from '../components/news/SourceSubscriptionsModal'
 import {
   formatRelativeTime,
-  sourceColors,
-  videoSourceColors,
   sortSourcesByCategory,
-  SOURCE_CATEGORY,
-  VIDEO_SOURCE_CATEGORY,
 } from '../components/news'
 import { NewsItem, TabType, NEWS_CATEGORIES, CATEGORY_COLORS, SeenFilter } from './news/types'
 import { useNewsData, useArticleContent, useNewsFilters, useSeenStatus } from './news/hooks'
@@ -484,6 +480,7 @@ export default function News() {
                   published: item.published,
                   thumbnail: item.thumbnail,
                   summary: item.summary,
+                  category: item.category,
                   has_issue: item.has_issue,
                 }))
                 startArticlePlaylist(articles, 0)
@@ -569,6 +566,7 @@ export default function News() {
                             published: item.published,
                             thumbnail: item.thumbnail,
                             summary: item.summary,
+                            category: item.category,
                             has_issue: item.has_issue,
                           }))
                           startArticlePlaylist(articles, idx, true)
@@ -659,7 +657,6 @@ export default function News() {
                 const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
                 return categoryNews.some(n => n.source === source.id)
               }),
-              SOURCE_CATEGORY,
             ).map((source) => {
               const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
               const count = countItemsBySource(categoryNews, source.id)
@@ -669,7 +666,7 @@ export default function News() {
                   onClick={() => toggleSource(source.id)}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
                     (allSourcesSelected || selectedSources.has(source.id))
-                      ? sourceColors[source.id] || 'bg-slate-600 text-white border-slate-500'
+                      ? CATEGORY_COLORS[source.category || ''] || 'bg-slate-600 text-white border-slate-500'
                       : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
                   }`}
                 >
@@ -736,6 +733,7 @@ export default function News() {
                         published: item.published,
                         thumbnail: item.thumbnail,
                         summary: item.summary,
+                        category: item.category,
                         has_issue: item.has_issue,
                       }
                       const allArticles: ArticleItem[] = filteredNews.map(n => ({
@@ -747,6 +745,7 @@ export default function News() {
                         published: n.published,
                         thumbnail: n.thumbnail,
                         summary: n.summary,
+                        category: n.category,
                         has_issue: n.has_issue,
                       }))
                       openArticle(articleItem, allArticles)
@@ -777,6 +776,7 @@ export default function News() {
                       published: item.published,
                       thumbnail: item.thumbnail,
                       summary: item.summary,
+                      category: item.category,
                       has_issue: item.has_issue,
                     }
                     const allArticles: ArticleItem[] = filteredNews.map(n => ({
@@ -788,6 +788,7 @@ export default function News() {
                       published: n.published,
                       thumbnail: n.thumbnail,
                       summary: n.summary,
+                      category: n.category,
                       has_issue: n.has_issue,
                     }))
                     openArticle(articleItem, allArticles)
@@ -799,7 +800,7 @@ export default function News() {
                     <div className="flex items-center gap-1.5">
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                          sourceColors[item.source] || 'bg-slate-600 text-slate-300'
+                          CATEGORY_COLORS[item.category] || 'bg-slate-600 text-slate-300 border-slate-500'
                         }`}
                       >
                         {item.source_name}
@@ -982,7 +983,6 @@ export default function News() {
                 const categoryVideos = (videoData?.videos || []).filter(v => selectedVideoCategories.has(v.category))
                 return categoryVideos.some(v => v.source === source.id)
               }),
-              VIDEO_SOURCE_CATEGORY,
             ).map((source) => {
               const categoryVideos = (videoData?.videos || []).filter(v => selectedVideoCategories.has(v.category))
               const count = countItemsBySource(categoryVideos, source.id)
@@ -992,7 +992,7 @@ export default function News() {
                   onClick={() => toggleVideoSource(source.id)}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
                     (allVideoSourcesSelected || selectedVideoSources.has(source.id))
-                      ? videoSourceColors[source.id] || 'bg-slate-600 text-white border-slate-500'
+                      ? CATEGORY_COLORS[source.category || ''] || 'bg-slate-600 text-white border-slate-500'
                       : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
                   }`}
                 >
@@ -1183,7 +1183,7 @@ export default function News() {
                     <div className="flex items-center justify-between">
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                          videoSourceColors[video.source] || 'bg-slate-600 text-slate-300'
+                          CATEGORY_COLORS[video.category] || 'bg-slate-600 text-slate-300 border-slate-500'
                         }`}
                       >
                         {video.channel_name}
@@ -1311,7 +1311,7 @@ export default function News() {
               <div className="flex items-center space-x-2">
                 <span
                   className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                    sourceColors[previewArticle.source] || 'bg-slate-600 text-slate-300'
+                    CATEGORY_COLORS[previewArticle.category] || 'bg-slate-600 text-slate-300 border-slate-500'
                   }`}
                 >
                   {previewArticle.source_name}

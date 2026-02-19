@@ -743,6 +743,7 @@ async def get_videos_from_db(
             "id": sid, "name": cfg["name"],
             "website": cfg["website"],
             "description": cfg.get("description", ""),
+            "category": cfg.get("category", "CryptoCurrency"),
         }
         for sid, cfg in sources_to_use.items()
     ]
@@ -1214,7 +1215,11 @@ async def get_news_from_db(
     ]
 
     sources_list = [
-        {"id": sid, "name": cfg["name"], "website": cfg["website"]}
+        {
+            "id": sid, "name": cfg["name"],
+            "website": cfg["website"],
+            "category": cfg.get("category", "CryptoCurrency"),
+        }
         for sid, cfg in sources_to_use.items()
     ]
 

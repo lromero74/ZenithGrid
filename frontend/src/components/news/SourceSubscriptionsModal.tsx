@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Newspaper, Video, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, Plus, Trash2, Clock, Search, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
-import { sourceColors, videoSourceColors } from './newsUtils'
 import { authFetch } from '../../services/api'
-import { CATEGORY_COLORS, NewsCategory, NEWS_CATEGORIES } from '../../pages/news/types'
+import { CATEGORY_COLORS, NEWS_CATEGORIES } from '../../pages/news/types'
 
 interface ContentSource {
   id: number
@@ -548,7 +547,7 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
                 const subscribedCount = categorySources.filter(s => s.is_subscribed).length
                 const allSubscribed = subscribedCount === categorySources.length
                 const noneSubscribed = subscribedCount === 0
-                const categoryColor = CATEGORY_COLORS[category as NewsCategory] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+                const categoryColor = CATEGORY_COLORS[category] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
 
                 return (
                   <div key={category} className="rounded-lg border border-slate-700 overflow-hidden">
@@ -592,9 +591,7 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
                     {!isCollapsed && (
                       <div className="divide-y divide-slate-700/50">
                         {categorySources.map(source => {
-                          const colorClass = activeTab === 'news'
-                            ? sourceColors[source.source_key] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
-                            : videoSourceColors[source.source_key] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+                          const colorClass = CATEGORY_COLORS[source.category] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'
 
                           return (
                             <div

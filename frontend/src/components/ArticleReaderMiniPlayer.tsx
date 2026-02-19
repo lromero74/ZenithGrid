@@ -8,8 +8,8 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2, Volume1, VolumeX, RefreshCw, Repeat, AlertCircle } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useArticleReader } from '../contexts/ArticleReaderContext'
-import { sourceColors } from './news'
 import { markdownToPlainText, scrollToArticle } from '../pages/news/helpers'
+import { CATEGORY_COLORS } from '../pages/news/types'
 import { TTS_VOICES, TTS_VOICES_BY_ID } from '../constants/voices'
 
 // Format seconds to MM:SS
@@ -498,7 +498,7 @@ export function ArticleReaderMiniPlayer() {
               {/* Header with source, time, voice */}
               <div className="flex flex-wrap items-center gap-3 mb-2">
                 <span className={`px-2 py-1 rounded text-sm font-medium border ${
-                  sourceColors[currentArticle.source] || 'bg-slate-600 text-slate-300'
+                  CATEGORY_COLORS[currentArticle.category || ''] || 'bg-slate-600 text-slate-300 border-slate-500'
                 }`}>
                   {currentArticle.source_name}
                 </span>
@@ -595,7 +595,7 @@ export function ArticleReaderMiniPlayer() {
             {!isExpanded && (
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${
-                  sourceColors[currentArticle.source] || 'bg-slate-600 text-slate-300'
+                  CATEGORY_COLORS[currentArticle.category || ''] || 'bg-slate-600 text-slate-300 border-slate-500'
                 }`}>
                   {currentArticle.source_name}
                 </span>
