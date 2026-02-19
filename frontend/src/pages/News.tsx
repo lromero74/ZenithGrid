@@ -414,7 +414,7 @@ export default function News() {
           })}
         </div>
 
-        {/* Full articles only toggle (hide RSS-only) */}
+        {/* Full articles only toggle (hide summary-only) */}
         {activeTab === 'articles' && (
           <button
             onClick={() => {
@@ -426,7 +426,7 @@ export default function News() {
                 ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
                 : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 border-slate-700'
             }`}
-            title={fullArticlesOnly ? 'Showing full articles only — click to show all' : 'Hide RSS-only articles (summary only)'}
+            title={fullArticlesOnly ? 'Showing full articles only — click to show all' : 'Hide summary-only articles (sources that block full content)'}
           >
             <BookOpen className="w-3.5 h-3.5" />
             <span>Full articles</span>
@@ -806,8 +806,8 @@ export default function News() {
                         {item.source_name}
                       </span>
                       {!item.content_scrape_allowed && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700 text-slate-400 border border-slate-600">
-                          RSS
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-900/50 text-amber-400 border border-amber-700/50">
+                          Summary only
                         </span>
                       )}
                     </div>
