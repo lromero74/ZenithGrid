@@ -64,11 +64,14 @@ export function BotListItem({
     if (openMenuId === bot.id && menuButtonRef.current) {
       const rect = menuButtonRef.current.getBoundingClientRect()
       const menuWidth = 192 // w-48 = 12rem = 192px
-      const menuHeight = 320 // approximate max height
+      const maxMenuHeight = Math.min(window.innerHeight * 0.8, 600) // 80vh or 600px
       const spaceBelow = window.innerHeight - rect.bottom
-      const top = spaceBelow < menuHeight
-        ? rect.top - menuHeight // flip upward
-        : rect.bottom + 4 // normal downward
+      const spaceAbove = rect.top
+      const top = spaceBelow >= maxMenuHeight
+        ? rect.bottom + 4 // normal downward
+        : spaceAbove >= maxMenuHeight
+          ? rect.top - maxMenuHeight // flip upward
+          : 8 // neither fits — pin to top of viewport with padding
       setMenuPosition({
         top,
         left: rect.right - menuWidth,
@@ -428,8 +431,8 @@ export function BotListItem({
             {/* Dropdown Menu - fixed positioning to escape overflow:hidden */}
             {openMenuId === bot.id && menuPosition && (
               <div
-                className="fixed w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-50"
-                style={{ top: menuPosition.top, left: menuPosition.left }}
+                className="fixed w-48 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-50 max-h-[80vh] overflow-y-auto"
+                style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: Math.min(window.innerHeight * 0.8, 600) }}
               >
                 <button
                   onClick={() => {
