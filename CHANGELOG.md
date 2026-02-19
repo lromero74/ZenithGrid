@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.20.3] - 2026-02-19
+
+### Fixed
+- **Broken articles skip instead of showing retry button**: Clicking a `has_issue` article auto-skipped to the next article before the mini-player could mount, making the retry button unreachable. Auto-skip now only fires during playlist auto-advance — user-initiated clicks always show the mini-player with the retry button visible. Also clears `has_issue` if the content fetch succeeds on open (not just on explicit retry)
+
 ## [v2.20.2] - 2026-02-19
 
 ### Fixed

@@ -263,11 +263,14 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   // articleIndex is the position in the playlist (used for voice cycling)
   // overrideVoice: optional voice ID to use instead of cycling (for resume)
   // forceRetry: skip has_issue check and re-attempt content fetch
+  // userInitiated: user explicitly clicked this article — show mini-player
+  //   even if broken so they can see the retry button
   const loadAndPlayArticle = useCallback(async (
-    article: ArticleItem, articleIndex: number, overrideVoice?: string, forceRetry?: boolean
+    article: ArticleItem, articleIndex: number, overrideVoice?: string, forceRetry?: boolean, userInitiated?: boolean
   ) => {
-    // Skip known-bad articles automatically (unless user explicitly retries)
-    if (article.has_issue && !forceRetry) {
+    // Skip known-bad articles automatically during auto-advance.
+    // When user explicitly clicked this article, show it so retry button is visible.
+    if (article.has_issue && !forceRetry && !userInitiated) {
       console.log(`[TTS] Skipping known-bad article: ${article.title}`)
       setTimeout(() => {
         if (articleIndex < playlistRef.current.length - 1) {
@@ -373,8 +376,8 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       setIsSummaryOnly(false)
       setArticleContent(content)
       const plainText = markdownToPlainText(content)
-      // If this was a retry and content succeeded, clear the has_issue flag
-      if (forceRetry && article.has_issue) {
+      // If content succeeded for a broken article, clear the has_issue flag
+      if ((forceRetry || userInitiated) && article.has_issue) {
         flagArticleIssue(article.id, false)
         article.has_issue = false
       }
@@ -564,7 +567,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   // ===========================================================================
 
   // Start a new playlist
-  const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false, startContinuousPlay: boolean = true) => {
+  const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false, startContinuousPlay: boolean = true, userInitiated: boolean = false) => {
     if (articles.length === 0) return
     // Stop video player if playing (mutually exclusive)
     stopVideoPlayer()
@@ -580,7 +583,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setContinuousPlay(startContinuousPlay)
 
     // Load and play the first article (pass index for voice cycling)
-    loadAndPlayArticle(articles[clampedIndex], clampedIndex)
+    loadAndPlayArticle(articles[clampedIndex], clampedIndex, undefined, undefined, userInitiated)
   }, [loadAndPlayArticle, tts])
 
   // Open a single article (expanded view) - optionally with surrounding articles for navigation
@@ -596,12 +599,12 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       // Find the index of the clicked article in the full list
       const index = allArticles.findIndex(a => a.url === article.url)
       if (index >= 0) {
-        startPlaylist(allArticles, index, true, false)
+        startPlaylist(allArticles, index, true, false, true)
         return
       }
     }
     // Single article, create a one-item playlist
-    startPlaylist([article], 0, true, false)
+    startPlaylist([article], 0, true, false, true)
   }, [startPlaylist, showMiniPlayer, currentArticle?.url])
 
   // Stop playlist
@@ -625,12 +628,12 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     registerArticleReader(stopPlaylist)
   }, [stopPlaylist])
 
-  // Play specific article in playlist
+  // Play specific article in playlist (user-initiated selection)
   const playArticle = useCallback((index: number) => {
     if (index >= 0 && index < playlistRef.current.length) {
       tts.stop()
       setCurrentIndex(index)
-      loadAndPlayArticle(playlistRef.current[index], index)
+      loadAndPlayArticle(playlistRef.current[index], index, undefined, undefined, true)
     }
   }, [tts, loadAndPlayArticle])
 
