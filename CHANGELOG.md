@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.20.0] - 2026-02-19
+
+### Added
+- **Retry button for broken articles**: Articles flagged as `has_issue` or playing summary-only now show a blue "Retry" button in the mini-player (both expanded and collapsed modes). Clicking re-attempts full content extraction; on success, clears the broken flag and plays the full article
+- **Persistent article content cache**: Extracted article text is now stored in the database (`news_articles.content` column). All users share the same cache — content is fetched once via trafilatura, then served from DB on all subsequent requests. Eliminates redundant fetches and survives backend restarts
+- **TTS cleanup on article deletion**: When articles age out (>7 days), their TTS audio cache directories and DB records are now deleted alongside image files. Prevents orphaned files from accumulating on disk
+
+### Fixed
+- **setup.py lint cleanup**: Fixed all 154 flake8 violations (E302, E501, E128) — formatting only, no logic changes
+
 ## [v2.19.0] - 2026-02-18
 
 ### Added

@@ -66,6 +66,7 @@ export function ArticleReaderMiniPlayer() {
     previousArticle,
     closeMiniPlayer,
     playArticle,
+    retryArticle,
     play,
     pause,
     resume,
@@ -506,6 +507,17 @@ export function ArticleReaderMiniPlayer() {
                     Summary only
                   </span>
                 )}
+                {(isSummaryOnly || currentArticle.has_issue) && (
+                  <button
+                    onClick={retryArticle}
+                    disabled={isLoading || articleContentLoading}
+                    className="px-2 py-1 rounded text-sm font-medium bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition-colors disabled:opacity-50 flex items-center gap-1"
+                    title="Re-attempt full content fetch"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Retry full article
+                  </button>
+                )}
                 {currentArticle.published && (
                   <span className="text-sm text-slate-400">
                     {new Date(currentArticle.published).toLocaleDateString(undefined, {
@@ -591,6 +603,17 @@ export function ArticleReaderMiniPlayer() {
                   <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-600/20 text-amber-400 border border-amber-500/30 flex-shrink-0">
                     Summary
                   </span>
+                )}
+                {(isSummaryOnly || currentArticle.has_issue) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); retryArticle() }}
+                    disabled={isLoading || articleContentLoading}
+                    className="px-1.5 py-0.5 rounded text-xs font-medium bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition-colors disabled:opacity-50 flex-shrink-0 flex items-center gap-0.5"
+                    title="Retry full article"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Retry
+                  </button>
                 )}
                 <h4 className="text-sm font-medium text-white truncate flex-1">
                   {currentArticle.title}
