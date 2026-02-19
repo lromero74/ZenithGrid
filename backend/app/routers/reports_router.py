@@ -11,7 +11,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -35,21 +35,35 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 class GoalCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    target_type: str = Field(..., pattern="^(balance|profit|both)$")
+    target_type: str = Field(..., pattern="^(balance|profit|both|income)$")
     target_currency: str = Field("USD", pattern="^(USD|BTC)$")
     target_value: float = Field(..., gt=0)
     target_balance_value: Optional[float] = None
     target_profit_value: Optional[float] = None
+    income_period: Optional[str] = Field(
+        None, pattern="^(daily|weekly|monthly|yearly)$"
+    )
+    lookback_days: Optional[int] = Field(None, ge=7, le=365)
     time_horizon_months: int = Field(..., ge=1, le=120)
+
+    @model_validator(mode="after")
+    def validate_income_fields(self):
+        if self.target_type == "income" and not self.income_period:
+            raise ValueError("income_period is required when target_type is 'income'")
+        return self
 
 
 class GoalUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
-    target_type: Optional[str] = Field(None, pattern="^(balance|profit|both)$")
+    target_type: Optional[str] = Field(None, pattern="^(balance|profit|both|income)$")
     target_currency: Optional[str] = Field(None, pattern="^(USD|BTC)$")
     target_value: Optional[float] = Field(None, gt=0)
     target_balance_value: Optional[float] = None
     target_profit_value: Optional[float] = None
+    income_period: Optional[str] = Field(
+        None, pattern="^(daily|weekly|monthly|yearly)$"
+    )
+    lookback_days: Optional[int] = Field(None, ge=7, le=365)
     time_horizon_months: Optional[int] = Field(None, ge=1, le=120)
     is_active: Optional[bool] = None
 
@@ -97,6 +111,8 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         "target_value": goal.target_value,
         "target_balance_value": goal.target_balance_value,
         "target_profit_value": goal.target_profit_value,
+        "income_period": goal.income_period,
+        "lookback_days": goal.lookback_days,
         "time_horizon_months": goal.time_horizon_months,
         "start_date": goal.start_date.isoformat() if goal.start_date else None,
         "target_date": goal.target_date.isoformat() if goal.target_date else None,
@@ -227,6 +243,8 @@ async def create_goal(
         target_value=body.target_value,
         target_balance_value=body.target_balance_value,
         target_profit_value=body.target_profit_value,
+        income_period=body.income_period,
+        lookback_days=body.lookback_days,
         time_horizon_months=body.time_horizon_months,
         start_date=start_date,
         target_date=target_date,

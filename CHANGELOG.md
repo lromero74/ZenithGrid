@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.28.0] - 2026-02-19
+
+### Added
+- **Income Goals**: New goal type that tracks your earning rate — set a target like "$1,000/month" and reports project your current income both linearly and with compounding, plus advise how much additional capital to deposit to reach the goal
+- Configurable lookback window for income calculations (7/14/30/90/365 days or all-time)
+- Income goal cards in reports show daily average, linear/compound projections, and deposit-needed estimates
+
+### Fixed
+- **Report account value**: Performance reports no longer include paper trading or inactive accounts when calculating total account value — previously inflated values by counting simulated accounts
+
 ## [v2.27.0] - 2026-02-19
 
 ### Added

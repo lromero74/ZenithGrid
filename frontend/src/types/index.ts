@@ -479,11 +479,13 @@ export interface MetricHistoryResponse {
 export interface ReportGoal {
   id: number
   name: string
-  target_type: 'balance' | 'profit' | 'both'
+  target_type: 'balance' | 'profit' | 'both' | 'income'
   target_currency: 'USD' | 'BTC'
   target_value: number
   target_balance_value?: number | null
   target_profit_value?: number | null
+  income_period?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
+  lookback_days?: number | null
   time_horizon_months: number
   start_date: string | null
   target_date: string | null
