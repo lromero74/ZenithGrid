@@ -10,7 +10,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,15 @@ class SimpleCache:
     """
     Simple in-memory cache with TTL support
 
-    Thread-safe for asyncio use.
+    Thread-safe for asyncio use. Supports single-flight pattern to prevent
+    thundering herd on cache expiry (multiple concurrent fetches for same key).
     """
 
     def __init__(self):
         self._cache: Dict[str, CacheEntry] = {}
         self._lock = asyncio.Lock()
+        # In-flight futures: key -> Future (prevents thundering herd)
+        self._in_flight: Dict[str, asyncio.Future] = {}
 
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired"""
@@ -79,6 +82,46 @@ class SimpleCache:
             expired_keys = [key for key, entry in self._cache.items() if entry.is_expired()]
             for key in expired_keys:
                 del self._cache[key]
+
+    async def get_or_fetch(
+        self, key: str, fetch_fn: Callable[[], Awaitable[Any]], ttl_seconds: int
+    ) -> Any:
+        """
+        Get from cache or fetch with single-flight protection.
+
+        If the key is cached and valid, returns immediately.
+        If not cached, the first caller fetches via fetch_fn while subsequent
+        concurrent callers await the same result (no thundering herd).
+
+        Args:
+            key: Cache key
+            fetch_fn: Async callable that produces the value
+            ttl_seconds: TTL for the cached result
+        """
+        # Fast path: check cache
+        cached = await self.get(key)
+        if cached is not None:
+            return cached
+
+        # Check if another coroutine is already fetching this key
+        if key in self._in_flight:
+            return await self._in_flight[key]
+
+        # We're the first — create a future and fetch
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+        self._in_flight[key] = future
+
+        try:
+            result = await fetch_fn()
+            await self.set(key, result, ttl_seconds)
+            future.set_result(result)
+            return result
+        except Exception as exc:
+            future.set_exception(exc)
+            raise
+        finally:
+            self._in_flight.pop(key, None)
 
 
 # Global cache instance

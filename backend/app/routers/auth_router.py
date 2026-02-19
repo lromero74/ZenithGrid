@@ -61,9 +61,40 @@ _login_attempts: dict = defaultdict(list)
 _RATE_LIMIT_MAX = 5  # max attempts
 _RATE_LIMIT_WINDOW = 900  # 15 minutes in seconds
 
+# Track last global prune time (shared across all rate limiters)
+_last_prune_time: float = 0.0
+_PRUNE_INTERVAL = 3600  # Prune stale entries every hour
+
+
+def _prune_all_rate_limiters():
+    """Periodically remove stale IPs/keys from all rate limiter dicts."""
+    global _last_prune_time
+    now = time.time()
+    if now - _last_prune_time < _PRUNE_INTERVAL:
+        return
+    _last_prune_time = now
+
+    total_pruned = 0
+    for store, window in [
+        (_login_attempts, _RATE_LIMIT_WINDOW),
+        (_signup_attempts, _SIGNUP_RATE_LIMIT_WINDOW),
+        (_forgot_pw_attempts, _FORGOT_PW_RATE_LIMIT_WINDOW),
+        (_resend_attempts, _RESEND_RATE_LIMIT_WINDOW),
+    ]:
+        stale_keys = [
+            k for k, timestamps in store.items()
+            if not any(now - t < window for t in timestamps)
+        ]
+        for k in stale_keys:
+            del store[k]
+        total_pruned += len(stale_keys)
+    if total_pruned:
+        logger.debug("Pruned %d stale rate limiter entries", total_pruned)
+
 
 def _check_rate_limit(ip: str):
     """Check if IP has exceeded login rate limit. Raises 429 if exceeded."""
+    _prune_all_rate_limiters()
     now = time.time()
     # Clean old entries
     _login_attempts[ip] = [

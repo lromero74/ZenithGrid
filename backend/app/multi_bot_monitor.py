@@ -5,6 +5,7 @@ Monitors prices for all active bots and processes signals using their configured
 """
 
 import asyncio
+import contextvars
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -13,7 +14,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import (
-    BOT_PROCESSING_DELAY_SECONDS,
     CANDLE_CACHE_DEFAULT_TTL,
     CANDLE_CACHE_TTL,
     PAIR_PROCESSING_DELAY_SECONDS,
@@ -44,6 +44,12 @@ logger = logging.getLogger(__name__)
 
 # Module-level reference to the active monitor instance (set in __init__)
 _active_monitor_instance: Optional["MultiBotMonitor"] = None
+
+# Per-task exchange client context (each asyncio.Task gets its own copy)
+# This allows parallel bot processing without shared mutable state
+_ctx_exchange: contextvars.ContextVar[Optional["ExchangeClient"]] = contextvars.ContextVar(
+    "_ctx_exchange", default=None
+)
 
 
 def clear_monitor_exchange_cache(account_id: Optional[int] = None):
@@ -172,9 +178,12 @@ class MultiBotMonitor:
         self.running = False
         self.task: Optional[asyncio.Task] = None
 
-        # Current exchange client (set per-bot in the monitoring loop)
+        # Current exchange client (legacy — used by serial fallback path)
         self._current_exchange: Optional[ExchangeClient] = None
         self._current_account_id: Optional[int] = None
+
+        # Semaphore to limit concurrent bot processing (protects API rate limits + t2.micro CPU)
+        self._bot_semaphore = asyncio.Semaphore(5)
 
         # Initialize order monitor (will get exchange per-bot)
         self.order_monitor = None  # Initialized lazily when needed
@@ -184,8 +193,9 @@ class MultiBotMonitor:
         # TTL is per-timeframe (e.g., 15-min candles cached for 15 minutes)
         self._candle_cache: Dict[str, tuple] = {}  # product_id:granularity -> (timestamp, candles)
 
-        # Cache for exchange clients per account
+        # Cache for exchange clients per account (with lock for concurrent safety)
         self._exchange_cache: Dict[int, ExchangeClient] = {}
+        self._exchange_cache_lock = asyncio.Lock()
 
         # Cache for previous indicators (for crossing detection)
         # Key: (bot_id, product_id) -> Dict of indicator values
@@ -213,14 +223,19 @@ class MultiBotMonitor:
 
         # If bot has an account_id, use that account's credentials
         if bot.account_id:
-            # Check cache first
+            # Check cache first (lock-free fast path)
             if bot.account_id in self._exchange_cache:
                 return self._exchange_cache[bot.account_id]
 
-            client = await get_exchange_client_for_account(db, bot.account_id)
-            if client:
-                self._exchange_cache[bot.account_id] = client
-                return client
+            async with self._exchange_cache_lock:
+                # Double-check after acquiring lock
+                if bot.account_id in self._exchange_cache:
+                    return self._exchange_cache[bot.account_id]
+
+                client = await get_exchange_client_for_account(db, bot.account_id)
+                if client:
+                    self._exchange_cache[bot.account_id] = client
+                    return client
 
         # If bot has a user_id but no account_id, get user's default account
         if bot.user_id:
@@ -237,8 +252,8 @@ class MultiBotMonitor:
 
     @property
     def exchange(self) -> Optional[ExchangeClient]:
-        """Returns current exchange client (per-bot) or fallback"""
-        return self._current_exchange or self._fallback_exchange
+        """Returns current exchange client (per-bot task context) or fallback"""
+        return _ctx_exchange.get() or self._current_exchange or self._fallback_exchange
 
     async def get_active_bots(self, db: AsyncSession) -> List[Bot]:
         """
@@ -290,10 +305,8 @@ class MultiBotMonitor:
         This dramatically reduces API calls since candles don't change until the next
         candle closes.
         """
-        # Use account + product_id + granularity as cache key
-        # Account ID prevents cross-exchange cache collisions
-        acct = self._current_account_id or 0
-        cache_key = f"{acct}:{product_id}:{granularity}"
+        # Candle data is public (same for all users/accounts)
+        cache_key = f"{product_id}:{granularity}"
 
         # Check cache with per-timeframe TTL
         now = datetime.utcnow().timestamp()
@@ -1750,6 +1763,60 @@ class MultiBotMonitor:
             traceback.print_exc()
             return {"error": str(e)}
 
+    async def _process_single_bot(self, bot: Bot, needs_ai_analysis: bool) -> None:
+        """
+        Process a single bot with its own DB session and exchange context.
+
+        Designed to run as a concurrent task — each invocation gets its own
+        DB session and sets the exchange client via contextvars so that
+        self.exchange returns the correct client for this bot.
+        """
+        async with self._bot_semaphore:
+            async with async_session_maker() as db:
+                try:
+                    # Get exchange client for this bot (per-user/per-account)
+                    exchange = await self.get_exchange_for_bot(db, bot)
+                    if not exchange:
+                        logger.warning(
+                            f"No exchange client for bot {bot.name}"
+                            f" (account_id={bot.account_id})"
+                        )
+                        return
+
+                    # Set exchange in task-local context (each asyncio.Task gets its own copy)
+                    _ctx_exchange.set(exchange)
+
+                    # Re-fetch bot in this session to avoid detached instance errors
+                    result = await db.execute(select(Bot).where(Bot.id == bot.id))
+                    local_bot = result.scalar_one_or_none()
+                    if not local_bot:
+                        logger.warning(f"Bot {bot.id} not found in DB")
+                        return
+
+                    # Update timestamp BEFORE processing to prevent race condition
+                    local_bot.last_signal_check = datetime.utcnow()
+                    if needs_ai_analysis:
+                        local_bot.last_ai_check = datetime.utcnow()
+                    await db.commit()
+
+                    print(f"🔍 Calling process_bot for {local_bot.name} (AI: {needs_ai_analysis})...")
+                    await self.process_bot(db, local_bot, skip_ai_analysis=not needs_ai_analysis)
+                    print(f"✅ Finished processing {local_bot.name}")
+
+                    # Calculate and store next check time (aligned to candle boundaries)
+                    bot_check_interval = calculate_bot_check_interval(local_bot.strategy_config or {})
+                    current_timestamp = int(datetime.utcnow().timestamp())
+                    next_check_timestamp = next_check_time_aligned(bot_check_interval, current_timestamp)
+                    self._bot_next_check[bot.id] = next_check_timestamp
+                    next_check_in = next_check_timestamp - current_timestamp
+                    logger.debug(
+                        f"📅 {local_bot.name}: Next check in {next_check_in}s "
+                        f"(interval: {bot_check_interval}s, aligned to candle close)"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Error processing bot {bot.name}: {e}")
+
     async def monitor_loop(self):
         """Main monitoring loop for all active bots"""
         print("🔍 monitor_loop() ENTERED - starting multi-bot monitor loop")
@@ -1769,23 +1836,13 @@ class MultiBotMonitor:
                     else:
                         print(f"✅ Monitoring {len(bots)} active bot(s)")
 
-                        # Process each bot independently based on their individual check intervals
+                        # Determine which bots are due for processing
+                        bots_to_process: List[tuple] = []  # (bot, needs_ai_analysis)
                         for bot in bots:
                             try:
                                 print(f"🔍 Checking bot: {bot.name} (ID: {bot.id})")
 
-                                # Get exchange client for this bot (per-user/per-account)
-                                self._current_exchange = await self.get_exchange_for_bot(db, bot)
-                                self._current_account_id = bot.account_id
-                                if not self._current_exchange:
-                                    logger.warning(
-                                        f"No exchange client for bot {bot.name}"
-                                        f" (account_id={bot.account_id})"
-                                    )
-                                    continue
-
                                 # Phase 2 Optimization: Smart check scheduling
-                                # Calculate bot-specific check interval based on its shortest indicator timeframe
                                 bot_check_interval = calculate_bot_check_interval(bot.strategy_config or {})
                                 current_timestamp = int(datetime.utcnow().timestamp())
 
@@ -1800,8 +1857,7 @@ class MultiBotMonitor:
                                         )
                                         continue
 
-                                # Bot is due for a check
-                                # Determine if we need AI analysis (separate from candle-based scheduling)
+                                # Determine if we need AI analysis
                                 ai_check_interval = bot.check_interval_seconds or self.interval_seconds
                                 needs_ai_analysis = True
                                 now = datetime.utcnow()
@@ -1827,31 +1883,51 @@ class MultiBotMonitor:
                                         f"(candle interval: {bot_check_interval}s)"
                                     )
 
-                                # Update timestamp BEFORE processing to prevent race condition
-                                bot.last_signal_check = datetime.utcnow()
-                                if needs_ai_analysis:
-                                    bot.last_ai_check = datetime.utcnow()
-                                await db.commit()  # Commit immediately to prevent concurrent processing
-
-                                print(f"🔍 Calling process_bot for {bot.name} (AI: {needs_ai_analysis})...")
-                                await self.process_bot(db, bot, skip_ai_analysis=not needs_ai_analysis)
-                                print(f"✅ Finished processing {bot.name}")
-
-                                # Calculate and store next check time (aligned to candle boundaries)
-                                next_check_timestamp = next_check_time_aligned(bot_check_interval, current_timestamp)
-                                self._bot_next_check[bot.id] = next_check_timestamp
-                                next_check_in = next_check_timestamp - current_timestamp
-                                logger.debug(
-                                    f"📅 {bot.name}: Next check in {next_check_in}s "
-                                    f"(interval: {bot_check_interval}s, aligned to candle close)"
-                                )
-
-                                # Throttle between bots to reduce CPU burst (t2.micro friendly)
-                                await asyncio.sleep(BOT_PROCESSING_DELAY_SECONDS)
+                                bots_to_process.append((bot, needs_ai_analysis))
                             except Exception as e:
-                                logger.error(f"Error processing bot {bot.name}: {e}")
-                                # Continue with other bots even if one fails
+                                logger.error(f"Error scheduling bot {bot.name}: {e}")
                                 continue
+
+                        # Process bots concurrently (semaphore limits to 5 at a time)
+                        if bots_to_process:
+                            print(f"🚀 Processing {len(bots_to_process)} bot(s) concurrently (max 5 parallel)")
+                            tasks = [
+                                asyncio.create_task(
+                                    self._process_single_bot(bot, needs_ai),
+                                    name=f"bot-{bot.id}-{bot.name}"
+                                )
+                                for bot, needs_ai in bots_to_process
+                            ]
+                            await asyncio.gather(*tasks, return_exceptions=True)
+                            print(f"✅ Finished processing {len(bots_to_process)} bot(s)")
+
+                        # Prune stale entries from unbounded caches
+                        active_bot_ids = {b.id for b in bots}
+                        active_pairs = set()
+                        for b in bots:
+                            for p in b.get_trading_pairs():
+                                active_pairs.add((b.id, p))
+
+                        # Prune _previous_indicators_cache
+                        stale_indicator_keys = [
+                            k for k in self._previous_indicators_cache
+                            if k not in active_pairs
+                        ]
+                        for k in stale_indicator_keys:
+                            del self._previous_indicators_cache[k]
+                        if stale_indicator_keys:
+                            logger.debug(
+                                f"Pruned {len(stale_indicator_keys)} stale "
+                                "entries from indicators cache"
+                            )
+
+                        # Prune _bot_next_check for deleted/deactivated bots
+                        stale_schedule_keys = [
+                            bid for bid in self._bot_next_check
+                            if bid not in active_bot_ids
+                        ]
+                        for bid in stale_schedule_keys:
+                            del self._bot_next_check[bid]
 
                 # Wait for next interval - check frequently so bots with short intervals are responsive
                 print("🔍 Sleeping 10 seconds before next iteration...")
