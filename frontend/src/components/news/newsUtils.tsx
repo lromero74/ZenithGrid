@@ -261,7 +261,7 @@ export const SOURCE_CATEGORY: Record<string, string> = {
   science_daily: 'Science', nasa: 'Science', new_scientist: 'Science',
   // Health
   stat_news: 'Health', npr_health: 'Health', science_daily_health: 'Health',
-  medical_xpress: 'Health', genetic_engineering_news: 'Health',
+  genetic_engineering_news: 'Health',
   nature_medicine: 'Health', the_lancet: 'Health', who_news: 'Health',
   nutrition_org: 'Health', self_wellness: 'Health',
 }

@@ -262,15 +262,14 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   // Load and play an article
   // articleIndex is the position in the playlist (used for voice cycling)
   // overrideVoice: optional voice ID to use instead of cycling (for resume)
-  // forceRetry: skip has_issue check and re-attempt content fetch
   // userInitiated: user explicitly clicked this article — show mini-player
   //   even if broken so they can see the retry button
   const loadAndPlayArticle = useCallback(async (
-    article: ArticleItem, articleIndex: number, overrideVoice?: string, forceRetry?: boolean, userInitiated?: boolean
+    article: ArticleItem, articleIndex: number, overrideVoice?: string, userInitiated?: boolean
   ) => {
     // Skip known-bad articles automatically during auto-advance.
     // When user explicitly clicked this article, show it so retry button is visible.
-    if (article.has_issue && !forceRetry && !userInitiated) {
+    if (article.has_issue && !userInitiated) {
       console.log(`[TTS] Skipping known-bad article: ${article.title}`)
       setTimeout(() => {
         if (articleIndex < playlistRef.current.length - 1) {
@@ -287,11 +286,6 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       return
     }
 
-    // If retrying, clear cached content so we fetch fresh
-    if (forceRetry) {
-      article.content = undefined
-    }
-
     // Reset playback tracking for new article
     hasPlaybackStartedRef.current = false
     setIsSummaryOnly(false)
@@ -302,18 +296,10 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       voiceToUse = VOICE_CYCLE_IDS[articleIndex % VOICE_CYCLE_IDS.length]
     }
 
-    // Fetch content with exponential backoff retries
+    // Single fetch — backend persists failures so we never re-fetch a failed URL
     let content = article.content
     if (!content) {
-      const BACKOFF_DELAYS = [0, 1500, 3000, 6000]  // immediate, 1.5s, 3s, 6s
-      for (let attempt = 0; attempt < BACKOFF_DELAYS.length; attempt++) {
-        if (attempt > 0) {
-          console.log(`[TTS] Content fetch attempt ${attempt + 1} for "${article.title}", backoff ${BACKOFF_DELAYS[attempt]}ms`)
-          await new Promise(r => setTimeout(r, BACKOFF_DELAYS[attempt]))
-        }
-        content = await fetchArticleContent(article.url) || undefined
-        if (content) break
-      }
+      content = await fetchArticleContent(article.url) || undefined
     }
 
     // Mark article as seen when opened in reader mode (fire-and-forget)
@@ -325,9 +311,9 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       }).catch(() => {})
     }
 
-    // If no content AND no summary after retry, flag as issue and skip
+    // If no content AND no summary, flag as issue and skip
     if (!content && !article.summary) {
-      console.log(`[TTS] No content or summary for article after retry: ${article.title}`)
+      console.log(`[TTS] No content or summary for article: ${article.title}`)
       flagArticleIssue(article.id)
       article.has_issue = true
       setTimeout(() => {
@@ -377,15 +363,15 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       setArticleContent(content)
       const plainText = markdownToPlainText(content)
       // If content succeeded for a broken article, clear the has_issue flag
-      if ((forceRetry || userInitiated) && article.has_issue) {
+      if (userInitiated && article.has_issue) {
         flagArticleIssue(article.id, false)
         article.has_issue = false
       }
       // Pass voice and article ID for server-side TTS caching
       await tts.loadAndPlay(plainText, voiceToUse, article.id)
     } else if (article.summary) {
-      // All retries exhausted — fall back to summary and flag as broken
-      console.warn(`[TTS] Content extraction failed after retries for "${article.title}", using summary`)
+      // Content fetch failed — fall back to summary and flag as broken
+      console.warn(`[TTS] Content extraction failed for "${article.title}", using summary`)
       setIsSummaryOnly(true)
       setArticleContent(article.summary)
       flagArticleIssue(article.id)
@@ -583,7 +569,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setContinuousPlay(startContinuousPlay)
 
     // Load and play the first article (pass index for voice cycling)
-    loadAndPlayArticle(articles[clampedIndex], clampedIndex, undefined, undefined, userInitiated)
+    loadAndPlayArticle(articles[clampedIndex], clampedIndex, undefined, userInitiated)
   }, [loadAndPlayArticle, tts])
 
   // Open a single article (expanded view) - optionally with surrounding articles for navigation
@@ -633,7 +619,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     if (index >= 0 && index < playlistRef.current.length) {
       tts.stop()
       setCurrentIndex(index)
-      loadAndPlayArticle(playlistRef.current[index], index, undefined, undefined, true)
+      loadAndPlayArticle(playlistRef.current[index], index, undefined, true)
     }
   }, [tts, loadAndPlayArticle])
 
@@ -871,13 +857,25 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setPendingResume(null)
   }, [])
 
-  // Retry the current article's content fetch (clears has_issue on success)
+  // Regenerate TTS audio from existing text (content or summary) — no external fetch
   const retryArticle = useCallback(() => {
     const article = playlistRef.current[currentIndex]
     if (!article) return
+
+    const text = article.content || articleContent || article.summary
+    if (!text) return
+
     setIsPlaying(true)
-    loadAndPlayArticle(article, currentIndex, undefined, true)
-  }, [currentIndex, loadAndPlayArticle])
+
+    // Determine current voice for this article
+    let voiceToUse: string | undefined
+    if (voiceCycleEnabled) {
+      voiceToUse = VOICE_CYCLE_IDS[currentIndex % VOICE_CYCLE_IDS.length]
+    }
+
+    const plainText = markdownToPlainText(text)
+    tts.loadAndPlay(plainText, voiceToUse, article.id)
+  }, [currentIndex, articleContent, voiceCycleEnabled, tts])
 
   const value: ArticleReaderContextType = useMemo(() => ({
     // Playlist state

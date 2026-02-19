@@ -333,13 +333,6 @@ NEWS_SOURCES = {
         "website": "https://www.sciencedaily.com",
         "category": "Health",
     },
-    "medical_xpress": {
-        "name": "Medical Xpress",
-        "url": "https://medicalxpress.com/rss-feed/",
-        "type": "rss",
-        "website": "https://medicalxpress.com",
-        "category": "Health",
-    },
     "the_lancet": {
         "name": "The Lancet",
         "url": "https://www.thelancet.com/rssfeed/lancet_online.xml",

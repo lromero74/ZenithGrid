@@ -1273,7 +1273,8 @@ def initialize_database(project_root):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 has_issue BOOLEAN DEFAULT 0,
                 content TEXT,
-                content_fetched_at DATETIME
+                content_fetched_at DATETIME,
+                content_fetch_failed BOOLEAN DEFAULT 0
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_url ON news_articles(url)")
@@ -2347,16 +2348,6 @@ def initialize_database(project_root):
                 'https://www.sciencedaily.com/rss/health_medicine.xml',
                 'https://www.sciencedaily.com',
                 'Health & medicine research',
-                None,
-                'Health',
-            ),
-            (
-                'medical_xpress',
-                'Medical Xpress',
-                'news',
-                'https://medicalxpress.com/rss-feed/',
-                'https://medicalxpress.com',
-                'Medical research news',
                 None,
                 'Health',
             ),

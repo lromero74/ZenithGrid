@@ -986,6 +986,9 @@ class NewsArticle(Base):
     content = Column(Text, nullable=True)
     content_fetched_at = Column(DateTime, nullable=True)  # When content was last extracted
 
+    # Content fetch tracking
+    content_fetch_failed = Column(Boolean, default=False)  # True if content extraction failed — never re-fetch
+
     # TTS issue flag (article failed to load/play)
     has_issue = Column(Boolean, default=False)
 
