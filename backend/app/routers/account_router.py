@@ -323,7 +323,11 @@ async def get_aggregate_value(db: AsyncSession = Depends(get_db), current_user: 
 
 
 @router.get("/portfolio")
-async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_portfolio(
+    force_fresh: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Get full portfolio breakdown (all coins like 3Commas)"""
     try:
         # Paper-only users get a simulated portfolio from their virtual balances
@@ -371,20 +375,22 @@ async def get_portfolio(db: AsyncSession = Depends(get_db), current_user: User =
                 "is_paper_trading": True,
             }
 
-        # Check in-memory cache first (60s TTL)
         cache_key = f"portfolio_response_{current_user.id}"
-        cached = await api_cache.get(cache_key)
-        if cached is not None:
-            logger.debug("Using cached portfolio response")
-            return cached
 
-        # Check persistent cache (survives restarts)
-        persistent = await portfolio_cache.get(current_user.id)
-        if persistent is not None:
-            # Serve stale data immediately, populate in-memory cache
-            await api_cache.set(cache_key, persistent, 60)
-            logger.info("Serving persistent portfolio cache while fresh data loads")
-            return persistent
+        if not force_fresh:
+            # Check in-memory cache first (60s TTL)
+            cached = await api_cache.get(cache_key)
+            if cached is not None:
+                logger.debug("Using cached portfolio response")
+                return cached
+
+            # Check persistent cache (survives restarts)
+            persistent = await portfolio_cache.get(current_user.id)
+            if persistent is not None:
+                # Serve stale data immediately, populate in-memory cache
+                await api_cache.set(cache_key, persistent, 60)
+                logger.info("Serving persistent portfolio cache while fresh data loads")
+                return persistent
 
         coinbase = await get_coinbase_from_db(db, current_user.id)
 

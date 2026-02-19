@@ -59,27 +59,36 @@ function Portfolio() {
   const { selectedAccount } = useAccount()
   const queryClient = useQueryClient()
 
-  // Use React Query with account-specific key to support CEX/DEX switching
-  const { data: portfolio, isLoading: loading, error, refetch, isFetching } = useQuery({
-    queryKey: ['account-portfolio', selectedAccount?.id],
-    queryFn: async () => {
-      // If we have a selected account, use the account-specific endpoint
-      if (selectedAccount) {
-        const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio`)
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        return response.json() as Promise<PortfolioData>
-      }
-      // Fallback to legacy endpoint
-      const response = await authFetch('/api/account/portfolio')
+  // Fetch portfolio with optional cache bypass
+  const fetchPortfolio = async (forceFresh = false): Promise<PortfolioData> => {
+    const qs = forceFresh ? '?force_fresh=true' : ''
+    if (selectedAccount) {
+      const response = await authFetch(`/api/accounts/${selectedAccount.id}/portfolio${qs}`)
       if (!response.ok) throw new Error('Failed to fetch portfolio')
       return response.json() as Promise<PortfolioData>
-    },
-    refetchInterval: 60000, // Update prices every 60 seconds
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchOnMount: false, // Don't refetch on page refresh - use cache
-    refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    enabled: true, // Always enabled, will use fallback if no account selected
+    }
+    const response = await authFetch(`/api/account/portfolio${qs}`)
+    if (!response.ok) throw new Error('Failed to fetch portfolio')
+    return response.json() as Promise<PortfolioData>
+  }
+
+  // Use React Query with account-specific key to support CEX/DEX switching
+  const { data: portfolio, isLoading: loading, error, isFetching } = useQuery({
+    queryKey: ['account-portfolio', selectedAccount?.id],
+    queryFn: () => fetchPortfolio(false),
+    refetchInterval: 30000, // Update every 30 seconds
+    staleTime: 15000, // Consider data fresh for 15 seconds
+    refetchOnMount: true, // Refetch when navigating to portfolio page
+    refetchOnWindowFocus: true, // Refetch when switching back to tab
+    enabled: true,
   })
+
+  // Manual refresh bypasses backend cache entirely
+  const handleManualRefresh = async () => {
+    queryClient.setQueryData(['account-portfolio', selectedAccount?.id],
+      await fetchPortfolio(true)
+    )
+  }
 
   // Sell coin mutation
   const sellCoinMutation = useMutation({
@@ -425,7 +434,7 @@ function Portfolio() {
             </div>
           </div>
           <button
-            onClick={() => refetch()}
+            onClick={() => handleManualRefresh()}
             disabled={isFetching}
             className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-300 px-4 py-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Refresh Portfolio"

@@ -23,6 +23,7 @@ async def get_cex_portfolio(
     account: Account,
     db: AsyncSession,
     get_coinbase_for_account_func,
+    force_fresh: bool = False,
 ) -> dict:
     """
     Get portfolio for a CEX (Coinbase) account.
@@ -30,19 +31,21 @@ async def get_cex_portfolio(
     Uses Coinbase's portfolio breakdown which returns USD values for every
     position in a single API call — no individual price fetches needed.
     """
-    # Check in-memory cache first (60s TTL)
     cache_key = f"portfolio_response_{account.id}"
-    cached = await api_cache.get(cache_key)
-    if cached is not None:
-        logger.debug(f"Using cached portfolio response for account {account.id}")
-        return cached
 
-    # Check persistent cache (survives restarts)
-    persistent = await portfolio_cache.get(account.user_id)
-    if persistent is not None:
-        await api_cache.set(cache_key, persistent, 60)
-        logger.info(f"Serving persistent portfolio cache for account {account.id}")
-        return persistent
+    if not force_fresh:
+        # Check in-memory cache first (60s TTL)
+        cached = await api_cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"Using cached portfolio response for account {account.id}")
+            return cached
+
+        # Check persistent cache (survives restarts)
+        persistent = await portfolio_cache.get(account.user_id)
+        if persistent is not None:
+            await api_cache.set(cache_key, persistent, 60)
+            logger.info(f"Serving persistent portfolio cache for account {account.id}")
+            return persistent
 
     coinbase = await get_coinbase_for_account_func(account)
 

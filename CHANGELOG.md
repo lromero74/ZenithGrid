@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.26.5] - 2026-02-19
+
+### Fixed
+- **Portfolio balances now match Coinbase**: Refresh button bypasses all backend caches and fetches live data directly from Coinbase
+- **Faster portfolio updates**: Auto-refresh interval reduced from 60s to 30s, data refreshes on tab focus and page navigation
+- **Bot action menu cut off**: Fixed dropdown menu on the Bots page overflowing off-screen — "Cancel All Deals", "Sell All at Market", and "Delete" options were hidden when many accounts existed
+
 ## [v2.26.4] - 2026-02-19
 
 ### Fixed
