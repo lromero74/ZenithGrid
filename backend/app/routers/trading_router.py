@@ -101,20 +101,32 @@ async def market_sell(
             size=str(request.size),
         )
 
-        logger.info(
-            f"Market sell executed: order_id={order.get('order_id', 'N/A')}"
-        )
+        # Coinbase nests order details inside success_response
+        success_response = order.get('success_response', {})
+        error_response = order.get('error_response', {})
+        order_id = success_response.get('order_id', '') or order.get('order_id', '')
+
+        if not order_id:
+            error_msg = (
+                error_response.get('message')
+                or error_response.get('error')
+                or error_response.get('preview_failure_reason')
+                or "Order rejected by exchange"
+            )
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        logger.info(f"Market sell executed: order_id={order_id}")
 
         return {
             "success": True,
-            "order_id": order.get('order_id'),
+            "order_id": order_id,
             "product_id": request.product_id,
             "side": "SELL",
             "size": request.size,
-            "filled_size": order.get('filled_size', 0),
-            "filled_value": order.get('filled_value', 0),
-            "average_filled_price": order.get('average_filled_price', 0),
-            "status": order.get('status', 'unknown'),
+            "filled_size": success_response.get('filled_size', 0),
+            "filled_value": success_response.get('filled_value', 0),
+            "average_filled_price": success_response.get('average_filled_price', 0),
+            "status": success_response.get('status', 'unknown'),
         }
 
     except HTTPException:

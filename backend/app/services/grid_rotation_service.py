@@ -179,7 +179,7 @@ async def execute_grid_rotation(
                 size=str(base_amount)
             )
 
-            if sell_result.get("success"):
+            if sell_result.get("success") or sell_result.get("success_response", {}).get("order_id"):
                 total_locked_profit += level_info["profit"]
                 closed_count += 1
 

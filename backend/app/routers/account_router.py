@@ -899,10 +899,12 @@ async def _run_portfolio_conversion(
                     if usd_account:
                         usd_available = float(usd_account.get("available_balance", {}).get("value", "0"))
                         if usd_available > 1.0:
+                            # Reserve 1% for exchange fees to avoid "Insufficient balance"
+                            spend_amount = round(usd_available * 0.99, 2)
                             await exchange.create_market_order(
                                 product_id="BTC-USD",
                                 side="BUY",
-                                funds=str(usd_available),
+                                funds=str(spend_amount),
                             )
                             logger.info(f"✅ Converted ${usd_available} USD to BTC")
                 except Exception as e:
