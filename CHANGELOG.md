@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.26.0] - 2026-02-19
+
+### Added
+- **Parallel bot processing**: Bots now process concurrently (up to 5 at a time) instead of sequentially — 3-5x faster cycle times for multi-bot setups
+- **Thundering herd prevention**: When cached prices/products expire, only one request fetches fresh data while others wait for the result — eliminates redundant API calls under load
+- **Candle chart caching**: The charting endpoint now caches candle data with per-timeframe TTLs — multiple users viewing the same chart no longer trigger duplicate API calls
+- **Rate limiter self-cleaning**: Login/signup/password-reset rate limiters now prune stale entries hourly to prevent slow memory growth
+
+### Fixed
+- **Exchange client cache race condition**: Added async locking to prevent duplicate client creation when multiple requests hit the same account concurrently
+- **Monitor exchange cache race condition**: Same double-checked locking pattern applied to the bot monitor's per-account exchange cache
+- **Candle cache shared across users**: Candle data (which is public/identical for all users) no longer includes account ID in cache keys — with 5 users trading the same pair, candle fetches drop from 5x to 1x
+- **Unbounded cache growth**: Indicator and scheduling caches now prune entries for deleted/deactivated bots each cycle
+
 ## [v2.25.3] - 2026-02-19
 
 ### Fixed

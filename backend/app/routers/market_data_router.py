@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache import SimpleCache
 from app.coinbase_unified_client import CoinbaseClient
 from app.config import settings
+from app.constants import CANDLE_CACHE_TTL, CANDLE_CACHE_DEFAULT_TTL
 from app.database import get_db
 from app.models import Account
 from app.auth.dependencies import get_current_user
@@ -30,6 +31,9 @@ logger = logging.getLogger(__name__)
 
 # Cache for expensive market data (product listings don't change often)
 _market_data_cache = SimpleCache()
+
+# Cache for candle data (shared across all users — candles are public)
+_candle_cache = SimpleCache()
 
 router = APIRouter(prefix="/api", tags=["market_data"])
 
@@ -132,6 +136,12 @@ async def get_candles(
     try:
         interval = granularity or settings.candle_interval
 
+        # Check cache first — candle data is public, shared across all users
+        cache_key = f"candles:{product_id}:{interval}:{limit}"
+        cached = await _candle_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         # Native Coinbase intervals (in seconds)
         native_intervals = {
             "ONE_MINUTE": 60,
@@ -221,7 +231,13 @@ async def get_candles(
                     }
                 )
 
-        return {"candles": formatted_candles, "interval": interval, "product_id": product_id}
+        result = {"candles": formatted_candles, "interval": interval, "product_id": product_id}
+
+        # Cache with per-timeframe TTL (same as backend monitor uses)
+        cache_ttl = CANDLE_CACHE_TTL.get(interval, CANDLE_CACHE_DEFAULT_TTL)
+        await _candle_cache.set(cache_key, result, cache_ttl)
+
+        return result
     except Exception as e:
         logger.error(f"Failed to fetch candles: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred")

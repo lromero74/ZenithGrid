@@ -14,17 +14,13 @@ logger = logging.getLogger(__name__)
 
 async def list_products(request_func: Callable) -> List[Dict[str, Any]]:
     """Get all available products/trading pairs"""
-    cache_key = "all_products"
-    cached = await api_cache.get(cache_key)
-    if cached is not None:
-        return cached
 
-    result = await request_func("GET", "/api/v3/brokerage/products")
-    products = result.get("products", [])
+    async def _fetch():
+        result = await request_func("GET", "/api/v3/brokerage/products")
+        return result.get("products", [])
 
-    # Cache for 1 hour (product list doesn't change often)
-    await api_cache.set(cache_key, products, ttl_seconds=3600)
-    return products
+    # Single-flight: only one requester fetches when cache expires
+    return await api_cache.get_or_fetch("all_products", _fetch, ttl_seconds=3600)
 
 
 async def get_product(request_func: Callable, product_id: str = "ETH-BTC") -> Dict[str, Any]:
@@ -44,42 +40,44 @@ async def get_current_price(request_func: Callable, auth_type: str, product_id: 
     """
     Get current price (cached for 10s to reduce API spam)
 
+    Uses single-flight pattern to prevent thundering herd when cache expires
+    (multiple concurrent requests for the same price all trigger one fetch).
+
     CDP auth returns mid-price from best bid/ask.
     HMAC auth returns direct price field.
     """
     cache_key = f"price_{product_id}"
-    cached = await api_cache.get(cache_key)
-    if cached is not None:
-        return cached
 
-    ticker = await get_ticker(request_func, product_id)
+    async def _fetch_price() -> float:
+        ticker = await get_ticker(request_func, product_id)
 
-    if auth_type == "cdp":
-        # CDP returns best_bid and best_ask, calculate mid-price
-        best_bid = float(ticker.get("best_bid", 0))
-        best_ask = float(ticker.get("best_ask", 0))
+        if auth_type == "cdp":
+            # CDP returns best_bid and best_ask, calculate mid-price
+            best_bid = float(ticker.get("best_bid", 0))
+            best_ask = float(ticker.get("best_ask", 0))
 
-        if best_bid > 0 and best_ask > 0:
-            price = (best_bid + best_ask) / 2.0
-        else:
-            # Fallback: use most recent trade price
-            trades = ticker.get("trades", [])
-            if trades:
-                price = float(trades[0].get("price", 0))
+            if best_bid > 0 and best_ask > 0:
+                price = (best_bid + best_ask) / 2.0
             else:
-                price = 0.0
-    else:
-        # HMAC returns price field directly
-        if "price" not in ticker or not ticker.get("price"):
-            logger.error(f"Ticker response for {product_id} missing price! Response: {ticker}")
+                # Fallback: use most recent trade price
+                trades = ticker.get("trades", [])
+                if trades:
+                    price = float(trades[0].get("price", 0))
+                else:
+                    price = 0.0
+        else:
+            # HMAC returns price field directly
+            if "price" not in ticker or not ticker.get("price"):
+                logger.error(f"Ticker response for {product_id} missing price! Response: {ticker}")
 
-        price = float(ticker.get("price", "0"))
+            price = float(ticker.get("price", "0"))
 
-        if price == 0.0:
-            logger.warning(f"Price is 0.0 for {product_id}. Ticker response: {ticker}")
+            if price == 0.0:
+                logger.warning(f"Price is 0.0 for {product_id}. Ticker response: {ticker}")
 
-    await api_cache.set(cache_key, price, PRICE_CACHE_TTL)
-    return price
+        return price
+
+    return await api_cache.get_or_fetch(cache_key, _fetch_price, PRICE_CACHE_TTL)
 
 
 async def get_btc_usd_price(request_func: Callable, auth_type: str) -> float:
@@ -102,22 +100,16 @@ async def get_product_stats(request_func: Callable, product_id: str = "ETH-BTC")
     - price_percentage_change_24h: % change in price
     """
     cache_key = f"stats_{product_id}"
-    cached = await api_cache.get(cache_key)
-    if cached is not None:
-        return cached
 
-    result = await request_func("GET", f"/api/v3/brokerage/products/{product_id}")
+    async def _fetch():
+        result = await request_func("GET", f"/api/v3/brokerage/products/{product_id}")
+        return {
+            "volume_24h": float(result.get("volume_24h", 0)),
+            "volume_percentage_change_24h": float(result.get("volume_percentage_change_24h", 0)),
+            "price_percentage_change_24h": float(result.get("price_percentage_change_24h", 0)),
+        }
 
-    # Extract 24h stats from product data
-    stats = {
-        "volume_24h": float(result.get("volume_24h", 0)),
-        "volume_percentage_change_24h": float(result.get("volume_percentage_change_24h", 0)),
-        "price_percentage_change_24h": float(result.get("price_percentage_change_24h", 0)),
-    }
-
-    # Cache for 10 minutes (volume doesn't change that quickly)
-    await api_cache.set(cache_key, stats, PRODUCT_STATS_CACHE_TTL)
-    return stats
+    return await api_cache.get_or_fetch(cache_key, _fetch, PRODUCT_STATS_CACHE_TTL)
 
 
 async def get_candles(
@@ -144,20 +136,16 @@ async def get_product_book(
         Dict with 'pricebook' containing bids and asks arrays
     """
     cache_key = f"orderbook_{product_id}_{limit}"
-    cached = await api_cache.get(cache_key)
-    if cached is not None:
-        return cached
 
-    # Coinbase uses /product_book with product_id as query param
-    result = await request_func(
-        "GET",
-        "/api/v3/brokerage/product_book",
-        params={"product_id": product_id, "limit": str(limit)}
-    )
+    async def _fetch():
+        return await request_func(
+            "GET",
+            "/api/v3/brokerage/product_book",
+            params={"product_id": product_id, "limit": str(limit)}
+        )
 
     # Cache for 2 seconds (order book changes rapidly)
-    await api_cache.set(cache_key, result, 2)
-    return result
+    return await api_cache.get_or_fetch(cache_key, _fetch, 2)
 
 
 async def test_connection(request_func: Callable) -> bool:
