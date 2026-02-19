@@ -474,3 +474,51 @@ export interface MetricHistoryResponse {
   metric_name: string
   data: MetricHistoryPoint[]
 }
+
+// Reports & Goals
+export interface ReportGoal {
+  id: number
+  name: string
+  target_type: 'balance' | 'profit' | 'both'
+  target_currency: 'USD' | 'BTC'
+  target_value: number
+  target_balance_value?: number | null
+  target_profit_value?: number | null
+  time_horizon_months: number
+  start_date: string | null
+  target_date: string | null
+  is_active: boolean
+  achieved_at: string | null
+  created_at: string | null
+}
+
+export interface ReportSchedule {
+  id: number
+  name: string
+  periodicity: string
+  account_id?: number | null
+  is_enabled: boolean
+  recipients: string[]
+  ai_provider?: string | null
+  goal_ids: number[]
+  last_run_at: string | null
+  next_run_at: string | null
+  created_at: string | null
+}
+
+export interface ReportSummary {
+  id: number
+  schedule_id?: number | null
+  period_start: string | null
+  period_end: string | null
+  periodicity: string
+  report_data?: Record<string, any> | null
+  ai_summary?: string | null
+  ai_provider_used?: string | null
+  delivery_status: string
+  delivered_at: string | null
+  delivery_recipients?: string[] | null
+  has_pdf: boolean
+  html_content?: string | null
+  created_at: string | null
+}

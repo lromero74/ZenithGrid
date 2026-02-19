@@ -233,6 +233,78 @@ def send_mfa_verification_email(
     return _send_email(to, subject, html_body, text_body)
 
 
+def send_report_email(
+    to: str,
+    cc: list,
+    subject: str,
+    html_body: str,
+    text_body: str,
+    pdf_attachment: bytes = None,
+    pdf_filename: str = "report.pdf",
+) -> bool:
+    """
+    Send a report email with optional PDF attachment and CC recipients.
+
+    Uses SES send_raw_email for MIME multipart support.
+    """
+    if not settings.ses_enabled:
+        logger.warning("SES disabled, skipping report email to %s", to)
+        return False
+
+    from email.mime.application import MIMEApplication
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    try:
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = settings.ses_sender_email
+        msg["To"] = to
+        if cc:
+            msg["Cc"] = ", ".join(cc)
+
+        # Build the body (HTML + text alternative)
+        body_part = MIMEMultipart("alternative")
+        body_part.attach(MIMEText(text_body, "plain", "utf-8"))
+        body_part.attach(MIMEText(html_body, "html", "utf-8"))
+        msg.attach(body_part)
+
+        # Attach PDF if provided
+        if pdf_attachment:
+            pdf_part = MIMEApplication(pdf_attachment, "pdf")
+            pdf_part.add_header(
+                "Content-Disposition", "attachment", filename=pdf_filename
+            )
+            msg.attach(pdf_part)
+
+        # All recipients (To + Cc)
+        all_recipients = [to] + (cc or [])
+
+        client = _get_ses_client()
+        response = client.send_raw_email(
+            Source=settings.ses_sender_email,
+            Destinations=all_recipients,
+            RawMessage={"Data": msg.as_string()},
+        )
+        message_id = response.get("MessageId", "unknown")
+        logger.info(
+            "Report email sent to %s (cc: %s, MessageId: %s)",
+            to, cc, message_id,
+        )
+        return True
+
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        error_msg = e.response["Error"]["Message"]
+        logger.error(
+            "SES error sending report to %s: %s - %s", to, error_code, error_msg
+        )
+        return False
+    except Exception as e:
+        logger.error("Failed to send report email to %s: %s", to, e)
+        return False
+
+
 def _send_email(to: str, subject: str, html_body: str, text_body: str) -> bool:
     """Send an email via SES. Returns True on success."""
     try:

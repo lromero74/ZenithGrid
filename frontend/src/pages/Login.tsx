@@ -553,7 +553,7 @@ export default function Login() {
           &copy; {new Date().getFullYear()} Romero Tech Solutions
         </p>
         <p className="text-xs text-slate-600 mt-1">
-          Powered by <span className="text-slate-500">Zenith Grid</span>: a Romero Tech Solutions Open Source Project
+          Powered by <a href="https://github.com/lromero74/ZenithGrid/" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-blue-400 transition-colors">Zenith Grid</a>: a Romero Tech Solutions Open Source Project
         </p>
       </div>
 

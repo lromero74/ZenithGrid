@@ -620,3 +620,38 @@ export const accountValueApi = {
       params: { include_paper_trading: includePaperTrading }
     }).then((res) => res.data),
 };
+
+// Reports & Goals
+import type { ReportGoal, ReportSchedule, ReportSummary } from '../types'
+
+export const reportsApi = {
+  // Goals
+  getGoals: () => api.get<ReportGoal[]>('/reports/goals').then(r => r.data),
+  createGoal: (data: Omit<ReportGoal, 'id' | 'start_date' | 'target_date' | 'is_active' | 'achieved_at' | 'created_at'>) =>
+    api.post<ReportGoal>('/reports/goals', data).then(r => r.data),
+  updateGoal: (id: number, data: Partial<ReportGoal>) =>
+    api.put<ReportGoal>(`/reports/goals/${id}`, data).then(r => r.data),
+  deleteGoal: (id: number) => api.delete(`/reports/goals/${id}`).then(r => r.data),
+
+  // Schedules
+  getSchedules: () => api.get<ReportSchedule[]>('/reports/schedules').then(r => r.data),
+  createSchedule: (data: {
+    name: string; periodicity: string; account_id?: number | null;
+    recipients: string[]; ai_provider?: string | null; goal_ids: number[]; is_enabled?: boolean
+  }) => api.post<ReportSchedule>('/reports/schedules', data).then(r => r.data),
+  updateSchedule: (id: number, data: Partial<ReportSchedule & { goal_ids?: number[] }>) =>
+    api.put<ReportSchedule>(`/reports/schedules/${id}`, data).then(r => r.data),
+  deleteSchedule: (id: number) => api.delete(`/reports/schedules/${id}`).then(r => r.data),
+
+  // Reports
+  getHistory: (limit: number = 20, offset: number = 0, scheduleId?: number) =>
+    api.get<{ total: number; reports: ReportSummary[] }>('/reports/history', {
+      params: { limit, offset, schedule_id: scheduleId }
+    }).then(r => r.data),
+  getReport: (id: number) => api.get<ReportSummary>(`/reports/${id}`).then(r => r.data),
+  downloadPdf: (id: number) => api.get(`/reports/${id}/pdf`, { responseType: 'blob' }).then(r => r.data),
+  generateReport: (scheduleId: number) =>
+    api.post<ReportSummary>('/reports/generate', { schedule_id: scheduleId }).then(r => r.data),
+  previewReport: (scheduleId: number) =>
+    api.post<ReportSummary>('/reports/preview', { schedule_id: scheduleId }).then(r => r.data),
+};

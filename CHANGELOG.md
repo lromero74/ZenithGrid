@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.27.0] - 2026-02-19
+
+### Added
+- **Performance Reports & Goals**: Full reporting system with customizable financial goals (balance, profit, or both targets in USD/BTC), scheduled report generation (daily through yearly), AI-powered analysis summaries using your own AI provider credentials, and email delivery with PDF attachments
+- **Report History**: View and download past reports in-app with HTML preview and PDF download
+- **Goal Progress Tracking**: Visual progress bars showing on-track status relative to time elapsed, integrated into reports
+- **Period-on-Period Comparison**: Reports automatically include prior period data for trend analysis
+- **GitHub link on login page**: "Zenith Grid" text on the login page now links to the open source repository
+
 ## [v2.26.9] - 2026-02-19
 
 ### Fixed
