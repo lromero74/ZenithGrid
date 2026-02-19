@@ -1409,6 +1409,7 @@ def initialize_database(project_root):
                 audio_path TEXT NOT NULL,
                 word_timings TEXT,
                 file_size_bytes INTEGER,
+                content_hash TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_by_user_id INTEGER REFERENCES users(id),
                 UNIQUE(article_id, voice_id)
