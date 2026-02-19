@@ -18,6 +18,7 @@ class NewsItem(BaseModel):
     summary: Optional[str] = None
     thumbnail: Optional[str] = None
     category: str = "CryptoCurrency"
+    content_scrape_allowed: bool = True
     is_seen: bool = False
     has_issue: bool = False
 
