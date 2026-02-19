@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.21.1] - 2026-02-19
+
+### Changed
+- **Video filter labels**: News Videos tab now shows "Watched/Unwatched" instead of "Read/Unread" for filter pills, bulk action buttons, and per-video eye button tooltips
+
 ## [v2.21.0] - 2026-02-19
 
 ### Added
