@@ -80,6 +80,10 @@ _article_cache_lock = asyncio.Lock()
 _ARTICLE_CACHE_TTL = 1800  # 30 minutes
 _ARTICLE_CACHE_MAX = 100
 
+# Per-domain crawl delay tracking: domain -> last_fetch_timestamp
+_domain_last_fetch: Dict[str, float] = {}
+_domain_last_fetch_lock = asyncio.Lock()
+
 
 # =============================================================================
 # Database Functions for Content Sources
@@ -115,6 +119,46 @@ async def get_allowed_article_domains() -> set[str]:
             pass
 
     return allowed
+
+
+async def get_source_scrape_policy(url: str) -> Tuple[bool, int]:
+    """
+    Look up the scrape policy for the source that owns a given article URL.
+
+    Returns (scrape_allowed, crawl_delay_seconds).
+    Defaults to (True, 0) if the source can't be determined.
+    """
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        domain_bare = domain[4:] if domain.startswith("www.") else domain
+
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(ContentSource)
+                .where(ContentSource.is_enabled.is_(True))
+                .where(ContentSource.website.isnot(None))
+            )
+            sources = result.scalars().all()
+
+        for source in sources:
+            try:
+                src_domain = urlparse(source.website).netloc.lower()
+                src_bare = src_domain[4:] if src_domain.startswith("www.") else src_domain
+                if domain_bare == src_bare:
+                    scrape = source.content_scrape_allowed
+                    delay = source.crawl_delay_seconds
+                    return (
+                        scrape if scrape is not None else True,
+                        delay if delay is not None else 0,
+                    )
+            except Exception:
+                continue
+
+    except Exception as e:
+        logger.warning(f"Failed to look up scrape policy for {url}: {e}")
+
+    return (True, 0)
 
 
 async def get_news_sources_from_db() -> Dict[str, Dict]:
@@ -1703,6 +1747,19 @@ async def get_article_content(
     except Exception as e:
         logger.warning(f"DB content cache lookup failed: {e}")
 
+    # Check per-source scrape policy (RSS-only sources cannot be scraped)
+    scrape_allowed, crawl_delay = await get_source_scrape_policy(url)
+    if not scrape_allowed:
+        no_scrape_response = ArticleContentResponse(
+            url=url,
+            success=False,
+            error="Full article content is not available for this source.",
+        )
+        # Cache the "not available" response so we don't re-check
+        async with _article_cache_lock:
+            _article_cache[url] = (no_scrape_response, time.time())
+        return no_scrape_response
+
     # Known paywalled domains
     PAYWALLED_DOMAINS = {
         'www.ft.com', 'ft.com',
@@ -1743,6 +1800,17 @@ async def get_article_content(
         )
 
     try:
+        # Respect per-source crawl delay before fetching
+        if crawl_delay > 0:
+            parsed_url = urlparse(url)
+            fetch_domain = parsed_url.netloc.lower()
+            async with _domain_last_fetch_lock:
+                last_fetch = _domain_last_fetch.get(fetch_domain, 0)
+                elapsed = time.time() - last_fetch
+                if elapsed < crawl_delay:
+                    await asyncio.sleep(crawl_delay - elapsed)
+                _domain_last_fetch[fetch_domain] = time.time()
+
         # Increase max_field_size: some sites (Yahoo Finance) return huge
         # Set-Cookie headers (~27KB) that exceed aiohttp's 8190-byte default.
         async with aiohttp.ClientSession(

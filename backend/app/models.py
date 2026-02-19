@@ -1050,6 +1050,8 @@ class ContentSource(Base):
     is_system = Column(Boolean, default=True)  # System sources can't be deleted
     is_enabled = Column(Boolean, default=True, index=True)  # Globally enabled
     category = Column(String, nullable=False, default="CryptoCurrency", index=True)  # News category
+    content_scrape_allowed = Column(Boolean, default=True)   # False = RSS-only, no article scraping
+    crawl_delay_seconds = Column(Integer, default=0)          # robots.txt crawl-delay
     # Owner for custom sources (null for system)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)

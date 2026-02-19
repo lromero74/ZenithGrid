@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.22.0] - 2026-02-19
+
+### Added
+- **Per-source content scraping policies**: robots.txt audit of all 47 news sources. Sources that block AI bots/scrapers are now marked RSS-only (`content_scrape_allowed=0`) — RSS feeds still work, but article body scraping is blocked. 26 sources marked RSS-only
+- **Per-domain crawl delays**: Sources with specific crawl-delay in robots.txt are respected (e.g., Bitcoin Magazine 5s, SCMP 10s). Module-level tracking prevents hammering
+- **20 new permissive sources**: 9 crypto (NewsBTC, CryptoPotato, Bitcoinist, U.Today, CoinJournal, The Crypto Basic, Crypto Briefing, Watcher Guru, Blockchain.News), 5 world (VOA News, Global Voices, RFE/RL, Africanews, SCMP), 6 science (Quanta Magazine, ScienceAlert, Futurism, Live Science, Space.com, Smithsonian Magazine)
+- **SOURCE_SCRAPE_POLICIES dict** in database.py: Centralized policy definitions that seed function syncs to DB on every startup
+
+### Removed
+- **8 dropped sources**: Reddit r/CryptoCurrency, Reddit r/Bitcoin, Reddit r/artificial (ToS prohibit scraping), BBC World, The Guardian World, Al Jazeera (explicit legal prohibitions), New Scientist (aggressive anti-bot), The Block (broken feed + anti-scrape)
+
+### Fixed
+- **Stale frontend category map entries**: Removed leftover `ft_markets`, `marketwatch`, `reuters_finance`, `techcrunch` entries from newsUtils.tsx
+
 ## [v2.21.1] - 2026-02-19
 
 ### Changed
