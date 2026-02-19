@@ -213,9 +213,13 @@ class AutoBuyMonitor:
             # Determine order type
             order_type = account.auto_buy_order_type or "market"
 
+            # Reserve 1% for exchange fees (taker fee ~0.6%) to avoid
+            # "Insufficient balance" rejections from Coinbase
+            spend_amount = round(available * 0.99, 2)
+
             if order_type == "market":
                 # Place market order
-                result = await client.buy_with_usd(available, product_id)
+                result = await client.buy_with_usd(spend_amount, product_id)
                 success_response = result.get('success_response', {})
                 error_response = result.get('error_response', {})
                 order_id = success_response.get('order_id', '')
@@ -232,7 +236,7 @@ class AutoBuyMonitor:
                     return
 
                 print(
-                    f"✅ Auto-buy market order placed: {available:.2f} {currency} → BTC "
+                    f"✅ Auto-buy market order placed: {spend_amount:.2f} {currency} → BTC "
                     f"(Account: {account.name}, Order: {order_id})"
                 )
 
@@ -245,8 +249,8 @@ class AutoBuyMonitor:
                     print(f"❌ Auto-buy: could not get price for {product_id}")
                     return
 
-                # Calculate BTC size
-                btc_size = available / current_price
+                # Calculate BTC size from fee-adjusted amount
+                btc_size = spend_amount / current_price
 
                 # Place limit order at current market price
                 result = await client.create_limit_order(
