@@ -216,7 +216,20 @@ class AutoBuyMonitor:
             if order_type == "market":
                 # Place market order
                 result = await client.buy_with_usd(available, product_id)
-                order_id = result.get('order_id')
+                success_response = result.get('success_response', {})
+                error_response = result.get('error_response', {})
+                order_id = success_response.get('order_id', '')
+
+                if not order_id:
+                    error_msg = (
+                        error_response.get('message')
+                        or error_response.get('error')
+                        or error_response.get('preview_failure_reason')
+                        or result.get('failure_response', {}).get('message')
+                        or f"Unknown failure — raw response: {result}"
+                    )
+                    print(f"❌ Auto-buy order FAILED for {account.name}: {error_msg}")
+                    return
 
                 print(
                     f"✅ Auto-buy market order placed: {available:.2f} {currency} → BTC "
@@ -243,7 +256,20 @@ class AutoBuyMonitor:
                     price=str(current_price)
                 )
 
-                order_id = result.get('order_id')
+                success_response = result.get('success_response', {})
+                error_response = result.get('error_response', {})
+                order_id = success_response.get('order_id', '')
+
+                if not order_id:
+                    error_msg = (
+                        error_response.get('message')
+                        or error_response.get('error')
+                        or error_response.get('preview_failure_reason')
+                        or result.get('failure_response', {}).get('message')
+                        or f"Unknown failure — raw response: {result}"
+                    )
+                    print(f"❌ Auto-buy limit order FAILED for {account.name}: {error_msg}")
+                    return
 
                 # Track pending order in memory for re-pricing
                 self._pending_orders[order_id] = AutoBuyPendingOrder(
@@ -323,7 +349,18 @@ class AutoBuyMonitor:
                 price=str(new_price)
             )
 
-            new_order_id = result.get('order_id')
+            success_response = result.get('success_response', {})
+            new_order_id = success_response.get('order_id', '')
+
+            if not new_order_id:
+                error_response = result.get('error_response', {})
+                error_msg = (
+                    error_response.get('message')
+                    or error_response.get('error')
+                    or f"Unknown failure — raw response: {result}"
+                )
+                print(f"❌ Auto-buy re-price order FAILED: {error_msg}")
+                return
 
             # Track new order in memory
             self._pending_orders[new_order_id] = AutoBuyPendingOrder(
