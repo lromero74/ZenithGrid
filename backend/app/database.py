@@ -489,7 +489,7 @@ DEFAULT_CONTENT_SOURCES = [
 DEAD_SOURCES = [
     'reuters_world', 'techcrunch', 'ew', 'bleacher_report',
     'sports_illustrated', 'medical_news_today', 'healthline', 'webmd',
-    'medical_xpress',
+    'medical_xpress',  # IP-banned our EC2; still 400 as of 2026-02-19. Re-test after 2026-02-26.
 ]
 
 
