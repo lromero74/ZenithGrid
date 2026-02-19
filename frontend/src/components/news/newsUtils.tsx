@@ -246,33 +246,55 @@ export const SOURCE_CATEGORY: Record<string, string> = {
   yahoo_finance_news: 'Finance', motley_fool: 'Finance', kiplinger: 'Finance',
   // World
   voa_news: 'World', global_voices: 'World', rferl: 'World',
-  africanews: 'World', scmp: 'World', cnn_world: 'World',
+  africanews: 'World', scmp: 'World',
+  bbc_world: 'World', npr_world: 'World',
+  cbs_news_world: 'World', nbc_news_world: 'World',
+  abc_news_world: 'World', pbs_world: 'World',
   // Politics
-  cnn_politics: 'Politics',
+  npr_politics: 'Politics', the_hill: 'Politics', politico: 'Politics',
+  cbs_news_politics: 'Politics', nbc_news_politics: 'Politics',
+  abc_news_politics: 'Politics', pbs_politics: 'Politics',
+  bbc_politics: 'Politics',
   // Nation
   npr_news: 'Nation', pbs_newshour: 'Nation', ap_news: 'Nation',
-  cnn_us: 'Nation',
+  cbs_news_us: 'Nation', nbc_news_us: 'Nation', abc_news_us: 'Nation',
   // Business
   cnbc_business: 'Business', business_insider: 'Business',
-  cnn_business: 'Business',
+  bbc_business: 'Business', npr_business: 'Business',
+  cbs_news_business: 'Business', nbc_news_business: 'Business',
+  abc_news_business: 'Business', pbs_economy: 'Business',
+  politico_economy: 'Business',
   // Technology
   engadget: 'Technology', ars_technica: 'Technology',
-  the_verge: 'Technology', wired: 'Technology', cnn_tech: 'Technology',
+  the_verge: 'Technology', wired: 'Technology',
+  bbc_tech: 'Technology', npr_tech: 'Technology',
+  cbs_news_tech: 'Technology', nbc_news_tech: 'Technology',
+  abc_news_tech: 'Technology', politico_tech: 'Technology',
   // Entertainment
   variety: 'Entertainment', hollywood_reporter: 'Entertainment',
-  deadline: 'Entertainment', cnn_entertainment: 'Entertainment',
+  deadline: 'Entertainment',
+  bbc_entertainment: 'Entertainment', npr_culture: 'Entertainment',
+  cbs_news_entertainment: 'Entertainment',
+  abc_news_entertainment: 'Entertainment', pbs_arts: 'Entertainment',
   // Sports
   espn: 'Sports', cbs_sports: 'Sports', yahoo_sports: 'Sports',
+  bbc_sport: 'Sports', npr_sports: 'Sports', abc_news_sports: 'Sports',
   // Science
   science_daily: 'Science', nasa: 'Science',
   quanta_magazine: 'Science', sciencealert: 'Science',
   futurism: 'Science', live_science: 'Science',
   space_com: 'Science', smithsonian: 'Science',
+  bbc_science: 'Science', npr_science: 'Science',
+  cbs_news_science: 'Science', nbc_news_science: 'Science',
+  pbs_science: 'Science',
   // Health
   stat_news: 'Health', npr_health: 'Health', science_daily_health: 'Health',
-  genetic_engineering_news: 'Health', cnn_health: 'Health',
+  genetic_engineering_news: 'Health',
   nature_medicine: 'Health', the_lancet: 'Health', who_news: 'Health',
   nutrition_org: 'Health', self_wellness: 'Health',
+  bbc_health: 'Health', cbs_news_health: 'Health',
+  nbc_news_health: 'Health', abc_news_health: 'Health',
+  pbs_health: 'Health', politico_healthcare: 'Health',
 }
 
 export const VIDEO_SOURCE_CATEGORY: Record<string, string> = {

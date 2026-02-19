@@ -272,6 +272,12 @@ export const filterBySeen = <T extends { is_seen?: boolean; has_issue?: boolean 
   return items.filter(item => item.is_seen)
 }
 
+/**
+ * Filter to only full-article sources (exclude RSS-only)
+ */
+export const filterByFullArticle = (items: NewsItem[]): NewsItem[] =>
+  items.filter(item => item.content_scrape_allowed !== false)
+
 export const markdownToPlainText = (markdown: string): string => {
   let text = markdown
 

@@ -13,6 +13,7 @@ import {
   filterVideosBySource,
   filterVideosByCategory,
   filterBySeen,
+  filterByFullArticle,
   paginateItems,
   calculateTotalPages,
   shouldResetPage,
@@ -39,6 +40,8 @@ export interface UseNewsFiltersReturn {
   setSeenFilter: (filter: SeenFilter) => void
   seenVideoFilter: SeenFilter
   setSeenVideoFilter: (filter: SeenFilter) => void
+  fullArticlesOnly: boolean
+  setFullArticlesOnly: (value: boolean) => void
   currentPage: number
   setCurrentPage: (page: number | ((prev: number) => number)) => void
   filteredNews: NewsItem[]
@@ -97,6 +100,7 @@ export const useNewsFilters = ({
   const [currentPage, setCurrentPage] = useState(saved?.currentPage ?? 1)
   const [seenFilter, setSeenFilter] = useState<SeenFilter>(saved?.seenFilter ?? 'all')
   const [seenVideoFilter, setSeenVideoFilter] = useState<SeenFilter>(saved?.seenVideoFilter ?? 'all')
+  const [fullArticlesOnly, setFullArticlesOnly] = useState<boolean>(saved?.fullArticlesOnly ?? false)
 
   // Persist filter state to localStorage
   useEffect(() => {
@@ -108,8 +112,9 @@ export const useNewsFilters = ({
       currentPage,
       seenFilter,
       seenVideoFilter,
+      fullArticlesOnly,
     })
-  }, [selectedSources, selectedCategories, selectedVideoSources, selectedVideoCategories, currentPage, seenFilter, seenVideoFilter])
+  }, [selectedSources, selectedCategories, selectedVideoSources, selectedVideoCategories, currentPage, seenFilter, seenVideoFilter, fullArticlesOnly])
 
   const allCategoriesSelected = selectedCategories.size === NEWS_CATEGORIES.length
   const allVideoCategoriesSelected = selectedVideoCategories.size === NEWS_CATEGORIES.length
@@ -203,12 +208,13 @@ export const useNewsFilters = ({
     setSelectedVideoSources(new Set())
   }, [])
 
-  // Filter news by selected categories, then source, then seen status
+  // Filter news by selected categories, then source, then seen status, then full-article toggle
   const filteredNews = useMemo(() => {
     const byCategory = filterNewsByCategory(newsData?.news || [], selectedCategories)
     const bySource = filterNewsBySource(byCategory, selectedSources)
-    return filterBySeen(bySource, seenFilter)
-  }, [newsData?.news, selectedCategories, selectedSources, seenFilter])
+    const bySeen = filterBySeen(bySource, seenFilter)
+    return fullArticlesOnly ? filterByFullArticle(bySeen) : bySeen
+  }, [newsData?.news, selectedCategories, selectedSources, seenFilter, fullArticlesOnly])
 
   // Filter videos by selected categories, then source, then seen status
   const filteredVideos = useMemo(() => {
@@ -257,6 +263,8 @@ export const useNewsFilters = ({
     setSeenFilter,
     seenVideoFilter,
     setSeenVideoFilter,
+    fullArticlesOnly,
+    setFullArticlesOnly,
     currentPage,
     setCurrentPage,
     filteredNews,

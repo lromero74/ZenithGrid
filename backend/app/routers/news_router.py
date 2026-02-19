@@ -178,6 +178,9 @@ async def get_news_sources_from_db() -> Dict[str, Dict]:
             "type": "reddit" if "reddit" in s.source_key else "rss",
             "website": s.website,
             "category": getattr(s, 'category', 'CryptoCurrency'),
+            "content_scrape_allowed": getattr(
+                s, 'content_scrape_allowed', True
+            ),
         }
         for s in sources
     }
@@ -507,6 +510,9 @@ def article_to_news_item(
         "summary": article.summary,
         "thumbnail": thumbnail,
         "category": getattr(article, 'category', 'CryptoCurrency'),
+        "content_scrape_allowed": source_map.get(
+            article.source, {}
+        ).get("content_scrape_allowed", True),
         "is_seen": article.id in seen_ids if seen_ids else False,
         "has_issue": bool(getattr(article, 'has_issue', False)),
     }
