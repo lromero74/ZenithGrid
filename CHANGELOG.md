@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.21.0] - 2026-02-19
+
+### Added
+- **Fetch once, never re-fetch**: Backend now persists `content_fetch_failed` flag on articles when external content extraction fails. Subsequent requests return instant failure from cache — no external network call. Prevents hammering failing sources
+- **content_fetch_failed migration**: Backfills existing broken articles (`has_issue=1 AND content IS NULL`) so they're never re-fetched
+
+### Changed
+- **Retry button → Regenerate audio**: The "Retry full article" button now says "Regenerate audio" and regenerates TTS from existing text (content or summary) without any external fetch
+- **Single fetch replaces exponential backoff**: Frontend no longer retries content fetch 4 times with increasing delays. One fetch attempt is sufficient since failures are now persisted server-side
+
+### Removed
+- **medicalxpress.com source**: Removed from all source lists, seed data, and category maps. Cleanup migration deletes existing articles, TTS cache, and source record. medicalxpress blocked our EC2 IP after repeated fetch attempts
+
 ## [v2.20.4] - 2026-02-19
 
 ### Fixed
