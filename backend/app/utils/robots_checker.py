@@ -14,6 +14,8 @@ import ssl
 
 import httpx
 
+from app.utils.url_utils import ensure_url_scheme
+
 logger = logging.getLogger(__name__)
 
 
@@ -156,6 +158,7 @@ async def check_robots_txt(url: str) -> RobotsPolicy:
     - Fetch timeout/error → warn but allow with defaults
     - Content > 512KB → reject as invalid
     """
+    url = ensure_url_scheme(url)
     domain = _extract_domain(url)
     robots_url = _extract_robots_url(url)
 
