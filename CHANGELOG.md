@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.23.0] - 2026-02-19
+
+### Added
+- **robots.txt validation for custom sources**: When adding a custom news source, the system now fetches and parses the domain's robots.txt to determine RSS feed access, article scraping permissions, and crawl delay
+- **"Check Source" button** in Add Custom Source form: Users can preview the robots.txt policy before adding — shows green (full access), amber (RSS-only), or red (blocked) status panel
+- **Backend enforcement**: Custom news sources that block RSS access are rejected at the API level. Permitted sources automatically get `content_scrape_allowed` and `crawl_delay_seconds` set from robots.txt
+- **New `/api/sources/check-robots` endpoint**: Authenticated POST endpoint that returns parsed robots.txt policy for any URL
+
 ## [v2.22.0] - 2026-02-19
 
 ### Added

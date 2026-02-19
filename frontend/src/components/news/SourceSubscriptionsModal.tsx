@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Newspaper, Video, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, Plus, Trash2, Clock } from 'lucide-react'
+import { X, Newspaper, Video, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, Plus, Trash2, Clock, Search, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { sourceColors, videoSourceColors } from './newsUtils'
 import { authFetch } from '../../services/api'
 import { CATEGORY_COLORS, NewsCategory, NEWS_CATEGORIES } from '../../pages/news/types'
@@ -33,6 +33,17 @@ interface SourceSubscriptionsModalProps {
   onClose: () => void
 }
 
+interface RobotsPolicyResponse {
+  domain: string
+  robots_found: boolean
+  robots_fetch_error: string | null
+  rss_allowed: boolean
+  scraping_allowed: boolean
+  crawl_delay_seconds: number
+  summary: string
+  can_add: boolean
+}
+
 const RETENTION_OPTIONS = [
   { value: null, label: 'Default (14 days)' },
   { value: 3, label: '3 days' },
@@ -55,6 +66,11 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
   const [addLoading, setAddLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [retentionEditId, setRetentionEditId] = useState<number | null>(null)
+
+  // Robots.txt check state
+  const [robotsPolicy, setRobotsPolicy] = useState<RobotsPolicyResponse | null>(null)
+  const [robotsLoading, setRobotsLoading] = useState(false)
+  const [robotsChecked, setRobotsChecked] = useState(false)
 
   // Add form state
   const [newSource, setNewSource] = useState({
@@ -172,6 +188,8 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
       // Refresh sources list
       await fetchSources()
       setShowAddForm(false)
+      setRobotsPolicy(null)
+      setRobotsChecked(false)
       setNewSource({
         source_key: '', name: '', type: 'news', url: '',
         website: '', description: '', channel_id: '', category: 'CryptoCurrency',
@@ -215,6 +233,43 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
       console.error('Failed to update retention:', err)
     }
     setRetentionEditId(null)
+  }
+
+  const checkRobots = async () => {
+    setRobotsLoading(true)
+    setRobotsPolicy(null)
+    setAddError(null)
+    try {
+      const response = await authFetch('/api/sources/check-robots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: newSource.url }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.detail || 'Failed to check robots.txt')
+      }
+      const policy: RobotsPolicyResponse = await response.json()
+      setRobotsPolicy(policy)
+      setRobotsChecked(true)
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Failed to check robots.txt')
+    } finally {
+      setRobotsLoading(false)
+    }
+  }
+
+  // Reset robots policy when URL or type changes
+  const handleUrlChange = (url: string) => {
+    setNewSource(prev => ({ ...prev, url }))
+    setRobotsPolicy(null)
+    setRobotsChecked(false)
+  }
+
+  const handleTypeChange = (type: 'news' | 'video') => {
+    setNewSource(prev => ({ ...prev, type }))
+    setRobotsPolicy(null)
+    setRobotsChecked(false)
   }
 
   const newsSources = sources.filter(s => s.type === 'news')
@@ -295,12 +350,12 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
                   type="url"
                   placeholder="Feed URL (RSS / YouTube)"
                   value={newSource.url}
-                  onChange={e => setNewSource(prev => ({ ...prev, url: e.target.value }))}
+                  onChange={e => handleUrlChange(e.target.value)}
                   className="bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
                 />
                 <select
                   value={newSource.type}
-                  onChange={e => setNewSource(prev => ({ ...prev, type: e.target.value as 'news' | 'video' }))}
+                  onChange={e => handleTypeChange(e.target.value as 'news' | 'video')}
                   className="bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
                 >
                   <option value="news">News (RSS)</option>
@@ -325,16 +380,115 @@ export function SourceSubscriptionsModal({ isOpen, onClose }: SourceSubscription
                   className="w-full bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:border-blue-500 focus:outline-none"
                 />
               )}
+
+              {/* Check Source button — news only */}
+              {newSource.type === 'news' && newSource.url && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={checkRobots}
+                    disabled={robotsLoading || !newSource.url}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+                  >
+                    {robotsLoading
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Search className="w-3.5 h-3.5" />
+                    }
+                    <span>{robotsChecked ? 'Re-check' : 'Check Source'}</span>
+                  </button>
+                  {!robotsChecked && (
+                    <span className="text-xs text-slate-400">Check robots.txt before adding</span>
+                  )}
+                </div>
+              )}
+
+              {/* Robots.txt policy panel */}
+              {robotsPolicy && newSource.type === 'news' && (
+                <div className={`rounded-lg border p-3 text-sm ${
+                  robotsPolicy.rss_allowed && robotsPolicy.scraping_allowed
+                    ? 'border-green-500/40 bg-green-500/5'
+                    : robotsPolicy.rss_allowed
+                      ? 'border-amber-500/40 bg-amber-500/5'
+                      : 'border-red-500/40 bg-red-500/5'
+                }`}>
+                  <div className="flex items-center space-x-2 mb-2">
+                    {robotsPolicy.rss_allowed && robotsPolicy.scraping_allowed ? (
+                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    ) : robotsPolicy.rss_allowed ? (
+                      <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    )}
+                    <span className={`font-medium ${
+                      robotsPolicy.rss_allowed && robotsPolicy.scraping_allowed
+                        ? 'text-green-400'
+                        : robotsPolicy.rss_allowed
+                          ? 'text-amber-400'
+                          : 'text-red-400'
+                    }`}>
+                      {robotsPolicy.domain}
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-xs ml-6">
+                    <div className="flex items-center space-x-2">
+                      {robotsPolicy.rss_allowed
+                        ? <CheckCircle className="w-3 h-3 text-green-400" />
+                        : <XCircle className="w-3 h-3 text-red-400" />
+                      }
+                      <span className={robotsPolicy.rss_allowed ? 'text-green-300' : 'text-red-300'}>
+                        RSS Feed Access
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {robotsPolicy.scraping_allowed
+                        ? <CheckCircle className="w-3 h-3 text-green-400" />
+                        : <XCircle className="w-3 h-3 text-amber-400" />
+                      }
+                      <span className={robotsPolicy.scraping_allowed ? 'text-green-300' : 'text-amber-300'}>
+                        Article Scraping {!robotsPolicy.scraping_allowed && '(RSS-only mode)'}
+                      </span>
+                    </div>
+                    {robotsPolicy.crawl_delay_seconds > 0 && (
+                      <div className="flex items-center space-x-2">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        <span className="text-slate-300">
+                          {robotsPolicy.crawl_delay_seconds}s crawl delay
+                        </span>
+                      </div>
+                    )}
+                    {robotsPolicy.robots_fetch_error && (
+                      <div className="flex items-center space-x-2 mt-1">
+                        <AlertTriangle className="w-3 h-3 text-amber-400" />
+                        <span className="text-amber-300">{robotsPolicy.robots_fetch_error}</span>
+                      </div>
+                    )}
+                    {!robotsPolicy.can_add && (
+                      <p className="text-red-300 mt-1">
+                        This source blocks bot access and cannot be added.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end space-x-2">
                 <button
-                  onClick={() => { setShowAddForm(false); setAddError(null) }}
+                  onClick={() => {
+                    setShowAddForm(false)
+                    setAddError(null)
+                    setRobotsPolicy(null)
+                    setRobotsChecked(false)
+                  }}
                   className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAddSource}
-                  disabled={!newSource.name || !newSource.url || addLoading || customSourceCount >= maxCustomSources}
+                  disabled={
+                    !newSource.name || !newSource.url || addLoading
+                    || customSourceCount >= maxCustomSources
+                    || (newSource.type === 'news' && robotsChecked && robotsPolicy !== null && !robotsPolicy.can_add)
+                  }
                   className="flex items-center space-x-1 px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
                 >
                   {addLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
