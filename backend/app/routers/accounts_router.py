@@ -1029,8 +1029,9 @@ async def _get_generic_cex_portfolio(
 @router.get("/{account_id}/portfolio")
 async def get_account_portfolio(
     account_id: int,
+    force_fresh: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get portfolio for a specific account.
@@ -1129,7 +1130,7 @@ async def get_account_portfolio(
                 return await _get_generic_cex_portfolio(account, db)
             else:
                 # Coinbase: use existing rich portfolio logic
-                return await get_cex_portfolio(account, db, get_coinbase_for_account)
+                return await get_cex_portfolio(account, db, get_coinbase_for_account, force_fresh=force_fresh)
         else:
             # Use DEX wallet service for blockchain balances
             return await get_dex_portfolio(account, db, get_coinbase_for_account)
