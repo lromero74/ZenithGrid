@@ -189,7 +189,8 @@ export default function Reports() {
                     <h4 className="font-medium text-white">{goal.name}</h4>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {goal.target_type === 'balance' ? 'Balance' :
-                       goal.target_type === 'profit' ? 'Profit' : 'Balance & Profit'} target
+                       goal.target_type === 'profit' ? 'Profit' :
+                       goal.target_type === 'income' ? 'Income' : 'Balance & Profit'} target
                       {' '}&middot;{' '}{getTimeRemaining(goal.target_date)} remaining
                     </p>
                   </div>
@@ -215,10 +216,24 @@ export default function Reports() {
                 </div>
 
                 {/* Target display */}
-                <div className="text-lg font-semibold text-white mb-2">
-                  {goal.target_currency === 'BTC'
-                    ? `${goal.target_value} BTC`
-                    : `$${goal.target_value.toLocaleString()}`}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg font-semibold text-white">
+                    {goal.target_currency === 'BTC'
+                      ? `${goal.target_value} BTC`
+                      : `$${goal.target_value.toLocaleString()}`}
+                    {goal.target_type === 'income' && goal.income_period && (
+                      <span className="text-sm text-slate-400 font-normal">
+                        /{goal.income_period === 'daily' ? 'day' :
+                          goal.income_period === 'weekly' ? 'week' :
+                          goal.income_period === 'monthly' ? 'month' : 'year'}
+                      </span>
+                    )}
+                  </span>
+                  {goal.target_type === 'income' && (
+                    <span className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                      {goal.lookback_days ? `${goal.lookback_days}d lookback` : 'All-time'}
+                    </span>
+                  )}
                 </div>
 
                 {/* Time progress bar (since we can't know account value client-side) */}

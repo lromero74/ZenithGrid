@@ -183,18 +183,33 @@ def _build_goals_section(goals: List[Dict[str, Any]]) -> str:
 
     goal_rows = ""
     for g in goals:
-        pct = g.get("progress_pct", 0)
-        bar_color = "#10b981" if g.get("on_track") else "#f59e0b"
-        bar_width = min(pct, 100)
-        currency = g.get("target_currency", "USD")
-        fmt = ".8f" if currency == "BTC" else ",.2f"
-        current = f"{g.get('current_value', 0):{fmt}}"
-        target = f"{g.get('target_value', 0):{fmt}}"
-        prefix = "" if currency == "BTC" else "$"
-        track_label = "On Track" if g.get("on_track") else "Behind"
-        track_color = "#10b981" if g.get("on_track") else "#f59e0b"
+        if g.get("target_type") == "income":
+            goal_rows += _build_income_goal_card(g)
+        else:
+            goal_rows += _build_standard_goal_card(g)
 
-        goal_rows += f"""
+    return f"""
+    <div style="margin: 25px 0;">
+        <h3 style="color: #94a3b8; font-size: 13px; text-transform: uppercase;
+                   letter-spacing: 1px; margin: 0 0 15px 0;">Goal Progress</h3>
+        {goal_rows}
+    </div>"""
+
+
+def _build_standard_goal_card(g: Dict[str, Any]) -> str:
+    """Standard balance/profit/both goal card with progress bar."""
+    pct = g.get("progress_pct", 0)
+    bar_color = "#10b981" if g.get("on_track") else "#f59e0b"
+    bar_width = min(pct, 100)
+    currency = g.get("target_currency", "USD")
+    fmt = ".8f" if currency == "BTC" else ",.2f"
+    current = f"{g.get('current_value', 0):{fmt}}"
+    target = f"{g.get('target_value', 0):{fmt}}"
+    prefix = "" if currency == "BTC" else "$"
+    track_label = "On Track" if g.get("on_track") else "Behind"
+    track_color = "#10b981" if g.get("on_track") else "#f59e0b"
+
+    return f"""
         <div style="margin: 0 0 15px 0; padding: 12px; background-color: #1e293b;
                     border-radius: 8px; border: 1px solid #334155;">
             <div style="display: flex; justify-content: space-between; align-items: center;
@@ -216,12 +231,85 @@ def _build_goals_section(goals: List[Dict[str, Any]]) -> str:
             </div>
         </div>"""
 
+
+def _build_income_goal_card(g: Dict[str, Any]) -> str:
+    """Income goal card with projection table and deposit advice."""
+    pct = g.get("progress_pct", 0)
+    bar_color = "#10b981" if g.get("on_track") else "#f59e0b"
+    bar_width = min(pct, 100)
+    currency = g.get("target_currency", "USD")
+    fmt = ".8f" if currency == "BTC" else ",.2f"
+    prefix = "" if currency == "BTC" else "$"
+    period = g.get("income_period", "monthly")
+    track_label = "On Track" if g.get("on_track") else "Behind"
+    track_color = "#10b981" if g.get("on_track") else "#f59e0b"
+
+    target = f"{g.get('target_value', 0):{fmt}}"
+    daily = f"{g.get('current_daily_income', 0):{fmt}}"
+    linear = f"{g.get('projected_income_linear', 0):{fmt}}"
+    compound = f"{g.get('projected_income_compound', 0):{fmt}}"
+
+    dep_lin = g.get("deposit_needed_linear")
+    dep_cmp = g.get("deposit_needed_compound")
+    dep_lin_str = f"{prefix}{dep_lin:{fmt}}" if dep_lin is not None else "N/A"
+    dep_cmp_str = f"{prefix}{dep_cmp:{fmt}}" if dep_cmp is not None else "N/A"
+
+    sample = g.get("sample_trades", 0)
+    lookback = g.get("lookback_days_used", 0)
+
     return f"""
-    <div style="margin: 25px 0;">
-        <h3 style="color: #94a3b8; font-size: 13px; text-transform: uppercase;
-                   letter-spacing: 1px; margin: 0 0 15px 0;">Goal Progress</h3>
-        {goal_rows}
-    </div>"""
+        <div style="margin: 0 0 15px 0; padding: 12px; background-color: #1e293b;
+                    border-radius: 8px; border: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between; align-items: center;
+                        margin: 0 0 8px 0;">
+                <span style="color: #f1f5f9; font-weight: 600; font-size: 14px;">
+                    {g.get('name', '')}
+                    <span style="color: #94a3b8; font-weight: 400; font-size: 12px;
+                                 margin-left: 6px;">Income / {period.capitalize()}</span>
+                </span>
+                <span style="color: {track_color}; font-size: 12px; font-weight: 600;">
+                    {track_label}</span>
+            </div>
+            <div style="background-color: #334155; border-radius: 4px; height: 8px;
+                        overflow: hidden; margin-bottom: 10px;">
+                <div style="background-color: {bar_color}; width: {bar_width}%;
+                            height: 100%; border-radius: 4px;"></div>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Target</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {prefix}{target} {currency}/{period}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Daily Avg Income</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {prefix}{daily} {currency}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Linear Projection</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {prefix}{linear} {currency}/{period}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Compound Projection</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {prefix}{compound} {currency}/{period}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Deposit Needed (Linear)</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {dep_lin_str}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Deposit Needed (Compound)</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {dep_cmp_str}</td>
+                </tr>
+            </table>
+            <p style="color: #64748b; font-size: 11px; margin: 8px 0 0 0;">
+                Based on {sample} trades over {lookback} days</p>
+        </div>"""
 
 
 def _build_comparison_section(data: Dict[str, Any]) -> str:
@@ -394,13 +482,40 @@ def generate_pdf(html_content: str, report_data: Optional[Dict] = None) -> Optio
                 curr = g.get("target_currency", "USD")
                 pfx = "$" if curr == "USD" else ""
                 pdf.set_text_color(30, 30, 30)
-                pdf.cell(
-                    0, 7,
-                    f"{g.get('name', '')}: {pct:.1f}% "
-                    f"({pfx}{g.get('current_value', 0)} / "
-                    f"{pfx}{g.get('target_value', 0)} {curr}) - {status}",
-                    new_x="LMARGIN", new_y="NEXT",
-                )
+
+                if g.get("target_type") == "income":
+                    period = g.get("income_period", "monthly")
+                    pdf.set_font("Helvetica", "B", 10)
+                    pdf.cell(
+                        0, 7,
+                        f"{g.get('name', '')} (Income/{period.capitalize()}) - {status}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(80, 80, 80)
+                    pdf.cell(
+                        0, 6,
+                        f"Target: {pfx}{g.get('target_value', 0)} {curr}/{period} | "
+                        f"Linear: {pfx}{g.get('projected_income_linear', 0)} | "
+                        f"Compound: {pfx}{g.get('projected_income_compound', 0)}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    sample = g.get("sample_trades", 0)
+                    lookback = g.get("lookback_days_used", 0)
+                    pdf.cell(
+                        0, 6,
+                        f"Based on {sample} trades over {lookback} days",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.set_font("Helvetica", "", 10)
+                else:
+                    pdf.cell(
+                        0, 7,
+                        f"{g.get('name', '')}: {pct:.1f}% "
+                        f"({pfx}{g.get('current_value', 0)} / "
+                        f"{pfx}{g.get('target_value', 0)} {curr}) - {status}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
 
         # Prior Period Comparison
         prior = report_data.get("prior_period")

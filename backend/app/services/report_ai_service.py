@@ -76,11 +76,33 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
         goals_lines = []
         for g in data["goals"]:
             status = "on track" if g.get("on_track") else "behind target"
-            goals_lines.append(
-                f"  - {g['name']}: {g['progress_pct']}% complete "
-                f"({g['current_value']} / {g['target_value']} {g['target_currency']}), "
-                f"{status}, time elapsed: {g['time_elapsed_pct']}%"
-            )
+            if g.get("target_type") == "income":
+                period = g.get("income_period", "monthly")
+                goals_lines.append(
+                    f"  - {g['name']} (Income Goal): "
+                    f"Target {g['target_value']} {g['target_currency']}/{period}, "
+                    f"Linear projection: {g.get('projected_income_linear', 0)}, "
+                    f"Compound projection: {g.get('projected_income_compound', 0)}, "
+                    f"Daily avg income: {g.get('current_daily_income', 0)}, "
+                    f"Based on {g.get('sample_trades', 0)} trades over "
+                    f"{g.get('lookback_days_used', 0)} days, "
+                    f"{status}"
+                )
+                dep_lin = g.get("deposit_needed_linear")
+                dep_cmp = g.get("deposit_needed_compound")
+                if dep_lin is not None or dep_cmp is not None:
+                    goals_lines.append(
+                        f"    Deposit needed: "
+                        f"~{dep_lin} (linear) / ~{dep_cmp} (compound) "
+                        f"{g['target_currency']} to reach target"
+                    )
+            else:
+                goals_lines.append(
+                    f"  - {g['name']}: {g['progress_pct']}% complete "
+                    f"({g['current_value']} / {g['target_value']} "
+                    f"{g['target_currency']}), "
+                    f"{status}, time elapsed: {g['time_elapsed_pct']}%"
+                )
         goals_section = "\nGoal Progress:\n" + "\n".join(goals_lines)
 
     prior_section = ""

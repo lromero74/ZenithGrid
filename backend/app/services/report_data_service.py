@@ -9,13 +9,13 @@ Gathers metrics for report generation:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AccountValueSnapshot, Position, Report, ReportGoal
+from app.models import Account, AccountValueSnapshot, Position, Report, ReportGoal
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,8 @@ async def gather_report_data(
     # Compute goal progress
     goal_data = []
     for goal in goals:
-        goal_progress = compute_goal_progress(
+        goal_progress = await compute_goal_progress(
+            db,
             goal,
             current_usd=end_value["usd"],
             current_btc=end_value["btc"],
@@ -129,7 +130,8 @@ async def get_prior_period_data(
     return None
 
 
-def compute_goal_progress(
+async def compute_goal_progress(
+    db: AsyncSession,
     goal: ReportGoal,
     current_usd: float,
     current_btc: float,
@@ -139,8 +141,14 @@ def compute_goal_progress(
     """
     Compute progress towards a goal.
 
-    Returns dict with goal_id, name, target_value, current_value, progress_pct, on_track.
+    For income goals, queries closed positions to calculate income rate.
+    Returns dict with goal info, progress_pct, on_track, and income-specific fields.
     """
+    if goal.target_type == "income":
+        return await _compute_income_goal_progress(
+            db, goal, current_usd, current_btc
+        )
+
     is_btc = goal.target_currency == "BTC"
     current_value = current_btc if is_btc else current_usd
 
@@ -177,6 +185,126 @@ def compute_goal_progress(
     }
 
 
+async def _compute_income_goal_progress(
+    db: AsyncSession,
+    goal: ReportGoal,
+    current_usd: float,
+    current_btc: float,
+) -> Dict[str, Any]:
+    """
+    Compute income goal progress by analyzing closed position profits.
+
+    Calculates daily income rate from historical trades, then projects
+    linear and compound income for the goal's period. Also computes
+    how much additional capital would be needed to reach the target.
+    """
+    is_btc = goal.target_currency == "BTC"
+    account_value = current_btc if is_btc else current_usd
+    target = goal.target_value
+
+    period_multipliers = {
+        "daily": 1,
+        "weekly": 7,
+        "monthly": 30,
+        "yearly": 365,
+    }
+    period_days = period_multipliers.get(goal.income_period or "monthly", 30)
+
+    # Determine lookback window
+    now = datetime.utcnow()
+    if goal.lookback_days:
+        lookback_start = now - timedelta(days=goal.lookback_days)
+    else:
+        lookback_start = goal.start_date
+
+    lookback_days_actual = max((now - lookback_start).days, 1)
+
+    # Query closed positions within the lookback window
+    pos_filters = [
+        Position.user_id == goal.user_id,
+        Position.status == "closed",
+        Position.closed_at >= lookback_start,
+        Position.closed_at <= now,
+    ]
+    result = await db.execute(select(Position).where(and_(*pos_filters)))
+    closed_positions = result.scalars().all()
+
+    # Sum profits in the appropriate currency
+    if is_btc:
+        total_profit = sum(
+            p.profit_quote or 0 for p in closed_positions
+            if p.get_quote_currency() == "BTC"
+        )
+    else:
+        total_profit = sum(p.profit_usd or 0 for p in closed_positions)
+
+    sample_trades = len(closed_positions)
+
+    # Calculate daily income rate
+    daily_income = total_profit / lookback_days_actual if lookback_days_actual > 0 else 0
+
+    # Linear projection
+    projected_linear = daily_income * period_days
+
+    # Compound projection
+    projected_compound = 0.0
+    deposit_needed_linear = None
+    deposit_needed_compound = None
+
+    if account_value > 0 and daily_income > 0:
+        daily_return_rate = daily_income / account_value
+        projected_compound = account_value * (
+            (1 + daily_return_rate) ** period_days - 1
+        )
+
+        # Deposit needed (linear): extra capital so that rate * period_days >= target
+        if projected_linear < target and daily_income > 0:
+            # Need: (daily_income / account_value) * (account_value + deposit) * period_days = target
+            # deposit = (target / (period_days * daily_return_rate)) - account_value
+            needed = (target / (period_days * daily_return_rate)) - account_value
+            deposit_needed_linear = round(max(needed, 0), 8 if is_btc else 2)
+
+        # Deposit needed (compound): target / ((1+r)^n - 1) - account_value
+        compound_factor = (1 + daily_return_rate) ** period_days - 1
+        if compound_factor > 0 and projected_compound < target:
+            needed = (target / compound_factor) - account_value
+            deposit_needed_compound = round(max(needed, 0), 8 if is_btc else 2)
+    elif daily_income <= 0 and target > 0:
+        # No positive income — can't project, deposit_needed is N/A
+        deposit_needed_linear = None
+        deposit_needed_compound = None
+
+    precision = 8 if is_btc else 2
+    progress = (projected_linear / target * 100) if target > 0 else 0
+    on_track = projected_linear >= target
+
+    # Time elapsed (same as other goals)
+    total_duration = (goal.target_date - goal.start_date).total_seconds()
+    elapsed = (now - goal.start_date).total_seconds()
+    time_pct = (elapsed / total_duration * 100) if total_duration > 0 else 100
+
+    return {
+        "goal_id": goal.id,
+        "name": goal.name,
+        "target_type": "income",
+        "target_currency": goal.target_currency,
+        "target_value": goal.target_value,
+        "current_value": round(projected_linear, precision),
+        "progress_pct": round(min(progress, 100), 1),
+        "on_track": on_track,
+        "time_elapsed_pct": round(min(time_pct, 100), 1),
+        # Income-specific fields
+        "income_period": goal.income_period,
+        "current_daily_income": round(daily_income, precision),
+        "projected_income_linear": round(projected_linear, precision),
+        "projected_income_compound": round(projected_compound, precision),
+        "deposit_needed_linear": deposit_needed_linear,
+        "deposit_needed_compound": deposit_needed_compound,
+        "lookback_days_used": lookback_days_actual,
+        "sample_trades": sample_trades,
+    }
+
+
 async def _get_account_value_at(
     db: AsyncSession,
     user_id: int,
@@ -204,15 +332,18 @@ async def _get_account_value_at(
             return {"usd": snapshot.total_value_usd, "btc": snapshot.total_value_btc}
     else:
         # All accounts — sum the latest snapshot per account
-        # Get the max snapshot_date per account that's <= at_date
+        # Exclude paper trading and inactive accounts (matches account_snapshot_service)
         subq = (
             select(
                 AccountValueSnapshot.account_id,
                 func.max(AccountValueSnapshot.snapshot_date).label("max_date"),
             )
+            .join(Account, AccountValueSnapshot.account_id == Account.id)
             .where(
                 AccountValueSnapshot.user_id == user_id,
                 AccountValueSnapshot.snapshot_date <= at_date,
+                Account.is_paper_trading.is_(False),
+                Account.is_active.is_(True),
             )
             .group_by(AccountValueSnapshot.account_id)
             .subquery()

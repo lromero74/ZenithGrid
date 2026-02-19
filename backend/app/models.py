@@ -1334,6 +1334,8 @@ class ReportGoal(Base):
     target_value = Column(Float, nullable=False)  # Primary target (for balance or profit)
     target_balance_value = Column(Float, nullable=True)  # When target_type="both"
     target_profit_value = Column(Float, nullable=True)  # When target_type="both"
+    income_period = Column(String, nullable=True)  # "daily"/"weekly"/"monthly"/"yearly" (for income goals)
+    lookback_days = Column(Integer, nullable=True)  # null=all-time; 7/14/30/90/365
     time_horizon_months = Column(Integer, nullable=False)  # 1, 6, 12, 24, 60, 120
     start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
     target_date = Column(DateTime, nullable=False)  # Computed: start_date + horizon
