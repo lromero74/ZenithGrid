@@ -10,6 +10,7 @@ shared across users. Word timings stored in DB as JSON.
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -430,10 +431,16 @@ async def text_to_speech_with_sync(
                         await _update_tts_history(
                             current_user.id, body.article_id, voice,
                         )
+                        # Cache-buster: hash of text content so
+                        # browser refetches when article content changes
+                        text_hash = hashlib.md5(
+                            text[:200].encode()
+                        ).hexdigest()[:8]
                         return {
                             "audio_url": (
                                 f"/api/news/tts/audio/"
                                 f"{body.article_id}/{voice}"
+                                f"?v={text_hash}"
                             ),
                             "words": words,
                             "voice": voice,
