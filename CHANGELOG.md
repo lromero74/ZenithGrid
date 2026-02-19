@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.23.1] - 2026-02-19
+
+### Fixed
+- **robots.txt check: unreachable domains no longer show green checkmarks**: Connection-level failures (SSL errors, DNS failures, connection refused) now correctly block adding the source instead of defaulting to "all allowed"
+- **Friendly error messages**: Raw SSL/DNS exception text replaced with human-readable messages (e.g., "SSL/TLS connection failed" instead of `[SSL: TLSV1_UNRECOGNIZED_NAME]...`)
+
 ## [v2.23.0] - 2026-02-19
 
 ### Added
