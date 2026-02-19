@@ -20,7 +20,7 @@ from app.models import ContentSource, User, UserSourceSubscription
 from app.auth.dependencies import get_current_user
 from app.services.domain_blacklist_service import domain_blacklist_service
 from app.utils.robots_checker import check_robots_txt
-from app.utils.url_utils import normalize_feed_url
+from app.utils.url_utils import ensure_url_scheme, normalize_feed_url
 
 logger = logging.getLogger(__name__)
 
@@ -429,6 +429,9 @@ async def add_custom_source(
                 f"Remove a source before adding a new one."
             ),
         )
+
+    # Ensure scheme (e.g., bare "cnn.com" → "https://cnn.com")
+    request.url = ensure_url_scheme(request.url)
 
     # Normalize URL for dedup
     normalized_url = normalize_feed_url(request.url)
