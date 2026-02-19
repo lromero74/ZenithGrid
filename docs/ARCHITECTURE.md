@@ -485,6 +485,29 @@ erDiagram
 - Email verification required for new accounts
 - Password reset via email link (time-limited token)
 
+### Rate Limiting & Abuse Prevention
+
+- **Login**: 5 attempts per 15 minutes, tracked by both IP and email address (rotating IPs can't bypass)
+- **MFA verification**: 5 attempts per 5 minutes per mfa_token (prevents brute-forcing 6-digit codes)
+- **Forgot-password**: 3 per IP per hour + 3 per email per hour
+- **Signup**: 3 per IP per hour
+- **Article content fetch**: 30 per user per hour (external fetches only; cache hits are free)
+- **Nginx layer**: Auth endpoints 5 req/min per IP, API endpoints 30 req/s per IP (with burst allowance)
+- All in-memory rate limiter dicts are pruned hourly to prevent unbounded growth
+
+### Network Security (Nginx)
+
+- **HSTS**: `Strict-Transport-Security: max-age=31536000; includeSubDomains` — browsers enforce HTTPS on subsequent visits
+- **CSP**: `Content-Security-Policy` restricts script/style/connect sources to `'self'`, prevents XSS payload loading
+- **Request size**: `client_max_body_size 10m` — prevents memory exhaustion from oversized POST bodies
+- **WebSocket timeout**: Idle connections timeout after 300s (client has auto-reconnect)
+- **TLS**: TLS 1.2/1.3 only, ECDHE + AES-GCM + CHACHA20, HTTP→HTTPS redirect
+
+### Timing-Safe Authentication
+
+- Login endpoint runs bcrypt on a dummy hash when the email doesn't exist, equalizing response time with real password checks
+- Prevents username enumeration via response timing side-channel
+
 ## Multi-Tenancy Model
 
 - Multi-user platform with full data isolation between users

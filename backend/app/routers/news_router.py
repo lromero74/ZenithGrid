@@ -84,9 +84,9 @@ _ARTICLE_CACHE_MAX = 100
 _domain_last_fetch: Dict[str, float] = {}
 _domain_last_fetch_lock = asyncio.Lock()
 
-# S13: Per-user article fetch rate limiting (10 fetches/hour)
+# S13: Per-user article fetch rate limiting (30 fetches/hour)
 _article_fetch_counts: Dict[int, List[float]] = {}
-_ARTICLE_FETCH_MAX = 10
+_ARTICLE_FETCH_MAX = 30
 _ARTICLE_FETCH_WINDOW = 3600  # 1 hour
 
 
@@ -1788,7 +1788,7 @@ async def get_article_content(
         return ArticleContentResponse(
             url=url,
             success=False,
-            error="Rate limit reached. You can fetch up to 10 articles per hour.",
+            error="Rate limit reached. You can fetch up to 30 articles per hour.",
         )
     _article_fetch_counts[uid].append(now_ts)
 

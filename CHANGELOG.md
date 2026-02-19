@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unbounded page_size fixed**: News endpoint now clamps page_size to 200 max, preventing full-table dumps
 - **Settings endpoint restricted**: Individual settings lookup now requires superuser access
 - **Article flagging restricted**: Mark-article-issue endpoint now requires superuser access
-- **Per-user article fetch rate limit**: External article content extraction limited to 10 per user per hour
+- **Per-user article fetch rate limit**: External article content extraction limited to 30 per user per hour
 - **Per-username login rate limiting**: Login attempts now tracked by both IP and email — rotating IPs can't bypass the limit
 - **Per-email forgot-password rate limiting**: Password reset requests limited to 3 per email per hour
 - **WebSocket timeout reduced**: Idle WebSocket connections now timeout after 5 minutes instead of 24 hours

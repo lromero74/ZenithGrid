@@ -39,12 +39,15 @@ The first and only DCA bot platform with built-in AI decision-making:
 
 ### 🔐 Security & Multi-User
 - **HTTPS**: Nginx reverse proxy with Let's Encrypt SSL (auto-renewing)
+- **Security Headers**: HSTS (Strict-Transport-Security) + Content-Security-Policy
 - **Multi-Factor Authentication**: TOTP (authenticator app) or Email-based MFA
 - **Email Verification**: Required for new account activation
 - **Trusted Devices**: 30-day device trust with geolocation tracking
 - **Password Reset**: Secure email-based password recovery
 - **Multi-User**: Full data isolation between users with per-user encrypted credentials
 - **Encrypted at Rest**: All API keys and secrets encrypted with Fernet (AES-128-CBC + HMAC-SHA256)
+- **Rate Limiting**: Multi-layer — nginx (per-IP) + application (per-user/per-email/per-token)
+- **Timing-Safe Auth**: Constant-time login prevents username enumeration
 
 ### 🏦 Multi-Exchange Support
 - **Coinbase Advanced Trade**: Spot trading + perpetual futures (INTX) via HMAC or CDP auth
@@ -320,6 +323,8 @@ python3 update.py --yes
 - **Multi-User Support** with full data isolation
 - **MFA**: TOTP (authenticator app) or email-based two-factor authentication
 - **HTTPS**: Nginx + Let's Encrypt with auto-renewing certificates
+- **Security Headers**: HSTS + CSP to prevent MITM and XSS
+- **Multi-Layer Rate Limiting**: Nginx (per-IP) + app-level (per-user, per-token, per-email)
 - **Real-time Notifications**: WebSocket order fill alerts with audio
 
 ## 📖 Documentation
