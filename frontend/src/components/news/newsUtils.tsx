@@ -246,17 +246,21 @@ export const SOURCE_CATEGORY: Record<string, string> = {
   yahoo_finance_news: 'Finance', motley_fool: 'Finance', kiplinger: 'Finance',
   // World
   voa_news: 'World', global_voices: 'World', rferl: 'World',
-  africanews: 'World', scmp: 'World',
+  africanews: 'World', scmp: 'World', cnn_world: 'World',
+  // Politics
+  cnn_politics: 'Politics',
   // Nation
   npr_news: 'Nation', pbs_newshour: 'Nation', ap_news: 'Nation',
+  cnn_us: 'Nation',
   // Business
   cnbc_business: 'Business', business_insider: 'Business',
+  cnn_business: 'Business',
   // Technology
   engadget: 'Technology', ars_technica: 'Technology',
-  the_verge: 'Technology', wired: 'Technology',
+  the_verge: 'Technology', wired: 'Technology', cnn_tech: 'Technology',
   // Entertainment
   variety: 'Entertainment', hollywood_reporter: 'Entertainment',
-  deadline: 'Entertainment',
+  deadline: 'Entertainment', cnn_entertainment: 'Entertainment',
   // Sports
   espn: 'Sports', cbs_sports: 'Sports', yahoo_sports: 'Sports',
   // Science
@@ -266,7 +270,7 @@ export const SOURCE_CATEGORY: Record<string, string> = {
   space_com: 'Science', smithsonian: 'Science',
   // Health
   stat_news: 'Health', npr_health: 'Health', science_daily_health: 'Health',
-  genetic_engineering_news: 'Health',
+  genetic_engineering_news: 'Health', cnn_health: 'Health',
   nature_medicine: 'Health', the_lancet: 'Health', who_news: 'Health',
   nutrition_org: 'Health', self_wellness: 'Health',
 }

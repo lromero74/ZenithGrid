@@ -266,7 +266,20 @@ DEFAULT_CONTENT_SOURCES = [
         'scmp', 'SCMP', 'news', 'https://www.scmp.com/rss/91/feed',
         'https://www.scmp.com', 'South China Morning Post', None, 'World',
     ),
+    (
+        'cnn_world', 'CNN World', 'news', 'http://rss.cnn.com/rss/cnn_world.rss',
+        'https://www.cnn.com/world', 'CNN international news', None, 'World',
+    ),
+    # ===== Politics =====
+    (
+        'cnn_politics', 'CNN Politics', 'news', 'http://rss.cnn.com/rss/cnn_allpolitics.rss',
+        'https://www.cnn.com/politics', 'US political news & analysis', None, 'Politics',
+    ),
     # ===== Nation (US) =====
+    (
+        'cnn_us', 'CNN US', 'news', 'http://rss.cnn.com/rss/cnn_us.rss',
+        'https://www.cnn.com/us', 'CNN US news', None, 'Nation',
+    ),
     (
         'npr_news', 'NPR News', 'news', 'https://feeds.npr.org/1001/rss.xml', 'https://www.npr.org',
         'US national public radio news', None, 'Nation',
@@ -281,6 +294,10 @@ DEFAULT_CONTENT_SOURCES = [
     ),
     # ===== Business =====
     (
+        'cnn_business', 'CNN Business', 'news', 'http://rss.cnn.com/rss/money_latest.rss',
+        'https://www.cnn.com/business', 'CNN business & financial news', None, 'Business',
+    ),
+    (
         'cnbc_business', 'CNBC', 'news',
         'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147', 'https://www.cnbc.com',
         'Business & financial news', None, 'Business',
@@ -290,6 +307,10 @@ DEFAULT_CONTENT_SOURCES = [
         'https://www.businessinsider.com', 'Business & tech news', None, 'Business',
     ),
     # ===== Technology =====
+    (
+        'cnn_tech', 'CNN Tech', 'news', 'http://rss.cnn.com/rss/cnn_tech.rss',
+        'https://www.cnn.com/business/tech', 'CNN technology news', None, 'Technology',
+    ),
     (
         'engadget', 'Engadget', 'news', 'https://www.engadget.com/rss.xml', 'https://www.engadget.com',
         'Consumer tech news & reviews', None, 'Technology',
@@ -307,6 +328,10 @@ DEFAULT_CONTENT_SOURCES = [
         'Technology & future trends', None, 'Technology',
     ),
     # ===== Entertainment =====
+    (
+        'cnn_entertainment', 'CNN Entertainment', 'news', 'http://rss.cnn.com/rss/cnn_showbiz.rss',
+        'https://www.cnn.com/entertainment', 'CNN entertainment news', None, 'Entertainment',
+    ),
     (
         'variety', 'Variety', 'news', 'https://variety.com/feed/', 'https://variety.com', 'Entertainment industry news',
         None, 'Entertainment',
@@ -366,6 +391,10 @@ DEFAULT_CONTENT_SOURCES = [
         'https://www.smithsonianmag.com', 'Science, history & culture', None, 'Science',
     ),
     # ===== Health =====
+    (
+        'cnn_health', 'CNN Health', 'news', 'http://rss.cnn.com/rss/cnn_health.rss',
+        'https://www.cnn.com/health', 'CNN health news', None, 'Health',
+    ),
     (
         'stat_news', 'STAT News', 'news', 'https://www.statnews.com/feed/', 'https://www.statnews.com',
         'Health & pharma reporting', None, 'Health',
