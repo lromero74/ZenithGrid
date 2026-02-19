@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.26.8] - 2026-02-19
+
+### Fixed
+- **Auto-buy BTC now actually executes**: Fixed three layered bugs preventing auto-buy from converting USD to BTC:
+  1. Logs were invisible (uvicorn suppressed logger output)
+  2. Coinbase order responses were parsed incorrectly — order_id was always None, failures were silently ignored
+  3. Sending 100% of available balance failed because Coinbase needs room for taker fees (~0.6%)
+
 ## [v2.26.7] - 2026-02-19
 
 ### Fixed
