@@ -106,9 +106,10 @@ class AutoBuyMonitor:
     async def _process_account(self, account: Account, db: AsyncSession):
         """Process one account - check balances and buy BTC if needed"""
         try:
+            logger.info(f"Auto-buy: checking account '{account.name}' (id={account.id})")
             client = await get_exchange_client_for_account(db, account.id)
             if not client:
-                logger.warning(f"No exchange client for account {account.id}")
+                logger.warning(f"Auto-buy: no exchange client for account {account.id}")
                 return
 
             # Check each enabled stablecoin
@@ -168,7 +169,7 @@ class AutoBuyMonitor:
         for position in open_positions:
             pos_quote = position.get_quote_currency()
             if pos_quote in ("USD", "USDC", "USDT"):
-                reserved += position.total_cost or 0.0
+                reserved += position.total_quote_spent or 0.0
 
         return reserved
 
@@ -192,9 +193,9 @@ class AutoBuyMonitor:
             available = max(0.0, raw_available - reserved)
 
             if available < min_amount:
-                logger.debug(
-                    f"Account {account.name}: {currency} free balance {available:.2f} "
-                    f"(raw: {raw_available:.2f}, reserved: {reserved:.2f}) below minimum {min_amount}"
+                logger.info(
+                    f"Auto-buy: {account.name} {currency} free={available:.2f} "
+                    f"(raw={raw_available:.2f}, reserved={reserved:.2f}) < min {min_amount}"
                 )
                 return
 

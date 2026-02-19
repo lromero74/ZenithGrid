@@ -32,7 +32,7 @@ class MarketSellRequest(BaseModel):
 async def market_sell(
     request: MarketSellRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Execute a market sell order.
@@ -59,7 +59,8 @@ async def market_sell(
         if not account:
             raise HTTPException(
                 status_code=404,
-                detail="No active trading account found. Please configure your exchange account in Settings."
+                detail="No active trading account found. "
+                       "Please configure your exchange account in Settings."
             )
 
         # Get exchange client
@@ -74,7 +75,8 @@ async def market_sell(
         if '-' not in request.product_id:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid product_id format: {request.product_id}. Expected format: BASE-QUOTE (e.g., UNI-USD)"
+                detail=f"Invalid product_id format: {request.product_id}. "
+                       "Expected format: BASE-QUOTE (e.g., UNI-USD)"
             )
 
         base_asset = request.product_id.split('-')[0]
@@ -92,32 +94,34 @@ async def market_sell(
         )
 
         # Execute market sell order
+        # side must be uppercase per Coinbase API, size must be string
         order = await exchange.create_market_order(
             product_id=request.product_id,
-            side='sell',
-            size=request.size
+            side="SELL",
+            size=str(request.size),
         )
 
-        logger.info(f"Market sell executed successfully: {order.get('order_id', 'N/A')}")
+        logger.info(
+            f"Market sell executed: order_id={order.get('order_id', 'N/A')}"
+        )
 
-        # Return order details
         return {
             "success": True,
             "order_id": order.get('order_id'),
             "product_id": request.product_id,
-            "side": "sell",
+            "side": "SELL",
             "size": request.size,
             "filled_size": order.get('filled_size', 0),
             "filled_value": order.get('filled_value', 0),
             "average_filled_price": order.get('average_filled_price', 0),
-            "status": order.get('status', 'unknown')
+            "status": order.get('status', 'unknown'),
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Market sell failed: {e}")
+        logger.error(f"Market sell failed for {request.product_id}: {e}")
         raise HTTPException(
             status_code=500,
-            detail="Failed to execute market sell"
+            detail=f"Failed to execute market sell: {e}",
         )

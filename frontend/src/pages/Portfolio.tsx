@@ -96,7 +96,8 @@ function Portfolio() {
       const productId = `${asset}-${quoteAsset}`
       const response = await api.post('/trading/market-sell', {
         product_id: productId,
-        size: size
+        size: size,
+        account_id: selectedAccount?.id || null,
       })
       return response.data
     },
