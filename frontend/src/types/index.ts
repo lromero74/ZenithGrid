@@ -476,6 +476,19 @@ export interface MetricHistoryResponse {
 }
 
 // Reports & Goals
+export type ExperienceLevel = 'beginner' | 'comfortable' | 'experienced'
+
+export interface RecipientItem {
+  email: string
+  level: ExperienceLevel
+}
+
+export interface TieredAISummary {
+  beginner: string | null
+  comfortable: string | null
+  experienced: string | null
+}
+
 export interface ReportGoal {
   id: number
   name: string
@@ -500,7 +513,7 @@ export interface ReportSchedule {
   periodicity: string
   account_id?: number | null
   is_enabled: boolean
-  recipients: string[]
+  recipients: RecipientItem[]
   ai_provider?: string | null
   goal_ids: number[]
   last_run_at: string | null
@@ -515,11 +528,11 @@ export interface ReportSummary {
   period_end: string | null
   periodicity: string
   report_data?: Record<string, any> | null
-  ai_summary?: string | null
+  ai_summary?: string | TieredAISummary | null
   ai_provider_used?: string | null
   delivery_status: string
   delivered_at: string | null
-  delivery_recipients?: string[] | null
+  delivery_recipients?: RecipientItem[] | string[] | null
   has_pdf: boolean
   html_content?: string | null
   created_at: string | null

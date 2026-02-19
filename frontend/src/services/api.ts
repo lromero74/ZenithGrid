@@ -622,7 +622,7 @@ export const accountValueApi = {
 };
 
 // Reports & Goals
-import type { ReportGoal, ReportSchedule, ReportSummary } from '../types'
+import type { ReportGoal, ReportSchedule, ReportSummary, RecipientItem } from '../types'
 
 export const reportsApi = {
   // Goals
@@ -637,7 +637,7 @@ export const reportsApi = {
   getSchedules: () => api.get<ReportSchedule[]>('/reports/schedules').then(r => r.data),
   createSchedule: (data: {
     name: string; periodicity: string; account_id?: number | null;
-    recipients: string[]; ai_provider?: string | null; goal_ids: number[]; is_enabled?: boolean
+    recipients: RecipientItem[]; ai_provider?: string | null; goal_ids: number[]; is_enabled?: boolean
   }) => api.post<ReportSchedule>('/reports/schedules', data).then(r => r.data),
   updateSchedule: (id: number, data: Partial<ReportSchedule & { goal_ids?: number[] }>) =>
     api.put<ReportSchedule>(`/reports/schedules/${id}`, data).then(r => r.data),
@@ -654,4 +654,6 @@ export const reportsApi = {
     api.post<ReportSummary>('/reports/generate', { schedule_id: scheduleId }).then(r => r.data),
   previewReport: (scheduleId: number) =>
     api.post<ReportSummary>('/reports/preview', { schedule_id: scheduleId }).then(r => r.data),
+  deleteReport: (id: number) =>
+    api.delete<{ detail: string }>(`/reports/${id}`).then(r => r.data),
 };

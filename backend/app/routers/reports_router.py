@@ -5,6 +5,7 @@ Endpoints for managing financial goals, report schedules,
 and viewing/downloading generated reports.
 """
 
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -68,13 +69,21 @@ class GoalUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class RecipientItem(BaseModel):
+    email: str = Field(..., min_length=5)
+    level: str = Field(
+        "comfortable",
+        pattern="^(beginner|comfortable|experienced)$",
+    )
+
+
 class ScheduleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     periodicity: str = Field(
         ..., pattern="^(daily|weekly|biweekly|monthly|quarterly|yearly)$"
     )
     account_id: Optional[int] = None
-    recipients: List[str] = Field(default_factory=list)
+    recipients: List[RecipientItem] = Field(default_factory=list)
     ai_provider: Optional[str] = Field(None, pattern="^(claude|openai|gemini)$")
     goal_ids: List[int] = Field(default_factory=list)
     is_enabled: bool = True
@@ -86,7 +95,7 @@ class ScheduleUpdate(BaseModel):
         None, pattern="^(daily|weekly|biweekly|monthly|quarterly|yearly)$"
     )
     account_id: Optional[int] = None
-    recipients: Optional[List[str]] = None
+    recipients: Optional[List[RecipientItem]] = None
     ai_provider: Optional[str] = None
     goal_ids: Optional[List[int]] = None
     is_enabled: Optional[bool] = None
@@ -101,6 +110,22 @@ class PreviewRequest(BaseModel):
 
 
 # ----- Helper Functions -----
+
+def _normalize_recipient_for_api(item) -> dict:
+    """
+    Normalize a stored recipient to object format for API responses.
+
+    Handles both new object format and legacy plain string format.
+    """
+    if isinstance(item, dict) and "email" in item:
+        return {
+            "email": item["email"],
+            "level": item.get("level", "comfortable"),
+        }
+    if isinstance(item, str):
+        return {"email": item, "level": "comfortable"}
+    return {"email": str(item), "level": "comfortable"}
+
 
 def _goal_to_dict(goal: ReportGoal) -> dict:
     return {
@@ -124,13 +149,16 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
 
 def _schedule_to_dict(schedule: ReportSchedule) -> dict:
     goal_ids = [link.goal_id for link in schedule.goal_links] if schedule.goal_links else []
+    # Normalize recipients to object format
+    raw_recipients = schedule.recipients or []
+    recipients = [_normalize_recipient_for_api(r) for r in raw_recipients]
     return {
         "id": schedule.id,
         "name": schedule.name,
         "periodicity": schedule.periodicity,
         "account_id": schedule.account_id,
         "is_enabled": schedule.is_enabled,
-        "recipients": schedule.recipients or [],
+        "recipients": recipients,
         "ai_provider": schedule.ai_provider,
         "goal_ids": goal_ids,
         "last_run_at": schedule.last_run_at.isoformat() if schedule.last_run_at else None,
@@ -140,6 +168,16 @@ def _schedule_to_dict(schedule: ReportSchedule) -> dict:
 
 
 def _report_to_dict(report: Report, include_html: bool = False) -> dict:
+    # Parse ai_summary — return as dict if it's tiered JSON, else as-is
+    ai_summary = report.ai_summary
+    if ai_summary and isinstance(ai_summary, str):
+        try:
+            parsed = json.loads(ai_summary)
+            if isinstance(parsed, dict) and "comfortable" in parsed:
+                ai_summary = parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     result = {
         "id": report.id,
         "schedule_id": report.schedule_id,
@@ -147,7 +185,7 @@ def _report_to_dict(report: Report, include_html: bool = False) -> dict:
         "period_end": report.period_end.isoformat() if report.period_end else None,
         "periodicity": report.periodicity,
         "report_data": report.report_data,
-        "ai_summary": report.ai_summary,
+        "ai_summary": ai_summary,
         "ai_provider_used": report.ai_provider_used,
         "delivery_status": report.delivery_status,
         "delivered_at": report.delivered_at.isoformat() if report.delivered_at else None,
@@ -352,13 +390,15 @@ async def create_schedule(
             )
 
     next_run = _compute_next_run(body.periodicity)
+    # Serialize recipients to dicts for JSON storage
+    recipients_data = [r.model_dump() for r in body.recipients]
     schedule = ReportSchedule(
         user_id=current_user.id,
         account_id=body.account_id,
         name=body.name,
         periodicity=body.periodicity,
         is_enabled=body.is_enabled,
-        recipients=body.recipients,
+        recipients=recipients_data,
         ai_provider=body.ai_provider,
         next_run_at=next_run,
     )
@@ -403,6 +443,13 @@ async def update_schedule(
 
     update_data = body.model_dump(exclude_unset=True)
     goal_ids = update_data.pop("goal_ids", None)
+
+    # Serialize recipients if present
+    if "recipients" in update_data and update_data["recipients"] is not None:
+        update_data["recipients"] = [
+            r.model_dump() if hasattr(r, "model_dump") else r
+            for r in update_data["recipients"]
+        ]
 
     for key, value in update_data.items():
         setattr(schedule, key, value)
@@ -530,6 +577,28 @@ async def get_report(
         raise HTTPException(status_code=404, detail="Report not found")
 
     return _report_to_dict(report, include_html=True)
+
+
+@router.delete("/{report_id}")
+async def delete_report(
+    report_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Delete a report from history."""
+    result = await db.execute(
+        select(Report).where(
+            Report.id == report_id,
+            Report.user_id == current_user.id,
+        )
+    )
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    await db.delete(report)
+    await db.commit()
+    return {"detail": "Report deleted"}
 
 
 @router.get("/{report_id}/pdf")

@@ -2,7 +2,7 @@
 Weekly Coin Review Service
 
 Uses AI API (Claude, Gemini, OpenAI, or Grok) to analyze tracked coins and update their status/reasons.
-Runs weekly via systemd timer.
+Runs as a background task inside the backend on a weekly schedule.
 """
 
 import asyncio
@@ -357,9 +357,74 @@ async def update_coin_statuses(analysis: Dict[str, Dict[str, str]]) -> Dict[str,
     return stats
 
 
-async def run_weekly_review() -> Dict[str, Any]:
+async def run_coin_review_scheduler():
+    """
+    Background task that runs a full coin review weekly.
+
+    Waits 30 minutes after startup (let the app settle), then runs
+    every 7 days.  If the last review was recent (within 6 days),
+    it skips until the next window.
+    """
+    # Initial delay — let everything else start first
+    await asyncio.sleep(1800)  # 30 minutes
+
+    interval = 7 * 24 * 3600  # 7 days in seconds
+
+    while True:
+        try:
+            # Check when the last review ran (most recent global entry)
+            last_review = await _get_last_review_timestamp()
+            if last_review:
+                age_seconds = (datetime.utcnow() - last_review).total_seconds()
+                if age_seconds < 6 * 24 * 3600:  # < 6 days
+                    logger.info(
+                        f"Coin review: last ran {age_seconds / 3600:.0f}h ago, "
+                        f"skipping until next window"
+                    )
+                    await asyncio.sleep(interval)
+                    continue
+
+            logger.info("Coin review scheduler: starting weekly review")
+            result = await run_weekly_review()
+            if result["status"] == "success":
+                logger.info(
+                    f"Coin review complete: {result['coins_analyzed']} coins, "
+                    f"{result['categories']}"
+                )
+            else:
+                logger.warning(
+                    f"Coin review finished with status: {result['status']} — "
+                    f"{result.get('message', '')}"
+                )
+        except Exception as e:
+            logger.error(f"Coin review scheduler error: {e}", exc_info=True)
+
+        await asyncio.sleep(interval)
+
+
+async def _get_last_review_timestamp():
+    """Get the timestamp of the most recent global coin review entry."""
+    try:
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(BlacklistedCoin.created_at)
+                .where(BlacklistedCoin.user_id.is_(None))
+                .order_by(BlacklistedCoin.created_at.desc())
+                .limit(1)
+            )
+            row = result.scalar_one_or_none()
+            return row
+    except Exception:
+        return None
+
+
+async def run_weekly_review(standalone: bool = False) -> Dict[str, Any]:
     """
     Main entry point for weekly coin review.
+
+    Args:
+        standalone: If True, initializes the DB (for CLI usage).
+                    When called from the backend scheduler, DB is already init'd.
 
     Returns dict with review results.
     """
@@ -369,8 +434,8 @@ async def run_weekly_review() -> Dict[str, Any]:
     logger.info("=" * 60)
 
     try:
-        # Initialize database
-        await init_db()
+        if standalone:
+            await init_db()
 
         # Get tracked coins
         coins = await get_tracked_coins()
@@ -436,7 +501,7 @@ if __name__ == "__main__":
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
-    result = asyncio.run(run_weekly_review())
+    result = asyncio.run(run_weekly_review(standalone=True))
 
     if result["status"] == "error":
         print(f"\nError: {result.get('message', 'Unknown error')}")

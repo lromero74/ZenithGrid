@@ -5,6 +5,21 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.29.0] - 2026-02-19
+
+### Added
+- **Experience-level reports**: Each email recipient can be tagged as Beginner, Comfortable, or Experienced — the AI generates three summary tiers in a single call, and each recipient's email highlights their level's analysis with the others still accessible
+- **Report delete**: Delete reports from the history tab with a confirmation prompt
+- **Coin review scheduler**: Weekly AI-powered coin categorization now runs automatically inside the backend (no more external timer)
+
+### Changed
+- **Email branding**: Report emails now use the brand accent color instead of hardcoded blue for headers and AI section highlights
+- **Tab persistence**: Active tab on the Reports page now survives page refresh and navigation
+- **Gemini model updated**: Switched from deprecated `gemini-1.5-pro` to `gemini-2.0-flash` across all AI services (reports, coin review, grid optimizer)
+
+### Fixed
+- **AI report summaries not generating**: Gemini provider was failing silently due to deprecated model name — now uses `gemini-2.0-flash` and logs provider errors at warning level instead of debug
+
 ## [v2.28.1] - 2026-02-19
 
 ### Added
