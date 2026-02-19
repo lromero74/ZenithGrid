@@ -19,6 +19,7 @@ from app.database import get_db
 from app.models import ContentSource, User, UserSourceSubscription
 from app.auth.dependencies import get_current_user
 from app.services.domain_blacklist_service import domain_blacklist_service
+from app.utils.robots_checker import check_robots_txt
 from app.utils.url_utils import normalize_feed_url
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,23 @@ class SourceSettingsRequest(BaseModel):
         None, ge=1, le=90,
         description="Per-user visibility filter in days (null to reset)",
     )
+
+
+class CheckRobotsRequest(BaseModel):
+    """Request to check robots.txt for a URL."""
+    url: str
+
+
+class RobotsPolicyResponse(BaseModel):
+    """Response from robots.txt check."""
+    domain: str
+    robots_found: bool
+    robots_fetch_error: Optional[str] = None
+    rss_allowed: bool
+    scraping_allowed: bool
+    crawl_delay_seconds: int
+    summary: str
+    can_add: bool  # True if at least RSS is allowed
 
 
 # =============================================================================
@@ -427,6 +445,19 @@ async def add_custom_source(
             ),
         )
 
+    # Check robots.txt for news sources
+    robots_policy = None
+    if request.type == "news":
+        robots_policy = await check_robots_txt(request.url)
+        if not robots_policy.rss_allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"robots.txt on {robots_policy.domain} blocks bot "
+                    f"access to RSS feeds. This source cannot be added."
+                ),
+            )
+
     # Check for system source URL match
     sys_result = await db.execute(
         select(ContentSource).where(ContentSource.is_system.is_(True))
@@ -497,7 +528,13 @@ async def add_custom_source(
             status_code=400, detail="Source key already exists"
         )
 
-    # Create new custom source
+    # Create new custom source (apply robots.txt policy for news)
+    scrape_allowed = True
+    crawl_delay = 0
+    if robots_policy:
+        scrape_allowed = robots_policy.scraping_allowed
+        crawl_delay = robots_policy.crawl_delay_seconds
+
     source = ContentSource(
         source_key=request.source_key,
         name=request.name,
@@ -509,6 +546,8 @@ async def add_custom_source(
         is_system=False,
         is_enabled=True,
         category=request.category or "CryptoCurrency",
+        content_scrape_allowed=scrape_allowed,
+        crawl_delay_seconds=crawl_delay,
         user_id=current_user.id,
     )
     db.add(source)
@@ -539,6 +578,35 @@ async def add_custom_source(
         is_subscribed=True,
         category=getattr(source, 'category', 'CryptoCurrency'),
         user_category=request.category,
+    )
+
+
+@router.post("/check-robots", response_model=RobotsPolicyResponse)
+async def check_robots(
+    request: CheckRobotsRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Check robots.txt for a URL to determine scraping permissions.
+
+    Returns policy info: RSS allowed, scraping allowed, crawl delay.
+    Used by the frontend before adding a custom news source.
+    """
+    if not request.url or not request.url.strip():
+        raise HTTPException(
+            status_code=400, detail="URL is required"
+        )
+
+    policy = await check_robots_txt(request.url)
+    return RobotsPolicyResponse(
+        domain=policy.domain,
+        robots_found=policy.robots_found,
+        robots_fetch_error=policy.robots_fetch_error,
+        rss_allowed=policy.rss_allowed,
+        scraping_allowed=policy.scraping_allowed,
+        crawl_delay_seconds=policy.crawl_delay_seconds,
+        summary=policy.summary,
+        can_add=policy.rss_allowed,
     )
 
 
