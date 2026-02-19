@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.24.0] - 2026-02-19
+
+### Added
+- **7 CNN RSS feeds**: CNN World, CNN Politics, CNN US, CNN Business, CNN Tech, CNN Entertainment, CNN Health — each mapped to its matching category
+- **Politics category**: New news category slotted between World and Nation
+
+### Changed
+- **Equidistant category colors**: Rebalanced the 12-category color spectrum — Health moved from emerald to teal, Politics uses sky — so hues are evenly spaced across the Tailwind palette
+
 ## [v2.23.2] - 2026-02-19
 
 ### Fixed
