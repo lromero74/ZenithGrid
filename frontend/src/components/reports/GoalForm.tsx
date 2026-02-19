@@ -19,6 +19,7 @@ export interface GoalFormData {
   income_period?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
   lookback_days?: number | null
   time_horizon_months: number
+  target_date?: string | null
 }
 
 const HORIZON_OPTIONS = [
@@ -57,6 +58,8 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
   const [incomePeriod, setIncomePeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly')
   const [lookbackDays, setLookbackDays] = useState(0)
   const [timeHorizon, setTimeHorizon] = useState(12)
+  const [dateMode, setDateMode] = useState<'horizon' | 'date'>('horizon')
+  const [customDate, setCustomDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -70,6 +73,32 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setIncomePeriod(initialData.income_period || 'monthly')
       setLookbackDays(initialData.lookback_days || 0)
       setTimeHorizon(initialData.time_horizon_months)
+
+      // Detect if stored date matches a preset horizon
+      const isPreset = HORIZON_OPTIONS.some(o => o.value === initialData.time_horizon_months)
+      if (isPreset && initialData.start_date && initialData.target_date) {
+        // Check if the target_date is roughly what the preset would produce
+        const start = new Date(initialData.start_date)
+        const expected = new Date(start)
+        expected.setMonth(expected.getMonth() + initialData.time_horizon_months)
+        const actual = new Date(initialData.target_date)
+        const diffDays = Math.abs(actual.getTime() - expected.getTime()) / (1000 * 60 * 60 * 24)
+        if (diffDays > 3) {
+          // Custom date — doesn't match the preset
+          setDateMode('date')
+          setCustomDate(initialData.target_date.split('T')[0])
+        } else {
+          setDateMode('horizon')
+          setCustomDate('')
+        }
+      } else if (!isPreset) {
+        // Non-standard horizon months — must be custom date
+        setDateMode('date')
+        setCustomDate(initialData.target_date ? initialData.target_date.split('T')[0] : '')
+      } else {
+        setDateMode('horizon')
+        setCustomDate('')
+      }
     } else {
       setName('')
       setTargetType('balance')
@@ -80,6 +109,8 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setIncomePeriod('monthly')
       setLookbackDays(0)
       setTimeHorizon(12)
+      setDateMode('horizon')
+      setCustomDate('')
     }
   }, [initialData, isOpen])
 
@@ -89,7 +120,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
     e.preventDefault()
     setSubmitting(true)
     try {
-      await onSubmit({
+      const formData: GoalFormData = {
         name,
         target_type: targetType,
         target_currency: targetCurrency,
@@ -99,7 +130,21 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
         income_period: targetType === 'income' ? incomePeriod : null,
         lookback_days: targetType === 'income' && lookbackDays > 0 ? lookbackDays : null,
         time_horizon_months: timeHorizon,
-      })
+      }
+
+      if (dateMode === 'date' && customDate) {
+        // Send ISO datetime string; back-compute a rough horizon for the required field
+        formData.target_date = `${customDate}T23:59:59`
+        const now = new Date()
+        const target = new Date(customDate)
+        const diffMonths = (target.getFullYear() - now.getFullYear()) * 12
+          + (target.getMonth() - now.getMonth())
+        formData.time_horizon_months = Math.max(diffMonths, 1)
+      } else {
+        formData.target_date = null
+      }
+
+      await onSubmit(formData)
       onClose()
     } finally {
       setSubmitting(false)
@@ -251,15 +296,50 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Time Horizon</label>
-            <select
-              value={timeHorizon}
-              onChange={e => setTimeHorizon(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-            >
-              {HORIZON_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-1 mb-2">
+              <button
+                type="button"
+                onClick={() => setDateMode('horizon')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  dateMode === 'horizon'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-700 text-slate-400 hover:text-white'
+                }`}
+              >
+                Preset
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateMode('date')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  dateMode === 'date'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-700 text-slate-400 hover:text-white'
+                }`}
+              >
+                Custom Date
+              </button>
+            </div>
+            {dateMode === 'horizon' ? (
+              <select
+                value={timeHorizon}
+                onChange={e => setTimeHorizon(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              >
+                {HORIZON_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="date"
+                value={customDate}
+                onChange={e => setCustomDate(e.target.value)}
+                min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                required
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+              />
+            )}
           </div>
 
           <div className="flex justify-end space-x-3 pt-2">
@@ -272,7 +352,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
             </button>
             <button
               type="submit"
-              disabled={submitting || !name || !targetValue}
+              disabled={submitting || !name || !targetValue || (dateMode === 'date' && !customDate)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
             >
               {submitting ? 'Saving...' : initialData ? 'Update' : 'Create'}

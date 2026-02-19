@@ -159,6 +159,8 @@ async def generate_report_for_schedule(
     report_data = await gather_report_data(
         db, user.id, schedule.account_id, period_start, period_end, goals
     )
+    period_days = (period_end - period_start).days
+    report_data["period_days"] = period_days
 
     # Get prior period data for comparison
     if schedule.id:
@@ -264,12 +266,14 @@ async def _deliver_report(
 
     # Plain text fallback (same for all recipients)
     data = report.report_data or report_data or {}
+    pd = data.get("period_days")
+    trades_suffix = f" (last {pd}d)" if pd else ""
     text_body = (
         f"{b['shortName']} Performance Report\n"
         f"Period: {period_label}\n\n"
         f"Account Value: ${data.get('account_value_usd', 0):,.2f}\n"
         f"Period Profit: ${data.get('period_profit_usd', 0):,.2f}\n"
-        f"Total Trades: {data.get('total_trades', 0)}\n"
+        f"Total Trades{trades_suffix}: {data.get('total_trades', 0)}\n"
         f"Win Rate: {data.get('win_rate', 0):.1f}%\n"
     )
 

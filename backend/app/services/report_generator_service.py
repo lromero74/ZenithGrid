@@ -217,6 +217,10 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
     win_rate = data.get("win_rate", 0)
     winning = data.get("winning_trades", 0)
     losing = data.get("losing_trades", 0)
+    period_days = data.get("period_days")
+    trades_label = "Total Trades"
+    if period_days:
+        trades_label += f" (last {period_days}d)"
 
     profit_color = "#10b981" if profit_usd >= 0 else "#ef4444"
     profit_sign = "+" if profit_usd >= 0 else ""
@@ -247,7 +251,7 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
             <tr>
                 <td style="width: 50%; padding: 12px; background-color: #1e293b;
                            border-radius: 0 0 0 8px; border: 1px solid #334155;">
-                    <p style="color: #94a3b8; font-size: 12px; margin: 0;">Total Trades</p>
+                    <p style="color: #94a3b8; font-size: 12px; margin: 0;">{trades_label}</p>
                     <p style="color: #f1f5f9; font-size: 20px; font-weight: 700;
                              margin: 5px 0 0 0;">{total_trades}</p>
                     <p style="color: #94a3b8; font-size: 12px; margin: 3px 0 0 0;">
@@ -412,12 +416,17 @@ def _build_comparison_section(data: Dict[str, Any]) -> str:
     if not prior:
         return ""
 
+    period_days = data.get("period_days")
+    trades_label = "Total Trades"
+    if period_days:
+        trades_label += f" (last {period_days}d)"
+
     rows = [
         ("Account Value", data.get("account_value_usd", 0),
          prior.get("account_value_usd", 0), "usd"),
         ("Period Profit", data.get("period_profit_usd", 0),
          prior.get("period_profit_usd", 0), "usd"),
-        ("Total Trades", data.get("total_trades", 0),
+        (trades_label, data.get("total_trades", 0),
          prior.get("total_trades", 0), "int"),
         ("Win Rate", data.get("win_rate", 0),
          prior.get("win_rate", 0), "pct"),
@@ -549,10 +558,15 @@ def generate_pdf(
         total_trades = report_data.get("total_trades", 0)
         win_rate = report_data.get("win_rate", 0)
 
+        pdf_period_days = report_data.get("period_days")
+        pdf_trades_label = "Total Trades"
+        if pdf_period_days:
+            pdf_trades_label += f" (last {pdf_period_days}d)"
+
         metrics = [
             ("Account Value", f"${value_usd:,.2f} ({value_btc:.6f} BTC)"),
             ("Period Profit", f"${profit_usd:,.2f}"),
-            ("Total Trades", str(total_trades)),
+            (pdf_trades_label, str(total_trades)),
             ("Win Rate", f"{win_rate:.1f}%"),
             ("Winning Trades", str(report_data.get("winning_trades", 0))),
             ("Losing Trades", str(report_data.get("losing_trades", 0))),
