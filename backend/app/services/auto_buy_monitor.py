@@ -58,14 +58,14 @@ class AutoBuyMonitor:
         if not self.running:
             self.running = True
             self.task = asyncio.create_task(self._monitor_loop())
-            logger.info("✅ Auto-Buy Monitor started")
+            print("✅ Auto-Buy Monitor started")
 
     async def stop(self):
         """Stop the auto-buy monitor"""
         self.running = False
         if self.task:
             await self.task
-        logger.info("🛑 Auto-Buy Monitor stopped")
+        print("🛑 Auto-Buy Monitor stopped")
 
     async def _monitor_loop(self):
         """Main monitoring loop - checks every 10 seconds"""
@@ -74,6 +74,7 @@ class AutoBuyMonitor:
                 await self._check_accounts()
                 await self._check_pending_orders()
             except Exception as e:
+                print(f"❌ Error in auto-buy monitor loop: {e}")
                 logger.error(f"Error in auto-buy monitor loop: {e}", exc_info=True)
 
             await asyncio.sleep(10)  # Check every 10 seconds
@@ -86,8 +87,12 @@ class AutoBuyMonitor:
             result = await db.execute(query)
             accounts = result.scalars().all()
 
+            if not accounts:
+                return
+
             for account in accounts:
-                if self._should_check_account(account):
+                should = self._should_check_account(account)
+                if should:
                     await self._process_account(account, db)
 
     def _should_check_account(self, account: Account) -> bool:
@@ -106,10 +111,10 @@ class AutoBuyMonitor:
     async def _process_account(self, account: Account, db: AsyncSession):
         """Process one account - check balances and buy BTC if needed"""
         try:
-            logger.info(f"Auto-buy: checking account '{account.name}' (id={account.id})")
+            print(f"Auto-buy: checking account '{account.name}' (id={account.id})")
             client = await get_exchange_client_for_account(db, account.id)
             if not client:
-                logger.warning(f"Auto-buy: no exchange client for account {account.id}")
+                print(f"⚠️ Auto-buy: no exchange client for account {account.id}")
                 return
 
             # Check each enabled stablecoin
@@ -135,6 +140,7 @@ class AutoBuyMonitor:
             self._account_timers[account.id] = datetime.utcnow()
 
         except Exception as e:
+            print(f"❌ Auto-buy failed for account {account.id}: {e}")
             logger.error(f"Auto-buy failed for account {account.id}: {e}", exc_info=True)
 
     async def _calculate_reserved_usd(self, db: AsyncSession, account_id: int) -> float:
@@ -193,13 +199,13 @@ class AutoBuyMonitor:
             available = max(0.0, raw_available - reserved)
 
             if available < min_amount:
-                logger.info(
+                print(
                     f"Auto-buy: {account.name} {currency} free={available:.2f} "
                     f"(raw={raw_available:.2f}, reserved={reserved:.2f}) < min {min_amount}"
                 )
                 return
 
-            logger.info(
+            print(
                 f"🎯 Auto-buy triggered for {account.name}: {available:.2f} {currency} → BTC "
                 f"(raw: {raw_available:.2f}, reserved: {reserved:.2f})"
             )
@@ -212,8 +218,8 @@ class AutoBuyMonitor:
                 result = await client.buy_with_usd(available, product_id)
                 order_id = result.get('order_id')
 
-                logger.info(
-                    f"✅ Auto-buy market order placed: {available} {currency} → BTC "
+                print(
+                    f"✅ Auto-buy market order placed: {available:.2f} {currency} → BTC "
                     f"(Account: {account.name}, Order: {order_id})"
                 )
 
@@ -223,7 +229,7 @@ class AutoBuyMonitor:
                 current_price = float(ticker.get('price', 0))
 
                 if current_price == 0:
-                    logger.error(f"Could not get price for {product_id}")
+                    print(f"❌ Auto-buy: could not get price for {product_id}")
                     return
 
                 # Calculate BTC size
@@ -250,12 +256,13 @@ class AutoBuyMonitor:
                     placed_at=datetime.utcnow(),
                 )
 
-                logger.info(
+                print(
                     f"✅ Auto-buy limit order placed: {btc_size:.8f} BTC @ ${current_price:.2f} "
                     f"(Account: {account.name}, Order: {order_id})"
                 )
 
         except Exception as e:
+            print(f"❌ Error placing auto-buy order for {currency} on account {account.name}: {e}")
             logger.error(
                 f"Error placing auto-buy order for {currency} on account {account.name}: {e}",
                 exc_info=True
@@ -298,14 +305,14 @@ class AutoBuyMonitor:
 
             # Cancel old order
             await client.cancel_order(pending.order_id)
-            logger.info(f"🔄 Re-pricing auto-buy order {pending.order_id} (after 2 minutes)")
+            print(f"🔄 Re-pricing auto-buy order {pending.order_id} (after 2 minutes)")
 
             # Get current market price
             ticker = await client.get_product(pending.product_id)
             new_price = float(ticker.get('price', 0))
 
             if new_price == 0:
-                logger.error(f"Could not get price for {pending.product_id}")
+                print(f"❌ Auto-buy: could not get price for {pending.product_id}")
                 return
 
             # Place new limit order at current price
@@ -329,10 +336,11 @@ class AutoBuyMonitor:
                 placed_at=datetime.utcnow(),
             )
 
-            logger.info(
+            print(
                 f"✅ Re-priced order: {pending.size:.8f} BTC @ ${new_price:.2f} "
                 f"(Old: ${pending.price:.2f}, New Order: {new_order_id})"
             )
 
         except Exception as e:
+            print(f"❌ Error re-pricing order {pending.order_id}: {e}")
             logger.error(f"Error re-pricing order {pending.order_id}: {e}", exc_info=True)

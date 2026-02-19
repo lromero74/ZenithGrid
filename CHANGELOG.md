@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.26.7] - 2026-02-19
+
+### Fixed
+- **Auto-buy logging now visible**: Auto-buy monitor messages (balance checks, triggers, order placements) now appear in production logs — previously invisible due to uvicorn logger configuration
+
 ## [v2.26.6] - 2026-02-19
 
 ### Fixed
