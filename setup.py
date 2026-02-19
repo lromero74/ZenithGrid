@@ -1611,6 +1611,28 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_reports_schedule_id ON reports(schedule_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_reports_period_end ON reports(period_end)")
 
+        # Account Transfers (deposit/withdrawal tracking for accurate P&L)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS account_transfers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                account_id INTEGER NOT NULL,
+                external_id TEXT UNIQUE,
+                transfer_type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                currency TEXT NOT NULL,
+                amount_usd REAL,
+                occurred_at DATETIME NOT NULL,
+                source TEXT DEFAULT 'coinbase_api',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_account_transfers_user_id ON account_transfers(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_account_transfers_account_id ON account_transfers(account_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_account_transfers_occurred_at ON account_transfers(occurred_at)")
+
         # Seed default content sources
         # Format: (source_key, name, type, url, website, description, channel_id, category)
         default_sources = [

@@ -94,6 +94,7 @@ class User(Base):
     report_goals = relationship("ReportGoal", back_populates="user", cascade="all, delete-orphan")
     report_schedules = relationship("ReportSchedule", back_populates="user", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
+    account_transfers = relationship("AccountTransfer", back_populates="user", cascade="all, delete-orphan")
 
 
 class TrustedDevice(Base):
@@ -1433,3 +1434,36 @@ class Report(Base):
     # Relationships
     user = relationship("User", back_populates="reports")
     schedule = relationship("ReportSchedule", back_populates="reports")
+
+
+class AccountTransfer(Base):
+    """
+    Deposit/withdrawal tracking for accurate P&L calculation.
+
+    Records are created either by syncing with the Coinbase API or by manual entry.
+    Used to distinguish real trading gains from capital injections/withdrawals in
+    reports, dashboard projections, and account value charts.
+    """
+    __tablename__ = "account_transfers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    account_id = Column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    external_id = Column(String, unique=True, nullable=True)  # Coinbase txn ID (dedup)
+    transfer_type = Column(String, nullable=False)  # 'deposit' or 'withdrawal'
+    amount = Column(Float, nullable=False)
+    currency = Column(String, nullable=False)  # 'USD', 'BTC', etc.
+    amount_usd = Column(Float, nullable=True)  # USD equivalent at time of transfer
+    occurred_at = Column(DateTime, nullable=False, index=True)
+    source = Column(String, default="coinbase_api")  # 'coinbase_api' or 'manual'
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="account_transfers")
+    account = relationship("Account")

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { botsApi, positionsApi, authFetch } from '../services/api'
+import { botsApi, positionsApi, authFetch, transfersApi } from '../services/api'
 import {
   TrendingUp,
   TrendingDown,
@@ -111,6 +111,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     enabled: !!selectedAccount,
     refetchInterval: 30000, // 30 seconds
     staleTime: 15000,
+  })
+
+  // Fetch recent deposit/withdrawal summary for deposit note
+  const { data: transferSummary } = useQuery({
+    queryKey: ['transfer-recent-summary'],
+    queryFn: () => transfersApi.getRecentSummary(),
+    staleTime: 300000, // 5 minutes
+    refetchOnWindowFocus: false,
   })
 
   // Fetch PropGuard status for prop firm accounts
@@ -428,8 +436,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         )
       })()}
 
+      {/* Deposit/withdrawal note */}
+      {transferSummary && transferSummary.last_30d_net_deposits_usd !== 0 && (
+        <div className="px-3 py-2 bg-blue-900/20 border border-blue-800/30 rounded-lg">
+          <p className="text-xs text-blue-300">
+            {transferSummary.last_30d_net_deposits_usd > 0
+              ? `$${transferSummary.last_30d_net_deposits_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} deposited`
+              : `$${Math.abs(transferSummary.last_30d_net_deposits_usd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} withdrawn`}
+            {' '}in the last 30 days — % rates reflect current capital base
+          </p>
+        </div>
+      )}
+
       {/* Account Value Chart */}
-      <AccountValueChart />
+      <AccountValueChart transferSummary={transferSummary} />
 
       {/* Recent Deals */}
       {recentDeals.length > 0 && (

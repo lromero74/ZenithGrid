@@ -16,6 +16,7 @@ from app.coinbase_api import account_balance_api
 from app.coinbase_api import market_data_api
 from app.coinbase_api import order_api
 from app.coinbase_api import perpetuals_api
+from app.coinbase_api import transaction_api
 
 logger = logging.getLogger(__name__)
 
@@ -401,6 +402,26 @@ class CoinbaseClient:
         """
         return await order_api.create_market_order(
             self._request, product_id=product_id, side=side, size=base_size
+        )
+
+    # ===== Deposit/Withdrawal Tracking =====
+
+    async def get_deposit_withdrawals(
+        self, account_uuid: str, since: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch deposit and withdrawal transactions for a Coinbase account.
+
+        Args:
+            account_uuid: Coinbase account UUID (from get_accounts())
+            since: Only fetch transactions after this date
+
+        Returns:
+            List of normalized transfer dicts
+        """
+        since_iso = since.isoformat() if since else None
+        return await transaction_api.get_all_transfers(
+            self._request, account_uuid, since_iso=since_iso
         )
 
     # ===== Connection Test =====
