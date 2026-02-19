@@ -1463,16 +1463,22 @@ async def cleanup_articles_with_images(
     max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS,
     min_keep: int = 5,
 ) -> tuple:
-    """Run per-source article cleanup and delete associated image files.
+    """Run per-source article cleanup and delete associated files.
+    Cleans up: image files, TTS audio cache dirs, TTS DB records.
     Returns (articles_deleted, image_files_deleted)."""
+    import shutil
     from app.services.news_image_cache import NEWS_IMAGES_DIR
+    from app.routers.news_tts_router import TTS_CACHE_DIR
+    from app.models import ArticleTTS
 
     image_files_deleted = 0
+    tts_dirs_deleted = 0
     async with async_session_maker() as db:
-        # Collect image paths of articles that will be deleted
+        # Collect image paths and article IDs that will be deleted
         # We need to query before deleting
         cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
         paths_to_delete = []
+        article_ids_to_delete = []
 
         # Per-source: find articles beyond effective cutoff
         source_ids_result = await db.execute(
@@ -1496,32 +1502,46 @@ async def cleanup_articles_with_images(
             )
 
             result = await db.execute(
-                select(NewsArticle.cached_thumbnail_path).where(
+                select(
+                    NewsArticle.id, NewsArticle.cached_thumbnail_path
+                ).where(
                     NewsArticle.source_id == sid,
                     NewsArticle.published_at < effective_cutoff,
-                    NewsArticle.cached_thumbnail_path.isnot(None),
                 )
             )
-            paths_to_delete.extend(
-                row[0] for row in result.fetchall() if row[0]
-            )
+            for row in result.fetchall():
+                article_ids_to_delete.append(row[0])
+                if row[1]:
+                    paths_to_delete.append(row[1])
 
         # Orphan articles (no source_id)
         result = await db.execute(
-            select(NewsArticle.cached_thumbnail_path).where(
+            select(
+                NewsArticle.id, NewsArticle.cached_thumbnail_path
+            ).where(
                 NewsArticle.source_id.is_(None),
                 NewsArticle.fetched_at < cutoff,
-                NewsArticle.cached_thumbnail_path.isnot(None),
             )
         )
-        paths_to_delete.extend(
-            row[0] for row in result.fetchall() if row[0]
-        )
+        for row in result.fetchall():
+            article_ids_to_delete.append(row[0])
+            if row[1]:
+                paths_to_delete.append(row[1])
+
+        # Delete TTS DB records for articles being removed
+        if article_ids_to_delete:
+            await db.execute(
+                ArticleTTS.__table__.delete().where(
+                    ArticleTTS.article_id.in_(article_ids_to_delete)
+                )
+            )
+            await db.commit()
 
         articles_deleted = await cleanup_old_articles(
             db, max_age_days=max_age_days, min_keep=min_keep
         )
 
+    # Delete image files
     for filename in paths_to_delete:
         filepath = NEWS_IMAGES_DIR / filename
         if filepath.exists():
@@ -1530,6 +1550,19 @@ async def cleanup_articles_with_images(
                 image_files_deleted += 1
             except OSError:
                 pass
+
+    # Delete TTS cache directories
+    for aid in article_ids_to_delete:
+        tts_dir = TTS_CACHE_DIR / str(aid)
+        if tts_dir.is_dir():
+            try:
+                shutil.rmtree(tts_dir)
+                tts_dirs_deleted += 1
+            except OSError:
+                pass
+
+    if tts_dirs_deleted:
+        logger.info(f"Cleanup: deleted {tts_dirs_deleted} TTS cache dirs")
 
     return articles_deleted, image_files_deleted
 
@@ -1607,15 +1640,38 @@ async def get_article_content(
     Extract article content from a news URL.
 
     Uses trafilatura to extract the main article text, title, and metadata.
+    Results are cached persistently in the database so all users benefit.
     Only allows fetching from domains in the content_sources database table.
     """
-    # Check cache first (under lock to prevent race conditions)
+    # L1: Check in-memory cache (fast, short-lived)
     now = time.time()
     async with _article_cache_lock:
         if url in _article_cache:
             cached_response, cached_at = _article_cache[url]
             if now - cached_at < _ARTICLE_CACHE_TTL:
                 return cached_response
+
+    # L2: Check DB cache (persistent, shared across users/restarts)
+    try:
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(NewsArticle).where(NewsArticle.url == url)
+            )
+            db_article = result.scalar_one_or_none()
+            if db_article and db_article.content:
+                db_response = ArticleContentResponse(
+                    url=url,
+                    title=db_article.title,
+                    content=db_article.content,
+                    author=db_article.author,
+                    success=True,
+                )
+                # Promote to L1 cache
+                async with _article_cache_lock:
+                    _article_cache[url] = (db_response, time.time())
+                return db_response
+    except Exception as e:
+        logger.warning(f"DB content cache lookup failed: {e}")
 
     # Known paywalled domains
     PAYWALLED_DOMAINS = {
@@ -1757,12 +1813,26 @@ async def get_article_content(
             success=True
         )
 
-        # Cache successful responses (under lock to prevent race conditions)
+        # L1: Cache in memory
         async with _article_cache_lock:
             if len(_article_cache) >= _ARTICLE_CACHE_MAX:
                 oldest_key = min(_article_cache, key=lambda k: _article_cache[k][1])
                 del _article_cache[oldest_key]
             _article_cache[url] = (result, time.time())
+
+        # L2: Persist to DB (fire-and-forget, don't block the response)
+        try:
+            async with async_session_maker() as db:
+                db_result = await db.execute(
+                    select(NewsArticle).where(NewsArticle.url == url)
+                )
+                db_article = db_result.scalar_one_or_none()
+                if db_article:
+                    db_article.content = extracted
+                    db_article.content_fetched_at = datetime.utcnow()
+                    await db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist article content to DB: {e}")
 
         return result
 

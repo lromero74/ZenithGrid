@@ -982,6 +982,10 @@ class NewsArticle(Base):
     fetched_at = Column(DateTime, default=datetime.utcnow, index=True)  # When we fetched it
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Cached full article content (extracted via trafilatura, markdown format)
+    content = Column(Text, nullable=True)
+    content_fetched_at = Column(DateTime, nullable=True)  # When content was last extracted
+
     # TTS issue flag (article failed to load/play)
     has_issue = Column(Boolean, default=False)
 

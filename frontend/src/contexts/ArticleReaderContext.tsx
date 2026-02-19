@@ -75,6 +75,7 @@ interface ArticleReaderContextType {
   playArticle: (index: number) => void
   nextArticle: () => void
   previousArticle: () => void
+  retryArticle: () => void
   toggleExpanded: () => void
   closeMiniPlayer: () => void
   setExpanded: (expanded: boolean) => void
@@ -249,21 +250,24 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   }, [])
 
   // Flag an article as having an issue (fire-and-forget)
-  const flagArticleIssue = useCallback((articleId: number | undefined) => {
+  const flagArticleIssue = useCallback((articleId: number | undefined, hasIssue = true) => {
     if (!articleId) return
     authFetch('/api/news/article-issue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ article_id: articleId, has_issue: true }),
+      body: JSON.stringify({ article_id: articleId, has_issue: hasIssue }),
     }).catch(() => {})
   }, [])
 
   // Load and play an article
   // articleIndex is the position in the playlist (used for voice cycling)
   // overrideVoice: optional voice ID to use instead of cycling (for resume)
-  const loadAndPlayArticle = useCallback(async (article: ArticleItem, articleIndex: number, overrideVoice?: string) => {
-    // Skip known-bad articles automatically
-    if (article.has_issue) {
+  // forceRetry: skip has_issue check and re-attempt content fetch
+  const loadAndPlayArticle = useCallback(async (
+    article: ArticleItem, articleIndex: number, overrideVoice?: string, forceRetry?: boolean
+  ) => {
+    // Skip known-bad articles automatically (unless user explicitly retries)
+    if (article.has_issue && !forceRetry) {
       console.log(`[TTS] Skipping known-bad article: ${article.title}`)
       setTimeout(() => {
         if (articleIndex < playlistRef.current.length - 1) {
@@ -278,6 +282,11 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
         }
       }, 300)
       return
+    }
+
+    // If retrying, clear cached content so we fetch fresh
+    if (forceRetry) {
+      article.content = undefined
     }
 
     // Reset playback tracking for new article
@@ -364,6 +373,11 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
       setIsSummaryOnly(false)
       setArticleContent(content)
       const plainText = markdownToPlainText(content)
+      // If this was a retry and content succeeded, clear the has_issue flag
+      if (forceRetry && article.has_issue) {
+        flagArticleIssue(article.id, false)
+        article.has_issue = false
+      }
       // Pass voice and article ID for server-side TTS caching
       await tts.loadAndPlay(plainText, voiceToUse, article.id)
     } else if (article.summary) {
@@ -854,6 +868,14 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setPendingResume(null)
   }, [])
 
+  // Retry the current article's content fetch (clears has_issue on success)
+  const retryArticle = useCallback(() => {
+    const article = playlistRef.current[currentIndex]
+    if (!article) return
+    setIsPlaying(true)
+    loadAndPlayArticle(article, currentIndex, undefined, true)
+  }, [currentIndex, loadAndPlayArticle])
+
   const value: ArticleReaderContextType = useMemo(() => ({
     // Playlist state
     playlist,
@@ -901,6 +923,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     playArticle,
     nextArticle,
     previousArticle,
+    retryArticle,
     toggleExpanded,
     closeMiniPlayer,
     setExpanded: setIsExpanded,
@@ -929,7 +952,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     tts.currentWordIndex, tts.currentTime, tts.duration, tts.currentVoice, tts.playbackRate, tts.volume,
     articleContent, articleContentLoading, isSummaryOnly, voiceCycleEnabled, toggleVoiceCycle,
     continuousPlay, pendingResume, resumeSession, dismissResume,
-    openArticle, startPlaylist, stopPlaylist, playArticle, nextArticle, previousArticle,
+    openArticle, startPlaylist, stopPlaylist, playArticle, nextArticle, previousArticle, retryArticle,
     toggleExpanded, closeMiniPlayer,
     tts.play, tts.pause, tts.resume, tts.stop, tts.replay,
     tts.seekToWord, tts.seekToTime, tts.skipWords, tts.setVoice, tts.setRate, tts.setVolume,

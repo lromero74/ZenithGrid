@@ -71,7 +71,10 @@ REQUIRED_PACKAGES = {
     'qrcode': 'qrcode',
 }
 
+
 # Color codes for terminal output
+
+
 class Colors:
     HEADER = '\033[95m'
     BLUE = '\033[94m'
@@ -82,22 +85,28 @@ class Colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
 
+
 def print_header(text):
     print(f"\n{Colors.HEADER}{Colors.BOLD}{'=' * 60}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}{text.center(60)}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}{'=' * 60}{Colors.ENDC}\n")
 
+
 def print_step(step_num, text):
     print(f"{Colors.CYAN}{Colors.BOLD}[Step {step_num}]{Colors.ENDC} {text}")
+
 
 def print_success(text):
     print(f"{Colors.GREEN}✓ {text}{Colors.ENDC}")
 
+
 def print_warning(text):
     print(f"{Colors.YELLOW}⚠ {text}{Colors.ENDC}")
 
+
 def print_error(text):
     print(f"{Colors.RED}✗ {text}{Colors.ENDC}")
+
 
 def print_info(text):
     print(f"{Colors.BLUE}ℹ {text}{Colors.ENDC}")
@@ -186,6 +195,7 @@ def get_project_root():
     """Get the project root directory"""
     return Path(__file__).parent.resolve()
 
+
 def detect_os():
     """Detect operating system"""
     system = platform.system().lower()
@@ -195,6 +205,7 @@ def detect_os():
         return 'linux'
     else:
         return 'unknown'
+
 
 def get_homebrew_prefix():
     """
@@ -211,6 +222,7 @@ def get_homebrew_prefix():
     else:
         # Intel Mac
         return '/usr/local'
+
 
 def get_brew_path():
     """
@@ -233,6 +245,7 @@ def get_brew_path():
 
     return None
 
+
 def check_xcode_tools():
     """
     Check if Xcode Command Line Tools are installed (required for Homebrew on macOS).
@@ -249,6 +262,7 @@ def check_xcode_tools():
         return result.returncode == 0
     except FileNotFoundError:
         return False
+
 
 def install_xcode_tools():
     """Prompt user to install Xcode Command Line Tools"""
@@ -268,6 +282,7 @@ def install_xcode_tools():
         print_info("Install manually: xcode-select --install")
         return False
 
+
 def update_shell_path_for_homebrew():
     """
     Update PATH to include Homebrew after fresh installation.
@@ -281,6 +296,7 @@ def update_shell_path_for_homebrew():
     if brew_bin not in current_path:
         os.environ['PATH'] = f'{brew_bin}:{current_path}'
         print_info(f"Added {brew_bin} to PATH for this session")
+
 
 def prompt_yes_no(question, default='yes'):
     """Ask a yes/no question"""
@@ -334,7 +350,11 @@ def display_license_and_get_acceptance(project_root):
 
     # Require explicit "I AGREE" instead of just yes/no
     while True:
-        response = input(f"{Colors.BOLD}Type 'I AGREE' to accept the license terms (or 'quit' to exit): {Colors.ENDC}").strip()
+        prompt_msg = (
+            f"{Colors.BOLD}Type 'I AGREE' to accept the license "
+            f"terms (or 'quit' to exit): {Colors.ENDC}"
+        )
+        response = input(prompt_msg).strip()
         if response.upper() == 'I AGREE':
             print()
             print_success("License accepted. Proceeding with setup...")
@@ -345,6 +365,7 @@ def display_license_and_get_acceptance(project_root):
             return False
         else:
             print_warning("Please type 'I AGREE' exactly to accept, or 'quit' to exit.")
+
 
 def prompt_input(question, default=None, required=True, password=False):
     """Prompt for user input"""
@@ -366,10 +387,12 @@ def prompt_input(question, default=None, required=True, password=False):
         else:
             return value
 
+
 def validate_email(email):
     """Validate email format"""
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
+
 
 def validate_password(password):
     """Validate password meets requirements"""
@@ -525,9 +548,16 @@ def check_python_version():
                 if prompt_yes_no("Install Homebrew?", default='yes'):
                     try:
                         # Run Homebrew installation script
+                        brew_install_url = (
+                            "https://raw.githubusercontent.com"
+                            "/Homebrew/install/HEAD/install.sh"
+                        )
+                        brew_cmd = (
+                            f'/bin/bash -c '
+                            f'"$(curl -fsSL {brew_install_url})"'
+                        )
                         result = run_with_spinner(
-                            ['/bin/bash', '-c',
-                             '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'],
+                            ['/bin/bash', '-c', brew_cmd],
                             "Installing Homebrew (this may take a few minutes)",
                             success_msg="Homebrew installed!",
                             error_msg="Failed to install Homebrew"
@@ -556,11 +586,24 @@ def check_python_version():
                                 reexec_with_python311()
                     except Exception as e:
                         print_error(f"Installation failed: {e}")
-                        print_info("Try manually: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
-                        print_info("Then: brew install python@3.11 && python3.11 setup.py")
+                        brew_manual = (
+                            'Try manually: /bin/bash -c '
+                            '"$(curl -fsSL https://raw.githubusercontent.com'
+                            '/Homebrew/install/HEAD/install.sh)"'
+                        )
+                        print_info(brew_manual)
+                        print_info(
+                            "Then: brew install python@3.11 "
+                            "&& python3.11 setup.py"
+                        )
                 else:
                     print_info("To install manually:")
-                    print_info("  1. /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+                    brew_step1 = (
+                        '  1. /bin/bash -c '
+                        '"$(curl -fsSL https://raw.githubusercontent.com'
+                        '/Homebrew/install/HEAD/install.sh)"'
+                    )
+                    print_info(brew_step1)
                     print_info("  2. brew install python@3.11")
                     print_info("  3. python3.11 setup.py")
 
@@ -607,10 +650,12 @@ def check_python_version():
     print_success(f"Python {version.major}.{version.minor} detected")
     return True
 
+
 def check_venv_exists(project_root):
     """Check if virtual environment exists"""
     venv_path = project_root / 'backend' / 'venv'
     return venv_path.exists()
+
 
 def create_venv(project_root):
     """Create Python virtual environment"""
@@ -625,6 +670,7 @@ def create_venv(project_root):
         print_error(f"Failed to create virtual environment: {e}")
         return False
 
+
 def get_venv_python(project_root):
     """Get the path to venv Python"""
     os_type = detect_os()
@@ -633,6 +679,7 @@ def get_venv_python(project_root):
     else:
         return project_root / 'backend' / 'venv' / 'Scripts' / 'python.exe'
 
+
 def get_venv_pip(project_root):
     """Get the path to venv pip"""
     os_type = detect_os()
@@ -640,6 +687,7 @@ def get_venv_pip(project_root):
         return project_root / 'backend' / 'venv' / 'bin' / 'pip'
     else:
         return project_root / 'backend' / 'venv' / 'Scripts' / 'pip.exe'
+
 
 def check_package_installed(pip_path, package_name, import_name):
     """Check if a Python package is installed in the venv"""
@@ -654,6 +702,7 @@ def check_package_installed(pip_path, package_name, import_name):
     except Exception:
         return False
 
+
 def get_missing_packages(project_root):
     """Get list of missing Python packages"""
     pip_path = get_venv_pip(project_root)
@@ -664,6 +713,7 @@ def get_missing_packages(project_root):
             missing.append(package_name)
 
     return missing
+
 
 def install_dependencies(project_root, force_reinstall=False):
     """Install Python dependencies"""
@@ -684,8 +734,10 @@ def install_dependencies(project_root, force_reinstall=False):
 
     try:
         # Upgrade pip first
-        subprocess.run([str(pip_path), 'install', '--upgrade', 'pip'],
-                      capture_output=True, check=False)
+        subprocess.run(
+            [str(pip_path), 'install', '--upgrade', 'pip'],
+            capture_output=True, check=False
+        )
 
         # Install all requirements
         result = subprocess.run(
@@ -716,15 +768,19 @@ def install_dependencies(project_root, force_reinstall=False):
         print_error(f"Failed to install dependencies: {e}")
         return False
 
+
 def install_single_package(project_root, package_name):
     """Install a single Python package"""
     pip_path = get_venv_pip(project_root)
     try:
-        subprocess.run([str(pip_path), 'install', package_name],
-                      capture_output=True, check=True)
+        subprocess.run(
+            [str(pip_path), 'install', package_name],
+            capture_output=True, check=True
+        )
         return True
     except subprocess.CalledProcessError:
         return False
+
 
 def check_npm_installed():
     """Check if npm is installed"""
@@ -734,6 +790,7 @@ def check_npm_installed():
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
+
 def check_git_installed():
     """Check if git is installed (required for version display in frontend)"""
     try:
@@ -741,6 +798,7 @@ def check_git_installed():
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
+
 
 def check_node_modules_exists(project_root):
     """Check if frontend node_modules exists and has packages"""
@@ -753,6 +811,7 @@ def check_node_modules_exists(project_root):
         return len(contents) > 10  # Should have many packages
     except Exception:
         return False
+
 
 def install_frontend_dependencies(project_root, force_reinstall=False):
     """Install frontend dependencies"""
@@ -786,6 +845,7 @@ def install_frontend_dependencies(project_root, force_reinstall=False):
     except FileNotFoundError:
         print_error("npm not found. Please install Node.js first.")
         return False
+
 
 def initialize_database(project_root):
     """Initialize the SQLite database with all required tables"""
@@ -952,8 +1012,14 @@ def initialize_database(project_root):
                 UNIQUE(template_id, product_id)
             )
         """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_bot_template_products_template_id ON bot_template_products(template_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_bot_template_products_product_id ON bot_template_products(product_id)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bot_template_products_template_id "
+            "ON bot_template_products(template_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bot_template_products_product_id "
+            "ON bot_template_products(product_id)"
+        )
 
         # Positions table
         cursor.execute("""
@@ -1205,7 +1271,9 @@ def initialize_database(project_root):
                 source_id INTEGER REFERENCES content_sources(id),
                 fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                has_issue BOOLEAN DEFAULT 0
+                has_issue BOOLEAN DEFAULT 0,
+                content TEXT,
+                content_fetched_at DATETIME
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_news_articles_url ON news_articles(url)")
@@ -1254,9 +1322,19 @@ def initialize_database(project_root):
                 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
             )
         """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_provider_credentials_user_id ON ai_provider_credentials(user_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_provider_credentials_provider ON ai_provider_credentials(provider)")
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_ai_provider_credentials_user_provider ON ai_provider_credentials(user_id, provider)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_ai_provider_credentials_user_id "
+            "ON ai_provider_credentials(user_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_ai_provider_credentials_provider "
+            "ON ai_provider_credentials(provider)"
+        )
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS "
+            "ix_ai_provider_credentials_user_provider "
+            "ON ai_provider_credentials(user_id, provider)"
+        )
 
         # Indicator logs table (for indicator-based condition evaluation logging)
         cursor.execute("""
@@ -1315,7 +1393,11 @@ def initialize_database(project_root):
                 UNIQUE(user_id, source_id)
             )
         """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_user_source_subscriptions_user_id ON user_source_subscriptions(user_id)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS "
+            "ix_user_source_subscriptions_user_id "
+            "ON user_source_subscriptions(user_id)"
+        )
 
         # TTS persistence tables
         cursor.execute("""
@@ -1390,9 +1472,21 @@ def initialize_database(project_root):
                 UNIQUE(account_id, snapshot_date)
             )
         """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_account_value_snapshots_account_id ON account_value_snapshots(account_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_account_value_snapshots_user_id ON account_value_snapshots(user_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_account_value_snapshots_date ON account_value_snapshots(snapshot_date)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS "
+            "idx_account_value_snapshots_account_id "
+            "ON account_value_snapshots(account_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS "
+            "idx_account_value_snapshots_user_id "
+            "ON account_value_snapshots(user_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS "
+            "idx_account_value_snapshots_date "
+            "ON account_value_snapshots(snapshot_date)"
+        )
 
         # Metric snapshots table (for sparkline charts on market sentiment cards)
         cursor.execute("""
@@ -1405,122 +1499,965 @@ def initialize_database(project_root):
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_metric_snapshots_metric_name ON metric_snapshots(metric_name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_metric_snapshots_recorded_at ON metric_snapshots(recorded_at)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_metric_snapshots_name_time ON metric_snapshots(metric_name, recorded_at)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_metric_snapshots_name_time "
+            "ON metric_snapshots(metric_name, recorded_at)"
+        )
 
         # Seed default content sources
         # Format: (source_key, name, type, url, website, description, channel_id, category)
         default_sources = [
             # ===== CryptoCurrency News =====
-            ('reddit_crypto', 'Reddit r/CryptoCurrency', 'news', 'https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15', 'https://www.reddit.com/r/CryptoCurrency', 'Community-driven crypto discussion', None, 'CryptoCurrency'),
-            ('reddit_bitcoin', 'Reddit r/Bitcoin', 'news', 'https://www.reddit.com/r/Bitcoin/hot.json?limit=10', 'https://www.reddit.com/r/Bitcoin', 'Bitcoin-focused community news', None, 'CryptoCurrency'),
-            ('bitcoin_magazine', 'Bitcoin Magazine', 'news', 'https://bitcoinmagazine.com/feed', 'https://bitcoinmagazine.com', 'Bitcoin news, analysis & culture', None, 'CryptoCurrency'),
-            ('beincrypto', 'BeInCrypto', 'news', 'https://beincrypto.com/feed/', 'https://beincrypto.com', 'Crypto news, guides & price analysis', None, 'CryptoCurrency'),
-            ('blockworks', 'Blockworks', 'news', 'https://blockworks.co/feed', 'https://blockworks.co', 'Crypto & DeFi institutional news', None, 'CryptoCurrency'),
-            ('coindesk', 'CoinDesk', 'news', 'https://www.coindesk.com/arc/outboundfeeds/rss/', 'https://www.coindesk.com', 'Crypto news & analysis', None, 'CryptoCurrency'),
-            ('cointelegraph', 'CoinTelegraph', 'news', 'https://cointelegraph.com/rss', 'https://cointelegraph.com', 'Blockchain & crypto news', None, 'CryptoCurrency'),
-            ('decrypt', 'Decrypt', 'news', 'https://decrypt.co/feed', 'https://decrypt.co', 'Web3 news & guides', None, 'CryptoCurrency'),
-            ('theblock', 'The Block', 'news', 'https://www.theblock.co/rss.xml', 'https://www.theblock.co', 'Institutional crypto news', None, 'CryptoCurrency'),
-            ('cryptoslate', 'CryptoSlate', 'news', 'https://cryptoslate.com/feed/', 'https://cryptoslate.com', 'Crypto news & data', None, 'CryptoCurrency'),
+            (
+                'reddit_crypto',
+                'Reddit r/CryptoCurrency',
+                'news',
+                'https://www.reddit.com/r/CryptoCurrency/hot.json?limit=15',
+                'https://www.reddit.com/r/CryptoCurrency',
+                'Community-driven crypto discussion',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'reddit_bitcoin',
+                'Reddit r/Bitcoin',
+                'news',
+                'https://www.reddit.com/r/Bitcoin/hot.json?limit=10',
+                'https://www.reddit.com/r/Bitcoin',
+                'Bitcoin-focused community news',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'bitcoin_magazine',
+                'Bitcoin Magazine',
+                'news',
+                'https://bitcoinmagazine.com/feed',
+                'https://bitcoinmagazine.com',
+                'Bitcoin news, analysis & culture',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'beincrypto',
+                'BeInCrypto',
+                'news',
+                'https://beincrypto.com/feed/',
+                'https://beincrypto.com',
+                'Crypto news, guides & price analysis',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'blockworks',
+                'Blockworks',
+                'news',
+                'https://blockworks.co/feed',
+                'https://blockworks.co',
+                'Crypto & DeFi institutional news',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'coindesk',
+                'CoinDesk',
+                'news',
+                'https://www.coindesk.com/arc/outboundfeeds/rss/',
+                'https://www.coindesk.com',
+                'Crypto news & analysis',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'cointelegraph',
+                'CoinTelegraph',
+                'news',
+                'https://cointelegraph.com/rss',
+                'https://cointelegraph.com',
+                'Blockchain & crypto news',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'decrypt',
+                'Decrypt',
+                'news',
+                'https://decrypt.co/feed',
+                'https://decrypt.co',
+                'Web3 news & guides',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'theblock',
+                'The Block',
+                'news',
+                'https://www.theblock.co/rss.xml',
+                'https://www.theblock.co',
+                'Institutional crypto news',
+                None,
+                'CryptoCurrency',
+            ),
+            (
+                'cryptoslate',
+                'CryptoSlate',
+                'news',
+                'https://cryptoslate.com/feed/',
+                'https://cryptoslate.com',
+                'Crypto news & data',
+                None,
+                'CryptoCurrency',
+            ),
             # CryptoCurrency Video sources
-            ('coin_bureau', 'Coin Bureau', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw', 'https://www.youtube.com/@CoinBureau', 'Educational crypto content & analysis', 'UCqK_GSMbpiV8spgD3ZGloSw', 'CryptoCurrency'),
-            ('benjamin_cowen', 'Benjamin Cowen', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCRvqjQPSeaWn-uEx-w0XOIg', 'https://www.youtube.com/@intothecryptoverse', 'Technical analysis & market cycles', 'UCRvqjQPSeaWn-uEx-w0XOIg', 'CryptoCurrency'),
-            ('altcoin_daily', 'Altcoin Daily', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCbLhGKVY-bJPcawebgtNfbw', 'https://www.youtube.com/@AltcoinDaily', 'Daily crypto news & updates', 'UCbLhGKVY-bJPcawebgtNfbw', 'CryptoCurrency'),
-            ('bankless', 'Bankless', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCAl9Ld79qaZxp9JzEOwd3aA', 'https://www.youtube.com/@Bankless', 'Ethereum & DeFi ecosystem', 'UCAl9Ld79qaZxp9JzEOwd3aA', 'CryptoCurrency'),
-            ('the_defiant', 'The Defiant', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCL0J4MLEdLP0-UyLu0hCktg', 'https://www.youtube.com/@TheDefiant', 'DeFi news & interviews', 'UCL0J4MLEdLP0-UyLu0hCktg', 'CryptoCurrency'),
-            ('crypto_banter', 'Crypto Banter', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCN9Nj4tjXbVTLYWN0EKly_Q', 'https://www.youtube.com/@CryptoBanter', 'Live crypto shows & trading', 'UCN9Nj4tjXbVTLYWN0EKly_Q', 'CryptoCurrency'),
-            ('datadash', 'DataDash', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCCatR7nWbYrkVXdxXb4cGXw', 'https://www.youtube.com/@DataDash', 'Macro markets & crypto analysis', 'UCCatR7nWbYrkVXdxXb4cGXw', 'CryptoCurrency'),
-            ('cryptosrus', 'CryptosRUs', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCI7M65p3A-D3P4v5qW8POxQ', 'https://www.youtube.com/@CryptosRUs', 'Market analysis & project reviews', 'UCI7M65p3A-D3P4v5qW8POxQ', 'CryptoCurrency'),
-            ('the_moon', 'The Moon', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCc4Rz_T9Sb1w5rqqo9pL1Og', 'https://www.youtube.com/@TheMoonCarl', 'Daily Bitcoin analysis & news', 'UCc4Rz_T9Sb1w5rqqo9pL1Og', 'CryptoCurrency'),
-            ('digital_asset_news', 'Digital Asset News', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCJgHxpqfhWEEjYH9cLXqhIQ', 'https://www.youtube.com/@DigitalAssetNews', 'Bite-sized crypto news updates', 'UCJgHxpqfhWEEjYH9cLXqhIQ', 'CryptoCurrency'),
-            ('paul_barron', 'Paul Barron Network', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC4VPa7EOvObpyCRI4YKRQRw', 'https://www.youtube.com/@paulbarronnetwork', 'Tech, AI & crypto intersection', 'UC4VPa7EOvObpyCRI4YKRQRw', 'CryptoCurrency'),
-            ('lark_davis', 'Lark Davis', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCl2oCaw8hdR_kbqyqd2klIA', 'https://www.youtube.com/@TheCryptoLark', 'Altcoin analysis & opportunities', 'UCl2oCaw8hdR_kbqyqd2klIA', 'CryptoCurrency'),
-            ('pompliano', 'Anthony Pompliano', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCevXpeL8cNyAnww-NqJ4m2w', 'https://www.youtube.com/@AnthonyPompliano', 'Bitcoin advocate & market commentary', 'UCevXpeL8cNyAnww-NqJ4m2w', 'CryptoCurrency'),
-            ('whiteboard_crypto', 'Whiteboard Crypto', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCsYYksPHiGqXHPoHI-fm5sg', 'https://www.youtube.com/@WhiteboardCrypto', 'Educational crypto explainers', 'UCsYYksPHiGqXHPoHI-fm5sg', 'CryptoCurrency'),
+            (
+                'coin_bureau',
+                'Coin Bureau',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw',
+                'https://www.youtube.com/@CoinBureau',
+                'Educational crypto content & analysis',
+                'UCqK_GSMbpiV8spgD3ZGloSw',
+                'CryptoCurrency',
+            ),
+            (
+                'benjamin_cowen',
+                'Benjamin Cowen',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCRvqjQPSeaWn-uEx-w0XOIg',
+                'https://www.youtube.com/@intothecryptoverse',
+                'Technical analysis & market cycles',
+                'UCRvqjQPSeaWn-uEx-w0XOIg',
+                'CryptoCurrency',
+            ),
+            (
+                'altcoin_daily',
+                'Altcoin Daily',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCbLhGKVY-bJPcawebgtNfbw',
+                'https://www.youtube.com/@AltcoinDaily',
+                'Daily crypto news & updates',
+                'UCbLhGKVY-bJPcawebgtNfbw',
+                'CryptoCurrency',
+            ),
+            (
+                'bankless',
+                'Bankless',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCAl9Ld79qaZxp9JzEOwd3aA',
+                'https://www.youtube.com/@Bankless',
+                'Ethereum & DeFi ecosystem',
+                'UCAl9Ld79qaZxp9JzEOwd3aA',
+                'CryptoCurrency',
+            ),
+            (
+                'the_defiant',
+                'The Defiant',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCL0J4MLEdLP0-UyLu0hCktg',
+                'https://www.youtube.com/@TheDefiant',
+                'DeFi news & interviews',
+                'UCL0J4MLEdLP0-UyLu0hCktg',
+                'CryptoCurrency',
+            ),
+            (
+                'crypto_banter',
+                'Crypto Banter',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCN9Nj4tjXbVTLYWN0EKly_Q',
+                'https://www.youtube.com/@CryptoBanter',
+                'Live crypto shows & trading',
+                'UCN9Nj4tjXbVTLYWN0EKly_Q',
+                'CryptoCurrency',
+            ),
+            (
+                'datadash',
+                'DataDash',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCCatR7nWbYrkVXdxXb4cGXw',
+                'https://www.youtube.com/@DataDash',
+                'Macro markets & crypto analysis',
+                'UCCatR7nWbYrkVXdxXb4cGXw',
+                'CryptoCurrency',
+            ),
+            (
+                'cryptosrus',
+                'CryptosRUs',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCI7M65p3A-D3P4v5qW8POxQ',
+                'https://www.youtube.com/@CryptosRUs',
+                'Market analysis & project reviews',
+                'UCI7M65p3A-D3P4v5qW8POxQ',
+                'CryptoCurrency',
+            ),
+            (
+                'the_moon',
+                'The Moon',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCc4Rz_T9Sb1w5rqqo9pL1Og',
+                'https://www.youtube.com/@TheMoonCarl',
+                'Daily Bitcoin analysis & news',
+                'UCc4Rz_T9Sb1w5rqqo9pL1Og',
+                'CryptoCurrency',
+            ),
+            (
+                'digital_asset_news',
+                'Digital Asset News',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCJgHxpqfhWEEjYH9cLXqhIQ',
+                'https://www.youtube.com/@DigitalAssetNews',
+                'Bite-sized crypto news updates',
+                'UCJgHxpqfhWEEjYH9cLXqhIQ',
+                'CryptoCurrency',
+            ),
+            (
+                'paul_barron',
+                'Paul Barron Network',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UC4VPa7EOvObpyCRI4YKRQRw',
+                'https://www.youtube.com/@paulbarronnetwork',
+                'Tech, AI & crypto intersection',
+                'UC4VPa7EOvObpyCRI4YKRQRw',
+                'CryptoCurrency',
+            ),
+            (
+                'lark_davis',
+                'Lark Davis',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCl2oCaw8hdR_kbqyqd2klIA',
+                'https://www.youtube.com/@TheCryptoLark',
+                'Altcoin analysis & opportunities',
+                'UCl2oCaw8hdR_kbqyqd2klIA',
+                'CryptoCurrency',
+            ),
+            (
+                'pompliano',
+                'Anthony Pompliano',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCevXpeL8cNyAnww-NqJ4m2w',
+                'https://www.youtube.com/@AnthonyPompliano',
+                'Bitcoin advocate & market commentary',
+                'UCevXpeL8cNyAnww-NqJ4m2w',
+                'CryptoCurrency',
+            ),
+            (
+                'whiteboard_crypto',
+                'Whiteboard Crypto',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCsYYksPHiGqXHPoHI-fm5sg',
+                'https://www.youtube.com/@WhiteboardCrypto',
+                'Educational crypto explainers',
+                'UCsYYksPHiGqXHPoHI-fm5sg',
+                'CryptoCurrency',
+            ),
             # ===== AI =====
-            ('reddit_artificial', 'Reddit r/artificial', 'news', 'https://www.reddit.com/r/artificial/hot.json?limit=15', 'https://www.reddit.com/r/artificial', 'AI community discussion', None, 'AI'),
-            ('openai_blog', 'OpenAI Blog', 'news', 'https://openai.com/blog/rss.xml', 'https://openai.com/blog', 'OpenAI research & announcements', None, 'AI'),
-            ('mit_tech_ai', 'MIT Tech Review AI', 'news', 'https://www.technologyreview.com/topic/artificial-intelligence/feed', 'https://www.technologyreview.com/topic/artificial-intelligence', 'MIT AI research coverage', None, 'AI'),
-            ('the_ai_beat', 'VentureBeat AI', 'news', 'https://venturebeat.com/category/ai/feed/', 'https://venturebeat.com/category/ai', 'Enterprise AI news', None, 'AI'),
-            ('two_minute_papers', 'Two Minute Papers', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg', 'https://www.youtube.com/@TwoMinutePapers', 'AI research explained in short videos', 'UCbfYPyITQ-7l4upoX8nvctg', 'AI'),
-            ('ai_explained', 'AI Explained', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw', 'https://www.youtube.com/@aiaborz', 'Clear AI news and explanations', 'UCNJ1Ymd5yFuUPtn21xtRbbw', 'AI'),
-            ('matt_wolfe', 'Matt Wolfe', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCJtUOos_MwJa_Ewii-R3cJA', 'https://www.youtube.com/@maborz', 'AI tools, news & tutorials', 'UCJtUOos_MwJa_Ewii-R3cJA', 'AI'),
+            (
+                'reddit_artificial',
+                'Reddit r/artificial',
+                'news',
+                'https://www.reddit.com/r/artificial/hot.json?limit=15',
+                'https://www.reddit.com/r/artificial',
+                'AI community discussion',
+                None,
+                'AI',
+            ),
+            (
+                'openai_blog',
+                'OpenAI Blog',
+                'news',
+                'https://openai.com/blog/rss.xml',
+                'https://openai.com/blog',
+                'OpenAI research & announcements',
+                None,
+                'AI',
+            ),
+            (
+                'mit_tech_ai',
+                'MIT Tech Review AI',
+                'news',
+                'https://www.technologyreview.com/topic/artificial-intelligence/feed',
+                'https://www.technologyreview.com/topic/artificial-intelligence',
+                'MIT AI research coverage',
+                None,
+                'AI',
+            ),
+            (
+                'the_ai_beat',
+                'VentureBeat AI',
+                'news',
+                'https://venturebeat.com/category/ai/feed/',
+                'https://venturebeat.com/category/ai',
+                'Enterprise AI news',
+                None,
+                'AI',
+            ),
+            (
+                'two_minute_papers',
+                'Two Minute Papers',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg',
+                'https://www.youtube.com/@TwoMinutePapers',
+                'AI research explained in short videos',
+                'UCbfYPyITQ-7l4upoX8nvctg',
+                'AI',
+            ),
+            (
+                'ai_explained',
+                'AI Explained',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw',
+                'https://www.youtube.com/@aiaborz',
+                'Clear AI news and explanations',
+                'UCNJ1Ymd5yFuUPtn21xtRbbw',
+                'AI',
+            ),
+            (
+                'matt_wolfe',
+                'Matt Wolfe',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCJtUOos_MwJa_Ewii-R3cJA',
+                'https://www.youtube.com/@maborz',
+                'AI tools, news & tutorials',
+                'UCJtUOos_MwJa_Ewii-R3cJA',
+                'AI',
+            ),
             # ===== Finance =====
-            ('reuters_finance', 'Bloomberg Markets', 'news', 'https://feeds.bloomberg.com/markets/news.rss', 'https://www.bloomberg.com/markets', 'Bloomberg financial news', None, 'Finance'),
-            ('ft_markets', 'Financial Times', 'news', 'https://www.ft.com/markets?format=rss', 'https://www.ft.com/markets', 'Financial Times market coverage', None, 'Finance'),
-            ('motley_fool', 'Motley Fool', 'news', 'https://www.fool.com/feeds/index.aspx', 'https://www.fool.com', 'Investing analysis & stock picks', None, 'Finance'),
-            ('the_economist_finance', 'The Economist', 'news', 'https://www.economist.com/finance-and-economics/rss.xml', 'https://www.economist.com', 'Finance & economics analysis', None, 'Finance'),
-            ('financial_times', 'Financial Times', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw', 'https://www.youtube.com/@FinancialTimes', 'Financial news and analysis', 'UCoUxsWakJucWg46KW5RsvPw', 'Finance'),
-            ('graham_stephan', 'Graham Stephan', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCV6KDgJskWaEckne5aPA0aQ', 'https://www.youtube.com/@GrahamStephan', 'Personal finance & investing', 'UCV6KDgJskWaEckne5aPA0aQ', 'Finance'),
+            (
+                'reuters_finance',
+                'Bloomberg Markets',
+                'news',
+                'https://feeds.bloomberg.com/markets/news.rss',
+                'https://www.bloomberg.com/markets',
+                'Bloomberg financial news',
+                None,
+                'Finance',
+            ),
+            (
+                'ft_markets',
+                'Financial Times',
+                'news',
+                'https://www.ft.com/markets?format=rss',
+                'https://www.ft.com/markets',
+                'Financial Times market coverage',
+                None,
+                'Finance',
+            ),
+            (
+                'motley_fool',
+                'Motley Fool',
+                'news',
+                'https://www.fool.com/feeds/index.aspx',
+                'https://www.fool.com',
+                'Investing analysis & stock picks',
+                None,
+                'Finance',
+            ),
+            (
+                'the_economist_finance',
+                'The Economist',
+                'news',
+                'https://www.economist.com/finance-and-economics/rss.xml',
+                'https://www.economist.com',
+                'Finance & economics analysis',
+                None,
+                'Finance',
+            ),
+            (
+                'financial_times',
+                'Financial Times',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCoUxsWakJucWg46KW5RsvPw',
+                'https://www.youtube.com/@FinancialTimes',
+                'Financial news and analysis',
+                'UCoUxsWakJucWg46KW5RsvPw',
+                'Finance',
+            ),
+            (
+                'graham_stephan',
+                'Graham Stephan',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCV6KDgJskWaEckne5aPA0aQ',
+                'https://www.youtube.com/@GrahamStephan',
+                'Personal finance & investing',
+                'UCV6KDgJskWaEckne5aPA0aQ',
+                'Finance',
+            ),
             # ===== World =====
-            ('guardian_world', 'The Guardian World', 'news', 'https://www.theguardian.com/world/rss', 'https://www.theguardian.com/world', 'International news coverage', None, 'World'),
-            ('bbc_world', 'BBC World', 'news', 'https://feeds.bbci.co.uk/news/world/rss.xml', 'https://www.bbc.com/news/world', 'Global news from BBC', None, 'World'),
-            ('al_jazeera', 'Al Jazeera', 'news', 'https://www.aljazeera.com/xml/rss/all.xml', 'https://www.aljazeera.com', 'International news coverage', None, 'World'),
-            ('wion', 'WION', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCWEIPvoxRwn6llPOIn555rQ', 'https://www.youtube.com/@WIONews', 'World Is One News - international coverage', 'UCWEIPvoxRwn6llPOIn555rQ', 'World'),
-            ('dw_news', 'DW News', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCknLrEdhRCp1aegoMqRaCZg', 'https://www.youtube.com/@daborintv', 'Deutsche Welle international news', 'UCknLrEdhRCp1aegoMqRaCZg', 'World'),
-            ('channel4_news', 'Channel 4 News', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCTrQ7HXWRRxr7OsOtodr2_w', 'https://www.youtube.com/@Channel4News', 'UK-based international news coverage', 'UCTrQ7HXWRRxr7OsOtodr2_w', 'World'),
+            (
+                'guardian_world',
+                'The Guardian World',
+                'news',
+                'https://www.theguardian.com/world/rss',
+                'https://www.theguardian.com/world',
+                'International news coverage',
+                None,
+                'World',
+            ),
+            (
+                'bbc_world',
+                'BBC World',
+                'news',
+                'https://feeds.bbci.co.uk/news/world/rss.xml',
+                'https://www.bbc.com/news/world',
+                'Global news from BBC',
+                None,
+                'World',
+            ),
+            (
+                'al_jazeera',
+                'Al Jazeera',
+                'news',
+                'https://www.aljazeera.com/xml/rss/all.xml',
+                'https://www.aljazeera.com',
+                'International news coverage',
+                None,
+                'World',
+            ),
+            (
+                'wion',
+                'WION',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCWEIPvoxRwn6llPOIn555rQ',
+                'https://www.youtube.com/@WIONews',
+                'World Is One News - international coverage',
+                'UCWEIPvoxRwn6llPOIn555rQ',
+                'World',
+            ),
+            (
+                'dw_news',
+                'DW News',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCknLrEdhRCp1aegoMqRaCZg',
+                'https://www.youtube.com/@daborintv',
+                'Deutsche Welle international news',
+                'UCknLrEdhRCp1aegoMqRaCZg',
+                'World',
+            ),
+            (
+                'channel4_news',
+                'Channel 4 News',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCTrQ7HXWRRxr7OsOtodr2_w',
+                'https://www.youtube.com/@Channel4News',
+                'UK-based international news coverage',
+                'UCTrQ7HXWRRxr7OsOtodr2_w',
+                'World',
+            ),
             # ===== Nation (US) =====
-            ('npr_news', 'NPR News', 'news', 'https://feeds.npr.org/1001/rss.xml', 'https://www.npr.org', 'US national public radio news', None, 'Nation'),
-            ('pbs_newshour', 'PBS NewsHour', 'news', 'https://www.pbs.org/newshour/feeds/rss/headlines', 'https://www.pbs.org/newshour', 'In-depth US news', None, 'Nation'),
-            ('ap_news', 'AP News', 'news', 'https://feedx.net/rss/ap.xml', 'https://apnews.com', 'Associated Press top stories', None, 'Nation'),
-            ('pbs_newshour_yt', 'PBS NewsHour', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC6ZFN9Tx6xh-skXCuRHCDpQ', 'https://www.youtube.com/@PBSNewsHour', 'In-depth US national news', 'UC6ZFN9Tx6xh-skXCuRHCDpQ', 'Nation'),
-            ('nbc_news', 'NBC News', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCeY0bbntWzzVIaj2z3QigXg', 'https://www.youtube.com/@NBCNews', 'Major US network news', 'UCeY0bbntWzzVIaj2z3QigXg', 'Nation'),
-            ('abc_news', 'ABC News', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCBi2mrWuNuyYy4gbM6fU18Q', 'https://www.youtube.com/@ABCNews', 'Major US network news', 'UCBi2mrWuNuyYy4gbM6fU18Q', 'Nation'),
+            (
+                'npr_news',
+                'NPR News',
+                'news',
+                'https://feeds.npr.org/1001/rss.xml',
+                'https://www.npr.org',
+                'US national public radio news',
+                None,
+                'Nation',
+            ),
+            (
+                'pbs_newshour',
+                'PBS NewsHour',
+                'news',
+                'https://www.pbs.org/newshour/feeds/rss/headlines',
+                'https://www.pbs.org/newshour',
+                'In-depth US news',
+                None,
+                'Nation',
+            ),
+            (
+                'ap_news',
+                'AP News',
+                'news',
+                'https://feedx.net/rss/ap.xml',
+                'https://apnews.com',
+                'Associated Press top stories',
+                None,
+                'Nation',
+            ),
+            (
+                'pbs_newshour_yt',
+                'PBS NewsHour',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UC6ZFN9Tx6xh-skXCuRHCDpQ',
+                'https://www.youtube.com/@PBSNewsHour',
+                'In-depth US national news',
+                'UC6ZFN9Tx6xh-skXCuRHCDpQ',
+                'Nation',
+            ),
+            (
+                'nbc_news',
+                'NBC News',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCeY0bbntWzzVIaj2z3QigXg',
+                'https://www.youtube.com/@NBCNews',
+                'Major US network news',
+                'UCeY0bbntWzzVIaj2z3QigXg',
+                'Nation',
+            ),
+            (
+                'abc_news',
+                'ABC News',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCBi2mrWuNuyYy4gbM6fU18Q',
+                'https://www.youtube.com/@ABCNews',
+                'Major US network news',
+                'UCBi2mrWuNuyYy4gbM6fU18Q',
+                'Nation',
+            ),
             # ===== Business =====
-            ('cnbc_business', 'CNBC', 'news', 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147', 'https://www.cnbc.com', 'Business & financial news', None, 'Business'),
-            ('marketwatch', 'MarketWatch', 'news', 'https://www.marketwatch.com/rss/topstories', 'https://www.marketwatch.com', 'Financial markets & investing', None, 'Business'),
-            ('wsj_markets', 'WSJ Markets', 'news', 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml', 'https://www.wsj.com/news/markets', 'Wall Street Journal market news', None, 'Business'),
-            ('cnbc_yt', 'CNBC', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCvJJ_dzjViJCoLf5uKUTwoA', 'https://www.youtube.com/@CNBC', 'Business and financial news', 'UCvJJ_dzjViJCoLf5uKUTwoA', 'Business'),
-            ('bloomberg', 'Bloomberg Television', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg', 'https://www.youtube.com/@bloombergtv', 'Global business and financial news', 'UCIALMKvObZNtJ6AmdCLP7Lg', 'Business'),
-            ('yahoo_finance', 'Yahoo Finance', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCEAZeUIeJs0IjQiqTCdVSIg', 'https://www.youtube.com/@YahooFinance', 'Financial news and market analysis', 'UCEAZeUIeJs0IjQiqTCdVSIg', 'Business'),
+            (
+                'cnbc_business',
+                'CNBC',
+                'news',
+                'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147',
+                'https://www.cnbc.com',
+                'Business & financial news',
+                None,
+                'Business',
+            ),
+            (
+                'marketwatch',
+                'MarketWatch',
+                'news',
+                'https://www.marketwatch.com/rss/topstories',
+                'https://www.marketwatch.com',
+                'Financial markets & investing',
+                None,
+                'Business',
+            ),
+            (
+                'wsj_markets',
+                'WSJ Markets',
+                'news',
+                'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
+                'https://www.wsj.com/news/markets',
+                'Wall Street Journal market news',
+                None,
+                'Business',
+            ),
+            (
+                'cnbc_yt',
+                'CNBC',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCvJJ_dzjViJCoLf5uKUTwoA',
+                'https://www.youtube.com/@CNBC',
+                'Business and financial news',
+                'UCvJJ_dzjViJCoLf5uKUTwoA',
+                'Business',
+            ),
+            (
+                'bloomberg',
+                'Bloomberg Television',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg',
+                'https://www.youtube.com/@bloombergtv',
+                'Global business and financial news',
+                'UCIALMKvObZNtJ6AmdCLP7Lg',
+                'Business',
+            ),
+            (
+                'yahoo_finance',
+                'Yahoo Finance',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCEAZeUIeJs0IjQiqTCdVSIg',
+                'https://www.youtube.com/@YahooFinance',
+                'Financial news and market analysis',
+                'UCEAZeUIeJs0IjQiqTCdVSIg',
+                'Business',
+            ),
             # ===== Technology =====
-            ('engadget', 'Engadget', 'news', 'https://www.engadget.com/rss.xml', 'https://www.engadget.com', 'Consumer tech news & reviews', None, 'Technology'),
-            ('ars_technica', 'Ars Technica', 'news', 'https://feeds.arstechnica.com/arstechnica/index', 'https://arstechnica.com', 'Technology news & analysis', None, 'Technology'),
-            ('the_verge', 'The Verge', 'news', 'https://www.theverge.com/rss/index.xml', 'https://www.theverge.com', 'Tech, science & culture', None, 'Technology'),
-            ('wired', 'Wired', 'news', 'https://www.wired.com/feed/rss', 'https://www.wired.com', 'Technology & future trends', None, 'Technology'),
-            ('mkbhd', 'Marques Brownlee', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCBJycsmduvYEL83R_U4JriQ', 'https://www.youtube.com/@mkbhd', 'Tech reviews and commentary', 'UCBJycsmduvYEL83R_U4JriQ', 'Technology'),
-            ('linus_tech_tips', 'Linus Tech Tips', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCXuqSBlHAE6Xw-yeJA0Tunw', 'https://www.youtube.com/@LinusTechTips', 'Tech reviews and builds', 'UCXuqSBlHAE6Xw-yeJA0Tunw', 'Technology'),
-            ('the_verge_yt', 'The Verge', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ', 'https://www.youtube.com/@TheVerge', 'Technology news and reviews', 'UCddiUEpeqJcYeBxX1IVBKvQ', 'Technology'),
+            (
+                'engadget',
+                'Engadget',
+                'news',
+                'https://www.engadget.com/rss.xml',
+                'https://www.engadget.com',
+                'Consumer tech news & reviews',
+                None,
+                'Technology',
+            ),
+            (
+                'ars_technica',
+                'Ars Technica',
+                'news',
+                'https://feeds.arstechnica.com/arstechnica/index',
+                'https://arstechnica.com',
+                'Technology news & analysis',
+                None,
+                'Technology',
+            ),
+            (
+                'the_verge',
+                'The Verge',
+                'news',
+                'https://www.theverge.com/rss/index.xml',
+                'https://www.theverge.com',
+                'Tech, science & culture',
+                None,
+                'Technology',
+            ),
+            (
+                'wired',
+                'Wired',
+                'news',
+                'https://www.wired.com/feed/rss',
+                'https://www.wired.com',
+                'Technology & future trends',
+                None,
+                'Technology',
+            ),
+            (
+                'mkbhd',
+                'Marques Brownlee',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCBJycsmduvYEL83R_U4JriQ',
+                'https://www.youtube.com/@mkbhd',
+                'Tech reviews and commentary',
+                'UCBJycsmduvYEL83R_U4JriQ',
+                'Technology',
+            ),
+            (
+                'linus_tech_tips',
+                'Linus Tech Tips',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCXuqSBlHAE6Xw-yeJA0Tunw',
+                'https://www.youtube.com/@LinusTechTips',
+                'Tech reviews and builds',
+                'UCXuqSBlHAE6Xw-yeJA0Tunw',
+                'Technology',
+            ),
+            (
+                'the_verge_yt',
+                'The Verge',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ',
+                'https://www.youtube.com/@TheVerge',
+                'Technology news and reviews',
+                'UCddiUEpeqJcYeBxX1IVBKvQ',
+                'Technology',
+            ),
             # ===== Entertainment =====
-            ('variety', 'Variety', 'news', 'https://variety.com/feed/', 'https://variety.com', 'Entertainment industry news', None, 'Entertainment'),
-            ('hollywood_reporter', 'Hollywood Reporter', 'news', 'https://www.hollywoodreporter.com/feed/', 'https://www.hollywoodreporter.com', 'Movies, TV & entertainment', None, 'Entertainment'),
-            ('deadline', 'Deadline', 'news', 'https://deadline.com/feed/', 'https://deadline.com', 'Entertainment industry breaking news', None, 'Entertainment'),
-            ('screen_junkies', 'Screen Junkies', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A', 'https://www.youtube.com/@ScreenJunkies', 'Movie commentary and Honest Trailers', 'UCOpcACMWblDls9Z6GERVi1A', 'Entertainment'),
-            ('collider', 'Collider', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC5hX0jtOEAobccb2dvSnYbw', 'https://www.youtube.com/@Collider', 'Movies and TV discussion', 'UC5hX0jtOEAobccb2dvSnYbw', 'Entertainment'),
-            ('ign', 'IGN', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw', 'https://www.youtube.com/@IGN', 'Gaming and entertainment news', 'UCKy1dAqELo0zrOtPkf0eTMw', 'Entertainment'),
+            (
+                'variety',
+                'Variety',
+                'news',
+                'https://variety.com/feed/',
+                'https://variety.com',
+                'Entertainment industry news',
+                None,
+                'Entertainment',
+            ),
+            (
+                'hollywood_reporter',
+                'Hollywood Reporter',
+                'news',
+                'https://www.hollywoodreporter.com/feed/',
+                'https://www.hollywoodreporter.com',
+                'Movies, TV & entertainment',
+                None,
+                'Entertainment',
+            ),
+            (
+                'deadline',
+                'Deadline',
+                'news',
+                'https://deadline.com/feed/',
+                'https://deadline.com',
+                'Entertainment industry breaking news',
+                None,
+                'Entertainment',
+            ),
+            (
+                'screen_junkies',
+                'Screen Junkies',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A',
+                'https://www.youtube.com/@ScreenJunkies',
+                'Movie commentary and Honest Trailers',
+                'UCOpcACMWblDls9Z6GERVi1A',
+                'Entertainment',
+            ),
+            (
+                'collider',
+                'Collider',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UC5hX0jtOEAobccb2dvSnYbw',
+                'https://www.youtube.com/@Collider',
+                'Movies and TV discussion',
+                'UC5hX0jtOEAobccb2dvSnYbw',
+                'Entertainment',
+            ),
+            (
+                'ign',
+                'IGN',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw',
+                'https://www.youtube.com/@IGN',
+                'Gaming and entertainment news',
+                'UCKy1dAqELo0zrOtPkf0eTMw',
+                'Entertainment',
+            ),
             # ===== Sports =====
-            ('espn', 'ESPN', 'news', 'https://www.espn.com/espn/rss/news', 'https://www.espn.com', 'Sports news & scores', None, 'Sports'),
-            ('cbs_sports', 'CBS Sports', 'news', 'https://www.cbssports.com/rss/headlines/', 'https://www.cbssports.com', 'Sports news & scores', None, 'Sports'),
-            ('yahoo_sports', 'Yahoo Sports', 'news', 'https://sports.yahoo.com/rss/', 'https://sports.yahoo.com', 'Sports news & analysis', None, 'Sports'),
-            ('espn_yt', 'ESPN', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg', 'https://www.youtube.com/@espn', 'Sports news and highlights', 'UCiWLfSweyRNmLpgEHekhoAg', 'Sports'),
-            ('cbs_sports_yt', 'CBS Sports', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCja8sZ2T4ylIqjggA1Zuukg', 'https://www.youtube.com/@CBSSports', 'Sports coverage and analysis', 'UCja8sZ2T4ylIqjggA1Zuukg', 'Sports'),
-            ('pat_mcafee', 'The Pat McAfee Show', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCxcTeAKWJca6XyJ37_ZoKIQ', 'https://www.youtube.com/@ThePatMcAfeeShow', 'Sports talk and commentary', 'UCxcTeAKWJca6XyJ37_ZoKIQ', 'Sports'),
+            (
+                'espn',
+                'ESPN',
+                'news',
+                'https://www.espn.com/espn/rss/news',
+                'https://www.espn.com',
+                'Sports news & scores',
+                None,
+                'Sports',
+            ),
+            (
+                'cbs_sports',
+                'CBS Sports',
+                'news',
+                'https://www.cbssports.com/rss/headlines/',
+                'https://www.cbssports.com',
+                'Sports news & scores',
+                None,
+                'Sports',
+            ),
+            (
+                'yahoo_sports',
+                'Yahoo Sports',
+                'news',
+                'https://sports.yahoo.com/rss/',
+                'https://sports.yahoo.com',
+                'Sports news & analysis',
+                None,
+                'Sports',
+            ),
+            (
+                'espn_yt',
+                'ESPN',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg',
+                'https://www.youtube.com/@espn',
+                'Sports news and highlights',
+                'UCiWLfSweyRNmLpgEHekhoAg',
+                'Sports',
+            ),
+            (
+                'cbs_sports_yt',
+                'CBS Sports',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCja8sZ2T4ylIqjggA1Zuukg',
+                'https://www.youtube.com/@CBSSports',
+                'Sports coverage and analysis',
+                'UCja8sZ2T4ylIqjggA1Zuukg',
+                'Sports',
+            ),
+            (
+                'pat_mcafee',
+                'The Pat McAfee Show',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCxcTeAKWJca6XyJ37_ZoKIQ',
+                'https://www.youtube.com/@ThePatMcAfeeShow',
+                'Sports talk and commentary',
+                'UCxcTeAKWJca6XyJ37_ZoKIQ',
+                'Sports',
+            ),
             # ===== Science =====
-            ('science_daily', 'Science Daily', 'news', 'https://www.sciencedaily.com/rss/all.xml', 'https://www.sciencedaily.com', 'Breaking science news', None, 'Science'),
-            ('nasa', 'NASA', 'news', 'https://www.nasa.gov/rss/dyn/breaking_news.rss', 'https://www.nasa.gov', 'Space & science updates', None, 'Science'),
-            ('new_scientist', 'New Scientist', 'news', 'https://www.newscientist.com/feed/home/', 'https://www.newscientist.com', 'Science & technology news', None, 'Science'),
-            ('veritasium', 'Veritasium', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCHnyfMqiRRG1u-2MsSQLbXA', 'https://www.youtube.com/@veritasium', 'Science education and experiments', 'UCHnyfMqiRRG1u-2MsSQLbXA', 'Science'),
-            ('kurzgesagt', 'Kurzgesagt', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCsXVk37bltHxD1rDPwtNM8Q', 'https://www.youtube.com/@kurzgesagt', 'Animated science explainers', 'UCsXVk37bltHxD1rDPwtNM8Q', 'Science'),
-            ('smarter_every_day', 'SmarterEveryDay', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC6107grRI4m0o2-emgoDnAA', 'https://www.youtube.com/@smartereveryday', 'Science and engineering exploration', 'UC6107grRI4m0o2-emgoDnAA', 'Science'),
+            (
+                'science_daily',
+                'Science Daily',
+                'news',
+                'https://www.sciencedaily.com/rss/all.xml',
+                'https://www.sciencedaily.com',
+                'Breaking science news',
+                None,
+                'Science',
+            ),
+            (
+                'nasa',
+                'NASA',
+                'news',
+                'https://www.nasa.gov/rss/dyn/breaking_news.rss',
+                'https://www.nasa.gov',
+                'Space & science updates',
+                None,
+                'Science',
+            ),
+            (
+                'new_scientist',
+                'New Scientist',
+                'news',
+                'https://www.newscientist.com/feed/home/',
+                'https://www.newscientist.com',
+                'Science & technology news',
+                None,
+                'Science',
+            ),
+            (
+                'veritasium',
+                'Veritasium',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCHnyfMqiRRG1u-2MsSQLbXA',
+                'https://www.youtube.com/@veritasium',
+                'Science education and experiments',
+                'UCHnyfMqiRRG1u-2MsSQLbXA',
+                'Science',
+            ),
+            (
+                'kurzgesagt',
+                'Kurzgesagt',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCsXVk37bltHxD1rDPwtNM8Q',
+                'https://www.youtube.com/@kurzgesagt',
+                'Animated science explainers',
+                'UCsXVk37bltHxD1rDPwtNM8Q',
+                'Science',
+            ),
+            (
+                'smarter_every_day',
+                'SmarterEveryDay',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UC6107grRI4m0o2-emgoDnAA',
+                'https://www.youtube.com/@smartereveryday',
+                'Science and engineering exploration',
+                'UC6107grRI4m0o2-emgoDnAA',
+                'Science',
+            ),
             # ===== Health =====
-            ('stat_news', 'STAT News', 'news', 'https://www.statnews.com/feed/', 'https://www.statnews.com', 'Health & pharma reporting', None, 'Health'),
-            ('npr_health', 'NPR Health', 'news', 'https://feeds.npr.org/103537970/rss.xml', 'https://www.npr.org/sections/health', 'Public health news', None, 'Health'),
-            ('science_daily_health', 'Science Daily Health', 'news', 'https://www.sciencedaily.com/rss/health_medicine.xml', 'https://www.sciencedaily.com', 'Health & medicine research', None, 'Health'),
-            ('medical_xpress', 'Medical Xpress', 'news', 'https://medicalxpress.com/rss-feed/', 'https://medicalxpress.com', 'Medical research news', None, 'Health'),
-            ('the_lancet', 'The Lancet', 'news', 'https://www.thelancet.com/rssfeed/lancet_online.xml', 'https://www.thelancet.com', 'Medical journal articles', None, 'Health'),
-            ('nature_medicine', 'Nature Medicine', 'news', 'https://www.nature.com/nm.rss', 'https://www.nature.com/nm', 'Medical research journal', None, 'Health'),
-            ('genetic_engineering_news', 'Genetic Engineering News', 'news', 'https://www.genengnews.com/feed/', 'https://www.genengnews.com', 'Genetics & biotech news', None, 'Health'),
-            ('who_news', 'WHO News', 'news', 'https://www.who.int/rss-feeds/news-english.xml', 'https://www.who.int', 'World Health Organization', None, 'Health'),
-            ('nutrition_org', 'Nutrition.org', 'news', 'https://nutrition.org/feed/', 'https://nutrition.org', 'Nutrition science & research', None, 'Health'),
-            ('self_wellness', 'SELF', 'news', 'https://www.self.com/feed/rss', 'https://www.self.com', 'Wellness & fitness', None, 'Health'),
-            ('doctor_mike', 'Doctor Mike', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC0QHWhjbe5fGJEPz3sVb6nw', 'https://www.youtube.com/@DoctorMike', 'Medical education and health advice', 'UC0QHWhjbe5fGJEPz3sVb6nw', 'Health'),
-            ('medlife_crisis', 'Medlife Crisis', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UCgRBRE1DUP2w7HTH9j_L4OQ', 'https://www.youtube.com/@MedlifeCrisis', 'Medical topics from a cardiologist', 'UCgRBRE1DUP2w7HTH9j_L4OQ', 'Health'),
-            ('dr_eric_berg', 'Dr. Eric Berg DC', 'video', 'https://www.youtube.com/feeds/videos.xml?channel_id=UC3w193M5tYPJqF0Hi-7U-2g', 'https://www.youtube.com/@drberg', 'Health and nutrition advice', 'UC3w193M5tYPJqF0Hi-7U-2g', 'Health'),
+            (
+                'stat_news',
+                'STAT News',
+                'news',
+                'https://www.statnews.com/feed/',
+                'https://www.statnews.com',
+                'Health & pharma reporting',
+                None,
+                'Health',
+            ),
+            (
+                'npr_health',
+                'NPR Health',
+                'news',
+                'https://feeds.npr.org/103537970/rss.xml',
+                'https://www.npr.org/sections/health',
+                'Public health news',
+                None,
+                'Health',
+            ),
+            (
+                'science_daily_health',
+                'Science Daily Health',
+                'news',
+                'https://www.sciencedaily.com/rss/health_medicine.xml',
+                'https://www.sciencedaily.com',
+                'Health & medicine research',
+                None,
+                'Health',
+            ),
+            (
+                'medical_xpress',
+                'Medical Xpress',
+                'news',
+                'https://medicalxpress.com/rss-feed/',
+                'https://medicalxpress.com',
+                'Medical research news',
+                None,
+                'Health',
+            ),
+            (
+                'the_lancet',
+                'The Lancet',
+                'news',
+                'https://www.thelancet.com/rssfeed/lancet_online.xml',
+                'https://www.thelancet.com',
+                'Medical journal articles',
+                None,
+                'Health',
+            ),
+            (
+                'nature_medicine',
+                'Nature Medicine',
+                'news',
+                'https://www.nature.com/nm.rss',
+                'https://www.nature.com/nm',
+                'Medical research journal',
+                None,
+                'Health',
+            ),
+            (
+                'genetic_engineering_news',
+                'Genetic Engineering News',
+                'news',
+                'https://www.genengnews.com/feed/',
+                'https://www.genengnews.com',
+                'Genetics & biotech news',
+                None,
+                'Health',
+            ),
+            (
+                'who_news',
+                'WHO News',
+                'news',
+                'https://www.who.int/rss-feeds/news-english.xml',
+                'https://www.who.int',
+                'World Health Organization',
+                None,
+                'Health',
+            ),
+            (
+                'nutrition_org',
+                'Nutrition.org',
+                'news',
+                'https://nutrition.org/feed/',
+                'https://nutrition.org',
+                'Nutrition science & research',
+                None,
+                'Health',
+            ),
+            (
+                'self_wellness',
+                'SELF',
+                'news',
+                'https://www.self.com/feed/rss',
+                'https://www.self.com',
+                'Wellness & fitness',
+                None,
+                'Health',
+            ),
+            (
+                'doctor_mike',
+                'Doctor Mike',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UC0QHWhjbe5fGJEPz3sVb6nw',
+                'https://www.youtube.com/@DoctorMike',
+                'Medical education and health advice',
+                'UC0QHWhjbe5fGJEPz3sVb6nw',
+                'Health',
+            ),
+            (
+                'medlife_crisis',
+                'Medlife Crisis',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UCgRBRE1DUP2w7HTH9j_L4OQ',
+                'https://www.youtube.com/@MedlifeCrisis',
+                'Medical topics from a cardiologist',
+                'UCgRBRE1DUP2w7HTH9j_L4OQ',
+                'Health',
+            ),
+            (
+                'dr_eric_berg',
+                'Dr. Eric Berg DC',
+                'video',
+                'https://www.youtube.com/feeds/videos.xml?channel_id=UC3w193M5tYPJqF0Hi-7U-2g',
+                'https://www.youtube.com/@drberg',
+                'Health and nutrition advice',
+                'UC3w193M5tYPJqF0Hi-7U-2g',
+                'Health',
+            ),
         ]
         for source in default_sources:
-            cursor.execute("""
-                INSERT OR IGNORE INTO content_sources (source_key, name, type, url, website, description, channel_id, category)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, source)
+            cursor.execute(
+                "INSERT OR IGNORE INTO content_sources "
+                "(source_key, name, type, url, website, "
+                "description, channel_id, category) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                source
+            )
 
         conn.commit()
         print_success("Database tables created")
@@ -1532,6 +2469,7 @@ def initialize_database(project_root):
         return False
     finally:
         conn.close()
+
 
 def get_existing_admin_user(project_root):
     """Get existing admin user info from database if exists
@@ -1893,6 +2831,7 @@ def prompt_for_coinbase_credentials():
 
     return api_key_name, api_private_key
 
+
 def parse_existing_env(env_path):
     """Parse existing .env file and return dict of key-value pairs"""
     if not env_path.exists():
@@ -2028,6 +2967,7 @@ LOG_LEVEL=INFO
         print_error(f"Failed to create .env file: {e}")
         return False
 
+
 def create_systemd_service(project_root, user):
     """Create systemd service files for Linux"""
     services_dir = project_root / 'deployment'
@@ -2089,6 +3029,7 @@ WantedBy=multi-user.target
     except Exception as e:
         print_error(f"Failed to create systemd service files: {e}")
         return False
+
 
 def create_launchd_plist(project_root, user):
     """Create launchd plist files for macOS"""
@@ -2325,6 +3266,7 @@ def start_services_manually(project_root):
 
     return True
 
+
 def run_setup():
     """Main setup wizard"""
     # Check Python version FIRST - may re-execute with Python 3.11
@@ -2486,9 +3428,20 @@ def run_setup():
                 else:
                     print_info("To install manually: brew install node")
             else:
-                print_warning("Homebrew not found. Install Homebrew first to use automated installation.")
-                print_info("Install Homebrew: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
-                print_info("Or download Node.js directly from: https://nodejs.org/")
+                print_warning(
+                    "Homebrew not found. Install Homebrew first "
+                    "to use automated installation."
+                )
+                brew_install_msg = (
+                    'Install Homebrew: /bin/bash -c '
+                    '"$(curl -fsSL https://raw.githubusercontent.com'
+                    '/Homebrew/install/HEAD/install.sh)"'
+                )
+                print_info(brew_install_msg)
+                print_info(
+                    "Or download Node.js directly from: "
+                    "https://nodejs.org/"
+                )
         else:
             print_info("Please install Node.js to run the frontend.")
             print_info("Download from: https://nodejs.org/")
@@ -2589,7 +3542,11 @@ def run_setup():
     if user_count > 0:
         print_info(f"{user_count} user(s) already exist in database")
         if existing_email:
-            print_info(f"Admin user: {existing_email}" + (f" ({existing_display_name})" if existing_display_name else ""))
+            display_suffix = (
+                f" ({existing_display_name})"
+                if existing_display_name else ""
+            )
+            print_info(f"Admin user: {existing_email}{display_suffix}")
         if prompt_yes_no("Create another admin user?", default='no'):
             create_user = True
         else:
@@ -2817,19 +3774,43 @@ def run_services_only():
 
                 if prompt_yes_no("Load services now (start on boot)?"):
                     # Unload first if already loaded (ignore errors)
-                    subprocess.run(['launchctl', 'unload', str(launch_agents_dir / 'com.zenithgrid.backend.plist')],
-                                  capture_output=True)
-                    subprocess.run(['launchctl', 'unload', str(launch_agents_dir / 'com.zenithgrid.frontend.plist')],
-                                  capture_output=True)
+                    backend_plist_path = str(
+                        launch_agents_dir / 'com.zenithgrid.backend.plist'
+                    )
+                    frontend_plist_path = str(
+                        launch_agents_dir / 'com.zenithgrid.frontend.plist'
+                    )
+                    cleanup_plist_path = str(
+                        launch_agents_dir / 'com.zenithgrid.db-cleanup.plist'
+                    )
+                    subprocess.run(
+                        ['launchctl', 'unload', backend_plist_path],
+                        capture_output=True
+                    )
+                    subprocess.run(
+                        ['launchctl', 'unload', frontend_plist_path],
+                        capture_output=True
+                    )
                     if install_db_cleanup:
-                        subprocess.run(['launchctl', 'unload', str(launch_agents_dir / 'com.zenithgrid.db-cleanup.plist')],
-                                      capture_output=True)
+                        subprocess.run(
+                            ['launchctl', 'unload', cleanup_plist_path],
+                            capture_output=True
+                        )
 
                     # Load services
-                    subprocess.run(['launchctl', 'load', str(launch_agents_dir / 'com.zenithgrid.backend.plist')], check=True)
-                    subprocess.run(['launchctl', 'load', str(launch_agents_dir / 'com.zenithgrid.frontend.plist')], check=True)
+                    subprocess.run(
+                        ['launchctl', 'load', backend_plist_path],
+                        check=True
+                    )
+                    subprocess.run(
+                        ['launchctl', 'load', frontend_plist_path],
+                        check=True
+                    )
                     if install_db_cleanup:
-                        subprocess.run(['launchctl', 'load', str(launch_agents_dir / 'com.zenithgrid.db-cleanup.plist')], check=True)
+                        subprocess.run(
+                            ['launchctl', 'load', cleanup_plist_path],
+                            check=True
+                        )
                     print_success("Services loaded and will start on boot")
                     print()
                     print_info("Services are starting... wait a few seconds then access:")
