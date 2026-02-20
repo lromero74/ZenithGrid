@@ -424,7 +424,8 @@ async def cleanup_old_articles(
     Articles with no source_id use flat max_age_days cutoff."""
     from sqlalchemy import delete
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    # Use naive datetime to match SQLite's naive storage (avoids aware vs naive comparison)
+    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
     total_deleted = 0
 
     # Per-source cleanup: for each source_id, keep newer of min_keep or age
@@ -647,7 +648,8 @@ async def cleanup_old_videos(
     Videos with no source_id use flat max_age_days cutoff."""
     from sqlalchemy import delete
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    # Use naive datetime to match SQLite's naive storage (avoids aware vs naive comparison)
+    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
     total_deleted = 0
 
     # Per-source cleanup
@@ -1540,7 +1542,8 @@ async def cleanup_articles_with_images(
     async with async_session_maker() as db:
         # Collect image paths and article IDs that will be deleted
         # We need to query before deleting
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        # Use naive datetime to match SQLite's naive storage
+        cutoff = datetime.utcnow() - timedelta(days=max_age_days)
         paths_to_delete = []
         article_ids_to_delete = []
 
