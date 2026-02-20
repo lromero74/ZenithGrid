@@ -997,6 +997,7 @@ async def signup(
         is_active=True,
         is_superuser=False,
         email_verified=False,
+        last_login_at=datetime.utcnow(),
     )
 
     db.add(new_user)
