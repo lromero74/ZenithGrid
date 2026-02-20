@@ -322,7 +322,7 @@ export default function Reports() {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-400">
-                    <span className="capitalize">{schedule.periodicity}</span>
+                    <span>{schedule.periodicity}</span>
                     {schedule.recipients.length > 0 && (
                       <span>{schedule.recipients.length} recipient{schedule.recipients.length > 1 ? 's' : ''}</span>
                     )}

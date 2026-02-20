@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.31.0] - 2026-02-20
+
+### Added
+- **Flexible report scheduling**: Replace the rigid frequency dropdown with two independent controls — pick exactly when reports run (specific weekdays, days of month, quarterly/yearly dates) and how far back they look (full prior period, WTD, MTD, QTD, YTD, or trailing N days/weeks/months/years)
+- **Multi-day schedules**: Weekly schedules can run on multiple days (e.g., Mon + Wed), monthly on multiple dates (e.g., 1st & 15th), with "Last day" option for month-end reports
+- **Ad-hoc reports don't affect schedule**: Manually generating a report no longer advances the schedule's next run time — your scheduled cadence stays intact
+
+### Changed
+- Schedule cards now display a human-readable description (e.g., "Every Mon, Wed - full prior period") instead of a single word
+
 ## [v2.30.0] - 2026-02-19
 
 ### Added

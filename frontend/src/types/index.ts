@@ -507,10 +507,20 @@ export interface ReportGoal {
   created_at: string | null
 }
 
+export type ScheduleType = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+export type PeriodWindow = 'full_prior' | 'wtd' | 'mtd' | 'qtd' | 'ytd' | 'trailing'
+export type LookbackUnit = 'days' | 'weeks' | 'months' | 'years'
+
 export interface ReportSchedule {
   id: number
   name: string
   periodicity: string
+  schedule_type: ScheduleType | null
+  schedule_days: number[] | null
+  quarter_start_month: number | null
+  period_window: PeriodWindow
+  lookback_value: number | null
+  lookback_unit: LookbackUnit | null
   account_id?: number | null
   is_enabled: boolean
   recipients: RecipientItem[]
