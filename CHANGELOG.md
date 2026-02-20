@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.32.7] - 2026-02-20
+
+### Fixed
+- **Crossing detection now uses candle data instead of stale cache**: Crossing above/below conditions (e.g., "MACD cross above 0") were comparing against cached values from a previous check cycle, which could be stale after service restarts or long gaps. Now compares the two most recent closed candles — a crossing only fires when it actually happened on the latest candle close.
+
 ## [v2.32.6] - 2026-02-20
 
 ### Fixed

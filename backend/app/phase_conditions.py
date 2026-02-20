@@ -284,17 +284,15 @@ class PhaseConditionEvaluator:
 
         # Handle crossing operators
         if operator in ["crossing_above", "crossing_below"]:
-            # For crossing detection, prefer check-cycle-to-check-cycle comparison
-            # (stored in previous_indicators on the position) over candle-to-candle
-            # comparison (prev_ prefix). This prevents re-firing the same cross when
-            # the exchange API returns identical candle data on consecutive checks.
-            previous_val = None
-            if previous_indicators is not None:
-                previous_val = self._get_indicator_value(condition_type, condition, previous_indicators)
+            # Use candle-based prev_ values as primary source for crossing detection.
+            # These compare the two most recent CLOSED candles, which is the true
+            # definition of a crossing — it happened on the latest candle close.
+            # Fall back to check-cycle cache only when candle-based prev_ is unavailable.
+            previous_val = self._get_previous_indicator_value(condition_type, condition, current_indicators)
 
-            # Fallback to candle-based prev_ values (for first check or when no previous state)
-            if previous_val is None:
-                previous_val = self._get_previous_indicator_value(condition_type, condition, current_indicators)
+            # Fallback to check-cycle cache (for indicators without prev_ calculation)
+            if previous_val is None and previous_indicators is not None:
+                previous_val = self._get_indicator_value(condition_type, condition, previous_indicators)
 
             if previous_val is None:
                 print(
