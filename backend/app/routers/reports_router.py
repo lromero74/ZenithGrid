@@ -44,7 +44,6 @@ class GoalCreate(BaseModel):
     income_period: Optional[str] = Field(
         None, pattern="^(daily|weekly|monthly|yearly)$"
     )
-    lookback_days: Optional[int] = Field(None, ge=7, le=365)
     time_horizon_months: int = Field(..., ge=1, le=120)
     target_date: Optional[datetime] = None
 
@@ -65,7 +64,6 @@ class GoalUpdate(BaseModel):
     income_period: Optional[str] = Field(
         None, pattern="^(daily|weekly|monthly|yearly)$"
     )
-    lookback_days: Optional[int] = Field(None, ge=7, le=365)
     time_horizon_months: Optional[int] = Field(None, ge=1, le=120)
     target_date: Optional[datetime] = None
     is_active: Optional[bool] = None
@@ -182,7 +180,6 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         "target_balance_value": goal.target_balance_value,
         "target_profit_value": goal.target_profit_value,
         "income_period": goal.income_period,
-        "lookback_days": goal.lookback_days,
         "time_horizon_months": goal.time_horizon_months,
         "start_date": goal.start_date.isoformat() if goal.start_date else None,
         "target_date": goal.target_date.isoformat() if goal.target_date else None,
@@ -338,7 +335,6 @@ async def create_goal(
         target_balance_value=body.target_balance_value,
         target_profit_value=body.target_profit_value,
         income_period=body.income_period,
-        lookback_days=body.lookback_days,
         time_horizon_months=body.time_horizon_months,
         start_date=start_date,
         target_date=target_date,

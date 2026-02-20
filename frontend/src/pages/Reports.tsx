@@ -259,11 +259,6 @@ export default function Reports() {
                       </span>
                     )}
                   </span>
-                  {goal.target_type === 'income' && (
-                    <span className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
-                      {goal.lookback_days ? `${goal.lookback_days}d lookback` : 'All-time'}
-                    </span>
-                  )}
                 </div>
 
                 {/* Time progress bar (since we can't know account value client-side) */}

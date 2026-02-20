@@ -498,7 +498,6 @@ export interface ReportGoal {
   target_balance_value?: number | null
   target_profit_value?: number | null
   income_period?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
-  lookback_days?: number | null
   time_horizon_months: number
   start_date: string | null
   target_date: string | null
