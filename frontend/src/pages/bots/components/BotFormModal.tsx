@@ -212,8 +212,8 @@ export function BotFormModal({
       return
     }
 
-    // Validate account is selected
-    if (!selectedAccount?.id) {
+    // Validate account is selected (not required when editing — bot already has an account)
+    if (!selectedAccount?.id && !editingBot) {
       alert('Please select an account before creating a bot')
       return
     }
@@ -233,7 +233,7 @@ export function BotFormModal({
     const botData: any = {
       name: formData.name,
       description: formData.description || undefined,
-      account_id: selectedAccount?.id,  // Link bot to selected account
+      account_id: selectedAccount?.id ?? editingBot?.account_id,
       market_type: formData.market_type || 'spot',
       strategy_type: formData.strategy_type,
       product_id: formData.product_ids[0],  // Legacy - use first pair
