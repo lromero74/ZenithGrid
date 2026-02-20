@@ -187,16 +187,20 @@ async def generate_report_for_schedule(
 
     # Build canonical HTML (comfortable is the default for stored report)
     user_name = user.display_name or user.email
+    sched_name = schedule.name if schedule else None
     html_content = build_report_html(
         report_data, ai_summary, user_name, period_label,
         default_level="comfortable",
+        schedule_name=sched_name,
     )
 
     # Generate PDF (includes all three tiers with no emphasis)
     pdf_data = dict(report_data)
     if ai_summary:
         pdf_data["_ai_summary"] = ai_summary
-    pdf_content = generate_pdf(html_content, report_data=pdf_data)
+    pdf_content = generate_pdf(
+        html_content, report_data=pdf_data, schedule_name=sched_name,
+    )
 
     # Store ai_summary as JSON string for the DB
     ai_summary_str = None
@@ -230,7 +234,7 @@ async def generate_report_for_schedule(
         recipients = [_normalize_recipient(r) for r in schedule.recipients]
         email_sent = await _deliver_report(
             report, recipients, ai_summary, report_data, user_name,
-            period_label, pdf_content,
+            period_label, pdf_content, schedule_name=sched_name,
         )
         if email_sent:
             report.delivery_status = "sent"
@@ -267,6 +271,7 @@ async def _deliver_report(
     user_name: str,
     period_label: str,
     pdf_content: Optional[bytes],
+    schedule_name: Optional[str] = None,
 ) -> bool:
     """
     Send the report email to each recipient individually with their
@@ -284,14 +289,15 @@ async def _deliver_report(
     if not recipients:
         return False
 
-    subject = f"{b['shortName']} Performance Report \u2014 {period_label}"
+    report_title = schedule_name or "Performance Report"
+    subject = f"{b['shortName']} {report_title} \u2014 {period_label}"
 
     # Plain text fallback (same for all recipients)
     data = report.report_data or report_data or {}
     pd = data.get("period_days")
     trades_suffix = f" (last {pd}d)" if pd else ""
     text_body = (
-        f"{b['shortName']} Performance Report\n"
+        f"{b['shortName']} {report_title}\n"
         f"Period: {period_label}\n\n"
         f"Account Value: ${data.get('account_value_usd', 0):,.2f}\n"
         f"Period Profit: ${data.get('period_profit_usd', 0):,.2f}\n"
@@ -317,6 +323,7 @@ async def _deliver_report(
             html_cache[level] = build_report_html(
                 report_data, ai_summary, user_name, period_label,
                 default_level=level,
+                schedule_name=schedule_name,
             )
 
         try:

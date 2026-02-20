@@ -67,6 +67,7 @@ def build_report_html(
     user_name: str,
     period_label: str,
     default_level: str = "comfortable",
+    schedule_name: Optional[str] = None,
 ) -> str:
     """
     Build the full HTML report.
@@ -77,6 +78,7 @@ def build_report_html(
         user_name: User's display name or email
         period_label: e.g. "January 1 - January 7, 2026"
         default_level: Which tier gets visual prominence
+        schedule_name: Optional report schedule name (shown as title)
 
     Returns:
         Complete HTML string
@@ -110,7 +112,7 @@ def build_report_html(
 <body style="margin: 0; padding: 0; background-color: #0f172a; color: #e2e8f0;
              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
 <div style="max-width: 700px; margin: 0 auto; padding: 20px;">
-    {_report_header(b, user_name, period_label, brand_color)}
+    {_report_header(b, user_name, period_label, brand_color, schedule_name)}
     {metrics_html}
     {goals_html}
     {comparison_html}
@@ -179,8 +181,10 @@ def _build_tiered_ai_section(
 
 def _report_header(
     brand: dict, user_name: str, period_label: str, brand_color: str,
+    schedule_name: Optional[str] = None,
 ) -> str:
-    """Report header with brand name and period."""
+    """Report header with brand name, report title, and period."""
+    title = schedule_name or "Performance Report"
     return f"""
     <div style="text-align: center; padding: 25px 0; border-bottom: 1px solid #334155;">
         <h1 style="color: {brand_color}; margin: 0; font-size: 26px;">{brand['shortName']}</h1>
@@ -189,7 +193,7 @@ def _report_header(
     </div>
     <div style="padding: 20px 0 10px 0;">
         <h2 style="color: #f1f5f9; margin: 0 0 5px 0; font-size: 20px;">
-            Performance Report</h2>
+            {title}</h2>
         <p style="color: #94a3b8; margin: 0; font-size: 14px;">
             {period_label} &mdash; Prepared for {user_name}</p>
     </div>"""
@@ -552,6 +556,7 @@ def _sanitize_for_pdf(text: str) -> str:
 def generate_pdf(
     html_content: str,
     report_data: Optional[Dict] = None,
+    schedule_name: Optional[str] = None,
 ) -> Optional[bytes]:
     """
     Generate a PDF report using fpdf2.
@@ -589,9 +594,10 @@ def generate_pdf(
         pdf.ln(5)
 
         # Title
+        title = _sanitize_for_pdf(schedule_name) if schedule_name else "Performance Report"
         pdf.set_font("Helvetica", "B", 16)
         pdf.set_text_color(30, 30, 30)
-        pdf.cell(0, 10, "Performance Report", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 10, title, new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(100, 100, 100)
         now_str = datetime.utcnow().strftime("%B %d, %Y at %H:%M UTC")
