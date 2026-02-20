@@ -1562,6 +1562,7 @@ def initialize_database(project_root):
                 period_window TEXT DEFAULT 'full_prior',
                 lookback_value INTEGER,
                 lookback_unit TEXT,
+                force_standard_days TEXT,
                 is_enabled INTEGER DEFAULT 1,
                 recipients TEXT,
                 ai_provider TEXT,

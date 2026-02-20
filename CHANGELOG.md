@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.32.0] - 2026-02-20
+
+### Added
+- **Auto wrap-up for period-start days**: When a report runs on the 1st of the month (MTD) or Monday (WTD), it automatically wraps up the full prior period instead of covering just one day. Solves the "missed last-day trades" problem in 24/7 crypto markets.
+- **Three-state day toggle**: Period-start days (1st, Monday) cycle through amber (wrap-up), blue (standard), and deselected. Other days remain the normal two-state toggle.
+- **Day picker legend**: Color key appears below the day picker explaining amber (wraps up prior period) vs blue (standard) when relevant
+
 ## [v2.31.3] - 2026-02-20
 
 ### Changed

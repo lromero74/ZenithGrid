@@ -520,6 +520,7 @@ export interface ReportSchedule {
   period_window: PeriodWindow
   lookback_value: number | null
   lookback_unit: LookbackUnit | null
+  force_standard_days: number[] | null
   account_id?: number | null
   is_enabled: boolean
   recipients: RecipientItem[]
