@@ -21,6 +21,7 @@ export interface ScheduleFormData {
   period_window: PeriodWindow
   lookback_value: number | null
   lookback_unit: LookbackUnit | null
+  force_standard_days: number[] | null
   account_id?: number | null
   recipients: RecipientItem[]
   ai_provider?: string | null
@@ -91,6 +92,13 @@ function normalizeRecipients(raw: unknown[]): RecipientItem[] {
   })
 }
 
+/** Check if a day is a period-start day for the given schedule+window combination. */
+function isPeriodStartDay(scheduleType: ScheduleType, periodWindow: PeriodWindow, day: number): boolean {
+  if (scheduleType === 'monthly' && periodWindow === 'mtd' && day === 1) return true
+  if (scheduleType === 'weekly' && periodWindow === 'wtd' && day === 0) return true
+  return false
+}
+
 export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: ScheduleFormProps) {
   const [name, setName] = useState('')
   const [scheduleType, setScheduleType] = useState<ScheduleType>('weekly')
@@ -102,6 +110,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
   const [periodWindow, setPeriodWindow] = useState<PeriodWindow>('full_prior')
   const [lookbackValue, setLookbackValue] = useState<number>(7)
   const [lookbackUnit, setLookbackUnit] = useState<LookbackUnit>('days')
+  const [forceStandardDays, setForceStandardDays] = useState<number[]>([])
   const [recipients, setRecipients] = useState<RecipientItem[]>([])
   const [newRecipient, setNewRecipient] = useState('')
   const [newRecipientLevel, setNewRecipientLevel] = useState<ExperienceLevel>('comfortable')
@@ -118,6 +127,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setLookbackValue(initialData.lookback_value || 7)
       setLookbackUnit(initialData.lookback_unit || 'days')
       setQuarterStartMonth(initialData.quarter_start_month || 1)
+      setForceStandardDays(initialData.force_standard_days || [])
       setRecipients(normalizeRecipients(initialData.recipients as unknown[]))
       setAiProvider(initialData.ai_provider || '')
       setSelectedGoalIds(initialData.goal_ids || [])
@@ -149,6 +159,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setPeriodWindow('full_prior')
       setLookbackValue(7)
       setLookbackUnit('days')
+      setForceStandardDays([])
       setRecipients([])
       setNewRecipient('')
       setNewRecipientLevel('comfortable')
@@ -178,31 +189,108 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
     )
   }
 
+  /**
+   * Three-state toggle for period-start days (day 1 for monthly+MTD, Monday for weekly+WTD):
+   *   Click 1: selected + auto-prior (amber) — day in scheduleDays, NOT in forceStandardDays
+   *   Click 2: selected + standard (blue) — day in BOTH scheduleDays AND forceStandardDays
+   *   Click 3: deselected — removed from both
+   *
+   * Non-period-start days use normal two-state toggle (selected blue / deselected gray).
+   */
   const toggleWeekday = (day: number) => {
-    setScheduleDays(prev => {
-      if (prev.includes(day)) {
-        // Don't allow deselecting the last day
-        if (prev.length === 1) return prev
-        return prev.filter(d => d !== day)
+    const isStart = isPeriodStartDay(scheduleType, periodWindow, day)
+    const isSelected = scheduleDays.includes(day)
+    const isForced = forceStandardDays.includes(day)
+
+    if (isStart) {
+      if (!isSelected) {
+        // Not selected → selected + auto-prior (amber)
+        setScheduleDays(prev => [...prev, day].sort())
+        setForceStandardDays(prev => prev.filter(d => d !== day))
+      } else if (!isForced) {
+        // Selected + auto-prior → selected + standard (blue)
+        setForceStandardDays(prev => [...prev, day])
+      } else {
+        // Selected + standard → deselected (unless it's the last day)
+        if (scheduleDays.length === 1) return
+        setScheduleDays(prev => prev.filter(d => d !== day))
+        setForceStandardDays(prev => prev.filter(d => d !== day))
       }
-      return [...prev, day].sort()
-    })
+    } else {
+      // Normal two-state toggle
+      setScheduleDays(prev => {
+        if (prev.includes(day)) {
+          if (prev.length === 1) return prev
+          return prev.filter(d => d !== day)
+        }
+        return [...prev, day].sort()
+      })
+    }
   }
 
   const toggleMonthDay = (day: number) => {
-    setScheduleDays(prev => {
-      if (prev.includes(day)) {
-        if (prev.length === 1) return prev
-        return prev.filter(d => d !== day)
+    const isStart = isPeriodStartDay(scheduleType, periodWindow, day)
+    const isSelected = scheduleDays.includes(day)
+    const isForced = forceStandardDays.includes(day)
+
+    if (isStart) {
+      if (!isSelected) {
+        // Not selected → selected + auto-prior (amber)
+        setScheduleDays(prev => [...prev, day].sort((a, b) => {
+          if (a === -1) return 1; if (b === -1) return -1; return a - b
+        }))
+        setForceStandardDays(prev => prev.filter(d => d !== day))
+      } else if (!isForced) {
+        // Selected + auto-prior → selected + standard (blue)
+        setForceStandardDays(prev => [...prev, day])
+      } else {
+        // Selected + standard → deselected (unless it's the last day)
+        if (scheduleDays.length === 1) return
+        setScheduleDays(prev => prev.filter(d => d !== day))
+        setForceStandardDays(prev => prev.filter(d => d !== day))
       }
-      return [...prev, day].sort((a, b) => {
-        // Sort -1 (last) after all positive numbers
-        if (a === -1) return 1
-        if (b === -1) return -1
-        return a - b
+    } else {
+      // Normal two-state toggle
+      setScheduleDays(prev => {
+        if (prev.includes(day)) {
+          if (prev.length === 1) return prev
+          return prev.filter(d => d !== day)
+        }
+        return [...prev, day].sort((a, b) => {
+          if (a === -1) return 1; if (b === -1) return -1; return a - b
+        })
       })
-    })
+    }
   }
+
+  /** Get the visual state for a day pill. */
+  const getDayState = (day: number): 'auto-prior' | 'selected' | 'unselected' => {
+    if (!scheduleDays.includes(day)) return 'unselected'
+    if (isPeriodStartDay(scheduleType, periodWindow, day) && !forceStandardDays.includes(day)) {
+      return 'auto-prior'
+    }
+    return 'selected'
+  }
+
+  const dayPillClass = (day: number) => {
+    const state = getDayState(day)
+    switch (state) {
+      case 'auto-prior':
+        return 'bg-amber-600 border-amber-500 text-white'
+      case 'selected':
+        return 'bg-blue-600 border-blue-500 text-white'
+      default:
+        return 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'
+    }
+  }
+
+  /** Whether any period-start days are currently selected (to show the legend). */
+  const hasAutoPriorDays = scheduleDays.some(d =>
+    isPeriodStartDay(scheduleType, periodWindow, d) && !forceStandardDays.includes(d)
+  )
+  const hasAnyPeriodStartSelected = scheduleDays.some(d =>
+    isPeriodStartDay(scheduleType, periodWindow, d)
+  )
 
   // Build the schedule_days array for the API based on schedule type
   const getScheduleDaysForApi = (): number[] | null => {
@@ -228,6 +316,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
         period_window: periodWindow,
         lookback_value: periodWindow === 'trailing' ? lookbackValue : null,
         lookback_unit: periodWindow === 'trailing' ? lookbackUnit : null,
+        force_standard_days: forceStandardDays.length > 0 ? forceStandardDays : null,
         recipients,
         ai_provider: aiProvider || null,
         goal_ids: selectedGoalIds,
@@ -247,6 +336,12 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       </span>
     )
   }
+
+  const periodStartLabel = scheduleType === 'monthly'
+    ? 'Wraps up prior month'
+    : scheduleType === 'weekly'
+      ? 'Wraps up prior week'
+      : 'Wraps up prior period'
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -284,6 +379,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                 onChange={e => {
                   const val = e.target.value as ScheduleType
                   setScheduleType(val)
+                  setForceStandardDays([])
                   // Reset days to sensible defaults
                   if (val === 'weekly') setScheduleDays([0])
                   else if (val === 'monthly') setScheduleDays([1])
@@ -312,16 +408,28 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                       key={i}
                       type="button"
                       onClick={() => toggleWeekday(i)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
-                        scheduleDays.includes(i)
-                          ? 'bg-blue-600 border-blue-500 text-white'
-                          : 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'
-                      }`}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${dayPillClass(i)}`}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
+                {/* Legend for weekly */}
+                {hasAnyPeriodStartSelected && (
+                  <div className="flex items-center gap-3 mt-2 text-[10px]">
+                    {hasAutoPriorDays && (
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                        <span className="text-slate-400">{periodStartLabel}</span>
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                      <span className="text-slate-400">Standard period</span>
+                    </span>
+                    <span className="text-slate-600">Click again to cycle</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -334,11 +442,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                       key={d}
                       type="button"
                       onClick={() => toggleMonthDay(d)}
-                      className={`w-8 h-8 text-xs font-medium rounded border transition-colors ${
-                        scheduleDays.includes(d)
-                          ? 'bg-blue-600 border-blue-500 text-white'
-                          : 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'
-                      }`}
+                      className={`w-8 h-8 text-xs font-medium rounded border transition-colors ${dayPillClass(d)}`}
                     >
                       {d}
                     </button>
@@ -346,15 +450,27 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                   <button
                     type="button"
                     onClick={() => toggleMonthDay(-1)}
-                    className={`px-2 h-8 text-xs font-medium rounded border transition-colors ${
-                      scheduleDays.includes(-1)
-                        ? 'bg-blue-600 border-blue-500 text-white'
-                        : 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'
-                    }`}
+                    className={`px-2 h-8 text-xs font-medium rounded border transition-colors ${dayPillClass(-1)}`}
                   >
                     Last
                   </button>
                 </div>
+                {/* Legend for monthly */}
+                {hasAnyPeriodStartSelected && (
+                  <div className="flex items-center gap-3 mt-2 text-[10px]">
+                    {hasAutoPriorDays && (
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                        <span className="text-slate-400">{periodStartLabel}</span>
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                      <span className="text-slate-400">Standard period</span>
+                    </span>
+                    <span className="text-slate-600">Click again to cycle</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -427,7 +543,11 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                 <button
                   key={o.value}
                   type="button"
-                  onClick={() => setPeriodWindow(o.value)}
+                  onClick={() => {
+                    setPeriodWindow(o.value)
+                    // Reset force_standard_days when window changes
+                    setForceStandardDays([])
+                  }}
                   title={o.description}
                   className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
                     periodWindow === o.value

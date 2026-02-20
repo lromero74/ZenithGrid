@@ -470,6 +470,48 @@ def compute_next_run_flexible(
     return _at_run_time(after + timedelta(days=7))
 
 
+def _should_auto_prior(
+    schedule: ReportSchedule,
+    window: str,
+    period_end: datetime,
+) -> bool:
+    """
+    Check if this run day should auto-switch to full prior period.
+
+    Period-start days (1st of month for MTD, Monday for WTD) auto-switch
+    to full_prior because their x-to-date window would cover zero or one
+    day of the new period. Users can override this per-day via
+    force_standard_days.
+    """
+    stype = schedule.schedule_type or "weekly"
+
+    # Determine if run_at falls on a period-start day
+    is_period_start = False
+    run_day_key = None  # The day value to check in force_standard_days
+
+    if stype == "monthly" and window == "mtd":
+        if period_end.day == 1:
+            is_period_start = True
+            run_day_key = 1
+    elif stype == "weekly" and window == "wtd":
+        if period_end.weekday() == 0:  # Monday
+            is_period_start = True
+            run_day_key = 0
+
+    if not is_period_start:
+        return False
+
+    # Check if user has forced standard treatment for this day
+    force_standard = []
+    if schedule.force_standard_days:
+        try:
+            force_standard = json.loads(schedule.force_standard_days)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return run_day_key not in force_standard
+
+
 def compute_period_bounds_flexible(
     schedule: ReportSchedule,
     run_at: datetime,
@@ -484,11 +526,22 @@ def compute_period_bounds_flexible(
     - qtd: Quarter to date (quarter start through run_at)
     - ytd: Year to date (Jan 1 through run_at)
     - trailing: Rolling lookback of N units (days/weeks/months/years)
+
+    Auto-prior: When a report runs on a period-start day (1st for MTD,
+    Monday for WTD), it auto-switches to full prior period unless the
+    user has opted out via force_standard_days.
     """
     window = schedule.period_window or "full_prior"
     period_end = run_at.replace(
         hour=0, minute=0, second=0, microsecond=0
     )
+
+    # Auto-prior: period-start days switch to full prior period
+    if window in ("mtd", "wtd") and _should_auto_prior(
+        schedule, window, period_end
+    ):
+        stype = schedule.schedule_type or "weekly"
+        return _compute_full_prior_bounds(stype, period_end, schedule)
 
     if window == "trailing":
         val = schedule.lookback_value or 7
@@ -746,13 +799,14 @@ def build_periodicity_label(
     period_window: str,
     lookback_value: Optional[int],
     lookback_unit: Optional[str],
+    force_standard_days: Optional[str] = None,
 ) -> str:
     """
     Build a human-readable periodicity label from flexible schedule fields.
 
     Examples:
     - "Every Mon, Wed - full prior period"
-    - "Monthly on 1st & 15th - MTD"
+    - "Monthly on 1st (wrap-up) & 15th - MTD"
     - "Quarterly from Feb, day 1 - full prior period"
     - "Yearly on Jun 15 - trailing 30d"
     - "Daily - YTD"
@@ -764,26 +818,49 @@ def build_periodicity_label(
         except (json.JSONDecodeError, TypeError):
             pass
 
+    forced = []
+    if force_standard_days:
+        try:
+            forced = json.loads(force_standard_days)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    def _is_auto_prior(day_val: int) -> bool:
+        """Check if this day auto-switches to full prior."""
+        if day_val in forced:
+            return False
+        if schedule_type == "monthly" and period_window == "mtd":
+            return day_val == 1
+        if schedule_type == "weekly" and period_window == "wtd":
+            return day_val == 0  # Monday
+        return False
+
     # Schedule part
     if schedule_type == "daily":
         sched_part = "Daily"
     elif schedule_type == "weekly":
         if days:
-            day_names = [
-                WEEKDAY_NAMES[d] for d in sorted(days)
-                if 0 <= d <= 6
-            ]
+            day_names = []
+            for d in sorted(days):
+                if 0 <= d <= 6:
+                    name = WEEKDAY_NAMES[d]
+                    if _is_auto_prior(d):
+                        name += " (wrap-up)"
+                    day_names.append(name)
             sched_part = f"Every {', '.join(day_names)}"
         else:
             sched_part = "Weekly"
     elif schedule_type == "monthly":
         if days:
             day_strs = []
-            for d in sorted(days):
+            for d in sorted(days, key=lambda x: (x == -1, x)):
                 if d == -1:
                     day_strs.append("last")
                 else:
-                    day_strs.append(_ordinal(d))
+                    label = _ordinal(d)
+                    if _is_auto_prior(d):
+                        label += " (wrap-up)"
+                    day_strs.append(label)
             sched_part = f"Monthly on {' & '.join(day_strs)}"
         else:
             sched_part = "Monthly"

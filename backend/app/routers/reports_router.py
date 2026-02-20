@@ -93,6 +93,7 @@ class ScheduleCreate(BaseModel):
     lookback_unit: Optional[str] = Field(
         None, pattern="^(days|weeks|months|years)$"
     )
+    force_standard_days: Optional[List[int]] = None
     # Legacy periodicity — auto-generated if not provided
     periodicity: Optional[str] = None
     account_id: Optional[int] = None
@@ -136,6 +137,7 @@ class ScheduleUpdate(BaseModel):
     lookback_unit: Optional[str] = Field(
         None, pattern="^(days|weeks|months|years)$"
     )
+    force_standard_days: Optional[List[int]] = None
     periodicity: Optional[str] = None
     account_id: Optional[int] = None
     recipients: Optional[List[RecipientItem]] = None
@@ -189,6 +191,16 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
     }
 
 
+def _parse_json_list(raw: Optional[str]) -> Optional[list]:
+    """Parse a JSON string to a list, or return None."""
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
 def _schedule_to_dict(schedule: ReportSchedule) -> dict:
     goal_ids = (
         [link.goal_id for link in schedule.goal_links]
@@ -197,13 +209,7 @@ def _schedule_to_dict(schedule: ReportSchedule) -> dict:
     # Normalize recipients to object format
     raw_recipients = schedule.recipients or []
     recipients = [_normalize_recipient_for_api(r) for r in raw_recipients]
-    # Parse schedule_days JSON to list for API response
-    schedule_days = None
-    if schedule.schedule_days:
-        try:
-            schedule_days = json.loads(schedule.schedule_days)
-        except (json.JSONDecodeError, TypeError):
-            pass
+    schedule_days = _parse_json_list(schedule.schedule_days)
     return {
         "id": schedule.id,
         "name": schedule.name,
@@ -214,6 +220,9 @@ def _schedule_to_dict(schedule: ReportSchedule) -> dict:
         "period_window": schedule.period_window or "full_prior",
         "lookback_value": schedule.lookback_value,
         "lookback_unit": schedule.lookback_unit,
+        "force_standard_days": _parse_json_list(
+            schedule.force_standard_days
+        ),
         "account_id": schedule.account_id,
         "is_enabled": schedule.is_enabled,
         "recipients": recipients,
@@ -467,6 +476,10 @@ async def create_schedule(
     schedule_days_json = (
         json.dumps(body.schedule_days) if body.schedule_days else None
     )
+    force_standard_json = (
+        json.dumps(body.force_standard_days)
+        if body.force_standard_days else None
+    )
     periodicity_label = body.periodicity or build_periodicity_label(
         body.schedule_type,
         schedule_days_json,
@@ -474,6 +487,7 @@ async def create_schedule(
         body.period_window,
         body.lookback_value,
         body.lookback_unit,
+        force_standard_json,
     )
     schedule = ReportSchedule(
         user_id=current_user.id,
@@ -486,6 +500,7 @@ async def create_schedule(
         period_window=body.period_window,
         lookback_value=body.lookback_value,
         lookback_unit=body.lookback_unit,
+        force_standard_days=force_standard_json,
         is_enabled=body.is_enabled,
         recipients=recipients_data,
         ai_provider=body.ai_provider,
@@ -545,17 +560,23 @@ async def update_schedule(
             for r in update_data["recipients"]
         ]
 
-    # Convert schedule_days list to JSON string for DB storage
+    # Convert list fields to JSON strings for DB storage
     if "schedule_days" in update_data:
         sd = update_data["schedule_days"]
         update_data["schedule_days"] = (
             json.dumps(sd) if sd is not None else None
+        )
+    if "force_standard_days" in update_data:
+        fsd = update_data["force_standard_days"]
+        update_data["force_standard_days"] = (
+            json.dumps(fsd) if fsd is not None else None
         )
 
     # Track whether schedule config changed (for recompute)
     schedule_fields = {
         "schedule_type", "schedule_days", "quarter_start_month",
         "period_window", "lookback_value", "lookback_unit",
+        "force_standard_days",
     }
     schedule_changed = bool(schedule_fields & set(update_data.keys()))
 
@@ -574,6 +595,7 @@ async def update_schedule(
             schedule.period_window or "full_prior",
             schedule.lookback_value,
             schedule.lookback_unit,
+            schedule.force_standard_days,
         )
         schedule.next_run_at = compute_next_run_flexible(
             schedule, datetime.utcnow()

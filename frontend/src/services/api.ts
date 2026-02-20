@@ -635,6 +635,7 @@ export interface ScheduleCreatePayload {
   period_window: PeriodWindow
   lookback_value?: number | null
   lookback_unit?: LookbackUnit | null
+  force_standard_days?: number[] | null
   account_id?: number | null
   recipients: RecipientItem[]
   ai_provider?: string | null
