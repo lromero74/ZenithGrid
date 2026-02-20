@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.31.3] - 2026-02-20
+
+### Changed
+- Report history "Created" column now shows the time in your local timezone (e.g., "Feb 20, 2026 11:53 PM")
+
 ## [v2.31.2] - 2026-02-20
 
 ### Fixed
