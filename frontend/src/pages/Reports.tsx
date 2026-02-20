@@ -402,8 +402,8 @@ export default function Reports() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
+                    <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Report</th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Period</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Frequency</th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Status</th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Created</th>
                     <th className="text-right py-2 px-3 text-xs font-medium text-slate-400">Actions</th>
@@ -412,10 +412,13 @@ export default function Reports() {
                 <tbody>
                   {reports.map(report => (
                     <tr key={report.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                      <td className="py-2.5 px-3">
+                        <div className="text-sm text-slate-200">{report.schedule_name || report.periodicity}</div>
+                        <div className="text-xs text-slate-500">{report.periodicity}</div>
+                      </td>
                       <td className="py-2.5 px-3 text-sm text-slate-300">
                         {formatDate(report.period_start)} — {formatDate(report.period_end)}
                       </td>
-                      <td className="py-2.5 px-3 text-sm text-slate-400 capitalize">{report.periodicity}</td>
                       <td className="py-2.5 px-3">{getStatusBadge(report.delivery_status)}</td>
                       <td className="py-2.5 px-3 text-sm text-slate-400">{formatDateTime(report.created_at)}</td>
                       <td className="py-2.5 px-3 text-right">
