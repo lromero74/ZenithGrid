@@ -719,7 +719,7 @@ async def get_report(
         select(Report).where(
             Report.id == report_id,
             Report.user_id == current_user.id,
-        )
+        ).options(selectinload(Report.schedule))
     )
     report = result.scalar_one_or_none()
     if not report:
