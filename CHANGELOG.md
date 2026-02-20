@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.32.8] - 2026-02-20
+
+### Fixed
+- **YouTube videos and news cleanup working again**: A timezone mismatch caused the video/article cleanup to crash, which broke the entire refresh cycle. Videos and news articles now refresh normally.
+
 ## [v2.32.7] - 2026-02-20
 
 ### Fixed
