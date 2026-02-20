@@ -526,6 +526,29 @@ def _build_comparison_section(data: Dict[str, Any]) -> str:
     </div>"""
 
 
+def _sanitize_for_pdf(text: str) -> str:
+    """Replace Unicode characters unsupported by Helvetica (Latin-1) with ASCII equivalents."""
+    replacements = {
+        "\u2013": "-",    # en-dash
+        "\u2014": "--",   # em-dash
+        "\u2018": "'",    # left single quote
+        "\u2019": "'",    # right single quote
+        "\u201c": '"',    # left double quote
+        "\u201d": '"',    # right double quote
+        "\u2026": "...",  # ellipsis
+        "\u2022": "*",    # bullet
+        "\u00a0": " ",    # non-breaking space
+        "\u2032": "'",    # prime
+        "\u2033": '"',    # double prime
+        "\u2212": "-",    # minus sign
+        "\u00b7": "*",    # middle dot
+    }
+    for char, replacement in replacements.items():
+        text = text.replace(char, replacement)
+    # Fallback: replace any remaining non-Latin-1 chars
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def generate_pdf(
     html_content: str,
     report_data: Optional[Dict] = None,
@@ -643,9 +666,10 @@ def generate_pdf(
                 if g.get("target_type") == "income":
                     period = g.get("income_period", "monthly")
                     pdf.set_font("Helvetica", "B", 10)
+                    goal_name = _sanitize_for_pdf(g.get("name", ""))
                     pdf.cell(
                         0, 7,
-                        f"{g.get('name', '')} (Income/{period.capitalize()}) - {status}",
+                        f"{goal_name} (Income/{period.capitalize()}) - {status}",
                         new_x="LMARGIN", new_y="NEXT",
                     )
                     pdf.set_font("Helvetica", "", 9)
@@ -666,9 +690,10 @@ def generate_pdf(
                     )
                     pdf.set_font("Helvetica", "", 10)
                 else:
+                    goal_name = _sanitize_for_pdf(g.get("name", ""))
                     pdf.cell(
                         0, 7,
-                        f"{g.get('name', '')}: {pct:.1f}% "
+                        f"{goal_name}: {pct:.1f}% "
                         f"({pfx}{g.get('current_value', 0)} / "
                         f"{pfx}{g.get('target_value', 0)} {curr}) - {status}",
                         new_x="LMARGIN", new_y="NEXT",
@@ -711,7 +736,7 @@ def generate_pdf(
             pdf.ln(2)
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(60, 60, 60)
-            pdf.multi_cell(0, 6, raw_summary)
+            pdf.multi_cell(0, 6, _sanitize_for_pdf(raw_summary))
 
         # Footer
         pdf.ln(10)
@@ -749,7 +774,7 @@ def _render_pdf_tiers(pdf, tiered: dict, br: int, bg: int, bb: int):
         pdf.ln(2)
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(60, 60, 60)
-        pdf.multi_cell(0, 6, text)
+        pdf.multi_cell(0, 6, _sanitize_for_pdf(text))
 
 
 def _hex_to_rgb(hex_color: str) -> tuple:

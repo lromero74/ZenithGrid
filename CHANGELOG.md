@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.31.2] - 2026-02-20
+
+### Fixed
+- **PDF generation failing on Unicode characters**: AI summaries containing en-dashes, smart quotes, or other Unicode characters would crash PDF generation — now sanitized to Latin-1 equivalents
+
 ## [v2.31.1] - 2026-02-20
 
 ### Fixed
