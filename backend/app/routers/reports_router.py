@@ -7,7 +7,7 @@ and viewing/downloading generated reports.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -81,21 +81,64 @@ class RecipientItem(BaseModel):
 
 class ScheduleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    periodicity: str = Field(
-        ..., pattern="^(daily|weekly|biweekly|monthly|quarterly|yearly)$"
+    # New flexible schedule fields (primary)
+    schedule_type: str = Field(
+        ..., pattern="^(daily|weekly|monthly|quarterly|yearly)$"
     )
+    schedule_days: Optional[List[int]] = None
+    quarter_start_month: Optional[int] = Field(None, ge=1, le=12)
+    period_window: str = Field(
+        "full_prior",
+        pattern="^(full_prior|wtd|mtd|qtd|ytd|trailing)$",
+    )
+    lookback_value: Optional[int] = Field(None, ge=1)
+    lookback_unit: Optional[str] = Field(
+        None, pattern="^(days|weeks|months|years)$"
+    )
+    # Legacy periodicity — auto-generated if not provided
+    periodicity: Optional[str] = None
     account_id: Optional[int] = None
     recipients: List[RecipientItem] = Field(default_factory=list)
-    ai_provider: Optional[str] = Field(None, pattern="^(claude|openai|gemini)$")
+    ai_provider: Optional[str] = Field(
+        None, pattern="^(claude|openai|gemini)$"
+    )
     goal_ids: List[int] = Field(default_factory=list)
     is_enabled: bool = True
+
+    @model_validator(mode="after")
+    def validate_schedule_fields(self):
+        if (
+            self.schedule_type == "quarterly"
+            and self.quarter_start_month is None
+        ):
+            self.quarter_start_month = 1
+        if self.period_window == "trailing":
+            if not self.lookback_value:
+                raise ValueError(
+                    "lookback_value is required when "
+                    "period_window is 'trailing'"
+                )
+            if not self.lookback_unit:
+                self.lookback_unit = "days"
+        return self
 
 
 class ScheduleUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
-    periodicity: Optional[str] = Field(
-        None, pattern="^(daily|weekly|biweekly|monthly|quarterly|yearly)$"
+    schedule_type: Optional[str] = Field(
+        None, pattern="^(daily|weekly|monthly|quarterly|yearly)$"
     )
+    schedule_days: Optional[List[int]] = None
+    quarter_start_month: Optional[int] = Field(None, ge=1, le=12)
+    period_window: Optional[str] = Field(
+        None,
+        pattern="^(full_prior|wtd|mtd|qtd|ytd|trailing)$",
+    )
+    lookback_value: Optional[int] = Field(None, ge=1)
+    lookback_unit: Optional[str] = Field(
+        None, pattern="^(days|weeks|months|years)$"
+    )
+    periodicity: Optional[str] = None
     account_id: Optional[int] = None
     recipients: Optional[List[RecipientItem]] = None
     ai_provider: Optional[str] = None
@@ -150,22 +193,47 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
 
 
 def _schedule_to_dict(schedule: ReportSchedule) -> dict:
-    goal_ids = [link.goal_id for link in schedule.goal_links] if schedule.goal_links else []
+    goal_ids = (
+        [link.goal_id for link in schedule.goal_links]
+        if schedule.goal_links else []
+    )
     # Normalize recipients to object format
     raw_recipients = schedule.recipients or []
     recipients = [_normalize_recipient_for_api(r) for r in raw_recipients]
+    # Parse schedule_days JSON to list for API response
+    schedule_days = None
+    if schedule.schedule_days:
+        try:
+            schedule_days = json.loads(schedule.schedule_days)
+        except (json.JSONDecodeError, TypeError):
+            pass
     return {
         "id": schedule.id,
         "name": schedule.name,
         "periodicity": schedule.periodicity,
+        "schedule_type": schedule.schedule_type,
+        "schedule_days": schedule_days,
+        "quarter_start_month": schedule.quarter_start_month,
+        "period_window": schedule.period_window or "full_prior",
+        "lookback_value": schedule.lookback_value,
+        "lookback_unit": schedule.lookback_unit,
         "account_id": schedule.account_id,
         "is_enabled": schedule.is_enabled,
         "recipients": recipients,
         "ai_provider": schedule.ai_provider,
         "goal_ids": goal_ids,
-        "last_run_at": schedule.last_run_at.isoformat() if schedule.last_run_at else None,
-        "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
-        "created_at": schedule.created_at.isoformat() if schedule.created_at else None,
+        "last_run_at": (
+            schedule.last_run_at.isoformat()
+            if schedule.last_run_at else None
+        ),
+        "next_run_at": (
+            schedule.next_run_at.isoformat()
+            if schedule.next_run_at else None
+        ),
+        "created_at": (
+            schedule.created_at.isoformat()
+            if schedule.created_at else None
+        ),
     }
 
 
@@ -200,50 +268,25 @@ def _report_to_dict(report: Report, include_html: bool = False) -> dict:
     return result
 
 
-def _compute_next_run(periodicity: str, from_dt: Optional[datetime] = None) -> datetime:
-    """Compute the next run time for a schedule."""
-    now = from_dt or datetime.utcnow()
+def _compute_next_run_for_new_schedule(body) -> datetime:
+    """Compute the first next_run_at for a newly created schedule."""
+    from app.services.report_scheduler import compute_next_run_flexible
 
-    if periodicity == "daily":
-        # Next day at 06:00 UTC
-        next_dt = (now + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
-    elif periodicity == "weekly":
-        # Next Monday at 06:00 UTC
-        days_ahead = 7 - now.weekday()  # Monday = 0
-        if days_ahead == 0:
-            days_ahead = 7
-        next_dt = (now + timedelta(days=days_ahead)).replace(hour=6, minute=0, second=0, microsecond=0)
-    elif periodicity == "biweekly":
-        days_ahead = 14 - now.weekday()
-        if days_ahead <= 0:
-            days_ahead += 14
-        next_dt = (now + timedelta(days=days_ahead)).replace(hour=6, minute=0, second=0, microsecond=0)
-    elif periodicity == "monthly":
-        # 1st of next month at 06:00 UTC
-        if now.month == 12:
-            next_dt = now.replace(year=now.year + 1, month=1, day=1, hour=6, minute=0, second=0, microsecond=0)
-        else:
-            next_dt = now.replace(month=now.month + 1, day=1, hour=6, minute=0, second=0, microsecond=0)
-    elif periodicity == "quarterly":
-        # 1st of next quarter at 06:00 UTC
-        quarter_months = [1, 4, 7, 10]
-        next_q = None
-        for m in quarter_months:
-            if m > now.month:
-                next_q = m
-                break
-        if next_q is None:
-            next_q = 1
-            next_dt = now.replace(year=now.year + 1, month=next_q, day=1, hour=6, minute=0, second=0, microsecond=0)
-        else:
-            next_dt = now.replace(month=next_q, day=1, hour=6, minute=0, second=0, microsecond=0)
-    elif periodicity == "yearly":
-        # Jan 1 next year at 06:00 UTC
-        next_dt = now.replace(year=now.year + 1, month=1, day=1, hour=6, minute=0, second=0, microsecond=0)
-    else:
-        next_dt = now + timedelta(days=7)
+    # Build a lightweight object with the schedule fields
+    class _Sched:
+        pass
 
-    return next_dt
+    sched = _Sched()
+    sched.schedule_type = body.schedule_type
+    sched.schedule_days = (
+        json.dumps(body.schedule_days) if body.schedule_days else None
+    )
+    sched.quarter_start_month = body.quarter_start_month
+    sched.period_window = body.period_window
+    sched.lookback_value = body.lookback_value
+    sched.lookback_unit = body.lookback_unit
+
+    return compute_next_run_flexible(sched, datetime.utcnow())
 
 
 # ----- Goals CRUD -----
@@ -419,14 +462,34 @@ async def create_schedule(
                 detail=f"Invalid goal IDs: {list(invalid)}",
             )
 
-    next_run = _compute_next_run(body.periodicity)
+    from app.services.report_scheduler import build_periodicity_label
+
+    next_run = _compute_next_run_for_new_schedule(body)
     # Serialize recipients to dicts for JSON storage
     recipients_data = [r.model_dump() for r in body.recipients]
+    # Build human-readable periodicity label
+    schedule_days_json = (
+        json.dumps(body.schedule_days) if body.schedule_days else None
+    )
+    periodicity_label = body.periodicity or build_periodicity_label(
+        body.schedule_type,
+        schedule_days_json,
+        body.quarter_start_month,
+        body.period_window,
+        body.lookback_value,
+        body.lookback_unit,
+    )
     schedule = ReportSchedule(
         user_id=current_user.id,
         account_id=body.account_id,
         name=body.name,
-        periodicity=body.periodicity,
+        periodicity=periodicity_label,
+        schedule_type=body.schedule_type,
+        schedule_days=schedule_days_json,
+        quarter_start_month=body.quarter_start_month,
+        period_window=body.period_window,
+        lookback_value=body.lookback_value,
+        lookback_unit=body.lookback_unit,
         is_enabled=body.is_enabled,
         recipients=recipients_data,
         ai_provider=body.ai_provider,
@@ -471,6 +534,11 @@ async def update_schedule(
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
 
+    from app.services.report_scheduler import (
+        build_periodicity_label,
+        compute_next_run_flexible,
+    )
+
     update_data = body.model_dump(exclude_unset=True)
     goal_ids = update_data.pop("goal_ids", None)
 
@@ -481,12 +549,39 @@ async def update_schedule(
             for r in update_data["recipients"]
         ]
 
+    # Convert schedule_days list to JSON string for DB storage
+    if "schedule_days" in update_data:
+        sd = update_data["schedule_days"]
+        update_data["schedule_days"] = (
+            json.dumps(sd) if sd is not None else None
+        )
+
+    # Track whether schedule config changed (for recompute)
+    schedule_fields = {
+        "schedule_type", "schedule_days", "quarter_start_month",
+        "period_window", "lookback_value", "lookback_unit",
+    }
+    schedule_changed = bool(schedule_fields & set(update_data.keys()))
+
+    # Don't write a user-supplied periodicity — it's auto-generated
+    update_data.pop("periodicity", None)
+
     for key, value in update_data.items():
         setattr(schedule, key, value)
 
-    # Recompute next_run if periodicity changed
-    if "periodicity" in update_data:
-        schedule.next_run_at = _compute_next_run(schedule.periodicity)
+    # Recompute next_run_at and periodicity label if schedule changed
+    if schedule_changed:
+        schedule.periodicity = build_periodicity_label(
+            schedule.schedule_type,
+            schedule.schedule_days,
+            schedule.quarter_start_month,
+            schedule.period_window or "full_prior",
+            schedule.lookback_value,
+            schedule.lookback_unit,
+        )
+        schedule.next_run_at = compute_next_run_flexible(
+            schedule, datetime.utcnow()
+        )
 
     # Update goal links if provided
     if goal_ids is not None:
@@ -682,9 +777,11 @@ async def generate_report(
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
 
-    # Generate the report
+    # Generate the report (ad-hoc — don't advance schedule timing)
     from app.services.report_scheduler import generate_report_for_schedule
-    report = await generate_report_for_schedule(db, schedule, current_user)
+    report = await generate_report_for_schedule(
+        db, schedule, current_user, advance_schedule=False,
+    )
 
     return _report_to_dict(report, include_html=True)
 

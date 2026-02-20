@@ -1364,7 +1364,13 @@ class ReportSchedule(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # null = all accounts
     name = Column(String, nullable=False)  # e.g. "Weekly Performance Report"
-    periodicity = Column(String, nullable=False)  # daily/weekly/biweekly/monthly/quarterly/yearly
+    periodicity = Column(String, nullable=False)  # Human-readable label (derived)
+    schedule_type = Column(String, nullable=True)  # daily/weekly/monthly/quarterly/yearly
+    schedule_days = Column(String, nullable=True)  # JSON: weekday ints, day-of-month ints, etc.
+    quarter_start_month = Column(Integer, nullable=True)  # 1-12, for quarterly schedules
+    period_window = Column(String, default="full_prior")  # full_prior/wtd/mtd/qtd/ytd/trailing
+    lookback_value = Column(Integer, nullable=True)  # N for trailing window
+    lookback_unit = Column(String, nullable=True)  # days/weeks/months/years for trailing
     is_enabled = Column(Boolean, default=True)
     recipients = Column(JSON, nullable=True)  # List of email addresses
     ai_provider = Column(String, nullable=True)  # claude/openai/gemini — null = user's default

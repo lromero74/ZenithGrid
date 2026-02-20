@@ -622,7 +622,25 @@ export const accountValueApi = {
 };
 
 // Reports & Goals
-import type { ReportGoal, ReportSchedule, ReportSummary, RecipientItem } from '../types'
+import type {
+  ReportGoal, ReportSchedule, ReportSummary, RecipientItem,
+  ScheduleType, PeriodWindow, LookbackUnit,
+} from '../types'
+
+export interface ScheduleCreatePayload {
+  name: string
+  schedule_type: ScheduleType
+  schedule_days?: number[] | null
+  quarter_start_month?: number | null
+  period_window: PeriodWindow
+  lookback_value?: number | null
+  lookback_unit?: LookbackUnit | null
+  account_id?: number | null
+  recipients: RecipientItem[]
+  ai_provider?: string | null
+  goal_ids: number[]
+  is_enabled?: boolean
+}
 
 export const reportsApi = {
   // Goals
@@ -635,11 +653,9 @@ export const reportsApi = {
 
   // Schedules
   getSchedules: () => api.get<ReportSchedule[]>('/reports/schedules').then(r => r.data),
-  createSchedule: (data: {
-    name: string; periodicity: string; account_id?: number | null;
-    recipients: RecipientItem[]; ai_provider?: string | null; goal_ids: number[]; is_enabled?: boolean
-  }) => api.post<ReportSchedule>('/reports/schedules', data).then(r => r.data),
-  updateSchedule: (id: number, data: Partial<ReportSchedule & { goal_ids?: number[] }>) =>
+  createSchedule: (data: ScheduleCreatePayload) =>
+    api.post<ReportSchedule>('/reports/schedules', data).then(r => r.data),
+  updateSchedule: (id: number, data: Record<string, unknown>) =>
     api.put<ReportSchedule>(`/reports/schedules/${id}`, data).then(r => r.data),
   deleteSchedule: (id: number) => api.delete(`/reports/schedules/${id}`).then(r => r.data),
 
