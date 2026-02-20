@@ -534,6 +534,7 @@ export interface ReportSchedule {
 export interface ReportSummary {
   id: number
   schedule_id?: number | null
+  schedule_name?: string | null
   period_start: string | null
   period_end: string | null
   periodicity: string

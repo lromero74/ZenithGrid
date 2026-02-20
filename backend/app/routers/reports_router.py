@@ -254,9 +254,14 @@ def _report_to_dict(report: Report, include_html: bool = False) -> dict:
         except (json.JSONDecodeError, TypeError):
             pass
 
+    schedule_name = None
+    if report.schedule_id and hasattr(report, "schedule") and report.schedule:
+        schedule_name = report.schedule.name
+
     result = {
         "id": report.id,
         "schedule_id": report.schedule_id,
+        "schedule_name": schedule_name,
         "period_start": report.period_start.isoformat() if report.period_start else None,
         "period_end": report.period_end.isoformat() if report.period_end else None,
         "periodicity": report.periodicity,
@@ -686,10 +691,11 @@ async def list_reports(
     )
     total = count_result.scalar()
 
-    # Get page
+    # Get page (eager-load schedule for name)
     result = await db.execute(
         select(Report)
         .where(and_(*filters))
+        .options(selectinload(Report.schedule))
         .order_by(Report.created_at.desc())
         .offset(offset)
         .limit(limit)
