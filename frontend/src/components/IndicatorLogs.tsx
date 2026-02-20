@@ -136,6 +136,8 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
       not_equal: '!=',
       crossing_above: 'crossing above',
       crossing_below: 'crossing below',
+      increasing: 'increasing',
+      decreasing: 'decreasing',
     }
     return symbols[operator] || operator
   }
@@ -319,6 +321,12 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
                         <div className="flex items-center space-x-3 text-xs">
                           {cond.error || cond.reason ? (
                             <span className="text-yellow-400">{cond.error || cond.reason}</span>
+                          ) : (cond.operator === 'increasing' || cond.operator === 'decreasing') && cond.previous_value !== undefined ? (
+                            <span className="text-slate-400">
+                              {formatValue(cond.previous_value, cond.type)} → {formatValue(cond.actual_value, cond.type)}
+                              {' '}{cond.operator === 'increasing' ? '↑' : '↓'}
+                              {cond.threshold ? ` (min ${cond.threshold}%)` : ''}
+                            </span>
                           ) : (
                             <>
                               <span className="text-slate-400">

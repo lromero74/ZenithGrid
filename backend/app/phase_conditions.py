@@ -349,6 +349,63 @@ class PhaseConditionEvaluator:
                 return result, detail
             return result
 
+        # Handle increasing/decreasing operators (compare current vs previous candle)
+        if operator in ["increasing", "decreasing"]:
+            # Try check-cycle previous first, then candle-based prev_
+            previous_val = None
+            if previous_indicators is not None:
+                previous_val = self._get_indicator_value(
+                    condition_type, condition, previous_indicators
+                )
+            if previous_val is None:
+                previous_val = self._get_previous_indicator_value(
+                    condition_type, condition, current_indicators
+                )
+
+            if previous_val is None:
+                print(
+                    f"[DEBUG] {operator} check: no previous value available"
+                )
+                if capture_details:
+                    detail["error"] = "no previous indicator for direction check"
+                    return False, detail
+                return False
+
+            if capture_details:
+                detail["previous_value"] = (
+                    round(previous_val, 8) if isinstance(previous_val, float) else previous_val
+                )
+
+            # value field stores optional minimum % change threshold (0 = any change)
+            min_pct_change = value or 0
+
+            if previous_val == 0:
+                if operator == "increasing":
+                    result = current_val > 0
+                else:
+                    result = current_val < 0
+            elif min_pct_change > 0:
+                pct_change = ((current_val - previous_val) / abs(previous_val)) * 100
+                if operator == "increasing":
+                    result = pct_change >= min_pct_change
+                else:
+                    result = pct_change <= -min_pct_change
+            else:
+                if operator == "increasing":
+                    result = current_val > previous_val
+                else:
+                    result = current_val < previous_val
+
+            print(
+                f"[DEBUG] {operator} result: {result} "
+                f"(prev={previous_val}, curr={current_val}, min_pct={min_pct_change})"
+            )
+
+            if capture_details:
+                detail["result"] = result
+                return result, detail
+            return result
+
         # Handle simple comparisons
         result = False
         if operator == "greater_than":

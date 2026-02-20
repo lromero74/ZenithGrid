@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.32.6] - 2026-02-20
+
+### Fixed
+- **Increasing/Decreasing conditions now work**: These operators were available in the condition builder but silently ignored at runtime — they always returned false. Now properly compares current vs previous closed candle values.
+- Condition logs now show both previous and current values for increasing/decreasing checks (e.g., "48.2 → 52.3 ↑") instead of just one number
+
 ## [v2.32.5] - 2026-02-20
 
 ### Fixed
