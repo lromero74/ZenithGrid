@@ -143,6 +143,16 @@ export default function Reports() {
     })
   }
 
+  const formatDateTime = (iso: string | null) => {
+    if (!iso) return '-'
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric'
+    }) + ' ' + d.toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit'
+    })
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'sent':
@@ -407,7 +417,7 @@ export default function Reports() {
                       </td>
                       <td className="py-2.5 px-3 text-sm text-slate-400 capitalize">{report.periodicity}</td>
                       <td className="py-2.5 px-3">{getStatusBadge(report.delivery_status)}</td>
-                      <td className="py-2.5 px-3 text-sm text-slate-400">{formatDate(report.created_at)}</td>
+                      <td className="py-2.5 px-3 text-sm text-slate-400">{formatDateTime(report.created_at)}</td>
                       <td className="py-2.5 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
