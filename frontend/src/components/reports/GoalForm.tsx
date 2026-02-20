@@ -17,7 +17,6 @@ export interface GoalFormData {
   target_balance_value?: number | null
   target_profit_value?: number | null
   income_period?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
-  lookback_days?: number | null
   time_horizon_months: number
   target_date?: string | null
 }
@@ -39,15 +38,6 @@ const INCOME_PERIOD_OPTIONS = [
   { value: 'yearly', label: 'Per Year' },
 ]
 
-const LOOKBACK_OPTIONS = [
-  { value: 0, label: 'All Time' },
-  { value: 7, label: '7 Days' },
-  { value: 14, label: '14 Days' },
-  { value: 30, label: '30 Days' },
-  { value: 90, label: '90 Days' },
-  { value: 365, label: '365 Days' },
-]
-
 export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormProps) {
   const [name, setName] = useState('')
   const [targetType, setTargetType] = useState<'balance' | 'profit' | 'both' | 'income'>('balance')
@@ -56,7 +46,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
   const [targetBalanceValue, setTargetBalanceValue] = useState('')
   const [targetProfitValue, setTargetProfitValue] = useState('')
   const [incomePeriod, setIncomePeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly')
-  const [lookbackDays, setLookbackDays] = useState(0)
   const [timeHorizon, setTimeHorizon] = useState(12)
   const [dateMode, setDateMode] = useState<'horizon' | 'date'>('horizon')
   const [customDate, setCustomDate] = useState('')
@@ -71,7 +60,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setTargetBalanceValue(initialData.target_balance_value ? String(initialData.target_balance_value) : '')
       setTargetProfitValue(initialData.target_profit_value ? String(initialData.target_profit_value) : '')
       setIncomePeriod(initialData.income_period || 'monthly')
-      setLookbackDays(initialData.lookback_days || 0)
       setTimeHorizon(initialData.time_horizon_months)
 
       // Detect if stored date matches a preset horizon
@@ -107,7 +95,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setTargetBalanceValue('')
       setTargetProfitValue('')
       setIncomePeriod('monthly')
-      setLookbackDays(0)
       setTimeHorizon(12)
       setDateMode('horizon')
       setCustomDate('')
@@ -128,7 +115,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
         target_balance_value: targetType === 'both' ? parseFloat(targetBalanceValue) || null : null,
         target_profit_value: targetType === 'both' ? parseFloat(targetProfitValue) || null : null,
         income_period: targetType === 'income' ? incomePeriod : null,
-        lookback_days: targetType === 'income' && lookbackDays > 0 ? lookbackDays : null,
         time_horizon_months: timeHorizon,
       }
 
@@ -219,31 +205,18 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Income Period</label>
-                  <select
-                    value={incomePeriod}
-                    onChange={e => setIncomePeriod(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                  >
-                    {INCOME_PERIOD_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Lookback Window</label>
-                  <select
-                    value={lookbackDays}
-                    onChange={e => setLookbackDays(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                  >
-                    {LOOKBACK_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Income Period</label>
+                <select
+                  value={incomePeriod}
+                  onChange={e => setIncomePeriod(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  {INCOME_PERIOD_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">Lookback window is controlled by the report schedule</p>
               </div>
             </>
           ) : targetType !== 'both' ? (

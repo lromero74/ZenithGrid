@@ -9,7 +9,7 @@ Gathers metrics for report generation:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, func, select
@@ -75,7 +75,7 @@ async def gather_report_data(
         if p.get_quote_currency() == "BTC"
     )
 
-    # Compute goal progress
+    # Compute goal progress — use the report's period bounds for lookback
     goal_data = []
     for goal in goals:
         goal_progress = await compute_goal_progress(
@@ -85,6 +85,8 @@ async def gather_report_data(
             current_btc=end_value["btc"],
             period_profit_usd=period_profit_usd,
             period_profit_btc=period_profit_btc,
+            period_start=period_start,
+            period_end=period_end,
         )
         goal_data.append(goal_progress)
 
@@ -173,16 +175,20 @@ async def compute_goal_progress(
     current_btc: float,
     period_profit_usd: float,
     period_profit_btc: float,
+    period_start: Optional[datetime] = None,
+    period_end: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Compute progress towards a goal.
 
     For income goals, queries closed positions to calculate income rate.
-    Returns dict with goal info, progress_pct, on_track, and income-specific fields.
+    The lookback window comes from the schedule's period bounds
+    (period_start/period_end), not from goal.lookback_days.
     """
     if goal.target_type == "income":
         return await _compute_income_goal_progress(
-            db, goal, current_usd, current_btc
+            db, goal, current_usd, current_btc,
+            period_start, period_end,
         )
 
     is_btc = goal.target_currency == "BTC"
@@ -226,13 +232,15 @@ async def _compute_income_goal_progress(
     goal: ReportGoal,
     current_usd: float,
     current_btc: float,
+    period_start: Optional[datetime] = None,
+    period_end: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Compute income goal progress by analyzing closed position profits.
 
-    Calculates daily income rate from historical trades, then projects
-    linear and compound income for the goal's period. Also computes
-    how much additional capital would be needed to reach the target.
+    The lookback window is determined by the schedule's period bounds
+    (period_start/period_end). Calculates daily income rate from trades
+    within that window, then projects income for the goal's period.
     """
     is_btc = goal.target_currency == "BTC"
     account_value = current_btc if is_btc else current_usd
@@ -246,21 +254,19 @@ async def _compute_income_goal_progress(
     }
     period_days = period_multipliers.get(goal.income_period or "monthly", 30)
 
-    # Determine lookback window
+    # Use the schedule's period bounds as the lookback window
     now = datetime.utcnow()
-    if goal.lookback_days:
-        lookback_start = now - timedelta(days=goal.lookback_days)
-    else:
-        lookback_start = goal.start_date
+    lookback_start = period_start or goal.start_date
+    lookback_end = period_end or now
 
-    lookback_days_actual = max((now - lookback_start).days, 1)
+    lookback_days_actual = max((lookback_end - lookback_start).days, 1)
 
     # Query closed positions within the lookback window
     pos_filters = [
         Position.user_id == goal.user_id,
         Position.status == "closed",
         Position.closed_at >= lookback_start,
-        Position.closed_at <= now,
+        Position.closed_at <= lookback_end,
     ]
     result = await db.execute(select(Position).where(and_(*pos_filters)))
     closed_positions = result.scalars().all()

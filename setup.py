@@ -1537,7 +1537,6 @@ def initialize_database(project_root):
                 target_balance_value REAL,
                 target_profit_value REAL,
                 income_period TEXT,
-                lookback_days INTEGER,
                 time_horizon_months INTEGER NOT NULL,
                 start_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 target_date DATETIME NOT NULL,
