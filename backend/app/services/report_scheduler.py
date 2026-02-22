@@ -13,12 +13,13 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import async_session_maker
 from app.models import (
+    GoalProgressSnapshot,
     Report,
     ReportGoal,
     ReportSchedule,
@@ -171,6 +172,32 @@ async def generate_report_for_schedule(
     )
     period_days = (period_end - period_start).days
     report_data["period_days"] = period_days
+
+    # Fetch trend data for non-income goals (for chart embedding)
+    from app.services.goal_snapshot_service import (
+        backfill_goal_snapshots,
+        get_goal_trend_data,
+    )
+    goal_orm_map = {g.id: g for g in goals}
+    for goal_dict in report_data.get("goals", []):
+        if goal_dict.get("target_type") == "income":
+            continue
+        gid = goal_dict.get("goal_id")
+        if gid and gid in goal_orm_map:
+            try:
+                goal_orm = goal_orm_map[gid]
+                snap_count = await db.execute(
+                    select(func.count(GoalProgressSnapshot.id))
+                    .where(GoalProgressSnapshot.goal_id == gid)
+                )
+                if snap_count.scalar() == 0:
+                    await backfill_goal_snapshots(db, goal_orm)
+                trend = await get_goal_trend_data(db, goal_orm)
+                goal_dict["trend_data"] = trend
+            except Exception as e:
+                logger.warning(
+                    f"Failed to fetch trend data for goal {gid}: {e}"
+                )
 
     # Get prior period data for comparison
     if schedule.id:

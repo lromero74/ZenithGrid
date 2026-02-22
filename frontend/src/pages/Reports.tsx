@@ -1,8 +1,8 @@
-import { useState, useCallback, Fragment } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Target, Calendar, FileText, Plus, Pencil, Trash2, Play, Eye, Download,
-  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, TrendingUp
+  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
@@ -10,7 +10,6 @@ import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
 import { ScheduleForm, type ScheduleFormData } from '../components/reports/ScheduleForm'
 import { ReportViewModal } from '../components/reports/ReportViewModal'
 import { GoalProgressBar } from '../components/reports/GoalProgressBar'
-import { GoalTrendChart } from '../components/reports/GoalTrendChart'
 import type { ReportGoal, ReportSchedule, ReportSummary } from '../types'
 
 type TabId = 'goals' | 'schedules' | 'history'
@@ -43,9 +42,6 @@ export default function Reports() {
 
   // Report view state
   const [viewingReport, setViewingReport] = useState<ReportSummary | null>(null)
-
-  // Goal trend chart state
-  const [trendGoalId, setTrendGoalId] = useState<number | null>(null)
 
   // History pagination
   const [historyPage, setHistoryPage] = useState(0)
@@ -217,8 +213,7 @@ export default function Reports() {
             const timePct = totalMs > 0 ? Math.min((elapsedMs / totalMs) * 100, 100) : 100
 
             return (
-              <Fragment key={goal.id}>
-              <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+              <div key={goal.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h4 className="font-medium text-white">{goal.name}</h4>
@@ -289,30 +284,7 @@ export default function Reports() {
                   {formatDate(goal.start_date)} &rarr; {formatDate(goal.target_date)}
                 </p>
 
-                {/* Trend chart toggle */}
-                {goal.target_type !== 'income' && (
-                  <button
-                    onClick={() => setTrendGoalId(trendGoalId === goal.id ? null : goal.id)}
-                    className="w-full mt-2 py-1.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded transition-colors flex items-center justify-center gap-1"
-                  >
-                    <TrendingUp className="w-3 h-3" />
-                    {trendGoalId === goal.id ? 'Hide Trend' : 'View Trend'}
-                  </button>
-                )}
               </div>
-
-              {/* Trend chart (full width, spans both grid columns) */}
-              {trendGoalId === goal.id && (
-                <div className="sm:col-span-2">
-                  <GoalTrendChart
-                    goalId={goal.id}
-                    goalName={goal.name}
-                    targetCurrency={goal.target_currency}
-                    onClose={() => setTrendGoalId(null)}
-                  />
-                </div>
-              )}
-              </Fragment>
             )
           })}
         </div>
