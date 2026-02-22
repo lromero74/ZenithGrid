@@ -518,6 +518,7 @@ export interface ExpenseItem {
   frequency: string
   frequency_n?: number | null
   frequency_anchor?: string | null
+  due_day?: number | null
   is_active: boolean
   normalized_amount?: number
   created_at: string | null

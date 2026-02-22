@@ -177,11 +177,14 @@ class ExpenseItemCreate(BaseModel):
     )
     frequency_n: Optional[int] = Field(None, ge=1)
     frequency_anchor: Optional[str] = None
+    due_day: Optional[int] = Field(None, ge=-1, le=31)
 
     @model_validator(mode="after")
     def validate_frequency_n(self):
         if self.frequency == "every_n_days" and not self.frequency_n:
             raise ValueError("frequency_n is required when frequency is 'every_n_days'")
+        if self.due_day is not None and self.due_day == 0:
+            raise ValueError("due_day must be -1 (last day) or 1-31")
         return self
 
 
@@ -195,6 +198,7 @@ class ExpenseItemUpdate(BaseModel):
     )
     frequency_n: Optional[int] = Field(None, ge=1)
     frequency_anchor: Optional[str] = None
+    due_day: Optional[int] = Field(None, ge=-1, le=31)
     is_active: Optional[bool] = None
 
 
@@ -715,6 +719,7 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
         "frequency": item.frequency,
         "frequency_n": item.frequency_n,
         "frequency_anchor": item.frequency_anchor,
+        "due_day": item.due_day,
         "is_active": item.is_active,
         "created_at": item.created_at.isoformat() if item.created_at else None,
     }

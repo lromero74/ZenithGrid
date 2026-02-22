@@ -535,8 +535,39 @@ def _build_income_goal_card(g: Dict[str, Any]) -> str:
         </div>"""
 
 
+def _ordinal_day(day: int) -> str:
+    """Render a due day as ordinal ('1st', '15th') or 'Last' for -1."""
+    if day == -1:
+        return "Last"
+    if 11 <= (day % 100) <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+    return f"{day}{suffix}"
+
+
+def _build_expense_status_badge(item: dict) -> str:
+    """Return an HTML badge span for an expense item's coverage status."""
+    status = item.get("status", "uncovered")
+    if status == "covered":
+        badge_bg, badge_color, badge_text = "#065f46", "#6ee7b7", "Covered"
+    elif status == "partial":
+        cp = item.get("coverage_pct", 0)
+        badge_bg, badge_color, badge_text = "#78350f", "#fcd34d", f"{cp:.0f}%"
+    else:
+        badge_bg, badge_color, badge_text = "#7f1d1d", "#fca5a5", "Uncovered"
+    return (
+        f'<span style="background: {badge_bg}; color: {badge_color};'
+        f' padding: 1px 6px; border-radius: 4px; font-size: 10px;'
+        f' font-weight: 600;">{badge_text}</span>'
+    )
+
+
 def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
-    """Expenses goal card with coverage waterfall and itemized table."""
+    """Expenses goal card with Coverage + Upcoming tabs."""
+    import calendar
+    from datetime import datetime as _dt
+
     coverage = g.get("expense_coverage", {})
     pct = coverage.get("coverage_pct", 0)
     bar_color = "#10b981" if pct >= 100 else "#f59e0b" if pct >= 50 else "#ef4444"
@@ -546,24 +577,17 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
     prefix = "" if currency == "BTC" else "$"
     period = g.get("expense_period", "monthly")
     tax_pct = g.get("tax_withholding_pct", 0)
+    goal_id = g.get("id", 0)
 
     total_exp = coverage.get("total_expenses", 0)
     income_at = coverage.get("income_after_tax", 0)
     covered = coverage.get("covered_count", 0)
     total = coverage.get("total_count", 0)
+    items = coverage.get("items", [])
 
-    # Build itemized table rows
+    # ---- Coverage tab content (existing) ----
     item_rows = ""
-    for item in coverage.get("items", []):
-        status = item.get("status", "uncovered")
-        if status == "covered":
-            badge_bg, badge_color, badge_text = "#065f46", "#6ee7b7", "Covered"
-        elif status == "partial":
-            cp = item.get("coverage_pct", 0)
-            badge_bg, badge_color, badge_text = "#78350f", "#fcd34d", f"{cp:.0f}%"
-        else:
-            badge_bg, badge_color, badge_text = "#7f1d1d", "#fca5a5", "Uncovered"
-
+    for item in items:
         norm = item.get("normalized_amount", 0)
         item_rows += f"""
             <tr>
@@ -574,9 +598,7 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
                 <td style="padding: 4px 0; color: #f1f5f9; text-align: right; font-size: 12px;">
                     {prefix}{norm:{fmt}}</td>
                 <td style="padding: 4px 6px; text-align: center;">
-                    <span style="background: {badge_bg}; color: {badge_color};
-                                 padding: 1px 6px; border-radius: 4px; font-size: 10px;
-                                 font-weight: 600;">{badge_text}</span></td>
+                    {_build_expense_status_badge(item)}</td>
             </tr>"""
 
     dep = g.get("deposit_needed")
@@ -632,24 +654,7 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
                         {tax_pct:.1f}%</td>
                 </tr>"""
 
-    return f"""
-        <div style="margin: 0 0 15px 0; padding: 12px; background-color: #1e293b;
-                    border-radius: 8px; border: 1px solid #334155;">
-            <div style="display: flex; justify-content: space-between; align-items: center;
-                        margin: 0 0 8px 0;">
-                <span style="color: #f1f5f9; font-weight: 600; font-size: 14px;">
-                    {g.get('name', '')}
-                    <span style="color: #94a3b8; font-weight: 400; font-size: 12px;
-                                 margin-left: 6px;">Expenses / {period.capitalize()}</span>
-                </span>
-                <span style="color: {bar_color}; font-size: 12px; font-weight: 600;">
-                    {pct:.0f}% Covered</span>
-            </div>
-            <div style="background-color: #334155; border-radius: 4px; height: 8px;
-                        overflow: hidden; margin-bottom: 10px;">
-                <div style="background-color: {bar_color}; width: {bar_width}%;
-                            height: 100%; border-radius: 4px;"></div>
-            </div>
+    coverage_content = f"""
             <table style="width: 100%; border-collapse: collapse; font-size: 12px;
                           margin-bottom: 10px;">
                 <tr>
@@ -682,7 +687,126 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
                 </tr>
                 {item_rows}
             </table>
-            {dep_line}
+            {dep_line}"""
+
+    # ---- Upcoming tab content ----
+    now = _dt.utcnow()
+    today_day = now.day
+    last_day_of_month = calendar.monthrange(now.year, now.month)[1]
+
+    upcoming_items = []
+    for item in items:
+        dd = item.get("due_day")
+        if dd is None:
+            continue
+        resolved = last_day_of_month if dd == -1 else min(dd, last_day_of_month)
+        if resolved >= today_day:
+            upcoming_items.append((resolved, dd, item))
+
+    upcoming_items.sort(key=lambda x: x[0])
+
+    if not upcoming_items and not any(item.get("due_day") is not None for item in items):
+        upcoming_content = (
+            '<p style="color: #64748b; font-size: 12px; text-align: center; padding: 16px 0;">'
+            'Set due dates on your expenses to see upcoming bills</p>'
+        )
+    elif not upcoming_items:
+        upcoming_content = (
+            '<p style="color: #64748b; font-size: 12px; text-align: center; padding: 16px 0;">'
+            'All expenses with due dates have passed for this month</p>'
+        )
+    else:
+        upcoming_rows = ""
+        for resolved, dd, item in upcoming_items:
+            norm = item.get("normalized_amount", 0)
+            upcoming_rows += f"""
+                <tr>
+                    <td style="padding: 4px 0; color: #e2e8f0; font-size: 12px;
+                               font-weight: 600;">{_ordinal_day(dd)}</td>
+                    <td style="padding: 4px 0; color: #94a3b8; font-size: 11px;">
+                        {item.get('category', '')}</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; font-size: 12px;">
+                        {item.get('name', '')}</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right; font-size: 12px;">
+                        {prefix}{norm:{fmt}}</td>
+                    <td style="padding: 4px 6px; text-align: center;">
+                        {_build_expense_status_badge(item)}</td>
+                </tr>"""
+        upcoming_content = f"""
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: left;
+                               font-weight: 600;">Due</th>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: left;
+                               font-weight: 600;">Category</th>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: left;
+                               font-weight: 600;">Name</th>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: right;
+                               font-weight: 600;">Amount</th>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: center;
+                               font-weight: 600;">Status</th>
+                </tr>
+                {upcoming_rows}
+            </table>"""
+
+    # ---- CSS-only tabs ----
+    tab_name = f"exp-tab-{goal_id}"
+    cov_id = f"exp-tab-coverage-{goal_id}"
+    upc_id = f"exp-tab-upcoming-{goal_id}"
+    cov_panel = f"exp-panel-coverage-{goal_id}"
+    upc_panel = f"exp-panel-upcoming-{goal_id}"
+
+    css_rules = f"""
+        #{cov_id}:checked ~ .exp-tab-bar-{goal_id} label[for="{cov_id}"]
+            {{ background-color: #1e293b; color: #3b82f6; border-bottom-color: #3b82f6; }}
+        #{cov_id}:checked ~ #{cov_panel}
+            {{ display: block !important; }}
+        #{upc_id}:checked ~ .exp-tab-bar-{goal_id} label[for="{upc_id}"]
+            {{ background-color: #1e293b; color: #3b82f6; border-bottom-color: #3b82f6; }}
+        #{upc_id}:checked ~ #{upc_panel}
+            {{ display: block !important; }}
+    """
+
+    tab_label_style = (
+        'padding: 8px 14px; cursor: pointer; font-size: 12px; font-weight: 600;'
+        ' font-family: inherit; border-bottom: 2px solid transparent;'
+        ' color: #64748b; transition: all 0.2s;'
+    )
+
+    return f"""
+        <style>{css_rules}</style>
+        <div style="margin: 0 0 15px 0; background-color: #1e293b;
+                    border-radius: 8px; border: 1px solid #334155; overflow: hidden;">
+            <div style="padding: 12px 12px 0 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;
+                            margin: 0 0 8px 0;">
+                    <span style="color: #f1f5f9; font-weight: 600; font-size: 14px;">
+                        {g.get('name', '')}
+                        <span style="color: #94a3b8; font-weight: 400; font-size: 12px;
+                                     margin-left: 6px;">Expenses / {period.capitalize()}</span>
+                    </span>
+                    <span style="color: {bar_color}; font-size: 12px; font-weight: 600;">
+                        {pct:.0f}% Covered</span>
+                </div>
+                <div style="background-color: #334155; border-radius: 4px; height: 8px;
+                            overflow: hidden; margin-bottom: 10px;">
+                    <div style="background-color: {bar_color}; width: {bar_width}%;
+                                height: 100%; border-radius: 4px;"></div>
+                </div>
+            </div>
+            <input type="radio" name="{tab_name}" id="{cov_id}" style="display:none" checked>
+            <input type="radio" name="{tab_name}" id="{upc_id}" style="display:none">
+            <div class="exp-tab-bar-{goal_id}" style="display: flex;
+                        border-bottom: 1px solid #334155; background-color: #162032;">
+                <label for="{cov_id}" style="{tab_label_style}">Coverage</label>
+                <label for="{upc_id}" style="{tab_label_style}">Upcoming</label>
+            </div>
+            <div id="{cov_panel}" style="display: none; padding: 12px;">
+                {coverage_content}
+            </div>
+            <div id="{upc_panel}" style="display: none; padding: 12px;">
+                {upcoming_content}
+            </div>
         </div>"""
 
 

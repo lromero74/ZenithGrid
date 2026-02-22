@@ -103,6 +103,7 @@ def compute_expense_coverage(
             "category": item.category,
             "amount": item.amount,
             "frequency": item.frequency,
+            "due_day": getattr(item, "due_day", None),
             "normalized_amount": round(norm_amount, 2),
         })
 

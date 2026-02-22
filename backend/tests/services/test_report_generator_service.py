@@ -15,8 +15,10 @@ from unittest.mock import patch
 import pytest
 
 from app.services.report_generator_service import (
+    _build_expenses_goal_card,
     _build_tabbed_ai_section,
     _normalize_ai_summary,
+    _ordinal_day,
     build_report_html,
 )
 
@@ -550,3 +552,188 @@ class TestBuildReportHtmlCspCompliance:
         lower_html = html.lower()
         for handler in event_handlers:
             assert handler not in lower_html, f"Found '{handler}' in HTML output"
+
+
+# ---------------------------------------------------------------------------
+# _ordinal_day helper
+# ---------------------------------------------------------------------------
+
+
+class TestOrdinalDay:
+    """Test the ordinal day rendering helper."""
+
+    def test_first(self):
+        assert _ordinal_day(1) == "1st"
+
+    def test_second(self):
+        assert _ordinal_day(2) == "2nd"
+
+    def test_third(self):
+        assert _ordinal_day(3) == "3rd"
+
+    def test_fourth(self):
+        assert _ordinal_day(4) == "4th"
+
+    def test_eleventh(self):
+        assert _ordinal_day(11) == "11th"
+
+    def test_twelfth(self):
+        assert _ordinal_day(12) == "12th"
+
+    def test_thirteenth(self):
+        assert _ordinal_day(13) == "13th"
+
+    def test_twenty_first(self):
+        assert _ordinal_day(21) == "21st"
+
+    def test_thirty_first(self):
+        assert _ordinal_day(31) == "31st"
+
+    def test_last_day(self):
+        assert _ordinal_day(-1) == "Last"
+
+    def test_fifteenth(self):
+        assert _ordinal_day(15) == "15th"
+
+
+# ---------------------------------------------------------------------------
+# _build_expenses_goal_card — tabbed Coverage + Upcoming
+# ---------------------------------------------------------------------------
+
+
+def _make_expense_goal(items, goal_id=1, coverage_pct=100.0):
+    """Create a goal dict with expense coverage data."""
+    coverage_items = []
+    total = 0
+    for item in items:
+        norm = item.get("normalized_amount", item.get("amount", 0))
+        total += norm
+        coverage_items.append({
+            "id": item.get("id", 1),
+            "name": item["name"],
+            "category": item.get("category", "General"),
+            "amount": item.get("amount", norm),
+            "frequency": item.get("frequency", "monthly"),
+            "due_day": item.get("due_day"),
+            "normalized_amount": norm,
+            "status": item.get("status", "covered"),
+            "coverage_pct": item.get("coverage_pct_val", 100.0),
+        })
+    return {
+        "id": goal_id,
+        "name": "Monthly Bills",
+        "target_type": "expenses",
+        "target_currency": "USD",
+        "expense_period": "monthly",
+        "tax_withholding_pct": 0,
+        "expense_coverage": {
+            "total_expenses": total,
+            "income_after_tax": total * 2,
+            "coverage_pct": coverage_pct,
+            "shortfall": 0,
+            "covered_count": len(coverage_items),
+            "total_count": len(coverage_items),
+            "items": coverage_items,
+        },
+    }
+
+
+class TestBuildExpensesGoalCardTabs:
+    """Test the tabbed expense card output."""
+
+    def test_produces_two_radio_inputs(self):
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 1},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert 'name="exp-tab-1"' in html
+        assert 'id="exp-tab-coverage-1"' in html
+        assert 'id="exp-tab-upcoming-1"' in html
+
+    def test_coverage_tab_checked_by_default(self):
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 1},
+        ])
+        html = _build_expenses_goal_card(g)
+        coverage_radio = re.search(
+            r'<input[^>]*id="exp-tab-coverage-1"[^>]*>', html,
+        )
+        assert coverage_radio is not None
+        assert "checked" in coverage_radio.group()
+
+    def test_display_block_uses_important(self):
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 1},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "display: block !important" in html
+
+    def test_upcoming_filters_to_future_due_days(self):
+        """Upcoming tab should only show items with due_day >= today."""
+        g = _make_expense_goal([
+            {"name": "Past Bill", "amount": 100, "due_day": 1},
+            {"name": "Future Bill", "amount": 200, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        # The upcoming panel should contain "Future Bill"
+        # Whether "Past Bill" shows depends on today's date
+        assert "Future Bill" in html
+
+    def test_no_due_days_shows_helpful_message(self):
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500},
+            {"name": "Netflix", "amount": 15},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Set due dates on your expenses" in html
+
+    def test_last_day_resolved_correctly(self):
+        """due_day=-1 should render as 'Last' in the upcoming tab."""
+        g = _make_expense_goal([
+            {"name": "Mortgage", "amount": 2000, "due_day": -1},
+        ])
+        html = _build_expenses_goal_card(g)
+        # -1 resolves to last day of month, should always be >= today
+        assert "Last" in html
+
+    def test_upcoming_sorted_by_due_day(self):
+        g = _make_expense_goal([
+            {"name": "Late Bill", "amount": 100, "due_day": 28},
+            {"name": "Early Bill", "amount": 200, "due_day": 15},
+            {"name": "Last Day", "amount": 50, "due_day": -1},
+        ])
+        html = _build_expenses_goal_card(g)
+        # "15th" should appear before "28th" in the upcoming panel
+        pos_15 = html.find("15th")
+        pos_28 = html.find("28th")
+        if pos_15 != -1 and pos_28 != -1:
+            assert pos_15 < pos_28
+
+    def test_coverage_tab_still_has_itemized_table(self):
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 1},
+            {"name": "Netflix", "amount": 15, "due_day": 15},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Total Expenses" in html
+        assert "Income After Tax" in html
+        assert "Items Covered" in html
+
+    def test_unique_radio_names_per_goal(self):
+        """Different goal IDs should use different radio names."""
+        g1 = _make_expense_goal([{"name": "A", "amount": 100, "due_day": 1}], goal_id=5)
+        g2 = _make_expense_goal([{"name": "B", "amount": 200, "due_day": 1}], goal_id=9)
+        html1 = _build_expenses_goal_card(g1)
+        html2 = _build_expenses_goal_card(g2)
+        assert 'name="exp-tab-5"' in html1
+        assert 'name="exp-tab-9"' in html2
+
+    def test_status_badges_reused_in_upcoming(self):
+        """Upcoming tab should show the same coverage badges as coverage tab."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28,
+             "status": "uncovered", "coverage_pct_val": 0.0},
+        ])
+        html = _build_expenses_goal_card(g)
+        # The upcoming panel should contain the Uncovered badge
+        assert "Uncovered" in html

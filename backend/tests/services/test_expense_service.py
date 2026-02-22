@@ -244,6 +244,47 @@ class TestComputeExpenseCoverage:
         assert "next_uncovered_name" not in result
 
 
+class TestComputeExpenseCoverageDueDay:
+    """Test that due_day is carried through the coverage waterfall."""
+
+    def test_due_day_included_in_output(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Rent", 1500, "monthly", due_day=1)]
+        result = compute_expense_coverage(items, "monthly", 2000.0, 0.0)
+        assert result["items"][0]["due_day"] == 1
+
+    def test_due_day_none_when_not_set(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Netflix", 15, "monthly")]
+        result = compute_expense_coverage(items, "monthly", 100.0, 0.0)
+        assert result["items"][0]["due_day"] is None
+
+    def test_mixed_due_day_values(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Rent", 1500, "monthly", due_day=1),
+            _mock_item("Netflix", 15, "monthly"),
+            _mock_item("Insurance", 200, "monthly", due_day=-1),
+        ]
+        result = compute_expense_coverage(items, "monthly", 5000.0, 0.0)
+        due_days = {i["name"]: i["due_day"] for i in result["items"]}
+        assert due_days["Rent"] == 1
+        assert due_days["Netflix"] is None
+        assert due_days["Insurance"] == -1
+
+    def test_due_day_does_not_affect_sort_order(self):
+        """Items should still be sorted by normalized_amount, not due_day."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Rent", 1500, "monthly", due_day=28),
+            _mock_item("Netflix", 15, "monthly", due_day=1),
+        ]
+        result = compute_expense_coverage(items, "monthly", 5000.0, 0.0)
+        # Netflix (15) should come before Rent (1500)
+        assert result["items"][0]["name"] == "Netflix"
+        assert result["items"][1]["name"] == "Rent"
+
+
 class TestDefaultExpenseCategories:
     """Verify the default category list."""
 
@@ -257,7 +298,8 @@ class TestDefaultExpenseCategories:
 
 # ----- Helpers -----
 
-def _mock_item(name: str, amount: float, frequency: str, frequency_n: int = None):
+def _mock_item(name: str, amount: float, frequency: str,
+               frequency_n: int = None, due_day: int = None):
     """Create a mock expense item for testing."""
     item = MagicMock()
     item.name = name
@@ -265,5 +307,6 @@ def _mock_item(name: str, amount: float, frequency: str, frequency_n: int = None
     item.amount = amount
     item.frequency = frequency
     item.frequency_n = frequency_n
+    item.due_day = due_day
     item.is_active = True
     return item
