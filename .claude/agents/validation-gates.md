@@ -57,8 +57,12 @@ If only specific areas changed, run targeted tests:
 - Check that no service imports from a router
 - Verify no circular imports were introduced
 
-### 6. File Size Check
-- Flag any file exceeding ~1200 lines — it should be split into modules
+### 6. Size Checks
+- Flag any **file** exceeding ~1200 lines — it should be split into modules
+- Flag any **function** exceeding ~50 lines — it should be broken into smaller functions with single responsibilities
+  - Check changed files only (not the entire codebase)
+  - Use `grep -n "def \|async def " <file>` to find function boundaries and measure line counts
+  - Exclude test files from function length checks (test functions can be longer)
 
 ## Iterative Fix Process
 

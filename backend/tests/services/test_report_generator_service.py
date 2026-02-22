@@ -246,6 +246,39 @@ class TestBuildTabbedAiSectionMultiple:
         assert "#ai-tab-beginner:checked ~ #ai-panel-beginner" in result
         assert "#ai-tab-comfortable:checked ~ #ai-panel-comfortable" in result
 
+    def test_display_block_uses_important(self, two_tier_summary):
+        """CSS display:block must use !important to override inline display:none."""
+        result = _build_tabbed_ai_section(
+            two_tier_summary, "comfortable", BRAND_COLOR,
+        )
+        # Each panel's CSS rule must have !important so it overrides inline style
+        assert "display: block !important" in result
+        # Verify the pattern for each available tier
+        for tier in ["beginner", "comfortable"]:
+            rule = f"#ai-tab-{tier}:checked ~ #ai-panel-{tier}"
+            rule_idx = result.index(rule)
+            # The !important should appear in the same CSS rule block
+            rule_end = result.index("}", rule_idx)
+            rule_text = result[rule_idx:rule_end]
+            assert "!important" in rule_text, (
+                f"CSS rule for {tier} panel missing !important"
+            )
+
+    def test_display_block_important_three_tiers(self, three_tier_summary):
+        """All three tier panel rules must use !important."""
+        result = _build_tabbed_ai_section(
+            three_tier_summary, "comfortable", BRAND_COLOR,
+        )
+        for tier in ["beginner", "comfortable", "experienced"]:
+            rule = f"#ai-tab-{tier}:checked ~ #ai-panel-{tier}"
+            assert rule in result
+            rule_idx = result.index(rule)
+            rule_end = result.index("}", rule_idx)
+            rule_text = result[rule_idx:rule_end]
+            assert "!important" in rule_text, (
+                f"CSS rule for {tier} panel missing !important"
+            )
+
     def test_default_level_gets_checked_attribute(self, three_tier_summary):
         result = _build_tabbed_ai_section(
             three_tier_summary, "comfortable", BRAND_COLOR,
