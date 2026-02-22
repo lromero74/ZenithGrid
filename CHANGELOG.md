@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.33.0] - 2026-02-22
+
+### Added
+- **Video tab pagination**: Videos now load 50 at a time instead of all ~4000 at once, dramatically reducing thumbnail requests and page load time. Pagination controls match the article tab style. "Play All" and the playlist dropdown still use the full filtered list.
+
 ## [v2.32.8] - 2026-02-20
 
 ### Fixed
