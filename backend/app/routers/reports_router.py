@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models import (
+    GoalProgressSnapshot,
     Report,
     ReportGoal,
     ReportSchedule,
@@ -429,6 +430,70 @@ async def delete_goal(
     await db.delete(goal)
     await db.commit()
     return {"detail": "Goal deleted"}
+
+
+# ----- Goal Trend -----
+
+@router.get("/goals/{goal_id}/trend")
+async def get_goal_trend(
+    goal_id: int,
+    from_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    to_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Get trend line data for a specific goal."""
+    from app.services.goal_snapshot_service import (
+        backfill_goal_snapshots,
+        get_goal_trend_data,
+    )
+    from sqlalchemy import func as sa_func
+
+    result = await db.execute(
+        select(ReportGoal).where(
+            ReportGoal.id == goal_id,
+            ReportGoal.user_id == current_user.id,
+        )
+    )
+    goal = result.scalar_one_or_none()
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    if goal.target_type == "income":
+        raise HTTPException(
+            status_code=400,
+            detail="Trend charts are not yet supported for income goals"
+        )
+
+    # Auto-backfill if no snapshots exist yet
+    count_result = await db.execute(
+        select(sa_func.count(GoalProgressSnapshot.id)).where(
+            GoalProgressSnapshot.goal_id == goal_id
+        )
+    )
+    snapshot_count = count_result.scalar() or 0
+
+    if snapshot_count == 0:
+        backfill_count = await backfill_goal_snapshots(db, goal)
+        if backfill_count > 0:
+            await db.commit()
+
+    # Parse optional date filters
+    parsed_from = None
+    parsed_to = None
+    if from_date:
+        try:
+            parsed_from = datetime.strptime(from_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid from_date format")
+    if to_date:
+        try:
+            parsed_to = datetime.strptime(to_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid to_date format")
+
+    trend_data = await get_goal_trend_data(db, goal, parsed_from, parsed_to)
+    return trend_data
 
 
 # ----- Schedules CRUD -----

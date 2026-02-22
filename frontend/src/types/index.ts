@@ -548,3 +548,27 @@ export interface ReportSummary {
   html_content?: string | null
   created_at: string | null
 }
+
+// Goal Trend Chart
+export interface GoalTrendPoint {
+  date: string
+  current_value: number
+  ideal_value: number
+  progress_pct: number
+  on_track: boolean
+}
+
+export interface GoalTrendData {
+  goal: {
+    id: number
+    name: string
+    target_type: string
+    target_currency: string
+    target_value: number
+    start_date: string
+    target_date: string
+  }
+  ideal_start_value: number
+  ideal_end_value: number
+  data_points: GoalTrendPoint[]
+}

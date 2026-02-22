@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.35.0] - 2026-02-22
+
+### Added
+- **Goal trend line chart**: Visual progress tracking for financial goals — shows actual portfolio value vs. ideal trajectory over time with an interactive chart
+- **Daily goal progress snapshots**: Automatic daily capture of goal progress during the account snapshot cycle for historical trend data
+- **Auto-backfill on first view**: Existing goals automatically reconstruct historical progress from account value snapshots when you first view their trend
+- **Smart on-track detection**: Chart shows whether you're ahead or behind your target trajectory with color-coded status badges
+
 ## [v2.34.1] - 2026-02-22
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.34.1",
+  "version": "v2.35.0",
   "updated": "2026-02-22",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -20,7 +20,7 @@
       "bundler": "Vite",
       "styling": "TailwindCSS",
       "state": "React Context + React Query",
-      "charts": "Lightweight Charts (TradingView)",
+      "charts": "Lightweight Charts (TradingView), Recharts",
       "http": "Axios",
       "routing": "react-router-dom"
     },
@@ -58,7 +58,8 @@
       { "file": "routers/system_router.py", "prefix": "/api", "purpose": "Health check, dashboard stats, monitor control, system status" },
       { "file": "routers/templates.py", "prefix": "/api/templates", "purpose": "Bot template CRUD" },
       { "file": "routers/trading_router.py", "prefix": "/api/trading", "purpose": "Manual buy/sell orders for portfolio management" },
-      { "file": "routers/prop_guard_router.py", "prefix": "/api/propguard", "purpose": "PropGuard safety monitoring: status, kill switch, reset, history" }
+      { "file": "routers/prop_guard_router.py", "prefix": "/api/propguard", "purpose": "PropGuard safety monitoring: status, kill switch, reset, history" },
+      { "file": "routers/reports_router.py", "prefix": "/api/reports", "purpose": "Financial goals CRUD, report schedules, generated reports, goal trend data with auto-backfill" }
     ],
 
     "sub_routers": {
@@ -121,11 +122,16 @@
       { "name": "AccountValueSnapshot", "table": "account_value_snapshots", "key_fields": ["id", "account_id", "timestamp", "btc_value", "usd_value"] },
       { "name": "MetricSnapshot", "table": "metric_snapshots", "key_fields": ["id", "metric_type", "timestamp", "value_json"] },
       { "name": "PropFirmState", "table": "prop_firm_state", "key_fields": ["id", "account_id", "initial_deposit", "current_equity", "is_killed", "kill_reason"] },
-      { "name": "PropFirmEquitySnapshot", "table": "prop_firm_equity_snapshots", "key_fields": ["id", "account_id", "equity", "daily_drawdown_pct", "total_drawdown_pct", "timestamp"] }
+      { "name": "PropFirmEquitySnapshot", "table": "prop_firm_equity_snapshots", "key_fields": ["id", "account_id", "equity", "daily_drawdown_pct", "total_drawdown_pct", "timestamp"] },
+      { "name": "ReportGoal", "table": "report_goals", "key_fields": ["id", "user_id", "name", "target_type", "target_currency", "target_value", "start_date", "target_date", "is_active"], "purpose": "User financial targets (balance, profit, income) with time horizons for report tracking" },
+      { "name": "ReportSchedule", "table": "report_schedules", "key_fields": ["id", "user_id", "account_id", "name", "schedule_type", "is_active"], "purpose": "Report delivery configuration — when and how reports are generated" },
+      { "name": "ReportScheduleGoal", "table": "report_schedule_goals", "key_fields": ["id", "schedule_id", "goal_id"], "purpose": "Junction table linking report schedules to goals (many-to-many)" },
+      { "name": "Report", "table": "reports", "key_fields": ["id", "user_id", "schedule_id", "metrics_json", "html_content", "pdf_data"], "purpose": "Generated report instances with metrics, HTML, PDF, and AI summary" },
+      { "name": "GoalProgressSnapshot", "table": "goal_progress_snapshots", "key_fields": ["id", "goal_id", "user_id", "snapshot_date", "current_value", "target_value", "progress_pct", "on_track", "created_at"], "purpose": "Daily goal progress data points for trend line visualization, captured during account snapshot cycle" }
     ],
 
     "services": [
-      { "file": "services/account_snapshot_service.py", "purpose": "Captures daily account value snapshots for historical charting", "type": "background" },
+      { "file": "services/account_snapshot_service.py", "purpose": "Captures daily account value snapshots for historical charting; triggers goal progress snapshot capture", "type": "background" },
       { "file": "services/ai_credential_service.py", "purpose": "Per-user AI provider credential management and retrieval", "type": "infrastructure" },
       { "file": "services/ai_grid_optimizer.py", "purpose": "AI-powered grid parameter optimization", "type": "analysis" },
       { "file": "services/auto_buy_monitor.py", "purpose": "Auto-converts stablecoins to BTC when balances exceed minimums", "type": "background" },
@@ -139,6 +145,7 @@
       { "file": "services/domain_blacklist_service.py", "purpose": "Domain-level blocking for content sources that block our IP", "type": "infrastructure" },
       { "file": "services/email_service.py", "purpose": "AWS SES email sending for verification, password reset, MFA codes", "type": "infrastructure" },
       { "file": "services/exchange_service.py", "purpose": "Per-user, per-account exchange client instantiation with async locking and double-checked caching", "type": "exchange" },
+      { "file": "services/goal_snapshot_service.py", "purpose": "Captures daily goal progress snapshots, backfills from AccountValueSnapshot history, provides trend data for charting", "type": "background" },
       { "file": "services/grid_rotation_service.py", "purpose": "Periodic profit lock-in and grid refresh for winning positions", "type": "trading" },
       { "file": "services/grid_trading_service.py", "purpose": "Grid bot lifecycle: initialization, level management, order placement", "type": "trading" },
       { "file": "services/indicator_log_service.py", "purpose": "Logs indicator condition evaluations for non-AI bots", "type": "logging" },
@@ -316,11 +323,11 @@
       { "name": "DecisionLogCleanup", "interval": "Daily", "purpose": "Remove old AI decision logs" },
       { "name": "FailedConditionCleanup", "interval": "6 hours", "purpose": "Remove noise indicator condition logs" },
       { "name": "FailedOrderCleanup", "interval": "6 hours", "purpose": "Remove old failed order records" },
-      { "name": "AccountSnapshotCapture", "interval": "Daily (24 hours)", "purpose": "Capture account value snapshots for historical charts" }
+      { "name": "AccountSnapshotCapture", "interval": "Daily (24 hours)", "purpose": "Capture account value snapshots for historical charts and goal progress snapshots" }
     ],
 
     "migrations": {
-      "count": 30,
+      "count": 31,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -355,7 +362,8 @@
         "move_news_images_to_filesystem.py",
         "add_revoked_tokens.py",
         "remove_medicalxpress_source.py",
-        "replace_paywalled_sources.py"
+        "replace_paywalled_sources.py",
+        "add_goal_progress_snapshots.py"
       ]
     }
   },
@@ -370,7 +378,8 @@
       { "file": "pages/News.tsx", "route": "/news", "purpose": "Aggregated news, video player, article reader with TTS, sentiment cards" },
       { "file": "pages/Charts.tsx", "route": "/charts", "purpose": "Technical analysis with multiple indicators, timeframes, chart types" },
       { "file": "pages/Settings.tsx", "route": "/settings", "purpose": "User settings, password, accounts, AI credentials, blacklist config" },
-      { "file": "pages/Login.tsx", "route": "(auth page)", "purpose": "Email/password login and signup form" }
+      { "file": "pages/Login.tsx", "route": "(auth page)", "purpose": "Email/password login and signup form" },
+      { "file": "pages/Reports.tsx", "route": "/reports", "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history" }
     ],
 
     "components": {
@@ -446,6 +455,11 @@
         { "file": "components/cards/StablecoinMcapCard.tsx", "purpose": "Stablecoin market cap card" },
         { "file": "components/cards/TotalMarketCapCard.tsx", "purpose": "Total crypto market cap card" },
         { "file": "components/DebtCeilingModal.tsx", "purpose": "Debt ceiling detail modal" }
+      ],
+      "reports": [
+        { "file": "components/reports/GoalProgressBar.tsx", "purpose": "Visual progress bar for individual goal completion" },
+        { "file": "components/reports/GoalTrendChart.tsx", "purpose": "Recharts ComposedChart showing actual vs ideal goal progress over time with on-track status" },
+        { "file": "components/reports/ReportViewModal.tsx", "purpose": "Modal for viewing generated report details" }
       ],
       "prop_firm": [
         { "file": "components/PropGuardStatus.tsx", "purpose": "PropGuard drawdown monitoring dashboard for prop firm accounts" }
@@ -568,7 +582,8 @@
         { "name": "blacklistApi", "purpose": "Blacklist and category management with AI review" },
         { "name": "aiCredentialsApi", "purpose": "AI provider credential management" },
         { "name": "autoBuyApi", "purpose": "Auto-buy BTC settings" },
-        { "name": "accountValueApi", "purpose": "Historical account value snapshots" }
+        { "name": "accountValueApi", "purpose": "Historical account value snapshots" },
+        { "name": "reportsApi", "purpose": "Goals CRUD, goal trend data, report schedules, generated reports" }
       ]
     },
 
@@ -607,7 +622,8 @@
         "account": ["Balances", "AggregateValue", "DashboardStats", "Settings"],
         "market": ["Candle", "ReservedBalances", "MarketData"],
         "perps": ["PerpsProduct", "PerpsPosition", "PerpsPortfolio"],
-        "sentiment": ["FearGreedData", "BTCDominanceResponse", "AltseasonIndexResponse", "ATHResponse", "BTCRSIResponse", "HalvingCountdown", "DebtCeilingEvent"]
+        "sentiment": ["FearGreedData", "BTCDominanceResponse", "AltseasonIndexResponse", "ATHResponse", "BTCRSIResponse", "HalvingCountdown", "DebtCeilingEvent"],
+        "reports": ["ReportGoal", "ReportSchedule", "ReportSummary", "GoalTrendPoint", "GoalTrendData"]
       }
     },
 
