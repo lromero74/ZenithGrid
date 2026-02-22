@@ -1386,6 +1386,7 @@ class ExpenseItem(Base):
     frequency = Column(String, nullable=False)  # daily/weekly/biweekly/every_n_days/monthly/quarterly/yearly
     frequency_n = Column(Integer, nullable=True)  # Only for every_n_days
     frequency_anchor = Column(String, nullable=True)  # Start date for every_n_days (YYYY-MM-DD)
+    due_day = Column(Integer, nullable=True)  # Day of month (1-31, -1 for last day)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

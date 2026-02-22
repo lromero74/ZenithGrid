@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.38.0] - 2026-02-22
+
+### Added
+- **Expense due days**: Set the day of month (1-31 or last day) when each expense is due
+- **Upcoming expenses tab**: Report expense cards now have two tabs — "Coverage" (existing waterfall) and "Upcoming" (bills remaining this month sorted by due date)
+- **Due day badges**: Expense list in the editor shows a compact "Due 15th" or "Due last" badge next to each item
+
 ## [v2.37.1] - 2026-02-22
 
 ### Fixed

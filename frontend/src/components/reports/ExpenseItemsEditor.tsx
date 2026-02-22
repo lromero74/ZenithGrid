@@ -57,6 +57,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
   const [amount, setAmount] = useState('')
   const [frequency, setFrequency] = useState('monthly')
   const [frequencyN, setFrequencyN] = useState('')
+  const [dueDay, setDueDay] = useState('')
+  const [dueDayLast, setDueDayLast] = useState(false)
 
   const resetForm = () => {
     setCategory('')
@@ -65,6 +67,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     setAmount('')
     setFrequency('monthly')
     setFrequencyN('')
+    setDueDay('')
+    setDueDayLast(false)
     setEditing(null)
     setShowForm(false)
   }
@@ -77,6 +81,16 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
       setAmount(String(editing.amount))
       setFrequency(editing.frequency)
       setFrequencyN(editing.frequency_n ? String(editing.frequency_n) : '')
+      if (editing.due_day === -1) {
+        setDueDayLast(true)
+        setDueDay('')
+      } else if (editing.due_day) {
+        setDueDayLast(false)
+        setDueDay(String(editing.due_day))
+      } else {
+        setDueDayLast(false)
+        setDueDay('')
+      }
       setShowForm(true)
     }
   }, [editing, categories])
@@ -111,6 +125,11 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     }
     if (frequency === 'every_n_days') {
       data.frequency_n = parseInt(frequencyN)
+    }
+    if (dueDayLast) {
+      data.due_day = -1
+    } else if (dueDay) {
+      data.due_day = parseInt(dueDay)
     }
     if (editing) {
       updateItem.mutate({ id: editing.id, data })
@@ -220,6 +239,32 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
         )}
       </div>
 
+      {/* Due day */}
+      <div>
+        <label className="block text-xs text-slate-400 mb-1.5">Due Day (optional)</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            value={dueDay}
+            onChange={e => setDueDay(e.target.value)}
+            min="1"
+            max="31"
+            disabled={dueDayLast}
+            placeholder="1-31"
+            className="w-20 px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-40"
+          />
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={dueDayLast}
+              onChange={e => { setDueDayLast(e.target.checked); if (e.target.checked) setDueDay('') }}
+              className="rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
+            />
+            <span className="text-xs text-slate-400">Last day of month</span>
+          </label>
+        </div>
+      </div>
+
       <div className="flex justify-end">
         <button
           type="submit"
@@ -266,6 +311,11 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
                       <span>{prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}</span>
                       {item.frequency === 'every_n_days' && item.frequency_n && (
                         <span>(every {item.frequency_n} days)</span>
+                      )}
+                      {item.due_day != null && (
+                        <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
+                          Due {item.due_day === -1 ? 'last' : `${item.due_day}${item.due_day === 1 || item.due_day === 21 || item.due_day === 31 ? 'st' : item.due_day === 2 || item.due_day === 22 ? 'nd' : item.due_day === 3 || item.due_day === 23 ? 'rd' : 'th'}`}
+                        </span>
                       )}
                       <span className="text-slate-500">|</span>
                       <span className="text-blue-400">
