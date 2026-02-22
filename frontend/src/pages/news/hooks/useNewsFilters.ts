@@ -44,10 +44,14 @@ export interface UseNewsFiltersReturn {
   setFullArticlesOnly: (value: boolean) => void
   currentPage: number
   setCurrentPage: (page: number | ((prev: number) => number)) => void
+  videoPage: number
+  setVideoPage: (page: number | ((prev: number) => number)) => void
   filteredNews: NewsItem[]
   filteredVideos: VideoItem[]
   paginatedNews: NewsItem[]
+  paginatedVideos: VideoItem[]
   totalPages: number
+  videoTotalPages: number
   totalFilteredItems: number
 }
 
@@ -98,6 +102,7 @@ export const useNewsFilters = ({
     () => new Set(saved?.selectedVideoCategories?.length ? saved.selectedVideoCategories : NEWS_CATEGORIES)
   )
   const [currentPage, setCurrentPage] = useState(saved?.currentPage ?? 1)
+  const [videoPage, setVideoPage] = useState(saved?.videoPage ?? 1)
   const [seenFilter, setSeenFilter] = useState<SeenFilter>(saved?.seenFilter ?? 'all')
   const [seenVideoFilter, setSeenVideoFilter] = useState<SeenFilter>(saved?.seenVideoFilter ?? 'all')
   const [fullArticlesOnly, setFullArticlesOnly] = useState<boolean>(saved?.fullArticlesOnly ?? false)
@@ -110,11 +115,12 @@ export const useNewsFilters = ({
       selectedVideoSources: Array.from(selectedVideoSources),
       selectedVideoCategories: Array.from(selectedVideoCategories),
       currentPage,
+      videoPage,
       seenFilter,
       seenVideoFilter,
       fullArticlesOnly,
     })
-  }, [selectedSources, selectedCategories, selectedVideoSources, selectedVideoCategories, currentPage, seenFilter, seenVideoFilter, fullArticlesOnly])
+  }, [selectedSources, selectedCategories, selectedVideoSources, selectedVideoCategories, currentPage, videoPage, seenFilter, seenVideoFilter, fullArticlesOnly])
 
   const allCategoriesSelected = selectedCategories.size === NEWS_CATEGORIES.length
   const allVideoCategoriesSelected = selectedVideoCategories.size === NEWS_CATEGORIES.length
@@ -177,6 +183,7 @@ export const useNewsFilters = ({
       return next
     })
     setSelectedVideoSources(new Set())
+    setVideoPage(1)
   }, [])
 
   const toggleAllVideoCategories = useCallback(() => {
@@ -188,6 +195,7 @@ export const useNewsFilters = ({
       }
     })
     setSelectedVideoSources(new Set())
+    setVideoPage(1)
   }, [])
 
   const allVideoSourcesSelected = selectedVideoSources.size === 0
@@ -202,10 +210,12 @@ export const useNewsFilters = ({
       }
       return next
     })
+    setVideoPage(1)
   }, [])
 
   const toggleAllVideoSources = useCallback(() => {
     setSelectedVideoSources(new Set())
+    setVideoPage(1)
   }, [])
 
   // Filter news by selected categories, then source, then seen status, then full-article toggle
@@ -235,12 +245,29 @@ export const useNewsFilters = ({
     [filteredNews, currentPage, pageSize]
   )
 
+  // Video pagination - same pattern as articles
+  const videoTotalPages = useMemo(
+    () => calculateTotalPages(filteredVideos.length, pageSize),
+    [filteredVideos.length, pageSize]
+  )
+
+  const paginatedVideos = useMemo(
+    () => paginateItems(filteredVideos, videoPage, pageSize),
+    [filteredVideos, videoPage, pageSize]
+  )
+
   // Reset to page 1 if current page is out of bounds (e.g., after filtering)
   useEffect(() => {
     if (shouldResetPage(currentPage, totalPages)) {
       setCurrentPage(1)
     }
   }, [currentPage, totalPages])
+
+  useEffect(() => {
+    if (shouldResetPage(videoPage, videoTotalPages)) {
+      setVideoPage(1)
+    }
+  }, [videoPage, videoTotalPages])
 
   return {
     selectedSources,
@@ -267,10 +294,14 @@ export const useNewsFilters = ({
     setFullArticlesOnly,
     currentPage,
     setCurrentPage,
+    videoPage,
+    setVideoPage,
     filteredNews,
     filteredVideos,
     paginatedNews,
+    paginatedVideos,
     totalPages,
+    videoTotalPages,
     totalFilteredItems,
   }
 }

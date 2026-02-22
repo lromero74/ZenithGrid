@@ -129,10 +129,14 @@ export default function News() {
     setFullArticlesOnly,
     currentPage,
     setCurrentPage,
+    videoPage,
+    setVideoPage,
     filteredNews,
     filteredVideos,
     paginatedNews,
+    paginatedVideos,
     totalPages,
+    videoTotalPages,
     totalFilteredItems,
   } = useNewsFilters({ newsData, videoData, pageSize: PAGE_SIZE })
 
@@ -237,10 +241,23 @@ export default function News() {
     }
   }, [filteredNews, currentPage, setCurrentPage, activeTab])
 
+  // Navigate to the page containing a video, then scroll to it
+  const findVideo = useCallback((videoId: string, addPulse = false) => {
+    const idx = filteredVideos.findIndex(v => v.video_id === videoId)
+    if (idx === -1) return
+    const targetPage = Math.floor(idx / PAGE_SIZE) + 1
+    if (targetPage !== videoPage) {
+      setVideoPage(targetPage)
+      setTimeout(() => scrollToVideo(videoId, addPulse), 100)
+    } else {
+      scrollToVideo(videoId, addPulse)
+    }
+  }, [filteredVideos, videoPage, setVideoPage])
+
   // Scroll to currently playing video (centered in viewport) with pulse effect
   const scrollToPlayingVideo = () => {
     if (!currentVideo) return
-    scrollToVideo(currentVideo.video_id, true)
+    findVideo(currentVideo.video_id, true)
   }
 
   // Get unique sources from actual news items
@@ -400,6 +417,7 @@ export default function News() {
                     setCurrentPage(1)
                   } else {
                     setSeenVideoFilter(f)
+                    setVideoPage(1)
                   }
                 }}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -1078,9 +1096,9 @@ export default function News() {
                       }}
                       onMouseEnter={() => {
                         setHoveredPlaylistIndex(idx)
-                        // Scroll to and highlight the video in the grid
+                        // Navigate to correct page, scroll to, and highlight the video in the grid
                         highlightVideo(video.video_id)
-                        scrollToVideo(video.video_id, false)
+                        findVideo(video.video_id, false)
                       }}
                       onMouseLeave={() => {
                         setHoveredPlaylistIndex(null)
@@ -1109,7 +1127,7 @@ export default function News() {
 
           {/* Videos grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredVideos.map((video, idx) => {
+            {paginatedVideos.map((video, idx) => {
               // Use unique key combining source and video_id to avoid collisions
               const uniqueKey = `${video.source}-${video.video_id}`
 
@@ -1117,8 +1135,10 @@ export default function News() {
               const isCurrentlyPlaying = isPlaylistPlaying && currentVideo?.video_id === video.video_id
 
               // Handler to play this specific video in expanded modal
+              // Use absolute index into filteredVideos so the full playlist plays correctly
+              const absoluteIdx = (videoPage - 1) * PAGE_SIZE + idx
               const handlePlayVideo = () => {
-                startPlaylist(filteredVideos as ContextVideoItem[], idx, true) // true = start expanded
+                startPlaylist(filteredVideos as ContextVideoItem[], absoluteIdx, true) // true = start expanded
               }
 
               return (
@@ -1237,6 +1257,58 @@ export default function News() {
               )
             })}
           </div>
+
+          {/* Video pagination controls */}
+          {videoTotalPages > 1 && (
+            <div className="flex items-center justify-center space-x-4 py-6">
+              <button
+                onClick={() => setVideoPage(p => Math.max(1, p - 1))}
+                disabled={videoPage === 1}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                Previous
+              </button>
+              <div className="flex items-center space-x-2">
+                {Array.from({ length: videoTotalPages }, (_, i) => i + 1)
+                  .filter(pageNum => {
+                    if (pageNum === 1 || pageNum === videoTotalPages) return true
+                    if (Math.abs(pageNum - videoPage) <= 1) return true
+                    return false
+                  })
+                  .map((pageNum, idx, arr) => (
+                    <span key={pageNum} className="flex items-center">
+                      {idx > 0 && arr[idx - 1] !== pageNum - 1 && (
+                        <span className="px-2 text-slate-500">...</span>
+                      )}
+                      <button
+                        onClick={() => setVideoPage(pageNum)}
+                        className={`w-10 h-10 rounded-lg transition-colors ${
+                          videoPage === pageNum
+                            ? 'bg-red-600 text-white'
+                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    </span>
+                  ))}
+              </div>
+              <button
+                onClick={() => setVideoPage(p => Math.min(videoTotalPages, p + 1))}
+                disabled={videoPage === videoTotalPages}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
+
+          {/* Video page info */}
+          {filteredVideos.length > 0 && (
+            <div className="text-center text-sm text-slate-500">
+              Showing {((videoPage - 1) * PAGE_SIZE) + 1}-{Math.min(videoPage * PAGE_SIZE, filteredVideos.length)} of {filteredVideos.length} videos
+            </div>
+          )}
 
           {/* Empty state for videos */}
           {filteredVideos.length === 0 && (
