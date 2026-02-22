@@ -1326,6 +1326,23 @@ class MultiBotMonitor:
                 self._previous_indicators_cache[cache_key] = signal_data["indicators"].copy()
                 logger.debug(f"    Updated previous_indicators cache for {cache_key}")
 
+            # Check max_synthetic_pct threshold — skip pair if too many gap-filled candles
+            max_synthetic_pct = strategy_config.get("max_synthetic_pct")
+            if max_synthetic_pct is not None and signal_data and "indicators" in signal_data:
+                indicators_snap = signal_data["indicators"]
+                # Find gap_fill_pct from any timeframe (check with and without timeframe prefix)
+                gap_fill = indicators_snap.get("gap_fill_pct")
+                if gap_fill is None:
+                    for key, val in indicators_snap.items():
+                        if key.endswith("_gap_fill_pct") and val is not None:
+                            gap_fill = val
+                            break
+                if gap_fill is not None and gap_fill > max_synthetic_pct:
+                    logger.warning(
+                        f"  Skipping {product_id}: gap_fill_pct={gap_fill:.1f}% > max_synthetic_pct={max_synthetic_pct}%"
+                    )
+                    return {"action": "none", "reason": f"Synthetic candle % too high ({gap_fill:.1f}% > {max_synthetic_pct}%)"}
+
             # Commit any position changes (e.g., previous_indicators for crossing detection)
             if existing_position is not None:
                 await db.commit()

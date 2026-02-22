@@ -5,6 +5,25 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.34.0] - 2026-02-22
+
+### Added
+- **Password visibility toggle on login**: Eye icon to show/hide password while typing, auto-hides after 5 seconds
+- **TradingView chart loading indicator**: Spinner overlay while the chart widget downloads and initializes
+- **Max Synthetic Candles % setting**: New bot-level filter to skip pairs with too many gap-filled candles during analysis
+- **Broken articles "Retry All"**: When filtering to Broken articles, "Read All" becomes "Retry All" and re-attempts TTS instead of skipping
+
+### Fixed
+- **Modal buttons hidden behind mini player**: Modals now render above the article reader mini player
+- **Number input snapping to 0**: Editing deal settings (take profit, safety orders, etc.) no longer snaps to 0 when clearing the field
+- **Category filter resetting source selection**: Changing news/video categories no longer clears your source filter
+- **"All" category button toggling confusingly**: "All" now always selects all categories instead of toggling to a single category
+
+### Changed
+- **Indicator logs responsive on mobile**: Filters wrap, condition details stack vertically, modal uses full viewport width
+- **Bot config modal responsive on mobile**: Capped to viewport width, reduced padding, action buttons wrap
+- **Balance columns readable on mobile**: Narrower columns, smaller text, BTC values show 6 decimals instead of 8
+
 ## [v2.33.0] - 2026-02-22
 
 ### Added

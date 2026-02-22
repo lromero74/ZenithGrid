@@ -17,39 +17,46 @@ export function EditPositionSettingsModal({
   const config = position.strategy_config_snapshot || {}
 
   // Form state initialized from current config snapshot
-  const [takeProfitPercentage, setTakeProfitPercentage] = useState<number>(
-    config.take_profit_percentage ?? 1.5
+  // Use string state for number inputs to allow natural editing (clearing, typing)
+  const [takeProfitPercentage, setTakeProfitPercentage] = useState<string>(
+    String(config.take_profit_percentage ?? 1.5)
   )
-  const [maxSafetyOrders, setMaxSafetyOrders] = useState<number>(
-    config.max_safety_orders ?? 5
+  const [maxSafetyOrders, setMaxSafetyOrders] = useState<string>(
+    String(config.max_safety_orders ?? 5)
   )
   const [trailingTakeProfit, setTrailingTakeProfit] = useState<boolean>(
     config.trailing_take_profit ?? false
   )
-  const [trailingTpDeviation, setTrailingTpDeviation] = useState<number>(
-    config.trailing_tp_deviation ?? 0.5
+  const [trailingTpDeviation, setTrailingTpDeviation] = useState<string>(
+    String(config.trailing_tp_deviation ?? 0.5)
   )
   const [stopLossEnabled, setStopLossEnabled] = useState<boolean>(
     config.stop_loss_enabled ?? false
   )
-  const [stopLossPercentage, setStopLossPercentage] = useState<number>(
-    config.stop_loss_percentage ?? -10
+  const [stopLossPercentage, setStopLossPercentage] = useState<string>(
+    String(config.stop_loss_percentage ?? -10)
   )
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  // Parse string state to numbers for comparison and submission
+  const parsedTakeProfit = parseFloat(takeProfitPercentage) || 0
+  const parsedMaxSafety = parseInt(maxSafetyOrders) || 0
+  const parsedTrailingDev = parseFloat(trailingTpDeviation) || 0
+  const parsedStopLoss = parseFloat(stopLossPercentage) || 0
+
   // Track which fields have been modified
   const hasChanges = () => {
     const originalConfig = position.strategy_config_snapshot || {}
     return (
-      takeProfitPercentage !== (originalConfig.take_profit_percentage ?? 1.5) ||
-      maxSafetyOrders !== (originalConfig.max_safety_orders ?? 5) ||
+      parsedTakeProfit !== (originalConfig.take_profit_percentage ?? 1.5) ||
+      parsedMaxSafety !== (originalConfig.max_safety_orders ?? 5) ||
       trailingTakeProfit !== (originalConfig.trailing_take_profit ?? false) ||
-      trailingTpDeviation !== (originalConfig.trailing_tp_deviation ?? 0.5) ||
+      parsedTrailingDev !== (originalConfig.trailing_tp_deviation ?? 0.5) ||
       stopLossEnabled !== (originalConfig.stop_loss_enabled ?? false) ||
-      stopLossPercentage !== (originalConfig.stop_loss_percentage ?? -10)
+      parsedStopLoss !== (originalConfig.stop_loss_percentage ?? -10)
     )
   }
 
@@ -63,23 +70,23 @@ export function EditPositionSettingsModal({
       const request: UpdatePositionSettingsRequest = {}
       const originalConfig = position.strategy_config_snapshot || {}
 
-      if (takeProfitPercentage !== (originalConfig.take_profit_percentage ?? 1.5)) {
-        request.take_profit_percentage = takeProfitPercentage
+      if (parsedTakeProfit !== (originalConfig.take_profit_percentage ?? 1.5)) {
+        request.take_profit_percentage = parsedTakeProfit
       }
-      if (maxSafetyOrders !== (originalConfig.max_safety_orders ?? 5)) {
-        request.max_safety_orders = maxSafetyOrders
+      if (parsedMaxSafety !== (originalConfig.max_safety_orders ?? 5)) {
+        request.max_safety_orders = parsedMaxSafety
       }
       if (trailingTakeProfit !== (originalConfig.trailing_take_profit ?? false)) {
         request.trailing_take_profit = trailingTakeProfit
       }
-      if (trailingTpDeviation !== (originalConfig.trailing_tp_deviation ?? 0.5)) {
-        request.trailing_tp_deviation = trailingTpDeviation
+      if (parsedTrailingDev !== (originalConfig.trailing_tp_deviation ?? 0.5)) {
+        request.trailing_tp_deviation = parsedTrailingDev
       }
       if (stopLossEnabled !== (originalConfig.stop_loss_enabled ?? false)) {
         request.stop_loss_enabled = stopLossEnabled
       }
-      if (stopLossPercentage !== (originalConfig.stop_loss_percentage ?? -10)) {
-        request.stop_loss_percentage = stopLossPercentage
+      if (parsedStopLoss !== (originalConfig.stop_loss_percentage ?? -10)) {
+        request.stop_loss_percentage = parsedStopLoss
       }
 
       const result = await positionsApi.updateSettings(position.id, request)
@@ -99,7 +106,7 @@ export function EditPositionSettingsModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-2 sm:p-4">
       <div className="bg-slate-800 rounded-lg w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto mx-1 sm:mx-auto">
         {/* Header */}
         <div className="p-6 border-b border-slate-700 flex items-center justify-between sticky top-0 bg-slate-800">
@@ -159,7 +166,8 @@ export function EditPositionSettingsModal({
               <input
                 type="number"
                 value={takeProfitPercentage}
-                onChange={(e) => setTakeProfitPercentage(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setTakeProfitPercentage(e.target.value)}
+                onBlur={() => { if (takeProfitPercentage === '' || isNaN(parseFloat(takeProfitPercentage))) setTakeProfitPercentage(String(config.take_profit_percentage ?? 1.5)) }}
                 step="0.1"
                 min="0.1"
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -187,7 +195,8 @@ export function EditPositionSettingsModal({
                 <input
                   type="number"
                   value={trailingTpDeviation}
-                  onChange={(e) => setTrailingTpDeviation(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setTrailingTpDeviation(e.target.value)}
+                  onBlur={() => { if (trailingTpDeviation === '' || isNaN(parseFloat(trailingTpDeviation))) setTrailingTpDeviation(String(config.trailing_tp_deviation ?? 0.5)) }}
                   step="0.1"
                   min="0.1"
                   className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -213,7 +222,8 @@ export function EditPositionSettingsModal({
               <input
                 type="number"
                 value={maxSafetyOrders}
-                onChange={(e) => setMaxSafetyOrders(parseInt(e.target.value) || 0)}
+                onChange={(e) => setMaxSafetyOrders(e.target.value)}
+                onBlur={() => { if (maxSafetyOrders === '' || isNaN(parseInt(maxSafetyOrders))) setMaxSafetyOrders(String(config.max_safety_orders ?? 5)) }}
                 step="1"
                 min="0"
                 max="50"
@@ -253,7 +263,8 @@ export function EditPositionSettingsModal({
                 <input
                   type="number"
                   value={stopLossPercentage}
-                  onChange={(e) => setStopLossPercentage(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setStopLossPercentage(e.target.value)}
+                  onBlur={() => { if (stopLossPercentage === '' || isNaN(parseFloat(stopLossPercentage))) setStopLossPercentage(String(config.stop_loss_percentage ?? -10)) }}
                   step="0.5"
                   max="0"
                   className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-red-500"

@@ -399,17 +399,17 @@ export function BotFormModal({
   if (!showModal) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-1 sm:p-4 z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-1 sm:p-4 z-[60]">
       <div className={`bg-slate-800 rounded-lg w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto mx-1 sm:mx-auto ${
-        formData.strategy_type === 'conditional_dca' ? 'max-w-6xl' : 'max-w-4xl'
+        formData.strategy_type === 'conditional_dca' ? 'max-w-[98vw] sm:max-w-6xl' : 'max-w-[98vw] sm:max-w-4xl'
       }`}>
-        <div className="p-6 border-b border-slate-700">
+        <div className="p-4 sm:p-6 border-b border-slate-700">
           <h3 className="text-xl font-bold">
             {readOnly ? (readOnlyTitle || 'View Bot') : editingBot ? 'Edit Bot' : 'Create New Bot'}
           </h3>
         </div>
 
-        <form onSubmit={readOnly ? (e) => { e.preventDefault(); setShowModal(false); resetForm() } : handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={readOnly ? (e) => { e.preventDefault(); setShowModal(false); resetForm() } : handleSubmit} className="p-3 sm:p-6 space-y-6">
           <fieldset disabled={readOnly} className={readOnly ? 'opacity-80' : ''}>
           {/* Template Selector - Only show when creating new bot */}
           {!editingBot && !readOnly && templates.length > 0 && (
@@ -886,6 +886,38 @@ export function BotFormModal({
                     </div>
                     <p className="text-xs text-slate-400 mt-3">
                       💡 Bot will only trade coins in selected categories. Unselected categories are filtered out before trading.
+                    </p>
+                  </div>
+
+                  {/* Max Synthetic Candles % */}
+                  <div className="mt-4 pt-4 border-t border-slate-600">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Max Synthetic Candles %
+                      <span className="text-xs text-slate-400 font-normal ml-2">
+                        (Skip pairs with too many gap-filled candles)
+                      </span>
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="100"
+                      value={formData.strategy_config?.max_synthetic_pct ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setFormData({
+                          ...formData,
+                          strategy_config: {
+                            ...formData.strategy_config,
+                            max_synthetic_pct: val === '' ? undefined : parseFloat(val),
+                          },
+                        })
+                      }}
+                      className="w-full sm:w-48 rounded border border-slate-600 bg-slate-700 px-3 py-2 text-white font-mono text-sm"
+                      placeholder="Off"
+                    />
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      Pairs with synthetic candle % above this threshold are skipped during analysis. Leave empty to disable.
                     </p>
                   </div>
                 </>
@@ -1459,7 +1491,7 @@ export function BotFormModal({
           )}
 
           {/* Actions */}
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-700">
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-slate-700">
             {readOnly ? (
               <button
                 type="submit"

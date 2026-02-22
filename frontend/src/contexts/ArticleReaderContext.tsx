@@ -71,7 +71,7 @@ interface ArticleReaderContextType {
 
   // Actions
   openArticle: (article: ArticleItem, allArticles?: ArticleItem[]) => void
-  startPlaylist: (articles: ArticleItem[], startIndex?: number, startExpanded?: boolean, startContinuousPlay?: boolean) => void
+  startPlaylist: (articles: ArticleItem[], startIndex?: number, startExpanded?: boolean, startContinuousPlay?: boolean, userInitiated?: boolean, retryBroken?: boolean) => void
   stopPlaylist: () => void
   playArticle: (index: number) => void
   nextArticle: () => void
@@ -154,6 +154,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const autoResumeTriggeredRef = useRef(false)
   const prefetchAbortRef = useRef<AbortController | null>(null)
   const retriedArticlesRef = useRef<Set<string>>(new Set())  // Track articles that already got a retry
+  const retryBrokenRef = useRef(false)  // When true, don't skip has_issue articles during auto-advance
 
   // Use TTS hook
   const tts = useTTSSync()
@@ -270,7 +271,8 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   ) => {
     // Skip known-bad articles automatically during auto-advance.
     // When user explicitly clicked this article, show it so retry button is visible.
-    if (article.has_issue && !userInitiated) {
+    // When retryBrokenRef is true (e.g., "Read All" from Broken filter), try them instead of skipping.
+    if (article.has_issue && !userInitiated && !retryBrokenRef.current) {
       console.log(`[TTS] Skipping known-bad article: ${article.title}`)
       setTimeout(() => {
         if (articleIndex < playlistRef.current.length - 1) {
@@ -554,7 +556,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   // ===========================================================================
 
   // Start a new playlist
-  const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false, startContinuousPlay: boolean = true, userInitiated: boolean = false) => {
+  const startPlaylist = useCallback((articles: ArticleItem[], startIndex: number = 0, startExpanded: boolean = false, startContinuousPlay: boolean = true, userInitiated: boolean = false, retryBroken: boolean = false) => {
     if (articles.length === 0) return
     // Stop video player if playing (mutually exclusive)
     stopVideoPlayer()
@@ -562,6 +564,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     tts.stop()
 
     const clampedIndex = Math.min(Math.max(0, startIndex), articles.length - 1)
+    retryBrokenRef.current = retryBroken
     setPlaylist(articles)
     setCurrentIndex(clampedIndex)
     setIsPlaying(true)
@@ -570,7 +573,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setContinuousPlay(startContinuousPlay)
 
     // Load and play the first article (pass index for voice cycling)
-    loadAndPlayArticle(articles[clampedIndex], clampedIndex, undefined, userInitiated)
+    loadAndPlayArticle(articles[clampedIndex], clampedIndex, undefined, userInitiated || retryBroken)
   }, [loadAndPlayArticle, tts])
 
   // Open a single article (expanded view) - optionally with surrounding articles for navigation
@@ -606,6 +609,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setShowMiniPlayer(false)
     setArticleContent(null)
     retriedArticlesRef.current.clear()
+    retryBrokenRef.current = false
     // Clear saved session so auto-resume doesn't trigger after intentional stop
     try { localStorage.removeItem(TTS_SESSION_KEY) } catch { /* ignore */ }
   }, [tts])
