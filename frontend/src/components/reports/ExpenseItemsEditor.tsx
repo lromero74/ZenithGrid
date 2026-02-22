@@ -11,19 +11,22 @@ interface ExpenseItemsEditorProps {
   onClose: () => void
 }
 
-const FREQUENCY_OPTIONS = [
+const FREQUENCY_PILLS = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
-  { value: 'biweekly', label: 'Biweekly' },
-  { value: 'every_n_days', label: 'Every N Days' },
+  { value: 'biweekly', label: 'Every 2 Wks' },
+  { value: 'semi_monthly', label: '2x/Month' },
   { value: 'monthly', label: 'Monthly' },
   { value: 'quarterly', label: 'Quarterly' },
-  { value: 'yearly', label: 'Yearly' },
+  { value: 'semi_annual', label: '2x/Year' },
+  { value: 'yearly', label: 'Annual' },
+  { value: 'every_n_days', label: 'Custom' },
 ]
 
 const FREQ_LABELS: Record<string, string> = {
   daily: '/day', weekly: '/week', biweekly: '/2wk',
-  every_n_days: '/N days', monthly: '/mo', quarterly: '/qtr', yearly: '/yr',
+  semi_monthly: '/2x mo', every_n_days: '/N days',
+  monthly: '/mo', quarterly: '/qtr', semi_annual: '/6mo', yearly: '/yr',
 }
 
 export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }: ExpenseItemsEditorProps) {
@@ -81,6 +84,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['expense-items', goalId] })
     queryClient.invalidateQueries({ queryKey: ['report-goals'] })
+    queryClient.invalidateQueries({ queryKey: ['expense-categories'] })
   }
 
   const createItem = useMutation({
@@ -117,9 +121,120 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
 
   const totalNormalized = items.reduce((sum, i) => sum + (i.normalized_amount || 0), 0)
 
+  const pillBase = 'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors'
+  const pillActive = 'bg-blue-600 border-blue-500 text-white'
+  const pillInactive = 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'
+
+  const expenseForm = (
+    <form onSubmit={handleSubmit} className="bg-slate-700/30 rounded-lg p-4 space-y-3 border border-slate-600">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-medium text-slate-300">
+          {editing ? 'Edit Expense' : 'New Expense'}
+        </span>
+        <button type="button" onClick={resetForm} className="text-slate-400 hover:text-white text-xs">
+          Cancel
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Category</label>
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            required
+            className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Select...</option>
+            {categories.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            <option value="__custom__">Custom...</option>
+          </select>
+          {category === '__custom__' && (
+            <input
+              type="text"
+              value={customCategory}
+              onChange={e => setCustomCategory(e.target.value)}
+              placeholder="Category name"
+              required
+              className="w-full mt-1 px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            />
+          )}
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="e.g. Netflix"
+            required
+            className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+      </div>
+
+      {/* Amount on its own row */}
+      <div>
+        <label className="block text-xs text-slate-400 mb-1">Amount ({currency})</label>
+        <input
+          type="number"
+          step={currency === 'BTC' ? '0.00000001' : '0.01'}
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+          required
+          min="0"
+          className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
+        />
+      </div>
+
+      {/* Frequency pills */}
+      <div>
+        <label className="block text-xs text-slate-400 mb-1.5">Frequency</label>
+        <div className="flex flex-wrap gap-1.5">
+          {FREQUENCY_PILLS.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => setFrequency(o.value)}
+              className={`${pillBase} ${frequency === o.value ? pillActive : pillInactive}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {frequency === 'every_n_days' && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-slate-400">Every</span>
+            <input
+              type="number"
+              value={frequencyN}
+              onChange={e => setFrequencyN(e.target.value)}
+              required
+              min="1"
+              className="w-20 px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-xs text-slate-400">days</span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={createItem.isPending || updateItem.isPending || !name || !amount || (!category || (category === '__custom__' && !customCategory))}
+          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+        >
+          {(createItem.isPending || updateItem.isPending) ? 'Saving...' : editing ? 'Update' : 'Add'}
+        </button>
+      </div>
+    </form>
+  )
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="w-full max-w-2xl bg-slate-800 rounded-lg shadow-2xl border border-slate-700 max-h-[85vh] flex flex-col">
+      <div className="w-full max-w-2xl bg-slate-800 rounded-lg shadow-2xl border border-slate-700 max-h-[85vh] flex flex-col relative">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <h3 className="text-lg font-semibold text-white">Manage Expenses</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
@@ -187,116 +302,25 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
             </div>
           )}
 
-          {/* Add/Edit form */}
-          {!showForm ? (
+          {/* Add button (only when form overlay is NOT showing) */}
+          {!showForm && (
             <button
               onClick={() => { resetForm(); setShowForm(true) }}
               className="w-full py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:text-white hover:border-slate-500 transition-colors flex items-center justify-center gap-2 text-sm"
             >
               <Plus className="w-4 h-4" /> Add Expense
             </button>
-          ) : (
-            <form onSubmit={handleSubmit} className="bg-slate-700/30 rounded-lg p-4 space-y-3 border border-slate-600">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-slate-300">
-                  {editing ? 'Edit Expense' : 'New Expense'}
-                </span>
-                <button type="button" onClick={resetForm} className="text-slate-400 hover:text-white text-xs">
-                  Cancel
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Category</label>
-                  <select
-                    value={category}
-                    onChange={e => setCategory(e.target.value)}
-                    required
-                    className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    {categories.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                    <option value="__custom__">Custom...</option>
-                  </select>
-                  {category === '__custom__' && (
-                    <input
-                      type="text"
-                      value={customCategory}
-                      onChange={e => setCustomCategory(e.target.value)}
-                      placeholder="Category name"
-                      required
-                      className="w-full mt-1 px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                    />
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="e.g. Netflix"
-                    required
-                    className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Amount ({currency})</label>
-                  <input
-                    type="number"
-                    step={currency === 'BTC' ? '0.00000001' : '0.01'}
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                    required
-                    min="0"
-                    className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Frequency</label>
-                  <select
-                    value={frequency}
-                    onChange={e => setFrequency(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
-                    {FREQUENCY_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                {frequency === 'every_n_days' && (
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Every N days</label>
-                    <input
-                      type="number"
-                      value={frequencyN}
-                      onChange={e => setFrequencyN(e.target.value)}
-                      required
-                      min="1"
-                      className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={createItem.isPending || updateItem.isPending || !name || !amount || (!category || (category === '__custom__' && !customCategory))}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
-                >
-                  {(createItem.isPending || updateItem.isPending) ? 'Saving...' : editing ? 'Update' : 'Add'}
-                </button>
-              </div>
-            </form>
           )}
         </div>
+
+        {/* Form overlay — renders on top of the list */}
+        {showForm && (
+          <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center p-6 z-10">
+            <div className="w-full max-w-lg">
+              {expenseForm}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

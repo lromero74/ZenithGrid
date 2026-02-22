@@ -5,6 +5,22 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.37.0] - 2026-02-22
+
+### Added
+- **Semi-monthly and semi-annual expense frequencies**: Two new options for expenses that occur twice a month or twice a year
+- **Pill-based frequency selector**: Expense editor now uses a clean pill button UI instead of a dropdown, making all frequency options visible at a glance
+- **Custom frequency option**: "Custom" pill reveals an inline "Every ___ days" input for non-standard intervals
+
+### Changed
+- **Expense editor opens as overlay**: Add/edit expense form now appears as a centered overlay on top of the list, so you don't lose your scroll position with long expense lists
+- **Deposit guidance shows incremental amount**: "Cover all listed expenses" line now includes the additional deposit beyond individually mentioned items, e.g. "~$12,345 total (+$3,456)"
+
+### Fixed
+- **Report AI tabs work under strict CSP**: Replaced JavaScript-based tabs with CSS-only radio button approach that works in sandboxed iframes
+- **Report viewer uses sandboxed iframe**: Switched from blob URL to srcDoc with sandbox attribute for better security isolation
+- **Custom expense categories available immediately**: Adding an expense with a custom category now invalidates the category cache so it appears in the dropdown right away
+
 ## [v2.36.4] - 2026-02-22
 
 ### Fixed
