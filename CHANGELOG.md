@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v2.36.4] - 2026-02-22
 
 ### Fixed
-- **Report AI summary tabs now clickable**: Tabs in the report viewer were unresponsive; fixed so all three analysis tiers switch correctly
+- **Report AI summary tabs now clickable**: Tabs were blocked by Content Security Policy; switched to blob URL rendering which bypasses CSP restrictions
 - **Deposit calculation accounts for taxes**: Deposit suggestions now factor in tax withholding — shows how much trading capital to add so that after-tax returns cover expenses
 - **Per-item deposit amounts**: Each uncovered expense shows the specific deposit needed, e.g. "Finish covering Insurance: deposit ~$2,400" and "Then cover Rent: deposit ~$21,800 more"
 
