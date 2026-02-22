@@ -586,10 +586,39 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
 
     dep = g.get("deposit_needed")
     dep_line = ""
-    if dep is not None:
-        dep_line = f"""
-            <p style="color: #94a3b8; font-size: 11px; margin: 8px 0 0 0;">
-                Deposit needed to cover all expenses: {prefix}{dep:{fmt}} {currency}</p>"""
+    if dep is not None or coverage.get("partial_item_name") or coverage.get("next_uncovered_name"):
+        dep_parts = []
+        partial_name = coverage.get("partial_item_name")
+        partial_short = coverage.get("partial_item_shortfall")
+        next_name = coverage.get("next_uncovered_name")
+        next_amt = coverage.get("next_uncovered_amount")
+
+        if partial_name and partial_short:
+            dep_parts.append(
+                f"Finish covering <strong>{partial_name}</strong>: "
+                f"{prefix}{partial_short:{fmt}} {currency} more needed"
+            )
+            if next_name and next_amt:
+                dep_parts.append(
+                    f"Next: <strong>{next_name}</strong> "
+                    f"({prefix}{next_amt:{fmt}} {currency})"
+                )
+        elif next_name and next_amt:
+            dep_parts.append(
+                f"Next expense to cover: <strong>{next_name}</strong> "
+                f"({prefix}{next_amt:{fmt}} {currency})"
+            )
+
+        if dep is not None:
+            dep_parts.append(
+                f"Total deposit needed: {prefix}{dep:{fmt}} {currency}"
+            )
+
+        dep_line = "".join(
+            f'<p style="color: #94a3b8; font-size: 11px; margin: {4 if i else 8}px 0 0 0;">'
+            f'{part}</p>'
+            for i, part in enumerate(dep_parts)
+        )
 
     tax_line = ""
     if tax_pct > 0:
@@ -1080,6 +1109,32 @@ def generate_pdf(
                             0, 5,
                             f"  [{badge}] {ei.get('name', '')} - "
                             f"{pfx}{norm:,.2f}/{exp_period}",
+                            new_x="LMARGIN", new_y="NEXT",
+                        )
+                    # Deposit guidance lines
+                    partial_name = coverage.get("partial_item_name")
+                    partial_short = coverage.get("partial_item_shortfall")
+                    next_name = coverage.get("next_uncovered_name")
+                    next_amt = coverage.get("next_uncovered_amount")
+                    if partial_name and partial_short:
+                        pdf.cell(
+                            0, 5,
+                            f"  Finish covering {partial_name}: "
+                            f"{pfx}{partial_short:,.2f} {curr} more needed",
+                            new_x="LMARGIN", new_y="NEXT",
+                        )
+                    if next_name and next_amt:
+                        label = "Next" if partial_name else "Next expense to cover"
+                        pdf.cell(
+                            0, 5,
+                            f"  {label}: {next_name} ({pfx}{next_amt:,.2f} {curr})",
+                            new_x="LMARGIN", new_y="NEXT",
+                        )
+                    dep = g.get("deposit_needed")
+                    if dep is not None:
+                        pdf.cell(
+                            0, 5,
+                            f"  Total deposit needed: {pfx}{dep:,.2f} {curr}",
                             new_x="LMARGIN", new_y="NEXT",
                         )
                     pdf.set_font("Helvetica", "", 10)

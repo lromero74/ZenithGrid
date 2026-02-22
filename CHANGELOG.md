@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.36.3] - 2026-02-22
+
+### Changed
+- **Granular deposit guidance**: Expense reports now show targeted suggestions like "Finish covering Insurance: $165 more needed" and "Next: Rent ($1,500)" instead of just a total deposit figure
+- Deposit guidance appears in HTML reports, PDFs, and AI summaries
+
 ## [v2.36.2] - 2026-02-22
 
 ### Changed

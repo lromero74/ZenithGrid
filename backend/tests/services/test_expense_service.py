@@ -179,6 +179,54 @@ class TestComputeExpenseCoverage:
         assert result["shortfall"] == pytest.approx(515.0)
 
 
+    def test_partial_item_tracking(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Netflix", 15, "monthly"),
+            _mock_item("Gym", 50, "monthly"),
+            _mock_item("Rent", 1500, "monthly"),
+        ]
+        # $100 covers Netflix + Gym, partial on Rent
+        result = compute_expense_coverage(items, "monthly", 100.0, 0.0)
+        assert result["partial_item_name"] == "Rent"
+        assert result["partial_item_shortfall"] == pytest.approx(1465.0)
+        assert "next_uncovered_name" not in result  # Rent is the last item
+
+    def test_partial_with_next_uncovered(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Netflix", 15, "monthly"),
+            _mock_item("Gym", 50, "monthly"),
+            _mock_item("Insurance", 200, "monthly"),
+            _mock_item("Rent", 1500, "monthly"),
+        ]
+        # $100 covers Netflix + Gym, partial on Insurance, Rent uncovered
+        result = compute_expense_coverage(items, "monthly", 100.0, 0.0)
+        assert result["partial_item_name"] == "Insurance"
+        assert result["partial_item_shortfall"] == pytest.approx(165.0)
+        assert result["next_uncovered_name"] == "Rent"
+        assert result["next_uncovered_amount"] == pytest.approx(1500.0)
+
+    def test_no_partial_first_uncovered_tracked(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Netflix", 15, "monthly"),
+            _mock_item("Rent", 1500, "monthly"),
+        ]
+        # $15 exactly covers Netflix, Rent is fully uncovered (no partial)
+        result = compute_expense_coverage(items, "monthly", 15.0, 0.0)
+        assert "partial_item_name" not in result
+        assert result["next_uncovered_name"] == "Rent"
+        assert result["next_uncovered_amount"] == pytest.approx(1500.0)
+
+    def test_all_covered_no_partial_or_next(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Netflix", 15, "monthly")]
+        result = compute_expense_coverage(items, "monthly", 100.0, 0.0)
+        assert "partial_item_name" not in result
+        assert "next_uncovered_name" not in result
+
+
 class TestDefaultExpenseCategories:
     """Verify the default category list."""
 
