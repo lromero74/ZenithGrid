@@ -109,6 +109,8 @@ def compute_expense_coverage(
     # Walk through the waterfall
     remaining = income_after_tax
     covered_count = 0
+    partial_item = None  # The item that's partially covered
+    next_uncovered_item = None  # The first fully uncovered item after partial
     for item in normalized:
         amt = item["normalized_amount"]
         if remaining >= amt:
@@ -119,10 +121,21 @@ def compute_expense_coverage(
         elif remaining > 0:
             item["status"] = "partial"
             item["coverage_pct"] = round(remaining / amt * 100, 1)
+            item["shortfall"] = round(amt - remaining, 2)
+            partial_item = item
             remaining = 0
         else:
             item["status"] = "uncovered"
             item["coverage_pct"] = 0.0
+            if next_uncovered_item is None and partial_item is not None:
+                next_uncovered_item = item
+
+    # If no partial item, the first uncovered is the "next" to cover
+    if partial_item is None:
+        for item in normalized:
+            if item["status"] == "uncovered":
+                next_uncovered_item = item
+                break
 
     shortfall = max(total_expenses - income_after_tax, 0)
     coverage_pct = (
@@ -130,7 +143,7 @@ def compute_expense_coverage(
         if total_expenses > 0 else 100.0
     )
 
-    return {
+    result = {
         "total_expenses": round(total_expenses, 2),
         "income_after_tax": round(income_after_tax, 2),
         "coverage_pct": round(coverage_pct, 1),
@@ -139,6 +152,16 @@ def compute_expense_coverage(
         "total_count": len(normalized),
         "items": normalized,
     }
+
+    # Add granular deposit targets
+    if partial_item:
+        result["partial_item_name"] = partial_item["name"]
+        result["partial_item_shortfall"] = partial_item["shortfall"]
+    if next_uncovered_item:
+        result["next_uncovered_name"] = next_uncovered_item["name"]
+        result["next_uncovered_amount"] = next_uncovered_item["normalized_amount"]
+
+    return result
 
 
 async def get_user_expense_categories(

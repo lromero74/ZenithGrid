@@ -161,10 +161,24 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
                     f"Based on {g.get('sample_trades', 0)} trades over "
                     f"{g.get('lookback_days_used', 0)} days"
                 )
+                partial_name = coverage.get("partial_item_name")
+                partial_short = coverage.get("partial_item_shortfall")
+                next_name = coverage.get("next_uncovered_name")
+                next_amt = coverage.get("next_uncovered_amount")
+                if partial_name and partial_short:
+                    goals_lines.append(
+                        f"    Partially covered: {partial_name} "
+                        f"(needs ~{partial_short} more {g['target_currency']})"
+                    )
+                if next_name and next_amt:
+                    goals_lines.append(
+                        f"    Next uncovered: {next_name} "
+                        f"(~{next_amt} {g['target_currency']})"
+                    )
                 dep = g.get("deposit_needed")
                 if dep is not None:
                     goals_lines.append(
-                        f"    Deposit needed to cover all expenses: "
+                        f"    Total deposit needed: "
                         f"~{dep} {g['target_currency']}"
                     )
             else:
