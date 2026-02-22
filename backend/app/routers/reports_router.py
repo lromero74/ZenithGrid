@@ -15,6 +15,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import get_current_user
@@ -234,10 +235,14 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         "achieved_at": goal.achieved_at.isoformat() if goal.achieved_at else None,
         "created_at": goal.created_at.isoformat() if goal.created_at else None,
     }
-    # Include expense item count for expenses goals
-    if goal.target_type == "expenses" and hasattr(goal, "expense_items"):
-        items = goal.expense_items
-        d["expense_item_count"] = len(items) if items else 0
+    # Include expense item count (only if relationship is already loaded)
+    if goal.target_type == "expenses":
+        state = sa_inspect(goal)
+        if "expense_items" not in state.unloaded:
+            items = goal.expense_items
+            d["expense_item_count"] = len(items) if items else 0
+        else:
+            d["expense_item_count"] = 0
     else:
         d["expense_item_count"] = 0
     return d
