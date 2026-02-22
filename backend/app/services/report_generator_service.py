@@ -87,7 +87,7 @@ def build_report_html(
     brand_color = b["colors"]["primary"]
 
     metrics_html = _build_metrics_section(report_data)
-    goals_html = _build_goals_section(report_data.get("goals", []))
+    goals_html = _build_goals_section(report_data.get("goals", []), brand_color)
     comparison_html = _build_comparison_section(report_data)
 
     tiered = _normalize_ai_summary(ai_summary)
@@ -304,8 +304,10 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
     </div>"""
 
 
-def _build_goals_section(goals: List[Dict[str, Any]]) -> str:
-    """Goal progress bars."""
+def _build_goals_section(
+    goals: List[Dict[str, Any]], brand_color: str = "#3b82f6",
+) -> str:
+    """Goal progress bars with optional trend charts."""
     if not goals:
         return ""
 
@@ -314,7 +316,7 @@ def _build_goals_section(goals: List[Dict[str, Any]]) -> str:
         if g.get("target_type") == "income":
             goal_rows += _build_income_goal_card(g)
         else:
-            goal_rows += _build_standard_goal_card(g)
+            goal_rows += _build_standard_goal_card(g, brand_color)
 
     return f"""
     <div style="margin: 25px 0;">
@@ -324,8 +326,10 @@ def _build_goals_section(goals: List[Dict[str, Any]]) -> str:
     </div>"""
 
 
-def _build_standard_goal_card(g: Dict[str, Any]) -> str:
-    """Standard balance/profit/both goal card with progress bar."""
+def _build_standard_goal_card(
+    g: Dict[str, Any], brand_color: str = "#3b82f6",
+) -> str:
+    """Standard balance/profit/both goal card with progress bar and trend chart."""
     pct = g.get("progress_pct", 0)
     bar_color = "#10b981" if g.get("on_track") else "#f59e0b"
     bar_width = min(pct, 100)
@@ -336,6 +340,12 @@ def _build_standard_goal_card(g: Dict[str, Any]) -> str:
     prefix = "" if currency == "BTC" else "$"
     track_label = "On Track" if g.get("on_track") else "Behind"
     track_color = "#10b981" if g.get("on_track") else "#f59e0b"
+
+    # Trend chart SVG (if trend data is available)
+    trend_svg = ""
+    trend_data = g.get("trend_data")
+    if trend_data:
+        trend_svg = _build_trend_chart_svg(trend_data, brand_color, currency)
 
     return f"""
         <div style="margin: 0 0 15px 0; padding: 12px; background-color: #1e293b;
@@ -357,6 +367,7 @@ def _build_standard_goal_card(g: Dict[str, Any]) -> str:
                     {prefix}{current} / {prefix}{target} {currency}</span>
                 <span style="color: #94a3b8; font-size: 12px;">{pct:.1f}%</span>
             </div>
+            {trend_svg}
         </div>"""
 
 
@@ -441,6 +452,146 @@ def _build_income_goal_card(g: Dict[str, Any]) -> str:
                 Past performance does not guarantee future results. Projections are
                 estimates based on historical data and actual results may vary.</p>
         </div>"""
+
+
+def _format_chart_value(val: float, currency: str) -> str:
+    """Format a value for chart axis labels."""
+    if currency == "BTC":
+        if abs(val) >= 1:
+            return f"{val:.2f}"
+        return f"{val:.4f}"
+    if abs(val) >= 1_000_000:
+        return f"${val / 1_000_000:.1f}M"
+    if abs(val) >= 10_000:
+        return f"${val / 1_000:.0f}K"
+    if abs(val) >= 1_000:
+        return f"${val / 1_000:.1f}K"
+    return f"${val:,.0f}"
+
+
+def _build_trend_chart_svg(
+    trend_data: Dict[str, Any],
+    brand_color: str,
+    currency: str = "USD",
+) -> str:
+    """
+    Build an inline SVG trend chart showing actual vs ideal goal progress.
+
+    Returns HTML containing the SVG, or empty string if insufficient data.
+    """
+    data_points = trend_data.get("data_points", [])
+    if len(data_points) < 2:
+        return ""
+
+    # Chart dimensions
+    width, height = 660, 200
+    ml, mr, mt, mb = 65, 15, 20, 35
+    cw = width - ml - mr
+    ch = height - mt - mb
+
+    # Extract values
+    actual = [p["current_value"] for p in data_points]
+    ideal = [p["ideal_value"] for p in data_points]
+    all_vals = actual + ideal
+
+    min_val = min(all_vals)
+    max_val = max(all_vals)
+    val_range = max_val - min_val
+    if val_range == 0:
+        val_range = max_val * 0.1 or 1.0
+    # Add 5% padding
+    min_val -= val_range * 0.05
+    max_val += val_range * 0.05
+    val_range = max_val - min_val
+
+    n = len(data_points)
+
+    def sx(i):
+        return ml + (i / (n - 1)) * cw
+
+    def sy(v):
+        return mt + (1 - (v - min_val) / val_range) * ch
+
+    # Build polyline points
+    actual_pts = " ".join(
+        f"{sx(i):.1f},{sy(v):.1f}" for i, v in enumerate(actual)
+    )
+    ideal_pts = " ".join(
+        f"{sx(i):.1f},{sy(v):.1f}" for i, v in enumerate(ideal)
+    )
+
+    # Area fill under actual line
+    area_pts = (
+        actual_pts
+        + f" {sx(n - 1):.1f},{mt + ch:.1f} {sx(0):.1f},{mt + ch:.1f}"
+    )
+
+    is_on_track = data_points[-1].get("on_track", False)
+    actual_color = "#10b981" if is_on_track else "#f59e0b"
+
+    # Grid lines + Y-axis labels
+    grid_svg = ""
+    n_grids = 4
+    for i in range(n_grids + 1):
+        gy = mt + (i / n_grids) * ch
+        grid_svg += (
+            f'<line x1="{ml}" y1="{gy:.1f}" '
+            f'x2="{width - mr}" y2="{gy:.1f}" '
+            f'stroke="#334155" stroke-width="0.5"/>\n'
+        )
+        val = max_val - (i / n_grids) * val_range
+        label = _format_chart_value(val, currency)
+        grid_svg += (
+            f'<text x="{ml - 5}" y="{gy + 3:.1f}" text-anchor="end" '
+            f'fill="#64748b" font-size="9" '
+            f'font-family="sans-serif">{label}</text>\n'
+        )
+
+    # X-axis date labels
+    first_date = data_points[0]["date"]
+    last_date = data_points[-1]["date"]
+
+    # Legend positions
+    leg_x = ml
+    leg_y = height - 20
+
+    return f"""
+            <div style="margin-top: 10px;">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     viewBox="0 0 {width} {height}"
+                     style="width:100%;height:auto;display:block;">
+                    <rect width="{width}" height="{height}"
+                          rx="6" fill="#1a2332"/>
+                    {grid_svg}
+                    <polygon points="{area_pts}"
+                             fill="{actual_color}" opacity="0.08"/>
+                    <polyline points="{ideal_pts}" fill="none"
+                        stroke="{brand_color}" stroke-width="1.5"
+                        stroke-dasharray="6,4" opacity="0.7"/>
+                    <polyline points="{actual_pts}" fill="none"
+                        stroke="{actual_color}" stroke-width="2"/>
+                    <text x="{ml}" y="{height - 5}" fill="#64748b"
+                        font-size="9"
+                        font-family="sans-serif">{first_date}</text>
+                    <text x="{width - mr}" y="{height - 5}"
+                        text-anchor="end" fill="#64748b"
+                        font-size="9"
+                        font-family="sans-serif">{last_date}</text>
+                    <line x1="{leg_x}" y1="{leg_y}"
+                        x2="{leg_x + 20}" y2="{leg_y}"
+                        stroke="{actual_color}" stroke-width="2"/>
+                    <text x="{leg_x + 25}" y="{leg_y + 4}"
+                        fill="#94a3b8" font-size="9"
+                        font-family="sans-serif">Actual</text>
+                    <line x1="{leg_x + 80}" y1="{leg_y}"
+                        x2="{leg_x + 100}" y2="{leg_y}"
+                        stroke="{brand_color}" stroke-width="1.5"
+                        stroke-dasharray="6,4" opacity="0.7"/>
+                    <text x="{leg_x + 105}" y="{leg_y + 4}"
+                        fill="#94a3b8" font-size="9"
+                        font-family="sans-serif">Ideal</text>
+                </svg>
+            </div>"""
 
 
 def _build_comparison_section(data: Dict[str, Any]) -> str:
@@ -704,6 +855,12 @@ def generate_pdf(
                         f"{pfx}{g.get('target_value', 0)} {curr}) - {status}",
                         new_x="LMARGIN", new_y="NEXT",
                     )
+                    # Render trend chart if data available
+                    trend_data = g.get("trend_data")
+                    if trend_data:
+                        _render_pdf_trend_chart(
+                            pdf, trend_data, (br, bg, bb),
+                        )
 
         # Prior Period Comparison
         prior = report_data.get("prior_period")
@@ -781,6 +938,100 @@ def _render_pdf_tiers(pdf, tiered: dict, br: int, bg: int, bb: int):
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(60, 60, 60)
         pdf.multi_cell(0, 6, _sanitize_for_pdf(text))
+
+
+def _render_pdf_trend_chart(pdf, trend_data: Dict, brand_rgb: tuple):
+    """
+    Draw a trend chart (actual vs ideal) in the PDF using fpdf2 lines.
+
+    Args:
+        pdf: fpdf2 FPDF instance
+        trend_data: Dict from get_goal_trend_data() with data_points
+        brand_rgb: (r, g, b) tuple for the ideal line color
+    """
+    data_points = trend_data.get("data_points", [])
+    if len(data_points) < 2:
+        return
+
+    actual = [p["current_value"] for p in data_points]
+    ideal = [p["ideal_value"] for p in data_points]
+    all_vals = actual + ideal
+
+    min_val = min(all_vals)
+    max_val = max(all_vals)
+    val_range = max_val - min_val
+    if val_range == 0:
+        val_range = max_val * 0.1 or 1.0
+    min_val -= val_range * 0.05
+    max_val += val_range * 0.05
+    val_range = max_val - min_val
+
+    # Chart position and size
+    chart_x = pdf.l_margin
+    chart_y = pdf.get_y() + 3
+    chart_w = pdf.w - pdf.l_margin - pdf.r_margin
+    chart_h = 40
+    n = len(data_points)
+
+    # Check if we need a new page
+    if chart_y + chart_h + 12 > pdf.h - pdf.b_margin:
+        pdf.add_page()
+        chart_y = pdf.get_y() + 3
+
+    def px(i):
+        return chart_x + (i / (n - 1)) * chart_w
+
+    def py(v):
+        return chart_y + (1 - (v - min_val) / val_range) * chart_h
+
+    # Draw chart border
+    pdf.set_draw_color(200, 200, 200)
+    pdf.set_line_width(0.2)
+    pdf.rect(chart_x, chart_y, chart_w, chart_h)
+
+    # Draw ideal line (brand color, thin)
+    pdf.set_draw_color(*brand_rgb)
+    pdf.set_line_width(0.3)
+    for i in range(n - 1):
+        pdf.line(px(i), py(ideal[i]), px(i + 1), py(ideal[i + 1]))
+
+    # Draw actual line (green/amber, thicker)
+    is_on_track = data_points[-1].get("on_track", False)
+    if is_on_track:
+        pdf.set_draw_color(16, 185, 129)
+    else:
+        pdf.set_draw_color(245, 158, 11)
+    pdf.set_line_width(0.5)
+    for i in range(n - 1):
+        pdf.line(px(i), py(actual[i]), px(i + 1), py(actual[i + 1]))
+
+    # Reset
+    pdf.set_line_width(0.2)
+    pdf.set_draw_color(0, 0, 0)
+
+    # Date labels
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(120, 120, 120)
+    first_date = data_points[0]["date"]
+    last_date = data_points[-1]["date"]
+    pdf.text(chart_x, chart_y + chart_h + 4, first_date)
+    pdf.text(
+        chart_x + chart_w - pdf.get_string_width(last_date),
+        chart_y + chart_h + 4,
+        last_date,
+    )
+
+    # Legend
+    pdf.set_y(chart_y + chart_h + 6)
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(
+        0, 4,
+        "--- Ideal trajectory    -- Actual progress",
+        new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(30, 30, 30)
 
 
 def _hex_to_rgb(hex_color: str) -> tuple:
