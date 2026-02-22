@@ -182,7 +182,14 @@ def build_changelog_cache() -> None:
             )
             commits = []
             if result.returncode == 0 and result.stdout.strip():
-                commits = [line.strip() for line in result.stdout.strip().split('\n') if line.strip()]
+                for line in result.stdout.strip().split('\n'):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Skip merge commits with branch names (internal git noise)
+                    if line.startswith("Merge ") and ("/" in line.split(":")[0]):
+                        continue
+                    commits.append(line)
         except Exception:
             commits = []
 
