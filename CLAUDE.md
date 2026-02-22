@@ -80,6 +80,9 @@ cd /home/ec2-user/ZenithGrid/backend && ./venv/bin/python3 -m pytest tests/ -v
 - SQLAlchemy/FastAPI framework behavior
 - Trivial getters/setters with no logic
 
+### Coverage Enforcement
+The `test-auditor` agent is called automatically after features are implemented. It scans for modules without corresponding test files, identifies gaps, and writes missing tests with appropriate mocks. No code ships without test coverage.
+
 ## Code Standards
 
 ### File & Function Limits
@@ -223,8 +226,9 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 ## Workflow: When to Use What
 
 **Proactive (Claude uses automatically — no user action needed):**
-- `validation-gates` agent — called after implementing features to lint/typecheck
+- `validation-gates` agent — called after implementing features to lint/typecheck/run tests
 - `architecture-sync` agent — called after changing models, routers, or services to update docs
+- `test-auditor` agent — called after implementing features to verify tests exist for new code, and writes missing tests with proper mocks
 
 **User-invoked slash commands:**
 | Command | When to use |
