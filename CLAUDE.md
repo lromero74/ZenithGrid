@@ -21,6 +21,64 @@ This file is the authoritative source of truth for how to work on ZenithGrid. Re
 7. **Stop services before migrations.** `./bot.sh stop`, then migrate, then restart.
 8. **Bots created during development must NOT be started.** Create them in a stopped state.
 9. **Think "How does 3Commas do it?"** when building features — match their UX patterns.
+10. **Test first.** Write failing tests before writing implementation code. No feature ships without tests. See the TDD section below.
+
+## Test-Driven Development
+
+**Write the test BEFORE the implementation. No exceptions.**
+
+### TDD Cycle
+1. **Write a failing test** — define the expected behavior
+2. **Watch it fail** — confirm the test actually tests something
+3. **Write minimal code** — just enough to make the test pass
+4. **Refactor** — improve code while keeping tests green
+5. **Repeat** — one test at a time
+
+### Test Structure
+```
+backend/tests/
+├── conftest.py                    # Shared fixtures (db session, test client, mock exchange)
+├── test_<module>.py               # Mirrors backend/app/ structure
+├── routers/
+│   └── test_<router>.py           # Endpoint tests
+├── services/
+│   └── test_<service>.py          # Business logic tests
+├── strategies/
+│   └── test_<strategy>.py         # Strategy calculation tests
+└── exchange_clients/
+    └── test_<client>.py           # Exchange integration tests
+```
+
+### Test Requirements
+Every new feature, endpoint, or bug fix MUST include:
+- At least 1 **happy path** test (expected use)
+- At least 1 **edge case** test (boundary conditions)
+- At least 1 **failure case** test (invalid input, error handling)
+
+### Running Tests
+```bash
+# All tests
+cd /home/ec2-user/ZenithGrid/backend && ./venv/bin/python3 -m pytest tests/ -v
+
+# Specific test file
+./venv/bin/python3 -m pytest tests/test_grid_calculations.py -v
+
+# With coverage
+./venv/bin/python3 -m pytest tests/ --cov=app --cov-report=term-missing
+```
+
+### Test Conventions
+- Use `pytest` fixtures for setup (shared fixtures in `conftest.py`)
+- Use `pytest.approx()` for floating point comparisons
+- Use `pytest.raises()` for expected exceptions
+- Mock external services (exchange APIs, AI providers) — never hit real APIs in tests
+- Test names: `test_<what>_<condition>_<expected>` (e.g., `test_grid_calculation_negative_range_raises_error`)
+- Group related tests in classes (e.g., `class TestArithmeticGrid`)
+
+### What NOT to Test
+- Third-party library internals
+- SQLAlchemy/FastAPI framework behavior
+- Trivial getters/setters with no logic
 
 ## Code Standards
 

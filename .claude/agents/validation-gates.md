@@ -38,13 +38,26 @@ npx tsc --noEmit
 ```
 Note: There are known pre-existing TS errors in ArticleReaderMiniPlayer, MarketSentimentCards, PnLChart, and BotListItem. Ignore those — focus on NEW errors in changed files.
 
-### 4. Architecture Validation
+### 4. Run Tests
+```bash
+cd /home/ec2-user/ZenithGrid/backend
+./venv/bin/python3 -m pytest tests/ -v
+```
+All tests must pass. If new code was added without tests, flag it — TDD is mandatory.
+
+If only specific areas changed, run targeted tests:
+```bash
+./venv/bin/python3 -m pytest tests/test_<module>.py -v
+./venv/bin/python3 -m pytest tests/strategies/ -v
+```
+
+### 5. Architecture Validation
 - Verify dependency direction: models → services → routers (never upward)
 - Check that no router imports from another router
 - Check that no service imports from a router
 - Verify no circular imports were introduced
 
-### 5. File Size Check
+### 6. File Size Check
 - Flag any file exceeding ~1200 lines — it should be split into modules
 
 ## Iterative Fix Process
