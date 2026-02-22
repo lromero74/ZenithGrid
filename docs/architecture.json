@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.35.1",
+  "version": "v2.36.0",
   "updated": "2026-02-22",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -59,7 +59,7 @@
       { "file": "routers/templates.py", "prefix": "/api/templates", "purpose": "Bot template CRUD" },
       { "file": "routers/trading_router.py", "prefix": "/api/trading", "purpose": "Manual buy/sell orders for portfolio management" },
       { "file": "routers/prop_guard_router.py", "prefix": "/api/propguard", "purpose": "PropGuard safety monitoring: status, kill switch, reset, history" },
-      { "file": "routers/reports_router.py", "prefix": "/api/reports", "purpose": "Financial goals CRUD, report schedules, generated reports, goal trend data with auto-backfill" }
+      { "file": "routers/reports_router.py", "prefix": "/api/reports", "purpose": "Financial goals CRUD, expense item CRUD, expense categories, report schedules, generated reports, goal trend data with auto-backfill" }
     ],
 
     "sub_routers": {
@@ -123,7 +123,8 @@
       { "name": "MetricSnapshot", "table": "metric_snapshots", "key_fields": ["id", "metric_type", "timestamp", "value_json"] },
       { "name": "PropFirmState", "table": "prop_firm_state", "key_fields": ["id", "account_id", "initial_deposit", "current_equity", "is_killed", "kill_reason"] },
       { "name": "PropFirmEquitySnapshot", "table": "prop_firm_equity_snapshots", "key_fields": ["id", "account_id", "equity", "daily_drawdown_pct", "total_drawdown_pct", "timestamp"] },
-      { "name": "ReportGoal", "table": "report_goals", "key_fields": ["id", "user_id", "name", "target_type", "target_currency", "target_value", "start_date", "target_date", "is_active"], "purpose": "User financial targets (balance, profit, income) with time horizons for report tracking" },
+      { "name": "ReportGoal", "table": "report_goals", "key_fields": ["id", "user_id", "name", "target_type", "target_currency", "target_value", "start_date", "target_date", "is_active", "expense_period", "tax_withholding_pct"], "purpose": "User financial targets (balance, profit, income, expenses) with time horizons for report tracking; expenses goals use expense_period and tax_withholding_pct" },
+      { "name": "ExpenseItem", "table": "expense_items", "key_fields": ["id", "goal_id", "user_id", "category", "name", "amount", "frequency", "frequency_n", "frequency_anchor", "is_active"], "purpose": "Itemized living expenses for expense-type goals, each with its own frequency normalized to the goal's expense_period for coverage calculations" },
       { "name": "ReportSchedule", "table": "report_schedules", "key_fields": ["id", "user_id", "account_id", "name", "schedule_type", "is_active"], "purpose": "Report delivery configuration — when and how reports are generated" },
       { "name": "ReportScheduleGoal", "table": "report_schedule_goals", "key_fields": ["id", "schedule_id", "goal_id"], "purpose": "Junction table linking report schedules to goals (many-to-many)" },
       { "name": "Report", "table": "reports", "key_fields": ["id", "user_id", "schedule_id", "metrics_json", "html_content", "pdf_data"], "purpose": "Generated report instances with metrics, HTML, PDF, and AI summary" },
@@ -145,6 +146,7 @@
       { "file": "services/domain_blacklist_service.py", "purpose": "Domain-level blocking for content sources that block our IP", "type": "infrastructure" },
       { "file": "services/email_service.py", "purpose": "AWS SES email sending for verification, password reset, MFA codes", "type": "infrastructure" },
       { "file": "services/exchange_service.py", "purpose": "Per-user, per-account exchange client instantiation with async locking and double-checked caching", "type": "exchange" },
+      { "file": "services/expense_service.py", "purpose": "Expense item normalization (frequency to period) and coverage waterfall calculations for expenses goals", "type": "analysis" },
       { "file": "services/goal_snapshot_service.py", "purpose": "Captures daily goal progress snapshots, backfills from AccountValueSnapshot history, provides trend data for charting", "type": "background" },
       { "file": "services/grid_rotation_service.py", "purpose": "Periodic profit lock-in and grid refresh for winning positions", "type": "trading" },
       { "file": "services/grid_trading_service.py", "purpose": "Grid bot lifecycle: initialization, level management, order placement", "type": "trading" },
@@ -327,7 +329,7 @@
     ],
 
     "migrations": {
-      "count": 31,
+      "count": 32,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -363,7 +365,8 @@
         "add_revoked_tokens.py",
         "remove_medicalxpress_source.py",
         "replace_paywalled_sources.py",
-        "add_goal_progress_snapshots.py"
+        "add_goal_progress_snapshots.py",
+        "add_expense_goal_support.py"
       ]
     }
   },
@@ -459,7 +462,8 @@
       "reports": [
         { "file": "components/reports/GoalProgressBar.tsx", "purpose": "Visual progress bar for individual goal completion" },
         { "file": "components/reports/GoalTrendChart.tsx", "purpose": "Recharts ComposedChart showing actual vs ideal goal progress over time with on-track status" },
-        { "file": "components/reports/ReportViewModal.tsx", "purpose": "Modal for viewing generated report details" }
+        { "file": "components/reports/ReportViewModal.tsx", "purpose": "Modal for viewing generated report details" },
+        { "file": "components/reports/ExpenseItemsEditor.tsx", "purpose": "Expense items CRUD editor for expenses-type goals with category, frequency, and amount management" }
       ],
       "prop_firm": [
         { "file": "components/PropGuardStatus.tsx", "purpose": "PropGuard drawdown monitoring dashboard for prop firm accounts" }
@@ -623,7 +627,7 @@
         "market": ["Candle", "ReservedBalances", "MarketData"],
         "perps": ["PerpsProduct", "PerpsPosition", "PerpsPortfolio"],
         "sentiment": ["FearGreedData", "BTCDominanceResponse", "AltseasonIndexResponse", "ATHResponse", "BTCRSIResponse", "HalvingCountdown", "DebtCeilingEvent"],
-        "reports": ["ReportGoal", "ReportSchedule", "ReportSummary", "GoalTrendPoint", "GoalTrendData"]
+        "reports": ["ReportGoal", "ReportSchedule", "ReportSummary", "GoalTrendPoint", "GoalTrendData", "ExpenseItem"]
       }
     },
 

@@ -315,6 +315,8 @@ def _build_goals_section(
     for g in goals:
         if g.get("target_type") == "income":
             goal_rows += _build_income_goal_card(g)
+        elif g.get("target_type") == "expenses":
+            goal_rows += _build_expenses_goal_card(g)
         else:
             goal_rows += _build_standard_goal_card(g, brand_color)
 
@@ -451,6 +453,120 @@ def _build_income_goal_card(g: Dict[str, Any]) -> str:
             <p style="color: #475569; font-size: 10px; font-style: italic; margin: 6px 0 0 0;">
                 Past performance does not guarantee future results. Projections are
                 estimates based on historical data and actual results may vary.</p>
+        </div>"""
+
+
+def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
+    """Expenses goal card with coverage waterfall and itemized table."""
+    coverage = g.get("expense_coverage", {})
+    pct = coverage.get("coverage_pct", 0)
+    bar_color = "#10b981" if pct >= 100 else "#f59e0b" if pct >= 50 else "#ef4444"
+    bar_width = min(pct, 100)
+    currency = g.get("target_currency", "USD")
+    fmt = ".8f" if currency == "BTC" else ",.2f"
+    prefix = "" if currency == "BTC" else "$"
+    period = g.get("expense_period", "monthly")
+    tax_pct = g.get("tax_withholding_pct", 0)
+
+    total_exp = coverage.get("total_expenses", 0)
+    income_at = coverage.get("income_after_tax", 0)
+    covered = coverage.get("covered_count", 0)
+    total = coverage.get("total_count", 0)
+
+    # Build itemized table rows
+    item_rows = ""
+    for item in coverage.get("items", []):
+        status = item.get("status", "uncovered")
+        if status == "covered":
+            badge_bg, badge_color, badge_text = "#065f46", "#6ee7b7", "Covered"
+        elif status == "partial":
+            cp = item.get("coverage_pct", 0)
+            badge_bg, badge_color, badge_text = "#78350f", "#fcd34d", f"{cp:.0f}%"
+        else:
+            badge_bg, badge_color, badge_text = "#7f1d1d", "#fca5a5", "Uncovered"
+
+        norm = item.get("normalized_amount", 0)
+        item_rows += f"""
+            <tr>
+                <td style="padding: 4px 0; color: #94a3b8; font-size: 11px;">
+                    {item.get('category', '')}</td>
+                <td style="padding: 4px 0; color: #f1f5f9; font-size: 12px;">
+                    {item.get('name', '')}</td>
+                <td style="padding: 4px 0; color: #f1f5f9; text-align: right; font-size: 12px;">
+                    {prefix}{norm:{fmt}}</td>
+                <td style="padding: 4px 6px; text-align: center;">
+                    <span style="background: {badge_bg}; color: {badge_color};
+                                 padding: 1px 6px; border-radius: 4px; font-size: 10px;
+                                 font-weight: 600;">{badge_text}</span></td>
+            </tr>"""
+
+    dep = g.get("deposit_needed")
+    dep_line = ""
+    if dep is not None:
+        dep_line = f"""
+            <p style="color: #94a3b8; font-size: 11px; margin: 8px 0 0 0;">
+                Deposit needed to cover all expenses: {prefix}{dep:{fmt}} {currency}</p>"""
+
+    tax_line = ""
+    if tax_pct > 0:
+        tax_line = f"""
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Tax Withholding</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {tax_pct:.1f}%</td>
+                </tr>"""
+
+    return f"""
+        <div style="margin: 0 0 15px 0; padding: 12px; background-color: #1e293b;
+                    border-radius: 8px; border: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between; align-items: center;
+                        margin: 0 0 8px 0;">
+                <span style="color: #f1f5f9; font-weight: 600; font-size: 14px;">
+                    {g.get('name', '')}
+                    <span style="color: #94a3b8; font-weight: 400; font-size: 12px;
+                                 margin-left: 6px;">Expenses / {period.capitalize()}</span>
+                </span>
+                <span style="color: {bar_color}; font-size: 12px; font-weight: 600;">
+                    {pct:.0f}% Covered</span>
+            </div>
+            <div style="background-color: #334155; border-radius: 4px; height: 8px;
+                        overflow: hidden; margin-bottom: 10px;">
+                <div style="background-color: {bar_color}; width: {bar_width}%;
+                            height: 100%; border-radius: 4px;"></div>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;
+                          margin-bottom: 10px;">
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Total Expenses</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {prefix}{total_exp:{fmt}} {currency}/{period}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Income After Tax</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {prefix}{income_at:{fmt}} {currency}/{period}</td>
+                </tr>{tax_line}
+                <tr>
+                    <td style="padding: 4px 0; color: #94a3b8;">Items Covered</td>
+                    <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                        {covered} / {total}</td>
+                </tr>
+            </table>
+            <table style="width: 100%; border-collapse: collapse; border-top: 1px solid #334155;
+                          padding-top: 8px;">
+                <tr>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: left;
+                               font-weight: 600;">Category</th>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: left;
+                               font-weight: 600;">Name</th>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: right;
+                               font-weight: 600;">Amount</th>
+                    <th style="padding: 4px 0; color: #64748b; font-size: 10px; text-align: center;
+                               font-weight: 600;">Status</th>
+                </tr>
+                {item_rows}
+            </table>
+            {dep_line}
         </div>"""
 
 
@@ -845,6 +961,43 @@ def generate_pdf(
                         f"Based on {sample} trades over {lookback} days",
                         new_x="LMARGIN", new_y="NEXT",
                     )
+                    pdf.set_font("Helvetica", "", 10)
+                elif g.get("target_type") == "expenses":
+                    coverage = g.get("expense_coverage", {})
+                    exp_period = g.get("expense_period", "monthly")
+                    cov_pct = coverage.get("coverage_pct", 0)
+                    total_exp = coverage.get("total_expenses", 0)
+                    income_at = coverage.get("income_after_tax", 0)
+                    pdf.set_font("Helvetica", "B", 10)
+                    goal_name = _sanitize_for_pdf(g.get("name", ""))
+                    pdf.cell(
+                        0, 7,
+                        f"{goal_name} (Expenses/{exp_period.capitalize()}) "
+                        f"- {cov_pct:.0f}% Covered",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(80, 80, 80)
+                    pdf.cell(
+                        0, 6,
+                        f"Total: {pfx}{total_exp:,.2f} {curr}/{exp_period} | "
+                        f"Income after tax: {pfx}{income_at:,.2f}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    # List expense items in waterfall order
+                    for ei in coverage.get("items", []):
+                        s = ei.get("status", "uncovered")
+                        badge = "OK" if s == "covered" else (
+                            f"{ei.get('coverage_pct', 0):.0f}%" if s == "partial"
+                            else "X"
+                        )
+                        norm = ei.get("normalized_amount", 0)
+                        pdf.cell(
+                            0, 5,
+                            f"  [{badge}] {ei.get('name', '')} - "
+                            f"{pfx}{norm:,.2f}/{exp_period}",
+                            new_x="LMARGIN", new_y="NEXT",
+                        )
                     pdf.set_font("Helvetica", "", 10)
                 else:
                     goal_name = _sanitize_for_pdf(g.get("name", ""))

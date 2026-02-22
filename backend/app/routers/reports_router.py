@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models import (
+    ExpenseItem,
     GoalProgressSnapshot,
     Report,
     ReportGoal,
@@ -37,7 +38,7 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 class GoalCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    target_type: str = Field(..., pattern="^(balance|profit|both|income)$")
+    target_type: str = Field(..., pattern="^(balance|profit|both|income|expenses)$")
     target_currency: str = Field("USD", pattern="^(USD|BTC)$")
     target_value: float = Field(..., gt=0)
     target_balance_value: Optional[float] = None
@@ -45,19 +46,25 @@ class GoalCreate(BaseModel):
     income_period: Optional[str] = Field(
         None, pattern="^(daily|weekly|monthly|yearly)$"
     )
+    expense_period: Optional[str] = Field(
+        None, pattern="^(weekly|monthly|quarterly|yearly)$"
+    )
+    tax_withholding_pct: Optional[float] = Field(None, ge=0, le=100)
     time_horizon_months: int = Field(..., ge=1, le=120)
     target_date: Optional[datetime] = None
 
     @model_validator(mode="after")
-    def validate_income_fields(self):
+    def validate_goal_fields(self):
         if self.target_type == "income" and not self.income_period:
             raise ValueError("income_period is required when target_type is 'income'")
+        if self.target_type == "expenses" and not self.expense_period:
+            raise ValueError("expense_period is required when target_type is 'expenses'")
         return self
 
 
 class GoalUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
-    target_type: Optional[str] = Field(None, pattern="^(balance|profit|both|income)$")
+    target_type: Optional[str] = Field(None, pattern="^(balance|profit|both|income|expenses)$")
     target_currency: Optional[str] = Field(None, pattern="^(USD|BTC)$")
     target_value: Optional[float] = Field(None, gt=0)
     target_balance_value: Optional[float] = None
@@ -65,6 +72,10 @@ class GoalUpdate(BaseModel):
     income_period: Optional[str] = Field(
         None, pattern="^(daily|weekly|monthly|yearly)$"
     )
+    expense_period: Optional[str] = Field(
+        None, pattern="^(weekly|monthly|quarterly|yearly)$"
+    )
+    tax_withholding_pct: Optional[float] = Field(None, ge=0, le=100)
     time_horizon_months: Optional[int] = Field(None, ge=1, le=120)
     target_date: Optional[datetime] = None
     is_active: Optional[bool] = None
@@ -155,6 +166,37 @@ class PreviewRequest(BaseModel):
     schedule_id: int
 
 
+class ExpenseItemCreate(BaseModel):
+    category: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=200)
+    amount: float = Field(..., gt=0)
+    frequency: str = Field(
+        ...,
+        pattern="^(daily|weekly|biweekly|every_n_days|monthly|quarterly|yearly)$",
+    )
+    frequency_n: Optional[int] = Field(None, ge=1)
+    frequency_anchor: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_frequency_n(self):
+        if self.frequency == "every_n_days" and not self.frequency_n:
+            raise ValueError("frequency_n is required when frequency is 'every_n_days'")
+        return self
+
+
+class ExpenseItemUpdate(BaseModel):
+    category: Optional[str] = Field(None, min_length=1, max_length=100)
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    amount: Optional[float] = Field(None, gt=0)
+    frequency: Optional[str] = Field(
+        None,
+        pattern="^(daily|weekly|biweekly|every_n_days|monthly|quarterly|yearly)$",
+    )
+    frequency_n: Optional[int] = Field(None, ge=1)
+    frequency_anchor: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 # ----- Helper Functions -----
 
 def _normalize_recipient_for_api(item) -> dict:
@@ -174,7 +216,7 @@ def _normalize_recipient_for_api(item) -> dict:
 
 
 def _goal_to_dict(goal: ReportGoal) -> dict:
-    return {
+    d = {
         "id": goal.id,
         "name": goal.name,
         "target_type": goal.target_type,
@@ -183,6 +225,8 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         "target_balance_value": goal.target_balance_value,
         "target_profit_value": goal.target_profit_value,
         "income_period": goal.income_period,
+        "expense_period": goal.expense_period,
+        "tax_withholding_pct": goal.tax_withholding_pct or 0,
         "time_horizon_months": goal.time_horizon_months,
         "start_date": goal.start_date.isoformat() if goal.start_date else None,
         "target_date": goal.target_date.isoformat() if goal.target_date else None,
@@ -190,6 +234,13 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         "achieved_at": goal.achieved_at.isoformat() if goal.achieved_at else None,
         "created_at": goal.created_at.isoformat() if goal.created_at else None,
     }
+    # Include expense item count for expenses goals
+    if goal.target_type == "expenses" and hasattr(goal, "expense_items"):
+        items = goal.expense_items
+        d["expense_item_count"] = len(items) if items else 0
+    else:
+        d["expense_item_count"] = 0
+    return d
 
 
 def _parse_json_list(raw: Optional[str]) -> Optional[list]:
@@ -312,6 +363,7 @@ async def list_goals(
     result = await db.execute(
         select(ReportGoal)
         .where(ReportGoal.user_id == current_user.id)
+        .options(selectinload(ReportGoal.expense_items))
         .order_by(ReportGoal.created_at.desc())
     )
     goals = result.scalars().all()
@@ -341,15 +393,22 @@ async def create_goal(
     else:
         target_date = start_date + relativedelta(months=body.time_horizon_months)
 
+    # For expenses goals, target_value starts at 0 (auto-computed from items)
+    target_value = body.target_value
+    if body.target_type == "expenses":
+        target_value = body.target_value  # Will be recalculated when items are added
+
     goal = ReportGoal(
         user_id=current_user.id,
         name=body.name,
         target_type=body.target_type,
         target_currency=body.target_currency,
-        target_value=body.target_value,
+        target_value=target_value,
         target_balance_value=body.target_balance_value,
         target_profit_value=body.target_profit_value,
         income_period=body.income_period,
+        expense_period=body.expense_period,
+        tax_withholding_pct=body.tax_withholding_pct or 0,
         time_horizon_months=body.time_horizon_months,
         start_date=start_date,
         target_date=target_date,
@@ -459,10 +518,10 @@ async def get_goal_trend(
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
 
-    if goal.target_type == "income":
+    if goal.target_type in ("income", "expenses"):
         raise HTTPException(
             status_code=400,
-            detail="Trend charts are not yet supported for income goals"
+            detail=f"Trend charts are not supported for {goal.target_type} goals"
         )
 
     # Auto-backfill if no snapshots exist yet
@@ -494,6 +553,169 @@ async def get_goal_trend(
 
     trend_data = await get_goal_trend_data(db, goal, parsed_from, parsed_to)
     return trend_data
+
+
+# ----- Expense Items CRUD -----
+
+@router.get("/expense-categories")
+async def get_expense_categories(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[str]:
+    """Get default + user-defined expense categories."""
+    from app.services.expense_service import get_user_expense_categories
+    return await get_user_expense_categories(db, current_user.id)
+
+
+@router.get("/goals/{goal_id}/expenses")
+async def list_expense_items(
+    goal_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[dict]:
+    """List all expense items for a goal."""
+    goal = await _get_user_goal(db, goal_id, current_user.id)
+    result = await db.execute(
+        select(ExpenseItem)
+        .where(ExpenseItem.goal_id == goal.id)
+        .order_by(ExpenseItem.created_at)
+    )
+    items = result.scalars().all()
+    return [_expense_item_to_dict(i, goal.expense_period) for i in items]
+
+
+@router.post("/goals/{goal_id}/expenses")
+async def create_expense_item(
+    goal_id: int,
+    body: ExpenseItemCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Add an expense item to a goal."""
+    from app.services.expense_service import recalculate_goal_target
+
+    goal = await _get_user_goal(db, goal_id, current_user.id)
+    if goal.target_type != "expenses":
+        raise HTTPException(
+            status_code=400, detail="Can only add expense items to expenses goals"
+        )
+
+    item = ExpenseItem(
+        goal_id=goal.id,
+        user_id=current_user.id,
+        category=body.category,
+        name=body.name,
+        amount=body.amount,
+        frequency=body.frequency,
+        frequency_n=body.frequency_n,
+        frequency_anchor=body.frequency_anchor,
+    )
+    db.add(item)
+    await db.flush()
+
+    await recalculate_goal_target(db, goal)
+    await db.commit()
+    await db.refresh(item)
+    return _expense_item_to_dict(item, goal.expense_period)
+
+
+@router.put("/goals/{goal_id}/expenses/{item_id}")
+async def update_expense_item(
+    goal_id: int,
+    item_id: int,
+    body: ExpenseItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Update an expense item."""
+    from app.services.expense_service import recalculate_goal_target
+
+    goal = await _get_user_goal(db, goal_id, current_user.id)
+    result = await db.execute(
+        select(ExpenseItem).where(
+            ExpenseItem.id == item_id,
+            ExpenseItem.goal_id == goal.id,
+            ExpenseItem.user_id == current_user.id,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Expense item not found")
+
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(item, key, value)
+    item.updated_at = datetime.utcnow()
+
+    await recalculate_goal_target(db, goal)
+    await db.commit()
+    await db.refresh(item)
+    return _expense_item_to_dict(item, goal.expense_period)
+
+
+@router.delete("/goals/{goal_id}/expenses/{item_id}")
+async def delete_expense_item(
+    goal_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Delete an expense item."""
+    from app.services.expense_service import recalculate_goal_target
+
+    goal = await _get_user_goal(db, goal_id, current_user.id)
+    result = await db.execute(
+        select(ExpenseItem).where(
+            ExpenseItem.id == item_id,
+            ExpenseItem.goal_id == goal.id,
+            ExpenseItem.user_id == current_user.id,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Expense item not found")
+
+    await db.delete(item)
+    await recalculate_goal_target(db, goal)
+    await db.commit()
+    return {"detail": "Expense item deleted"}
+
+
+async def _get_user_goal(
+    db: AsyncSession, goal_id: int, user_id: int,
+) -> ReportGoal:
+    """Helper to fetch and validate goal ownership."""
+    result = await db.execute(
+        select(ReportGoal).where(
+            ReportGoal.id == goal_id,
+            ReportGoal.user_id == user_id,
+        )
+    )
+    goal = result.scalar_one_or_none()
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return goal
+
+
+def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
+    """Convert an ExpenseItem to a dict for API responses."""
+    from app.services.expense_service import normalize_item_to_period
+
+    d = {
+        "id": item.id,
+        "goal_id": item.goal_id,
+        "category": item.category,
+        "name": item.name,
+        "amount": item.amount,
+        "frequency": item.frequency,
+        "frequency_n": item.frequency_n,
+        "frequency_anchor": item.frequency_anchor,
+        "is_active": item.is_active,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+    }
+    if period:
+        d["normalized_amount"] = round(normalize_item_to_period(item, period), 2)
+    return d
 
 
 # ----- Schedules CRUD -----

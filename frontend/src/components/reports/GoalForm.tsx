@@ -11,12 +11,14 @@ interface GoalFormProps {
 
 export interface GoalFormData {
   name: string
-  target_type: 'balance' | 'profit' | 'both' | 'income'
+  target_type: 'balance' | 'profit' | 'both' | 'income' | 'expenses'
   target_currency: 'USD' | 'BTC'
   target_value: number
   target_balance_value?: number | null
   target_profit_value?: number | null
   income_period?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
+  expense_period?: 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+  tax_withholding_pct?: number
   time_horizon_months: number
   target_date?: string | null
 }
@@ -38,14 +40,23 @@ const INCOME_PERIOD_OPTIONS = [
   { value: 'yearly', label: 'Per Year' },
 ]
 
+const EXPENSE_PERIOD_OPTIONS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'yearly', label: 'Yearly' },
+]
+
 export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormProps) {
   const [name, setName] = useState('')
-  const [targetType, setTargetType] = useState<'balance' | 'profit' | 'both' | 'income'>('balance')
+  const [targetType, setTargetType] = useState<'balance' | 'profit' | 'both' | 'income' | 'expenses'>('balance')
   const [targetCurrency, setTargetCurrency] = useState<'USD' | 'BTC'>('USD')
   const [targetValue, setTargetValue] = useState('')
   const [targetBalanceValue, setTargetBalanceValue] = useState('')
   const [targetProfitValue, setTargetProfitValue] = useState('')
   const [incomePeriod, setIncomePeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly')
+  const [expensePeriod, setExpensePeriod] = useState<'weekly' | 'monthly' | 'quarterly' | 'yearly'>('monthly')
+  const [taxWithholding, setTaxWithholding] = useState('')
   const [timeHorizon, setTimeHorizon] = useState(12)
   const [dateMode, setDateMode] = useState<'horizon' | 'date'>('horizon')
   const [customDate, setCustomDate] = useState('')
@@ -60,6 +71,8 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setTargetBalanceValue(initialData.target_balance_value ? String(initialData.target_balance_value) : '')
       setTargetProfitValue(initialData.target_profit_value ? String(initialData.target_profit_value) : '')
       setIncomePeriod(initialData.income_period || 'monthly')
+      setExpensePeriod(initialData.expense_period || 'monthly')
+      setTaxWithholding(initialData.tax_withholding_pct ? String(initialData.tax_withholding_pct) : '')
       setTimeHorizon(initialData.time_horizon_months)
 
       // Detect if stored date matches a preset horizon
@@ -95,6 +108,8 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setTargetBalanceValue('')
       setTargetProfitValue('')
       setIncomePeriod('monthly')
+      setExpensePeriod('monthly')
+      setTaxWithholding('')
       setTimeHorizon(12)
       setDateMode('horizon')
       setCustomDate('')
@@ -111,10 +126,12 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
         name,
         target_type: targetType,
         target_currency: targetCurrency,
-        target_value: parseFloat(targetValue),
+        target_value: targetType === 'expenses' ? 1 : parseFloat(targetValue),
         target_balance_value: targetType === 'both' ? parseFloat(targetBalanceValue) || null : null,
         target_profit_value: targetType === 'both' ? parseFloat(targetProfitValue) || null : null,
         income_period: targetType === 'income' ? incomePeriod : null,
+        expense_period: targetType === 'expenses' ? expensePeriod : undefined,
+        tax_withholding_pct: targetType === 'expenses' ? (parseFloat(taxWithholding) || 0) : undefined,
         time_horizon_months: timeHorizon,
       }
 
@@ -174,6 +191,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
                 <option value="profit">Profit</option>
                 <option value="both">Both</option>
                 <option value="income">Income</option>
+                <option value="expenses">Expenses</option>
               </select>
             </div>
             <div>
@@ -189,7 +207,40 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
             </div>
           </div>
 
-          {targetType === 'income' ? (
+          {targetType === 'expenses' ? (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Expense Period</label>
+                <select
+                  value={expensePeriod}
+                  onChange={e => setExpensePeriod(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  {EXPENSE_PERIOD_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">All expenses will be normalized to this period</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Tax Withholding %</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={taxWithholding}
+                  onChange={e => setTaxWithholding(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">Applied to income before comparing to expenses</p>
+              </div>
+              <div className="bg-slate-700/50 rounded-lg p-3 text-xs text-slate-400">
+                Target amount is auto-calculated from expense items. Add items after creating the goal.
+              </div>
+            </>
+          ) : targetType === 'income' ? (
             <>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
@@ -325,7 +376,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
             </button>
             <button
               type="submit"
-              disabled={submitting || !name || !targetValue || (dateMode === 'date' && !customDate)}
+              disabled={submitting || !name || (targetType !== 'expenses' && !targetValue) || (dateMode === 'date' && !customDate)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
             >
               {submitting ? 'Saving...' : initialData ? 'Update' : 'Create'}
