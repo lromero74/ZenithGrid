@@ -68,6 +68,7 @@ def build_report_html(
     period_label: str,
     default_level: str = "comfortable",
     schedule_name: Optional[str] = None,
+    email_mode: bool = False,
 ) -> str:
     """
     Build the full HTML report.
@@ -79,6 +80,7 @@ def build_report_html(
         period_label: e.g. "January 1 - January 7, 2026"
         default_level: Which tier gets visual prominence
         schedule_name: Optional report schedule name (shown as title)
+        email_mode: If True, show only the default tier (email clients strip JS)
 
     Returns:
         Complete HTML string
@@ -93,7 +95,10 @@ def build_report_html(
     tiered = _normalize_ai_summary(ai_summary)
     ai_html = ""
     if tiered:
-        ai_html = _build_tiered_ai_section(tiered, default_level, brand_color)
+        if email_mode:
+            ai_html = _build_email_ai_section(tiered, default_level, brand_color)
+        else:
+            ai_html = _build_tabbed_ai_section(tiered, default_level, brand_color)
     elif ai_summary is None:
         ai_html = """
         <div style="margin: 25px 0; padding: 15px; background-color: #1e293b;
@@ -123,60 +128,139 @@ def build_report_html(
 </html>"""
 
 
-def _build_tiered_ai_section(
+def _build_tabbed_ai_section(
     ai_summary: dict,
     default_level: str,
     brand_color: str,
 ) -> str:
     """
-    Render all available tiers as stacked sections.
+    Render AI tiers as tabbed file-folder interface with JS.
 
-    The default_level tier gets brand-colored left border and full prominence.
-    Other tiers are visually secondary (gray border, muted text).
-    Email-safe — no JS, no interactive elements.
+    Used for stored HTML reports viewed in iframe (not email).
     """
-    sections = []
     tier_order = ["beginner", "comfortable", "experienced"]
+    available = [(t, ai_summary.get(t)) for t in tier_order if ai_summary.get(t)]
 
-    for tier in tier_order:
-        text = ai_summary.get(tier)
-        if not text:
-            continue
+    if not available:
+        return ""
 
+    if len(available) == 1:
+        # Only one tier — no tabs needed
+        tier, text = available[0]
         label = _TIER_LABELS.get(tier, tier.capitalize())
-        is_default = tier == default_level
+        return _render_single_ai_section(text, label, brand_color)
 
-        paragraphs = text.strip().split("\n\n")
-        rendered_paragraphs = "".join(
-            f'<p style="color: {"#cbd5e1" if is_default else "#94a3b8"}; '
-            f'line-height: 1.7; margin: 0 0 12px 0; '
-            f'font-size: {"14px" if is_default else "13px"};">'
-            f"{p.strip()}</p>"
-            for p in paragraphs
-            if p.strip()
+    # Build tab buttons
+    tab_buttons = []
+    tab_panels = []
+    for i, (tier, text) in enumerate(available):
+        label = _TIER_LABELS.get(tier, tier.capitalize())
+        is_active = tier == default_level
+        active_style = (
+            f"background-color: #1e293b; color: {brand_color}; "
+            f"border-bottom: 2px solid {brand_color};"
+            if is_active else
+            "background-color: transparent; color: #64748b; "
+            "border-bottom: 2px solid transparent;"
+        )
+        tab_buttons.append(
+            f'<button onclick="switchTab(\'{tier}\')" id="tab-{tier}" '
+            f'style="padding: 10px 18px; border: none; cursor: pointer; '
+            f'font-size: 13px; font-weight: 600; font-family: inherit; '
+            f'transition: all 0.2s; {active_style}">{label}</button>'
         )
 
-        if is_default:
-            sections.append(f"""
+        paragraphs = text.strip().split("\n\n")
+        rendered = "".join(
+            f'<p style="color: #cbd5e1; line-height: 1.7; '
+            f'margin: 0 0 12px 0; font-size: 14px;">{p.strip()}</p>'
+            for p in paragraphs if p.strip()
+        )
+        display = "block" if is_active else "none"
+        tab_panels.append(
+            f'<div id="panel-{tier}" style="display: {display}; '
+            f'padding: 20px;">{rendered}</div>'
+        )
+
+    tabs_html = "\n".join(tab_buttons)
+    panels_html = "\n".join(tab_panels)
+    tier_ids = [t for t, _ in available]
+    tier_ids_js = ", ".join(f'"{t}"' for t in tier_ids)
+
+    return f"""
+        <div style="margin: 25px 0; background-color: #1e293b;
+                    border-radius: 8px; border: 1px solid #334155; overflow: hidden;">
+            <div style="display: flex; border-bottom: 1px solid #334155;
+                        background-color: #162032;">
+                {tabs_html}
+            </div>
+            {panels_html}
+        </div>
+        <script>
+        function switchTab(tier) {{
+            var tiers = [{tier_ids_js}];
+            for (var i = 0; i < tiers.length; i++) {{
+                var t = tiers[i];
+                var panel = document.getElementById('panel-' + t);
+                var tab = document.getElementById('tab-' + t);
+                if (t === tier) {{
+                    panel.style.display = 'block';
+                    tab.style.backgroundColor = '#1e293b';
+                    tab.style.color = '{brand_color}';
+                    tab.style.borderBottom = '2px solid {brand_color}';
+                }} else {{
+                    panel.style.display = 'none';
+                    tab.style.backgroundColor = 'transparent';
+                    tab.style.color = '#64748b';
+                    tab.style.borderBottom = '2px solid transparent';
+                }}
+            }}
+        }}
+        </script>"""
+
+
+def _build_email_ai_section(
+    ai_summary: dict,
+    default_level: str,
+    brand_color: str,
+) -> str:
+    """
+    Render only the recipient's tier for email delivery.
+
+    Email clients strip JS, so no tabs. Shows one tier with a note
+    about other perspectives being available in the web report.
+    """
+    text = ai_summary.get(default_level)
+    if not text:
+        # Fallback: try any available tier
+        for tier in ["comfortable", "beginner", "experienced"]:
+            text = ai_summary.get(tier)
+            if text:
+                default_level = tier
+                break
+    if not text:
+        return ""
+
+    label = _TIER_LABELS.get(default_level, default_level.capitalize())
+    return _render_single_ai_section(text, label, brand_color)
+
+
+def _render_single_ai_section(text: str, label: str, brand_color: str) -> str:
+    """Render a single AI summary section (used by both email and single-tier)."""
+    paragraphs = text.strip().split("\n\n")
+    rendered = "".join(
+        f'<p style="color: #cbd5e1; line-height: 1.7; '
+        f'margin: 0 0 12px 0; font-size: 14px;">{p.strip()}</p>'
+        for p in paragraphs if p.strip()
+    )
+    return f"""
         <div style="margin: 25px 0; padding: 20px; background-color: #1e293b;
                     border-radius: 8px; border: 1px solid #334155;
                     border-left: 4px solid {brand_color};">
             <h3 style="color: {brand_color}; margin: 0 0 15px 0; font-size: 16px;">
                 {label}</h3>
-            {rendered_paragraphs}
-        </div>""")
-        else:
-            sections.append(f"""
-        <div style="margin: 15px 0; padding: 16px; background-color: #1a2332;
-                    border-radius: 8px; border: 1px solid #2d3a4a;
-                    border-left: 4px solid #475569;">
-            <h4 style="color: #94a3b8; margin: 0 0 10px 0; font-size: 13px;
-                       text-transform: uppercase; letter-spacing: 0.5px;">
-                {label}</h4>
-            {rendered_paragraphs}
-        </div>""")
-
-    return "\n".join(sections)
+            {rendered}
+        </div>"""
 
 
 def _report_header(

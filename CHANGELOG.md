@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.36.2] - 2026-02-22
+
+### Changed
+- **Tabbed AI summaries in reports**: The three AI analysis tiers (Simplified, Performance Analysis, Technical) now appear as clickable tabs instead of stacked sections
+- **Email reports show single tier**: Emails display only the recipient's preferred analysis tier for a cleaner reading experience
+
+### Fixed
+- **Report delivery status**: Reports generated from schedules with no email recipients now correctly show "Manual" instead of getting stuck on "Pending"
+
 ## [v2.36.1] - 2026-02-22
 
 ### Fixed

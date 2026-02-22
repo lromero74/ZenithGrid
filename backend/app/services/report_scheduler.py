@@ -249,7 +249,7 @@ async def generate_report_for_schedule(
         pdf_content=pdf_content,
         ai_summary=ai_summary_str,
         ai_provider_used=ai_provider_used,
-        delivery_status="pending" if send_email else "manual",
+        delivery_status="pending" if (send_email and schedule.recipients) else "manual",
     )
 
     if save:
@@ -351,6 +351,7 @@ async def _deliver_report(
                 report_data, ai_summary, user_name, period_label,
                 default_level=level,
                 schedule_name=schedule_name,
+                email_mode=True,
             )
 
         try:
