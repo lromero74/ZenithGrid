@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.34.1] - 2026-02-22
+
+### Added
+- **Development workflow commands**: New slash commands `/primer`, `/generate-prp`, `/execute-prp`, and `/fix-github-issue` for structured development workflows
+- **Validation and documentation agents**: Automated code quality gating and architecture documentation sync
+- **Domain knowledge reference**: Trading domain specifics (budget calculation, AI allocation flow) now in a dedicated reference doc
+
+### Changed
+- **Restructured project guide**: Cleaner, more focused development instructions with clear philosophy, rules, and architecture reference
+
 ## [v2.34.0] - 2026-02-22
 
 ### Added
