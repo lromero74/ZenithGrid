@@ -424,15 +424,29 @@ async def _compute_expenses_goal_progress(
         expense_items, expense_period, projected_income, tax_pct,
     )
 
-    # Deposit needed: shortfall / daily_return_rate
+    # Deposit needed: how much additional capital to generate enough
+    # after-tax income to cover the shortfall, based on past return rate.
+    # Formula: shortfall / ((1 - tax_pct/100) * daily_return_rate * period_days)
     deposit_needed = None
-    if coverage["shortfall"] > 0 and account_value > 0 and daily_income > 0:
+    deposit_partial = None
+    deposit_next = None
+    if account_value > 0 and daily_income > 0:
         daily_return_rate = daily_income / account_value
-        if daily_return_rate > 0:
-            deposit_needed = round(
-                coverage["shortfall"] / (daily_return_rate * period_days),
-                8 if is_btc else 2,
-            )
+        after_tax_factor = (1 - tax_pct / 100) if tax_pct < 100 else 0
+        denominator = daily_return_rate * period_days * after_tax_factor
+        if denominator > 0:
+            if coverage["shortfall"] > 0:
+                deposit_needed = round(
+                    coverage["shortfall"] / denominator,
+                    8 if is_btc else 2,
+                )
+            # Per-item deposits
+            partial_short = coverage.get("partial_item_shortfall")
+            if partial_short:
+                deposit_partial = round(partial_short / denominator, 8 if is_btc else 2)
+            next_amt = coverage.get("next_uncovered_amount")
+            if next_amt:
+                deposit_next = round(next_amt / denominator, 8 if is_btc else 2)
 
     precision = 8 if is_btc else 2
     progress_pct = coverage["coverage_pct"]
@@ -454,6 +468,9 @@ async def _compute_expenses_goal_progress(
         "expense_coverage": coverage,
         "projected_income": round(projected_income, precision),
         "deposit_needed": deposit_needed,
+        "deposit_partial": deposit_partial,
+        "deposit_next": deposit_next,
+        "daily_return_rate": round(daily_income / account_value, 6) if account_value > 0 else None,
         "lookback_days_used": lookback_days_actual,
         "sample_trades": sample_trades,
     }

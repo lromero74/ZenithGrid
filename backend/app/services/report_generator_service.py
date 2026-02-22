@@ -585,33 +585,33 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
             </tr>"""
 
     dep = g.get("deposit_needed")
+    dep_partial = g.get("deposit_partial")
+    dep_next = g.get("deposit_next")
     dep_line = ""
     if dep is not None or coverage.get("partial_item_name") or coverage.get("next_uncovered_name"):
         dep_parts = []
         partial_name = coverage.get("partial_item_name")
-        partial_short = coverage.get("partial_item_shortfall")
         next_name = coverage.get("next_uncovered_name")
-        next_amt = coverage.get("next_uncovered_amount")
 
-        if partial_name and partial_short:
+        if partial_name and dep_partial is not None:
             dep_parts.append(
                 f"Finish covering <strong>{partial_name}</strong>: "
-                f"{prefix}{partial_short:{fmt}} {currency} more needed"
+                f"deposit ~{prefix}{dep_partial:{fmt}} {currency}"
             )
-            if next_name and next_amt:
+            if next_name and dep_next is not None:
                 dep_parts.append(
-                    f"Next: <strong>{next_name}</strong> "
-                    f"({prefix}{next_amt:{fmt}} {currency})"
+                    f"Then cover <strong>{next_name}</strong>: "
+                    f"deposit ~{prefix}{dep_next:{fmt}} {currency} more"
                 )
-        elif next_name and next_amt:
+        elif next_name and dep_next is not None:
             dep_parts.append(
-                f"Next expense to cover: <strong>{next_name}</strong> "
-                f"({prefix}{next_amt:{fmt}} {currency})"
+                f"Cover <strong>{next_name}</strong>: "
+                f"deposit ~{prefix}{dep_next:{fmt}} {currency}"
             )
 
         if dep is not None:
             dep_parts.append(
-                f"Total deposit needed: {prefix}{dep:{fmt}} {currency}"
+                f"Cover all expenses: deposit ~{prefix}{dep:{fmt}} {currency} total"
             )
 
         dep_line = "".join(
@@ -1113,28 +1113,29 @@ def generate_pdf(
                         )
                     # Deposit guidance lines
                     partial_name = coverage.get("partial_item_name")
-                    partial_short = coverage.get("partial_item_shortfall")
                     next_name = coverage.get("next_uncovered_name")
-                    next_amt = coverage.get("next_uncovered_amount")
-                    if partial_name and partial_short:
+                    dep_partial = g.get("deposit_partial")
+                    dep_next = g.get("deposit_next")
+                    if partial_name and dep_partial is not None:
                         pdf.cell(
                             0, 5,
                             f"  Finish covering {partial_name}: "
-                            f"{pfx}{partial_short:,.2f} {curr} more needed",
+                            f"deposit ~{pfx}{dep_partial:,.2f} {curr}",
                             new_x="LMARGIN", new_y="NEXT",
                         )
-                    if next_name and next_amt:
-                        label = "Next" if partial_name else "Next expense to cover"
+                    if next_name and dep_next is not None:
+                        label = "Then cover" if partial_name else "Cover"
                         pdf.cell(
                             0, 5,
-                            f"  {label}: {next_name} ({pfx}{next_amt:,.2f} {curr})",
+                            f"  {label} {next_name}: "
+                            f"deposit ~{pfx}{dep_next:,.2f} {curr}",
                             new_x="LMARGIN", new_y="NEXT",
                         )
                     dep = g.get("deposit_needed")
                     if dep is not None:
                         pdf.cell(
                             0, 5,
-                            f"  Total deposit needed: {pfx}{dep:,.2f} {curr}",
+                            f"  Cover all: deposit ~{pfx}{dep:,.2f} {curr} total",
                             new_x="LMARGIN", new_y="NEXT",
                         )
                     pdf.set_font("Helvetica", "", 10)

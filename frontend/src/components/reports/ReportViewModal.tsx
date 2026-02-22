@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { X, Download } from 'lucide-react'
 
 interface ReportViewModalProps {
@@ -12,7 +13,15 @@ interface ReportViewModalProps {
 export function ReportViewModal({
   isOpen, onClose, htmlContent, title, onDownloadPdf, hasPdf
 }: ReportViewModalProps) {
-  if (!isOpen || !htmlContent) return null
+  // Use blob URL instead of srcDoc to bypass parent CSP restrictions
+  // on inline scripts (needed for tabbed AI summaries)
+  const blobUrl = useMemo(() => {
+    if (!htmlContent) return null
+    const blob = new Blob([htmlContent], { type: 'text/html' })
+    return URL.createObjectURL(blob)
+  }, [htmlContent])
+
+  if (!isOpen || !htmlContent || !blobUrl) return null
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -36,13 +45,12 @@ export function ReportViewModal({
           </div>
         </div>
 
-        {/* Report Content — isolated iframe */}
+        {/* Report Content — blob URL allows inline scripts without CSP issues */}
         <div className="flex-1 overflow-hidden">
           <iframe
-            srcDoc={htmlContent}
+            src={blobUrl}
             className="w-full h-full border-0"
             title="Report Preview"
-            sandbox="allow-same-origin allow-scripts"
           />
         </div>
       </div>
