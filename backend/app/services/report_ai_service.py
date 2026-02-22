@@ -145,6 +145,28 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
                         f"~{dep_lin} (linear) / ~{dep_cmp} (compound) "
                         f"{g['target_currency']} to reach target"
                     )
+            elif g.get("target_type") == "expenses":
+                coverage = g.get("expense_coverage", {})
+                exp_period = g.get("expense_period", "monthly")
+                cov_pct = coverage.get("coverage_pct", 0)
+                total_exp = coverage.get("total_expenses", 0)
+                income_at = coverage.get("income_after_tax", 0)
+                covered_n = coverage.get("covered_count", 0)
+                total_n = coverage.get("total_count", 0)
+                goals_lines.append(
+                    f"  - {g['name']} (Expenses Goal): "
+                    f"Total expenses: {total_exp} {g['target_currency']}/{exp_period}, "
+                    f"Income after tax: {income_at}, "
+                    f"Coverage: {cov_pct:.0f}% ({covered_n}/{total_n} items covered), "
+                    f"Based on {g.get('sample_trades', 0)} trades over "
+                    f"{g.get('lookback_days_used', 0)} days"
+                )
+                dep = g.get("deposit_needed")
+                if dep is not None:
+                    goals_lines.append(
+                        f"    Deposit needed to cover all expenses: "
+                        f"~{dep} {g['target_currency']}"
+                    )
             else:
                 goals_lines.append(
                     f"  - {g['name']}: {g['progress_pct']}% complete "

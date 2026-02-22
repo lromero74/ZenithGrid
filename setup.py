@@ -1537,6 +1537,8 @@ def initialize_database(project_root):
                 target_balance_value REAL,
                 target_profit_value REAL,
                 income_period TEXT,
+                expense_period TEXT,
+                tax_withholding_pct REAL DEFAULT 0,
                 time_horizon_months INTEGER NOT NULL,
                 start_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 target_date DATETIME NOT NULL,
@@ -1668,6 +1670,32 @@ def initialize_database(project_root):
         cursor.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_goal_snapshot_date "
             "ON goal_progress_snapshots(goal_id, snapshot_date)"
+        )
+
+        # Expense items table (itemized expenses for expense-type goals)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS expense_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                goal_id INTEGER NOT NULL REFERENCES report_goals(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                frequency TEXT NOT NULL,
+                frequency_n INTEGER,
+                frequency_anchor TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_expense_items_goal_id "
+            "ON expense_items(goal_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_expense_items_user_id "
+            "ON expense_items(user_id)"
         )
 
         # Seed default content sources

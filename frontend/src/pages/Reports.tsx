@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Target, Calendar, FileText, Plus, Pencil, Trash2, Play, Eye, Download,
-  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight
+  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, Receipt
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
@@ -10,6 +10,7 @@ import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
 import { ScheduleForm, type ScheduleFormData } from '../components/reports/ScheduleForm'
 import { ReportViewModal } from '../components/reports/ReportViewModal'
 import { GoalProgressBar } from '../components/reports/GoalProgressBar'
+import { ExpenseItemsEditor } from '../components/reports/ExpenseItemsEditor'
 import type { ReportGoal, ReportSchedule, ReportSummary } from '../types'
 
 type TabId = 'goals' | 'schedules' | 'history'
@@ -35,6 +36,7 @@ export default function Reports() {
   // Goal state
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [editingGoal, setEditingGoal] = useState<ReportGoal | null>(null)
+  const [expenseEditorGoal, setExpenseEditorGoal] = useState<ReportGoal | null>(null)
 
   // Schedule state
   const [showScheduleForm, setShowScheduleForm] = useState(false)
@@ -221,7 +223,8 @@ export default function Reports() {
                       <span className="text-xs text-slate-400">
                         {goal.target_type === 'balance' ? 'Balance' :
                          goal.target_type === 'profit' ? 'Profit' :
-                         goal.target_type === 'income' ? 'Income' : 'Balance & Profit'} target
+                         goal.target_type === 'income' ? 'Income' :
+                         goal.target_type === 'expenses' ? 'Expenses' : 'Balance & Profit'} target
                       </span>
                       {goal.target_date && (
                         <span className="inline-flex items-center gap-1 text-xs bg-blue-900/40 text-blue-300 border border-blue-800/50 px-1.5 py-0.5 rounded">
@@ -257,18 +260,45 @@ export default function Reports() {
 
                 {/* Target display */}
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg font-semibold text-white">
-                    {goal.target_currency === 'BTC'
-                      ? `${goal.target_value} BTC`
-                      : `$${goal.target_value.toLocaleString()}`}
-                    {goal.target_type === 'income' && goal.income_period && (
-                      <span className="text-sm text-slate-400 font-normal">
-                        /{goal.income_period === 'daily' ? 'day' :
-                          goal.income_period === 'weekly' ? 'week' :
-                          goal.income_period === 'monthly' ? 'month' : 'year'}
+                  {goal.target_type === 'expenses' ? (
+                    <div className="flex items-center gap-3 w-full">
+                      <span className="text-lg font-semibold text-white">
+                        {goal.target_currency === 'BTC'
+                          ? `${goal.target_value} BTC`
+                          : `$${goal.target_value.toLocaleString()}`}
+                        <span className="text-sm text-slate-400 font-normal">
+                          /{goal.expense_period || 'month'}
+                        </span>
                       </span>
-                    )}
-                  </span>
+                      <span className="text-xs text-slate-500">
+                        {goal.expense_item_count || 0} item{(goal.expense_item_count || 0) !== 1 ? 's' : ''}
+                      </span>
+                      {(goal.tax_withholding_pct || 0) > 0 && (
+                        <span className="text-xs bg-amber-900/30 text-amber-400 px-1.5 py-0.5 rounded">
+                          {goal.tax_withholding_pct}% tax
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setExpenseEditorGoal(goal)}
+                        className="ml-auto flex items-center gap-1 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 px-2.5 py-1 rounded transition-colors"
+                      >
+                        <Receipt className="w-3 h-3" /> Manage Expenses
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-lg font-semibold text-white">
+                      {goal.target_currency === 'BTC'
+                        ? `${goal.target_value} BTC`
+                        : `$${goal.target_value.toLocaleString()}`}
+                      {goal.target_type === 'income' && goal.income_period && (
+                        <span className="text-sm text-slate-400 font-normal">
+                          /{goal.income_period === 'daily' ? 'day' :
+                            goal.income_period === 'weekly' ? 'week' :
+                            goal.income_period === 'monthly' ? 'month' : 'year'}
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </div>
 
                 {/* Time progress bar (since we can't know account value client-side) */}
@@ -591,6 +621,15 @@ export default function Reports() {
         hasPdf={viewingReport?.has_pdf}
         onDownloadPdf={viewingReport ? () => handleDownloadPdf(viewingReport.id) : undefined}
       />
+
+      {expenseEditorGoal && (
+        <ExpenseItemsEditor
+          goalId={expenseEditorGoal.id}
+          expensePeriod={expenseEditorGoal.expense_period || 'monthly'}
+          currency={expenseEditorGoal.target_currency}
+          onClose={() => setExpenseEditorGoal(null)}
+        />
+      )}
     </div>
   )
 }

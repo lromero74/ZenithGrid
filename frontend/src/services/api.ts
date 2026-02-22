@@ -625,6 +625,7 @@ export const accountValueApi = {
 import type {
   ReportGoal, ReportSchedule, ReportSummary, RecipientItem,
   ScheduleType, PeriodWindow, LookbackUnit, GoalTrendData,
+  ExpenseItem,
 } from '../types'
 
 export interface ScheduleCreatePayload {
@@ -657,6 +658,18 @@ export const reportsApi = {
     if (toDate) params.to_date = toDate
     return api.get<GoalTrendData>(`/reports/goals/${goalId}/trend`, { params }).then(r => r.data)
   },
+
+  // Expense Items
+  getExpenseItems: (goalId: number) =>
+    api.get<ExpenseItem[]>(`/reports/goals/${goalId}/expenses`).then(r => r.data),
+  createExpenseItem: (goalId: number, data: Omit<ExpenseItem, 'id' | 'goal_id' | 'is_active' | 'normalized_amount' | 'created_at'>) =>
+    api.post<ExpenseItem>(`/reports/goals/${goalId}/expenses`, data).then(r => r.data),
+  updateExpenseItem: (goalId: number, itemId: number, data: Partial<ExpenseItem>) =>
+    api.put<ExpenseItem>(`/reports/goals/${goalId}/expenses/${itemId}`, data).then(r => r.data),
+  deleteExpenseItem: (goalId: number, itemId: number) =>
+    api.delete(`/reports/goals/${goalId}/expenses/${itemId}`).then(r => r.data),
+  getExpenseCategories: () =>
+    api.get<string[]>('/reports/expense-categories').then(r => r.data),
 
   // Schedules
   getSchedules: () => api.get<ReportSchedule[]>('/reports/schedules').then(r => r.data),

@@ -492,17 +492,34 @@ export interface TieredAISummary {
 export interface ReportGoal {
   id: number
   name: string
-  target_type: 'balance' | 'profit' | 'both' | 'income'
+  target_type: 'balance' | 'profit' | 'both' | 'income' | 'expenses'
   target_currency: 'USD' | 'BTC'
   target_value: number
   target_balance_value?: number | null
   target_profit_value?: number | null
   income_period?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
+  expense_period?: 'weekly' | 'monthly' | 'quarterly' | 'yearly' | null
+  tax_withholding_pct?: number
+  expense_item_count?: number
   time_horizon_months: number
   start_date: string | null
   target_date: string | null
   is_active: boolean
   achieved_at: string | null
+  created_at: string | null
+}
+
+export interface ExpenseItem {
+  id: number
+  goal_id: number
+  category: string
+  name: string
+  amount: number
+  frequency: string
+  frequency_n?: number | null
+  frequency_anchor?: string | null
+  is_active: boolean
+  normalized_amount?: number
   created_at: string | null
 }
 

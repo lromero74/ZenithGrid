@@ -40,12 +40,12 @@ async def capture_goal_snapshots(
         hour=0, minute=0, second=0, microsecond=0
     )
 
-    # Get all active, non-income goals for this user
+    # Get all active goals that support snapshots (not income/expenses)
     result = await db.execute(
         select(ReportGoal).where(
             ReportGoal.user_id == user_id,
             ReportGoal.is_active.is_(True),
-            ReportGoal.target_type != "income",
+            ReportGoal.target_type.notin_(["income", "expenses"]),
         )
     )
     goals = result.scalars().all()
@@ -163,8 +163,8 @@ async def backfill_goal_snapshots(
 
     Returns the number of snapshots created.
     """
-    if goal.target_type == "income":
-        logger.info(f"Skipping backfill for income goal {goal.id}")
+    if goal.target_type in ("income", "expenses"):
+        logger.info(f"Skipping backfill for {goal.target_type} goal {goal.id}")
         return 0
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)

@@ -1345,6 +1345,10 @@ class ReportGoal(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Expenses goal fields
+    expense_period = Column(String, nullable=True)  # weekly/monthly/quarterly/yearly
+    tax_withholding_pct = Column(Float, nullable=True, default=0)  # 0-100
+
     # Relationships
     user = relationship("User", back_populates="report_goals")
     schedule_links = relationship(
@@ -1353,6 +1357,42 @@ class ReportGoal(Base):
     progress_snapshots = relationship(
         "GoalProgressSnapshot", back_populates="goal", cascade="all, delete-orphan"
     )
+    expense_items = relationship(
+        "ExpenseItem", back_populates="goal", cascade="all, delete-orphan"
+    )
+
+
+class ExpenseItem(Base):
+    """
+    Individual expense line items for expenses-type goals.
+
+    Each item has its own frequency; all are normalized to the goal's
+    expense_period for coverage calculations.
+    """
+    __tablename__ = "expense_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    goal_id = Column(
+        Integer, ForeignKey("report_goals.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    category = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    frequency = Column(String, nullable=False)  # daily/weekly/biweekly/every_n_days/monthly/quarterly/yearly
+    frequency_n = Column(Integer, nullable=True)  # Only for every_n_days
+    frequency_anchor = Column(String, nullable=True)  # Start date for every_n_days (YYYY-MM-DD)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    goal = relationship("ReportGoal", back_populates="expense_items")
+    user = relationship("User")
 
 
 class GoalProgressSnapshot(Base):

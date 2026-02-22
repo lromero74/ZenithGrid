@@ -191,6 +191,12 @@ async def compute_goal_progress(
             period_start, period_end,
         )
 
+    if goal.target_type == "expenses":
+        return await _compute_expenses_goal_progress(
+            db, goal, current_usd, current_btc,
+            period_start, period_end,
+        )
+
     is_btc = goal.target_currency == "BTC"
     current_value = current_btc if is_btc else current_usd
 
@@ -342,6 +348,112 @@ async def _compute_income_goal_progress(
         "projected_income_compound": round(projected_compound, precision),
         "deposit_needed_linear": deposit_needed_linear,
         "deposit_needed_compound": deposit_needed_compound,
+        "lookback_days_used": lookback_days_actual,
+        "sample_trades": sample_trades,
+    }
+
+
+async def _compute_expenses_goal_progress(
+    db: AsyncSession,
+    goal: ReportGoal,
+    current_usd: float,
+    current_btc: float,
+    period_start: Optional[datetime] = None,
+    period_end: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """
+    Compute expenses goal progress by analyzing income vs expense items.
+
+    Reuses the same income calculation logic as income goals, then runs
+    the coverage waterfall from expense_service.
+    """
+    from app.models import ExpenseItem
+    from app.services.expense_service import compute_expense_coverage
+
+    is_btc = goal.target_currency == "BTC"
+    account_value = current_btc if is_btc else current_usd
+    expense_period = goal.expense_period or "monthly"
+    tax_pct = goal.tax_withholding_pct or 0
+
+    period_multipliers = {
+        "weekly": 7,
+        "monthly": 30,
+        "quarterly": 91,
+        "yearly": 365,
+    }
+    period_days = period_multipliers.get(expense_period, 30)
+
+    # Calculate income using same logic as income goals
+    now = datetime.utcnow()
+    lookback_start = period_start or goal.start_date
+    lookback_end = period_end or now
+    lookback_days_actual = max((lookback_end - lookback_start).days, 1)
+
+    pos_filters = [
+        Position.user_id == goal.user_id,
+        Position.status == "closed",
+        Position.closed_at >= lookback_start,
+        Position.closed_at <= lookback_end,
+    ]
+    result = await db.execute(select(Position).where(and_(*pos_filters)))
+    closed_positions = result.scalars().all()
+
+    if is_btc:
+        total_profit = sum(
+            p.profit_quote or 0 for p in closed_positions
+            if p.get_quote_currency() == "BTC"
+        )
+    else:
+        total_profit = sum(p.profit_usd or 0 for p in closed_positions)
+
+    sample_trades = len(closed_positions)
+    daily_income = total_profit / lookback_days_actual if lookback_days_actual > 0 else 0
+    projected_income = daily_income * period_days
+
+    # Load active expense items
+    items_result = await db.execute(
+        select(ExpenseItem).where(
+            ExpenseItem.goal_id == goal.id,
+            ExpenseItem.is_active.is_(True),
+        )
+    )
+    expense_items = items_result.scalars().all()
+
+    # Run coverage waterfall
+    coverage = compute_expense_coverage(
+        expense_items, expense_period, projected_income, tax_pct,
+    )
+
+    # Deposit needed: shortfall / daily_return_rate
+    deposit_needed = None
+    if coverage["shortfall"] > 0 and account_value > 0 and daily_income > 0:
+        daily_return_rate = daily_income / account_value
+        if daily_return_rate > 0:
+            deposit_needed = round(
+                coverage["shortfall"] / (daily_return_rate * period_days),
+                8 if is_btc else 2,
+            )
+
+    precision = 8 if is_btc else 2
+    progress_pct = coverage["coverage_pct"]
+    on_track = progress_pct >= 100.0
+
+    return {
+        "goal_id": goal.id,
+        "name": goal.name,
+        "target_type": "expenses",
+        "target_currency": goal.target_currency,
+        "target_value": goal.target_value,
+        "current_value": round(coverage["income_after_tax"], precision),
+        "progress_pct": round(min(progress_pct, 100), 1),
+        "on_track": on_track,
+        "time_elapsed_pct": 0,  # Not time-based
+        # Expenses-specific fields
+        "expense_period": expense_period,
+        "tax_withholding_pct": tax_pct,
+        "expense_coverage": coverage,
+        "projected_income": round(projected_income, precision),
+        "deposit_needed": deposit_needed,
         "lookback_days_used": lookback_days_actual,
         "sample_trades": sample_trades,
     }

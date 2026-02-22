@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.36.0] - 2026-02-22
+
+### Added
+- **Expenses goal type**: New goal type that tracks itemized living expenses and measures how close your trading income is to covering them
+- **Expense items management**: Add, edit, and delete individual expense items with flexible frequencies (daily, weekly, biweekly, every N days, monthly, quarterly, yearly)
+- **Coverage waterfall**: Reports show which expenses are covered, partially covered, or uncovered by your income — sorted from cheapest to most expensive
+- **Tax withholding**: Optional tax percentage deducted from income before expense coverage comparison
+- **Automatic normalization**: All expense items normalized to your chosen period (weekly, monthly, quarterly, yearly) regardless of individual billing frequency
+- **12 default expense categories**: Housing, Utilities, Transportation, Food, Insurance, Healthcare, Subscriptions, Entertainment, Education, Debt, Personal, Other — plus custom categories
+- **Expense coverage in reports**: HTML and PDF reports include a detailed expense card with coverage progress bar, itemized waterfall table, and deposit-to-go suggestion
+- **AI summary integration**: AI analysis now includes expense coverage data when summarizing reports with expenses goals
+
 ## [v2.35.1] - 2026-02-22
 
 ### Changed
