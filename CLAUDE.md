@@ -162,6 +162,28 @@ When building features, always ask:
 
 See `COMMERCIALIZATION.md` for the full roadmap.
 
+## Workflow: When to Use What
+
+**Proactive (Claude uses automatically — no user action needed):**
+- `validation-gates` agent — called after implementing features to lint/typecheck
+- `architecture-sync` agent — called after changing models, routers, or services to update docs
+
+**User-invoked slash commands:**
+| Command | When to use |
+|---------|-------------|
+| `/primer` | Start of a new conversation — load full project context |
+| `/generate-prp <feature>` | Before building a non-trivial feature — research and plan first |
+| `/execute-prp <name>` | Implement a feature from its PRP document |
+| `/fix-github-issue <#>` | Fix a specific GitHub issue end-to-end |
+| `/whitebox <area>` | Audit a specific area for security, performance, code quality |
+| `/shipit` | Release: lint, commit, merge, tag, deploy, clean up |
+| `/setdev` | Switch EC2 to dev mode (Vite HMR) |
+| `/setprod` | Switch EC2 to prod mode (built dist/) |
+
+**When Claude should suggest a PRP**: If a task touches 3+ files, involves new models/routers, or has multiple valid approaches, suggest `/generate-prp` before diving in. One-pass implementation success beats rework.
+
+**When Claude should suggest a whitebox**: After shipping a significant feature, especially one touching auth, trading logic, or multi-user data paths.
+
 ## Key Documentation
 
 | Document | Purpose |
