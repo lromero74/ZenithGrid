@@ -45,6 +45,24 @@ class TestNormalizeToMonthly:
         # $1200/year -> $1200/12 = $100
         assert normalize_to_monthly(1200.0, "yearly") == pytest.approx(100.0)
 
+    def test_semi_monthly_to_monthly(self):
+        from app.services.expense_service import normalize_to_monthly
+        # $500 semi-monthly (2x/month) -> $500 * 2 = $1000
+        assert normalize_to_monthly(500.0, "semi_monthly") == pytest.approx(1000.0)
+
+    def test_semi_monthly_zero_amount(self):
+        from app.services.expense_service import normalize_to_monthly
+        assert normalize_to_monthly(0.0, "semi_monthly") == pytest.approx(0.0)
+
+    def test_semi_annual_to_monthly(self):
+        from app.services.expense_service import normalize_to_monthly
+        # $600 semi-annual (2x/year) -> $600 / 6 = $100
+        assert normalize_to_monthly(600.0, "semi_annual") == pytest.approx(100.0)
+
+    def test_semi_annual_zero_amount(self):
+        from app.services.expense_service import normalize_to_monthly
+        assert normalize_to_monthly(0.0, "semi_annual") == pytest.approx(0.0)
+
     def test_every_n_days_without_n_raises(self):
         from app.services.expense_service import normalize_to_monthly
         with pytest.raises(ValueError, match="frequency_n"):
@@ -160,7 +178,7 @@ class TestComputeExpenseCoverage:
         items = [
             _mock_item("Daily Coffee", 5, "daily"),   # ~152.19/mo
             _mock_item("Rent", 1500, "monthly"),       # 1500/mo
-            _mock_item("Insurance", 600, "quarterly"), # 200/mo
+            _mock_item("Insurance", 600, "quarterly"),  # 200/mo
         ]
         result = compute_expense_coverage(items, "monthly", 2000.0, 0.0)
         # Total monthly ~= 152.19 + 1500 + 200 = 1852.19
@@ -177,7 +195,6 @@ class TestComputeExpenseCoverage:
         result = compute_expense_coverage(items, "monthly", 500.0, 0.0)
         # Shortfall = 1015 - 500 = 515
         assert result["shortfall"] == pytest.approx(515.0)
-
 
     def test_partial_item_tracking(self):
         from app.services.expense_service import compute_expense_coverage

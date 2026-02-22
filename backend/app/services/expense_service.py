@@ -43,10 +43,14 @@ def normalize_to_monthly(
         if not frequency_n or frequency_n <= 0:
             raise ValueError("frequency_n is required and must be > 0 for every_n_days")
         return amount * _DAYS_PER_MONTH / frequency_n
+    elif frequency == "semi_monthly":
+        return amount * 2
     elif frequency == "monthly":
         return amount
     elif frequency == "quarterly":
         return amount / 3
+    elif frequency == "semi_annual":
+        return amount / 6
     elif frequency == "yearly":
         return amount / 12
     else:

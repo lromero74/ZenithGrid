@@ -173,7 +173,7 @@ class ExpenseItemCreate(BaseModel):
     amount: float = Field(..., gt=0)
     frequency: str = Field(
         ...,
-        pattern="^(daily|weekly|biweekly|every_n_days|monthly|quarterly|yearly)$",
+        pattern="^(daily|weekly|biweekly|every_n_days|semi_monthly|monthly|quarterly|semi_annual|yearly)$",
     )
     frequency_n: Optional[int] = Field(None, ge=1)
     frequency_anchor: Optional[str] = None
@@ -191,7 +191,7 @@ class ExpenseItemUpdate(BaseModel):
     amount: Optional[float] = Field(None, gt=0)
     frequency: Optional[str] = Field(
         None,
-        pattern="^(daily|weekly|biweekly|every_n_days|monthly|quarterly|yearly)$",
+        pattern="^(daily|weekly|biweekly|every_n_days|semi_monthly|monthly|quarterly|semi_annual|yearly)$",
     )
     frequency_n: Optional[int] = Field(None, ge=1)
     frequency_anchor: Optional[str] = None

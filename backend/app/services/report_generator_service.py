@@ -134,9 +134,10 @@ def _build_tabbed_ai_section(
     brand_color: str,
 ) -> str:
     """
-    Render AI tiers as tabbed file-folder interface with JS.
+    Render AI tiers as CSS-only tabbed interface (no JavaScript).
 
-    Used for stored HTML reports viewed in iframe (not email).
+    Uses hidden radio buttons + :checked pseudo-class for tab switching,
+    which works under strict CSP without 'unsafe-inline' in script-src.
     """
     tier_order = ["beginner", "comfortable", "experienced"]
     available = [(t, ai_summary.get(t)) for t in tier_order if ai_summary.get(t)]
@@ -150,73 +151,65 @@ def _build_tabbed_ai_section(
         label = _TIER_LABELS.get(tier, tier.capitalize())
         return _render_single_ai_section(text, label, brand_color)
 
-    # Build tab buttons
-    tab_buttons = []
-    tab_panels = []
-    for i, (tier, text) in enumerate(available):
-        label = _TIER_LABELS.get(tier, tier.capitalize())
-        is_active = tier == default_level
-        active_style = (
-            f"background-color: #1e293b; color: {brand_color}; "
-            f"border-bottom: 2px solid {brand_color};"
-            if is_active else
-            "background-color: transparent; color: #64748b; "
-            "border-bottom: 2px solid transparent;"
+    # CSS rules for tab states (checked radio → show panel + highlight label)
+    css_rules = []
+    for tier, _ in available:
+        css_rules.append(
+            f'#ai-tab-{tier}:checked ~ .ai-tab-bar label[for="ai-tab-{tier}"] '
+            f'{{ background-color: #1e293b; color: {brand_color}; '
+            f'border-bottom-color: {brand_color}; }}'
         )
-        tab_buttons.append(
-            f'<button onclick="switchTab(\'{tier}\')" id="tab-{tier}" '
-            f'style="padding: 10px 18px; border: none; cursor: pointer; '
-            f'font-size: 13px; font-weight: 600; font-family: inherit; '
-            f'transition: all 0.2s; {active_style}">{label}</button>'
+        css_rules.append(
+            f'#ai-tab-{tier}:checked ~ #ai-panel-{tier} {{ display: block; }}'
         )
 
+    # Hidden radio inputs (must precede tab-bar and panels as siblings)
+    radios = []
+    for tier, _ in available:
+        checked = " checked" if tier == default_level else ""
+        radios.append(
+            f'<input type="radio" name="ai-tab" id="ai-tab-{tier}" '
+            f'style="display:none"{checked}>'
+        )
+
+    # Tab labels
+    labels = []
+    for tier, _ in available:
+        label = _TIER_LABELS.get(tier, tier.capitalize())
+        labels.append(
+            f'<label for="ai-tab-{tier}" style="padding: 10px 18px; '
+            f'cursor: pointer; font-size: 13px; font-weight: 600; '
+            f'font-family: inherit; border-bottom: 2px solid transparent; '
+            f'color: #64748b; transition: all 0.2s;">{label}</label>'
+        )
+
+    # Content panels (hidden by default, shown via CSS when radio checked)
+    panels = []
+    for tier, text in available:
         paragraphs = text.strip().split("\n\n")
         rendered = "".join(
             f'<p style="color: #cbd5e1; line-height: 1.7; '
             f'margin: 0 0 12px 0; font-size: 14px;">{p.strip()}</p>'
             for p in paragraphs if p.strip()
         )
-        display = "block" if is_active else "none"
-        tab_panels.append(
-            f'<div id="panel-{tier}" style="display: {display}; '
+        panels.append(
+            f'<div id="ai-panel-{tier}" style="display: none; '
             f'padding: 20px;">{rendered}</div>'
         )
 
-    tabs_html = "\n".join(tab_buttons)
-    panels_html = "\n".join(tab_panels)
-    tier_ids = [t for t, _ in available]
-    tier_ids_js = ", ".join(f'"{t}"' for t in tier_ids)
-
     return f"""
+        <style>
+        {chr(10).join(css_rules)}
+        </style>
         <div style="margin: 25px 0; background-color: #1e293b;
                     border-radius: 8px; border: 1px solid #334155; overflow: hidden;">
-            <div style="display: flex; border-bottom: 1px solid #334155;
+            {chr(10).join(radios)}
+            <div class="ai-tab-bar" style="display: flex; border-bottom: 1px solid #334155;
                         background-color: #162032;">
-                {tabs_html}
+                {chr(10).join(labels)}
             </div>
-            {panels_html}
-        </div>
-        <script>
-        function switchTab(tier) {{
-            var tiers = [{tier_ids_js}];
-            for (var i = 0; i < tiers.length; i++) {{
-                var t = tiers[i];
-                var panel = document.getElementById('panel-' + t);
-                var tab = document.getElementById('tab-' + t);
-                if (t === tier) {{
-                    panel.style.display = 'block';
-                    tab.style.backgroundColor = '#1e293b';
-                    tab.style.color = '{brand_color}';
-                    tab.style.borderBottom = '2px solid {brand_color}';
-                }} else {{
-                    panel.style.display = 'none';
-                    tab.style.backgroundColor = 'transparent';
-                    tab.style.color = '#64748b';
-                    tab.style.borderBottom = '2px solid transparent';
-                }}
-            }}
-        }}
-        </script>"""
+            {chr(10).join(panels)}
+        </div>"""
 
 
 def _build_email_ai_section(
@@ -610,9 +603,17 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
             )
 
         if dep is not None:
-            dep_parts.append(
-                f"Cover all expenses: deposit ~{prefix}{dep:{fmt}} {currency} total"
-            )
+            already_mentioned = (dep_partial or 0) + (dep_next or 0)
+            additional = dep - already_mentioned
+            if additional > 0 and already_mentioned > 0:
+                dep_parts.append(
+                    f"Cover all listed expenses: ~{prefix}{dep:{fmt}} {currency} total"
+                    f" (+{prefix}{additional:{fmt}} {currency})"
+                )
+            else:
+                dep_parts.append(
+                    f"Cover all listed expenses: deposit ~{prefix}{dep:{fmt}} {currency} total"
+                )
 
         dep_line = "".join(
             f'<p style="color: #94a3b8; font-size: 11px; margin: {4 if i else 8}px 0 0 0;">'
@@ -1133,9 +1134,19 @@ def generate_pdf(
                         )
                     dep = g.get("deposit_needed")
                     if dep is not None:
+                        already = (dep_partial or 0) + (dep_next or 0)
+                        extra = dep - already
+                        if extra > 0 and already > 0:
+                            dep_text = (
+                                f"  Cover all: ~{pfx}{dep:,.2f} {curr} total"
+                                f" (+{pfx}{extra:,.2f} {curr})"
+                            )
+                        else:
+                            dep_text = (
+                                f"  Cover all: deposit ~{pfx}{dep:,.2f} {curr} total"
+                            )
                         pdf.cell(
-                            0, 5,
-                            f"  Cover all: deposit ~{pfx}{dep:,.2f} {curr} total",
+                            0, 5, dep_text,
                             new_x="LMARGIN", new_y="NEXT",
                         )
                     pdf.set_font("Helvetica", "", 10)
