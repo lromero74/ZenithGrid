@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.37.1] - 2026-02-22
+
+### Fixed
+- **AI summaries now visible in report viewer**: All three AI summary tiers (Simplified, Analysis, Technical) now display correctly when viewing reports in the app — CSS specificity issue prevented tab panels from appearing
+
+### Added
+- **`/code-quality` command**: New slash command to run comprehensive code quality sweeps across security, testing, architecture, dead code, and documentation
+- **`code-hygiene` agent**: Audits dead code, modularization violations, hardcoded values, documentation gaps, and error handling anti-patterns
+- **`regression-check` agent**: Diffs changes before shipping to flag deleted code, changed API contracts, and behavioral side effects
+
 ## [v2.37.0] - 2026-02-22
 
 ### Added

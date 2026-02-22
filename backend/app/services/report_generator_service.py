@@ -152,6 +152,7 @@ def _build_tabbed_ai_section(
         return _render_single_ai_section(text, label, brand_color)
 
     # CSS rules for tab states (checked radio → show panel + highlight label)
+    # !important is required to override the inline style="display:none" on panels
     css_rules = []
     for tier, _ in available:
         css_rules.append(
@@ -160,7 +161,8 @@ def _build_tabbed_ai_section(
             f'border-bottom-color: {brand_color}; }}'
         )
         css_rules.append(
-            f'#ai-tab-{tier}:checked ~ #ai-panel-{tier} {{ display: block; }}'
+            f'#ai-tab-{tier}:checked ~ #ai-panel-{tier} '
+            f'{{ display: block !important; }}'
         )
 
     # Hidden radio inputs (must precede tab-bar and panels as siblings)

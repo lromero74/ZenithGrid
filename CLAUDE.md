@@ -230,6 +230,8 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 - `architecture-sync` agent — called after changing models, routers, or services to update docs
 - `test-auditor` agent — called after implementing features to verify tests exist for new code, and writes missing tests with proper mocks
 - `multiuser-security` agent — called after adding/modifying endpoints, queries, or auth logic to audit tenant isolation, IDOR vulnerabilities, and cross-user data leakage
+- `regression-check` agent — called after implementation, before `/shipit`, to diff changes and flag deleted code, changed API contracts, behavioral side effects, and security surface changes
+- `code-hygiene` agent — called by `/code-quality` to audit dead code, modularization, hardcoded values, documentation gaps, and error handling patterns
 
 **User-invoked slash commands:**
 | Command | When to use |
@@ -240,6 +242,7 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 | `/fix-github-issue <#>` | Fix a specific GitHub issue end-to-end |
 | `/whitebox <area>` | Audit a specific area for security, performance, code quality |
 | `/shipit` | Release: lint, commit, merge, tag, deploy, clean up |
+| `/code-quality <focus>` | Code quality sweep — spawns agent team to audit security, testing, architecture, dead code, documentation |
 | `/setdev` | Switch EC2 to dev mode (Vite HMR) |
 | `/setprod` | Switch EC2 to prod mode (built dist/) |
 
@@ -248,6 +251,8 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 **When Claude should suggest a whitebox**: After shipping a significant feature, especially one touching auth, trading logic, or multi-user data paths.
 
 **When Claude should run multiuser-security**: After adding new endpoints, modifying database queries, or changing auth/authorization logic — especially on routes that handle user-owned resources (bots, positions, orders, accounts, credentials).
+
+**When Claude should suggest a code-quality sweep**: Periodically after shipping several features, or when the user mentions tech debt or maintainability. Suggest focused sweeps for specific concerns, or `general` before major releases.
 
 ## Key Documentation
 
