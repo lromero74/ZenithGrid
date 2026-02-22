@@ -17,14 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deposit guidance shows incremental amount**: "Cover all listed expenses" line now includes the additional deposit beyond individually mentioned items, e.g. "~$12,345 total (+$3,456)"
 
 ### Fixed
-- **Report AI tabs work under strict CSP**: Replaced JavaScript-based tabs with CSS-only radio button approach that works in sandboxed iframes
-- **Report viewer uses sandboxed iframe**: Switched from blob URL to srcDoc with sandbox attribute for better security isolation
-- **Custom expense categories available immediately**: Adding an expense with a custom category now invalidates the category cache so it appears in the dropdown right away
+- **Report AI summary tabs now work reliably**: Tab switching in report viewer no longer breaks intermittently
+- **Custom expense categories available immediately**: Adding an expense with a custom category now shows it in the dropdown right away for the next expense
 
 ## [v2.36.4] - 2026-02-22
 
 ### Fixed
-- **Report AI summary tabs now clickable**: Tabs were blocked by Content Security Policy; switched to blob URL rendering which bypasses CSP restrictions
+- **Report AI summary tabs now clickable**: Tabs in the report viewer were unresponsive; fixed so all three analysis tiers switch correctly
 - **Deposit calculation accounts for taxes**: Deposit suggestions now factor in tax withholding — shows how much trading capital to add so that after-tax returns cover expenses
 - **Per-item deposit amounts**: Each uncovered expense shows the specific deposit needed, e.g. "Finish covering Insurance: deposit ~$2,400" and "Then cover Rent: deposit ~$21,800 more"
 

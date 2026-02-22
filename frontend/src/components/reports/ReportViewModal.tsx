@@ -36,11 +36,10 @@ export function ReportViewModal({
           </div>
         </div>
 
-        {/* Report Content — srcDoc with sandbox for CSP isolation */}
+        {/* Report Content — srcDoc renders HTML inline (CSS-only tabs, no JS needed) */}
         <div className="flex-1 overflow-hidden">
           <iframe
             srcDoc={htmlContent}
-            sandbox=""
             className="w-full h-full border-0"
             title="Report Preview"
           />
