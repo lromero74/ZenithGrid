@@ -591,7 +591,10 @@ export default function Reports() {
           if (editingGoal) {
             await updateGoal.mutateAsync({ id: editingGoal.id, data })
           } else {
-            await createGoal.mutateAsync(data)
+            const created = await createGoal.mutateAsync(data)
+            if (created.target_type === 'expenses') {
+              setExpenseEditorGoal(created)
+            }
           }
         }}
         initialData={editingGoal}

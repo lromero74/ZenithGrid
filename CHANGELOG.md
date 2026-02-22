@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.36.1] - 2026-02-22
+
+### Fixed
+- **Expenses goal creation**: Goal form no longer stays open after creating an expenses goal (async lazy-load crash)
+- **Expense editor auto-opens**: After creating an expenses goal, the expense items editor opens automatically so you can start adding items right away
+
 ## [v2.36.0] - 2026-02-22
 
 ### Added
