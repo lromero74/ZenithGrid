@@ -1639,6 +1639,37 @@ def initialize_database(project_root):
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_account_transfers_account_id ON account_transfers(account_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_account_transfers_occurred_at ON account_transfers(occurred_at)")
 
+        # Goal Progress Snapshots (daily progress data points for trend line charts)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS goal_progress_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                goal_id INTEGER NOT NULL REFERENCES report_goals(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                snapshot_date DATETIME NOT NULL,
+                current_value REAL NOT NULL DEFAULT 0.0,
+                target_value REAL NOT NULL DEFAULT 0.0,
+                progress_pct REAL NOT NULL DEFAULT 0.0,
+                on_track INTEGER NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_goal_progress_snapshots_goal_id "
+            "ON goal_progress_snapshots(goal_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_goal_progress_snapshots_user_id "
+            "ON goal_progress_snapshots(user_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_goal_progress_snapshots_date "
+            "ON goal_progress_snapshots(snapshot_date)"
+        )
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_goal_snapshot_date "
+            "ON goal_progress_snapshots(goal_id, snapshot_date)"
+        )
+
         # Seed default content sources
         # Format: (source_key, name, type, url, website, description, channel_id, category)
         default_sources = [

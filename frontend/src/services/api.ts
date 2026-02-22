@@ -624,7 +624,7 @@ export const accountValueApi = {
 // Reports & Goals
 import type {
   ReportGoal, ReportSchedule, ReportSummary, RecipientItem,
-  ScheduleType, PeriodWindow, LookbackUnit,
+  ScheduleType, PeriodWindow, LookbackUnit, GoalTrendData,
 } from '../types'
 
 export interface ScheduleCreatePayload {
@@ -651,6 +651,12 @@ export const reportsApi = {
   updateGoal: (id: number, data: Partial<ReportGoal>) =>
     api.put<ReportGoal>(`/reports/goals/${id}`, data).then(r => r.data),
   deleteGoal: (id: number) => api.delete(`/reports/goals/${id}`).then(r => r.data),
+  getGoalTrend: (goalId: number, fromDate?: string, toDate?: string) => {
+    const params: Record<string, string> = {}
+    if (fromDate) params.from_date = fromDate
+    if (toDate) params.to_date = toDate
+    return api.get<GoalTrendData>(`/reports/goals/${goalId}/trend`, { params }).then(r => r.data)
+  },
 
   // Schedules
   getSchedules: () => api.get<ReportSchedule[]>('/reports/schedules').then(r => r.data),

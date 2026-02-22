@@ -229,6 +229,7 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 - `validation-gates` agent — called after implementing features to lint/typecheck/run tests
 - `architecture-sync` agent — called after changing models, routers, or services to update docs
 - `test-auditor` agent — called after implementing features to verify tests exist for new code, and writes missing tests with proper mocks
+- `multiuser-security` agent — called after adding/modifying endpoints, queries, or auth logic to audit tenant isolation, IDOR vulnerabilities, and cross-user data leakage
 
 **User-invoked slash commands:**
 | Command | When to use |
@@ -245,6 +246,8 @@ See `COMMERCIALIZATION.md` for the full roadmap.
 **When Claude should suggest a PRP**: If a task touches 3+ files, involves new models/routers, or has multiple valid approaches, suggest `/generate-prp` before diving in. One-pass implementation success beats rework.
 
 **When Claude should suggest a whitebox**: After shipping a significant feature, especially one touching auth, trading logic, or multi-user data paths.
+
+**When Claude should run multiuser-security**: After adding new endpoints, modifying database queries, or changing auth/authorization logic — especially on routes that handle user-owned resources (bots, positions, orders, accounts, credentials).
 
 ## Key Documentation
 

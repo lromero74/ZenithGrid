@@ -1350,6 +1350,43 @@ class ReportGoal(Base):
     schedule_links = relationship(
         "ReportScheduleGoal", back_populates="goal", cascade="all, delete-orphan"
     )
+    progress_snapshots = relationship(
+        "GoalProgressSnapshot", back_populates="goal", cascade="all, delete-orphan"
+    )
+
+
+class GoalProgressSnapshot(Base):
+    """
+    Daily snapshot of goal progress for trend line visualization.
+
+    Captured during the daily account snapshot cycle. One row per goal per day.
+    Used to render actual-vs-ideal progress charts on the Goals tab.
+    """
+    __tablename__ = "goal_progress_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    goal_id = Column(
+        Integer, ForeignKey("report_goals.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    snapshot_date = Column(DateTime, nullable=False, index=True)
+    current_value = Column(Float, nullable=False, default=0.0)
+    target_value = Column(Float, nullable=False, default=0.0)
+    progress_pct = Column(Float, nullable=False, default=0.0)
+    on_track = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("goal_id", "snapshot_date", name="uq_goal_snapshot_date"),
+    )
+
+    # Relationships
+    goal = relationship("ReportGoal", back_populates="progress_snapshots")
+    user = relationship("User")
 
 
 class ReportSchedule(Base):
