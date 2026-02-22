@@ -161,8 +161,8 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-900 rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-700">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-slate-900 rounded-lg w-full max-w-[95vw] sm:max-w-4xl max-h-[90vh] flex flex-col border border-slate-700">
         {/* Header */}
         <div className="p-6 border-b border-slate-700 flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -181,9 +181,9 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
         </div>
 
         {/* Filters */}
-        <div className="p-4 border-b border-slate-700 bg-slate-800/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+        <div className="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/50">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               <div className="flex items-center space-x-2">
                 <label className="text-sm font-medium text-slate-300">Phase:</label>
                 <select
@@ -260,7 +260,7 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
                           {log.conditions_met ? 'MET' : 'NOT MET'}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-3 mt-1 text-xs text-slate-400">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-400">
                         <span className="flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
                           <span>{formatDateTime(log.timestamp)}</span>
@@ -292,7 +292,7 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
                     {(log.conditions_detail || []).map((cond, idx) => (
                       <div
                         key={idx}
-                        className={`flex items-center justify-between p-2 rounded text-sm ${
+                        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 p-2 rounded text-sm ${
                           cond.result
                             ? 'bg-green-900/20 border border-green-700/30'
                             : 'bg-red-900/20 border border-red-700/30'
@@ -318,7 +318,7 @@ function IndicatorLogs({ botId, isOpen, onClose }: IndicatorLogsProps) {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center space-x-3 text-xs">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:ml-0 ml-6">
                           {cond.error || cond.reason ? (
                             <span className="text-yellow-400">{cond.error || cond.reason}</span>
                           ) : (cond.operator === 'increasing' || cond.operator === 'decreasing') && cond.previous_value !== undefined ? (

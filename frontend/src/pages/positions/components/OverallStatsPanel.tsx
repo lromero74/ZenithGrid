@@ -252,45 +252,45 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
           <div className="space-y-2">
             <div className="flex justify-between text-slate-400 text-xs">
               <span>Currency</span>
-              <div className="flex gap-2 sm:gap-3">
-                <span className="w-16 sm:w-20 text-right" title="Total assigned budget (sum of max budget per deal)">Budget</span>
-                <span className="w-16 sm:w-20 text-right" title="Locked in open positions">In Pos.</span>
+              <div className="flex gap-1.5 sm:gap-3">
+                <span className="w-[52px] sm:w-20 text-right" title="Total assigned budget (sum of max budget per deal)">Budget</span>
+                <span className="w-[52px] sm:w-20 text-right" title="Locked in open positions">In Pos.</span>
                 <span className="hidden sm:inline w-20 text-right" title="Locked in pending orders (grids)">In Grids</span>
-                <span className="w-16 sm:w-20 text-right" title="Available for new bots">Available</span>
+                <span className="w-[52px] sm:w-20 text-right" title="Available for new bots">Available</span>
               </div>
             </div>
             {/* BTC - Always show */}
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">BTC</span>
-              <div className="flex gap-2 sm:gap-3">
-                <span className="text-blue-400 w-16 sm:w-20 text-right font-mono text-xs">
-                  {(stats.totalBudgetByQuote.BTC || 0).toFixed(8)}
+              <div className="flex gap-1.5 sm:gap-3">
+                <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-[10px] sm:text-xs">
+                  {(stats.totalBudgetByQuote.BTC || 0).toFixed(6)}
                 </span>
-                <span className="text-amber-400 w-16 sm:w-20 text-right font-mono text-xs">
-                  {balances ? balances.reserved_in_positions.BTC.toFixed(8) : '...'}
+                <span className="text-amber-400 w-[52px] sm:w-20 text-right font-mono text-[10px] sm:text-xs">
+                  {balances ? balances.reserved_in_positions.BTC.toFixed(6) : '...'}
                 </span>
                 <span className="hidden sm:inline text-purple-400 w-20 text-right font-mono text-xs">
-                  {balances ? balances.reserved_in_pending_orders.BTC.toFixed(8) : '...'}
+                  {balances ? balances.reserved_in_pending_orders.BTC.toFixed(6) : '...'}
                 </span>
-                <span className="text-green-400 w-16 sm:w-20 text-right font-mono text-xs font-semibold">
-                  {balances ? balances.available_btc.toFixed(8) : '...'}
+                <span className="text-green-400 w-[52px] sm:w-20 text-right font-mono text-[10px] sm:text-xs font-semibold">
+                  {balances ? balances.available_btc.toFixed(6) : '...'}
                 </span>
               </div>
             </div>
             {/* ETH - Always show */}
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">ETH</span>
-              <div className="flex gap-2 sm:gap-3">
-                <span className="text-blue-400 w-16 sm:w-20 text-right font-mono text-xs">
+              <div className="flex gap-1.5 sm:gap-3">
+                <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-xs">
                   {(stats.totalBudgetByQuote.ETH || 0).toFixed(6)}
                 </span>
-                <span className="text-amber-400 w-16 sm:w-20 text-right font-mono text-xs">
+                <span className="text-amber-400 w-[52px] sm:w-20 text-right font-mono text-xs">
                   {balances ? balances.reserved_in_positions.ETH.toFixed(6) : '...'}
                 </span>
                 <span className="hidden sm:inline text-purple-400 w-20 text-right font-mono text-xs">
                   {balances ? balances.reserved_in_pending_orders.ETH.toFixed(6) : '...'}
                 </span>
-                <span className="text-green-400 w-16 sm:w-20 text-right font-mono text-xs font-semibold">
+                <span className="text-green-400 w-[52px] sm:w-20 text-right font-mono text-xs font-semibold">
                   {balances ? balances.available_eth.toFixed(6) : '...'}
                 </span>
               </div>
@@ -298,17 +298,17 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             {/* USD - Always show */}
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">USD</span>
-              <div className="flex gap-2 sm:gap-3">
-                <span className="text-blue-400 w-16 sm:w-20 text-right font-mono text-xs">
+              <div className="flex gap-1.5 sm:gap-3">
+                <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-xs">
                   ${(stats.totalBudgetByQuote.USD || 0).toFixed(2)}
                 </span>
-                <span className="text-amber-400 w-16 sm:w-20 text-right font-mono text-xs">
+                <span className="text-amber-400 w-[52px] sm:w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USD.toFixed(2) : '...'}
                 </span>
                 <span className="hidden sm:inline text-purple-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_pending_orders.USD.toFixed(2) : '...'}
                 </span>
-                <span className="text-green-400 w-16 sm:w-20 text-right font-mono text-xs font-semibold">
+                <span className="text-green-400 w-[52px] sm:w-20 text-right font-mono text-xs font-semibold">
                   ${balances ? balances.available_usd.toFixed(2) : '...'}
                 </span>
               </div>
@@ -316,17 +316,17 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             {/* USDC - Always show */}
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">USDC</span>
-              <div className="flex gap-2 sm:gap-3">
-                <span className="text-blue-400 w-16 sm:w-20 text-right font-mono text-xs">
+              <div className="flex gap-1.5 sm:gap-3">
+                <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-xs">
                   ${(stats.totalBudgetByQuote.USDC || 0).toFixed(2)}
                 </span>
-                <span className="text-amber-400 w-16 sm:w-20 text-right font-mono text-xs">
+                <span className="text-amber-400 w-[52px] sm:w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USDC.toFixed(2) : '...'}
                 </span>
                 <span className="hidden sm:inline text-purple-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_pending_orders.USDC.toFixed(2) : '...'}
                 </span>
-                <span className="text-green-400 w-16 sm:w-20 text-right font-mono text-xs font-semibold">
+                <span className="text-green-400 w-[52px] sm:w-20 text-right font-mono text-xs font-semibold">
                   ${balances ? balances.available_usdc.toFixed(2) : '...'}
                 </span>
               </div>
@@ -334,17 +334,17 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
             {/* USDT - Always show */}
             <div className="flex justify-between items-baseline">
               <span className="text-slate-300 font-medium text-xs">USDT</span>
-              <div className="flex gap-2 sm:gap-3">
-                <span className="text-blue-400 w-16 sm:w-20 text-right font-mono text-xs">
+              <div className="flex gap-1.5 sm:gap-3">
+                <span className="text-blue-400 w-[52px] sm:w-20 text-right font-mono text-xs">
                   ${(stats.totalBudgetByQuote.USDT || 0).toFixed(2)}
                 </span>
-                <span className="text-amber-400 w-16 sm:w-20 text-right font-mono text-xs">
+                <span className="text-amber-400 w-[52px] sm:w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_positions.USDT.toFixed(2) : '...'}
                 </span>
                 <span className="hidden sm:inline text-purple-400 w-20 text-right font-mono text-xs">
                   ${balances ? balances.reserved_in_pending_orders.USDT.toFixed(2) : '...'}
                 </span>
-                <span className="text-green-400 w-16 sm:w-20 text-right font-mono text-xs font-semibold">
+                <span className="text-green-400 w-[52px] sm:w-20 text-right font-mono text-xs font-semibold">
                   ${balances ? balances.available_usdt.toFixed(2) : '...'}
                 </span>
               </div>

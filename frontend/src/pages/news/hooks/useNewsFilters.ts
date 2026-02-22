@@ -136,19 +136,11 @@ export const useNewsFilters = ({
       }
       return next
     })
-    setSelectedSources(new Set())
     setCurrentPage(1)
   }, [])
 
   const toggleAllCategories = useCallback(() => {
-    setSelectedCategories(prev => {
-      if (prev.size === NEWS_CATEGORIES.length) {
-        return new Set(['CryptoCurrency'])
-      } else {
-        return new Set(NEWS_CATEGORIES)
-      }
-    })
-    setSelectedSources(new Set())
+    setSelectedCategories(new Set(NEWS_CATEGORIES))
     setCurrentPage(1)
   }, [])
 
@@ -182,19 +174,11 @@ export const useNewsFilters = ({
       }
       return next
     })
-    setSelectedVideoSources(new Set())
     setVideoPage(1)
   }, [])
 
   const toggleAllVideoCategories = useCallback(() => {
-    setSelectedVideoCategories(prev => {
-      if (prev.size === NEWS_CATEGORIES.length) {
-        return new Set(['CryptoCurrency'])
-      } else {
-        return new Set(NEWS_CATEGORIES)
-      }
-    })
-    setSelectedVideoSources(new Set())
+    setSelectedVideoCategories(new Set(NEWS_CATEGORIES))
     setVideoPage(1)
   }, [])
 

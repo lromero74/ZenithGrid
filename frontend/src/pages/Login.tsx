@@ -6,7 +6,7 @@
  */
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import { Truck, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap, Check, Smartphone, RefreshCw } from 'lucide-react'
+import { Truck, Lock, Mail, AlertCircle, User, X, CheckSquare, Square, Shield, ArrowLeft, TrendingUp, BarChart3, Zap, Check, Smartphone, RefreshCw, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useBrand } from '../contexts/BrandContext'
 import { PasswordStrengthMeter, isPasswordValid } from '../components/PasswordStrengthMeter'
@@ -42,6 +42,8 @@ export default function Login() {
   const [signupError, setSignupError] = useState<string | null>(null)
   const [isSigningUp, setIsSigningUp] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const showPasswordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Set default MFA tab based on available methods
   useEffect(() => {
@@ -490,14 +492,29 @@ export default function Login() {
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
                     id="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     autoComplete="current-password"
                     placeholder="Enter your password"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-12 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !showPassword
+                      setShowPassword(next)
+                      if (showPasswordTimerRef.current) clearTimeout(showPasswordTimerRef.current)
+                      if (next) {
+                        showPasswordTimerRef.current = setTimeout(() => setShowPassword(false), 5000)
+                      }
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
