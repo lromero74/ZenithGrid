@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.39.4] - 2026-02-23
+
+### Fixed
+- **Upcoming expense amounts**: Upcoming tab now shows the actual bill amount due on that date instead of the monthly-normalized amount
+
 ## [v2.39.3] - 2026-02-23
 
 ### Fixed

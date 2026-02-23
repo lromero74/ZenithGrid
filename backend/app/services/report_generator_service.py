@@ -865,7 +865,7 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
     else:
         upcoming_rows = ""
         for _, dd, item in upcoming_items:
-            norm = item.get("normalized_amount", 0)
+            bill_amount = item.get("amount", 0)
             due_label = _format_due_label(item, now=now)
             upcoming_rows += f"""
                 <tr>
@@ -876,7 +876,7 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
                     <td style="padding: 4px 0; color: #f1f5f9; font-size: 12px;">
                         {_expense_name_html(item)}</td>
                     <td style="padding: 4px 0; color: #f1f5f9; text-align: right; font-size: 12px;">
-                        {prefix}{norm:{fmt}}</td>
+                        {prefix}{bill_amount:{fmt}}</td>
                     <td style="padding: 4px 6px; text-align: center;">
                         {_build_expense_status_badge(item)}</td>
                 </tr>"""
