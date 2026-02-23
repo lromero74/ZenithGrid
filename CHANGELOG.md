@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.9] - 2026-02-23
+
+### Fixed
+- **Volume slider restored to original smooth behavior**: Removed unnecessary Web Audio API / GainNode complexity that caused stuttering and silence — reverted to simple direct `audio.volume` control which works correctly on Chrome iOS
+
 ## [v2.40.8] - 2026-02-23
 
 ### Fixed

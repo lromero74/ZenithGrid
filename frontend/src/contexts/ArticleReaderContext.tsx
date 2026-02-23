@@ -93,7 +93,6 @@ interface ArticleReaderContextType {
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
   setVolume: (volume: number) => void
-  setVolumeImmediate: (volume: number) => void
 
   // Direct audio access (for smooth progress bar animation)
   getPlaybackState: () => { currentTime: number; duration: number }
@@ -947,7 +946,6 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     setVoice: tts.setVoice,
     setRate: tts.setRate,
     setVolume: tts.setVolume,
-    setVolumeImmediate: tts.setVolumeImmediate,
 
     // Direct audio access
     getPlaybackState: tts.getPlaybackState,
@@ -963,7 +961,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
     openArticle, startPlaylist, stopPlaylist, playArticle, nextArticle, previousArticle, retryArticle,
     toggleExpanded, closeMiniPlayer,
     tts.play, tts.pause, tts.resume, tts.stop, tts.replay,
-    tts.seekToWord, tts.seekToTime, tts.skipWords, tts.setVoice, tts.setRate, tts.setVolume, tts.setVolumeImmediate,
+    tts.seekToWord, tts.seekToTime, tts.skipWords, tts.setVoice, tts.setRate, tts.setVolume,
     tts.getPlaybackState, getVoiceForArticle,
   ])
 
