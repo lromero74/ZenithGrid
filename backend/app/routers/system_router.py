@@ -181,6 +181,7 @@ def build_changelog_cache() -> None:
                 timeout=5
             )
             commits = []
+            seen = set()
             if result.returncode == 0 and result.stdout.strip():
                 for line in result.stdout.strip().split('\n'):
                     line = line.strip()
@@ -189,6 +190,11 @@ def build_changelog_cache() -> None:
                     # Skip merge commits with branch names (internal git noise)
                     if line.startswith("Merge ") and ("/" in line.split(":")[0]):
                         continue
+                    # Deduplicate: --no-ff merges create a merge commit with
+                    # the same subject as the feature commit
+                    if line in seen:
+                        continue
+                    seen.add(line)
                     commits.append(line)
         except Exception:
             commits = []
