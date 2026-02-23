@@ -78,6 +78,7 @@ export function ArticleReaderMiniPlayer() {
     setRate,
     volume,
     setVolume,
+    setVolumeImmediate,
   } = useArticleReader()
 
   const navigate = useNavigate()
@@ -746,8 +747,9 @@ export function ArticleReaderMiniPlayer() {
                               max="1"
                               step="any"
                               defaultValue={volume}
-                              key={`vol-${volume === 0 || volume === 1 ? volume : 'drag'}`}
-                              onInput={(e) => setVolume(parseFloat((e.target as HTMLInputElement).value))}
+                              key={`vol-${volume}`}
+                              onInput={(e) => setVolumeImmediate(parseFloat((e.target as HTMLInputElement).value))}
+                              onChange={(e) => setVolume(parseFloat((e.target as HTMLInputElement).value))}
                               className="flex-1 h-1.5 bg-slate-600 rounded-full appearance-none cursor-pointer accent-green-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:hover:bg-green-400 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-green-500 [&::-moz-range-thumb]:border-0"
                             />
                             <span className="text-xs text-slate-400 w-8 text-right flex-shrink-0">

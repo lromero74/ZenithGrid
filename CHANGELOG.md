@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.7] - 2026-02-23
+
+### Fixed
+- **Smooth volume slider on mobile**: Volume slider no longer stutters during drag — audio volume changes instantly via direct GainNode/audio element access while React state only updates on release
+
 ## [v2.40.6] - 2026-02-23
 
 ### Fixed

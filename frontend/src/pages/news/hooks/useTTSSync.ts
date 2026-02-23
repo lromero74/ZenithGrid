@@ -64,6 +64,8 @@ interface UseTTSSyncReturn {
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
   setVolume: (volume: number) => void
+  // Set audio volume instantly without React re-render (for smooth slider dragging)
+  setVolumeImmediate: (volume: number) => void
 }
 
 export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
@@ -709,11 +711,25 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setPlaybackRate(rate)
   }, [])
 
+  // Set audio volume instantly without React state update (no re-render).
+  // Used during slider drag for smooth touch response.
+  const setVolumeImmediate = useCallback((vol: number) => {
+    const clamped = Math.max(0, Math.min(1, vol))
+    volumeRef.current = clamped
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = clamped
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = clamped
+    }
+  }, [])
+
+  // Full volume update — sets audio + React state + localStorage.
+  // Used on drag end and mute/unmute button.
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol))
     volumeRef.current = clamped
     setVolumeState(clamped)
-    // Apply directly — GainNode for iOS, audio.volume as fallback
     if (gainNodeRef.current) {
       gainNodeRef.current.gain.value = clamped
     }
@@ -760,5 +776,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setVoice,
     setRate,
     setVolume,
+    setVolumeImmediate,
   }
 }
