@@ -92,6 +92,12 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const animationFrameRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
+  // Web Audio API refs — GainNode controls volume on iOS WebKit where audio.volume is ignored
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const audioContextRef = useRef<any>(null)
+  const gainNodeRef = useRef<GainNode | null>(null)
+  const volumeRef = useRef(volume)  // Track volume for non-React access
+
   // Silent WAV (844 bytes, 0.1s at 8kHz 8-bit mono) — used to clear audio source without
   // "Invalid URI" errors. Firefox requires actual audio samples (not just a header) to decode
   // successfully. This properly clears the media session (AirPods, lock screen, etc.)
@@ -206,6 +212,31 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     }
   }, [])
 
+  // Lazily initialize Web Audio API GainNode for iOS volume control.
+  // MUST be called from a user gesture handler (click/tap) — iOS suspends
+  // AudioContexts created outside user gestures.
+  // createMediaElementSource permanently routes audio through the context,
+  // so this is a one-time operation on the persistent Audio element.
+  const ensureGainNode = useCallback(() => {
+    if (gainNodeRef.current || !audioRef.current) return
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      const source = ctx.createMediaElementSource(audioRef.current)
+      const gain = ctx.createGain()
+      source.connect(gain)
+      gain.connect(ctx.destination)
+      gain.gain.value = volumeRef.current
+      audioContextRef.current = ctx
+      gainNodeRef.current = gain
+      if (ctx.state === 'suspended') ctx.resume()
+    } catch (e) {
+      console.warn('AudioContext init failed:', e)
+    }
+  }, [])
+
   // Initialize persistent audio element once
   useEffect(() => {
     const audio = new Audio()
@@ -278,6 +309,12 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         URL.revokeObjectURL(currentAudioUrlRef.current)
         currentAudioUrlRef.current = null
       }
+      // Close AudioContext if it was created
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {})
+        audioContextRef.current = null
+        gainNodeRef.current = null
+      }
     }
   }, [startAnimationLoop, stopAnimationLoop])
 
@@ -290,6 +327,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
   // Update volume when it changes
   useEffect(() => {
+    volumeRef.current = volume
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = volume
+    }
     if (audioRef.current) {
       audioRef.current.volume = volume
     }
@@ -298,6 +339,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const loadAndPlay = useCallback(async (text: string, overrideVoice?: string, articleId?: number) => {
     const audio = audioRef.current
     if (!audio) return
+
+    // Initialize GainNode on first call (user gesture context required for iOS)
+    ensureGainNode()
 
     // Increment request ID - any errors from previous requests will be ignored
     const thisRequestId = ++requestIdRef.current
@@ -517,10 +561,11 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         await new Promise(resolve => setTimeout(resolve, backoffMs))
       }
     }
-  }, [currentVoice, playbackRate, stopAnimationLoop])
+  }, [currentVoice, playbackRate, stopAnimationLoop, ensureGainNode])
 
   const play = useCallback(() => {
     if (audioRef.current && isReady) {
+      ensureGainNode()  // User gesture context — safe to init AudioContext
       audioRef.current.play()
         .then(() => setIsReady(false))
         .catch(err => {
@@ -528,7 +573,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
           setError('Failed to play audio')
         })
     }
-  }, [isReady])
+  }, [isReady, ensureGainNode])
 
   const pause = useCallback(() => {
     if (audioRef.current && !audioRef.current.paused) {
@@ -538,9 +583,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
   const resume = useCallback(() => {
     if (audioRef.current && audioRef.current.paused && isPaused) {
+      ensureGainNode()
       audioRef.current.play()
     }
-  }, [isPaused])
+  }, [isPaused, ensureGainNode])
 
   const stop = useCallback(() => {
     stopAnimationLoop()
@@ -661,7 +707,12 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol))
+    volumeRef.current = clamped
     setVolumeState(clamped)
+    // GainNode for iOS WebKit (audio.volume is ignored)
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = clamped
+    }
     if (audioRef.current) {
       audioRef.current.volume = clamped
     }

@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.10] - 2026-02-23
+
+### Fixed
+- **Volume control works on iOS**: Added Web Audio API GainNode for volume control — iOS WebKit (used by all iOS browsers including Chrome) ignores `audio.volume`, so GainNode handles actual amplitude. Lazily initialized on first user gesture to avoid iOS AudioContext suspension.
+
 ## [v2.40.9] - 2026-02-23
 
 ### Fixed
