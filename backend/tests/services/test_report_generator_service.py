@@ -776,14 +776,30 @@ class TestFormatDueLabel:
     def test_monthly_last(self):
         assert _format_due_label({"due_day": -1, "frequency": "monthly"}) == "Last"
 
-    def test_weekly_monday(self):
+    def test_weekly_monday_no_now(self):
         assert _format_due_label({"due_day": 0, "frequency": "weekly"}) == "Mon"
 
-    def test_weekly_friday(self):
+    def test_weekly_friday_no_now(self):
         assert _format_due_label({"due_day": 4, "frequency": "weekly"}) == "Fri"
 
-    def test_biweekly_sunday(self):
+    def test_biweekly_sunday_no_now(self):
         assert _format_due_label({"due_day": 6, "frequency": "biweekly"}) == "Sun"
+
+    def test_weekly_friday_with_now(self):
+        """When now is provided, weekly labels include day-of-month."""
+        from datetime import datetime
+        # 2026-02-23 is a Monday (weekday=0), Friday (dd=4) is 4 days later = Feb 27
+        now = datetime(2026, 2, 23)
+        label = _format_due_label({"due_day": 4, "frequency": "weekly"}, now=now)
+        assert label == "Fri 27th"
+
+    def test_biweekly_with_now_same_day(self):
+        """When due_day == today's weekday, show today's date."""
+        from datetime import datetime
+        # 2026-02-23 is a Monday (weekday=0), due_day=0 → 0 days → Feb 23
+        now = datetime(2026, 2, 23)
+        label = _format_due_label({"due_day": 0, "frequency": "biweekly"}, now=now)
+        assert label == "Mon 23rd"
 
     def test_yearly_with_month(self):
         label = _format_due_label(
@@ -844,3 +860,142 @@ class TestExpenseNameHtml:
         html = _build_expenses_goal_card(g)
         assert 'href="https://netflix.com/login"' in html
         assert 'target="_blank"' in html
+
+
+# ---------------------------------------------------------------------------
+# _build_expenses_goal_card — email_mode (stacked, no CSS tabs)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildExpensesGoalCardEmailMode:
+    """Email mode renders stacked sections instead of CSS-only tabs."""
+
+    def test_email_mode_no_radio_inputs(self):
+        """Email clients strip CSS; no radio buttons should appear."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=True)
+        assert '<input type="radio"' not in html
+
+    def test_email_mode_no_style_block(self):
+        """Email mode should not use <style> blocks (stripped by email clients)."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=True)
+        assert "<style>" not in html
+
+    def test_email_mode_has_coverage_header(self):
+        """Coverage section should have a visible header."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=True)
+        assert ">Coverage</p>" in html
+
+    def test_email_mode_has_upcoming_header(self):
+        """Upcoming section should have a visible header."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=True)
+        assert ">Upcoming</p>" in html
+
+    def test_email_mode_coverage_content_visible(self):
+        """Coverage content should be in a visible div (no display:none)."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=True)
+        # Ensure coverage content (Total Expenses) is present
+        assert "Total Expenses" in html
+        assert "Income After Tax" in html
+
+    def test_email_mode_upcoming_content_visible(self):
+        """Upcoming items should be rendered (not hidden behind broken tabs)."""
+        g = _make_expense_goal([
+            {"name": "Future Bill", "amount": 200, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=True)
+        assert "Future Bill" in html
+
+    def test_email_mode_preserves_progress_bar(self):
+        """The progress bar header should still appear in email mode."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ], coverage_pct=75.0)
+        html = _build_expenses_goal_card(g, email_mode=True)
+        assert "75% Covered" in html
+
+    def test_email_mode_no_display_none_panels(self):
+        """Email mode should NOT have hidden panels — all content is inline."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=True)
+        # The in-app version has display:none panels; email should not
+        assert 'display: none' not in html
+
+    def test_web_mode_still_has_tabs(self):
+        """Non-email mode should still produce CSS-only tabs."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=False)
+        assert '<input type="radio"' in html
+        assert "<style>" in html
+
+
+# ---------------------------------------------------------------------------
+# build_report_html — email_mode threads through to goals
+# ---------------------------------------------------------------------------
+
+
+class TestBuildReportHtmlEmailModeGoals:
+    """Verify email_mode propagates to expense goal cards."""
+
+    @pytest.fixture()
+    def mock_brand(self):
+        with patch(
+            "app.services.report_generator_service.get_brand",
+            return_value=MOCK_BRAND,
+        ):
+            yield
+
+    def test_email_mode_expenses_no_radio(self, mock_brand):
+        """build_report_html with email_mode=True should have stacked expense sections."""
+        report_data = {
+            "account_value_usd": 1000,
+            "goals": [
+                _make_expense_goal([
+                    {"name": "Rent", "amount": 1500, "due_day": 28},
+                ]),
+            ],
+        }
+        html = build_report_html(
+            report_data, ai_summary=None,
+            user_name="Test", period_label="Feb 2026",
+            email_mode=True,
+        )
+        assert '<input type="radio"' not in html
+        assert ">Coverage</p>" in html
+        assert ">Upcoming</p>" in html
+
+    def test_web_mode_expenses_has_tabs(self, mock_brand):
+        """build_report_html with email_mode=False should keep CSS tabs."""
+        report_data = {
+            "account_value_usd": 1000,
+            "goals": [
+                _make_expense_goal([
+                    {"name": "Rent", "amount": 1500, "due_day": 28},
+                ]),
+            ],
+        }
+        html = build_report_html(
+            report_data, ai_summary=None,
+            user_name="Test", period_label="Feb 2026",
+            email_mode=False,
+        )
+        assert '<input type="radio"' in html
+        assert "<style>" in html

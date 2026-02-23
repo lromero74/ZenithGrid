@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.39.2] - 2026-02-23
+
+### Fixed
+- **Email reports missing expense data**: Coverage and Upcoming expense sections were hidden in email reports because CSS-only tabs don't work in email clients — now rendered as stacked inline sections
+- **PDF reports missing upcoming expenses**: PDF reports only showed expense coverage items but completely omitted the Upcoming expenses section
+- **Weekly expense due labels**: Upcoming expense due dates for weekly/biweekly items now show day-of-week and day-of-month (e.g., "Fri 27th") instead of just the day name
+
 ## [v2.39.1] - 2026-02-23
 
 ### Changed
