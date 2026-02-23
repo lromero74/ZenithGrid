@@ -8,8 +8,8 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Play, Pause, SkipBack, SkipForward, X, Maximize2, Minimize2, ListVideo, ExternalLink, RotateCcw, Volume2, Volume1, VolumeX, RefreshCw, Repeat, AlertCircle } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useArticleReader } from '../contexts/ArticleReaderContext'
-import { markdownToPlainText, scrollToArticle } from '../pages/news/helpers'
-import { CATEGORY_COLORS } from '../pages/news/types'
+import { markdownToPlainText, scrollToArticle } from '../utils/newsHelpers'
+import { CATEGORY_COLORS } from '../types/newsTypes'
 import { TTS_VOICES, TTS_VOICES_BY_ID } from '../constants/voices'
 
 // Format seconds to MM:SS

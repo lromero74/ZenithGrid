@@ -51,14 +51,9 @@ from app.news_data import (
     VideoItem,
     VideoResponse,
     load_video_cache,
-    merge_news_items,
-    prune_old_items,
-    save_video_cache,
 )
 from app.routers.news_metrics_router import router as metrics_router
 from app.routers.news_tts_router import router as tts_router
-from app.services.news_image_cache import download_and_save_image
-
 logger = logging.getLogger(__name__)
 
 # Track when we last refreshed news/videos (in-memory for this process)
@@ -832,67 +827,8 @@ async def fetch_youtube_videos(session: aiohttp.ClientSession, source_id: str, c
 
 async def fetch_all_videos() -> Dict[str, Any]:
     """Fetch videos from all YouTube sources and store in database."""
-    global _last_video_refresh
-    fresh_items: List[VideoItem] = []
-
-    db_sources = await get_video_sources_from_db()
-    sources_to_use = db_sources if db_sources else VIDEO_SOURCES
-
-    # Build source_key -> source_id map for linking videos to content_sources
-    source_key_to_id = await _get_source_key_to_id_map("video")
-
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        for source_id, config in sources_to_use.items():
-            tasks.append(fetch_youtube_videos(session, source_id, config))
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for result in results:
-            if isinstance(result, list):
-                fresh_items.extend(result)
-            elif isinstance(result, Exception):
-                logger.error(f"Video fetch task failed: {result}")
-
-    new_count = 0
-    async with async_session_maker() as db:
-        for item in fresh_items:
-            video = await store_video_in_db(
-                db, item, category=item.category,
-                source_id=source_key_to_id.get(item.source),
-            )
-            if video:
-                new_count += 1
-        await db.commit()
-        await cleanup_old_videos(db)
-
-    if new_count > 0:
-        logger.info(f"Stored {new_count} new videos in database")
-
-    # Also save to JSON cache for backward compatibility
-    fresh_dicts = [item.model_dump() for item in fresh_items]
-    existing_cache = load_video_cache(for_merge=True)
-    existing_items = existing_cache.get("videos", []) if existing_cache else []
-    merged_items = merge_news_items(existing_items, fresh_dicts)
-    merged_items = prune_old_items(merged_items)
-
-    sources_list = [
-        {"id": sid, "name": cfg["name"], "website": cfg["website"], "description": cfg.get("description", "")}
-        for sid, cfg in sources_to_use.items()
-    ]
-
-    now = datetime.now(timezone.utc)
-    cache_data = {
-        "videos": merged_items,
-        "sources": sources_list,
-        "cached_at": now.isoformat(),
-        "cache_expires_at": (now + timedelta(minutes=VIDEO_CACHE_CHECK_MINUTES)).isoformat(),
-        "total_items": len(merged_items),
-    }
-    save_video_cache(cache_data)
-
-    _last_video_refresh = datetime.now(timezone.utc)
-    return cache_data
+    from app.services.news_fetch_service import fetch_all_videos as _fetch_all_videos
+    return await _fetch_all_videos()
 
 
 async def fetch_reddit_news(session: aiohttp.ClientSession, source_id: str, config: Dict) -> List[NewsItem]:
@@ -1110,85 +1046,8 @@ async def fetch_rss_news(session: aiohttp.ClientSession, source_id: str, config:
 
 async def fetch_all_news() -> None:
     """Fetch news from all sources, cache images, and store in database."""
-    global _last_news_refresh
-    fresh_items: List[NewsItem] = []
-
-    db_sources = await get_news_sources_from_db()
-    sources_to_use = db_sources if db_sources else NEWS_SOURCES
-
-    # Build source_key -> source_id map for linking articles to content_sources
-    source_key_to_id = await _get_source_key_to_id_map("news")
-
-    connector = aiohttp.TCPConnector()
-    async with aiohttp.ClientSession(connector=connector, max_field_size=16384) as session:
-        tasks = []
-        for source_id, config in sources_to_use.items():
-            if config["type"] == "reddit":
-                tasks.append(fetch_reddit_news(session, source_id, config))
-            elif config["type"] == "rss":
-                tasks.append(fetch_rss_news(session, source_id, config))
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for result in results:
-            if isinstance(result, list):
-                fresh_items.extend(result)
-            elif isinstance(result, Exception):
-                logger.error(f"Task failed: {result}")
-
-        new_articles_count = 0
-        articles_to_download = []
-        async with async_session_maker() as db:
-            seen_urls = set()
-            for item in fresh_items:
-                if item.url in seen_urls:
-                    continue
-                seen_urls.add(item.url)
-                article = await store_article_in_db(
-                    db, item, category=item.category,
-                    source_id=source_key_to_id.get(item.source),
-                )
-                if article:
-                    new_articles_count += 1
-
-            await db.commit()
-
-            if new_articles_count > 0:
-                for item in fresh_items:
-                    result = await db.execute(
-                        select(NewsArticle.id).where(
-                            NewsArticle.url == item.url,
-                            NewsArticle.cached_thumbnail_path.is_(None),
-                        )
-                    )
-                    row = result.first()
-                    if row and item.thumbnail:
-                        articles_to_download.append((row[0], item.thumbnail))
-
-        if articles_to_download:
-            for article_id, thumbnail_url in articles_to_download:
-                filename = await download_and_save_image(session, thumbnail_url, article_id)
-                if filename:
-                    async with async_session_maker() as db:
-                        await db.execute(
-                            update(NewsArticle)
-                            .where(NewsArticle.id == article_id)
-                            .values(cached_thumbnail_path=filename)
-                        )
-                        await db.commit()
-
-        if new_articles_count > 0:
-            logger.info(f"Added {new_articles_count} new news articles to database")
-
-    # Run per-source retention cleanup (articles + images)
-    try:
-        deleted, imgs = await cleanup_articles_with_images()
-        if deleted > 0:
-            logger.info(f"Post-fetch cleanup: {deleted} articles, {imgs} images")
-    except Exception as e:
-        logger.warning(f"Post-fetch article cleanup failed: {e}")
-
-    _last_news_refresh = datetime.now(timezone.utc)
+    from app.services.news_fetch_service import fetch_all_news as _fetch_all_news
+    await _fetch_all_news()
 
 
 async def get_news_from_db(
@@ -1534,7 +1393,7 @@ async def cleanup_articles_with_images(
     Returns (articles_deleted, image_files_deleted)."""
     import shutil
     from app.services.news_image_cache import NEWS_IMAGES_DIR
-    from app.routers.news_tts_router import TTS_CACHE_DIR
+    from app.paths import TTS_CACHE_DIR
     from app.models import ArticleTTS
 
     image_files_deleted = 0

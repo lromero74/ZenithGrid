@@ -80,7 +80,7 @@ async def get_positions(
     blacklist_map = {coin.symbol: coin.reason for coin in blacklisted_coins}
 
     # Pre-load bots for open positions (needed for computed_max_budget)
-    from app.position_routers.position_actions_router import _compute_resize_budget
+    from app.position_routers.helpers import compute_resize_budget
     open_bot_ids = {pos.bot_id for pos in positions if pos.bot_id and pos.status == "open"}
     bots_map = {}
     if open_bot_ids:
@@ -118,7 +118,7 @@ async def get_positions(
         # Compute resize budget for open positions
         if pos.status == "open":
             bot = bots_map.get(pos.bot_id) if pos.bot_id else None
-            computed = _compute_resize_budget(pos, bot)
+            computed = compute_resize_budget(pos, bot)
             if computed > 0:
                 pos_response.computed_max_budget = computed
 

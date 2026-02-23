@@ -226,7 +226,7 @@ export function formatRelativeTime(isoString: string | null): string {
   return date.toLocaleDateString()
 }
 
-import { NEWS_CATEGORIES } from '../../pages/news/types'
+import { NEWS_CATEGORIES } from '../../types/newsTypes'
 
 // Build a category-order index for fast sorting (lower index = earlier in list)
 const _categoryOrder: Record<string, number> = Object.fromEntries(

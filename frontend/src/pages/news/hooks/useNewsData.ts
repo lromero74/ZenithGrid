@@ -7,7 +7,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { authFetch } from '../../../services/api'
-import { NewsResponse, VideoResponse } from '../types'
+import { NewsResponse, VideoResponse } from '../../../types/newsTypes'
 
 interface UseNewsDataOptions {
   /** When true, suppresses auto-refetch to avoid disrupting the user */
