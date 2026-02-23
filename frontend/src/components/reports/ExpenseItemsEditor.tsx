@@ -96,7 +96,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
   const needsMonth = frequency === 'quarterly' || frequency === 'semi_annual' || frequency === 'yearly'
   const needsDow = frequency === 'weekly' || frequency === 'biweekly'
   const needsDom = frequency === 'monthly' || frequency === 'semi_monthly' || needsMonth
-  const needsAnchor = frequency === 'biweekly'
+  const needsAnchor = frequency === 'biweekly' || frequency === 'every_n_days'
   const showDueSection = needsDow || needsDom
 
   const resetForm = () => {
@@ -297,17 +297,28 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
           ))}
         </div>
         {frequency === 'every_n_days' && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-slate-400">Every</span>
-            <input
-              type="number"
-              value={frequencyN}
-              onChange={e => setFrequencyN(e.target.value)}
-              required
-              min="1"
-              className={`w-20 ${inputCls}`}
-            />
-            <span className="text-xs text-slate-400">days</span>
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Every</span>
+              <input
+                type="number"
+                value={frequencyN}
+                onChange={e => setFrequencyN(e.target.value)}
+                required
+                min="1"
+                className={`w-20 ${inputCls}`}
+              />
+              <span className="text-xs text-slate-400">days</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Starting from</span>
+              <input
+                type="date"
+                value={anchor}
+                onChange={e => setAnchor(e.target.value)}
+                className={`${inputCls} text-xs`}
+              />
+            </div>
           </div>
         )}
       </div>

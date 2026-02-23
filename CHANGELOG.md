@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.39.3] - 2026-02-23
+
+### Fixed
+- **Biweekly due dates**: Biweekly expenses with different anchor dates now show correct next due dates instead of both landing on the same week
+- **Every-N-days in reports**: Expenses with custom day intervals now appear in the Upcoming tab and show their computed next due date
+- **Every-N-days anchor date**: Custom interval expenses can now set a start date in the expense editor so the system knows when to count from
+
+### Added
+- **Frontend test infrastructure**: Vitest setup with React Testing Library for frontend unit testing
+
 ## [v2.39.2] - 2026-02-23
 
 ### Fixed
