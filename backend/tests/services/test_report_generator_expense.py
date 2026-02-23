@@ -92,7 +92,7 @@ class TestFormatDueLabelAnchored:
             "frequency_anchor": "2026-02-20", "frequency_n": None,
         }
         label = _format_due_label(item, now=datetime(2026, 2, 23))
-        assert label == "Fri 6th"  # 3/6 is a Friday, day 6
+        assert label == "Fri Mar 6th"  # 3/6 is a Friday, day 6
 
     def test_biweekly_without_anchor_falls_back(self):
         """biweekly without anchor falls back to weekly-style calc."""

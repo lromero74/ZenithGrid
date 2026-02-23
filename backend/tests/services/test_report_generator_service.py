@@ -807,20 +807,34 @@ class TestFormatDueLabel:
         assert _format_due_label({"due_day": 6, "frequency": "biweekly"}) == "Sun"
 
     def test_weekly_friday_with_now(self):
-        """When now is provided, weekly labels include day-of-month."""
+        """When now is provided, weekly labels include month and day-of-month."""
         from datetime import datetime
         # 2026-02-23 is a Monday (weekday=0), Friday (dd=4) is 4 days later = Feb 27
         now = datetime(2026, 2, 23)
         label = _format_due_label({"due_day": 4, "frequency": "weekly"}, now=now)
-        assert label == "Fri 27th"
+        assert label == "Fri Feb 27th"
 
     def test_biweekly_with_now_same_day(self):
-        """When due_day == today's weekday, show today's date."""
+        """When due_day == today's weekday, show today's date with month."""
         from datetime import datetime
         # 2026-02-23 is a Monday (weekday=0), due_day=0 → 0 days → Feb 23
         now = datetime(2026, 2, 23)
         label = _format_due_label({"due_day": 0, "frequency": "biweekly"}, now=now)
-        assert label == "Mon 23rd"
+        assert label == "Mon Feb 23rd"
+
+    def test_monthly_day_with_now(self):
+        """Monthly labels include month when now is provided."""
+        from datetime import datetime
+        now = datetime(2026, 2, 23)
+        label = _format_due_label({"due_day": 28, "frequency": "monthly"}, now=now)
+        assert label == "Feb 28th"
+
+    def test_monthly_past_day_shows_next_month(self):
+        """Monthly due day already past this month shows next month."""
+        from datetime import datetime
+        now = datetime(2026, 2, 23)
+        label = _format_due_label({"due_day": 5, "frequency": "monthly"}, now=now)
+        assert label == "Mar 5th"
 
     def test_yearly_with_month(self):
         label = _format_due_label(
