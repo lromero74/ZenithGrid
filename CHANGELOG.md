@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.2] - 2026-02-23
+
+### Added
+- **Comprehensive unit test coverage**: Added 333 new tests across backend and frontend, nearly doubling the test suite from 336 to 669 total tests
+- **Trading engine tests**: Order logger, trailing stops, position manager budget calculations
+- **Auth & security tests**: JWT token handling, encryption roundtrips, token revocation, RequireAuth component
+- **Strategy tests**: Grid trading arithmetic/geometric level calculations, condition mirroring for bidirectional bots
+- **Business logic tests**: Currency formatting, precision handling, order validation, portfolio conversion service
+- **Router helper tests**: Account key masking, SSRF protection for prop firm bridge URLs
+- **Frontend utility tests**: Bot indicator detection, position PnL calculations, chart data transforms, news filtering/pagination, markdown-to-text conversion
+
 ## [v2.40.1] - 2026-02-23
 
 ### Fixed
