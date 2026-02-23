@@ -519,6 +519,8 @@ export interface ExpenseItem {
   frequency_n?: number | null
   frequency_anchor?: string | null
   due_day?: number | null
+  due_month?: number | null
+  login_url?: string | null
   is_active: boolean
   normalized_amount?: number
   created_at: string | null

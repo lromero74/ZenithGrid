@@ -178,6 +178,8 @@ class ExpenseItemCreate(BaseModel):
     frequency_n: Optional[int] = Field(None, ge=1)
     frequency_anchor: Optional[str] = None
     due_day: Optional[int] = Field(None, ge=-1, le=31)
+    due_month: Optional[int] = Field(None, ge=1, le=12)
+    login_url: Optional[str] = Field(None, max_length=500)
 
     @model_validator(mode="after")
     def validate_frequency_n(self):
@@ -199,6 +201,8 @@ class ExpenseItemUpdate(BaseModel):
     frequency_n: Optional[int] = Field(None, ge=1)
     frequency_anchor: Optional[str] = None
     due_day: Optional[int] = Field(None, ge=-1, le=31)
+    due_month: Optional[int] = Field(None, ge=1, le=12)
+    login_url: Optional[str] = Field(None, max_length=500)
     is_active: Optional[bool] = None
 
 
@@ -720,6 +724,8 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
         "frequency_n": item.frequency_n,
         "frequency_anchor": item.frequency_anchor,
         "due_day": item.due_day,
+        "due_month": item.due_month,
+        "login_url": item.login_url,
         "is_active": item.is_active,
         "created_at": item.created_at.isoformat() if item.created_at else None,
     }

@@ -1685,6 +1685,8 @@ def initialize_database(project_root):
                 frequency_n INTEGER,
                 frequency_anchor TEXT,
                 due_day INTEGER,
+                due_month INTEGER,
+                login_url TEXT,
                 is_active INTEGER DEFAULT 1,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

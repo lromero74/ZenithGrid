@@ -1387,6 +1387,8 @@ class ExpenseItem(Base):
     frequency_n = Column(Integer, nullable=True)  # Only for every_n_days
     frequency_anchor = Column(String, nullable=True)  # Start date for every_n_days (YYYY-MM-DD)
     due_day = Column(Integer, nullable=True)  # Day of month (1-31, -1 for last day)
+    due_month = Column(Integer, nullable=True)  # Month (1-12) for quarterly/semi_annual/yearly
+    login_url = Column(String, nullable=True)  # URL to payment/login page
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
