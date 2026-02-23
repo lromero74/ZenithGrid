@@ -12,6 +12,8 @@ import {
 } from '../../../components/positions'
 import { GridVisualizer } from '../../../components/GridVisualizer'
 import { api } from '../../../services/api'
+import { useConfirm } from '../../../contexts/ConfirmContext'
+import { useNotifications } from '../../../contexts/NotificationContext'
 
 interface PositionCardProps {
   position: Position & { _cachedPnL?: any }
@@ -52,6 +54,8 @@ export const PositionCard = ({
   onCheckSlippage,
   onRefetch,
 }: PositionCardProps) => {
+  const confirm = useConfirm()
+  const { addToast } = useNotifications()
   const pnl = position._cachedPnL
   const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
 
@@ -60,12 +64,12 @@ export const PositionCard = ({
 
   const handleCancelLimitClose = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (confirm('Cancel limit close order?')) {
+    if (await confirm({ title: 'Cancel Limit Close', message: 'Cancel limit close order?', variant: 'warning', confirmLabel: 'Cancel Order' })) {
       try {
         await api.post(`/positions/${position.id}/cancel-limit-close`)
         onRefetch()
       } catch (err: any) {
-        alert(`Error: ${err.response?.data?.detail || err.message}`)
+        addToast({ type: 'error', title: 'Error', message: err.response?.data?.detail || err.message })
       }
     }
   }
@@ -450,10 +454,10 @@ export const PositionCard = ({
               try {
                 const result = await api.post(`/positions/${position.id}/resize-budget`)
                 const d = result.data
-                alert(`Budget resized: ${d.old_max.toFixed(8)} → ${d.new_max.toFixed(8)} ${d.quote_currency}`)
+                addToast({ type: 'success', title: 'Budget Resized', message: `${d.old_max.toFixed(8)} → ${d.new_max.toFixed(8)} ${d.quote_currency}` })
                 onRefetch()
               } catch (err: any) {
-                alert(`Error: ${err.response?.data?.detail || err.message}`)
+                addToast({ type: 'error', title: 'Resize Failed', message: err.response?.data?.detail || err.message })
               }
             }}
           >

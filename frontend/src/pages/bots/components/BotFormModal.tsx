@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNotifications } from '../../../contexts/NotificationContext'
 import { Bot, StrategyParameter } from '../../../types'
 import ThreeCommasStyleForm from '../../../components/ThreeCommasStyleForm'
 import PhaseConditionSelector from '../../../components/PhaseConditionSelector'
@@ -53,6 +54,7 @@ export function BotFormModal({
   readOnly = false,
   readOnlyTitle,
 }: BotFormModalProps) {
+  const { addToast } = useNotifications()
   // Fetch blacklist/category data for badges and counts
   const [coinCategories, setCoinCategories] = useState<Record<string, string>>({})
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({
@@ -208,19 +210,19 @@ export function BotFormModal({
 
     // Block save if there are validation errors
     if (validationErrors.length > 0) {
-      alert('Cannot save: Order values are below exchange minimum. Please increase the percentage values or fund your account with more capital.')
+      addToast({ type: 'error', title: 'Validation Error', message: 'Order values are below exchange minimum. Increase percentage values or fund your account.' })
       return
     }
 
     // Validate account is selected (not required when editing — bot already has an account)
     if (!selectedAccount?.id && !editingBot) {
-      alert('Please select an account before creating a bot')
+      addToast({ type: 'error', title: 'No Account', message: 'Please select an account before creating a bot' })
       return
     }
 
     // Validate at least one pair is selected
     if (formData.product_ids.length === 0) {
-      alert('Please select at least one trading pair')
+      addToast({ type: 'error', title: 'No Pair Selected', message: 'Please select at least one trading pair' })
       return
     }
 

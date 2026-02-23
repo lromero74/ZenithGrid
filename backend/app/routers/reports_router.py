@@ -622,6 +622,9 @@ async def create_expense_item(
         frequency=body.frequency,
         frequency_n=body.frequency_n,
         frequency_anchor=body.frequency_anchor,
+        due_day=body.due_day,
+        due_month=body.due_month,
+        login_url=body.login_url,
     )
     db.add(item)
     await db.flush()

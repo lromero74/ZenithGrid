@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { botsApi } from '../../../services/api'
 import type { Bot, BotCreate } from '../../../types'
+import { useNotifications } from '../../../contexts/NotificationContext'
 
 interface UseBotMutationsProps {
   selectedAccount: { id: number } | null
@@ -20,6 +21,7 @@ export function useBotMutations({
   projectionTimeframe
 }: UseBotMutationsProps) {
   const queryClient = useQueryClient()
+  const { addToast } = useNotifications()
 
   // Create bot mutation
   const createBot = useMutation({
@@ -39,7 +41,7 @@ export function useBotMutations({
       } else if (error.message) {
         message = error.message
       }
-      alert(`Error: ${message}`)
+      addToast({ type: 'error', title: 'Create Bot Failed', message })
       console.error('Create bot error:', error)
     },
   })
@@ -63,7 +65,7 @@ export function useBotMutations({
       } else if (error.message) {
         message = error.message
       }
-      alert(`Error: ${message}`)
+      addToast({ type: 'error', title: 'Update Bot Failed', message })
       console.error('Update bot error:', error)
     },
   })
@@ -162,12 +164,9 @@ export function useBotMutations({
       const botName = bot?.name || `Bot #${botId}`
 
       if (data.failed_count > 0) {
-        alert(
-          `Cancelled ${data.cancelled_count} of ${data.cancelled_count + data.failed_count} positions for ${botName}.\n\n` +
-          `Errors:\n${data.errors.join('\n')}`
-        )
+        addToast({ type: 'error', title: 'Partial Cancellation', message: `Cancelled ${data.cancelled_count} of ${data.cancelled_count + data.failed_count} positions for ${botName}. ${data.errors.length} errors.` })
       } else {
-        alert(`✅ Successfully cancelled all ${data.cancelled_count} positions for ${botName}`)
+        addToast({ type: 'success', title: 'Positions Cancelled', message: `Cancelled all ${data.cancelled_count} positions for ${botName}` })
       }
     },
   })
@@ -183,16 +182,9 @@ export function useBotMutations({
       const botName = bot?.name || `Bot #${botId}`
 
       if (data.failed_count > 0) {
-        alert(
-          `Sold ${data.sold_count} of ${data.sold_count + data.failed_count} positions for ${botName}.\n\n` +
-          `Total Profit: ${data.total_profit_quote.toFixed(8)}\n\n` +
-          `Errors:\n${data.errors.join('\n')}`
-        )
+        addToast({ type: 'error', title: 'Partial Sell', message: `Sold ${data.sold_count} of ${data.sold_count + data.failed_count} positions for ${botName}. Profit: ${data.total_profit_quote.toFixed(8)}` })
       } else {
-        alert(
-          `✅ Successfully sold all ${data.sold_count} positions for ${botName}\n` +
-          `Total Profit: ${data.total_profit_quote.toFixed(8)}`
-        )
+        addToast({ type: 'success', title: 'All Positions Sold', message: `Sold all ${data.sold_count} positions for ${botName}. Profit: ${data.total_profit_quote.toFixed(8)}` })
       }
     },
   })

@@ -24,6 +24,8 @@ import {
 } from 'lucide-react'
 import { useAccount, Account, getChainName } from '../contexts/AccountContext'
 import { accountApi, api } from '../services/api'
+import { useConfirm } from '../contexts/ConfirmContext'
+import { useNotifications } from '../contexts/NotificationContext'
 import { PropGuardStatus } from './PropGuardStatus'
 
 interface AccountsManagementProps {
@@ -40,6 +42,8 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
     refreshAccounts,
   } = useAccount()
 
+  const confirm = useConfirm()
+  const { addToast } = useNotifications()
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -60,7 +64,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
   }
 
   const handleDelete = async (account: Account) => {
-    if (!confirm(`Are you sure you want to delete "${account.name}"? This action cannot be undone.`)) {
+    if (!await confirm({ title: 'Delete Account', message: `Are you sure you want to delete "${account.name}"? This action cannot be undone.`, variant: 'danger', confirmLabel: 'Delete' })) {
       return
     }
 
@@ -151,10 +155,10 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
                 `✅ Portfolio Conversion Complete!\n\n` +
                 `Successfully sold all ${status.sold_count} currencies to ${conversionProgress.targetCurrency}`
             }
-            alert(message)
+            addToast({ type: status.failed_count > 0 ? 'error' : 'success', title: 'Conversion Complete', message })
             await refreshAccounts()
           } else {
-            alert(`❌ Conversion failed: ${status.message}`)
+            addToast({ type: 'error', title: 'Conversion Failed', message: status.message })
           }
 
           // Reset state
@@ -187,13 +191,12 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
   const handleSellPortfolioToBase = async (account: Account, targetCurrency: 'BTC' | 'USD') => {
     const currencySetter = targetCurrency === 'BTC' ? setSellingToBTC : setSellingToUSD
 
-    if (!confirm(
-      `🚨 CONVERT ${account.name.toUpperCase()} PORTFOLIO TO ${targetCurrency} 🚨\n\n` +
-      `This will sell ALL holdings on ${account.name} (ETH, ADA, etc.) to ${targetCurrency}.\n\n` +
-      `All balances will be converted at MARKET price.\n` +
-      `This action CANNOT be undone.\n\n` +
-      `Are you absolutely sure you want to proceed?`
-    )) {
+    if (!await confirm({
+      title: `Convert to ${targetCurrency}`,
+      message: `This will sell ALL holdings on ${account.name} (ETH, ADA, etc.) to ${targetCurrency}.\n\nAll balances will be converted at MARKET price.\nThis action CANNOT be undone.`,
+      variant: 'danger',
+      confirmLabel: `Convert to ${targetCurrency}`,
+    })) {
       return
     }
 
@@ -220,7 +223,7 @@ export function AccountsManagement({ onAddAccount }: AccountsManagementProps) {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error'
       setActionError(`Failed to start portfolio conversion: ${errorMsg}`)
-      alert(`❌ Error starting portfolio conversion: ${errorMsg}`)
+      addToast({ type: 'error', title: 'Conversion Error', message: errorMsg })
       currencySetter(false)
     }
   }

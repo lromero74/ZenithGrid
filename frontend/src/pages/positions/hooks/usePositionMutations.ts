@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { positionsApi, api } from '../../../services/api'
+import { useNotifications } from '../../../contexts/NotificationContext'
 
 interface UsePositionMutationsProps {
   refetchPositions: () => void
@@ -7,6 +8,7 @@ interface UsePositionMutationsProps {
 
 export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsProps) => {
   const [isProcessing, setIsProcessing] = useState(false)
+  const { addToast } = useNotifications()
 
   const handleClosePosition = async (closeConfirmPositionId: number | null) => {
     if (!closeConfirmPositionId) return
@@ -15,11 +17,10 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
     try {
       const result = await positionsApi.close(closeConfirmPositionId)
       refetchPositions()
-      // Show success notification
-      alert(`Position closed successfully!\nProfit: ${result.profit_quote.toFixed(8)} (${result.profit_percentage.toFixed(2)}%)`)
+      addToast({ type: 'success', title: 'Position Closed', message: `Profit: ${result.profit_quote.toFixed(8)} (${result.profit_percentage.toFixed(2)}%)` })
       return { success: true }
     } catch (err: any) {
-      alert(`Error closing position: ${err.response?.data?.detail || err.message}`)
+      addToast({ type: 'error', title: 'Close Failed', message: err.response?.data?.detail || err.message })
       return { success: false }
     } finally {
       setIsProcessing(false)
@@ -41,7 +42,7 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
       refetchPositions()
       return { success: true }
     } catch (err: any) {
-      alert(`Error saving notes: ${err.response?.data?.detail || err.message}`)
+      addToast({ type: 'error', title: 'Save Failed', message: err.response?.data?.detail || err.message })
       return { success: false }
     } finally {
       setIsProcessing(false)
@@ -54,7 +55,7 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
       refetchPositions()
       return { success: true }
     } catch (err: any) {
-      alert(`Error: ${err.response?.data?.detail || err.message}`)
+      addToast({ type: 'error', title: 'Error', message: err.response?.data?.detail || err.message })
       return { success: false }
     }
   }

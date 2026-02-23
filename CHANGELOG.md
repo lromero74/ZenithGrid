@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.39.1] - 2026-02-23
+
+### Changed
+- **Styled confirmation dialogs**: All native browser confirm/alert popups replaced with themed modal dialogs matching the app's dark trading UI
+- **Toast notifications**: Error and success alerts now appear as styled toast notifications instead of browser popups
+
+### Fixed
+- **Expense fields not saved on create**: Due day, due month, and login URL were not being saved when creating new expense items (only when editing existing ones)
+
 ## [v2.39.0] - 2026-02-23
 
 ### Added

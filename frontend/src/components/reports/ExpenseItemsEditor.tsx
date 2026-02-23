@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { reportsApi } from '../../services/api'
+import { useConfirm } from '../../contexts/ConfirmContext'
 import type { ExpenseItem } from '../../types'
 
 interface ExpenseItemsEditorProps {
@@ -58,6 +59,7 @@ function formatDueBadge(item: ExpenseItem): string | null {
 
 export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }: ExpenseItemsEditorProps) {
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
   const prefix = currency === 'BTC' ? '' : '$'
   const periodLabel = expensePeriod === 'weekly' ? '/wk' :
     expensePeriod === 'quarterly' ? '/qtr' :
@@ -473,7 +475,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => { if (confirm('Delete this expense?')) deleteItem.mutate(item.id) }}
+                        onClick={async () => { if (await confirm({ title: 'Delete Expense', message: 'Delete this expense?', variant: 'danger', confirmLabel: 'Delete' })) deleteItem.mutate(item.id) }}
                         className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

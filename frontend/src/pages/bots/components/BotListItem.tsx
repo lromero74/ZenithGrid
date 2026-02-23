@@ -4,6 +4,7 @@ import { Account } from '../../../contexts/AccountContext'
 import { Edit, Trash2, Copy, Brain, MoreVertical, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
 import { botUsesAIIndicators, botUsesBullFlagIndicator, botUsesNonAIIndicators } from '../helpers'
 import { useNotifications } from '../../../contexts/NotificationContext'
+import { useConfirm } from '../../../contexts/ConfirmContext'
 
 interface BotListItemProps {
   bot: Bot
@@ -49,6 +50,7 @@ export function BotListItem({
   setScannerLogsBotId,
 }: BotListItemProps) {
   const { addToast } = useNotifications()
+  const confirm = useConfirm()
   const botPairs = ((bot as any).product_ids || [bot.product_id])
   const strategyName = strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
   const botAccount = accounts.find(a => a.id === bot.account_id)
@@ -556,16 +558,16 @@ export function BotListItem({
                 {/* Cancel All Positions */}
                 {(bot.open_positions_count ?? 0) > 0 && (
                   <button
-                    onClick={() => {
-                      if (confirm(
-                        `⚠️ Cancel all ${bot.open_positions_count} open position(s) for "${bot.name}"?\n\n` +
-                        `This will mark them as CANCELLED without selling.\n` +
-                        `Your holdings will remain as-is (no P&L impact).\n\n` +
-                        `This action cannot be undone.`
-                      )) {
+                    onClick={async () => {
+                      setOpenMenuId(null)
+                      if (await confirm({
+                        title: 'Cancel All Deals',
+                        message: `Cancel all ${bot.open_positions_count} open position(s) for "${bot.name}"?\n\nThis will mark them as CANCELLED without selling. Your holdings will remain as-is (no P&L impact).\n\nThis action cannot be undone.`,
+                        variant: 'danger',
+                        confirmLabel: 'Cancel All',
+                      })) {
                         cancelAllPositions.mutate(bot.id)
                       }
-                      setOpenMenuId(null)
                     }}
                     className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
                   >
@@ -577,15 +579,16 @@ export function BotListItem({
                 {/* Sell All Positions at Market Price */}
                 {(bot.open_positions_count ?? 0) > 0 && (
                   <button
-                    onClick={() => {
-                      if (confirm(
-                        `⚠️ Sell all ${bot.open_positions_count} position(s) for "${bot.name}" at MARKET price?\n\n` +
-                        `This will immediately close all positions and realize gains/losses.\n\n` +
-                        `This action cannot be undone.`
-                      )) {
+                    onClick={async () => {
+                      setOpenMenuId(null)
+                      if (await confirm({
+                        title: 'Sell All at Market',
+                        message: `Sell all ${bot.open_positions_count} position(s) for "${bot.name}" at MARKET price?\n\nThis will immediately close all positions and realize gains/losses.\n\nThis action cannot be undone.`,
+                        variant: 'danger',
+                        confirmLabel: 'Sell All',
+                      })) {
                         sellAllPositions.mutate(bot.id)
                       }
-                      setOpenMenuId(null)
                     }}
                     className="w-full flex items-center space-x-2 px-4 py-2 hover:bg-slate-700 text-left transition-colors"
                   >
