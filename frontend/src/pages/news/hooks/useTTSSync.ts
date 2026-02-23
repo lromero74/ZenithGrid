@@ -89,6 +89,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   })
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const gainNodeRef = useRef<GainNode | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -209,8 +211,23 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   // Initialize persistent audio element once
   useEffect(() => {
     const audio = new Audio()
-    audio.volume = volume
     audioRef.current = audio
+
+    // Set up Web Audio API GainNode for volume control.
+    // iOS Safari ignores audio.volume — GainNode is the only way to control volume programmatically.
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      audioContextRef.current = ctx
+      const source = ctx.createMediaElementSource(audio)
+      const gainNode = ctx.createGain()
+      gainNode.gain.value = volume
+      source.connect(gainNode)
+      gainNode.connect(ctx.destination)
+      gainNodeRef.current = gainNode
+    } catch {
+      // Fallback: no Web Audio API — use audio.volume directly
+      audio.volume = volume
+    }
 
     audio.onplay = () => {
       setIsPlaying(true)
@@ -278,6 +295,12 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         URL.revokeObjectURL(currentAudioUrlRef.current)
         currentAudioUrlRef.current = null
       }
+      // Close Web Audio API context
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {})
+        audioContextRef.current = null
+        gainNodeRef.current = null
+      }
     }
   }, [startAnimationLoop, stopAnimationLoop])
 
@@ -290,7 +313,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
   // Update volume when it changes
   useEffect(() => {
-    if (audioRef.current) {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = volume
+    } else if (audioRef.current) {
       audioRef.current.volume = volume
     }
   }, [volume])
@@ -298,6 +323,11 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const loadAndPlay = useCallback(async (text: string, overrideVoice?: string, articleId?: number) => {
     const audio = audioRef.current
     if (!audio) return
+
+    // Resume AudioContext on user gesture (required by iOS Safari)
+    if (audioContextRef.current?.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => {})
+    }
 
     // Increment request ID - any errors from previous requests will be ignored
     const thisRequestId = ++requestIdRef.current
@@ -520,6 +550,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   }, [currentVoice, playbackRate, stopAnimationLoop])
 
   const play = useCallback(() => {
+    if (audioContextRef.current?.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => {})
+    }
     if (audioRef.current && isReady) {
       audioRef.current.play()
         .then(() => setIsReady(false))
@@ -537,6 +570,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   }, [])
 
   const resume = useCallback(() => {
+    if (audioContextRef.current?.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => {})
+    }
     if (audioRef.current && audioRef.current.paused && isPaused) {
       audioRef.current.play()
     }
@@ -662,8 +698,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol))
     setVolumeState(clamped)
-    // Apply directly to audio element — don't rely on useEffect render cycle
-    if (audioRef.current) {
+    // Apply directly — GainNode for iOS, audio.volume as fallback
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = clamped
+    } else if (audioRef.current) {
       audioRef.current.volume = clamped
     }
     try {

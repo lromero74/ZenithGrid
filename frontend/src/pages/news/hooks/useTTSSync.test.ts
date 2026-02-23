@@ -1,8 +1,9 @@
 /**
  * Tests for useTTSSync volume control
  *
- * Verifies that setVolume directly applies to the Audio element
- * (not just React state), and that initial volume is restored from localStorage.
+ * Verifies that setVolume applies via Web Audio API GainNode (for iOS compatibility),
+ * falls back to audio.volume when AudioContext is unavailable,
+ * and that initial volume is restored from localStorage.
  */
 
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest'
@@ -14,7 +15,7 @@ vi.mock('../../../services/api', () => ({
   authFetch: vi.fn(),
 }))
 
-// Track Audio instances so we can inspect them
+// Track mock instances
 interface MockAudio {
   volume: number
   playbackRate: number
@@ -35,7 +36,13 @@ interface MockAudio {
   ontimeupdate: (() => void) | null
 }
 
+interface MockGainNode {
+  gain: { value: number }
+  connect: ReturnType<typeof vi.fn>
+}
+
 let mockAudioInstances: MockAudio[] = []
+let mockGainNodes: MockGainNode[] = []
 
 function createMockAudio(): MockAudio {
   const instance: MockAudio = {
@@ -61,65 +68,106 @@ function createMockAudio(): MockAudio {
   return instance
 }
 
-beforeEach(() => {
+function setupMocks(withAudioContext: boolean) {
   mockAudioInstances = []
+  mockGainNodes = []
   localStorage.clear()
   vi.restoreAllMocks()
 
-  // Mock window.Audio constructor using a proper function constructor
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.stubGlobal('Audio', function (this: any) {
     return createMockAudio()
   })
 
-  // Mock requestAnimationFrame/cancelAnimationFrame
+  if (withAudioContext) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.stubGlobal('AudioContext', function (this: any) {
+      const gainNode: MockGainNode = {
+        gain: { value: 1.0 },
+        connect: vi.fn(),
+      }
+      mockGainNodes.push(gainNode)
+      return {
+        state: 'running',
+        createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
+        createGain: vi.fn(() => gainNode),
+        destination: {},
+        resume: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+      }
+    })
+  } else {
+    // No AudioContext — force fallback to audio.volume
+    vi.stubGlobal('AudioContext', undefined)
+  }
+
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
-})
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
-describe('useTTSSync volume control', () => {
-  test('setVolume directly sets audio element volume', () => {
+describe('useTTSSync volume control (with Web Audio API)', () => {
+  beforeEach(() => setupMocks(true))
+
+  test('setVolume sets GainNode gain value', () => {
     const { result } = renderHook(() => useTTSSync())
 
-    expect(mockAudioInstances).toHaveLength(1)
-    const audio = mockAudioInstances[0]
+    expect(mockGainNodes).toHaveLength(1)
+    const gainNode = mockGainNodes[0]
 
-    // Default volume should be 1.0
+    // Default volume
     expect(result.current.volume).toBe(1.0)
-    expect(audio.volume).toBe(1.0)
+    expect(gainNode.gain.value).toBe(1.0)
 
-    // Change volume via setVolume
     act(() => {
       result.current.setVolume(0.5)
     })
 
-    // Both React state and audio element should update immediately
     expect(result.current.volume).toBe(0.5)
-    expect(audio.volume).toBe(0.5)
+    expect(gainNode.gain.value).toBe(0.5)
+  })
+
+  test('initial volume from localStorage is applied to GainNode', () => {
+    localStorage.setItem('tts-volume', '0.7')
+
+    const { result } = renderHook(() => useTTSSync())
+    const gainNode = mockGainNodes[0]
+
+    expect(result.current.volume).toBe(0.7)
+    expect(gainNode.gain.value).toBe(0.7)
   })
 
   test('setVolume clamps value to [0, 1]', () => {
     const { result } = renderHook(() => useTTSSync())
-    const audio = mockAudioInstances[0]
+    const gainNode = mockGainNodes[0]
 
-    // Over 1.0
     act(() => {
       result.current.setVolume(1.5)
     })
     expect(result.current.volume).toBe(1.0)
-    expect(audio.volume).toBe(1.0)
+    expect(gainNode.gain.value).toBe(1.0)
 
-    // Below 0.0
     act(() => {
       result.current.setVolume(-0.5)
     })
     expect(result.current.volume).toBe(0.0)
-    expect(audio.volume).toBe(0.0)
+    expect(gainNode.gain.value).toBe(0.0)
+  })
+
+  test('setVolume to 0 mutes via GainNode', () => {
+    const { result } = renderHook(() => useTTSSync())
+    const gainNode = mockGainNodes[0]
+
+    act(() => {
+      result.current.setVolume(0)
+    })
+
+    expect(result.current.volume).toBe(0)
+    expect(gainNode.gain.value).toBe(0)
   })
 
   test('setVolume persists to localStorage', () => {
@@ -131,8 +179,27 @@ describe('useTTSSync volume control', () => {
 
     expect(localStorage.getItem('tts-volume')).toBe('0.3')
   })
+})
 
-  test('initial volume is restored from localStorage', () => {
+describe('useTTSSync volume control (fallback without Web Audio API)', () => {
+  beforeEach(() => setupMocks(false))
+
+  test('setVolume falls back to audio.volume without AudioContext', () => {
+    const { result } = renderHook(() => useTTSSync())
+    const audio = mockAudioInstances[0]
+
+    expect(result.current.volume).toBe(1.0)
+    expect(audio.volume).toBe(1.0)
+
+    act(() => {
+      result.current.setVolume(0.5)
+    })
+
+    expect(result.current.volume).toBe(0.5)
+    expect(audio.volume).toBe(0.5)
+  })
+
+  test('initial volume from localStorage applied to audio.volume', () => {
     localStorage.setItem('tts-volume', '0.7')
 
     const { result } = renderHook(() => useTTSSync())
@@ -148,17 +215,5 @@ describe('useTTSSync volume control', () => {
 
     expect(result.current.volume).toBe(1.0)
     expect(audio.volume).toBe(1.0)
-  })
-
-  test('setVolume to 0 mutes audio element', () => {
-    const { result } = renderHook(() => useTTSSync())
-    const audio = mockAudioInstances[0]
-
-    act(() => {
-      result.current.setVolume(0)
-    })
-
-    expect(result.current.volume).toBe(0)
-    expect(audio.volume).toBe(0)
   })
 })

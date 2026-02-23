@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.5] - 2026-02-23
+
+### Fixed
+- **Article reader volume control on iOS**: Volume slider now works on iPhone/iPad using Web Audio API GainNode (iOS Safari ignores the standard audio.volume property)
+- **Volume slider smoothness**: Changed slider step from 5% to 1% for smooth, fine-grained volume control
+
 ## [v2.40.4] - 2026-02-23
 
 ### Fixed

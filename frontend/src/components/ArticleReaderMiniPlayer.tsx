@@ -744,7 +744,7 @@ export function ArticleReaderMiniPlayer() {
                               type="range"
                               min="0"
                               max="1"
-                              step="0.05"
+                              step="0.01"
                               value={volume}
                               onChange={(e) => setVolume(parseFloat(e.target.value))}
                               className="flex-1 h-1.5 bg-slate-600 rounded-full appearance-none cursor-pointer accent-green-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:hover:bg-green-400 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-green-500 [&::-moz-range-thumb]:border-0"
