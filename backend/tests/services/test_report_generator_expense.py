@@ -5,6 +5,7 @@ Tests for biweekly and every_n_days due date helpers in report_generator_service
 from datetime import datetime
 
 from app.services.report_generator_service import (
+    _get_upcoming_items,
     _next_biweekly_date,
     _next_every_n_days_date,
     _format_due_label,
@@ -115,3 +116,85 @@ class TestFormatDueLabelAnchored:
         item = {"due_day": None, "frequency": "every_n_days"}
         label = _format_due_label(item, now=datetime(2026, 2, 23))
         assert label == ""
+
+
+class TestGetUpcomingItems:
+    """Tests for _get_upcoming_items shared helper."""
+
+    def test_weekly_this_month_only(self):
+        """Weekly item whose next occurrence is next month should be excluded."""
+        # Feb 28, 2026 is a Saturday. Sunday (dow=6) is March 1 → excluded.
+        items = [{"due_day": 6, "frequency": "weekly"}]
+        result = _get_upcoming_items(items, datetime(2026, 2, 28))
+        assert len(result) == 0
+
+    def test_weekly_still_in_month(self):
+        """Weekly item whose next occurrence is still this month → included."""
+        # Feb 23, 2026 is Monday. Friday (dow=4) is Feb 27 → included.
+        items = [{"due_day": 4, "frequency": "weekly", "name": "Groceries"}]
+        result = _get_upcoming_items(items, datetime(2026, 2, 23))
+        assert len(result) == 1
+        assert result[0][1]["name"] == "Groceries"
+
+    def test_biweekly_next_month_excluded(self):
+        """Biweekly item landing in next month should be excluded."""
+        # anchor=2/20, dow=4 (Fri), today=2/23 → next biweekly = 3/6 → excluded
+        items = [{
+            "due_day": 4, "frequency": "biweekly",
+            "frequency_anchor": "2026-02-20",
+        }]
+        result = _get_upcoming_items(items, datetime(2026, 2, 23))
+        assert len(result) == 0
+
+    def test_biweekly_this_month_included(self):
+        """Biweekly item landing this month → included."""
+        # anchor=2/27, dow=4 (Fri), today=2/23 → next = 2/27 → included
+        items = [{
+            "due_day": 4, "frequency": "biweekly",
+            "frequency_anchor": "2026-02-27", "name": "Paycheck",
+        }]
+        result = _get_upcoming_items(items, datetime(2026, 2, 23))
+        assert len(result) == 1
+
+    def test_every_n_days_next_month_excluded(self):
+        """every_n_days item landing in next month should be excluded."""
+        # anchor=2/15, n=10, today=2/26 → next=3/7 → excluded
+        items = [{
+            "due_day": None, "frequency": "every_n_days",
+            "frequency_anchor": "2026-02-15", "frequency_n": 10,
+        }]
+        result = _get_upcoming_items(items, datetime(2026, 2, 26))
+        assert len(result) == 0
+
+    def test_every_n_days_this_month_included(self):
+        """every_n_days item landing this month → included."""
+        # anchor=2/15, n=10, today=2/23 → next=2/25 → included
+        items = [{
+            "due_day": None, "frequency": "every_n_days",
+            "frequency_anchor": "2026-02-15", "frequency_n": 10,
+            "name": "Custom",
+        }]
+        result = _get_upcoming_items(items, datetime(2026, 2, 23))
+        assert len(result) == 1
+
+    def test_monthly_past_day_excluded(self):
+        """Monthly item whose due day already passed → excluded."""
+        items = [{"due_day": 5, "frequency": "monthly"}]
+        result = _get_upcoming_items(items, datetime(2026, 2, 23))
+        assert len(result) == 0
+
+    def test_monthly_future_day_included(self):
+        """Monthly item with due day still ahead → included."""
+        items = [{"due_day": 28, "frequency": "monthly", "name": "Rent"}]
+        result = _get_upcoming_items(items, datetime(2026, 2, 23))
+        assert len(result) == 1
+
+    def test_sorted_by_sort_key(self):
+        """Results should be sorted by days-until / resolved day."""
+        items = [
+            {"due_day": 28, "frequency": "monthly", "name": "Late"},
+            {"due_day": 25, "frequency": "monthly", "name": "Early"},
+        ]
+        result = _get_upcoming_items(items, datetime(2026, 2, 23))
+        names = [item["name"] for _, item in result]
+        assert names == ["Early", "Late"]
