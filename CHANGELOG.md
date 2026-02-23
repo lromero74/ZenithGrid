@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.14] - 2026-02-23
+
+### Fixed
+- **News article thumbnails blocked by CSP**: Broadened `img-src` to allow HTTPS images from any news source domain (previously only YouTube CDN was whitelisted)
+- **TTS silence init blocked by CSP**: Added `data:` to `media-src` so the silent WAV used for AudioContext initialization isn't rejected
+- **PnL chart console warnings**: Added mount guard to defer Recharts rendering until container has valid dimensions, eliminating repeated "width(-1) and height(-1)" warnings
+
 ## [v2.40.13] - 2026-02-23
 
 ### Fixed
