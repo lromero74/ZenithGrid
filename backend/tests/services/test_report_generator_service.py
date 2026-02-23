@@ -19,8 +19,10 @@ from app.services.report_generator_service import (
     _build_tabbed_ai_section,
     _expense_name_html,
     _format_due_label,
+    _md_to_styled_html,
     _normalize_ai_summary,
     _ordinal_day,
+    _sanitize_for_pdf,
     build_report_html,
 )
 
@@ -1034,3 +1036,209 @@ class TestBuildReportHtmlEmailModeGoals:
         )
         assert '<input type="radio"' in html
         assert "<style>" in html
+
+
+# ---------------------------------------------------------------------------
+# _md_to_styled_html — markdown to dark-theme HTML
+# ---------------------------------------------------------------------------
+
+
+class TestMdToStyledHtml:
+    """Test markdown-to-styled-HTML conversion for AI summaries."""
+
+    def test_bold_text_styled(self):
+        result = _md_to_styled_html("**important**", "#3b82f6")
+        assert "<strong" in result
+        assert "color: #f1f5f9" in result
+        assert "important" in result
+
+    def test_h3_header_uses_brand_color(self):
+        result = _md_to_styled_html("### Performance Overview", "#ff5500")
+        assert "<h3" in result
+        assert "#ff5500" in result
+        assert "Performance Overview" in result
+
+    def test_bullet_list_styled(self):
+        result = _md_to_styled_html("- item one\n- item two", "#3b82f6")
+        assert "<ul" in result
+        assert "<li" in result
+        assert "item one" in result
+        assert "item two" in result
+
+    def test_plain_text_wrapped_in_p(self):
+        result = _md_to_styled_html("Just plain text.", "#3b82f6")
+        assert "<p " in result
+        assert "Just plain text." in result
+        assert "color: #cbd5e1" in result
+
+    def test_italic_text_styled(self):
+        result = _md_to_styled_html("*muted note*", "#3b82f6")
+        assert "<em" in result
+        assert "color: #94a3b8" in result
+
+    def test_emoji_preserved_in_html(self):
+        """Emoji should pass through in HTML (only stripped in PDF)."""
+        result = _md_to_styled_html("### \U0001F4CA Overview", "#3b82f6")
+        assert "\U0001F4CA" in result
+
+    def test_multiple_paragraphs(self):
+        text = "First paragraph.\n\nSecond paragraph."
+        result = _md_to_styled_html(text, "#3b82f6")
+        assert "First paragraph." in result
+        assert "Second paragraph." in result
+        p_count = result.count("<p ")
+        assert p_count == 2
+
+    def test_old_plain_text_compat(self):
+        """Old summaries (plain text, no markdown) should render as <p> tags."""
+        text = "This is a legacy summary with no markdown formatting."
+        result = _md_to_styled_html(text, "#3b82f6")
+        assert "<p " in result
+        assert "legacy summary" in result
+
+
+# ---------------------------------------------------------------------------
+# _sanitize_for_pdf — emoji stripping
+# ---------------------------------------------------------------------------
+
+
+class TestSanitizeForPdfEmoji:
+    """Test that _sanitize_for_pdf strips emoji for Helvetica compatibility."""
+
+    def test_emoji_stripped(self):
+        result = _sanitize_for_pdf("\U0001F4CA Performance Overview")
+        assert "\U0001F4CA" not in result
+        assert "Performance Overview" in result
+
+    def test_multiple_emoji_stripped(self):
+        result = _sanitize_for_pdf("\U0001F680 Launching \U0001F4B0 Profits")
+        assert "\U0001F680" not in result
+        assert "\U0001F4B0" not in result
+        assert "Launching" in result
+        assert "Profits" in result
+
+    def test_plain_text_preserved(self):
+        result = _sanitize_for_pdf("No emoji here, just $100 profit.")
+        assert result == "No emoji here, just $100 profit."
+
+    def test_unicode_dashes_preserved_as_ascii(self):
+        """En-dash and em-dash should be replaced with ASCII equivalents."""
+        result = _sanitize_for_pdf("range \u2013 values \u2014 note")
+        assert "range - values -- note" == result
+
+    def test_smart_quotes_replaced(self):
+        result = _sanitize_for_pdf("\u201cquoted\u201d and \u2018single\u2019")
+        assert '"quoted"' in result
+        assert "'single'" in result
+
+
+# ---------------------------------------------------------------------------
+# _build_expenses_goal_card — Projections tab
+# ---------------------------------------------------------------------------
+
+
+def _make_expense_goal_with_projections(items, goal_id=1, coverage_pct=50.0):
+    """Create a goal dict with expense coverage data AND projection fields."""
+    g = _make_expense_goal(items, goal_id=goal_id, coverage_pct=coverage_pct)
+    # Add projection fields that come from report_data_service
+    g["current_daily_income"] = 0.39
+    g["projected_income"] = 11.70
+    g["projected_income_compound"] = 12.50
+    g["deposit_needed"] = 47244.83
+    g["deposit_needed_compound"] = 43000.00
+    g["sample_trades"] = 29
+    g["lookback_days_used"] = 31
+    return g
+
+
+class TestExpensesGoalCardProjections:
+    """Test the projections tab/section in expense goal card."""
+
+    def test_web_mode_has_projections_tab(self):
+        """In-app mode should show a Projections tab when data is present."""
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Projections" in html
+        assert "exp-tab-proj-" in html
+
+    def test_web_mode_projections_tab_has_radio(self):
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert 'id="exp-tab-proj-1"' in html
+
+    def test_email_mode_has_projections_section(self):
+        """Email mode should show stacked Projections section."""
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g, email_mode=True)
+        assert ">Projections</p>" in html
+
+    def test_projections_shows_daily_avg(self):
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Daily Avg Income" in html
+        assert "0.39" in html
+
+    def test_projections_shows_linear_after_tax(self):
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Linear Projection" in html
+        assert "(after tax)" in html
+
+    def test_projections_shows_compound_after_tax(self):
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Compound Projection" in html
+
+    def test_projections_shows_deposit_needed(self):
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Deposit Needed (Linear)" in html
+        assert "Deposit Needed (Compound)" in html
+        assert "47,244.83" in html
+        assert "43,000.00" in html
+
+    def test_projections_shows_trade_basis(self):
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "29 trades over 31 days" in html
+
+    def test_projections_shows_disclaimer(self):
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Past performance does not guarantee" in html
+
+    def test_no_projections_when_no_data(self):
+        """Without projection fields, no projections tab should appear."""
+        g = _make_expense_goal([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Projections" not in html
+        assert "exp-tab-proj-" not in html
+
+    def test_projections_css_rule_present(self):
+        """CSS rule for projections panel should use !important."""
+        g = _make_expense_goal_with_projections([
+            {"name": "Rent", "amount": 1500, "due_day": 28},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "exp-panel-proj-1" in html
+        assert "display: block !important" in html

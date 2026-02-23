@@ -15,8 +15,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-# Max tokens for summary generation (3 tiers @ ~300 words each)
-MAX_SUMMARY_TOKENS = 2048
+# Max tokens for summary generation (3 tiers with structured markdown sections)
+MAX_SUMMARY_TOKENS = 4096
+
+# System message for all AI providers — sets the role and output format
+_SYSTEM_MESSAGE = (
+    "You are a trading performance analyst writing structured report summaries. "
+    "Format your output using markdown: ### for section headers, **bold** for key "
+    "figures, - for bullet lists. Every summary MUST include these sections in order: "
+    "### Performance Overview, ### Goal Progress (if goal data is present), "
+    "### Capital Movements (if deposit/withdrawal data is present), "
+    "### Outlook & Action Items. Keep each section concise (2-4 sentences or a short "
+    "bullet list). Be factual — never invent data not provided."
+)
 
 # Delimiters used to split the AI response into tiers
 _DELIM_BEGINNER = "---BEGINNER---"
@@ -220,8 +231,7 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
             f"\n  - Prior account value: ${prior.get('account_value_usd', 0):,.2f}"
         )
 
-    return f"""You are a trading performance analyst. Analyze this trading report for \
-the period: {period_label}.
+    return f"""Analyze this trading report for the period: {period_label}.
 
 Report Data:
 - Account Value: ${data.get('account_value_usd', 0):,.2f} ({data.get('account_value_btc', 0):.6f} BTC)
@@ -232,20 +242,31 @@ Report Data:
 - Win Rate: {data.get('win_rate', 0):.1f}%
 {goals_section}{capital_section}{prior_section}
 
-Write THREE versions of a concise 3-5 paragraph summary, separated by the exact \
-delimiters shown below. Each version targets a different audience:
+Write THREE versions separated by the exact delimiters below. All versions MUST use \
+the same section structure (### headers in order), but pitched for different audiences.
+
+Formatting rules (apply to ALL tiers):
+- Use ### for section headers (### Performance Overview, ### Goal Progress, etc.)
+- Use **bold** for key figures and important numbers
+- Use - bullet lists for action items in the Outlook section
+- Keep each section concise: 2-4 sentences or a short bullet list
+- Only include ### Goal Progress if goal data is present above
+- Only include ### Capital Movements if deposit/withdrawal data is present above
 
 {_DELIM_BEGINNER}
-(For beginners: use plain language, explain any financial jargon, keep an encouraging \
-tone, avoid complex metrics. Focus on "what does this mean for me?")
+(For beginners: plain language, explain jargon, encouraging tone. Focus on \
+"what does this mean for me?" Use a few approachable symbols at section headers \
+for visual warmth — not childish or overloaded, just welcoming.)
 
 {_DELIM_COMFORTABLE}
-(For comfortable users: data-driven but approachable, highlight key trends, note goal \
-progress, suggest 1-2 actionable items. Professional but friendly tone.)
+(For comfortable users: data-driven but approachable, highlight key trends, note \
+goal progress, suggest 1-2 actionable items. Professional but friendly. Light use \
+of symbols at section headers only.)
 
 {_DELIM_EXPERIENCED}
 (For experienced traders: technical, concise, focus on alpha/risk metrics, win rate \
-analysis, period-over-period delta. Skip basic explanations.)
+analysis, period-over-period delta. Skip basic explanations. Professional — use \
+financial symbols (%, +/-, currency) but minimal decorative symbols.)
 
 Guidelines for ALL tiers:
 - Be factual — do not hallucinate data not provided above
@@ -264,6 +285,7 @@ async def _call_ai(client, provider: str, prompt: str) -> Optional[str]:
         response = await client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=MAX_SUMMARY_TOKENS,
+            system=_SYSTEM_MESSAGE,
             messages=[{"role": "user", "content": prompt}],
         )
         return response.content[0].text if response.content else None
@@ -272,12 +294,18 @@ async def _call_ai(client, provider: str, prompt: str) -> Optional[str]:
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=MAX_SUMMARY_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": _SYSTEM_MESSAGE},
+                {"role": "user", "content": prompt},
+            ],
         )
         return response.choices[0].message.content if response.choices else None
 
     elif provider == "gemini":
-        model_instance = client.GenerativeModel("gemini-2.0-flash")
+        model_instance = client.GenerativeModel(
+            "gemini-2.0-flash",
+            system_instruction=_SYSTEM_MESSAGE,
+        )
         response = await model_instance.generate_content_async(prompt)
         return response.text if response else None
 

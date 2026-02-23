@@ -424,6 +424,16 @@ async def _compute_expenses_goal_progress(
         expense_items, expense_period, projected_income, tax_pct,
     )
 
+    # Compound projection (same formula as income goal)
+    projected_income_compound = 0.0
+    deposit_needed_compound = None
+    daily_return_rate = 0.0
+    if account_value > 0 and daily_income > 0:
+        daily_return_rate = daily_income / account_value
+        projected_income_compound = account_value * (
+            (1 + daily_return_rate) ** period_days - 1
+        )
+
     # Deposit needed: how much additional capital to generate enough
     # after-tax income to cover the shortfall, based on past return rate.
     # Formula: shortfall / ((1 - tax_pct/100) * daily_return_rate * period_days)
@@ -431,7 +441,6 @@ async def _compute_expenses_goal_progress(
     deposit_partial = None
     deposit_next = None
     if account_value > 0 and daily_income > 0:
-        daily_return_rate = daily_income / account_value
         after_tax_factor = (1 - tax_pct / 100) if tax_pct < 100 else 0
         denominator = daily_return_rate * period_days * after_tax_factor
         if denominator > 0:
@@ -447,6 +456,19 @@ async def _compute_expenses_goal_progress(
             next_amt = coverage.get("next_uncovered_amount")
             if next_amt:
                 deposit_next = round(next_amt / denominator, 8 if is_btc else 2)
+
+        # Deposit needed (compound): target / ((1+r)^n - 1) - account_value
+        compound_factor = (1 + daily_return_rate) ** period_days - 1
+        total_expenses = coverage.get("total_expenses", 0)
+        if compound_factor > 0 and after_tax_factor > 0 and total_expenses > 0:
+            compound_income_at = projected_income_compound * after_tax_factor
+            if compound_income_at < total_expenses:
+                needed = (
+                    total_expenses / (compound_factor * after_tax_factor)
+                ) - account_value
+                deposit_needed_compound = round(
+                    max(needed, 0), 8 if is_btc else 2,
+                )
 
     precision = 8 if is_btc else 2
     progress_pct = coverage["coverage_pct"]
@@ -467,10 +489,13 @@ async def _compute_expenses_goal_progress(
         "tax_withholding_pct": tax_pct,
         "expense_coverage": coverage,
         "projected_income": round(projected_income, precision),
+        "current_daily_income": round(daily_income, precision),
+        "projected_income_compound": round(projected_income_compound, precision),
         "deposit_needed": deposit_needed,
+        "deposit_needed_compound": deposit_needed_compound,
         "deposit_partial": deposit_partial,
         "deposit_next": deposit_next,
-        "daily_return_rate": round(daily_income / account_value, 6) if account_value > 0 else None,
+        "daily_return_rate": round(daily_return_rate, 6) if account_value > 0 else None,
         "lookback_days_used": lookback_days_actual,
         "sample_trades": sample_trades,
     }
