@@ -535,6 +535,13 @@ def _build_income_goal_card(g: Dict[str, Any]) -> str:
         </div>"""
 
 
+_DOW_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+_MONTH_ABBREVS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
+
+
 def _ordinal_day(day: int) -> str:
     """Render a due day as ordinal ('1st', '15th') or 'Last' for -1."""
     if day == -1:
@@ -544,6 +551,21 @@ def _ordinal_day(day: int) -> str:
     else:
         suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
     return f"{day}{suffix}"
+
+
+def _format_due_label(item: dict) -> str:
+    """Format a human-readable due label for an expense item."""
+    dd = item.get("due_day")
+    if dd is None:
+        return ""
+    freq = item.get("frequency", "monthly")
+    if freq in ("weekly", "biweekly"):
+        return _DOW_NAMES[dd] if 0 <= dd <= 6 else str(dd)
+    dm = item.get("due_month")
+    day_str = _ordinal_day(dd)
+    if freq in ("quarterly", "semi_annual", "yearly") and dm and 1 <= dm <= 12:
+        return f"{_MONTH_ABBREVS[dm - 1]} {day_str}"
+    return day_str
 
 
 def _build_expense_status_badge(item: dict) -> str:
@@ -561,6 +583,19 @@ def _build_expense_status_badge(item: dict) -> str:
         f' padding: 1px 6px; border-radius: 4px; font-size: 10px;'
         f' font-weight: 600;">{badge_text}</span>'
     )
+
+
+def _expense_name_html(item: dict, color: str = "#f1f5f9") -> str:
+    """Render expense name, linked to login_url if set."""
+    name = item.get("name", "")
+    url = item.get("login_url")
+    if url:
+        return (
+            f'<a href="{url}" target="_blank" rel="noopener noreferrer"'
+            f' style="color: {color}; text-decoration: underline;'
+            f' text-decoration-color: #475569;">{name}</a>'
+        )
+    return name
 
 
 def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
@@ -594,7 +629,7 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
                 <td style="padding: 4px 0; color: #94a3b8; font-size: 11px;">
                     {item.get('category', '')}</td>
                 <td style="padding: 4px 0; color: #f1f5f9; font-size: 12px;">
-                    {item.get('name', '')}</td>
+                    {_expense_name_html(item)}</td>
                 <td style="padding: 4px 0; color: #f1f5f9; text-align: right; font-size: 12px;">
                     {prefix}{norm:{fmt}}</td>
                 <td style="padding: 4px 6px; text-align: center;">
@@ -692,20 +727,48 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
     # ---- Upcoming tab content ----
     now = _dt.utcnow()
     today_day = now.day
+    current_month = now.month
+    today_dow = now.weekday()  # 0=Mon, 6=Sun
     last_day_of_month = calendar.monthrange(now.year, now.month)[1]
+
+    _MULTI_MONTH_FREQS = {"quarterly", "semi_annual", "yearly"}
+    _WEEKLY_FREQS = {"weekly", "biweekly"}
 
     upcoming_items = []
     for item in items:
         dd = item.get("due_day")
         if dd is None:
             continue
+        freq = item.get("frequency", "monthly")
+        dm = item.get("due_month")
+
+        if freq in _WEEKLY_FREQS:
+            # Day of week (0=Mon..6=Sun) — always upcoming
+            # Sort key: days until next occurrence this week
+            days_until = (dd - today_dow) % 7
+            upcoming_items.append((days_until, dd, item))
+            continue
+
+        # For multi-month frequencies, check if this item is due this month
+        if freq in _MULTI_MONTH_FREQS and dm is not None:
+            if freq == "yearly" and current_month != dm:
+                continue
+            elif freq == "semi_annual":
+                if current_month not in (dm, ((dm + 5) % 12) + 1):
+                    continue
+            elif freq == "quarterly":
+                quarter_months = {((dm - 1 + 3 * i) % 12) + 1 for i in range(4)}
+                if current_month not in quarter_months:
+                    continue
+
         resolved = last_day_of_month if dd == -1 else min(dd, last_day_of_month)
         if resolved >= today_day:
             upcoming_items.append((resolved, dd, item))
 
     upcoming_items.sort(key=lambda x: x[0])
 
-    if not upcoming_items and not any(item.get("due_day") is not None for item in items):
+    has_any_due_day = any(item.get("due_day") is not None for item in items)
+    if not upcoming_items and not has_any_due_day:
         upcoming_content = (
             '<p style="color: #64748b; font-size: 12px; text-align: center; padding: 16px 0;">'
             'Set due dates on your expenses to see upcoming bills</p>'
@@ -713,20 +776,21 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
     elif not upcoming_items:
         upcoming_content = (
             '<p style="color: #64748b; font-size: 12px; text-align: center; padding: 16px 0;">'
-            'All expenses with due dates have passed for this month</p>'
+            'No upcoming expenses due this month</p>'
         )
     else:
         upcoming_rows = ""
-        for resolved, dd, item in upcoming_items:
+        for _, dd, item in upcoming_items:
             norm = item.get("normalized_amount", 0)
+            due_label = _format_due_label(item)
             upcoming_rows += f"""
                 <tr>
                     <td style="padding: 4px 0; color: #e2e8f0; font-size: 12px;
-                               font-weight: 600;">{_ordinal_day(dd)}</td>
+                               font-weight: 600;">{due_label}</td>
                     <td style="padding: 4px 0; color: #94a3b8; font-size: 11px;">
                         {item.get('category', '')}</td>
                     <td style="padding: 4px 0; color: #f1f5f9; font-size: 12px;">
-                        {item.get('name', '')}</td>
+                        {_expense_name_html(item)}</td>
                     <td style="padding: 4px 0; color: #f1f5f9; text-align: right; font-size: 12px;">
                         {prefix}{norm:{fmt}}</td>
                     <td style="padding: 4px 6px; text-align: center;">

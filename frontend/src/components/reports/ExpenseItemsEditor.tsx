@@ -29,6 +29,33 @@ const FREQ_LABELS: Record<string, string> = {
   monthly: '/mo', quarterly: '/qtr', semi_annual: '/6mo', yearly: '/yr',
 }
 
+const DAY_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+const MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+function ordinalDay(d: number): string {
+  if (d === -1) return 'last'
+  if (d >= 11 && d <= 13) return `${d}th`
+  const s = { 1: 'st', 2: 'nd', 3: 'rd' }[d % 10] || 'th'
+  return `${d}${s}`
+}
+
+function formatDueBadge(item: ExpenseItem): string | null {
+  if (item.due_day == null) return null
+  const freq = item.frequency
+  if (freq === 'weekly' || freq === 'biweekly') {
+    return `Due ${DAY_OF_WEEK[item.due_day] ?? '?'}`
+  }
+  const dayPart = ordinalDay(item.due_day)
+  if ((freq === 'quarterly' || freq === 'semi_annual' || freq === 'yearly') && item.due_month) {
+    return `Due ${MONTH_NAMES[item.due_month - 1]} ${dayPart}`
+  }
+  return `Due ${dayPart}`
+}
+
 export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }: ExpenseItemsEditorProps) {
   const queryClient = useQueryClient()
   const prefix = currency === 'BTC' ? '' : '$'
@@ -59,6 +86,16 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
   const [frequencyN, setFrequencyN] = useState('')
   const [dueDay, setDueDay] = useState('')
   const [dueDayLast, setDueDayLast] = useState(false)
+  const [dueMonth, setDueMonth] = useState('')
+  const [dueDow, setDueDow] = useState('')  // day of week (0-6) for weekly/biweekly
+  const [anchor, setAnchor] = useState('')  // start date for biweekly
+  const [loginUrl, setLoginUrl] = useState('')
+
+  const needsMonth = frequency === 'quarterly' || frequency === 'semi_annual' || frequency === 'yearly'
+  const needsDow = frequency === 'weekly' || frequency === 'biweekly'
+  const needsDom = frequency === 'monthly' || frequency === 'semi_monthly' || needsMonth
+  const needsAnchor = frequency === 'biweekly'
+  const showDueSection = needsDow || needsDom
 
   const resetForm = () => {
     setCategory('')
@@ -69,6 +106,10 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     setFrequencyN('')
     setDueDay('')
     setDueDayLast(false)
+    setDueMonth('')
+    setDueDow('')
+    setAnchor('')
+    setLoginUrl('')
     setEditing(null)
     setShowForm(false)
   }
@@ -81,16 +122,29 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
       setAmount(String(editing.amount))
       setFrequency(editing.frequency)
       setFrequencyN(editing.frequency_n ? String(editing.frequency_n) : '')
-      if (editing.due_day === -1) {
+      setAnchor(editing.frequency_anchor || '')
+
+      const isWeeklyType = editing.frequency === 'weekly' || editing.frequency === 'biweekly'
+      if (isWeeklyType) {
+        setDueDow(editing.due_day != null ? String(editing.due_day) : '')
+        setDueDay('')
+        setDueDayLast(false)
+      } else if (editing.due_day === -1) {
         setDueDayLast(true)
         setDueDay('')
-      } else if (editing.due_day) {
+        setDueDow('')
+      } else if (editing.due_day != null) {
         setDueDayLast(false)
         setDueDay(String(editing.due_day))
+        setDueDow('')
       } else {
         setDueDayLast(false)
         setDueDay('')
+        setDueDow('')
       }
+
+      setDueMonth(editing.due_month ? String(editing.due_month) : '')
+      setLoginUrl(editing.login_url || '')
       setShowForm(true)
     }
   }, [editing, categories])
@@ -126,10 +180,24 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     if (frequency === 'every_n_days') {
       data.frequency_n = parseInt(frequencyN)
     }
-    if (dueDayLast) {
-      data.due_day = -1
-    } else if (dueDay) {
-      data.due_day = parseInt(dueDay)
+    // Due date — frequency-aware
+    if (needsDow && dueDow !== '') {
+      data.due_day = parseInt(dueDow)
+    } else if (needsDom) {
+      if (dueDayLast) {
+        data.due_day = -1
+      } else if (dueDay) {
+        data.due_day = parseInt(dueDay)
+      }
+    }
+    if (needsMonth && dueMonth) {
+      data.due_month = parseInt(dueMonth)
+    }
+    if (needsAnchor && anchor) {
+      data.frequency_anchor = anchor
+    }
+    if (loginUrl.trim()) {
+      data.login_url = loginUrl.trim()
     }
     if (editing) {
       updateItem.mutate({ id: editing.id, data })
@@ -143,6 +211,9 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
   const pillBase = 'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors'
   const pillActive = 'bg-blue-600 border-blue-500 text-white'
   const pillInactive = 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'
+
+  const inputCls = 'px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white'
+    + ' focus:outline-none focus:border-blue-500'
 
   const expenseForm = (
     <form onSubmit={handleSubmit} className="bg-slate-700/30 rounded-lg p-4 space-y-3 border border-slate-600">
@@ -162,7 +233,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
             value={category}
             onChange={e => setCategory(e.target.value)}
             required
-            className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
+            className={`w-full ${inputCls}`}
           >
             <option value="">Select...</option>
             {categories.map(c => (
@@ -177,7 +248,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
               onChange={e => setCustomCategory(e.target.value)}
               placeholder="Category name"
               required
-              className="w-full mt-1 px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              className={`w-full mt-1 ${inputCls} placeholder-slate-500`}
             />
           )}
         </div>
@@ -189,7 +260,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Netflix"
             required
-            className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            className={`w-full ${inputCls} placeholder-slate-500`}
           />
         </div>
       </div>
@@ -204,7 +275,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
           onChange={e => setAmount(e.target.value)}
           required
           min="0"
-          className="w-full px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
+          className={`w-full ${inputCls}`}
         />
       </div>
 
@@ -232,44 +303,107 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
               onChange={e => setFrequencyN(e.target.value)}
               required
               min="1"
-              className="w-20 px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
+              className={`w-20 ${inputCls}`}
             />
             <span className="text-xs text-slate-400">days</span>
           </div>
         )}
       </div>
 
-      {/* Due day */}
-      <div>
-        <label className="block text-xs text-slate-400 mb-1.5">Due Day (optional)</label>
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            value={dueDay}
-            onChange={e => setDueDay(e.target.value)}
-            min="1"
-            max="31"
-            disabled={dueDayLast}
-            placeholder="1-31"
-            className="w-20 px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-40"
-          />
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={dueDayLast}
-              onChange={e => { setDueDayLast(e.target.checked); if (e.target.checked) setDueDay('') }}
-              className="rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-            />
-            <span className="text-xs text-slate-400">Last day of month</span>
+      {/* Due date — frequency-aware */}
+      {showDueSection && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-1.5">
+            Due Date (optional)
           </label>
+
+          {/* Weekly / Biweekly: day of week pills */}
+          {needsDow && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {DAY_OF_WEEK.map((d, i) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDueDow(dueDow === String(i) ? '' : String(i))}
+                    className={`${pillBase} ${dueDow === String(i) ? pillActive : pillInactive}`}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              {needsAnchor && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Starting from</span>
+                  <input
+                    type="date"
+                    value={anchor}
+                    onChange={e => setAnchor(e.target.value)}
+                    className={`${inputCls} text-xs`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Monthly+ frequencies: day of month + optional month */}
+          {needsDom && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {needsMonth && (
+                <select
+                  value={dueMonth}
+                  onChange={e => setDueMonth(e.target.value)}
+                  className={`w-24 ${inputCls}`}
+                >
+                  <option value="">Month</option>
+                  {MONTH_NAMES.map((m, i) => (
+                    <option key={m} value={i + 1}>{m}</option>
+                  ))}
+                </select>
+              )}
+              <input
+                type="number"
+                value={dueDay}
+                onChange={e => setDueDay(e.target.value)}
+                min="1"
+                max="31"
+                disabled={dueDayLast}
+                placeholder="Day"
+                className={`w-20 ${inputCls} placeholder-slate-500 disabled:opacity-40`}
+              />
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={dueDayLast}
+                  onChange={e => { setDueDayLast(e.target.checked); if (e.target.checked) setDueDay('') }}
+                  className="rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
+                />
+                <span className="text-xs text-slate-400">Last day</span>
+              </label>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Login URL */}
+      <div>
+        <label className="block text-xs text-slate-400 mb-1">Login / Payment URL (optional)</label>
+        <input
+          type="url"
+          value={loginUrl}
+          onChange={e => setLoginUrl(e.target.value)}
+          placeholder="https://..."
+          className={`w-full ${inputCls} placeholder-slate-500`}
+        />
       </div>
 
       <div className="flex justify-end">
         <button
           type="submit"
-          disabled={createItem.isPending || updateItem.isPending || !name || !amount || (!category || (category === '__custom__' && !customCategory))}
-          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+          disabled={createItem.isPending || updateItem.isPending || !name || !amount
+            || (!category || (category === '__custom__' && !customCategory))}
+          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium
+            rounded transition-colors"
         >
           {(createItem.isPending || updateItem.isPending) ? 'Saving...' : editing ? 'Update' : 'Add'}
         </button>
@@ -279,7 +413,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="w-full max-w-2xl bg-slate-800 rounded-lg shadow-2xl border border-slate-700 max-h-[85vh] flex flex-col relative">
+      <div className="w-full max-w-2xl bg-slate-800 rounded-lg shadow-2xl border border-slate-700 max-h-[85vh]
+        flex flex-col relative">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <h3 className="text-lg font-semibold text-white">Manage Expenses</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
@@ -297,48 +432,56 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
             </div>
           ) : (
             <div className="space-y-2">
-              {items.map(item => (
-                <div key={item.id}
-                  className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg border border-slate-600">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
-                        {item.category}
-                      </span>
-                      <span className="font-medium text-white truncate">{item.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-                      <span>{prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}</span>
-                      {item.frequency === 'every_n_days' && item.frequency_n && (
-                        <span>(every {item.frequency_n} days)</span>
-                      )}
-                      {item.due_day != null && (
-                        <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
-                          Due {item.due_day === -1 ? 'last' : `${item.due_day}${item.due_day === 1 || item.due_day === 21 || item.due_day === 31 ? 'st' : item.due_day === 2 || item.due_day === 22 ? 'nd' : item.due_day === 3 || item.due_day === 23 ? 'rd' : 'th'}`}
+              {items.map(item => {
+                const badge = formatDueBadge(item)
+                return (
+                  <div key={item.id}
+                    className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg border
+                      border-slate-600">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
+                          {item.category}
                         </span>
-                      )}
-                      <span className="text-slate-500">|</span>
-                      <span className="text-blue-400">
-                        {prefix}{(item.normalized_amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}{periodLabel}
-                      </span>
+                        <span className="font-medium text-white truncate">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                        <span>
+                          {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
+                        </span>
+                        {item.frequency === 'every_n_days' && item.frequency_n && (
+                          <span>(every {item.frequency_n} days)</span>
+                        )}
+                        {badge && (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
+                            {badge}
+                          </span>
+                        )}
+                        <span className="text-slate-500">|</span>
+                        <span className="text-blue-400">
+                          {prefix}{(item.normalized_amount || 0).toLocaleString(
+                            undefined, { maximumFractionDigits: 2 }
+                          )}{periodLabel}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 ml-2">
+                      <button
+                        onClick={() => setEditing(item)}
+                        className="p-1.5 text-slate-400 hover:text-white transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => { if (confirm('Delete this expense?')) deleteItem.mutate(item.id) }}
+                        className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 ml-2">
-                    <button
-                      onClick={() => setEditing(item)}
-                      className="p-1.5 text-slate-400 hover:text-white transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => { if (confirm('Delete this expense?')) deleteItem.mutate(item.id) }}
-                      className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -356,7 +499,9 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
           {!showForm && (
             <button
               onClick={() => { resetForm(); setShowForm(true) }}
-              className="w-full py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:text-white hover:border-slate-500 transition-colors flex items-center justify-center gap-2 text-sm"
+              className="w-full py-2 border border-dashed border-slate-600 rounded-lg text-slate-400
+                hover:text-white hover:border-slate-500 transition-colors flex items-center justify-center
+                gap-2 text-sm"
             >
               <Plus className="w-4 h-4" /> Add Expense
             </button>

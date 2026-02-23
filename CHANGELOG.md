@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.39.0] - 2026-02-23
+
+### Added
+- **Expense due month**: Quarterly, semi-annual, and yearly expenses now support a due month selector so you can specify exactly when they're due (e.g., March 15th for annual insurance)
+- **Day-of-week selector**: Weekly and biweekly expenses now show pill buttons to pick which day of the week they're due (Mon–Sun)
+- **Biweekly start date**: Biweekly expenses can set a calendar anchor date so the "upcoming" tab knows which weeks they fall on
+- **Expense login URLs**: Add an optional login URL to any expense — clicking the expense name in the HTML report opens the payment/login page in a new tab
+- **Smart upcoming tab**: Upcoming expenses tab now handles weekly, biweekly, and multi-month frequencies correctly — not just monthly
+
 ## [v2.38.0] - 2026-02-22
 
 ### Added

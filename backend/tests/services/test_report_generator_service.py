@@ -17,6 +17,8 @@ import pytest
 from app.services.report_generator_service import (
     _build_expenses_goal_card,
     _build_tabbed_ai_section,
+    _expense_name_html,
+    _format_due_label,
     _normalize_ai_summary,
     _ordinal_day,
     build_report_html,
@@ -615,6 +617,8 @@ def _make_expense_goal(items, goal_id=1, coverage_pct=100.0):
             "amount": item.get("amount", norm),
             "frequency": item.get("frequency", "monthly"),
             "due_day": item.get("due_day"),
+            "due_month": item.get("due_month"),
+            "login_url": item.get("login_url"),
             "normalized_amount": norm,
             "status": item.get("status", "covered"),
             "coverage_pct": item.get("coverage_pct_val", 100.0),
@@ -737,3 +741,106 @@ class TestBuildExpensesGoalCardTabs:
         html = _build_expenses_goal_card(g)
         # The upcoming panel should contain the Uncovered badge
         assert "Uncovered" in html
+
+    def test_weekly_item_shows_day_of_week(self):
+        """Weekly items should show day-of-week names in upcoming tab."""
+        g = _make_expense_goal([
+            {"name": "Groceries", "amount": 100, "frequency": "weekly", "due_day": 4},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert "Fri" in html  # 4 = Friday
+
+    def test_yearly_item_with_month(self):
+        """Yearly items should show month + day in upcoming tab."""
+        g = _make_expense_goal([
+            {"name": "Insurance", "amount": 1200, "frequency": "yearly",
+             "due_day": 15, "due_month": 6},
+        ])
+        html = _build_expenses_goal_card(g)
+        # Whether it appears in upcoming depends on current month,
+        # but the card should always render without error
+        assert "Insurance" in html
+
+
+# ---------------------------------------------------------------------------
+# _format_due_label helper
+# ---------------------------------------------------------------------------
+
+
+class TestFormatDueLabel:
+    """Test the due label formatting helper."""
+
+    def test_monthly_day(self):
+        assert _format_due_label({"due_day": 15, "frequency": "monthly"}) == "15th"
+
+    def test_monthly_last(self):
+        assert _format_due_label({"due_day": -1, "frequency": "monthly"}) == "Last"
+
+    def test_weekly_monday(self):
+        assert _format_due_label({"due_day": 0, "frequency": "weekly"}) == "Mon"
+
+    def test_weekly_friday(self):
+        assert _format_due_label({"due_day": 4, "frequency": "weekly"}) == "Fri"
+
+    def test_biweekly_sunday(self):
+        assert _format_due_label({"due_day": 6, "frequency": "biweekly"}) == "Sun"
+
+    def test_yearly_with_month(self):
+        label = _format_due_label(
+            {"due_day": 1, "due_month": 3, "frequency": "yearly"}
+        )
+        assert label == "Mar 1st"
+
+    def test_quarterly_with_month(self):
+        label = _format_due_label(
+            {"due_day": -1, "due_month": 6, "frequency": "quarterly"}
+        )
+        assert label == "Jun Last"
+
+    def test_no_due_day(self):
+        assert _format_due_label({"frequency": "monthly"}) == ""
+
+    def test_none_due_day(self):
+        assert _format_due_label({"due_day": None, "frequency": "monthly"}) == ""
+
+
+# ---------------------------------------------------------------------------
+# _expense_name_html — login URL linking
+# ---------------------------------------------------------------------------
+
+
+class TestExpenseNameHtml:
+    """Test expense name rendering with optional login URL."""
+
+    def test_plain_name_no_url(self):
+        result = _expense_name_html({"name": "Netflix"})
+        assert result == "Netflix"
+        assert "<a " not in result
+
+    def test_name_with_url_renders_link(self):
+        result = _expense_name_html(
+            {"name": "Netflix", "login_url": "https://netflix.com/login"}
+        )
+        assert "<a " in result
+        assert 'href="https://netflix.com/login"' in result
+        assert 'target="_blank"' in result
+        assert "Netflix" in result
+
+    def test_link_has_noopener(self):
+        result = _expense_name_html(
+            {"name": "X", "login_url": "https://example.com"}
+        )
+        assert "noopener" in result
+
+    def test_login_url_none(self):
+        result = _expense_name_html({"name": "Rent", "login_url": None})
+        assert result == "Rent"
+
+    def test_login_url_in_card_coverage_tab(self):
+        g = _make_expense_goal([
+            {"name": "Netflix", "amount": 15, "due_day": 15,
+             "login_url": "https://netflix.com/login"},
+        ])
+        html = _build_expenses_goal_card(g)
+        assert 'href="https://netflix.com/login"' in html
+        assert 'target="_blank"' in html

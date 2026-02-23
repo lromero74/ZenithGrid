@@ -284,6 +284,30 @@ class TestComputeExpenseCoverageDueDay:
         assert result["items"][0]["name"] == "Netflix"
         assert result["items"][1]["name"] == "Rent"
 
+    def test_due_month_included_in_output(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Insurance", 600, "quarterly", due_day=15, due_month=3)]
+        result = compute_expense_coverage(items, "monthly", 1000.0, 0.0)
+        assert result["items"][0]["due_month"] == 3
+
+    def test_due_month_none_when_not_set(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Rent", 1500, "monthly", due_day=1)]
+        result = compute_expense_coverage(items, "monthly", 2000.0, 0.0)
+        assert result["items"][0]["due_month"] is None
+
+    def test_login_url_included_in_output(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Netflix", 15, "monthly", login_url="https://netflix.com/login")]
+        result = compute_expense_coverage(items, "monthly", 100.0, 0.0)
+        assert result["items"][0]["login_url"] == "https://netflix.com/login"
+
+    def test_login_url_none_when_not_set(self):
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Rent", 1500, "monthly")]
+        result = compute_expense_coverage(items, "monthly", 2000.0, 0.0)
+        assert result["items"][0]["login_url"] is None
+
 
 class TestDefaultExpenseCategories:
     """Verify the default category list."""
@@ -299,7 +323,8 @@ class TestDefaultExpenseCategories:
 # ----- Helpers -----
 
 def _mock_item(name: str, amount: float, frequency: str,
-               frequency_n: int = None, due_day: int = None):
+               frequency_n: int = None, due_day: int = None,
+               due_month: int = None, login_url: str = None):
     """Create a mock expense item for testing."""
     item = MagicMock()
     item.name = name
@@ -308,5 +333,7 @@ def _mock_item(name: str, amount: float, frequency: str,
     item.frequency = frequency
     item.frequency_n = frequency_n
     item.due_day = due_day
+    item.due_month = due_month
+    item.login_url = login_url
     item.is_active = True
     return item
