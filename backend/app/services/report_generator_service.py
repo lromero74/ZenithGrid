@@ -556,19 +556,77 @@ def _ordinal_day(day: int) -> str:
     return f"{day}{suffix}"
 
 
+def _next_biweekly_date(anchor_str: str, dow: int, today: datetime) -> datetime:
+    """Find the next biweekly occurrence of `dow` based on anchor date.
+
+    Args:
+        anchor_str: ISO date string (YYYY-MM-DD) for the anchor/start date.
+        dow: Day of week (0=Mon..6=Sun).
+        today: Current datetime (only date part used).
+    """
+    anchor = datetime.strptime(anchor_str, "%Y-%m-%d")
+    # If anchor hasn't started yet, return it
+    if today.replace(hour=0, minute=0, second=0, microsecond=0) < anchor:
+        return anchor
+    # Find next occurrence of dow from today
+    days_until = (dow - today.weekday()) % 7
+    candidate = today.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=days_until)
+    # Check week parity relative to anchor
+    weeks_diff = (candidate - anchor).days // 7
+    if weeks_diff % 2 != 0:
+        # Off-week — push 7 days forward
+        candidate += timedelta(days=7)
+    return candidate
+
+
+def _next_every_n_days_date(anchor_str: str, n: int, today: datetime) -> datetime:
+    """Find the next every-N-days occurrence based on anchor date.
+
+    Args:
+        anchor_str: ISO date string (YYYY-MM-DD) for the anchor/start date.
+        n: Number of days between occurrences.
+        today: Current datetime (only date part used).
+    """
+    import math
+    anchor = datetime.strptime(anchor_str, "%Y-%m-%d")
+    today_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    # If anchor hasn't started yet, return it
+    if today_date < anchor:
+        return anchor
+    days_elapsed = (today_date - anchor).days
+    # ceil to find next multiple of n that's >= days_elapsed
+    cycles = math.ceil(days_elapsed / n)
+    return anchor + timedelta(days=cycles * n)
+
+
 def _format_due_label(item: dict, now: Optional[datetime] = None) -> str:
     """Format a human-readable due label for an expense item."""
+    freq = item.get("frequency", "monthly")
     dd = item.get("due_day")
+    anchor = item.get("frequency_anchor")
+
+    # every_n_days: compute from anchor, no due_day needed
+    if freq == "every_n_days" and anchor and item.get("frequency_n"):
+        if not now:
+            return ""
+        next_dt = _next_every_n_days_date(anchor, item["frequency_n"], now)
+        return f"{_MONTH_ABBREVS[next_dt.month - 1]} {_ordinal_day(next_dt.day)}"
+
     if dd is None:
         return ""
-    freq = item.get("frequency", "monthly")
+
     if freq in ("weekly", "biweekly"):
         dow_name = _DOW_NAMES[dd] if 0 <= dd <= 6 else str(dd)
         if now and 0 <= dd <= 6:
-            days_until = (dd - now.weekday()) % 7
-            next_date = now + timedelta(days=days_until)
+            # Use anchor-aware calc for biweekly if anchor is set
+            if freq == "biweekly" and anchor:
+                next_date = _next_biweekly_date(anchor, dd, now)
+            else:
+                days_until = (dd - now.weekday()) % 7
+                next_date = now + timedelta(days=days_until)
             return f"{dow_name} {_ordinal_day(next_date.day)}"
         return dow_name
+
     dm = item.get("due_month")
     day_str = _ordinal_day(dd)
     if freq in ("quarterly", "semi_annual", "yearly") and dm and 1 <= dm <= 12:
@@ -745,15 +803,29 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
     upcoming_items = []
     for item in items:
         dd = item.get("due_day")
+        freq = item.get("frequency", "monthly")
+        anchor = item.get("frequency_anchor")
+
+        # every_n_days: compute from anchor, no due_day needed
+        if freq == "every_n_days" and anchor and item.get("frequency_n"):
+            next_dt = _next_every_n_days_date(anchor, item["frequency_n"], now)
+            days_until = (next_dt - now.replace(hour=0, minute=0, second=0, microsecond=0)).days
+            if 0 <= days_until <= 30:
+                upcoming_items.append((days_until, dd, item))
+            continue
+
         if dd is None:
             continue
-        freq = item.get("frequency", "monthly")
+
         dm = item.get("due_month")
 
         if freq in _WEEKLY_FREQS:
-            # Day of week (0=Mon..6=Sun) — always upcoming
-            # Sort key: days until next occurrence this week
-            days_until = (dd - today_dow) % 7
+            # Use anchor-aware calc for biweekly
+            if freq == "biweekly" and anchor:
+                next_dt = _next_biweekly_date(anchor, dd, now)
+                days_until = (next_dt - now.replace(hour=0, minute=0, second=0, microsecond=0)).days
+            else:
+                days_until = (dd - today_dow) % 7
             upcoming_items.append((days_until, dd, item))
             continue
 
@@ -775,7 +847,11 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
 
     upcoming_items.sort(key=lambda x: x[0])
 
-    has_any_due_day = any(item.get("due_day") is not None for item in items)
+    has_any_due_day = any(
+        item.get("due_day") is not None
+        or (item.get("frequency") == "every_n_days" and item.get("frequency_anchor"))
+        for item in items
+    )
     if not upcoming_items and not has_any_due_day:
         upcoming_content = (
             '<p style="color: #64748b; font-size: 12px; text-align: center; padding: 16px 0;">'

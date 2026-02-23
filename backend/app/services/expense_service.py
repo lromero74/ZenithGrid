@@ -105,6 +105,8 @@ def compute_expense_coverage(
             "frequency": item.frequency,
             "due_day": getattr(item, "due_day", None),
             "due_month": getattr(item, "due_month", None),
+            "frequency_anchor": getattr(item, "frequency_anchor", None),
+            "frequency_n": getattr(item, "frequency_n", None),
             "login_url": getattr(item, "login_url", None),
             "normalized_amount": round(norm_amount, 2),
         })
