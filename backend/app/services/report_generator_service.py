@@ -10,7 +10,7 @@ uses the brand's primary accent color instead of hardcoded blue.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 from app.services.brand_service import get_brand
@@ -89,7 +89,9 @@ def build_report_html(
     brand_color = b["colors"]["primary"]
 
     metrics_html = _build_metrics_section(report_data)
-    goals_html = _build_goals_section(report_data.get("goals", []), brand_color)
+    goals_html = _build_goals_section(
+        report_data.get("goals", []), brand_color, email_mode=email_mode,
+    )
     comparison_html = _build_comparison_section(report_data)
 
     tiered = _normalize_ai_summary(ai_summary)
@@ -385,6 +387,7 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
 
 def _build_goals_section(
     goals: List[Dict[str, Any]], brand_color: str = "#3b82f6",
+    email_mode: bool = False,
 ) -> str:
     """Goal progress bars with optional trend charts."""
     if not goals:
@@ -395,7 +398,7 @@ def _build_goals_section(
         if g.get("target_type") == "income":
             goal_rows += _build_income_goal_card(g)
         elif g.get("target_type") == "expenses":
-            goal_rows += _build_expenses_goal_card(g)
+            goal_rows += _build_expenses_goal_card(g, email_mode=email_mode)
         else:
             goal_rows += _build_standard_goal_card(g, brand_color)
 
@@ -553,14 +556,19 @@ def _ordinal_day(day: int) -> str:
     return f"{day}{suffix}"
 
 
-def _format_due_label(item: dict) -> str:
+def _format_due_label(item: dict, now: Optional[datetime] = None) -> str:
     """Format a human-readable due label for an expense item."""
     dd = item.get("due_day")
     if dd is None:
         return ""
     freq = item.get("frequency", "monthly")
     if freq in ("weekly", "biweekly"):
-        return _DOW_NAMES[dd] if 0 <= dd <= 6 else str(dd)
+        dow_name = _DOW_NAMES[dd] if 0 <= dd <= 6 else str(dd)
+        if now and 0 <= dd <= 6:
+            days_until = (dd - now.weekday()) % 7
+            next_date = now + timedelta(days=days_until)
+            return f"{dow_name} {_ordinal_day(next_date.day)}"
+        return dow_name
     dm = item.get("due_month")
     day_str = _ordinal_day(dd)
     if freq in ("quarterly", "semi_annual", "yearly") and dm and 1 <= dm <= 12:
@@ -598,7 +606,7 @@ def _expense_name_html(item: dict, color: str = "#f1f5f9") -> str:
     return name
 
 
-def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
+def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> str:
     """Expenses goal card with Coverage + Upcoming tabs."""
     import calendar
     from datetime import datetime as _dt
@@ -782,7 +790,7 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
         upcoming_rows = ""
         for _, dd, item in upcoming_items:
             norm = item.get("normalized_amount", 0)
-            due_label = _format_due_label(item)
+            due_label = _format_due_label(item, now=now)
             upcoming_rows += f"""
                 <tr>
                     <td style="padding: 4px 0; color: #e2e8f0; font-size: 12px;
@@ -813,7 +821,45 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
                 {upcoming_rows}
             </table>"""
 
-    # ---- CSS-only tabs ----
+    # ---- Card header (shared) ----
+    header_html = f"""
+        <div style="margin: 0 0 15px 0; background-color: #1e293b;
+                    border-radius: 8px; border: 1px solid #334155; overflow: hidden;">
+            <div style="padding: 12px 12px 0 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;
+                            margin: 0 0 8px 0;">
+                    <span style="color: #f1f5f9; font-weight: 600; font-size: 14px;">
+                        {g.get('name', '')}
+                        <span style="color: #94a3b8; font-weight: 400; font-size: 12px;
+                                     margin-left: 6px;">Expenses / {period.capitalize()}</span>
+                    </span>
+                    <span style="color: {bar_color}; font-size: 12px; font-weight: 600;">
+                        {pct:.0f}% Covered</span>
+                </div>
+                <div style="background-color: #334155; border-radius: 4px; height: 8px;
+                            overflow: hidden; margin-bottom: 10px;">
+                    <div style="background-color: {bar_color}; width: {bar_width}%;
+                                height: 100%; border-radius: 4px;"></div>
+                </div>
+            </div>"""
+
+    if email_mode:
+        # ---- Email: stacked sections (no CSS tabs) ----
+        section_hdr = (
+            'style="color: #3b82f6; font-size: 12px; font-weight: 600;'
+            ' padding: 8px 12px; margin: 0; border-bottom: 1px solid #334155;'
+            ' background-color: #162032;"'
+        )
+        return (
+            f"{header_html}"
+            f'<p {section_hdr}>Coverage</p>'
+            f'<div style="padding: 12px;">{coverage_content}</div>'
+            f'<p {section_hdr}>Upcoming</p>'
+            f'<div style="padding: 12px;">{upcoming_content}</div>'
+            f'</div>'
+        )
+
+    # ---- In-app: CSS-only tabs ----
     tab_name = f"exp-tab-{goal_id}"
     cov_id = f"exp-tab-coverage-{goal_id}"
     upc_id = f"exp-tab-upcoming-{goal_id}"
@@ -839,25 +885,7 @@ def _build_expenses_goal_card(g: Dict[str, Any]) -> str:
 
     return f"""
         <style>{css_rules}</style>
-        <div style="margin: 0 0 15px 0; background-color: #1e293b;
-                    border-radius: 8px; border: 1px solid #334155; overflow: hidden;">
-            <div style="padding: 12px 12px 0 12px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;
-                            margin: 0 0 8px 0;">
-                    <span style="color: #f1f5f9; font-weight: 600; font-size: 14px;">
-                        {g.get('name', '')}
-                        <span style="color: #94a3b8; font-weight: 400; font-size: 12px;
-                                     margin-left: 6px;">Expenses / {period.capitalize()}</span>
-                    </span>
-                    <span style="color: {bar_color}; font-size: 12px; font-weight: 600;">
-                        {pct:.0f}% Covered</span>
-                </div>
-                <div style="background-color: #334155; border-radius: 4px; height: 8px;
-                            overflow: hidden; margin-bottom: 10px;">
-                    <div style="background-color: {bar_color}; width: {bar_width}%;
-                                height: 100%; border-radius: 4px;"></div>
-                </div>
-            </div>
+        {header_html}
             <input type="radio" name="{tab_name}" id="{cov_id}" style="display:none" checked>
             <input type="radio" name="{tab_name}" id="{upc_id}" style="display:none">
             <div class="exp-tab-bar-{goal_id}" style="display: flex;
@@ -1339,6 +1367,63 @@ def generate_pdf(
                             0, 5, dep_text,
                             new_x="LMARGIN", new_y="NEXT",
                         )
+                    # Upcoming expenses
+                    import calendar as _cal
+                    _now = datetime.utcnow()
+                    _today_day = _now.day
+                    _today_dow = _now.weekday()
+                    _last_dom = _cal.monthrange(_now.year, _now.month)[1]
+                    _multi = {"quarterly", "semi_annual", "yearly"}
+                    _weekly = {"weekly", "biweekly"}
+                    _upcoming = []
+                    for ei in coverage.get("items", []):
+                        _dd = ei.get("due_day")
+                        if _dd is None:
+                            continue
+                        _freq = ei.get("frequency", "monthly")
+                        _dm = ei.get("due_month")
+                        if _freq in _weekly:
+                            _days_u = (_dd - _today_dow) % 7
+                            _upcoming.append((_days_u, ei))
+                            continue
+                        if _freq in _multi and _dm is not None:
+                            _cm = _now.month
+                            if _freq == "yearly" and _cm != _dm:
+                                continue
+                            elif _freq == "semi_annual":
+                                if _cm not in (_dm, ((_dm + 5) % 12) + 1):
+                                    continue
+                            elif _freq == "quarterly":
+                                qm = {((_dm - 1 + 3 * i) % 12) + 1
+                                      for i in range(4)}
+                                if _cm not in qm:
+                                    continue
+                        _res = _last_dom if _dd == -1 else min(_dd, _last_dom)
+                        if _res >= _today_day:
+                            _upcoming.append((_res, ei))
+                    _upcoming.sort(key=lambda x: x[0])
+                    if _upcoming:
+                        pdf.set_font("Helvetica", "B", 9)
+                        pdf.set_text_color(80, 80, 80)
+                        pdf.cell(
+                            0, 6, "Upcoming:",
+                            new_x="LMARGIN", new_y="NEXT",
+                        )
+                        pdf.set_font("Helvetica", "", 9)
+                        for _, _ei in _upcoming:
+                            _label = _format_due_label(_ei, now=_now)
+                            _n = _ei.get("normalized_amount", 0)
+                            _s = _ei.get("status", "uncovered")
+                            _badge = ("OK" if _s == "covered"
+                                      else f"{_ei.get('coverage_pct', 0):.0f}%"
+                                      if _s == "partial" else "X")
+                            pdf.cell(
+                                0, 5,
+                                f"  {_label} - [{_badge}] "
+                                f"{_ei.get('name', '')} "
+                                f"{pfx}{_n:,.2f}/{exp_period}",
+                                new_x="LMARGIN", new_y="NEXT",
+                            )
                     pdf.set_font("Helvetica", "", 10)
                 else:
                     goal_name = _sanitize_for_pdf(g.get("name", ""))
