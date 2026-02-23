@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.0] - 2026-02-23
+
+### Added
+- **Structured AI summaries**: AI report summaries now use markdown with consistent section headers (Performance Overview, Goal Progress, Capital Movements, Outlook & Action Items) across all tiers, with styled rendering in both HTML and PDF
+- **Expense projection table**: Expenses goal card now shows income projections (daily avg, linear, compound after tax), deposit needed (both models), and trade basis — matching the projection math already available on income goals
+- **System message for AI providers**: All three AI providers (Claude, OpenAI, Gemini) now receive a system message that enforces structured output format
+
+### Changed
+- **AI summary token limit**: Increased from 2048 to 4096 tokens to support richer structured content across three tiers
+- **AI summary HTML rendering**: Switched from plain paragraph splitting to full markdown rendering with dark-theme styled headers, bold, bullets, and italic text
+- **PDF AI rendering**: Summaries now render markdown headers in brand color, bullets as indented items, and bold text via fpdf2's built-in markdown support
+- **PDF emoji handling**: Emoji characters are now stripped from PDF output (Helvetica lacks emoji glyphs) while preserved in HTML
+
 ## [v2.39.7] - 2026-02-23
 
 ### Fixed

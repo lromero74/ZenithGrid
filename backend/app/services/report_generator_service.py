@@ -10,8 +10,11 @@ uses the brand's primary accent color instead of hardcoded blue.
 
 import json
 import logging
+import re as _re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
+
+import markdown as _md
 
 from app.services.brand_service import get_brand
 
@@ -23,6 +26,53 @@ _TIER_LABELS = {
     "comfortable": "AI Performance Analysis",
     "experienced": "Technical Analysis",
 }
+
+
+def _md_to_styled_html(text: str, brand_color: str) -> str:
+    """Convert markdown text to dark-theme styled HTML for report display.
+
+    Converts markdown → HTML via the markdown library, then applies
+    inline styles for the dark theme (slate backgrounds, light text).
+    Old plain-text summaries pass through fine — plain text gets <p> wrapped.
+    """
+    raw_html = _md.markdown(text.strip(), extensions=["extra"])
+
+    # Apply inline styles via string replacement
+    styled = raw_html
+    # h3 headers → brand color, bold
+    styled = styled.replace(
+        "<h3>",
+        f'<h3 style="color: {brand_color}; font-size: 15px; font-weight: 700; '
+        f'margin: 18px 0 8px 0;">',
+    )
+    # Paragraphs → slate text
+    styled = styled.replace(
+        "<p>",
+        '<p style="color: #cbd5e1; line-height: 1.7; '
+        'margin: 0 0 10px 0; font-size: 14px;">',
+    )
+    # Unordered lists
+    styled = styled.replace(
+        "<ul>",
+        '<ul style="color: #cbd5e1; font-size: 14px; line-height: 1.7; '
+        'margin: 4px 0 10px 0; padding-left: 20px;">',
+    )
+    # List items
+    styled = styled.replace(
+        "<li>",
+        '<li style="margin: 2px 0;">',
+    )
+    # Bold → bright white
+    styled = styled.replace(
+        "<strong>",
+        '<strong style="color: #f1f5f9;">',
+    )
+    # Italic → muted
+    styled = styled.replace(
+        "<em>",
+        '<em style="color: #94a3b8;">',
+    )
+    return styled
 
 
 def _normalize_ai_summary(
@@ -190,12 +240,7 @@ def _build_tabbed_ai_section(
     # Content panels (hidden by default, shown via CSS when radio checked)
     panels = []
     for tier, text in available:
-        paragraphs = text.strip().split("\n\n")
-        rendered = "".join(
-            f'<p style="color: #cbd5e1; line-height: 1.7; '
-            f'margin: 0 0 12px 0; font-size: 14px;">{p.strip()}</p>'
-            for p in paragraphs if p.strip()
-        )
+        rendered = _md_to_styled_html(text, brand_color)
         panels.append(
             f'<div id="ai-panel-{tier}" style="display: none; '
             f'padding: 20px;">{rendered}</div>'
@@ -244,12 +289,7 @@ def _build_email_ai_section(
 
 def _render_single_ai_section(text: str, label: str, brand_color: str) -> str:
     """Render a single AI summary section (used by both email and single-tier)."""
-    paragraphs = text.strip().split("\n\n")
-    rendered = "".join(
-        f'<p style="color: #cbd5e1; line-height: 1.7; '
-        f'margin: 0 0 12px 0; font-size: 14px;">{p.strip()}</p>'
-        for p in paragraphs if p.strip()
-    )
+    rendered = _md_to_styled_html(text, brand_color)
     return f"""
         <div style="margin: 25px 0; padding: 20px; background-color: #1e293b;
                     border-radius: 8px; border: 1px solid #334155;
@@ -915,6 +955,64 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
                 {upcoming_rows}
             </table>"""
 
+    # ---- Projection section (parallels income goal projections) ----
+    projection_content = ""
+    daily_inc = g.get("current_daily_income", 0)
+    proj_linear = g.get("projected_income")
+    proj_compound = g.get("projected_income_compound")
+    sample = g.get("sample_trades", 0)
+    lookback = g.get("lookback_days_used", 0)
+    dep_compound = g.get("deposit_needed_compound")
+
+    if daily_inc or proj_linear or proj_compound:
+        after_tax_factor = (1 - tax_pct / 100) if tax_pct < 100 else 0
+        linear_at = (proj_linear or 0) * after_tax_factor
+        compound_at = (proj_compound or 0) * after_tax_factor
+
+        dep_lin_str = f"{prefix}{dep:{fmt}}" if dep is not None else "N/A"
+        dep_cmp_str = f"{prefix}{dep_compound:{fmt}}" if dep_compound is not None else "N/A"
+
+        projection_content = f"""
+            <div style="border-top: 1px solid #334155; margin-top: 10px; padding-top: 10px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                    <tr>
+                        <td style="padding: 4px 0; color: #94a3b8;">Target</td>
+                        <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                            {prefix}{total_exp:{fmt}} {currency}/{period}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: #94a3b8;">Daily Avg Income</td>
+                        <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                            {prefix}{daily_inc:{fmt}} {currency}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: #94a3b8;">Linear Projection</td>
+                        <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                            {prefix}{linear_at:{fmt}} {currency}/{period} (after tax)</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: #94a3b8;">Compound Projection</td>
+                        <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                            {prefix}{compound_at:{fmt}} {currency}/{period} (after tax)</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: #94a3b8;">Deposit Needed (Linear)</td>
+                        <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                            {dep_lin_str}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: #94a3b8;">Deposit Needed (Compound)</td>
+                        <td style="padding: 4px 0; color: #f1f5f9; text-align: right;">
+                            {dep_cmp_str}</td>
+                    </tr>
+                </table>
+                <p style="color: #64748b; font-size: 11px; margin: 8px 0 0 0;">
+                    Based on {sample} trades over {lookback} days</p>
+                <p style="color: #475569; font-size: 10px; font-style: italic; margin: 6px 0 0 0;">
+                    Past performance does not guarantee future results. Projections are
+                    estimates based on historical data and actual results may vary.</p>
+            </div>"""
+
     # ---- Card header (shared) ----
     header_html = f"""
         <div style="margin: 0 0 15px 0; background-color: #1e293b;
@@ -944,12 +1042,19 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
             ' padding: 8px 12px; margin: 0; border-bottom: 1px solid #334155;'
             ' background-color: #162032;"'
         )
+        proj_block = ""
+        if projection_content:
+            proj_block = (
+                f'<p {section_hdr}>Projections</p>'
+                f'<div style="padding: 12px;">{projection_content}</div>'
+            )
         return (
             f"{header_html}"
             f'<p {section_hdr}>Coverage</p>'
             f'<div style="padding: 12px;">{coverage_content}</div>'
             f'<p {section_hdr}>Upcoming</p>'
             f'<div style="padding: 12px;">{upcoming_content}</div>'
+            f'{proj_block}'
             f'</div>'
         )
 
@@ -957,8 +1062,18 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
     tab_name = f"exp-tab-{goal_id}"
     cov_id = f"exp-tab-coverage-{goal_id}"
     upc_id = f"exp-tab-upcoming-{goal_id}"
+    proj_id = f"exp-tab-proj-{goal_id}"
     cov_panel = f"exp-panel-coverage-{goal_id}"
     upc_panel = f"exp-panel-upcoming-{goal_id}"
+    proj_panel = f"exp-panel-proj-{goal_id}"
+
+    proj_css = ""
+    if projection_content:
+        proj_css = f"""
+        #{proj_id}:checked ~ .exp-tab-bar-{goal_id} label[for="{proj_id}"]
+            {{ background-color: #1e293b; color: #3b82f6; border-bottom-color: #3b82f6; }}
+        #{proj_id}:checked ~ #{proj_panel}
+            {{ display: block !important; }}"""
 
     css_rules = f"""
         #{cov_id}:checked ~ .exp-tab-bar-{goal_id} label[for="{cov_id}"]
@@ -968,7 +1083,7 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
         #{upc_id}:checked ~ .exp-tab-bar-{goal_id} label[for="{upc_id}"]
             {{ background-color: #1e293b; color: #3b82f6; border-bottom-color: #3b82f6; }}
         #{upc_id}:checked ~ #{upc_panel}
-            {{ display: block !important; }}
+            {{ display: block !important; }}{proj_css}
     """
 
     tab_label_style = (
@@ -977,15 +1092,30 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
         ' color: #64748b; transition: all 0.2s;'
     )
 
+    proj_radio = ""
+    proj_label = ""
+    proj_panel_html = ""
+    if projection_content:
+        proj_radio = (
+            f'<input type="radio" name="{tab_name}" id="{proj_id}" style="display:none">'
+        )
+        proj_label = f'<label for="{proj_id}" style="{tab_label_style}">Projections</label>'
+        proj_panel_html = (
+            f'<div id="{proj_panel}" style="display: none; padding: 12px;">'
+            f'{projection_content}</div>'
+        )
+
     return f"""
         <style>{css_rules}</style>
         {header_html}
             <input type="radio" name="{tab_name}" id="{cov_id}" style="display:none" checked>
             <input type="radio" name="{tab_name}" id="{upc_id}" style="display:none">
+            {proj_radio}
             <div class="exp-tab-bar-{goal_id}" style="display: flex;
                         border-bottom: 1px solid #334155; background-color: #162032;">
                 <label for="{cov_id}" style="{tab_label_style}">Coverage</label>
                 <label for="{upc_id}" style="{tab_label_style}">Upcoming</label>
+                {proj_label}
             </div>
             <div id="{cov_panel}" style="display: none; padding: 12px;">
                 {coverage_content}
@@ -993,6 +1123,7 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
             <div id="{upc_panel}" style="display: none; padding: 12px;">
                 {upcoming_content}
             </div>
+            {proj_panel_html}
         </div>"""
 
 
@@ -1223,8 +1354,22 @@ def _build_comparison_section(data: Dict[str, Any]) -> str:
     </div>"""
 
 
+# Regex to strip emoji characters (Helvetica lacks emoji glyphs)
+_EMOJI_RE = _re.compile(
+    "["
+    "\U0001F300-\U0001F9FF"  # Misc Symbols, Emoticons, Supplemental Symbols
+    "\U00002702-\U000027B0"  # Dingbats
+    "\U0000FE00-\U0000FE0F"  # Variation Selectors
+    "\U0000200D"             # Zero Width Joiner
+    "\U000024C2-\U0001F251"  # Enclosed chars
+    "]+",
+)
+
+
 def _sanitize_for_pdf(text: str) -> str:
     """Replace Unicode characters unsupported by Helvetica (Latin-1) with ASCII equivalents."""
+    # Strip emoji first (they render in HTML but Helvetica lacks the glyphs)
+    text = _EMOJI_RE.sub("", text)
     replacements = {
         "\u2013": "-",    # en-dash
         "\u2014": "--",   # em-dash
@@ -1488,6 +1633,42 @@ def generate_pdf(
                                 f"{pfx}{_amt:,.2f}",
                                 new_x="LMARGIN", new_y="NEXT",
                             )
+                    # Projection table
+                    _daily_inc = g.get("current_daily_income", 0)
+                    _proj_lin = g.get("projected_income")
+                    _proj_cmp = g.get("projected_income_compound")
+                    if _daily_inc or _proj_lin or _proj_cmp:
+                        _tax = g.get("tax_withholding_pct", 0)
+                        _atf = (1 - _tax / 100) if _tax < 100 else 0
+                        _lin_at = (_proj_lin or 0) * _atf
+                        _cmp_at = (_proj_cmp or 0) * _atf
+                        _dep_lin = g.get("deposit_needed")
+                        _dep_cmp = g.get("deposit_needed_compound")
+                        pdf.set_font("Helvetica", "B", 9)
+                        pdf.set_text_color(80, 80, 80)
+                        pdf.cell(
+                            0, 6, "Projections:",
+                            new_x="LMARGIN", new_y="NEXT",
+                        )
+                        pdf.set_font("Helvetica", "", 9)
+                        _proj_rows = [
+                            ("Target", f"{pfx}{total_exp:,.2f} {curr}/{exp_period}"),
+                            ("Daily Avg Income", f"{pfx}{_daily_inc:,.2f} {curr}"),
+                            ("Linear (after tax)", f"{pfx}{_lin_at:,.2f} {curr}/{exp_period}"),
+                            ("Compound (after tax)", f"{pfx}{_cmp_at:,.2f} {curr}/{exp_period}"),
+                        ]
+                        if _dep_lin is not None:
+                            _proj_rows.append(("Deposit Needed (Linear)", f"{pfx}{_dep_lin:,.2f}"))
+                        if _dep_cmp is not None:
+                            _proj_rows.append(("Deposit Needed (Compound)", f"{pfx}{_dep_cmp:,.2f}"))
+                        _smp = g.get("sample_trades", 0)
+                        _lbk = g.get("lookback_days_used", 0)
+                        _proj_rows.append(("Based on", f"{_smp} trades over {_lbk} days"))
+                        for _lbl, _val in _proj_rows:
+                            pdf.set_text_color(100, 100, 100)
+                            pdf.cell(55, 5, f"  {_lbl}:", new_x="RIGHT")
+                            pdf.set_text_color(30, 30, 30)
+                            pdf.cell(0, 5, _val, new_x="LMARGIN", new_y="NEXT")
                     pdf.set_font("Helvetica", "", 10)
                 else:
                     goal_name = _sanitize_for_pdf(g.get("name", ""))
@@ -1562,6 +1743,54 @@ def generate_pdf(
         return None
 
 
+def _render_pdf_markdown(pdf, text: str, br: int, bg: int, bb: int):
+    """Render markdown-formatted text into PDF with styled headers and bullets.
+
+    Parses markdown line by line:
+    - ### Header → bold, brand color, larger size
+    - **bold** → handled by fpdf2's markdown=True
+    - - bullet → rendered as indented bullet item
+    - Regular text → multi_cell with markdown=True
+    """
+    sanitized = _sanitize_for_pdf(text)
+    lines = sanitized.split("\n")
+    buf = []  # accumulate regular paragraph lines
+
+    def flush_buf():
+        if buf:
+            paragraph = " ".join(buf)
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(60, 60, 60)
+            pdf.multi_cell(0, 6, paragraph, markdown=True)
+            buf.clear()
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            flush_buf()
+            continue
+
+        if stripped.startswith("### "):
+            flush_buf()
+            header_text = stripped[4:]
+            pdf.ln(3)
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.set_text_color(br, bg, bb)
+            pdf.cell(0, 7, header_text, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1)
+        elif stripped.startswith("- "):
+            flush_buf()
+            bullet_text = stripped[2:]
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(60, 60, 60)
+            pdf.cell(5, 6, "")  # indent
+            pdf.multi_cell(0, 6, "- " + bullet_text, markdown=True)
+        else:
+            buf.append(stripped)
+
+    flush_buf()
+
+
 def _render_pdf_tiers(pdf, tiered: dict, br: int, bg: int, bb: int):
     """Render all three AI tiers into the PDF."""
     tier_order = ["beginner", "comfortable", "experienced"]
@@ -1578,9 +1807,7 @@ def _render_pdf_tiers(pdf, tiered: dict, br: int, bg: int, bb: int):
         pdf.set_text_color(br, bg, bb)
         pdf.cell(0, 8, label, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(60, 60, 60)
-        pdf.multi_cell(0, 6, _sanitize_for_pdf(text))
+        _render_pdf_markdown(pdf, text, br, bg, bb)
 
 
 def _render_pdf_trend_chart(pdf, trend_data: Dict, brand_rgb: tuple):
