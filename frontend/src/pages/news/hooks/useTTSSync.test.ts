@@ -1,21 +1,22 @@
 /**
  * Tests for useTTSSync volume control
  *
- * Verifies that setVolume applies via Web Audio API GainNode (for iOS compatibility),
- * falls back to audio.volume when AudioContext is unavailable,
- * and that initial volume is restored from localStorage.
+ * Verifies that:
+ * - Volume is applied via Web Audio API GainNode after lazy init (iOS support)
+ * - Volume falls back to audio.volume when AudioContext is unavailable
+ * - Initial volume is restored from localStorage
+ * - GainNode is created lazily on first user gesture (loadAndPlay/play/resume)
  */
 
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTTSSync } from './useTTSSync'
 
-// Mock authFetch — not needed for volume tests but required by the module
+// Mock authFetch
 vi.mock('../../../services/api', () => ({
   authFetch: vi.fn(),
 }))
 
-// Track mock instances
 interface MockAudio {
   volume: number
   playbackRate: number
@@ -97,7 +98,6 @@ function setupMocks(withAudioContext: boolean) {
       }
     })
   } else {
-    // No AudioContext — force fallback to audio.volume
     vi.stubGlobal('AudioContext', undefined)
   }
 
@@ -110,18 +110,35 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('useTTSSync volume control (with Web Audio API)', () => {
+describe('useTTSSync volume — with Web Audio API (lazy init)', () => {
   beforeEach(() => setupMocks(true))
 
-  test('setVolume sets GainNode gain value', () => {
+  test('GainNode is NOT created on mount (lazy)', () => {
+    renderHook(() => useTTSSync())
+    // AudioContext should NOT be created until a user gesture
+    expect(mockGainNodes).toHaveLength(0)
+  })
+
+  test('GainNode is created on first loadAndPlay call', async () => {
     const { result } = renderHook(() => useTTSSync())
+    expect(mockGainNodes).toHaveLength(0)
+
+    // loadAndPlay triggers lazy init (simulates user gesture)
+    await act(async () => {
+      result.current.loadAndPlay('test text')
+    })
 
     expect(mockGainNodes).toHaveLength(1)
-    const gainNode = mockGainNodes[0]
+  })
 
-    // Default volume
-    expect(result.current.volume).toBe(1.0)
-    expect(gainNode.gain.value).toBe(1.0)
+  test('setVolume sets GainNode gain after lazy init', async () => {
+    const { result } = renderHook(() => useTTSSync())
+
+    // Trigger lazy init
+    await act(async () => {
+      result.current.loadAndPlay('test')
+    })
+    const gainNode = mockGainNodes[0]
 
     act(() => {
       result.current.setVolume(0.5)
@@ -131,40 +148,50 @@ describe('useTTSSync volume control (with Web Audio API)', () => {
     expect(gainNode.gain.value).toBe(0.5)
   })
 
-  test('initial volume from localStorage is applied to GainNode', () => {
-    localStorage.setItem('tts-volume', '0.7')
-
+  test('setVolume before lazy init still updates audio.volume', () => {
     const { result } = renderHook(() => useTTSSync())
-    const gainNode = mockGainNodes[0]
+    const audio = mockAudioInstances[0]
 
-    expect(result.current.volume).toBe(0.7)
-    expect(gainNode.gain.value).toBe(0.7)
+    // No GainNode yet — should fall back to audio.volume
+    act(() => {
+      result.current.setVolume(0.3)
+    })
+
+    expect(result.current.volume).toBe(0.3)
+    expect(audio.volume).toBe(0.3)
   })
 
-  test('setVolume clamps value to [0, 1]', () => {
+  test('GainNode gets current volume at creation time', async () => {
+    localStorage.setItem('tts-volume', '0.4')
     const { result } = renderHook(() => useTTSSync())
-    const gainNode = mockGainNodes[0]
 
-    act(() => {
-      result.current.setVolume(1.5)
+    expect(result.current.volume).toBe(0.4)
+
+    // Trigger lazy init — GainNode should pick up 0.4
+    await act(async () => {
+      result.current.loadAndPlay('test')
     })
+
+    expect(mockGainNodes[0].gain.value).toBe(0.4)
+  })
+
+  test('setVolume clamps to [0, 1]', () => {
+    const { result } = renderHook(() => useTTSSync())
+
+    act(() => { result.current.setVolume(1.5) })
     expect(result.current.volume).toBe(1.0)
-    expect(gainNode.gain.value).toBe(1.0)
 
-    act(() => {
-      result.current.setVolume(-0.5)
-    })
+    act(() => { result.current.setVolume(-0.5) })
     expect(result.current.volume).toBe(0.0)
-    expect(gainNode.gain.value).toBe(0.0)
   })
 
-  test('setVolume to 0 mutes via GainNode', () => {
+  test('setVolume to 0 mutes', async () => {
     const { result } = renderHook(() => useTTSSync())
+
+    await act(async () => { result.current.loadAndPlay('test') })
     const gainNode = mockGainNodes[0]
 
-    act(() => {
-      result.current.setVolume(0)
-    })
+    act(() => { result.current.setVolume(0) })
 
     expect(result.current.volume).toBe(0)
     expect(gainNode.gain.value).toBe(0)
@@ -173,27 +200,20 @@ describe('useTTSSync volume control (with Web Audio API)', () => {
   test('setVolume persists to localStorage', () => {
     const { result } = renderHook(() => useTTSSync())
 
-    act(() => {
-      result.current.setVolume(0.3)
-    })
+    act(() => { result.current.setVolume(0.3) })
 
     expect(localStorage.getItem('tts-volume')).toBe('0.3')
   })
 })
 
-describe('useTTSSync volume control (fallback without Web Audio API)', () => {
+describe('useTTSSync volume — fallback without Web Audio API', () => {
   beforeEach(() => setupMocks(false))
 
-  test('setVolume falls back to audio.volume without AudioContext', () => {
+  test('setVolume uses audio.volume directly', () => {
     const { result } = renderHook(() => useTTSSync())
     const audio = mockAudioInstances[0]
 
-    expect(result.current.volume).toBe(1.0)
-    expect(audio.volume).toBe(1.0)
-
-    act(() => {
-      result.current.setVolume(0.5)
-    })
+    act(() => { result.current.setVolume(0.5) })
 
     expect(result.current.volume).toBe(0.5)
     expect(audio.volume).toBe(0.5)
@@ -209,11 +229,9 @@ describe('useTTSSync volume control (fallback without Web Audio API)', () => {
     expect(audio.volume).toBe(0.7)
   })
 
-  test('default volume is 1.0 when no localStorage value', () => {
+  test('default volume is 1.0', () => {
     const { result } = renderHook(() => useTTSSync())
-    const audio = mockAudioInstances[0]
-
     expect(result.current.volume).toBe(1.0)
-    expect(audio.volume).toBe(1.0)
+    expect(mockAudioInstances[0].volume).toBe(1.0)
   })
 })
