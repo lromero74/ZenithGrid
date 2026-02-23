@@ -209,6 +209,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   // Initialize persistent audio element once
   useEffect(() => {
     const audio = new Audio()
+    audio.volume = volume
     audioRef.current = audio
 
     audio.onplay = () => {
@@ -661,6 +662,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol))
     setVolumeState(clamped)
+    // Apply directly to audio element — don't rely on useEffect render cycle
+    if (audioRef.current) {
+      audioRef.current.volume = clamped
+    }
     try {
       localStorage.setItem('tts-volume', String(clamped))
     } catch { /* ignore */ }
