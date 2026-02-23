@@ -278,6 +278,12 @@ class CoinbaseAdapter(ExchangeClient):
     # These are not part of ExchangeClient interface but may be needed
     # for backward compatibility with existing code
 
+    async def get_deposit_withdrawals(
+        self, account_uuid: str, since: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """Fetch deposit/withdrawal transactions (pass-through method)."""
+        return await self._client.get_deposit_withdrawals(account_uuid, since=since)
+
     async def get_portfolios(self) -> List[Dict[str, Any]]:
         """Get Coinbase portfolios (pass-through method)."""
         return await self._client.get_portfolios()
