@@ -13,12 +13,10 @@ import base64
 import hashlib
 import json
 import logging
-import os
 import re
 import shutil
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import edge_tts
@@ -34,15 +32,11 @@ from app.models import (
     ArticleTTS, User, UserArticleTTSHistory, UserVoiceSubscription,
 )
 from app.auth.dependencies import get_current_user
+from app.paths import TTS_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["news-tts"])
-
-# TTS cache directory (relative to backend/)
-TTS_CACHE_DIR = Path(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-) / "tts_cache"
 
 # =============================================================================
 # TTS Concurrency Control

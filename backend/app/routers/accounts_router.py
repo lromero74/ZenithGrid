@@ -24,7 +24,7 @@ from app.database import get_db
 from app.encryption import encrypt_value, decrypt_value, is_encrypted
 from app.models import Account, Bot, User
 from app.auth.dependencies import get_current_user
-from app.services.portfolio_service import get_cex_portfolio, get_dex_portfolio
+from app.services.portfolio_service import get_cex_portfolio, get_dex_portfolio, get_generic_cex_portfolio
 from app.services.exchange_service import (
     clear_exchange_client_cache,
     get_coinbase_for_account,
@@ -828,204 +828,6 @@ async def get_default_account(
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
-async def _get_generic_cex_portfolio(
-    account: Account,
-    db: AsyncSession,
-) -> dict:
-    """
-    Build a portfolio view for non-Coinbase CEX accounts (ByBit, MT5).
-
-    Uses the exchange adapter's get_accounts() for balances and
-    the database for position-level P&L.
-    """
-    from app.models import Position, Bot
-
-    exchange = await get_exchange_client_for_account(db, account.id)
-    if not exchange:
-        raise HTTPException(
-            status_code=503,
-            detail="Could not connect to exchange. Check API credentials.",
-        )
-
-    # Get balances from the exchange
-    try:
-        coin_accounts = await exchange.get_accounts()
-    except Exception as e:
-        logger.error(f"Failed to fetch balances for account {account.id}: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="Failed to fetch balances from exchange.",
-        )
-
-    # Get BTC/USD price for valuations
-    try:
-        btc_usd_price = await exchange.get_btc_usd_price()
-    except Exception:
-        btc_usd_price = 95000.0  # fallback
-
-    # Build holdings from coin balances
-    portfolio_holdings = []
-    total_usd_value = 0.0
-    total_btc_value = 0.0
-
-    for coin_acct in coin_accounts:
-        currency = coin_acct.get("currency", "")
-        avail_val = coin_acct.get("available_balance", {}).get("value", "0")
-        hold_val = coin_acct.get("hold", {}).get("value", "0")
-        available = float(avail_val)
-        hold = float(hold_val)
-        total_balance = available + hold
-
-        if total_balance < 0.000001:
-            continue
-
-        # Calculate USD value
-        usd_value = 0.0
-        btc_value = 0.0
-        current_price_usd = 0.0
-
-        if currency in ("USD", "USDC", "USDT"):
-            usd_value = total_balance
-            btc_value = total_balance / btc_usd_price if btc_usd_price > 0 else 0
-            current_price_usd = 1.0
-        elif currency == "BTC":
-            usd_value = total_balance * btc_usd_price
-            btc_value = total_balance
-            current_price_usd = btc_usd_price
-        else:
-            # Try to get price for other coins
-            try:
-                price = await exchange.get_current_price(f"{currency}-USD")
-                if price > 0:
-                    current_price_usd = price
-                    usd_value = total_balance * price
-                    btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
-            except Exception:
-                continue  # skip coins we can't price
-
-        if usd_value < 0.01:
-            continue
-
-        total_usd_value += usd_value
-        total_btc_value += btc_value
-
-        portfolio_holdings.append({
-            "asset": currency,
-            "total_balance": total_balance,
-            "available": available,
-            "hold": hold,
-            "current_price_usd": current_price_usd,
-            "usd_value": usd_value,
-            "btc_value": btc_value,
-            "percentage": 0.0,
-            "unrealized_pnl_usd": 0.0,
-            "unrealized_pnl_percentage": 0.0,
-        })
-
-    # Also include equity from exchange if available (unrealized PnL)
-    try:
-        equity = await exchange.get_equity()
-        if equity > total_usd_value:
-            # Equity includes unrealized PnL — show the difference
-            unrealized = equity - total_usd_value
-            total_usd_value = equity
-            total_btc_value = equity / btc_usd_price if btc_usd_price > 0 else 0
-            # Attribute unrealized to positions bucket
-            if portfolio_holdings:
-                portfolio_holdings[0]["unrealized_pnl_usd"] = unrealized
-    except Exception:
-        pass  # not all adapters have get_equity
-
-    # Calculate percentages
-    for holding in portfolio_holdings:
-        if total_usd_value > 0:
-            holding["percentage"] = (holding["usd_value"] / total_usd_value) * 100
-
-    portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
-
-    # Get position P&L from database (strictly scoped to this account)
-    positions_q = select(Position).where(
-        Position.status == "open",
-        Position.account_id == account.id,
-    )
-    closed_q = select(Position).where(
-        Position.status == "closed",
-        Position.account_id == account.id,
-    )
-
-    open_result = await db.execute(positions_q)
-    open_positions = open_result.scalars().all()
-    closed_result = await db.execute(closed_q)
-    closed_positions = closed_result.scalars().all()
-
-    # Tally in-positions value
-    total_in_positions_usd = 0.0
-    total_in_positions_btc = 0.0
-    for pos in open_positions:
-        quote = pos.get_quote_currency()
-        if quote in ("USD", "USDC", "USDT"):
-            total_in_positions_usd += pos.total_quote_spent
-        else:
-            total_in_positions_btc += pos.total_quote_spent
-
-    # Calculate realized P&L
-    now = datetime.utcnow()
-    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    pnl_all_time = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
-    pnl_today = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
-
-    for pos in closed_positions:
-        if pos.profit_quote is not None:
-            quote = pos.get_quote_currency()
-            key = quote.lower() if quote in ("USD", "BTC", "USDC") else "usd"
-            pnl_all_time[key] += pos.profit_quote
-            if pos.closed_at and pos.closed_at >= start_of_today:
-                pnl_today[key] += pos.profit_quote
-
-    # Bot reservations
-    bots_q = select(Bot).where(Bot.account_id == account.id)
-    bots_result = await db.execute(bots_q)
-    account_bots = bots_result.scalars().all()
-    total_reserved_btc = sum(b.reserved_btc_balance for b in account_bots)
-    total_reserved_usd = sum(b.reserved_usd_balance for b in account_bots)
-
-    return {
-        "total_usd_value": total_usd_value,
-        "total_btc_value": total_btc_value,
-        "btc_usd_price": btc_usd_price,
-        "holdings": portfolio_holdings,
-        "holdings_count": len(portfolio_holdings),
-        "balance_breakdown": {
-            "btc": {
-                "total": total_btc_value,
-                "reserved_by_bots": total_reserved_btc,
-                "in_open_positions": total_in_positions_btc,
-                "free": max(0.0, total_btc_value - total_reserved_btc - total_in_positions_btc),
-            },
-            "usd": {
-                "total": total_usd_value,
-                "reserved_by_bots": total_reserved_usd,
-                "in_open_positions": total_in_positions_usd,
-                "free": max(0.0, total_usd_value - total_reserved_usd - total_in_positions_usd),
-            },
-            "usdc": {
-                "total": 0.0,
-                "reserved_by_bots": 0.0,
-                "in_open_positions": 0.0,
-                "free": 0.0,
-            },
-        },
-        "pnl": {
-            "today": pnl_today,
-            "all_time": pnl_all_time,
-        },
-        "account_id": account.id,
-        "account_name": account.name,
-        "account_type": "cex",
-        "is_dex": False,
-    }
-
-
 @router.get("/{account_id}/portfolio")
 async def get_account_portfolio(
     account_id: int,
@@ -1127,7 +929,7 @@ async def get_account_portfolio(
             exchange_name = account.exchange or "coinbase"
             if exchange_name in ("bybit", "mt5_bridge"):
                 # Non-Coinbase exchange: use generic portfolio builder
-                return await _get_generic_cex_portfolio(account, db)
+                return await get_generic_cex_portfolio(account, db)
             else:
                 # Coinbase: use existing rich portfolio logic
                 return await get_cex_portfolio(account, db, get_coinbase_for_account, force_fresh=force_fresh)

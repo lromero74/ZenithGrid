@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react'
 import { authFetch } from '../../../services/api'
-import { ArticleContentResponse, NewsItem } from '../types'
+import { ArticleContentResponse, NewsItem } from '../../../types/newsTypes'
 
 export interface UseArticleContentReturn {
   articleContent: ArticleContentResponse | null

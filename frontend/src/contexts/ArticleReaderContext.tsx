@@ -6,7 +6,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo, ReactNode } from 'react'
 import { authFetch } from '../services/api'
 import { useTTSSync, WordTiming } from '../pages/news/hooks/useTTSSync'
-import { markdownToPlainText } from '../pages/news/helpers'
+import { markdownToPlainText } from '../utils/newsHelpers'
 import { registerArticleReader, stopVideoPlayer } from './mediaCoordinator'
 import { VOICE_CYCLE_IDS, CHILD_VOICE_IDS, containsAdultContent } from '../constants/voices'
 

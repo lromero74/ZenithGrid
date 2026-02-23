@@ -17,7 +17,7 @@ import {
   formatRelativeTime,
   sortSourcesByCategory,
 } from '../components/news'
-import { NewsItem, TabType, NEWS_CATEGORIES, CATEGORY_COLORS, SeenFilter } from './news/types'
+import { NewsItem, TabType, NEWS_CATEGORIES, CATEGORY_COLORS, SeenFilter } from '../types/newsTypes'
 import { useNewsData, useArticleContent, useNewsFilters, useSeenStatus } from './news/hooks'
 import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource, cleanupArticleHoverHighlights, scrollToArticle, highlightArticle, unhighlightArticle } from './news/helpers'
 import { ArticleContent, TTSControls } from './news/components'

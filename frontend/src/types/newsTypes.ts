@@ -1,5 +1,8 @@
 /**
- * Type definitions for News page
+ * Shared News type definitions and constants.
+ *
+ * Moved from pages/news/types.ts so components/ and hooks/ outside the
+ * news page can import without an inverted dependency.
  */
 
 export interface NewsItem {

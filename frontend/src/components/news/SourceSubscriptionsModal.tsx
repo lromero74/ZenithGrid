@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Newspaper, Video, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, Plus, Trash2, Clock, Search, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { authFetch } from '../../services/api'
-import { CATEGORY_COLORS, NEWS_CATEGORIES } from '../../pages/news/types'
+import { CATEGORY_COLORS, NEWS_CATEGORIES } from '../../types/newsTypes'
 
 interface ContentSource {
   id: number

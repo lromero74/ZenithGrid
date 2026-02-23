@@ -9,7 +9,7 @@
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { authFetch } from '../../../services/api'
-import { NewsResponse, VideoResponse } from '../types'
+import { NewsResponse, VideoResponse } from '../../../types/newsTypes'
 
 export interface UseSeenStatusReturn {
   markSeen: (contentType: 'article' | 'video', contentId: number, seen?: boolean) => Promise<void>

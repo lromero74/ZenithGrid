@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { NewsItem, VideoItem, NewsResponse, VideoResponse, NEWS_CATEGORIES, SeenFilter } from '../types'
+import { NewsItem, VideoItem, NewsResponse, VideoResponse, NEWS_CATEGORIES, SeenFilter } from '../../../types/newsTypes'
 import {
   filterNewsBySource,
   filterNewsByCategory,
