@@ -599,6 +599,72 @@ def _next_every_n_days_date(anchor_str: str, n: int, today: datetime) -> datetim
     return anchor + timedelta(days=cycles * n)
 
 
+def _get_upcoming_items(items: list, now: datetime) -> List:
+    """Return upcoming expense items sorted by days until due, scoped to current month.
+
+    Returns list of (sort_key, item) tuples.
+    """
+    import calendar
+
+    today_day = now.day
+    current_month = now.month
+    today_dow = now.weekday()
+    last_day_of_month = calendar.monthrange(now.year, now.month)[1]
+    today_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    _MULTI_MONTH_FREQS = {"quarterly", "semi_annual", "yearly"}
+    _WEEKLY_FREQS = {"weekly", "biweekly"}
+
+    upcoming = []
+    for item in items:
+        dd = item.get("due_day")
+        freq = item.get("frequency", "monthly")
+        anchor = item.get("frequency_anchor")
+
+        # every_n_days: compute from anchor, no due_day needed
+        if freq == "every_n_days" and anchor and item.get("frequency_n"):
+            next_dt = _next_every_n_days_date(anchor, item["frequency_n"], now)
+            if next_dt.month == now.month and next_dt.year == now.year:
+                days_until = (next_dt - today_date).days
+                upcoming.append((days_until, item))
+            continue
+
+        if dd is None:
+            continue
+
+        dm = item.get("due_month")
+
+        if freq in _WEEKLY_FREQS:
+            if freq == "biweekly" and anchor:
+                next_dt = _next_biweekly_date(anchor, dd, now)
+                days_until = (next_dt - today_date).days
+            else:
+                days_until = (dd - today_dow) % 7
+                next_dt = now + timedelta(days=days_until)
+            if next_dt.month == now.month and next_dt.year == now.year:
+                upcoming.append((days_until, item))
+            continue
+
+        # For multi-month frequencies, check if this item is due this month
+        if freq in _MULTI_MONTH_FREQS and dm is not None:
+            if freq == "yearly" and current_month != dm:
+                continue
+            elif freq == "semi_annual":
+                if current_month not in (dm, ((dm + 5) % 12) + 1):
+                    continue
+            elif freq == "quarterly":
+                quarter_months = {((dm - 1 + 3 * i) % 12) + 1 for i in range(4)}
+                if current_month not in quarter_months:
+                    continue
+
+        resolved = last_day_of_month if dd == -1 else min(dd, last_day_of_month)
+        if resolved >= today_day:
+            upcoming.append((resolved, item))
+
+    upcoming.sort(key=lambda x: x[0])
+    return upcoming
+
+
 def _format_due_label(item: dict, now: Optional[datetime] = None) -> str:
     """Format a human-readable due label for an expense item."""
     freq = item.get("frequency", "monthly")
@@ -670,7 +736,6 @@ def _expense_name_html(item: dict, color: str = "#f1f5f9") -> str:
 
 def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> str:
     """Expenses goal card with Coverage + Upcoming tabs."""
-    import calendar
     from datetime import datetime as _dt
 
     coverage = g.get("expense_coverage", {})
@@ -796,63 +861,9 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
 
     # ---- Upcoming tab content ----
     now = _dt.utcnow()
-    today_day = now.day
-    current_month = now.month
-    today_dow = now.weekday()  # 0=Mon, 6=Sun
-    last_day_of_month = calendar.monthrange(now.year, now.month)[1]
-
-    _MULTI_MONTH_FREQS = {"quarterly", "semi_annual", "yearly"}
-    _WEEKLY_FREQS = {"weekly", "biweekly"}
-
-    upcoming_items = []
-    for item in items:
-        dd = item.get("due_day")
-        freq = item.get("frequency", "monthly")
-        anchor = item.get("frequency_anchor")
-
-        # every_n_days: compute from anchor, no due_day needed
-        if freq == "every_n_days" and anchor and item.get("frequency_n"):
-            next_dt = _next_every_n_days_date(anchor, item["frequency_n"], now)
-            if next_dt.month == now.month and next_dt.year == now.year:
-                days_until = (next_dt - now.replace(hour=0, minute=0, second=0, microsecond=0)).days
-                upcoming_items.append((days_until, dd, item))
-            continue
-
-        if dd is None:
-            continue
-
-        dm = item.get("due_month")
-
-        if freq in _WEEKLY_FREQS:
-            # Use anchor-aware calc for biweekly
-            if freq == "biweekly" and anchor:
-                next_dt = _next_biweekly_date(anchor, dd, now)
-                days_until = (next_dt - now.replace(hour=0, minute=0, second=0, microsecond=0)).days
-            else:
-                days_until = (dd - today_dow) % 7
-                next_dt = now + timedelta(days=days_until)
-            # Only include if the next occurrence is this month
-            if next_dt.month == now.month and next_dt.year == now.year:
-                upcoming_items.append((days_until, dd, item))
-            continue
-
-        # For multi-month frequencies, check if this item is due this month
-        if freq in _MULTI_MONTH_FREQS and dm is not None:
-            if freq == "yearly" and current_month != dm:
-                continue
-            elif freq == "semi_annual":
-                if current_month not in (dm, ((dm + 5) % 12) + 1):
-                    continue
-            elif freq == "quarterly":
-                quarter_months = {((dm - 1 + 3 * i) % 12) + 1 for i in range(4)}
-                if current_month not in quarter_months:
-                    continue
-
-        resolved = last_day_of_month if dd == -1 else min(dd, last_day_of_month)
-        if resolved >= today_day:
-            upcoming_items.append((resolved, dd, item))
-
-    upcoming_items.sort(key=lambda x: x[0])
+    upcoming_raw = _get_upcoming_items(items, now)
+    # Re-wrap tuples to include dd for template compatibility
+    upcoming_items = [(sort_key, item.get("due_day"), item) for sort_key, item in upcoming_raw]
 
     has_any_due_day = any(
         item.get("due_day") is not None
@@ -1450,41 +1461,11 @@ def generate_pdf(
                             0, 5, dep_text,
                             new_x="LMARGIN", new_y="NEXT",
                         )
-                    # Upcoming expenses
-                    import calendar as _cal
+                    # Upcoming expenses — reuse _get_upcoming_items
                     _now = datetime.utcnow()
-                    _today_day = _now.day
-                    _today_dow = _now.weekday()
-                    _last_dom = _cal.monthrange(_now.year, _now.month)[1]
-                    _multi = {"quarterly", "semi_annual", "yearly"}
-                    _weekly = {"weekly", "biweekly"}
-                    _upcoming = []
-                    for ei in coverage.get("items", []):
-                        _dd = ei.get("due_day")
-                        if _dd is None:
-                            continue
-                        _freq = ei.get("frequency", "monthly")
-                        _dm = ei.get("due_month")
-                        if _freq in _weekly:
-                            _days_u = (_dd - _today_dow) % 7
-                            _upcoming.append((_days_u, ei))
-                            continue
-                        if _freq in _multi and _dm is not None:
-                            _cm = _now.month
-                            if _freq == "yearly" and _cm != _dm:
-                                continue
-                            elif _freq == "semi_annual":
-                                if _cm not in (_dm, ((_dm + 5) % 12) + 1):
-                                    continue
-                            elif _freq == "quarterly":
-                                qm = {((_dm - 1 + 3 * i) % 12) + 1
-                                      for i in range(4)}
-                                if _cm not in qm:
-                                    continue
-                        _res = _last_dom if _dd == -1 else min(_dd, _last_dom)
-                        if _res >= _today_day:
-                            _upcoming.append((_res, ei))
-                    _upcoming.sort(key=lambda x: x[0])
+                    _upcoming = _get_upcoming_items(
+                        coverage.get("items", []), _now,
+                    )
                     if _upcoming:
                         pdf.set_font("Helvetica", "B", 9)
                         pdf.set_text_color(80, 80, 80)
@@ -1495,7 +1476,7 @@ def generate_pdf(
                         pdf.set_font("Helvetica", "", 9)
                         for _, _ei in _upcoming:
                             _label = _format_due_label(_ei, now=_now)
-                            _n = _ei.get("normalized_amount", 0)
+                            _amt = _ei.get("amount", 0)
                             _s = _ei.get("status", "uncovered")
                             _badge = ("OK" if _s == "covered"
                                       else f"{_ei.get('coverage_pct', 0):.0f}%"
@@ -1504,7 +1485,7 @@ def generate_pdf(
                                 0, 5,
                                 f"  {_label} - [{_badge}] "
                                 f"{_ei.get('name', '')} "
-                                f"{pfx}{_n:,.2f}/{exp_period}",
+                                f"{pfx}{_amt:,.2f}",
                                 new_x="LMARGIN", new_y="NEXT",
                             )
                     pdf.set_font("Helvetica", "", 10)

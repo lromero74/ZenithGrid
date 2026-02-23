@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.39.7] - 2026-02-23
+
+### Fixed
+- **PDF upcoming expenses**: PDF report now uses the same upcoming logic as HTML — correct anchor-aware dates, bill amounts, and current-month scoping
+- **DRY upcoming logic**: Extracted shared `_get_upcoming_items` helper used by both HTML and PDF report generators, eliminating duplicated code that was drifting out of sync
+
 ## [v2.39.6] - 2026-02-23
 
 ### Fixed
