@@ -89,7 +89,7 @@ class GeminiClientWrapper:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-    def GenerativeModel(self, model_name: str = "gemini-2.0-flash"):
+    def GenerativeModel(self, model_name: str = "gemini-2.0-flash", **kwargs):
         """Create a model instance with per-request API key."""
         import google.generativeai as genai
         # Configure with this specific key before creating the model
@@ -97,7 +97,7 @@ class GeminiClientWrapper:
         # in a contained scope. For true thread safety, we use the
         # client_options approach if available.
         genai.configure(api_key=self.api_key)
-        return genai.GenerativeModel(model_name)
+        return genai.GenerativeModel(model_name, **kwargs)
 
 
 async def get_ai_analysis(

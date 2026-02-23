@@ -7,7 +7,6 @@ Tests the core mathematical functions used by grid trading strategy:
 - Auto-range calculation from volatility
 """
 
-import math
 import pytest
 from app.strategies.grid_trading import (
     calculate_arithmetic_levels,

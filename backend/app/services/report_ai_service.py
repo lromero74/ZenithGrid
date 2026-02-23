@@ -56,9 +56,12 @@ async def generate_report_summary(
         Tuple of (tiered_summary_dict, provider_used) or (None, None) if no AI available.
         tiered_summary_dict has keys: beginner, comfortable, experienced
     """
-    providers_to_try = (
-        [provider] if provider else ["claude", "openai", "gemini"]
-    )
+    all_providers = ["claude", "openai", "gemini"]
+    if provider:
+        # Try preferred provider first, then fall back to others
+        providers_to_try = [provider] + [p for p in all_providers if p != provider]
+    else:
+        providers_to_try = all_providers
 
     for prov in providers_to_try:
         try:

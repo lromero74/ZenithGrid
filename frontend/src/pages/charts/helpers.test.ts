@@ -11,7 +11,10 @@ import {
   transformPriceData,
   transformVolumeData,
   extractCandleValues,
+  filterIndicators,
+  groupIndicatorsByCategory,
 } from './helpers'
+import { AVAILABLE_INDICATORS } from '../../utils/indicators'
 
 describe('getPriceFormat', () => {
   test('returns 8 decimal precision for BTC pairs', () => {
@@ -30,6 +33,11 @@ describe('getPriceFormat', () => {
     const format = getPriceFormat('ETH-USDT')
     expect(format.precision).toBe(2)
   })
+
+  test('type is always "price"', () => {
+    expect(getPriceFormat('ETH-BTC').type).toBe('price')
+    expect(getPriceFormat('BTC-USD').type).toBe('price')
+  })
 })
 
 describe('isBTCPair', () => {
@@ -41,6 +49,14 @@ describe('isBTCPair', () => {
   test('returns false for USD pairs', () => {
     expect(isBTCPair('BTC-USD')).toBe(false)
     expect(isBTCPair('ETH-USD')).toBe(false)
+  })
+
+  test('returns false for USDT pairs', () => {
+    expect(isBTCPair('BTC-USDT')).toBe(false)
+  })
+
+  test('handles edge case: "BTC" without suffix', () => {
+    expect(isBTCPair('BTC')).toBe(false)
   })
 })
 
@@ -76,6 +92,17 @@ describe('transformPriceData', () => {
     const data = transformPriceData(candles, 'area')
     expect(data[0]).toEqual({ time: 1000, value: 105 })
   })
+
+  test('handles empty candles array', () => {
+    expect(transformPriceData([], 'candlestick')).toEqual([])
+    expect(transformPriceData([], 'line')).toEqual([])
+  })
+
+  test('unknown chart type defaults to value-based (line/area)', () => {
+    const data = transformPriceData(candles, 'unknown_type')
+    expect(data[0]).toEqual({ time: 1000, value: 105 })
+    expect(data[0]).not.toHaveProperty('open')
+  })
 })
 
 describe('transformVolumeData', () => {
@@ -94,6 +121,18 @@ describe('transformVolumeData', () => {
     ] as any[]
     const data = transformVolumeData(candles)
     expect(data[0].color).toBe('#ef444480') // red (close < open)
+  })
+
+  test('assigns green for doji (close == open)', () => {
+    const candles = [
+      { time: 1000, open: 100, high: 105, low: 95, close: 100, volume: 300 },
+    ] as any[]
+    const data = transformVolumeData(candles)
+    expect(data[0].color).toBe('#10b98180') // green (close >= open)
+  })
+
+  test('handles empty candles', () => {
+    expect(transformVolumeData([])).toEqual([])
   })
 })
 
@@ -114,5 +153,81 @@ describe('extractCandleValues', () => {
     expect(closes).toEqual([])
     expect(highs).toEqual([])
     expect(lows).toEqual([])
+  })
+})
+
+describe('filterIndicators', () => {
+  test('returns all indicators for empty search', () => {
+    const result = filterIndicators('')
+    expect(result.length).toBe(AVAILABLE_INDICATORS.length)
+  })
+
+  test('filters by indicator name (case-insensitive)', () => {
+    const result = filterIndicators('rsi')
+    expect(result.length).toBeGreaterThanOrEqual(1)
+    expect(result.some(ind => ind.id === 'rsi')).toBe(true)
+  })
+
+  test('filters by category', () => {
+    const result = filterIndicators('oscillator')
+    expect(result.length).toBeGreaterThanOrEqual(1)
+    result.forEach(ind => {
+      expect(ind.category.toLowerCase()).toContain('oscillator')
+    })
+  })
+
+  test('returns empty array for non-matching search', () => {
+    const result = filterIndicators('zzzznonexistent')
+    expect(result).toEqual([])
+  })
+
+  test('matches partial name', () => {
+    const result = filterIndicators('moving')
+    expect(result.length).toBeGreaterThanOrEqual(2)
+    // SMA and EMA should both match
+    const ids = result.map(ind => ind.id)
+    expect(ids).toContain('sma')
+    expect(ids).toContain('ema')
+  })
+
+  test('case-insensitive matching', () => {
+    const upper = filterIndicators('MACD')
+    const lower = filterIndicators('macd')
+    expect(upper.length).toBe(lower.length)
+    expect(upper.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('groupIndicatorsByCategory', () => {
+  test('groups all available indicators by category', () => {
+    const grouped = groupIndicatorsByCategory(AVAILABLE_INDICATORS)
+    // Should have at least Moving Averages and Oscillators
+    expect(grouped).toHaveProperty('Moving Averages')
+    expect(grouped).toHaveProperty('Oscillators')
+  })
+
+  test('each category contains the correct indicators', () => {
+    const grouped = groupIndicatorsByCategory(AVAILABLE_INDICATORS)
+    const maIds = grouped['Moving Averages'].map(ind => ind.id)
+    expect(maIds).toContain('sma')
+    expect(maIds).toContain('ema')
+  })
+
+  test('total indicators across all groups equals input length', () => {
+    const grouped = groupIndicatorsByCategory(AVAILABLE_INDICATORS)
+    const totalCount = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0)
+    expect(totalCount).toBe(AVAILABLE_INDICATORS.length)
+  })
+
+  test('handles empty array', () => {
+    const grouped = groupIndicatorsByCategory([])
+    expect(Object.keys(grouped)).toHaveLength(0)
+  })
+
+  test('handles single indicator', () => {
+    const single = [AVAILABLE_INDICATORS[0]]
+    const grouped = groupIndicatorsByCategory(single)
+    expect(Object.keys(grouped)).toHaveLength(1)
+    expect(Object.values(grouped)[0]).toHaveLength(1)
   })
 })
