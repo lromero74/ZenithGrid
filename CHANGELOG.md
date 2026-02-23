@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.39.6] - 2026-02-23
+
+### Fixed
+- **Upcoming scoped to current month**: Weekly, biweekly, and every-N-days expenses no longer spill into next month in the upcoming tab — only shows what's due the rest of this month
+
 ## [v2.39.5] - 2026-02-23
 
 ### Changed
