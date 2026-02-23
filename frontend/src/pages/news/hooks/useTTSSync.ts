@@ -64,6 +64,7 @@ interface UseTTSSyncReturn {
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
   setVolume: (volume: number) => void
+  setVolumeImmediate: (volume: number) => void  // GainNode + audio only, no React state (for smooth slider drag)
 }
 
 export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
@@ -733,6 +734,19 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     } catch { /* ignore */ }
   }, [ensureGainNode])
 
+  // Lightweight volume update — only touches audio refs, no React state or localStorage.
+  // Used during slider drag for zero-latency volume changes without re-renders.
+  const setVolumeImmediate = useCallback((vol: number) => {
+    const clamped = Math.max(0, Math.min(1, vol))
+    volumeRef.current = clamped
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = clamped
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = clamped
+    }
+  }, [])
+
   // Direct audio element access — reads currentTime/duration without React state delay
   const getPlaybackState = useCallback(() => {
     const audio = audioRef.current
@@ -768,5 +782,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setVoice,
     setRate,
     setVolume,
+    setVolumeImmediate,
   }
 }

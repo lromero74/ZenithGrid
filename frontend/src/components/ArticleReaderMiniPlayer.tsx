@@ -78,6 +78,7 @@ export function ArticleReaderMiniPlayer() {
     setRate,
     volume,
     setVolume,
+    setVolumeImmediate,
   } = useArticleReader()
 
   const navigate = useNavigate()
@@ -94,6 +95,32 @@ export function ArticleReaderMiniPlayer() {
   const progressBarRef = useRef<HTMLDivElement>(null)
   const progressRafRef = useRef<number | null>(null)
   const getPlaybackStateRef = useRef(getPlaybackState)
+  const volumeSliderRef = useRef<HTMLInputElement>(null)
+  const volumePctRef = useRef<HTMLSpanElement>(null)
+
+  // During drag: update audio volume directly (no React state = no re-render = smooth)
+  const handleVolumeInput = useCallback((e: React.FormEvent<HTMLInputElement>) => {
+    const val = parseFloat((e.target as HTMLInputElement).value)
+    setVolumeImmediate(val)
+    if (volumePctRef.current) {
+      volumePctRef.current.textContent = `${Math.round(val * 100)}%`
+    }
+  }, [setVolumeImmediate])
+
+  // On release: commit to React state + localStorage
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setVolume(parseFloat(e.target.value))
+  }, [setVolume])
+
+  // Sync slider position when volume changes externally (mute button, restore)
+  useEffect(() => {
+    if (volumeSliderRef.current) {
+      volumeSliderRef.current.value = String(volume)
+    }
+    if (volumePctRef.current) {
+      volumePctRef.current.textContent = `${Math.round(volume * 100)}%`
+    }
+  }, [volume])
 
   // Keep ref in sync (avoids restarting rAF on context value changes)
   useEffect(() => {
@@ -741,15 +768,18 @@ export function ArticleReaderMiniPlayer() {
                                <Volume2 className="w-4 h-4" />}
                             </button>
                             <input
+                              ref={volumeSliderRef}
                               type="range"
                               min="0"
                               max="1"
-                              step="0.05"
-                              value={volume}
-                              onChange={(e) => setVolume(parseFloat(e.target.value))}
-                              className="flex-1 h-1.5 bg-slate-600 rounded-full appearance-none cursor-pointer accent-green-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:hover:bg-green-400 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-green-500 [&::-moz-range-thumb]:border-0"
+                              step="any"
+                              defaultValue={volume}
+                              onInput={handleVolumeInput}
+                              onChange={handleVolumeChange}
+                              className="flex-1 h-1.5 bg-slate-600 rounded-full appearance-none cursor-pointer accent-green-500 touch-action-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:hover:bg-green-400 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-green-500 [&::-moz-range-thumb]:border-0"
+                              style={{ touchAction: 'none' }}
                             />
-                            <span className="text-xs text-slate-400 w-8 text-right flex-shrink-0">
+                            <span ref={volumePctRef} className="text-xs text-slate-400 w-8 text-right flex-shrink-0">
                               {Math.round(volume * 100)}%
                             </span>
                           </div>
