@@ -4,7 +4,11 @@ Tests for report_ai_service — AI summary generation with provider fallback.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.report_ai_service import generate_report_summary, _parse_tiered_summary
+from app.services.report_ai_service import (
+    generate_report_summary,
+    _build_summary_prompt,
+    _parse_tiered_summary,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -28,6 +32,10 @@ def sample_report_data():
         "winning_trades": 30,
         "losing_trades": 12,
         "win_rate": 71.4,
+        "net_deposits_usd": 0,
+        "total_deposits_usd": 0,
+        "total_withdrawals_usd": 0,
+        "adjusted_account_growth_usd": 500.0,
     }
 
 
@@ -236,3 +244,58 @@ class TestParseTieredSummary:
         assert result["beginner"] is None  # empty → None
         assert result["comfortable"] == "Content"
         assert result["experienced"] is None  # empty → None
+
+
+# ---------------------------------------------------------------------------
+# _build_summary_prompt — capital movement data always included
+# ---------------------------------------------------------------------------
+
+class TestBuildSummaryPrompt:
+    """Prompt must always include capital movement reconciliation data."""
+
+    def test_capital_section_always_present_zero_deposits(self, sample_report_data):
+        """Capital movement section appears even when net deposits are zero."""
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Capital Movements & Account Reconciliation" in prompt
+        assert "Account value change in period" in prompt
+        assert "Trading profit in period" in prompt
+        assert "Net deposits/withdrawals" in prompt
+        assert "Adjusted growth" in prompt
+
+    def test_capital_section_with_deposits(self, sample_report_data):
+        """Capital section shows correct deposit/withdrawal breakdown."""
+        sample_report_data["net_deposits_usd"] = 5000.0
+        sample_report_data["total_deposits_usd"] = 6000.0
+        sample_report_data["total_withdrawals_usd"] = 1000.0
+        sample_report_data["adjusted_account_growth_usd"] = -4500.0
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "$5,000.00" in prompt  # net deposits
+        assert "$6,000.00" in prompt  # total deposits
+        assert "$1,000.00" in prompt  # total withdrawals
+        assert "$-4,500.00" in prompt  # adjusted growth
+
+    def test_prompt_includes_never_conflate_instruction(self, sample_report_data):
+        """Prompt includes critical instruction to never conflate value change with profit."""
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "NEVER imply that account value change equals trading profit" in prompt
+
+    def test_prompt_always_include_capital_movements_header(self, sample_report_data):
+        """Prompt instructs AI to ALWAYS include ### Capital Movements section."""
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "ALWAYS include ### Capital Movements" in prompt
+
+    def test_prior_period_comparison_included(self, sample_report_data):
+        """Prior period data is included when present."""
+        sample_report_data["prior_period"] = {
+            "period_profit_usd": 300.0,
+            "account_value_usd": 9200.0,
+        }
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Prior Period Comparison" in prompt
+        assert "$300.00" in prompt
+        assert "$200.00" in prompt  # change: 500 - 300
+
+    def test_no_prior_period_when_absent(self, sample_report_data):
+        """Prior period section omitted when no data."""
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Prior Period Comparison" not in prompt

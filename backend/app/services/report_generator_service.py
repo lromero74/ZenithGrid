@@ -1468,18 +1468,26 @@ def generate_pdf(
             ("Losing Trades", str(report_data.get("losing_trades", 0))),
         ]
 
-        # Add deposit/withdrawal metrics to PDF if present
+        # Always show capital movement metrics for full transparency
+        pdf_start_val = report_data.get("period_start_value_usd", 0)
         pdf_net_deposits = report_data.get("net_deposits_usd", 0)
-        pdf_adj_growth = report_data.get("adjusted_account_growth_usd")
-        if pdf_net_deposits != 0 and pdf_adj_growth is not None:
-            dep_sign = "+" if pdf_net_deposits >= 0 else "-"
-            adj_sign = "+" if pdf_adj_growth >= 0 else "-"
+        pdf_total_dep = report_data.get("total_deposits_usd", 0)
+        pdf_total_wth = report_data.get("total_withdrawals_usd", 0)
+        pdf_adj_growth = report_data.get("adjusted_account_growth_usd", 0)
+        metrics.append(("Period Start Value", f"${pdf_start_val:,.2f}"))
+        dep_sign = "+" if pdf_net_deposits >= 0 else "-"
+        metrics.append(
+            ("Net Deposits", f"{dep_sign}${abs(pdf_net_deposits):,.2f}")
+        )
+        if pdf_total_dep or pdf_total_wth:
             metrics.append(
-                ("Net Deposits", f"{dep_sign}${abs(pdf_net_deposits):,.2f}")
+                ("  Deposits / Withdrawals",
+                 f"${pdf_total_dep:,.2f} / ${pdf_total_wth:,.2f}")
             )
-            metrics.append(
-                ("Adjusted Growth", f"{adj_sign}${abs(pdf_adj_growth):,.2f}")
-            )
+        adj_sign = "+" if pdf_adj_growth >= 0 else "-"
+        metrics.append(
+            ("Adjusted Growth", f"{adj_sign}${abs(pdf_adj_growth):,.2f}")
+        )
 
         pdf.set_font("Helvetica", "", 10)
         for label, value in metrics:
@@ -1783,8 +1791,10 @@ def _render_pdf_markdown(pdf, text: str, br: int, bg: int, bb: int):
             bullet_text = stripped[2:]
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(60, 60, 60)
-            pdf.cell(5, 6, "")  # indent
-            pdf.multi_cell(0, 6, "- " + bullet_text, markdown=True)
+            indent = pdf.l_margin + 5
+            pdf.set_x(indent)
+            avail_w = pdf.w - pdf.r_margin - indent
+            pdf.multi_cell(avail_w, 6, "- " + bullet_text, markdown=True)
         else:
             buf.append(stripped)
 
