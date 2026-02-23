@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Bot } from '../types'
 import { Plus, Activity, Building2, Wallet, Upload, ClipboardPaste, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { useConfirm } from '../contexts/ConfirmContext'
+import { useNotifications } from '../contexts/NotificationContext'
 import AIBotLogs from '../components/AIBotLogs'
 import IndicatorLogs from '../components/IndicatorLogs'
 import ScannerLogs from '../components/ScannerLogs'
@@ -25,6 +27,8 @@ import type { SampleBot } from './bots/data/sampleBots'
 function Bots() {
   const location = useLocation()
   const { selectedAccount, accounts } = useAccount()
+  const confirm = useConfirm()
+  const { addToast } = useNotifications()
   const [showModal, setShowModal] = useState(false)
   const [editingBot, setEditingBot] = useState<Bot | null>(null)
   const [aiLogsBotId, setAiLogsBotId] = useState<number | null>(null)
@@ -229,12 +233,12 @@ function Bots() {
     setShowModal(true)
   }
 
-  const handleDelete = (bot: Bot) => {
+  const handleDelete = async (bot: Bot) => {
     if (bot.is_active) {
-      alert('Cannot delete an active bot. Stop it first.')
+      addToast({ type: 'error', title: 'Cannot Delete', message: 'Stop the bot before deleting it.' })
       return
     }
-    if (confirm(`Are you sure you want to delete "${bot.name}"?`)) {
+    if (await confirm({ title: 'Delete Bot', message: `Are you sure you want to delete "${bot.name}"?`, variant: 'danger', confirmLabel: 'Delete' })) {
       deleteBot.mutate(bot.id)
     }
   }
@@ -343,14 +347,17 @@ function Bots() {
     event.target.value = ''
   }
 
-  const handleImportSubmit = () => {
+  const handleImportSubmit = async () => {
     if (!importValidation.isValid || !importValidation.parsedData) return
 
     // Show warnings confirmation if any
     if (importValidation.warnings.length > 0) {
-      const proceed = confirm(
-        `Warnings:\n${importValidation.warnings.join('\n')}\n\nDo you want to import anyway?`
-      )
+      const proceed = await confirm({
+        title: 'Import Warnings',
+        message: `${importValidation.warnings.join('\n')}\n\nDo you want to import anyway?`,
+        variant: 'warning',
+        confirmLabel: 'Import Anyway',
+      })
       if (!proceed) return
     }
 

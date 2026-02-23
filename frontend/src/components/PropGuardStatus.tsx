@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { authFetch } from '../services/api'
 import { Account } from '../contexts/AccountContext'
+import { useConfirm } from '../contexts/ConfirmContext'
 
 interface PropGuardState {
   account_id: number
@@ -50,6 +51,7 @@ interface PropGuardStatusProps {
 }
 
 export function PropGuardStatus({ account }: PropGuardStatusProps) {
+  const confirm = useConfirm()
   const [state, setState] = useState<PropGuardState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -86,14 +88,12 @@ export function PropGuardStatus({ account }: PropGuardStatusProps) {
   }, [fetchStatus])
 
   const handleKill = async () => {
-    if (!confirm(
-      'EMERGENCY KILL SWITCH\n\n' +
-      'This will:\n' +
-      '- Block ALL new orders immediately\n' +
-      '- Attempt to close all open positions\n' +
-      '- Cancel all pending orders\n\n' +
-      'Are you sure you want to activate the kill switch?'
-    )) {
+    if (!await confirm({
+      title: 'Emergency Kill Switch',
+      message: 'This will:\n- Block ALL new orders immediately\n- Attempt to close all open positions\n- Cancel all pending orders\n\nAre you sure you want to activate the kill switch?',
+      confirmLabel: 'Activate Kill Switch',
+      variant: 'danger',
+    })) {
       return
     }
 
@@ -115,12 +115,12 @@ export function PropGuardStatus({ account }: PropGuardStatusProps) {
   }
 
   const handleReset = async () => {
-    if (!confirm(
-      'Reset Kill Switch\n\n' +
-      'This will re-enable trading for this account.\n' +
-      'Daily P&L tracking will restart from current equity.\n\n' +
-      'Make sure you have reviewed the situation before proceeding.'
-    )) {
+    if (!await confirm({
+      title: 'Reset Kill Switch',
+      message: 'This will re-enable trading for this account.\nDaily P&L tracking will restart from current equity.\n\nMake sure you have reviewed the situation before proceeding.',
+      confirmLabel: 'Reset',
+      variant: 'warning',
+    })) {
       return
     }
 

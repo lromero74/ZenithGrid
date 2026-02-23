@@ -9,6 +9,7 @@ import { PaperTradingToggle } from './components/PaperTradingToggle'
 import { AddAccountModal } from './components/AddAccountModal'
 import { LoadingSpinner } from './components/LoadingSpinner'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { ConfirmProvider } from './contexts/ConfirmContext'
 import { VideoPlayerProvider } from './contexts/VideoPlayerContext'
 import { ArticleReaderProvider } from './contexts/ArticleReaderContext'
 import { AccountProvider, useAccount } from './contexts/AccountContext'
@@ -207,6 +208,7 @@ function AppContent() {
 
   return (
     <NotificationProvider>
+    <ConfirmProvider>
     <VideoPlayerProvider>
     <ArticleReaderProvider>
     <div className="min-h-screen bg-slate-900 text-white">
@@ -672,6 +674,7 @@ function AppContent() {
     </div>
     </ArticleReaderProvider>
     </VideoPlayerProvider>
+    </ConfirmProvider>
     </NotificationProvider>
   )
 }

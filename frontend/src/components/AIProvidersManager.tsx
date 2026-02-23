@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { aiCredentialsApi, AIProviderStatus } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useConfirm } from '../contexts/ConfirmContext'
 
 // Provider color configuration
 const PROVIDER_COLORS: Record<string, string> = {
@@ -34,6 +35,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 
 export function AIProvidersManager() {
   const { user } = useAuth()
+  const confirm = useConfirm()
   const [providerStatus, setProviderStatus] = useState<AIProviderStatus[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,7 +95,7 @@ export function AIProvidersManager() {
 
   const handleDeleteKey = async (provider: string) => {
     const providerInfo = providerStatus.find(p => p.provider === provider)
-    if (!confirm(`Are you sure you want to delete your ${providerInfo?.name || provider} API key?`)) {
+    if (!await confirm({ title: 'Delete API Key', message: `Are you sure you want to delete your ${providerInfo?.name || provider} API key?`, variant: 'danger', confirmLabel: 'Delete' })) {
       return
     }
 

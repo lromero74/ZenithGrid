@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Wallet, TrendingUp, DollarSign, Bitcoin, ArrowUpDown, ArrowUp, ArrowDown, BarChart3, X, RefreshCw, Building2 } from 'lucide-react'
+import { useConfirm } from '../contexts/ConfirmContext'
+import { useNotifications } from '../contexts/NotificationContext'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authFetch, api } from '../services/api'
@@ -58,6 +60,8 @@ type SortDirection = 'asc' | 'desc'
 function Portfolio() {
   const { selectedAccount } = useAccount()
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
+  const { addToast } = useNotifications()
 
   // Fetch portfolio with optional cache bypass
   const fetchPortfolio = async (forceFresh = false): Promise<PortfolioData> => {
@@ -103,11 +107,11 @@ function Portfolio() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['account-portfolio'] })
-      alert(`✅ Successfully sold ${variables.size} ${variables.asset} to ${variables.quoteAsset}\nReceived: ${data.filled_value || 'N/A'} ${variables.quoteAsset}`)
+      addToast({ type: 'success', title: 'Sell Complete', message: `Sold ${variables.size} ${variables.asset} to ${variables.quoteAsset}. Received: ${data.filled_value || 'N/A'} ${variables.quoteAsset}` })
     },
     onError: (error: any, variables) => {
       const errorMsg = error.response?.data?.detail || error.message || 'Unknown error'
-      alert(`❌ Failed to sell ${variables.asset} to ${variables.quoteAsset}: ${errorMsg}`)
+      addToast({ type: 'error', title: 'Sell Failed', message: `Failed to sell ${variables.asset} to ${variables.quoteAsset}: ${errorMsg}` })
     }
   })
 
@@ -128,16 +132,18 @@ function Portfolio() {
   }
 
   // Handle sell action
-  const handleSell = (asset: string, quoteAsset: 'USD' | 'BTC', available: number) => {
+  const handleSell = async (asset: string, quoteAsset: 'USD' | 'BTC', available: number) => {
     if (available <= 0) {
-      alert(`No ${asset} available to sell`)
+      addToast({ type: 'error', title: 'No Balance', message: `No ${asset} available to sell` })
       return
     }
 
-    const confirmed = window.confirm(
-      `Sell all ${available.toFixed(8)} ${asset} to ${quoteAsset}?\n\n` +
-      `This will execute a market sell order.`
-    )
+    const confirmed = await confirm({
+      title: `Sell ${asset}`,
+      message: `Sell all ${available.toFixed(8)} ${asset} to ${quoteAsset}?\n\nThis will execute a market sell order.`,
+      variant: 'warning',
+      confirmLabel: 'Sell',
+    })
 
     if (confirmed) {
       sellCoinMutation.mutate({ asset, quoteAsset, size: available })

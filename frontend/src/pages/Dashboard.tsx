@@ -20,6 +20,7 @@ import { Bot } from '../types'
 import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
 import { useAccount, getChainName } from '../contexts/AccountContext'
+import { useNotifications } from '../contexts/NotificationContext'
 import { AccountValueChart } from '../components/AccountValueChart'
 
 type Page = 'dashboard' | 'bots' | 'positions' | 'portfolio' | 'charts' | 'strategies' | 'settings'
@@ -585,6 +586,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page: Page) => void }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { addToast } = useNotifications()
   const { data: stats } = useQuery({
     queryKey: ['bot-stats', bot.id],
     queryFn: () => botsApi.getStats(bot.id),
@@ -606,7 +608,7 @@ function BotCard({ bot, onNavigate: _onNavigate }: { bot: Bot, onNavigate: (page
       queryClient.invalidateQueries({ queryKey: ['bots'] })
       queryClient.invalidateQueries({ queryKey: ['bot-stats', bot.id] })
     } catch (err) {
-      alert(`Error: ${err}`)
+      addToast({ type: 'error', title: 'Bot Toggle Failed', message: `${err}` })
     }
   }
 

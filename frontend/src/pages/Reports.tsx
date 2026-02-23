@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
+import { useConfirm } from '../contexts/ConfirmContext'
 import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
 import { ScheduleForm, type ScheduleFormData } from '../components/reports/ScheduleForm'
 import { ReportViewModal } from '../components/reports/ReportViewModal'
@@ -28,6 +29,8 @@ export default function Reports() {
   const tabParam = searchParams.get('tab')
   const activeTab: TabId = (tabParam && VALID_TABS.has(tabParam) ? tabParam : 'goals') as TabId
   const queryClient = useQueryClient()
+
+  const confirm = useConfirm()
 
   const setActiveTab = (tab: TabId) => {
     setSearchParams({ tab }, { replace: true })
@@ -130,11 +133,11 @@ export default function Reports() {
     URL.revokeObjectURL(url)
   }, [])
 
-  const handleDeleteReport = useCallback((reportId: number) => {
-    if (confirm('Delete this report? This cannot be undone.')) {
+  const handleDeleteReport = useCallback(async (reportId: number) => {
+    if (await confirm({ title: 'Delete Report', message: 'Delete this report? This cannot be undone.', variant: 'danger', confirmLabel: 'Delete' })) {
       deleteReport.mutate(reportId)
     }
-  }, [deleteReport])
+  }, [deleteReport, confirm])
 
   // ---------- Render Helpers ----------
 
@@ -249,7 +252,7 @@ export default function Reports() {
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => { if (confirm('Delete this goal?')) deleteGoal.mutate(goal.id) }}
+                      onClick={async () => { if (await confirm({ title: 'Delete Goal', message: 'Delete this goal?', variant: 'danger', confirmLabel: 'Delete' })) deleteGoal.mutate(goal.id) }}
                       className="p-1 text-slate-400 hover:text-red-400 transition-colors"
                       title="Delete"
                     >
@@ -373,8 +376,8 @@ export default function Reports() {
 
                 <div className="flex items-center gap-1 ml-3">
                   <button
-                    onClick={() => {
-                      if (confirm('Generate a report now?')) generateReport.mutate(schedule.id)
+                    onClick={async () => {
+                      if (await confirm({ title: 'Generate Report', message: 'Generate a report now?', confirmLabel: 'Generate' })) generateReport.mutate(schedule.id)
                     }}
                     disabled={generateReport.isPending}
                     className="p-1.5 text-slate-400 hover:text-emerald-400 transition-colors"
@@ -390,7 +393,7 @@ export default function Reports() {
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => { if (confirm('Delete this schedule?')) deleteSchedule.mutate(schedule.id) }}
+                    onClick={async () => { if (await confirm({ title: 'Delete Schedule', message: 'Delete this schedule?', variant: 'danger', confirmLabel: 'Delete' })) deleteSchedule.mutate(schedule.id) }}
                     className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
                     title="Delete"
                   >
