@@ -624,13 +624,24 @@ def _format_due_label(item: dict, now: Optional[datetime] = None) -> str:
             else:
                 days_until = (dd - now.weekday()) % 7
                 next_date = now + timedelta(days=days_until)
-            return f"{dow_name} {_ordinal_day(next_date.day)}"
+            mon = _MONTH_ABBREVS[next_date.month - 1]
+            return f"{dow_name} {mon} {_ordinal_day(next_date.day)}"
         return dow_name
 
     dm = item.get("due_month")
     day_str = _ordinal_day(dd)
     if freq in ("quarterly", "semi_annual", "yearly") and dm and 1 <= dm <= 12:
         return f"{_MONTH_ABBREVS[dm - 1]} {day_str}"
+    # monthly/semi_monthly: resolve month from now
+    if now:
+        import calendar
+        last_dom = calendar.monthrange(now.year, now.month)[1]
+        resolved = last_dom if dd == -1 else min(dd, last_dom)
+        if resolved >= now.day:
+            return f"{_MONTH_ABBREVS[now.month - 1]} {day_str}"
+        # Already past this month — next month
+        next_month = now.month % 12 + 1
+        return f"{_MONTH_ABBREVS[next_month - 1]} {day_str}"
     return day_str
 
 

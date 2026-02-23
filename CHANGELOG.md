@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.39.5] - 2026-02-23
+
+### Changed
+- **Upcoming due labels**: Due dates now include the month (e.g., "Fri Feb 27th" instead of "Fri 27th", "Feb 15th" instead of "15th")
+
 ## [v2.39.4] - 2026-02-23
 
 ### Fixed
