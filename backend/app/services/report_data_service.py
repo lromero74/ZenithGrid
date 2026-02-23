@@ -114,8 +114,20 @@ async def gather_report_data(
     )
     net_deposits_usd = round(total_deposits_usd - total_withdrawals_usd, 2)
 
-    # True trading-driven account growth = (end - start) - net deposits
+    # Accounting identity: account_change = profit + net_deposits
+    # When no transfer records exist, compute implied net deposits from
+    # the difference between account change and trading profit.
     account_growth_usd = end_value["usd"] - start_value["usd"]
+    implied_net_deposits = round(account_growth_usd - period_profit_usd, 2)
+
+    if not all_transfers and abs(implied_net_deposits) >= 0.01:
+        # No transfer records — use the implied value
+        net_deposits_usd = implied_net_deposits
+        deposits_source = "implied"
+    else:
+        deposits_source = "transfers"
+
+    # True trading-driven account growth = (end - start) - net deposits
     adjusted_growth_usd = round(account_growth_usd - net_deposits_usd, 2)
 
     return {
@@ -137,6 +149,7 @@ async def gather_report_data(
         "total_withdrawals_usd": round(total_withdrawals_usd, 2),
         "adjusted_account_growth_usd": adjusted_growth_usd,
         "transfer_count": len(all_transfers),
+        "deposits_source": deposits_source,
     }
 
 

@@ -299,3 +299,17 @@ class TestBuildSummaryPrompt:
         """Prior period section omitted when no data."""
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
         assert "Prior Period Comparison" not in prompt
+
+    def test_implied_deposits_source_adds_note(self, sample_report_data):
+        """When deposits_source is 'implied', prompt warns AI not to say no deposits."""
+        sample_report_data["deposits_source"] = "implied"
+        sample_report_data["net_deposits_usd"] = 309.16
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Do NOT say 'no deposits were made'" in prompt
+        assert "accounting identity" in prompt
+
+    def test_transfers_source_no_implied_note(self, sample_report_data):
+        """When deposits_source is 'transfers', no implied note is added."""
+        sample_report_data["deposits_source"] = "transfers"
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Do NOT say 'no deposits were made'" not in prompt

@@ -214,6 +214,17 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
     total_wth = data.get("total_withdrawals_usd", 0)
     adj_growth = data.get("adjusted_account_growth_usd", 0)
 
+    deposits_source = data.get("deposits_source", "transfers")
+    source_note = ""
+    if deposits_source == "implied":
+        source_note = (
+            "\n  NOTE: No individual deposit/withdrawal records are available. "
+            "The net deposits figure above is computed from the accounting identity: "
+            "net deposits = account value change - trading profit. "
+            "Do NOT say 'no deposits were made' — the math proves deposits/withdrawals "
+            "occurred. Present the implied net figure accurately."
+        )
+
     capital_section = (
         f"\nCapital Movements & Account Reconciliation:"
         f"\n  - Account value change in period: ${account_change:,.2f}"
@@ -222,6 +233,7 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
         f"\n  - Net deposits/withdrawals: ${net_deposits:,.2f}"
         f"\n    (Deposits: ${total_dep:,.2f} / Withdrawals: ${total_wth:,.2f})"
         f"\n  - Adjusted growth (excluding deposits): ${adj_growth:,.2f}"
+        f"{source_note}"
     )
 
     prior_section = ""
