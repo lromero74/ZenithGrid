@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.13] - 2026-02-23
+
+### Fixed
+- **Report AI summaries broken for Gemini**: GeminiClientWrapper didn't forward kwargs (like `system_instruction`) to the underlying Google AI library, causing a silent TypeError that made all Gemini-powered report summaries fail
+- **Report AI provider has no fallback**: When a specific AI provider was configured for a report schedule but failed (expired key, service down), the system gave up immediately. Now tries the preferred provider first, then falls back to other available providers
+
+### Added
+- **Comprehensive test coverage**: Expanded from 433 tests / 11% coverage to 3,101 tests / 55% backend coverage across 3 rounds of parallel test-writing agents
+- **Backend test coverage**: 2,516 tests covering services, routers, strategies, trading engine, exchange clients, Coinbase API, and core logic modules
+- **Frontend test coverage**: 585 tests covering contexts, hooks, utilities, helpers, and API service layer
+
 ## [v2.40.12] - 2026-02-23
 
 ### Fixed
