@@ -64,8 +64,6 @@ interface UseTTSSyncReturn {
   setVoice: (voice: string) => void
   setRate: (rate: number) => void
   setVolume: (volume: number) => void
-  // Set audio volume instantly without React re-render (for smooth slider dragging)
-  setVolumeImmediate: (volume: number) => void
 }
 
 export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
@@ -91,9 +89,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   })
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const gainNodeRef = useRef<GainNode | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const volumeRef = useRef(volume)  // Track volume for lazy AudioContext init
   const animationFrameRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -211,33 +206,10 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     }
   }, [])
 
-  // Lazily create AudioContext + GainNode on first user gesture.
-  // MUST be called from a user-initiated event (click/tap) — iOS Safari
-  // blocks AudioContext created outside user gestures.
-  // createMediaElementSource permanently routes audio through Web Audio API,
-  // so if the context is suspended (no user gesture), silence results.
-  const ensureAudioContext = useCallback(() => {
-    if (gainNodeRef.current || !audioRef.current) return  // Already initialized
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
-    if (!AudioCtx) return  // No Web Audio API support
-    try {
-      const ctx = new AudioCtx()
-      const source = ctx.createMediaElementSource(audioRef.current)
-      const gainNode = ctx.createGain()
-      gainNode.gain.value = volumeRef.current
-      source.connect(gainNode)
-      gainNode.connect(ctx.destination)
-      audioContextRef.current = ctx
-      gainNodeRef.current = gainNode
-    } catch {
-      // Fallback: no GainNode — audio.volume will be used instead
-    }
-  }, [])
-
   // Initialize persistent audio element once
   useEffect(() => {
     const audio = new Audio()
-    audio.volume = volume  // Desktop fallback (ignored by iOS but works everywhere else)
+    audio.volume = volume
     audioRef.current = audio
 
     audio.onplay = () => {
@@ -306,12 +278,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
         URL.revokeObjectURL(currentAudioUrlRef.current)
         currentAudioUrlRef.current = null
       }
-      // Close Web Audio API context
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(() => {})
-        audioContextRef.current = null
-        gainNodeRef.current = null
-      }
     }
   }, [startAnimationLoop, stopAnimationLoop])
 
@@ -324,10 +290,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
 
   // Update volume when it changes
   useEffect(() => {
-    volumeRef.current = volume
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = volume
-    }
     if (audioRef.current) {
       audioRef.current.volume = volume
     }
@@ -336,12 +298,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   const loadAndPlay = useCallback(async (text: string, overrideVoice?: string, articleId?: number) => {
     const audio = audioRef.current
     if (!audio) return
-
-    // Initialize Web Audio API on first user gesture (required by iOS Safari)
-    ensureAudioContext()
-    if (audioContextRef.current?.state === 'suspended') {
-      await audioContextRef.current.resume()
-    }
 
     // Increment request ID - any errors from previous requests will be ignored
     const thisRequestId = ++requestIdRef.current
@@ -564,10 +520,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   }, [currentVoice, playbackRate, stopAnimationLoop])
 
   const play = useCallback(() => {
-    ensureAudioContext()
-    if (audioContextRef.current?.state === 'suspended') {
-      audioContextRef.current.resume().catch(() => {})
-    }
     if (audioRef.current && isReady) {
       audioRef.current.play()
         .then(() => setIsReady(false))
@@ -585,10 +537,6 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   }, [])
 
   const resume = useCallback(() => {
-    ensureAudioContext()
-    if (audioContextRef.current?.state === 'suspended') {
-      audioContextRef.current.resume().catch(() => {})
-    }
     if (audioRef.current && audioRef.current.paused && isPaused) {
       audioRef.current.play()
     }
@@ -711,28 +659,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setPlaybackRate(rate)
   }, [])
 
-  // Set audio volume instantly without React state update (no re-render).
-  // Used during slider drag for smooth touch response.
-  const setVolumeImmediate = useCallback((vol: number) => {
-    const clamped = Math.max(0, Math.min(1, vol))
-    volumeRef.current = clamped
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = clamped
-    }
-    if (audioRef.current) {
-      audioRef.current.volume = clamped
-    }
-  }, [])
-
-  // Full volume update — sets audio + React state + localStorage.
-  // Used on drag end and mute/unmute button.
   const setVolume = useCallback((vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol))
-    volumeRef.current = clamped
     setVolumeState(clamped)
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = clamped
-    }
     if (audioRef.current) {
       audioRef.current.volume = clamped
     }
@@ -776,6 +705,5 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setVoice,
     setRate,
     setVolume,
-    setVolumeImmediate,
   }
 }
