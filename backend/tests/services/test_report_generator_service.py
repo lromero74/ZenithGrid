@@ -22,8 +22,10 @@ from app.services.report_generator_service import (
     _md_to_styled_html,
     _normalize_ai_summary,
     _ordinal_day,
+    _render_pdf_markdown,
     _sanitize_for_pdf,
     build_report_html,
+    generate_pdf,
 )
 
 
@@ -1242,3 +1244,109 @@ class TestExpensesGoalCardProjections:
         html = _build_expenses_goal_card(g)
         assert "exp-panel-proj-1" in html
         assert "display: block !important" in html
+
+
+# ---------------------------------------------------------------------------
+# _render_pdf_markdown — bullet rendering with explicit width
+# ---------------------------------------------------------------------------
+
+
+class TestRenderPdfMarkdownBullets:
+    """Test that _render_pdf_markdown handles bullets without crashing."""
+
+    def test_bullets_render_without_error(self):
+        """Bullet items should render using explicit width calculation."""
+        from fpdf import FPDF
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("Helvetica", "", 10)
+
+        text = (
+            "### Performance Overview\n"
+            "- Win rate was **71.4%** across 42 trades\n"
+            "- Period profit: **$500.00**\n"
+            "- A very long bullet point that should wrap to multiple lines "
+            "because it contains a lot of text describing the trading performance "
+            "in great detail to test that the multi_cell width is correct\n"
+        )
+        # Should not raise "Not enough horizontal space"
+        _render_pdf_markdown(pdf, text, 59, 130, 246)
+
+    def test_nested_markdown_in_bullets(self):
+        """Bullets with bold markdown should render correctly."""
+        from fpdf import FPDF
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("Helvetica", "", 10)
+
+        text = "- **Bold text** and normal text in a bullet\n"
+        _render_pdf_markdown(pdf, text, 0, 0, 0)
+
+
+# ---------------------------------------------------------------------------
+# generate_pdf — capital movement metrics always included
+# ---------------------------------------------------------------------------
+
+
+class TestGeneratePdfCapitalMetrics:
+    """PDF key metrics always include capital movement data."""
+
+    def _make_report_data(self, **overrides):
+        base = {
+            "account_value_usd": 10000.0,
+            "account_value_btc": 0.1,
+            "period_start_value_usd": 9500.0,
+            "period_profit_usd": 500.0,
+            "period_profit_btc": 0.005,
+            "total_trades": 42,
+            "winning_trades": 30,
+            "losing_trades": 12,
+            "win_rate": 71.4,
+            "net_deposits_usd": 0,
+            "total_deposits_usd": 0,
+            "total_withdrawals_usd": 0,
+            "adjusted_account_growth_usd": 500.0,
+        }
+        base.update(overrides)
+        return base
+
+    def test_pdf_includes_capital_metrics_zero_deposits(self):
+        """PDF should include period start value and adjusted growth even with zero deposits."""
+        data = self._make_report_data()
+        result = generate_pdf("<html></html>", data, "Test Report")
+        assert result is not None
+        assert isinstance(result, bytes)
+        assert len(result) > 100  # valid PDF
+
+    def test_pdf_includes_capital_metrics_with_deposits(self):
+        """PDF should include deposit/withdrawal breakdown when present."""
+        data = self._make_report_data(
+            net_deposits_usd=5000.0,
+            total_deposits_usd=6000.0,
+            total_withdrawals_usd=1000.0,
+            adjusted_account_growth_usd=-4500.0,
+        )
+        result = generate_pdf("<html></html>", data, "Test Report")
+        assert result is not None
+        assert isinstance(result, bytes)
+
+    def test_pdf_with_ai_summary_bullets(self):
+        """PDF with AI tiered summary containing bullets should not crash."""
+        data = self._make_report_data()
+        data["_ai_summary"] = {
+            "beginner": (
+                "### Performance Overview\n"
+                "- You made **$500** in profit\n"
+                "- Your win rate was **71.4%**\n"
+                "### Capital Movements\n"
+                "- No deposits or withdrawals this period\n"
+            ),
+            "comfortable": "### Performance Overview\nSolid period.",
+            "experienced": "### Performance Overview\nAlpha positive.",
+        }
+        result = generate_pdf("<html></html>", data, "Test Report")
+        assert result is not None

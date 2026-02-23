@@ -204,20 +204,37 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
                 )
         goals_section = "\nGoal Progress:\n" + "\n".join(goals_lines)
 
-    capital_section = ""
+    # Always compute the account value change vs profit discrepancy
+    start_val = data.get("period_start_value_usd", 0)
+    end_val = data.get("account_value_usd", 0)
+    account_change = round(end_val - start_val, 2)
+    period_profit = data.get("period_profit_usd", 0)
     net_deposits = data.get("net_deposits_usd", 0)
-    if net_deposits != 0:
-        total_dep = data.get("total_deposits_usd", 0)
-        total_wth = data.get("total_withdrawals_usd", 0)
-        adj_growth = data.get("adjusted_account_growth_usd", 0)
-        capital_section = (
-            f"\nCapital Movements:"
-            f"\n  - Net deposits in period: ${net_deposits:,.2f}"
-            f"\n  - Adjusted account growth (excluding deposits): "
-            f"${adj_growth:,.2f}"
-            f"\n  - Total deposits: ${total_dep:,.2f} / "
-            f"Total withdrawals: ${total_wth:,.2f}"
+    total_dep = data.get("total_deposits_usd", 0)
+    total_wth = data.get("total_withdrawals_usd", 0)
+    adj_growth = data.get("adjusted_account_growth_usd", 0)
+
+    deposits_source = data.get("deposits_source", "transfers")
+    source_note = ""
+    if deposits_source == "implied":
+        source_note = (
+            "\n  NOTE: No individual deposit/withdrawal records are available. "
+            "The net deposits figure above is computed from the accounting identity: "
+            "net deposits = account value change - trading profit. "
+            "Do NOT say 'no deposits were made' — the math proves deposits/withdrawals "
+            "occurred. Present the implied net figure accurately."
         )
+
+    capital_section = (
+        f"\nCapital Movements & Account Reconciliation:"
+        f"\n  - Account value change in period: ${account_change:,.2f}"
+        f"\n    (from ${start_val:,.2f} to ${end_val:,.2f})"
+        f"\n  - Trading profit in period: ${period_profit:,.2f}"
+        f"\n  - Net deposits/withdrawals: ${net_deposits:,.2f}"
+        f"\n    (Deposits: ${total_dep:,.2f} / Withdrawals: ${total_wth:,.2f})"
+        f"\n  - Adjusted growth (excluding deposits): ${adj_growth:,.2f}"
+        f"{source_note}"
+    )
 
     prior_section = ""
     prior = data.get("prior_period")
@@ -254,7 +271,7 @@ Formatting rules (apply to ALL tiers):
 - Use - bullet lists for action items in the Outlook section
 - Keep each section concise: 2-4 sentences or a short bullet list
 - Only include ### Goal Progress if goal data is present above
-- Only include ### Capital Movements if deposit/withdrawal data is present above
+- ALWAYS include ### Capital Movements — explain the account value change breakdown
 
 {_DELIM_BEGINNER}
 (For beginners: plain language, explain jargon, encouraging tone. Focus on \
@@ -273,13 +290,17 @@ financial symbols (%, +/-, currency) but minimal decorative symbols.)
 
 Guidelines for ALL tiers:
 - Be factual — do not hallucinate data not provided above
+- CRITICAL: NEVER imply that account value change equals trading profit. The \
+account value change includes deposits and withdrawals. Always break down the \
+account value change: how much came from trading profit vs. deposits/withdrawals. \
+If account value change is significantly different from trading profit, explicitly \
+state that the difference is from deposits or withdrawals — do NOT present the \
+value change as if it resulted from trading.
 - If income projections or forward-looking estimates are present, include a brief \
 disclaimer: past performance does not guarantee future results, projections are \
 estimates based on historical data, and actual results may vary
 - If there's prior period data, compare and note changes
-- Note goal progress and whether the user is on track
-- If deposits or withdrawals occurred, explicitly mention them and clarify the \
-difference between account value growth and actual trading performance"""
+- Note goal progress and whether the user is on track"""
 
 
 async def _call_ai(client, provider: str, prompt: str) -> Optional[str]:

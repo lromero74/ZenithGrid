@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.15] - 2026-02-23
+
+### Fixed
+- **Report AI conflates deposits with trading profit**: AI summaries now always receive capital movement/reconciliation data (account change, trading profit, net deposits) and are instructed to never present account value growth as trading performance
+- **Implied net deposits when no transfer records**: When the Coinbase transfer sync has no records, reports now compute implied net deposits from the accounting identity (account change - trading profit) instead of showing $0
+- **PDF report crashes on AI bullet rendering**: Fixed fpdf2 "Not enough horizontal space" error when rendering bulleted lists in AI summaries by using explicit width calculation instead of implicit remaining width
+- **PDF report missing capital movement metrics**: Period start value, net deposits, and adjusted growth are now always shown in the PDF Key Metrics section (previously only shown when deposits were non-zero)
+
 ## [v2.40.14] - 2026-02-23
 
 ### Fixed
