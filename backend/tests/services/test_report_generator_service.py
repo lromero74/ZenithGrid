@@ -829,12 +829,12 @@ class TestFormatDueLabel:
         label = _format_due_label({"due_day": 28, "frequency": "monthly"}, now=now)
         assert label == "Feb 28th"
 
-    def test_monthly_past_day_shows_next_month(self):
-        """Monthly due day already past this month shows next month."""
+    def test_monthly_past_day_still_shows_current_month(self):
+        """Monthly due day already past still shows current month (upcoming filters it out)."""
         from datetime import datetime
         now = datetime(2026, 2, 23)
         label = _format_due_label({"due_day": 5, "frequency": "monthly"}, now=now)
-        assert label == "Mar 5th"
+        assert label == "Feb 5th"
 
     def test_yearly_with_month(self):
         label = _format_due_label(

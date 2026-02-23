@@ -632,16 +632,9 @@ def _format_due_label(item: dict, now: Optional[datetime] = None) -> str:
     day_str = _ordinal_day(dd)
     if freq in ("quarterly", "semi_annual", "yearly") and dm and 1 <= dm <= 12:
         return f"{_MONTH_ABBREVS[dm - 1]} {day_str}"
-    # monthly/semi_monthly: resolve month from now
+    # monthly/semi_monthly: show current month
     if now:
-        import calendar
-        last_dom = calendar.monthrange(now.year, now.month)[1]
-        resolved = last_dom if dd == -1 else min(dd, last_dom)
-        if resolved >= now.day:
-            return f"{_MONTH_ABBREVS[now.month - 1]} {day_str}"
-        # Already past this month — next month
-        next_month = now.month % 12 + 1
-        return f"{_MONTH_ABBREVS[next_month - 1]} {day_str}"
+        return f"{_MONTH_ABBREVS[now.month - 1]} {day_str}"
     return day_str
 
 
@@ -820,8 +813,8 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
         # every_n_days: compute from anchor, no due_day needed
         if freq == "every_n_days" and anchor and item.get("frequency_n"):
             next_dt = _next_every_n_days_date(anchor, item["frequency_n"], now)
-            days_until = (next_dt - now.replace(hour=0, minute=0, second=0, microsecond=0)).days
-            if 0 <= days_until <= 30:
+            if next_dt.month == now.month and next_dt.year == now.year:
+                days_until = (next_dt - now.replace(hour=0, minute=0, second=0, microsecond=0)).days
                 upcoming_items.append((days_until, dd, item))
             continue
 
@@ -837,7 +830,10 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
                 days_until = (next_dt - now.replace(hour=0, minute=0, second=0, microsecond=0)).days
             else:
                 days_until = (dd - today_dow) % 7
-            upcoming_items.append((days_until, dd, item))
+                next_dt = now + timedelta(days=days_until)
+            # Only include if the next occurrence is this month
+            if next_dt.month == now.month and next_dt.year == now.year:
+                upcoming_items.append((days_until, dd, item))
             continue
 
         # For multi-month frequencies, check if this item is due this month
