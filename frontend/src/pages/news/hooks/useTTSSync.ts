@@ -218,22 +218,29 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   // createMediaElementSource permanently routes audio through the context,
   // so this is a one-time operation on the persistent Audio element.
   const ensureGainNode = useCallback(() => {
-    if (gainNodeRef.current || !audioRef.current) return
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
-      if (!AudioCtx) return
-      const ctx = new AudioCtx()
-      const source = ctx.createMediaElementSource(audioRef.current)
-      const gain = ctx.createGain()
-      source.connect(gain)
-      gain.connect(ctx.destination)
-      gain.gain.value = volumeRef.current
-      audioContextRef.current = ctx
-      gainNodeRef.current = gain
-      if (ctx.state === 'suspended') ctx.resume()
-    } catch (e) {
-      console.warn('AudioContext init failed:', e)
+    if (!audioRef.current) return
+    if (!gainNodeRef.current) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtx) return
+        const ctx = new AudioCtx()
+        const source = ctx.createMediaElementSource(audioRef.current)
+        const gain = ctx.createGain()
+        source.connect(gain)
+        gain.connect(ctx.destination)
+        gain.gain.value = volumeRef.current
+        audioContextRef.current = ctx
+        gainNodeRef.current = gain
+      } catch (e) {
+        console.warn('AudioContext init failed:', e)
+        return
+      }
+    }
+    // Always resume if suspended — a user gesture call can unlock a
+    // context that was created outside a gesture (or auto-suspended by iOS)
+    if (audioContextRef.current?.state === 'suspended') {
+      audioContextRef.current.resume()
     }
   }, [])
 
@@ -589,6 +596,9 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
   }, [isPaused, ensureGainNode])
 
   const stop = useCallback(() => {
+    // Init/resume GainNode here — stop() is called synchronously from user
+    // gesture handlers (startPlaylist, playArticle) BEFORE any async gaps
+    ensureGainNode()
     stopAnimationLoop()
     // Increment request ID to invalidate any in-flight requests
     requestIdRef.current++
@@ -614,7 +624,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     setWords([])  // Clear words to prevent stale state
     wordsRef.current = []
     setError(null)
-  }, [stopAnimationLoop])
+  }, [stopAnimationLoop, ensureGainNode])
 
   const replay = useCallback(() => {
     if (audioRef.current) {
@@ -709,6 +719,8 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     const clamped = Math.max(0, Math.min(1, vol))
     volumeRef.current = clamped
     setVolumeState(clamped)
+    // User gesture (slider/mute click) can resume a suspended AudioContext
+    ensureGainNode()
     // GainNode for iOS WebKit (audio.volume is ignored)
     if (gainNodeRef.current) {
       gainNodeRef.current.gain.value = clamped
@@ -719,7 +731,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     try {
       localStorage.setItem('tts-volume', String(clamped))
     } catch { /* ignore */ }
-  }, [])
+  }, [ensureGainNode])
 
   // Direct audio element access — reads currentTime/duration without React state delay
   const getPlaybackState = useCallback(() => {

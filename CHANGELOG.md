@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.40.11] - 2026-02-23
+
+### Fixed
+- **Volume control works on iOS**: GainNode now initialized synchronously during the user gesture (in `stop()`) before any async gaps — fixes iOS AudioContext suspension that caused complete silence
+
 ## [v2.40.10] - 2026-02-23
 
 ### Fixed
