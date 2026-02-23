@@ -618,6 +618,8 @@ def _make_expense_goal(items, goal_id=1, coverage_pct=100.0):
             "frequency": item.get("frequency", "monthly"),
             "due_day": item.get("due_day"),
             "due_month": item.get("due_month"),
+            "frequency_anchor": item.get("frequency_anchor"),
+            "frequency_n": item.get("frequency_n"),
             "login_url": item.get("login_url"),
             "normalized_amount": norm,
             "status": item.get("status", "covered"),
@@ -760,6 +762,25 @@ class TestBuildExpensesGoalCardTabs:
         # Whether it appears in upcoming depends on current month,
         # but the card should always render without error
         assert "Insurance" in html
+
+    def test_upcoming_shows_bill_amount_not_normalized(self):
+        """Upcoming tab should show the raw bill amount, not the period-normalized one."""
+        # Weekly $100 normalizes to ~$433/mo — upcoming should show $100.00
+        g = _make_expense_goal([
+            {"name": "Groceries", "amount": 100, "frequency": "weekly",
+             "due_day": 4, "normalized_amount": 433.33},
+        ])
+        # Use email_mode to get stacked sections (easier to parse)
+        html = _build_expenses_goal_card(g, email_mode=True)
+        # Find the Groceries row in the upcoming section
+        # In email mode, upcoming section appears after ">Upcoming</p>"
+        upcoming_start = html.find(">Upcoming</p>")
+        assert upcoming_start != -1, "Upcoming header not found"
+        upcoming_html = html[upcoming_start:]
+        # The upcoming row for Groceries should show $100.00 (bill amount)
+        assert "100.00" in upcoming_html
+        # Should NOT contain the normalized amount in the upcoming section
+        assert "433.33" not in upcoming_html
 
 
 # ---------------------------------------------------------------------------
