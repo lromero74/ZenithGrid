@@ -31,7 +31,7 @@ Write the PRP with these sections:
 ### Context & Goal
 - What problem does this solve?
 - Who benefits? (user-facing? internal?)
-- How does 3Commas handle this? (if applicable)
+- How do leading platforms handle this? (if applicable)
 
 ### Implementation Blueprint
 - Pseudocode or step-by-step approach

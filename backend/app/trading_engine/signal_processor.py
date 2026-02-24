@@ -330,7 +330,7 @@ async def process_signal(
         max_concurrent_deals = max(bot.strategy_config.get("max_concurrent_deals", 1), 1)
 
         # Only split budget if split_budget_across_pairs is enabled
-        # (3Commas style: each deal gets full budget by default)
+        # (deal-based: each deal gets full budget by default)
         if bot.split_budget_across_pairs:
             per_position_budget = reserved_balance / max_concurrent_deals
         else:
@@ -403,7 +403,7 @@ async def process_signal(
     logger.info(f"  🤖 Bot active: {bot.is_active}, Position exists: {position is not None}")
 
     if bot.is_active:
-        # Check max concurrent deals limit (3Commas style)
+        # Check max concurrent deals limit
         if position is None:  # Only check when considering opening a NEW position
             open_positions_count = await get_open_positions_count(db, bot)
             max_deals = strategy.config.get("max_concurrent_deals", 1)

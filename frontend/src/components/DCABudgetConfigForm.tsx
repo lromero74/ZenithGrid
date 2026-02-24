@@ -6,7 +6,7 @@ import AdvancedConditionBuilder, {
 } from './AdvancedConditionBuilder'
 import { ConditionType } from './PhaseConditionSelector'
 
-interface ThreeCommasStyleFormProps {
+interface DCABudgetConfigFormProps {
   config: Record<string, any>
   onChange: (config: Record<string, any>) => void
   quoteCurrency?: string  // 'BTC', 'USD', 'USDC', etc. - defaults to 'BTC'
@@ -60,7 +60,7 @@ interface DCABudgetBreakdown {
   minimumEnforced: boolean  // True if any order was bumped to minimum
 }
 
-// 3Commas-style DCA ladder calculation: divides the bot's budget equally among
+// DCA ladder calculation: divides the bot's budget equally among
 // max concurrent deals, then within each deal splits budget across a base order
 // plus exponentially scaled safety orders (each SO_i = base * scale^i).
 function calculateDCABudget(
@@ -82,7 +82,7 @@ function calculateDCABudget(
   // Calculate total capital needed for full DCA ladder
   // Base order + SO1 + SO2 + ... + SO_n
   // Where SO_i = BaseOrder * SafetyOrderScale^(i-1)
-  // Assuming safety orders start at 100% of base (like 3Commas default)
+  // Assuming safety orders start at 100% of base (default behavior)
   const baseOrderSizeRatio = 1.0  // Base order is the unit
   let totalRatio = baseOrderSizeRatio  // Start with base order
 
@@ -194,7 +194,7 @@ function hasBullFlagEntry(expression: ConditionExpression): boolean {
   )
 }
 
-function ThreeCommasStyleForm({
+function DCABudgetConfigForm({
   config,
   onChange,
   quoteCurrency = 'BTC',
@@ -204,7 +204,7 @@ function ThreeCommasStyleForm({
   numPairs: _numPairs,
   splitBudget: _splitBudget,
   maxConcurrentDeals
-}: ThreeCommasStyleFormProps) {
+}: DCABudgetConfigFormProps) {
   // Track which fields have validation error (red flash)
   const [errorFields, setErrorFields] = useState<Set<string>>(new Set())
   const errorTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -758,7 +758,7 @@ function ThreeCommasStyleForm({
           onChange={(expression) => updateConfig('safety_order_conditions', expression)}
         />
 
-        {/* Volume/Step Scaling - always visible like 3Commas */}
+        {/* Volume/Step Scaling - always visible */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-600">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
@@ -1030,4 +1030,4 @@ function ThreeCommasStyleForm({
   )
 }
 
-export default ThreeCommasStyleForm
+export default DCABudgetConfigForm

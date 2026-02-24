@@ -160,7 +160,7 @@ async def execute_buy(
             # Log the full exchange response to understand why order failed
             logger.error(f"Exchange order failed - Full response: {order_response}")
 
-            # Save error to position for UI display (like 3Commas)
+            # Save error to position for UI display
             if error_response:
                 # Try multiple possible error field names from exchange
                 error_msg = error_response.get("message") or error_response.get("error") or "Unknown error"
@@ -380,7 +380,7 @@ async def execute_buy(
         position.average_buy_price = 0.0
 
     # Assign deal number on FIRST successful trade (base order success)
-    # This ensures only successfully opened positions get deal numbers (like 3Commas)
+    # This ensures only successfully opened positions get deal numbers
     if position.user_deal_number is None and position.user_id:
         from app.trading_engine.position_manager import get_next_user_deal_number
         position.user_deal_number = await get_next_user_deal_number(db, position.user_id)
@@ -416,6 +416,9 @@ async def execute_buy(
     # Broadcast order fill notification via WebSocket (best-effort)
     try:
         fill_type = "base_order" if trade_type == "initial" else "dca_order"
+        is_paper = (hasattr(exchange, 'is_paper_trading')
+                    and callable(exchange.is_paper_trading)
+                    and exchange.is_paper_trading())
         await ws_manager.broadcast_order_fill(
             fill_type=fill_type,
             product_id=product_id,
@@ -424,6 +427,7 @@ async def execute_buy(
             price=actual_price,
             position_id=position.id,
             user_id=position.user_id,
+            is_paper_trading=is_paper,
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
@@ -726,6 +730,9 @@ async def execute_buy_close_short(
 
     # Broadcast short close notification via WebSocket (best-effort)
     try:
+        is_paper = (hasattr(exchange, 'is_paper_trading')
+                    and callable(exchange.is_paper_trading)
+                    and exchange.is_paper_trading())
         await ws_manager.broadcast_order_fill(
             fill_type="close_short",
             product_id=product_id,
@@ -736,6 +743,7 @@ async def execute_buy_close_short(
             profit=profit_quote,
             profit_percentage=profit_percentage,
             user_id=position.user_id,
+            is_paper_trading=is_paper,
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast short close WebSocket notification: {e}")

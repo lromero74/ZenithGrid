@@ -149,7 +149,7 @@ export const PriceBar = memo(({ position, currentPrice: _currentPrice, pnl, stra
       <div className="mb-1">
         <span className="text-[10px] text-blue-400">Filled {fundsUsedPercent.toFixed(2)}%</span>
       </div>
-      {/* Price Bar - 3Commas Style */}
+      {/* Price Bar */}
       <div className="relative w-full pt-6 pb-6">
         <div className="relative w-full h-2 bg-slate-700 rounded-full">
           {/* Fill color between entry and current */}

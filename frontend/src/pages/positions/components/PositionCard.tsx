@@ -76,7 +76,7 @@ export const PositionCard = ({
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-      {/* Deal Row - 3Commas Style Horizontal Layout */}
+      {/* Deal Row - Horizontal Layout */}
       <div
         className="p-4 cursor-pointer hover:bg-slate-750 transition-colors"
         onClick={() => onTogglePosition(position.id)}
@@ -158,7 +158,7 @@ export const PositionCard = ({
                     productId={position.product_id || 'ETH-BTC'}
                   />
                 )}
-                {/* Error Indicator (like 3Commas) */}
+                {/* Error Indicator */}
                 {position.last_error_message && (
                   <div
                     className="flex items-center cursor-help"
@@ -257,7 +257,7 @@ export const PositionCard = ({
             </div>
           </div>
 
-          {/* Column 5: Avg. O (Averaging Orders) - Like 3Commas (1 col) - hidden on mobile */}
+          {/* Column 5: Avg. O (Averaging Orders) (1 col) - hidden on mobile */}
           <div className="hidden sm:block col-span-1">
             <div className="text-[10px] space-y-0.5">
               <div className="text-slate-400">
@@ -310,7 +310,7 @@ export const PositionCard = ({
           </div>
         </div>
 
-        {/* Our Special "Better than 3Commas" Budget Usage Bar */}
+        {/* Budget Usage Bar */}
         <div className="mt-3 px-4">
           <div className="flex items-center justify-between text-xs mb-1">
             <span className="text-slate-400">Budget Used</span>
@@ -475,10 +475,10 @@ export const PositionCard = ({
           </button>
         </div>
 
-        {/* Notes Section (like 3Commas) */}
+        {/* Notes Section */}
         <div className="mt-3 px-4 pb-3">
           <div
-            className="text-xs flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
+            className="text-xs inline-flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               onOpenNotes(position)

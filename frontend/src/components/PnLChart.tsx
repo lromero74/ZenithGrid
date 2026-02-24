@@ -56,7 +56,7 @@ interface PnLChartProps {
   onTimeRangeChange?: (timeRange: TimeRange) => void
 }
 
-// Custom tooltip component for 3Commas-style tooltips
+// Custom tooltip component
 const CustomTooltip = ({ active, payload, label, labelFormatter, currencyDisplay }: any) => {
   if (!active || !payload || !payload.length) return null
 
@@ -645,7 +645,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
 
   return (
     <div className="bg-slate-900 rounded-lg overflow-hidden">
-      {/* Time Range Pills - 3Commas style */}
+      {/* Time Range Pills */}
       <div className="p-4 sm:p-6 border-b border-slate-800">
         <div className="flex justify-between items-center mb-3">
           <div className="flex gap-2 flex-wrap">

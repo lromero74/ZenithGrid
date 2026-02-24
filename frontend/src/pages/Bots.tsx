@@ -488,7 +488,7 @@ function Bots() {
       {/* Seasonality Toggle */}
       <SeasonalityToggle />
 
-      {/* P&L Chart - 3Commas-style (filtered by account) */}
+      {/* P&L Chart (filtered by account) */}
       <div className="mb-6">
         <PnLChart
           accountId={selectedAccount?.id}
@@ -499,7 +499,7 @@ function Bots() {
       {/* Sample Bots */}
       <SampleBotsSection onView={handleSampleView} onCopy={handleSampleCopy} />
 
-      {/* Bot List - 3Commas-style Table */}
+      {/* Bot List Table */}
       {bots.length === 0 ? (
         <div className="bg-slate-800 rounded-lg p-12 text-center">
           <Activity className="w-16 h-16 text-slate-600 mx-auto mb-4" />

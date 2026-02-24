@@ -135,7 +135,7 @@ async def update_position_settings(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Update position settings (like 3Commas deal editing).
+    Update position settings (deal editing).
 
     This updates the strategy_config_snapshot for an open position,
     allowing users to modify take profit, max safety orders, etc.

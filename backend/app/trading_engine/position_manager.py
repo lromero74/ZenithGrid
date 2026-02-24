@@ -313,7 +313,7 @@ async def create_position(
         total_base_acquired=0.0,
         average_buy_price=0.0,
         btc_usd_price_at_open=btc_usd_price,
-        strategy_config_snapshot=bot.strategy_config,  # Freeze config at position creation (like 3Commas)
+        strategy_config_snapshot=bot.strategy_config,  # Freeze config at position creation
     )
 
     # If pattern data provided (e.g., bull_flag), set up trailing stops

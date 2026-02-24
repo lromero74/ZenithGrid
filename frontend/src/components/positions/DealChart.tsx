@@ -49,6 +49,8 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map())
   const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const positionLinesRef = useRef<ISeriesApi<any>[]>([])
   const candleDataRef = useRef<CandleData[]>([])
   const isCleanedUpRef = useRef<boolean>(false)
   const lastUpdateRef = useRef<string>('')
@@ -507,6 +509,16 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         renderIndicators(chartData)
       }
 
+      // Remove previous position line series before adding new ones
+      for (const series of positionLinesRef.current) {
+        try {
+          chartRef.current.removeSeries(series)
+        } catch {
+          // Series may already be removed
+        }
+      }
+      positionLinesRef.current = []
+
       // Add entry/profit/loss lines
       const isBTCPair = selectedPair.endsWith('-BTC')
       const priceFormat = isBTCPair
@@ -530,6 +542,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
       }))
 
       entryLineSeries.setData(entryLineData)
+      positionLinesRef.current.push(entryLineSeries)
 
       // Take Profit line - uses configured profit target with fee adjustment
       const configuredTakeProfit = getTakeProfitPercent(position, bot)
@@ -549,6 +562,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         time: c.time as Time,
         value: takeProfitPrice,
       })))
+      positionLinesRef.current.push(takeProfitSeries)
 
       // Stop Loss line (only if position is open)
       if (position.status === 'open') {
@@ -567,6 +581,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
           time: c.time as Time,
           value: stopLossPrice,
         })))
+        positionLinesRef.current.push(stopLossSeries)
       }
 
       // Safety Order price levels
@@ -594,6 +609,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
             time: c.time as Time,
             value: soPrice,
           })))
+          positionLinesRef.current.push(soSeries)
 
           cumulativeDeviation += priceDeviation * Math.pow(stepScale, i)
         }

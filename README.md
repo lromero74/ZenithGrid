@@ -1,6 +1,6 @@
 # Zenith Grid - Advanced Trading Bot Platform
 
-A sophisticated self-hosted cryptocurrency trading platform with **AI-powered autonomous trading**, advanced DCA strategies, and professional chart analysis. Built to replace 3Commas with enhanced features and full control.
+A sophisticated self-hosted cryptocurrency trading platform with **AI-powered autonomous trading**, advanced DCA strategies, and professional chart analysis. Built as a self-hosted alternative to subscription-based trading bot services, with enhanced features and full control.
 
 **IMPORTANT: This software is licensed under the GNU Affero General Public License v3.0 (AGPL v3). Please read the [LICENSE](LICENSE) file before using this software.**
 
@@ -34,7 +34,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Email Delivery**: Automated delivery via AWS SES
 
 ### 📊 Professional Dashboard
-- **3Commas-Style Deals**: Active positions with real-time P&L
+- **Deal Management**: Active positions with real-time P&L
 - **TradingView Charts**: Professional candlestick charts with indicators
 - **Position Markers**: Entry price, TP/SL lines, safety order levels
 - **Account Value Charts**: Historical BTC + USD value lines with split view by quote currency
@@ -292,7 +292,7 @@ python3 update.py --yes
 
 ## 📊 Features Comparison
 
-| Feature | 3Commas | Zenith Grid |
+| Feature | Other Platforms | Zenith Grid |
 |---------|---------|-------------|
 | DCA Bots | ✅ | ✅ |
 | Multi-Pair Bots | ✅ | ✅ |

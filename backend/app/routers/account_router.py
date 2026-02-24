@@ -4,7 +4,7 @@ Account and portfolio API routes
 Handles account-related endpoints:
 - Account balances (BTC, ETH, totals)
 - Aggregate portfolio value calculations
-- Full portfolio breakdown (3Commas-style)
+- Full portfolio breakdown
 """
 
 import asyncio
@@ -328,7 +328,7 @@ async def get_portfolio(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get full portfolio breakdown (all coins like 3Commas)"""
+    """Get full portfolio breakdown (all coins)"""
     try:
         # Paper-only users get a simulated portfolio from their virtual balances
         paper_account = await get_user_paper_account(db, current_user.id)

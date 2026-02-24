@@ -1,6 +1,6 @@
-# 3Commas Replacement - Feature Checklist
+# ZenithGrid - Feature Checklist
 
-**Goal:** Feature parity with 3Commas DCA bot functionality, then extend beyond.
+**Goal:** Full DCA bot feature parity, then extend beyond with advanced and proprietary features.
 
 **Status Key:**
 - ✅ Complete
@@ -13,14 +13,14 @@
 
 ### Bot Management
 - ✅ Create bots with multiple strategy types
-- ✅ Edit bots while running (3Commas style)
+- ✅ Edit bots while running
 - ✅ Start/Stop bots
 - ✅ Multiple bots running simultaneously
 - ✅ Multi-pair bots (trade multiple pairs with one bot)
 - ✅ Budget splitting toggle (divide percentages across pairs)
 - ✅ Bot templates (presets and custom templates)
 - ✅ Clone/duplicate bots
-- ✅ 3Commas-style UI (toggle switches, ... menu)
+- ✅ Professional UI (toggle switches, ... menu)
 - ✅ Import/export bot configs
 
 ### Strategy Support
@@ -223,7 +223,7 @@
 
 ---
 
-## 3Commas Feature Parity
+## Core Feature Parity
 
 ### Must Have (Core) - ALL COMPLETE
 - ✅ DCA bot with safety orders
@@ -243,7 +243,7 @@
 - ✅ Notifications (WebSocket)
 - ⏳ Multiple exchanges
 
-### Beyond 3Commas
+### Advanced & Proprietary Features
 - ✅ AI-powered trading (5+ AI providers)
 - ✅ Bull Flag pattern scanner
 - ✅ Arbitrage strategies (3 types)

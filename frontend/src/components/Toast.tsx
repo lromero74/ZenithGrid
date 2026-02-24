@@ -17,6 +17,7 @@ export interface ToastData {
   amount?: string
   price?: string
   profit?: string
+  isPaperTrading?: boolean
   timestamp: number
   persistent?: boolean
   actionLabel?: string
@@ -141,9 +142,20 @@ export function Toast({ toast, onDismiss }: ToastProps) {
           {/* Content */}
           <div className="ml-3 flex-1">
             <div className="flex items-center justify-between">
-              <p className={`text-sm font-semibold ${styles.titleColor}`}>
-                {toast.title}
-              </p>
+              <div className="flex items-center gap-2">
+                {toast.isPaperTrading !== undefined && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    toast.isPaperTrading
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  }`}>
+                    {toast.isPaperTrading ? 'PAPER' : 'LIVE'}
+                  </span>
+                )}
+                <p className={`text-sm font-semibold ${styles.titleColor}`}>
+                  {toast.title}
+                </p>
+              </div>
               <button
                 onClick={handleDismiss}
                 className="ml-4 text-slate-400 hover:text-white transition-colors"

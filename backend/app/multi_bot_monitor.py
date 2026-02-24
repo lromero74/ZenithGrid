@@ -878,7 +878,7 @@ class MultiBotMonitor:
                 total_bot_budget = bot.get_reserved_balance()
 
             # Only split budget if split_budget_across_pairs is enabled
-            # Otherwise each deal gets the full budget (3Commas style)
+            # Otherwise each deal gets the full budget (deal-based allocation)
             if bot.split_budget_across_pairs and max_concurrent_deals > 0:
                 per_position_budget = total_bot_budget / max_concurrent_deals
                 print(
@@ -1115,7 +1115,7 @@ class MultiBotMonitor:
                 existing_position = all_pair_positions[0] if all_pair_positions else None
 
                 if existing_position and existing_position.strategy_config_snapshot:
-                    # Use frozen config from position (like 3Commas)
+                    # Use frozen config from position (snapshot at creation time)
                     strategy_config = existing_position.strategy_config_snapshot.copy()
                     logger.info(f"    Using FROZEN strategy config from position #{existing_position.id}")
                 else:

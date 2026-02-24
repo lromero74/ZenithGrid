@@ -108,6 +108,7 @@ class WebSocketManager:
         profit: Optional[float] = None,
         profit_percentage: Optional[float] = None,
         user_id: Optional[int] = None,
+        is_paper_trading: bool = False,
     ):
         """Broadcast an order fill event to the owning user's connections"""
         message = {
@@ -120,6 +121,7 @@ class WebSocketManager:
             "position_id": position_id,
             "profit": profit,
             "profit_percentage": profit_percentage,
+            "is_paper_trading": is_paper_trading,
             "timestamp": datetime.utcnow().isoformat(),
         }
         logger.info(f"Broadcasting order fill: {fill_type} for {product_id} (user_id={user_id})")

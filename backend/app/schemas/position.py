@@ -11,7 +11,7 @@ class PositionResponse(BaseModel):
     bot_id: Optional[int] = None
     account_id: Optional[int] = None  # For multi-account support
     user_attempt_number: Optional[int] = None  # Sequential attempt number (ALL attempts: success + failed)
-    user_deal_number: Optional[int] = None  # Deal number (SUCCESSFUL deals only, like 3Commas)
+    user_deal_number: Optional[int] = None  # Deal number (SUCCESSFUL deals only)
     product_id: str = "ETH-BTC"
     status: str
     opened_at: datetime
@@ -33,9 +33,9 @@ class PositionResponse(BaseModel):
     pending_orders_count: int = 0  # Count of unfilled limit orders
     first_buy_price: Optional[float] = None  # Price of first (base order) buy trade
     last_buy_price: Optional[float] = None  # Price of most recent buy trade
-    last_error_message: Optional[str] = None  # Last error message (like 3Commas)
+    last_error_message: Optional[str] = None  # Last error message
     last_error_timestamp: Optional[datetime] = None  # When error occurred
-    notes: Optional[str] = None  # User notes (like 3Commas)
+    notes: Optional[str] = None  # User notes
     closing_via_limit: bool = False  # Whether position is closing via limit order
     limit_close_order_id: Optional[str] = None  # Coinbase order ID for limit close
     limit_order_details: Optional["LimitOrderDetails"] = None  # Details of limit close order
@@ -80,7 +80,7 @@ class TradeResponse(BaseModel):
     @computed_field
     @property
     def trade_type_display(self) -> str:
-        """Convert trade_type to 3Commas-style display name"""
+        """Convert trade_type to user-friendly display name"""
         if self.side.upper() == "SELL":
             if "limit" in self.trade_type.lower():
                 return "Take Profit (Limit)"
@@ -118,7 +118,7 @@ class AIBotLogResponse(BaseModel):
 
 class UpdatePositionSettingsRequest(BaseModel):
     """
-    Request model for updating position settings (like 3Commas deal editing).
+    Request model for updating position settings (deal editing).
 
     Only certain fields are safe to modify on an open position:
     - take_profit_percentage: Target profit % from average buy price

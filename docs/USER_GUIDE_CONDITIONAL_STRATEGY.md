@@ -2,7 +2,7 @@
 
 ## What is the Custom Bot Strategy?
 
-The Custom Bot (Indicator-Based) strategy is a 3Commas-style trading bot that lets you create custom entry, DCA, and exit conditions using technical indicators with comparison operators.
+The Custom Bot (Indicator-Based) strategy is a condition-based trading bot that lets you create custom entry, DCA, and exit conditions using technical indicators with comparison operators.
 
 **Think of it like building trading rules with LEGO blocks:**
 - Pick any indicator (RSI, MACD, Bollinger Bands, AI signals, etc.)

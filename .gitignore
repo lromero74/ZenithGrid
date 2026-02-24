@@ -76,6 +76,7 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+frontend/coverage/
 
 # One-off helper scripts and temporary test/debug scripts
 backend/scripts/*

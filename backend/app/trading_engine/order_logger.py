@@ -2,7 +2,7 @@
 Order logging utilities for trading engine
 
 Handles logging of:
-- Order history (audit trail like 3Commas)
+- Order history (complete audit trail)
 - AI bot decision logs
 """
 
@@ -102,7 +102,7 @@ async def log_order_to_history(
 ):
     """
     Log order attempt to order_history table for audit trail.
-    Similar to 3Commas order history.
+    Complete order history for audit trail.
 
     Args:
         db: Database session

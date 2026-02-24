@@ -265,6 +265,9 @@ async def execute_sell_short(
 
     # Broadcast short sell notification via WebSocket (best-effort)
     try:
+        is_paper = (hasattr(exchange, 'is_paper_trading')
+                    and callable(exchange.is_paper_trading)
+                    and exchange.is_paper_trading())
         await ws_manager.broadcast({
             "type": "order_fill",
             "fill_type": "short_sell",
@@ -273,6 +276,7 @@ async def execute_sell_short(
             "quote_amount": quote_received,
             "price": actual_price,
             "position_id": position.id,
+            "is_paper_trading": is_paper,
             "timestamp": datetime.utcnow().isoformat(),
         }, user_id=position.user_id)
     except Exception as e:
@@ -710,6 +714,9 @@ async def execute_sell(
 
     # Broadcast sell order fill notification via WebSocket (best-effort)
     try:
+        is_paper = (hasattr(exchange, 'is_paper_trading')
+                    and callable(exchange.is_paper_trading)
+                    and exchange.is_paper_trading())
         await ws_manager.broadcast_order_fill(
             fill_type="sell_order",
             product_id=product_id,
@@ -720,6 +727,7 @@ async def execute_sell(
             profit=profit_quote,
             profit_percentage=profit_percentage,
             user_id=position.user_id,
+            is_paper_trading=is_paper,
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
@@ -732,7 +740,7 @@ async def execute_sell(
 
     # Trigger immediate re-analysis to find replacement position (best-effort)
     # By resetting last_signal_check, the bot will run on the next monitor cycle
-    # This is like 3Commas - when a deal closes, immediately look for new opportunities
+    # When a deal closes, immediately look for new opportunities
     try:
         logger.info("🔄 Position closed - triggering immediate re-analysis to find replacement")
         bot.last_signal_check = None

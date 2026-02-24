@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.49.1",
+  "version": "v2.50.0",
   "updated": "2026-02-24",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "stack": {
@@ -1089,7 +1089,7 @@
       },
       {
         "file": "conditions.py",
-        "purpose": "Flexible condition framework (3Commas-style) with indicator comparisons"
+        "purpose": "Flexible condition framework (indicator-based) with indicator comparisons"
       },
       {
         "file": "config.py",
@@ -1125,7 +1125,7 @@
       },
       {
         "file": "phase_conditions.py",
-        "purpose": "Advanced condition grouping with AND/OR/NOT logic (3Commas-style)"
+        "purpose": "Advanced condition grouping with AND/OR/NOT logic (phase-based)"
       }
     ],
     "schemas": [
@@ -1475,8 +1475,8 @@
     "components": {
       "bot_management": [
         {
-          "file": "components/ThreeCommasStyleForm.tsx",
-          "purpose": "3Commas-style bot configuration form"
+          "file": "components/DCABudgetConfigForm.tsx",
+          "purpose": "DCA budget configuration form"
         },
         {
           "file": "components/ConditionalStrategyForm.tsx",

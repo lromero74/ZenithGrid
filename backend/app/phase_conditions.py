@@ -1,5 +1,5 @@
 """
-Phase-Based Conditions (3Commas Style)
+Phase-Based Conditions
 
 Supports advanced condition grouping with AND/OR/NOT logic:
 - Groups can contain multiple conditions with internal AND/OR logic

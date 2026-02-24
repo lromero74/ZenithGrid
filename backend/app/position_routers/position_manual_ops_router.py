@@ -112,7 +112,7 @@ async def update_position_notes(
     position_id: int, request: UpdateNotesRequest,
     db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
-    """Update notes for a position (like 3Commas)"""
+    """Update notes for a position"""
     try:
         # Verify position belongs to current user
         accounts_q = select(Account.id).where(Account.user_id == current_user.id)
