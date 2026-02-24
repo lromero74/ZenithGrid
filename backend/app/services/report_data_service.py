@@ -104,6 +104,23 @@ async def gather_report_data(
     )
     all_transfers = transfer_result.scalars().all()
 
+    # Serialize individual transfer records (most recent first, top 10)
+    sorted_transfers = sorted(
+        all_transfers,
+        key=lambda t: t.occurred_at or datetime.min,
+        reverse=True,
+    )[:10]
+    transfer_records = [
+        {
+            "date": t.occurred_at.strftime("%Y-%m-%d") if t.occurred_at else "",
+            "type": t.transfer_type,
+            "amount_usd": round(t.amount_usd or 0, 2),
+            "currency": t.currency or "USD",
+            "source": t.source or "unknown",
+        }
+        for t in sorted_transfers
+    ]
+
     total_deposits_usd = sum(
         t.amount_usd or 0 for t in all_transfers
         if t.transfer_type == "deposit"
@@ -130,6 +147,14 @@ async def gather_report_data(
     # True trading-driven account growth = (end - start) - net deposits
     adjusted_growth_usd = round(account_growth_usd - net_deposits_usd, 2)
 
+    # Trading summary for Capital Movements section
+    trade_summary = {
+        "total_trades": total_trades,
+        "winning_trades": winning_trades,
+        "losing_trades": losing_trades,
+        "net_profit_usd": round(period_profit_usd, 2),
+    }
+
     return {
         "account_value_usd": end_value["usd"],
         "account_value_btc": end_value["btc"],
@@ -150,6 +175,8 @@ async def gather_report_data(
         "adjusted_account_growth_usd": adjusted_growth_usd,
         "transfer_count": len(all_transfers),
         "deposits_source": deposits_source,
+        "transfer_records": transfer_records,
+        "trade_summary": trade_summary,
     }
 
 

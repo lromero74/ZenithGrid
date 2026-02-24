@@ -313,3 +313,66 @@ class TestBuildSummaryPrompt:
         sample_report_data["deposits_source"] = "transfers"
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
         assert "Do NOT say 'no deposits were made'" not in prompt
+
+    def test_individual_transfers_in_prompt(self, sample_report_data):
+        """Transfer records are listed individually in the prompt."""
+        sample_report_data["transfer_records"] = [
+            {"date": "2026-02-23", "type": "deposit", "amount_usd": 150.0},
+            {"date": "2026-02-20", "type": "withdrawal", "amount_usd": 50.0},
+        ]
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Individual transfers" in prompt
+        assert "2026-02-23: Deposit +$150.00" in prompt
+        assert "2026-02-20: Withdrawal -$50.00" in prompt
+
+    def test_no_transfers_no_individual_section(self, sample_report_data):
+        """When no transfer records, individual transfers section is omitted."""
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Individual transfers" not in prompt
+
+    def test_empty_transfers_no_individual_section(self, sample_report_data):
+        """Empty transfer_records list should not produce individual section."""
+        sample_report_data["transfer_records"] = []
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Individual transfers" not in prompt
+
+    def test_trade_summary_included_when_present(self, sample_report_data):
+        """Trading activity line appears in prompt when trade_summary exists."""
+        sample_report_data["trade_summary"] = {
+            "total_trades": 15,
+            "winning_trades": 10,
+            "losing_trades": 5,
+            "net_profit_usd": 250.50,
+        }
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Trading activity: 15 trades" in prompt
+        assert "10W/5L" in prompt
+        assert "+$250.50" in prompt
+
+    def test_trade_summary_negative_pnl(self, sample_report_data):
+        """Negative P&L shows without plus sign."""
+        sample_report_data["trade_summary"] = {
+            "total_trades": 3,
+            "winning_trades": 0,
+            "losing_trades": 3,
+            "net_profit_usd": -100.00,
+        }
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Trading activity: 3 trades" in prompt
+        assert "0W/3L" in prompt
+
+    def test_trade_summary_absent_no_line(self, sample_report_data):
+        """No trading activity line when trade_summary is absent."""
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Trading activity:" not in prompt
+
+    def test_trade_summary_zero_trades_no_line(self, sample_report_data):
+        """No trading activity line when total_trades is 0."""
+        sample_report_data["trade_summary"] = {
+            "total_trades": 0,
+            "winning_trades": 0,
+            "losing_trades": 0,
+            "net_profit_usd": 0,
+        }
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Trading activity:" not in prompt

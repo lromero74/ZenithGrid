@@ -606,6 +606,14 @@ interface AccountValueSnapshot {
   total_value_usd: number
 }
 
+export interface ActivityItem {
+  date: string
+  line: 'btc' | 'usd'
+  category: 'trade_win' | 'trade_loss' | 'deposit' | 'withdrawal'
+  amount: number
+  count: number
+}
+
 export const accountValueApi = {
   getHistory: (days: number, includePaperTrading: boolean, accountId?: number) =>
     api.get<AccountValueSnapshot[]>('/account-value/history', {
@@ -618,6 +626,14 @@ export const accountValueApi = {
   getLatest: (includePaperTrading: boolean) =>
     api.get<AccountValueSnapshot>('/account-value/latest', {
       params: { include_paper_trading: includePaperTrading }
+    }).then((res) => res.data),
+  getActivity: (days: number, includePaperTrading: boolean, accountId?: number) =>
+    api.get<ActivityItem[]>('/account-value/activity', {
+      params: {
+        days,
+        include_paper_trading: includePaperTrading,
+        account_id: accountId
+      }
     }).then((res) => res.data),
 };
 

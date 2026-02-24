@@ -9,10 +9,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
+from collections import defaultdict
+
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Account, AccountValueSnapshot
+from app.models import Account, AccountTransfer, AccountValueSnapshot, Position
 from app.services.exchange_service import get_exchange_client_for_account
 
 logger = logging.getLogger(__name__)
@@ -286,3 +288,100 @@ async def get_latest_snapshot(db: AsyncSession, user_id: int, include_paper_trad
         "total_value_btc": float(row.total_btc),
         "total_value_usd": float(row.total_usd)
     }
+
+
+async def get_daily_activity(
+    db: AsyncSession,
+    user_id: int,
+    days: int = 365,
+    include_paper_trading: bool = False,
+    account_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Aggregate closed positions and transfers by (date, line, category)
+    for chart activity markers.
+
+    Categories: trade_win, trade_loss, deposit, withdrawal
+    Lines: "btc" for BTC-pair trades/BTC transfers, "usd" for everything else
+
+    Returns flat list of aggregated records sorted by date.
+    """
+    cutoff = datetime.utcnow() - timedelta(days=days)
+
+    # --- Closed positions ---
+    pos_filters = [
+        Position.user_id == user_id,
+        Position.status == "closed",
+        Position.closed_at >= cutoff,
+    ]
+    if account_id is not None:
+        pos_filters.append(Position.account_id == account_id)
+    if not include_paper_trading:
+        pos_filters.append(
+            Position.account_id.in_(
+                select(Account.id).where(
+                    Account.user_id == user_id,
+                    Account.is_paper_trading.is_(False),
+                )
+            )
+        )
+
+    pos_result = await db.execute(
+        select(Position).where(and_(*pos_filters))
+    )
+    positions = pos_result.scalars().all()
+
+    # --- Transfers ---
+    xfer_filters = [
+        AccountTransfer.user_id == user_id,
+        AccountTransfer.occurred_at >= cutoff,
+    ]
+    if account_id is not None:
+        xfer_filters.append(AccountTransfer.account_id == account_id)
+
+    xfer_result = await db.execute(
+        select(AccountTransfer).where(and_(*xfer_filters))
+    )
+    transfers = xfer_result.scalars().all()
+
+    # --- Aggregate into buckets: (date_str, line, category) ---
+    buckets: Dict[tuple, Dict[str, Any]] = defaultdict(
+        lambda: {"amount": 0.0, "count": 0}
+    )
+
+    for p in positions:
+        profit = p.profit_usd or 0
+        if profit == 0:
+            continue
+        is_btc = p.get_quote_currency() == "BTC"
+        line = "btc" if is_btc else "usd"
+        category = "trade_win" if profit > 0 else "trade_loss"
+        amount = (p.profit_quote or 0) if is_btc else profit
+        date_str = p.closed_at.strftime("%Y-%m-%d")
+        key = (date_str, line, category)
+        buckets[key]["amount"] += amount
+        buckets[key]["count"] += 1
+
+    for t in transfers:
+        is_btc = (t.currency or "").upper() == "BTC"
+        line = "btc" if is_btc else "usd"
+        category = t.transfer_type  # "deposit" or "withdrawal"
+        amount = t.amount if is_btc else (t.amount_usd or 0)
+        date_str = t.occurred_at.strftime("%Y-%m-%d")
+        key = (date_str, line, category)
+        buckets[key]["amount"] += amount
+        buckets[key]["count"] += 1
+
+    # --- Build sorted result ---
+    result = []
+    for (date_str, line, category), agg in buckets.items():
+        result.append({
+            "date": date_str,
+            "line": line,
+            "category": category,
+            "amount": round(agg["amount"], 8 if line == "btc" else 2),
+            "count": agg["count"],
+        })
+
+    result.sort(key=lambda r: r["date"])
+    return result
