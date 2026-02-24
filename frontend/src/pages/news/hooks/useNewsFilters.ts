@@ -92,11 +92,17 @@ export const useNewsFilters = ({
   const [selectedSources, setSelectedSources] = useState<Set<string>>(
     () => new Set(saved?.selectedSources?.length ? saved.selectedSources : [])
   )
+  const [sourceSelectAll, setSourceSelectAll] = useState<boolean>(
+    () => saved?.sourceSelectAll ?? (saved?.selectedSources?.length ? false : true)
+  )
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     () => new Set(saved?.selectedCategories?.length ? saved.selectedCategories : NEWS_CATEGORIES)
   )
   const [selectedVideoSources, setSelectedVideoSources] = useState<Set<string>>(
     () => new Set(saved?.selectedVideoSources?.length ? saved.selectedVideoSources : [])
+  )
+  const [videoSourceSelectAll, setVideoSourceSelectAll] = useState<boolean>(
+    () => saved?.videoSourceSelectAll ?? (saved?.selectedVideoSources?.length ? false : true)
   )
   const [selectedVideoCategories, setSelectedVideoCategories] = useState<Set<string>>(
     () => new Set(saved?.selectedVideoCategories?.length ? saved.selectedVideoCategories : NEWS_CATEGORIES)
@@ -111,8 +117,10 @@ export const useNewsFilters = ({
   useEffect(() => {
     saveFilters({
       selectedSources: Array.from(selectedSources),
+      sourceSelectAll,
       selectedCategories: Array.from(selectedCategories),
       selectedVideoSources: Array.from(selectedVideoSources),
+      videoSourceSelectAll,
       selectedVideoCategories: Array.from(selectedVideoCategories),
       currentPage,
       videoPage,
@@ -120,7 +128,7 @@ export const useNewsFilters = ({
       seenVideoFilter,
       fullArticlesOnly,
     })
-  }, [selectedSources, selectedCategories, selectedVideoSources, selectedVideoCategories, currentPage, videoPage, seenFilter, seenVideoFilter, fullArticlesOnly])
+  }, [selectedSources, sourceSelectAll, selectedCategories, selectedVideoSources, videoSourceSelectAll, selectedVideoCategories, currentPage, videoPage, seenFilter, seenVideoFilter, fullArticlesOnly])
 
   const allCategoriesSelected = selectedCategories.size === NEWS_CATEGORIES.length
   const allVideoCategoriesSelected = selectedVideoCategories.size === NEWS_CATEGORIES.length
@@ -129,8 +137,7 @@ export const useNewsFilters = ({
     setSelectedCategories(prev => {
       const next = new Set(prev)
       if (next.has(category)) {
-        // Don't allow deselecting the last category
-        if (next.size > 1) next.delete(category)
+        next.delete(category)
       } else {
         next.add(category)
       }
@@ -140,35 +147,50 @@ export const useNewsFilters = ({
   }, [])
 
   const toggleAllCategories = useCallback(() => {
-    setSelectedCategories(new Set(NEWS_CATEGORIES))
+    setSelectedCategories(prev =>
+      prev.size === NEWS_CATEGORIES.length ? new Set() : new Set(NEWS_CATEGORIES)
+    )
     setCurrentPage(1)
   }, [])
 
-  const allSourcesSelected = selectedSources.size === 0
+  const allSourcesSelected = sourceSelectAll
 
   const toggleSource = useCallback((sourceId: string) => {
-    setSelectedSources(prev => {
-      const next = new Set(prev)
-      if (next.has(sourceId)) {
-        next.delete(sourceId)
-      } else {
-        next.add(sourceId)
-      }
-      return next
-    })
+    if (sourceSelectAll) {
+      // Switching from "all" to selecting only this source
+      setSourceSelectAll(false)
+      setSelectedSources(new Set([sourceId]))
+    } else {
+      setSelectedSources(prev => {
+        const next = new Set(prev)
+        if (next.has(sourceId)) {
+          next.delete(sourceId)
+        } else {
+          next.add(sourceId)
+        }
+        return next
+      })
+    }
     setCurrentPage(1)
-  }, [])
+  }, [sourceSelectAll])
 
   const toggleAllSources = useCallback(() => {
-    setSelectedSources(new Set())
+    if (sourceSelectAll) {
+      // All → None
+      setSourceSelectAll(false)
+      setSelectedSources(new Set())
+    } else {
+      // None/custom → All
+      setSourceSelectAll(true)
+    }
     setCurrentPage(1)
-  }, [])
+  }, [sourceSelectAll])
 
   const toggleVideoCategory = useCallback((category: string) => {
     setSelectedVideoCategories(prev => {
       const next = new Set(prev)
       if (next.has(category)) {
-        if (next.size > 1) next.delete(category)
+        next.delete(category)
       } else {
         next.add(category)
       }
@@ -178,44 +200,60 @@ export const useNewsFilters = ({
   }, [])
 
   const toggleAllVideoCategories = useCallback(() => {
-    setSelectedVideoCategories(new Set(NEWS_CATEGORIES))
+    setSelectedVideoCategories(prev =>
+      prev.size === NEWS_CATEGORIES.length ? new Set() : new Set(NEWS_CATEGORIES)
+    )
     setVideoPage(1)
   }, [])
 
-  const allVideoSourcesSelected = selectedVideoSources.size === 0
+  const allVideoSourcesSelected = videoSourceSelectAll
 
   const toggleVideoSource = useCallback((sourceId: string) => {
-    setSelectedVideoSources(prev => {
-      const next = new Set(prev)
-      if (next.has(sourceId)) {
-        next.delete(sourceId)
-      } else {
-        next.add(sourceId)
-      }
-      return next
-    })
+    if (videoSourceSelectAll) {
+      setVideoSourceSelectAll(false)
+      setSelectedVideoSources(new Set([sourceId]))
+    } else {
+      setSelectedVideoSources(prev => {
+        const next = new Set(prev)
+        if (next.has(sourceId)) {
+          next.delete(sourceId)
+        } else {
+          next.add(sourceId)
+        }
+        return next
+      })
+    }
     setVideoPage(1)
-  }, [])
+  }, [videoSourceSelectAll])
 
   const toggleAllVideoSources = useCallback(() => {
-    setSelectedVideoSources(new Set())
+    if (videoSourceSelectAll) {
+      setVideoSourceSelectAll(false)
+      setSelectedVideoSources(new Set())
+    } else {
+      setVideoSourceSelectAll(true)
+    }
     setVideoPage(1)
-  }, [])
+  }, [videoSourceSelectAll])
 
   // Filter news by selected categories, then source, then seen status, then full-article toggle
   const filteredNews = useMemo(() => {
     const byCategory = filterNewsByCategory(newsData?.news || [], selectedCategories)
-    const bySource = filterNewsBySource(byCategory, selectedSources)
+    const bySource = sourceSelectAll
+      ? byCategory
+      : selectedSources.size === 0 ? [] : filterNewsBySource(byCategory, selectedSources)
     const bySeen = filterBySeen(bySource, seenFilter)
     return fullArticlesOnly ? filterByFullArticle(bySeen) : bySeen
-  }, [newsData?.news, selectedCategories, selectedSources, seenFilter, fullArticlesOnly])
+  }, [newsData?.news, selectedCategories, selectedSources, sourceSelectAll, seenFilter, fullArticlesOnly])
 
   // Filter videos by selected categories, then source, then seen status
   const filteredVideos = useMemo(() => {
     const byCategory = filterVideosByCategory(videoData?.videos || [], selectedVideoCategories)
-    const bySource = filterVideosBySource(byCategory, selectedVideoSources)
+    const bySource = videoSourceSelectAll
+      ? byCategory
+      : selectedVideoSources.size === 0 ? [] : filterVideosBySource(byCategory, selectedVideoSources)
     return filterBySeen(bySource, seenVideoFilter)
-  }, [videoData?.videos, selectedVideoCategories, selectedVideoSources, seenVideoFilter])
+  }, [videoData?.videos, selectedVideoCategories, selectedVideoSources, videoSourceSelectAll, seenVideoFilter])
 
   // Client-side pagination - slice filtered news for current page (instant page changes)
   const totalFilteredItems = filteredNews.length

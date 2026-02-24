@@ -63,17 +63,19 @@ class PaperTradingClient(ExchangeClient):
     async def _save_balances(self):
         """Save current balances to database with retry for SQLite lock contention."""
         import asyncio
-        self.account.paper_balances = json.dumps(self.balances)
         for attempt in range(3):
             try:
+                # Merge to ensure account is persistent in the current session
+                self.account = await self.db.merge(self.account)
+                self.account.paper_balances = json.dumps(self.balances)
                 await self.db.commit()
                 await self.db.refresh(self.account)
                 return
             except Exception as e:
-                if "database is locked" in str(e) and attempt < 2:
-                    logger.warning(f"Paper balance save locked (attempt {attempt + 1}/3), retrying...")
+                err_str = str(e).lower()
+                if ("database is locked" in err_str or "not persistent" in err_str) and attempt < 2:
+                    logger.warning(f"Paper balance save failed (attempt {attempt + 1}/3): {e}")
                     await self.db.rollback()
-                    self.account.paper_balances = json.dumps(self.balances)
                     await asyncio.sleep(0.1 * (attempt + 1))
                 else:
                     raise
@@ -267,7 +269,7 @@ class PaperTradingClient(ExchangeClient):
     async def get_products(self) -> List[Dict[str, Any]]:
         """Get available trading pairs from real exchange."""
         if self.real_client:
-            return await self.real_client.get_products()
+            return await self.real_client.list_products()
 
         try:
             from app.coinbase_api import public_market_data

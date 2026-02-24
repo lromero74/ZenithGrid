@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.49.0] - 2026-02-24
+
+### Added
+- **News filter toggle behavior**: ALL button now toggles between all and none for both categories and sources (articles and videos). Categories can be fully deselected for empty results. Source selection memory persists across category changes.
+
+### Fixed
+- **Paper trading products page error**: Fixed 500 on `/api/products` for paper trading accounts — was calling non-existent `get_products()` instead of `list_products()` on the exchange adapter
+- **Paper trading snapshot capture error**: Fixed `'CoinbaseAdapter' has no attribute 'get_price'` by using the correct `get_current_price()` method
+- **Paper trading session persistence**: Paper balance saves now use `db.merge()` to re-attach Account objects that may have become detached, preventing "not persistent within this Session" errors
+- **History page rate limiting**: Reduced last-seen-history polling from every 2 seconds to every 30 seconds, preventing 429 Too Many Requests errors
+
 ## [v2.48.0] - 2026-02-24
 
 ### Added
