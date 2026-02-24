@@ -500,8 +500,10 @@ async def _compute_expenses_goal_progress(
     expense_items = items_result.scalars().all()
 
     # Run coverage waterfall
+    sort_mode = getattr(goal, "expense_sort_mode", None) or "amount_asc"
     coverage = compute_expense_coverage(
         expense_items, expense_period, projected_income, tax_pct,
+        sort_mode=sort_mode,
     )
 
     # Compound projection (same formula as income goal)

@@ -82,12 +82,13 @@ def compute_expense_coverage(
     period: str,
     projected_income: float,
     tax_pct: float,
+    sort_mode: str = "amount_asc",
 ) -> Dict[str, Any]:
     """
     Compute coverage waterfall for expense items.
 
     1. Normalize all items to the goal period
-    2. Sort ascending by normalized amount
+    2. Sort by sort_mode: amount_asc (default), amount_desc, or custom
     3. Walk through deducting from income after tax
     4. Return coverage status for each item
     """
@@ -108,10 +109,16 @@ def compute_expense_coverage(
             "frequency_anchor": getattr(item, "frequency_anchor", None),
             "frequency_n": getattr(item, "frequency_n", None),
             "login_url": getattr(item, "login_url", None),
+            "sort_order": getattr(item, "sort_order", 0),
             "normalized_amount": round(norm_amount, 2),
         })
 
-    normalized.sort(key=lambda x: x["normalized_amount"])
+    if sort_mode == "amount_desc":
+        normalized.sort(key=lambda x: x["normalized_amount"], reverse=True)
+    elif sort_mode == "custom":
+        normalized.sort(key=lambda x: x.get("sort_order", 0))
+    else:  # amount_asc (default)
+        normalized.sort(key=lambda x: x["normalized_amount"])
 
     total_expenses = sum(i["normalized_amount"] for i in normalized)
 

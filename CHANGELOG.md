@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.52.0] - 2026-02-24
+
+### Added
+- **Expense waterfall sort order**: Choose how expenses are prioritized for coverage — smallest first, largest first, or custom drag-to-reorder with move-to-top, move-to-bottom, and move-to-position controls
+- **Account name in report headers**: Reports now show the account name (e.g., "Paper Trading") next to the user name in HTML and PDF headers
+
 ## [v2.51.2] - 2026-02-24
 
 ### Fixed

@@ -51,6 +51,9 @@ class GoalCreate(BaseModel):
         None, pattern="^(weekly|monthly|quarterly|yearly)$"
     )
     tax_withholding_pct: Optional[float] = Field(None, ge=0, le=100)
+    expense_sort_mode: Optional[str] = Field(
+        None, pattern="^(amount_asc|amount_desc|custom)$"
+    )
     time_horizon_months: int = Field(..., ge=1, le=120)
     target_date: Optional[datetime] = None
     account_id: Optional[int] = None
@@ -78,6 +81,9 @@ class GoalUpdate(BaseModel):
         None, pattern="^(weekly|monthly|quarterly|yearly)$"
     )
     tax_withholding_pct: Optional[float] = Field(None, ge=0, le=100)
+    expense_sort_mode: Optional[str] = Field(
+        None, pattern="^(amount_asc|amount_desc|custom)$"
+    )
     time_horizon_months: Optional[int] = Field(None, ge=1, le=120)
     target_date: Optional[datetime] = None
     is_active: Optional[bool] = None
@@ -234,6 +240,7 @@ def _goal_to_dict(goal: ReportGoal) -> dict:
         "income_period": goal.income_period,
         "expense_period": goal.expense_period,
         "tax_withholding_pct": goal.tax_withholding_pct or 0,
+        "expense_sort_mode": goal.expense_sort_mode or "amount_asc",
         "time_horizon_months": goal.time_horizon_months,
         "start_date": goal.start_date.isoformat() if goal.start_date else None,
         "target_date": goal.target_date.isoformat() if goal.target_date else None,
@@ -434,6 +441,7 @@ async def create_goal(
         income_period=body.income_period,
         expense_period=body.expense_period,
         tax_withholding_pct=body.tax_withholding_pct or 0,
+        expense_sort_mode=body.expense_sort_mode or "amount_asc",
         time_horizon_months=body.time_horizon_months,
         start_date=start_date,
         target_date=target_date,
@@ -600,10 +608,15 @@ async def list_expense_items(
 ) -> List[dict]:
     """List all expense items for a goal."""
     goal = await _get_user_goal(db, goal_id, current_user.id)
+    sort_mode = goal.expense_sort_mode or "amount_asc"
+    if sort_mode == "custom":
+        order = ExpenseItem.sort_order
+    else:
+        order = ExpenseItem.created_at
     result = await db.execute(
         select(ExpenseItem)
         .where(ExpenseItem.goal_id == goal.id)
-        .order_by(ExpenseItem.created_at)
+        .order_by(order)
     )
     items = result.scalars().all()
     return [_expense_item_to_dict(i, goal.expense_period) for i in items]
@@ -709,6 +722,45 @@ async def delete_expense_item(
     return {"detail": "Expense item deleted"}
 
 
+class ExpenseReorderRequest(BaseModel):
+    item_ids: List[int] = Field(..., min_length=1)
+
+
+@router.put("/goals/{goal_id}/expenses/reorder")
+async def reorder_expense_items(
+    goal_id: int,
+    body: ExpenseReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Set sort_order for expense items based on provided ID order."""
+    goal = await _get_user_goal(db, goal_id, current_user.id)
+
+    # Fetch all items for this goal owned by this user
+    result = await db.execute(
+        select(ExpenseItem).where(
+            ExpenseItem.goal_id == goal.id,
+            ExpenseItem.user_id == current_user.id,
+        )
+    )
+    items_by_id = {item.id: item for item in result.scalars().all()}
+
+    # Validate all IDs belong to this goal
+    invalid = set(body.item_ids) - set(items_by_id.keys())
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid item IDs: {list(invalid)}",
+        )
+
+    # Set sort_order based on position in the list
+    for idx, item_id in enumerate(body.item_ids):
+        items_by_id[item_id].sort_order = idx
+
+    await db.commit()
+    return {"detail": "Expense items reordered", "count": len(body.item_ids)}
+
+
 async def _get_user_goal(
     db: AsyncSession, goal_id: int, user_id: int,
 ) -> ReportGoal:
@@ -742,6 +794,7 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
         "due_month": item.due_month,
         "login_url": item.login_url,
         "is_active": item.is_active,
+        "sort_order": item.sort_order or 0,
         "created_at": item.created_at.isoformat() if item.created_at else None,
     }
     if period:

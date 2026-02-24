@@ -1351,6 +1351,7 @@ class ReportGoal(Base):
     # Expenses goal fields
     expense_period = Column(String, nullable=True)  # weekly/monthly/quarterly/yearly
     tax_withholding_pct = Column(Float, nullable=True, default=0)  # 0-100
+    expense_sort_mode = Column(String, default="amount_asc")  # amount_asc | amount_desc | custom
 
     # Relationships
     user = relationship("User", back_populates="report_goals")
@@ -1393,6 +1394,7 @@ class ExpenseItem(Base):
     due_month = Column(Integer, nullable=True)  # Month (1-12) for quarterly/semi_annual/yearly
     login_url = Column(String, nullable=True)  # URL to payment/login page
     is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

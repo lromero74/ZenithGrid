@@ -1570,6 +1570,7 @@ def initialize_database(project_root):
                 lookback_days INTEGER,
                 expense_period TEXT,
                 tax_withholding_pct REAL DEFAULT 0,
+                expense_sort_mode TEXT DEFAULT 'amount_asc',
                 time_horizon_months INTEGER NOT NULL,
                 start_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 target_date DATETIME NOT NULL,
@@ -1725,6 +1726,7 @@ def initialize_database(project_root):
                 due_month INTEGER,
                 login_url TEXT,
                 is_active INTEGER DEFAULT 1,
+                sort_order INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
