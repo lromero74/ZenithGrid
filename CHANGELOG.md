@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.50.1] - 2026-02-24
+
+### Changed
+- **Goal form clarity**: Renamed "Time Horizon" to "Goal Deadline" with hint "When you want to reach this goal by". Updated Expense Period hint to "How often to compare income vs expenses"
+
 ## [v2.50.0] - 2026-02-24
 
 ### Added
