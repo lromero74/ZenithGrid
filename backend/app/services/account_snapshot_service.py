@@ -363,6 +363,10 @@ async def get_daily_activity(
         buckets[key]["count"] += 1
 
     for t in transfers:
+        # Skip micro-transfers (e.g. staking rewards < $1) — they clutter
+        # the chart with misleading deposit markers
+        if (t.amount_usd or 0) < 1.0:
+            continue
         is_btc = (t.currency or "").upper() == "BTC"
         line = "btc" if is_btc else "usd"
         category = t.transfer_type  # "deposit" or "withdrawal"

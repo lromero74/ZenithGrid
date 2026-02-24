@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.41.1] - 2026-02-24
+
+### Added
+- **Marker visibility toggles**: Chart legend items are now clickable — show/hide trade wins, losses, deposits, and withdrawals independently
+
+### Fixed
+- **Staking rewards shown as deposits**: Coinbase staking/earn rewards (sub-$1 micro-transfers) no longer appear as deposit markers on the chart
+- **AI omitting withdrawals in report narrative**: Strengthened AI prompt to require mentioning both deposits and withdrawals when both occurred, so the math always adds up
+
 ## [v2.41.0] - 2026-02-24
 
 ### Added
