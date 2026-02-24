@@ -352,6 +352,12 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
             mcd = cfg.get("max_concurrent_deals")
             if mcd is not None:
                 params.append(f"max_concurrent_deals={mcd}")
+            soss = cfg.get("safety_order_step_scale")
+            if soss is not None:
+                params.append(f"safety_order_step_scale={soss}")
+            sovs = cfg.get("safety_order_volume_scale")
+            if sovs is not None:
+                params.append(f"safety_order_volume_scale={sovs}")
             if cfg.get("trailing_take_profit"):
                 params.append(f"trailing_tp={cfg.get('trailing_deviation', 0)}%")
             if cfg.get("stop_loss_enabled"):
@@ -370,11 +376,15 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
         strat_lines.append(
             "  NOTE: These are DCA (Dollar Cost Averaging) bots that enter on "
             "momentum/indicator signals and take small profits. Safety orders "
-            "only trigger on renewed momentum (not blindly on price drops). "
-            "High win rates are expected — positions close only when profitable. "
-            "Unrealized losses exist in open positions still waiting for signals. "
-            "Wins are typically small and quick; losing positions may take much "
-            "longer as they wait for favorable re-entry signals to DCA down."
+            "require BOTH a minimum price drop from entry (price_deviation, "
+            "multiplied by safety_order_step_scale for each subsequent order — "
+            "e.g. 2% for SO1, 4% for SO2, 8% for SO3) AND the momentum "
+            "indicator conditions to be met. This prevents premature averaging "
+            "down — the bot waits for a real dip plus renewed momentum before "
+            "adding to a position. High win rates are expected because positions "
+            "only close when profitable. Wins are typically small and quick; "
+            "losing positions may take much longer as they wait for both a "
+            "sufficient price drop and favorable momentum signals to DCA down."
         )
         strategy_section = "\n".join(strat_lines)
 

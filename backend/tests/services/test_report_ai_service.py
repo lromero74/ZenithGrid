@@ -386,6 +386,8 @@ class TestBuildSummaryPrompt:
                 "safety_order_percentage": 100,
                 "price_deviation": 2,
                 "max_concurrent_deals": 2,
+                "safety_order_step_scale": 2,
+                "safety_order_volume_scale": 2,
                 "base_order_conditions": {
                     "groups": [{
                         "conditions": [{
@@ -408,9 +410,12 @@ class TestBuildSummaryPrompt:
         assert "dca_grid" in prompt
         assert "take_profit=2%" in prompt
         assert "max_safety_orders=8" in prompt
+        assert "safety_order_step_scale=2" in prompt
+        assert "safety_order_volume_scale=2" in prompt
         assert "Entry signals:" in prompt
         assert "bb_percent crossing_above 10" in prompt
         assert "DCA (Dollar Cost Averaging)" in prompt
+        assert "minimum price drop from entry" in prompt
 
     def test_strategy_multiple_conditions_and_logic(self, sample_report_data):
         """Multiple conditions joined by AND appear in prompt."""
