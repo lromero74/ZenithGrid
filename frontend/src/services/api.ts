@@ -708,6 +708,8 @@ export const reportsApi = {
     api.post<ReportSummary>('/reports/preview', { schedule_id: scheduleId }).then(r => r.data),
   deleteReport: (id: number) =>
     api.delete<{ detail: string }>(`/reports/${id}`).then(r => r.data),
+  bulkDeleteReports: (ids: number[]) =>
+    api.post<{ deleted: number }>('/reports/bulk-delete', { report_ids: ids }).then(r => r.data),
 };
 
 // Transfers (deposit/withdrawal tracking)

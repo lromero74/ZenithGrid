@@ -192,6 +192,14 @@ def build_report_html(
             ai_html = _build_email_ai_section(tiered, default_level, brand_color)
         else:
             ai_html = _build_tabbed_ai_section(tiered, default_level, brand_color)
+    elif isinstance(ai_summary, dict) and "_error" in ai_summary:
+        ai_html = """
+        <div style="margin: 25px 0; padding: 15px; background-color: #1e293b;
+                    border-radius: 8px; border: 1px solid #334155; text-align: center;">
+            <p style="color: #94a3b8; margin: 0; font-size: 13px;">
+                AI insights temporarily unavailable — provider rate-limited or credits exhausted.
+                Check your AI provider dashboard.</p>
+        </div>"""
     elif ai_summary is None:
         ai_html = """
         <div style="margin: 25px 0; padding: 15px; background-color: #1e293b;
