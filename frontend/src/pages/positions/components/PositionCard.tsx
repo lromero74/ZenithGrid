@@ -1,4 +1,5 @@
-import { AlertCircle, BarChart2, Brain, Scale, Settings, TrendingUp, TrendingDown } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { AlertCircle, BarChart2, Brain, ChevronDown, Edit, Play, Scale, Settings, Square, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
 import type { Position, Bot } from '../../../types'
 import CoinIcon from '../../../components/CoinIcon'
@@ -11,9 +12,10 @@ import {
   PriceBar,
 } from '../../../components/positions'
 import { GridVisualizer } from '../../../components/GridVisualizer'
-import { api } from '../../../services/api'
+import { api, botsApi } from '../../../services/api'
 import { useConfirm } from '../../../contexts/ConfirmContext'
 import { useNotifications } from '../../../contexts/NotificationContext'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface PositionCardProps {
   position: Position & { _cachedPnL?: any }
@@ -33,6 +35,7 @@ interface PositionCardProps {
   onOpenTradeHistory: (position: Position) => void
   onCheckSlippage: (positionId: number) => void
   onRefetch: () => void
+  onEditBot?: (bot: Bot) => void
 }
 
 export const PositionCard = ({
@@ -53,14 +56,47 @@ export const PositionCard = ({
   onOpenTradeHistory,
   onCheckSlippage,
   onRefetch,
+  onEditBot,
 }: PositionCardProps) => {
   const confirm = useConfirm()
   const { addToast } = useNotifications()
+  const queryClient = useQueryClient()
+  const [showBotMenu, setShowBotMenu] = useState(false)
+  const botMenuRef = useRef<HTMLDivElement>(null)
   const pnl = position._cachedPnL
   const fundsUsedPercent = (position.total_quote_spent / position.max_quote_allowed) * 100
 
   const bot = bots?.find(b => b.id === position.bot_id)
   const strategyConfig = position.strategy_config_snapshot || bot?.strategy_config || {}
+
+  // Close bot menu on outside click
+  useEffect(() => {
+    if (!showBotMenu) return
+    const handler = (e: MouseEvent) => {
+      if (botMenuRef.current && !botMenuRef.current.contains(e.target as Node)) {
+        setShowBotMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showBotMenu])
+
+  const handleToggleBot = async () => {
+    if (!bot) return
+    setShowBotMenu(false)
+    try {
+      if (bot.is_active) {
+        await botsApi.stop(bot.id)
+        addToast({ type: 'info', title: 'Bot Stopped', message: `${bot.name} stopped` })
+      } else {
+        await botsApi.start(bot.id)
+        addToast({ type: 'success', title: 'Bot Started', message: `${bot.name} started` })
+      }
+      queryClient.invalidateQueries({ queryKey: ['bots'] })
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Error', message: err.response?.data?.detail || err.message })
+    }
+  }
 
   const handleCancelLimitClose = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -85,8 +121,46 @@ export const PositionCard = ({
           {/* Column 1: Bot Info + Strategy (2 cols) */}
           <div className="col-span-1 sm:col-span-2">
             <div className="flex items-center gap-2 mb-1">
-              <div className="text-white font-semibold">
-                {bot?.name || `Bot #${position.bot_id || 'N/A'}`}
+              {/* Bot name with dropdown menu */}
+              <div className="relative" ref={botMenuRef}>
+                <button
+                  className="text-white font-semibold flex items-center gap-1 hover:text-blue-300 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (bot) setShowBotMenu(!showBotMenu)
+                  }}
+                  title={bot ? 'Bot actions' : undefined}
+                >
+                  {bot?.name || `Bot #${position.bot_id || 'N/A'}`}
+                  {bot && <ChevronDown size={12} className={`transition-transform ${showBotMenu ? 'rotate-180' : ''}`} />}
+                </button>
+                {showBotMenu && bot && (
+                  <div className="absolute left-0 top-full mt-1 w-40 bg-slate-800 rounded-lg shadow-lg border border-slate-700 z-50 py-1">
+                    {bot.is_active ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleBot() }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-slate-700 transition-colors"
+                      >
+                        <Square size={12} /> Stop Bot
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleBot() }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-green-400 hover:bg-slate-700 transition-colors"
+                      >
+                        <Play size={12} /> Start Bot
+                      </button>
+                    )}
+                    {onEditBot && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowBotMenu(false); onEditBot(bot) }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition-colors"
+                      >
+                        <Edit size={12} /> Edit Bot
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               {/* Bidirectional DCA: Show direction badge */}
               {position.direction && position.direction !== 'long' && (

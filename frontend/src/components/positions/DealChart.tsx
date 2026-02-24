@@ -55,16 +55,34 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
   const isCleanedUpRef = useRef<boolean>(false)
   const lastUpdateRef = useRef<string>('')
 
-  // State for chart controls
+  // Persist chart settings across deal cards via localStorage
+  const SETTINGS_KEY = 'deal-chart-settings'
+
+  // State for chart controls (pair is always position-specific, settings are shared)
   const [selectedPair, setSelectedPair] = useState(initialProductId)
-  const [timeframe, setTimeframe] = useState('FIFTEEN_MINUTE')
+  const [timeframe, setTimeframe] = useState(() => {
+    try { const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); return s.timeframe || 'FIFTEEN_MINUTE' } catch { return 'FIFTEEN_MINUTE' }
+  })
   const [chartData, setChartData] = useState<CandleData[]>([])
-  const [chartType, setChartType] = useState<'candlestick' | 'bar' | 'line' | 'area' | 'baseline'>('candlestick')
-  const [useHeikinAshi, setUseHeikinAshi] = useState(false)
-  const [indicators, setIndicators] = useState<IndicatorConfig[]>([])
+  const [chartType, setChartType] = useState<'candlestick' | 'bar' | 'line' | 'area' | 'baseline'>(() => {
+    try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').chartType || 'candlestick' } catch { return 'candlestick' }
+  })
+  const [useHeikinAshi, setUseHeikinAshi] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').useHeikinAshi ?? false } catch { return false }
+  })
+  const [indicators, setIndicators] = useState<IndicatorConfig[]>(() => {
+    try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').indicators || [] } catch { return [] }
+  })
   const [showIndicatorModal, setShowIndicatorModal] = useState(false)
   const [indicatorSearch, setIndicatorSearch] = useState('')
   const [editingIndicator, setEditingIndicator] = useState<IndicatorConfig | null>(null)
+
+  // Persist chart settings (not pair) to localStorage on change
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      timeframe, chartType, useHeikinAshi, indicators,
+    }))
+  }, [timeframe, chartType, useHeikinAshi, indicators])
 
   // Fetch bot configuration
   const { data: bot } = useQuery({
