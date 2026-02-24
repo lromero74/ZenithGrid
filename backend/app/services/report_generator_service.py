@@ -351,6 +351,27 @@ def _report_footer(brand: dict) -> str:
     </div>"""
 
 
+_TRANSFER_LABELS = {
+    "cardspend": "Card Spend",
+    "fiat_deposit": "Bank Deposit",
+    "fiat_withdrawal": "Bank Withdrawal",
+    "send": "Crypto Transfer",
+    "exchange_deposit": "Exchange Transfer",
+    "exchange_withdrawal": "Exchange Transfer",
+}
+
+
+def _transfer_label(rec: Dict[str, Any]) -> str:
+    """Map original_type to a human-readable label for reports."""
+    ot = rec.get("original_type")
+    if ot and ot in _TRANSFER_LABELS:
+        label = _TRANSFER_LABELS[ot]
+        if ot == "cardspend":
+            label += f" ({rec.get('currency', 'USD')})"
+        return label
+    return rec.get("type", "").capitalize()
+
+
 def _build_transfers_section(data: Dict[str, Any]) -> str:
     """Render a Capital Movements table with optional trading summary and transfers."""
     trade_summary = data.get("trade_summary")
@@ -386,7 +407,7 @@ def _build_transfers_section(data: Dict[str, Any]) -> str:
         color = "#10b981" if is_deposit else "#ef4444"
         sign = "+" if is_deposit else "-"
         amt = abs(rec.get("amount_usd", 0))
-        label = rec.get("type", "").capitalize()
+        label = _transfer_label(rec)
         date_str = rec.get("date", "")
         transfer_rows += f"""
                 <tr>
@@ -1636,7 +1657,7 @@ def generate_pdf(
                 pdf.cell(0, 6, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
                 for trec in pdf_transfers:
                     t_date = trec.get("date", "")
-                    t_type = trec.get("type", "").capitalize()
+                    t_type = _transfer_label(trec)
                     t_amt = abs(trec.get("amount_usd", 0))
                     t_sign = "+" if trec.get("type") == "deposit" else "-"
                     pdf.set_text_color(100, 100, 100)

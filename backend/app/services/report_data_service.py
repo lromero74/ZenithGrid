@@ -117,6 +117,7 @@ async def gather_report_data(
             "amount_usd": round(t.amount_usd or 0, 2),
             "currency": t.currency or "USD",
             "source": t.source or "unknown",
+            "original_type": t.original_type,
         }
         for t in sorted_transfers
     ]

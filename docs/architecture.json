@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.41.1",
+  "version": "v2.42.0",
   "updated": "2026-02-24",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
@@ -333,7 +333,7 @@
     ],
 
     "migrations": {
-      "count": 32,
+      "count": 33,
       "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
       "directory": "backend/migrations/",
       "discovery": "Auto-discovered by update.py",
@@ -370,7 +370,8 @@
         "remove_medicalxpress_source.py",
         "replace_paywalled_sources.py",
         "add_goal_progress_snapshots.py",
-        "add_expense_goal_support.py"
+        "add_expense_goal_support.py",
+        "add_transfer_original_type.py"
       ]
     }
   },

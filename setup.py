@@ -1632,6 +1632,7 @@ def initialize_database(project_root):
                 amount_usd REAL,
                 occurred_at DATETIME NOT NULL,
                 source TEXT DEFAULT 'coinbase_api',
+                original_type TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
