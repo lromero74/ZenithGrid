@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.45.3] - 2026-02-24
+
+### Fixed
+- **TradingView chart loading**: Fixed Content Security Policy blocking TradingView widget scripts and iframes — charts now load correctly in deal view
+
+### Added
+- **CSP audit script**: New `scripts/audit_csp.sh` detects mismatches between frontend external URLs and nginx CSP headers before they reach production
+- **Spaghetti check command**: New `/spaghetti-check` command audits code length, modularity, and separation of concerns across the codebase
+- **220 new unit tests**: Comprehensive test coverage for grid trading strategy (19%→92%), AI grid optimizer (10%→100%), email service (33%→100%), report data service (0%→tested), report scheduler (0%→tested), and security headers middleware
+
+### Changed
+- **Nginx config template synced**: `deployment/nginx-trading-bot.conf` now matches the live production config including CSP, HSTS, rate limiting, and SSL
+
 ## [v2.45.2] - 2026-02-24
 
 ### Fixed
