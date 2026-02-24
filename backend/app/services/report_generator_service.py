@@ -419,9 +419,27 @@ def _build_transfers_section(data: Dict[str, Any]) -> str:
                                font-weight: 700;">{sign}${abs(net):,.2f}</td>
                 </tr>"""
 
-    # Individual transfer rows
+    # Separate staking rewards from other transfers for aggregation
+    staking = [r for r in records if r.get("original_type") == "send" and r.get("type") == "deposit"]
+    other_transfers = [r for r in records if r not in staking]
+
+    # Staking rewards summary row (aggregated like trading activity)
+    staking_row = ""
+    if staking:
+        total_staking = sum(abs(r.get("amount_usd", 0)) for r in staking)
+        staking_row = f"""
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #334155;
+                               color: #e2e8f0; font-size: 12px; font-weight: 600;"
+                        colspan="2">Staking Rewards &mdash; {len(staking)} deposits</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #334155;
+                               color: #10b981; font-size: 12px; text-align: right;
+                               font-weight: 700;">+${total_staking:,.2f}</td>
+                </tr>"""
+
+    # Individual transfer rows (non-staking)
     transfer_rows = ""
-    for rec in records:
+    for rec in other_transfers:
         is_deposit = rec.get("type") == "deposit"
         color = "#10b981" if is_deposit else "#ef4444"
         sign = "+" if is_deposit else "-"
@@ -456,7 +474,7 @@ def _build_transfers_section(data: Dict[str, Any]) -> str:
                 </tr>
             </thead>
             <tbody>
-                {trade_row}{transfer_rows}
+                {trade_row}{staking_row}{transfer_rows}
             </tbody>
         </table>
     </div>"""
@@ -1668,14 +1686,36 @@ def generate_pdf(
                 pdf.set_font("Helvetica", "", 10)
                 pdf.ln(2)
 
-            # Column headers for transfers
-            if pdf_transfers:
+            # Staking rewards summary row (aggregated)
+            pdf_staking = [
+                r for r in pdf_transfers
+                if r.get("original_type") == "send" and r.get("type") == "deposit"
+            ]
+            pdf_other = [r for r in pdf_transfers if r not in pdf_staking]
+            if pdf_staking:
+                stk_total = sum(abs(r.get("amount_usd", 0)) for r in pdf_staking)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.set_text_color(30, 30, 30)
+                pdf.cell(
+                    80, 7,
+                    f"Staking Rewards: {len(pdf_staking)} deposits",
+                    new_x="RIGHT",
+                )
+                pdf.cell(
+                    0, 7, f"+${stk_total:,.2f}",
+                    new_x="LMARGIN", new_y="NEXT", align="R",
+                )
+                pdf.set_font("Helvetica", "", 10)
+                pdf.ln(2)
+
+            # Column headers for individual transfers
+            if pdf_other:
                 pdf.set_font("Helvetica", "", 10)
                 pdf.set_text_color(100, 100, 100)
                 pdf.cell(40, 6, "Date", new_x="RIGHT")
                 pdf.cell(40, 6, "Type", new_x="RIGHT")
                 pdf.cell(0, 6, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
-                for trec in pdf_transfers:
+                for trec in pdf_other:
                     t_date = trec.get("date", "")
                     t_type = _transfer_label(trec)
                     t_amt = abs(trec.get("amount_usd", 0))

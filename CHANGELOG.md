@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.45.0] - 2026-02-24
+
+### Changed
+- **Staking rewards aggregated in reports**: Staking reward deposits are now shown as a single summary row (e.g. "Staking Rewards — 12 deposits, +$0.85") in HTML, PDF, and AI reports instead of cluttering the table with individual penny-sized entries
+
 ## [v2.44.2] - 2026-02-24
 
 ### Added

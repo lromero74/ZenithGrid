@@ -292,17 +292,30 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
         f"{source_note}"
     )
 
-    # Append individual transfer records when available
+    # Append transfer records — aggregate staking rewards, list others individually
     transfer_records = data.get("transfer_records", [])
     if transfer_records:
-        lines = ["\n  Individual transfers (most recent first):"]
-        for tr in transfer_records:
-            tr_type = _ai_transfer_label(tr)
-            tr_amt = abs(tr.get("amount_usd", 0))
-            tr_sign = "+" if tr.get("type") == "deposit" else "-"
+        staking = [
+            tr for tr in transfer_records
+            if tr.get("original_type") == "send" and tr.get("type") == "deposit"
+        ]
+        other = [tr for tr in transfer_records if tr not in staking]
+        lines = []
+        if staking:
+            stk_total = sum(abs(tr.get("amount_usd", 0)) for tr in staking)
             lines.append(
-                f"  - {tr.get('date', '')}: {tr_type} {tr_sign}${tr_amt:,.2f}"
+                f"\n  - Staking rewards: {len(staking)} deposits, "
+                f"total +${stk_total:,.2f}"
             )
+        if other:
+            lines.append("\n  Individual transfers (most recent first):")
+            for tr in other:
+                tr_type = _ai_transfer_label(tr)
+                tr_amt = abs(tr.get("amount_usd", 0))
+                tr_sign = "+" if tr.get("type") == "deposit" else "-"
+                lines.append(
+                    f"  - {tr.get('date', '')}: {tr_type} {tr_sign}${tr_amt:,.2f}"
+                )
         capital_section += "\n".join(lines)
 
     prior_section = ""

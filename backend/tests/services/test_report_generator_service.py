@@ -1472,6 +1472,39 @@ class TestTransfersSection:
         assert "2026-02-21" in html
         assert "2026-02-20" in html
 
+    def test_staking_rewards_aggregated(self):
+        """Staking rewards (send deposits) are aggregated into one summary row."""
+        data = {"transfer_records": [
+            {"date": "2026-02-23", "type": "deposit", "original_type": "send",
+             "amount_usd": 0.12},
+            {"date": "2026-02-22", "type": "deposit", "original_type": "send",
+             "amount_usd": 0.05},
+            {"date": "2026-02-20", "type": "withdrawal", "amount_usd": 50.0},
+        ]}
+        html = _build_transfers_section(data)
+        assert "Staking Rewards" in html
+        assert "2 deposits" in html
+        assert "+$0.17" in html
+        # Non-staking withdrawal still listed individually
+        assert "2026-02-20" in html
+        assert "-$50.00" in html
+        # Individual staking dates NOT shown
+        assert "2026-02-23" not in html
+        assert "2026-02-22" not in html
+
+    def test_only_staking_no_individual_rows(self):
+        """When only staking rewards, no individual transfer rows."""
+        data = {"transfer_records": [
+            {"date": "2026-02-23", "type": "deposit", "original_type": "send",
+             "amount_usd": 0.10},
+            {"date": "2026-02-22", "type": "deposit", "original_type": "send",
+             "amount_usd": 0.04},
+        ]}
+        html = _build_transfers_section(data)
+        assert "Staking Rewards" in html
+        assert "2 deposits" in html
+        assert "2026-02-23" not in html
+
 
 # ---------------------------------------------------------------------------
 # HTML deposit metrics — always show row

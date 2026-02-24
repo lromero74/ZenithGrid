@@ -312,7 +312,7 @@ class TestBuildSummaryPrompt:
         assert "Do NOT say 'no deposits were made'" not in prompt
 
     def test_individual_transfers_in_prompt(self, sample_report_data):
-        """Transfer records are listed individually in the prompt."""
+        """Non-staking transfer records are listed individually in the prompt."""
         sample_report_data["transfer_records"] = [
             {"date": "2026-02-23", "type": "deposit", "amount_usd": 150.0},
             {"date": "2026-02-20", "type": "withdrawal", "amount_usd": 50.0},
@@ -321,6 +321,32 @@ class TestBuildSummaryPrompt:
         assert "Individual transfers" in prompt
         assert "2026-02-23: Deposit +$150.00" in prompt
         assert "2026-02-20: Withdrawal -$50.00" in prompt
+
+    def test_staking_rewards_aggregated(self, sample_report_data):
+        """Staking rewards (original_type=send, type=deposit) are aggregated."""
+        sample_report_data["transfer_records"] = [
+            {"date": "2026-02-23", "type": "deposit", "original_type": "send",
+             "amount_usd": 0.12},
+            {"date": "2026-02-22", "type": "deposit", "original_type": "send",
+             "amount_usd": 0.05},
+            {"date": "2026-02-20", "type": "withdrawal", "amount_usd": 50.0},
+        ]
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Staking rewards: 2 deposits, total +$0.17" in prompt
+        # Non-staking transfer still listed individually
+        assert "2026-02-20: Withdrawal -$50.00" in prompt
+        # Staking rewards NOT listed individually
+        assert "2026-02-23" not in prompt
+
+    def test_only_staking_no_individual_section(self, sample_report_data):
+        """When only staking rewards exist, no 'Individual transfers' header."""
+        sample_report_data["transfer_records"] = [
+            {"date": "2026-02-23", "type": "deposit", "original_type": "send",
+             "amount_usd": 0.10},
+        ]
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Staking rewards: 1 deposits" in prompt
+        assert "Individual transfers" not in prompt
 
     def test_no_transfers_no_individual_section(self, sample_report_data):
         """When no transfer records, individual transfers section is omitted."""
