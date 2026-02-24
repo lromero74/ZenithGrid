@@ -21,6 +21,7 @@ export interface GoalFormData {
   tax_withholding_pct?: number
   time_horizon_months: number
   target_date?: string | null
+  account_id?: number | null
 }
 
 const HORIZON_OPTIONS = [

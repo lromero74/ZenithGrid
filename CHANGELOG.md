@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.48.0] - 2026-02-24
+
+### Added
+- **Account value chart split view**: New "By Quote Currency" toggle on the Dashboard chart shows where capital is deployed — USD Portion (free USD/USDC/USDT + USD-quoted positions) and BTC Portion (free BTC + BTC-quoted positions) as separate lines
+- **Account-scoped reports and goals**: Reports and goals can now be linked to a specific exchange account instead of always aggregating across all accounts
+
+### Changed
+- **SQLite foreign keys enforcement**: `PRAGMA foreign_keys = ON` now enabled on all connections, preventing orphaned records from accumulating
+- **Paper trading resilience**: Paper balance saves now retry on SQLite lock contention instead of failing immediately
+
 ## [v2.47.0] - 2026-02-24
 
 ### Added

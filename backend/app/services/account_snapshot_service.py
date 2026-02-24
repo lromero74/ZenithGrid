@@ -36,6 +36,9 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
         from app.services.portfolio_service import get_cex_portfolio, get_dex_portfolio
         from app.services.exchange_service import get_coinbase_for_account
 
+        usd_portion_usd = None
+        btc_portion_btc = None
+
         if account.is_paper_trading:
             # Paper trading - use exchange client directly
             client = await get_exchange_client_for_account(db, account.id)
@@ -46,14 +49,50 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
             total_btc = await client.calculate_aggregate_btc_value()
             total_usd = await client.calculate_aggregate_usd_value()
 
+            # Compute portions from paper balances + open positions
+            balances = await client.get_all_balances()
+            usd_portion_usd = (
+                balances.get("USD", 0.0)
+                + balances.get("USDC", 0.0)
+                + balances.get("USDT", 0.0)
+            )
+            btc_portion_btc = balances.get("BTC", 0.0)
+
+            # Add open position values by quote currency
+            pos_result = await db.execute(
+                select(Position).where(
+                    Position.account_id == account.id,
+                    Position.status == "open"
+                )
+            )
+            for pos in pos_result.scalars().all():
+                quote = pos.get_quote_currency()
+                if pos.total_base_acquired and pos.total_base_acquired > 0:
+                    price = await client.get_price(pos.product_id)
+                    if price:
+                        current_value = pos.total_base_acquired * price
+                        if quote in ("USD", "USDC", "USDT"):
+                            usd_portion_usd += current_value
+                        elif quote == "BTC":
+                            btc_portion_btc += current_value
+
             portfolio = {
                 "total_btc_value": total_btc,
                 "total_usd_value": total_usd
             }
         elif account.type == "cex":
             portfolio = await get_cex_portfolio(account, db, get_coinbase_for_account)
+
+            # Extract portions from balance breakdown
+            breakdown = portfolio.get("balance_breakdown", {})
+            usd_portion_usd = (
+                breakdown.get("usd", {}).get("total", 0.0)
+                + breakdown.get("usdc", {}).get("total", 0.0)
+            )
+            btc_portion_btc = breakdown.get("btc", {}).get("total", 0.0)
         elif account.type == "dex":
             portfolio = await get_dex_portfolio(account, db, get_coinbase_for_account)
+            # DEX: portions not applicable
         else:
             logger.error(f"Unknown account type: {account.type}")
             return False
@@ -78,6 +117,8 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
             # Update existing snapshot
             existing.total_value_btc = total_btc
             existing.total_value_usd = total_usd
+            existing.usd_portion_usd = usd_portion_usd
+            existing.btc_portion_btc = btc_portion_btc
             logger.info(f"Updated snapshot for account {account.id}: {total_btc:.8f} BTC / ${total_usd:.2f} USD")
         else:
             # Create new snapshot
@@ -86,7 +127,9 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
                 user_id=account.user_id,
                 snapshot_date=snapshot_date,
                 total_value_btc=total_btc,
-                total_value_usd=total_usd
+                total_value_usd=total_usd,
+                usd_portion_usd=usd_portion_usd,
+                btc_portion_btc=btc_portion_btc
             )
             db.add(snapshot)
             logger.info(f"Created snapshot for account {account.id}: {total_btc:.8f} BTC / ${total_usd:.2f} USD")
@@ -199,7 +242,9 @@ async def get_account_value_history(
             select(
                 AccountValueSnapshot.snapshot_date,
                 AccountValueSnapshot.total_value_btc.label("total_btc"),
-                AccountValueSnapshot.total_value_usd.label("total_usd")
+                AccountValueSnapshot.total_value_usd.label("total_usd"),
+                AccountValueSnapshot.usd_portion_usd.label("usd_portion"),
+                AccountValueSnapshot.btc_portion_btc.label("btc_portion"),
             )
             .where(
                 AccountValueSnapshot.user_id == user_id,
@@ -215,7 +260,9 @@ async def get_account_value_history(
             select(
                 AccountValueSnapshot.snapshot_date,
                 func.sum(AccountValueSnapshot.total_value_btc).label("total_btc"),
-                func.sum(AccountValueSnapshot.total_value_usd).label("total_usd")
+                func.sum(AccountValueSnapshot.total_value_usd).label("total_usd"),
+                func.sum(AccountValueSnapshot.usd_portion_usd).label("usd_portion"),
+                func.sum(AccountValueSnapshot.btc_portion_btc).label("btc_portion"),
             )
             .join(Account, AccountValueSnapshot.account_id == Account.id)
             .where(
@@ -238,7 +285,9 @@ async def get_account_value_history(
             "date": row.snapshot_date.strftime("%Y-%m-%d"),
             "timestamp": row.snapshot_date.isoformat(),
             "total_value_btc": float(row.total_btc),
-            "total_value_usd": float(row.total_usd)
+            "total_value_usd": float(row.total_usd),
+            "usd_portion_usd": float(row.usd_portion) if row.usd_portion is not None else None,
+            "btc_portion_btc": float(row.btc_portion) if row.btc_portion is not None else None,
         })
 
     return snapshots

@@ -54,7 +54,8 @@ async def _create_account(db, user_id, name="Test CEX", account_type="cex",
     return account
 
 
-async def _create_snapshot(db, account_id, user_id, date, btc_val, usd_val):
+async def _create_snapshot(db, account_id, user_id, date, btc_val, usd_val,
+                           usd_portion=None, btc_portion=None):
     """Create a test snapshot."""
     snap = AccountValueSnapshot(
         account_id=account_id,
@@ -62,6 +63,8 @@ async def _create_snapshot(db, account_id, user_id, date, btc_val, usd_val):
         snapshot_date=date,
         total_value_btc=btc_val,
         total_value_usd=usd_val,
+        usd_portion_usd=usd_portion,
+        btc_portion_btc=btc_portion,
     )
     db.add(snap)
     await db.flush()
@@ -242,6 +245,9 @@ class TestCaptureAccountSnapshot:
         mock_client = AsyncMock()
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=2.5)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=125000.0)
+        mock_client.get_all_balances = AsyncMock(return_value={
+            "USD": 50000.0, "USDC": 10000.0, "USDT": 0.0, "BTC": 0.5
+        })
 
         with patch(
             "app.services.account_snapshot_service.get_exchange_client_for_account",
@@ -252,7 +258,7 @@ class TestCaptureAccountSnapshot:
 
         assert result is True
 
-        # Verify snapshot was created
+        # Verify snapshot was created with portion values
         snaps = (await db_session.execute(
             select(AccountValueSnapshot).where(
                 AccountValueSnapshot.account_id == acct.id
@@ -261,6 +267,9 @@ class TestCaptureAccountSnapshot:
         assert len(snaps) == 1
         assert snaps[0].total_value_btc == pytest.approx(2.5)
         assert snaps[0].total_value_usd == pytest.approx(125000.0)
+        # No open positions, so portions = free balances only
+        assert snaps[0].usd_portion_usd == pytest.approx(60000.0)
+        assert snaps[0].btc_portion_btc == pytest.approx(0.5)
 
     @pytest.mark.asyncio
     async def test_capture_paper_trading_no_client(self, db_session):
@@ -305,6 +314,9 @@ class TestCaptureAccountSnapshot:
         mock_client = AsyncMock()
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=1.0)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=50000.0)
+        mock_client.get_all_balances = AsyncMock(return_value={
+            "USD": 50000.0, "USDC": 0.0, "USDT": 0.0, "BTC": 0.0
+        })
 
         with patch(
             "app.services.account_snapshot_service.get_exchange_client_for_account",
@@ -317,6 +329,9 @@ class TestCaptureAccountSnapshot:
         # Update mock values
         mock_client.calculate_aggregate_btc_value = AsyncMock(return_value=2.0)
         mock_client.calculate_aggregate_usd_value = AsyncMock(return_value=100000.0)
+        mock_client.get_all_balances = AsyncMock(return_value={
+            "USD": 100000.0, "USDC": 0.0, "USDT": 0.0, "BTC": 0.0
+        })
 
         with patch(
             "app.services.account_snapshot_service.get_exchange_client_for_account",
@@ -334,6 +349,7 @@ class TestCaptureAccountSnapshot:
         )).scalars().all()
         assert len(snaps) == 1
         assert snaps[0].total_value_btc == pytest.approx(2.0)
+        assert snaps[0].usd_portion_usd == pytest.approx(100000.0)
 
     @pytest.mark.asyncio
     async def test_capture_exception_returns_false(self, db_session):
@@ -350,3 +366,161 @@ class TestCaptureAccountSnapshot:
             result = await capture_account_snapshot(db_session, acct)
 
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_capture_cex_stores_portion_values(self, db_session):
+        """Happy path: CEX account stores portion values from balance breakdown."""
+        user = await _create_user(db_session)
+        acct = await _create_account(db_session, user.id, name="CEX", is_paper=False)
+        await db_session.commit()
+
+        mock_portfolio = {
+            "total_btc_value": 3.0,
+            "total_usd_value": 150000.0,
+            "balance_breakdown": {
+                "usd": {"total": 40000.0},
+                "usdc": {"total": 15000.0},
+                "btc": {"total": 1.2},
+            },
+        }
+
+        with patch(
+            "app.services.account_snapshot_service.get_exchange_client_for_account",
+            new_callable=AsyncMock,
+        ), patch(
+            "app.services.portfolio_service.get_cex_portfolio",
+            new_callable=AsyncMock,
+            return_value=mock_portfolio,
+        ):
+            result = await capture_account_snapshot(db_session, acct)
+
+        assert result is True
+
+        snaps = (await db_session.execute(
+            select(AccountValueSnapshot).where(
+                AccountValueSnapshot.account_id == acct.id
+            )
+        )).scalars().all()
+        assert len(snaps) == 1
+        assert snaps[0].usd_portion_usd == pytest.approx(55000.0)  # 40k + 15k
+        assert snaps[0].btc_portion_btc == pytest.approx(1.2)
+
+    @pytest.mark.asyncio
+    async def test_capture_dex_has_null_portions(self, db_session):
+        """Edge case: DEX accounts get null portion values."""
+        user = await _create_user(db_session)
+        acct = await _create_account(db_session, user.id, name="DEX", account_type="dex")
+        await db_session.commit()
+
+        mock_portfolio = {
+            "total_btc_value": 0.5,
+            "total_usd_value": 25000.0,
+        }
+
+        with patch(
+            "app.services.account_snapshot_service.get_exchange_client_for_account",
+            new_callable=AsyncMock,
+        ), patch(
+            "app.services.portfolio_service.get_dex_portfolio",
+            new_callable=AsyncMock,
+            return_value=mock_portfolio,
+        ):
+            result = await capture_account_snapshot(db_session, acct)
+
+        assert result is True
+
+        snaps = (await db_session.execute(
+            select(AccountValueSnapshot).where(
+                AccountValueSnapshot.account_id == acct.id
+            )
+        )).scalars().all()
+        assert len(snaps) == 1
+        assert snaps[0].usd_portion_usd is None
+        assert snaps[0].btc_portion_btc is None
+
+
+# ---------------------------------------------------------------------------
+# Portion fields in history queries
+# ---------------------------------------------------------------------------
+
+
+class TestPortionFieldsInHistory:
+    """Tests for portion fields in get_account_value_history()"""
+
+    @pytest.mark.asyncio
+    async def test_history_returns_portion_fields(self, db_session):
+        """Happy path: snapshots with portion data include them in response."""
+        user = await _create_user(db_session)
+        acct = await _create_account(db_session, user.id)
+        date = datetime.utcnow() - timedelta(days=5)
+        await _create_snapshot(
+            db_session, acct.id, user.id, date, 2.0, 100000.0,
+            usd_portion=60000.0, btc_portion=0.8
+        )
+        await db_session.commit()
+
+        result = await get_account_value_history(db_session, user.id, days=30)
+
+        assert len(result) == 1
+        assert result[0]["usd_portion_usd"] == pytest.approx(60000.0)
+        assert result[0]["btc_portion_btc"] == pytest.approx(0.8)
+
+    @pytest.mark.asyncio
+    async def test_history_returns_null_for_old_snapshots(self, db_session):
+        """Edge case: pre-migration snapshots return null portion fields."""
+        user = await _create_user(db_session)
+        acct = await _create_account(db_session, user.id)
+        date = datetime.utcnow() - timedelta(days=5)
+        await _create_snapshot(db_session, acct.id, user.id, date, 1.0, 50000.0)
+        await db_session.commit()
+
+        result = await get_account_value_history(db_session, user.id, days=30)
+
+        assert len(result) == 1
+        assert result[0]["usd_portion_usd"] is None
+        assert result[0]["btc_portion_btc"] is None
+
+    @pytest.mark.asyncio
+    async def test_aggregation_sums_portions_across_accounts(self, db_session):
+        """Happy path: aggregated mode sums portions across accounts."""
+        user = await _create_user(db_session)
+        acct1 = await _create_account(db_session, user.id, name="Acct1")
+        acct2 = await _create_account(db_session, user.id, name="Acct2")
+        date = datetime.utcnow() - timedelta(days=5)
+        await _create_snapshot(
+            db_session, acct1.id, user.id, date, 1.0, 50000.0,
+            usd_portion=30000.0, btc_portion=0.5
+        )
+        await _create_snapshot(
+            db_session, acct2.id, user.id, date, 2.0, 100000.0,
+            usd_portion=70000.0, btc_portion=1.0
+        )
+        await db_session.commit()
+
+        result = await get_account_value_history(db_session, user.id, days=30)
+
+        assert len(result) == 1
+        assert result[0]["total_value_btc"] == pytest.approx(3.0)
+        assert result[0]["total_value_usd"] == pytest.approx(150000.0)
+        assert result[0]["usd_portion_usd"] == pytest.approx(100000.0)
+        assert result[0]["btc_portion_btc"] == pytest.approx(1.5)
+
+    @pytest.mark.asyncio
+    async def test_single_account_returns_portion_fields(self, db_session):
+        """Happy path: single-account mode includes portion fields."""
+        user = await _create_user(db_session)
+        acct = await _create_account(db_session, user.id)
+        date = datetime.utcnow() - timedelta(days=5)
+        await _create_snapshot(
+            db_session, acct.id, user.id, date, 1.5, 75000.0,
+            usd_portion=45000.0, btc_portion=0.3
+        )
+        await db_session.commit()
+
+        result = await get_account_value_history(
+            db_session, user.id, days=30, account_id=acct.id
+        )
+
+        assert len(result) == 1
+        assert result[0]["usd_portion_usd"] == pytest.approx(45000.0)
+        assert result[0]["btc_portion_btc"] == pytest.approx(0.3)

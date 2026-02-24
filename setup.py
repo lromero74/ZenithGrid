@@ -1487,6 +1487,8 @@ def initialize_database(project_root):
                 snapshot_date DATETIME NOT NULL,
                 total_value_btc REAL NOT NULL DEFAULT 0.0,
                 total_value_usd REAL NOT NULL DEFAULT 0.0,
+                usd_portion_usd REAL,
+                btc_portion_btc REAL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -1530,6 +1532,7 @@ def initialize_database(project_root):
             CREATE TABLE IF NOT EXISTS report_goals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                account_id INTEGER REFERENCES accounts(id),
                 name TEXT NOT NULL,
                 target_type TEXT NOT NULL,
                 target_currency TEXT NOT NULL DEFAULT 'USD',
@@ -1549,6 +1552,7 @@ def initialize_database(project_root):
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_report_goals_user_id ON report_goals(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_report_goals_account_id ON report_goals(account_id)")
 
         # Report schedules table (report delivery configuration)
         cursor.execute("""
@@ -1601,6 +1605,7 @@ def initialize_database(project_root):
             CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                account_id INTEGER REFERENCES accounts(id),
                 schedule_id INTEGER REFERENCES report_schedules(id) ON DELETE SET NULL,
                 period_start DATETIME NOT NULL,
                 period_end DATETIME NOT NULL,
@@ -1618,6 +1623,7 @@ def initialize_database(project_root):
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_reports_user_id ON reports(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_reports_account_id ON reports(account_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_reports_schedule_id ON reports(schedule_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_reports_period_end ON reports(period_end)")
 

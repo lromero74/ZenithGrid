@@ -61,10 +61,22 @@ class PaperTradingClient(ExchangeClient):
         logger.info(f"Initialized paper trading client for account {account.id}")
 
     async def _save_balances(self):
-        """Save current balances to database."""
+        """Save current balances to database with retry for SQLite lock contention."""
+        import asyncio
         self.account.paper_balances = json.dumps(self.balances)
-        await self.db.commit()
-        await self.db.refresh(self.account)
+        for attempt in range(3):
+            try:
+                await self.db.commit()
+                await self.db.refresh(self.account)
+                return
+            except Exception as e:
+                if "database is locked" in str(e) and attempt < 2:
+                    logger.warning(f"Paper balance save locked (attempt {attempt + 1}/3), retrying...")
+                    await self.db.rollback()
+                    self.account.paper_balances = json.dumps(self.balances)
+                    await asyncio.sleep(0.1 * (attempt + 1))
+                else:
+                    raise
 
     async def get_price(self, product_id: str) -> Optional[float]:
         """
@@ -74,7 +86,7 @@ class PaperTradingClient(ExchangeClient):
         Falls back to the public (no-auth) Coinbase API when no real_client.
         """
         if self.real_client:
-            return await self.real_client.get_price(product_id)
+            return await self.real_client.get_current_price(product_id)
 
         try:
             from app.coinbase_api import public_market_data
@@ -347,11 +359,16 @@ class PaperTradingClient(ExchangeClient):
         return self.balances.get("ETH", 0.0)
 
     async def get_usd_balance(self) -> float:
-        """Get USD balance (includes USDC and USDT)."""
-        usd = self.balances.get("USD", 0.0)
-        usdc = self.balances.get("USDC", 0.0)
-        usdt = self.balances.get("USDT", 0.0)
-        return usd + usdc + usdt
+        """Get USD balance (USD only, not stablecoins)."""
+        return self.balances.get("USD", 0.0)
+
+    async def get_usdc_balance(self) -> float:
+        """Get USDC balance."""
+        return self.balances.get("USDC", 0.0)
+
+    async def get_usdt_balance(self) -> float:
+        """Get USDT balance."""
+        return self.balances.get("USDT", 0.0)
 
     async def get_balance(self, currency: str) -> Dict[str, Any]:
         """Get balance for specific currency."""
@@ -390,7 +407,11 @@ class PaperTradingClient(ExchangeClient):
                 logger.warning(f"Failed to get ETH-BTC price for aggregate calculation: {e}")
 
         # Convert USD/stablecoins to BTC
-        usd_balance = await self.get_usd_balance()
+        usd_balance = (
+            await self.get_usd_balance()
+            + await self.get_usdc_balance()
+            + await self.get_usdt_balance()
+        )
         if usd_balance > 0:
             try:
                 btc_usd_price = await self.get_btc_usd_price()
@@ -409,7 +430,11 @@ class PaperTradingClient(ExchangeClient):
         - USD balance (including stablecoins)
         - USD value of crypto holdings
         """
-        total_usd = await self.get_usd_balance()
+        total_usd = (
+            await self.get_usd_balance()
+            + await self.get_usdc_balance()
+            + await self.get_usdt_balance()
+        )
 
         # Convert BTC to USD
         btc_balance = self.balances.get("BTC", 0.0)

@@ -483,6 +483,7 @@ export interface TieredAISummary {
 
 export interface ReportGoal {
   id: number
+  account_id?: number | null
   name: string
   target_type: 'balance' | 'profit' | 'both' | 'income' | 'expenses'
   target_currency: 'USD' | 'BTC'
@@ -547,6 +548,7 @@ export interface ReportSchedule {
 
 export interface ReportSummary {
   id: number
+  account_id?: number | null
   schedule_id?: number | null
   schedule_name?: string | null
   period_start: string | null

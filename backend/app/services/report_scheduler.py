@@ -254,6 +254,7 @@ async def generate_report_for_schedule(
     # Create report object
     report = Report(
         user_id=user.id,
+        account_id=schedule.account_id,
         schedule_id=schedule.id,
         period_start=period_start,
         period_end=period_end,

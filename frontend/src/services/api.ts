@@ -662,7 +662,10 @@ export interface ScheduleCreatePayload {
 
 export const reportsApi = {
   // Goals
-  getGoals: () => api.get<ReportGoal[]>('/reports/goals').then(r => r.data),
+  getGoals: (accountId?: number) =>
+    api.get<ReportGoal[]>('/reports/goals', {
+      params: accountId ? { account_id: accountId } : {}
+    }).then(r => r.data),
   createGoal: (data: Omit<ReportGoal, 'id' | 'start_date' | 'target_date' | 'is_active' | 'achieved_at' | 'created_at'>) =>
     api.post<ReportGoal>('/reports/goals', data).then(r => r.data),
   updateGoal: (id: number, data: Partial<ReportGoal>) =>
@@ -688,7 +691,10 @@ export const reportsApi = {
     api.get<string[]>('/reports/expense-categories').then(r => r.data),
 
   // Schedules
-  getSchedules: () => api.get<ReportSchedule[]>('/reports/schedules').then(r => r.data),
+  getSchedules: (accountId?: number) =>
+    api.get<ReportSchedule[]>('/reports/schedules', {
+      params: accountId ? { account_id: accountId } : {}
+    }).then(r => r.data),
   createSchedule: (data: ScheduleCreatePayload) =>
     api.post<ReportSchedule>('/reports/schedules', data).then(r => r.data),
   updateSchedule: (id: number, data: Record<string, unknown>) =>
@@ -696,9 +702,13 @@ export const reportsApi = {
   deleteSchedule: (id: number) => api.delete(`/reports/schedules/${id}`).then(r => r.data),
 
   // Reports
-  getHistory: (limit: number = 20, offset: number = 0, scheduleId?: number) =>
+  getHistory: (limit: number = 20, offset: number = 0, scheduleId?: number, accountId?: number) =>
     api.get<{ total: number; reports: ReportSummary[] }>('/reports/history', {
-      params: { limit, offset, schedule_id: scheduleId }
+      params: {
+        limit, offset,
+        ...(scheduleId ? { schedule_id: scheduleId } : {}),
+        ...(accountId ? { account_id: accountId } : {}),
+      }
     }).then(r => r.data),
   getReport: (id: number) => api.get<ReportSummary>(`/reports/${id}`).then(r => r.data),
   downloadPdf: (id: number) => api.get(`/reports/${id}/pdf`, { responseType: 'blob' }).then(r => r.data),
