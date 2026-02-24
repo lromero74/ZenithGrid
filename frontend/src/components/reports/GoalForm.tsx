@@ -19,7 +19,6 @@ export interface GoalFormData {
   income_period?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
   expense_period?: 'weekly' | 'monthly' | 'quarterly' | 'yearly'
   tax_withholding_pct?: number
-  expense_sort_mode?: 'amount_asc' | 'amount_desc' | 'custom'
   time_horizon_months: number
   target_date?: string | null
   account_id?: number | null
@@ -58,7 +57,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
   const [targetProfitValue, setTargetProfitValue] = useState('')
   const [incomePeriod, setIncomePeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly')
   const [expensePeriod, setExpensePeriod] = useState<'weekly' | 'monthly' | 'quarterly' | 'yearly'>('monthly')
-  const [expenseSortMode, setExpenseSortMode] = useState<'amount_asc' | 'amount_desc' | 'custom'>('amount_asc')
   const [taxWithholding, setTaxWithholding] = useState('')
   const [timeHorizon, setTimeHorizon] = useState(12)
   const [dateMode, setDateMode] = useState<'horizon' | 'date'>('horizon')
@@ -75,7 +73,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setTargetProfitValue(initialData.target_profit_value ? String(initialData.target_profit_value) : '')
       setIncomePeriod(initialData.income_period || 'monthly')
       setExpensePeriod(initialData.expense_period || 'monthly')
-      setExpenseSortMode(initialData.expense_sort_mode || 'amount_asc')
       setTaxWithholding(initialData.tax_withholding_pct ? String(initialData.tax_withholding_pct) : '')
       setTimeHorizon(initialData.time_horizon_months)
 
@@ -113,7 +110,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
       setTargetProfitValue('')
       setIncomePeriod('monthly')
       setExpensePeriod('monthly')
-      setExpenseSortMode('amount_asc')
       setTaxWithholding('')
       setTimeHorizon(12)
       setDateMode('horizon')
@@ -137,7 +133,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
         income_period: targetType === 'income' ? incomePeriod : null,
         expense_period: targetType === 'expenses' ? expensePeriod : undefined,
         tax_withholding_pct: targetType === 'expenses' ? (parseFloat(taxWithholding) || 0) : undefined,
-        expense_sort_mode: targetType === 'expenses' ? expenseSortMode : undefined,
         time_horizon_months: timeHorizon,
       }
 
@@ -241,30 +236,6 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
                 />
                 <p className="text-xs text-slate-500 mt-1">Applied to income before comparing to expenses</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Waterfall Order</label>
-                <div className="flex items-center gap-1">
-                  {([
-                    { value: 'amount_asc', label: 'Smallest First' },
-                    { value: 'amount_desc', label: 'Largest First' },
-                    { value: 'custom', label: 'Custom Order' },
-                  ] as const).map(o => (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => setExpenseSortMode(o.value)}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                        expenseSortMode === o.value
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-700 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">How expenses are prioritized for coverage</p>
               </div>
               <div className="bg-slate-700/50 rounded-lg p-3 text-xs text-slate-400">
                 Target amount is auto-calculated from expense items. Add items after creating the goal.

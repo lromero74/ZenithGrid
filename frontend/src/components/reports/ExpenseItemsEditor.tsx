@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Plus, Pencil, Trash2, GripVertical, ChevronsUp, ChevronsDown } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, GripVertical, ChevronsUp, ChevronsDown, ArrowUpNarrowWide, ArrowDownNarrowWide } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { reportsApi } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
@@ -416,6 +416,16 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     persistOrder(arrayMove(localItems, idx, target))
   }
 
+  const handleSortAsc = () => {
+    const sorted = [...localItems].sort((a, b) => (a.normalized_amount || 0) - (b.normalized_amount || 0))
+    persistOrder(sorted)
+  }
+
+  const handleSortDesc = () => {
+    const sorted = [...localItems].sort((a, b) => (b.normalized_amount || 0) - (a.normalized_amount || 0))
+    persistOrder(sorted)
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const resolvedCategory = category === '__custom__' ? customCategory : category
@@ -702,7 +712,25 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
           <div>
             <h3 className="text-lg font-semibold text-white">Manage Expenses</h3>
             {displayItems.length > 1 && (
-              <p className="text-xs text-slate-500 mt-0.5">Drag to reorder or use controls to set priority</p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-xs text-slate-500">Sort:</p>
+                <button
+                  onClick={handleSortAsc}
+                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
+                  title="Sort smallest first"
+                >
+                  <ArrowUpNarrowWide className="w-3 h-3" /> Low→High
+                </button>
+                <button
+                  onClick={handleSortDesc}
+                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
+                  title="Sort largest first"
+                >
+                  <ArrowDownNarrowWide className="w-3 h-3" /> High→Low
+                </button>
+                <span className="text-[10px] text-slate-600">|</span>
+                <p className="text-[10px] text-slate-500">Drag to customize</p>
+              </div>
             )}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">

@@ -1351,7 +1351,7 @@ class ReportGoal(Base):
     # Expenses goal fields
     expense_period = Column(String, nullable=True)  # weekly/monthly/quarterly/yearly
     tax_withholding_pct = Column(Float, nullable=True, default=0)  # 0-100
-    expense_sort_mode = Column(String, default="amount_asc")  # amount_asc | amount_desc | custom
+    expense_sort_mode = Column(String, default="custom")  # amount_asc | amount_desc | custom
 
     # Relationships
     user = relationship("User", back_populates="report_goals")
