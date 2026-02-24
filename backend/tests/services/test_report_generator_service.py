@@ -17,7 +17,9 @@ import pytest
 from app.services.report_generator_service import (
     _build_expenses_goal_card,
     _build_tabbed_ai_section,
+    _build_transfers_section,
     _expense_name_html,
+    _fmt_coverage_pct,
     _format_due_label,
     _md_to_styled_html,
     _normalize_ai_summary,
@@ -1350,3 +1352,238 @@ class TestGeneratePdfCapitalMetrics:
         }
         result = generate_pdf("<html></html>", data, "Test Report")
         assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# _fmt_coverage_pct — adaptive precision
+# ---------------------------------------------------------------------------
+
+
+class TestCoveragePrecision:
+    """Tests for _fmt_coverage_pct adaptive precision formatting."""
+
+    def test_zero_shows_two_decimals(self):
+        assert _fmt_coverage_pct(0) == "0.00%"
+
+    def test_sub_one_shows_two_decimals(self):
+        assert _fmt_coverage_pct(0.31) == "0.31%"
+
+    def test_exactly_one_shows_one_decimal(self):
+        assert _fmt_coverage_pct(1.0) == "1.0%"
+
+    def test_mid_range_shows_one_decimal(self):
+        assert _fmt_coverage_pct(3.25) == "3.2%"
+
+    def test_ten_plus_shows_zero_decimals(self):
+        assert _fmt_coverage_pct(67.8) == "68%"
+
+    def test_hundred_percent(self):
+        assert _fmt_coverage_pct(100.0) == "100%"
+
+    def test_very_small_value(self):
+        assert _fmt_coverage_pct(0.01) == "0.01%"
+
+
+# ---------------------------------------------------------------------------
+# _build_transfers_section — HTML transfer table
+# ---------------------------------------------------------------------------
+
+
+class TestTransfersSection:
+    """Tests for _build_transfers_section HTML output."""
+
+    def test_empty_records_returns_empty(self):
+        assert _build_transfers_section({}) == ""
+        assert _build_transfers_section({"transfer_records": []}) == ""
+
+    def test_trade_summary_renders_when_present(self):
+        """Trading summary row appears when trade_summary has trades."""
+        data = {
+            "trade_summary": {
+                "total_trades": 15,
+                "winning_trades": 10,
+                "losing_trades": 5,
+                "net_profit_usd": 250.50,
+            },
+        }
+        html = _build_transfers_section(data)
+        assert "Capital Movements" in html
+        assert "Trading Activity" in html
+        assert "15 trades" in html
+        assert "10W/5L" in html
+        assert "+$250.50" in html
+
+    def test_trade_summary_negative_renders_red(self):
+        """Negative net P&L renders with correct color."""
+        data = {
+            "trade_summary": {
+                "total_trades": 5,
+                "winning_trades": 1,
+                "losing_trades": 4,
+                "net_profit_usd": -75.00,
+            },
+        }
+        html = _build_transfers_section(data)
+        assert "#ef4444" in html  # red
+        assert "$75.00" in html
+
+    def test_trade_summary_absent_no_row(self):
+        """No trading summary row when trade_summary is absent."""
+        data = {"transfer_records": [
+            {"date": "2026-02-23", "type": "deposit", "amount_usd": 100.0},
+        ]}
+        html = _build_transfers_section(data)
+        assert "Trading Activity" not in html
+        assert "Capital Movements" in html
+
+    def test_trade_summary_zero_trades_no_row(self):
+        """No trading summary row when total_trades is 0."""
+        data = {
+            "trade_summary": {"total_trades": 0, "winning_trades": 0,
+                              "losing_trades": 0, "net_profit_usd": 0},
+            "transfer_records": [
+                {"date": "2026-02-23", "type": "deposit", "amount_usd": 100.0},
+            ],
+        }
+        html = _build_transfers_section(data)
+        assert "Trading Activity" not in html
+
+    def test_trade_summary_only_no_transfers(self):
+        """Section renders with only trade summary and no transfer records."""
+        data = {
+            "trade_summary": {
+                "total_trades": 3,
+                "winning_trades": 2,
+                "losing_trades": 1,
+                "net_profit_usd": 50.00,
+            },
+        }
+        html = _build_transfers_section(data)
+        assert "Capital Movements" in html
+        assert "Trading Activity" in html
+        assert "Deposit" not in html
+
+    def test_deposit_renders_green(self):
+        data = {"transfer_records": [
+            {"date": "2026-02-23", "type": "deposit", "amount_usd": 150.0},
+        ]}
+        html = _build_transfers_section(data)
+        assert "Capital Movements" in html
+        assert "#10b981" in html  # green
+        assert "+$150.00" in html
+        assert "Deposit" in html
+
+    def test_withdrawal_renders_red(self):
+        data = {"transfer_records": [
+            {"date": "2026-02-20", "type": "withdrawal", "amount_usd": 50.0},
+        ]}
+        html = _build_transfers_section(data)
+        assert "#ef4444" in html  # red
+        assert "-$50.00" in html
+        assert "Withdrawal" in html
+
+    def test_multiple_records_all_rendered(self):
+        data = {"transfer_records": [
+            {"date": "2026-02-23", "type": "deposit", "amount_usd": 100.0},
+            {"date": "2026-02-21", "type": "withdrawal", "amount_usd": 25.0},
+            {"date": "2026-02-20", "type": "deposit", "amount_usd": 200.0},
+        ]}
+        html = _build_transfers_section(data)
+        # 1 header + 3 data rows (no trade summary row)
+        assert "2026-02-23" in html
+        assert "2026-02-21" in html
+        assert "2026-02-20" in html
+
+
+# ---------------------------------------------------------------------------
+# HTML deposit metrics — always show row
+# ---------------------------------------------------------------------------
+
+
+class TestMetricsSectionDeposits:
+    """Deposit/withdrawal row in key metrics always shows."""
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_deposits_row_shown_when_zero(self, mock_brand):
+        """Deposit row should appear even when net_deposits is 0."""
+        data = _minimal_report_data()
+        data["net_deposits_usd"] = 0
+        data["adjusted_account_growth_usd"] = 500.0
+        html = build_report_html(
+            report_data=data,
+            ai_summary=None,
+            user_name="Test",
+            period_label="Feb 2026",
+        )
+        assert "Net Deposits" in html
+        assert "Adjusted Growth" in html
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_deposits_row_hidden_when_no_adjusted(self, mock_brand):
+        """If adjusted_account_growth_usd is missing entirely, no deposit row."""
+        data = _minimal_report_data()
+        # No adjusted_account_growth_usd key at all
+        html = build_report_html(
+            report_data=data,
+            ai_summary=None,
+            user_name="Test",
+            period_label="Feb 2026",
+        )
+        assert "Net Deposits" not in html
+
+
+# ---------------------------------------------------------------------------
+# generate_pdf — with transfer records
+# ---------------------------------------------------------------------------
+
+
+class TestGeneratePdfTransferRecords:
+    """PDF includes Capital Movements table when transfer records exist."""
+
+    def test_pdf_with_transfers_does_not_crash(self):
+        data = {
+            "account_value_usd": 10000.0,
+            "account_value_btc": 0.1,
+            "period_start_value_usd": 9500.0,
+            "period_profit_usd": 500.0,
+            "period_profit_btc": 0.005,
+            "total_trades": 42,
+            "winning_trades": 30,
+            "losing_trades": 12,
+            "win_rate": 71.4,
+            "net_deposits_usd": 150.0,
+            "total_deposits_usd": 150.0,
+            "total_withdrawals_usd": 0,
+            "adjusted_account_growth_usd": 350.0,
+            "transfer_records": [
+                {"date": "2026-02-23", "type": "deposit", "amount_usd": 150.0},
+            ],
+        }
+        result = generate_pdf("<html></html>", data, "Test Report")
+        assert result is not None
+        assert isinstance(result, bytes)
+        assert len(result) > 100
+
+
+# ---------------------------------------------------------------------------
+# build_report_html — transfers section in full report
+# ---------------------------------------------------------------------------
+
+
+class TestBuildReportHtmlTransfers:
+    """Transfer table appears in the full HTML report."""
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_transfers_section_in_full_report(self, mock_brand):
+        data = _minimal_report_data()
+        data["transfer_records"] = [
+            {"date": "2026-02-23", "type": "deposit", "amount_usd": 150.0},
+        ]
+        html = build_report_html(
+            report_data=data,
+            ai_summary=None,
+            user_name="Test",
+            period_label="Feb 2026",
+        )
+        assert "Capital Movements" in html
+        assert "+$150.00" in html

@@ -20,6 +20,23 @@ from app.services.brand_service import get_brand
 
 logger = logging.getLogger(__name__)
 
+
+def _fmt_coverage_pct(pct: float) -> str:
+    """Format expense coverage percentage with adaptive precision.
+
+    Small values get more decimals so they don't misleadingly round to 0%.
+    - < 1%  → 2 decimals (e.g. "0.31%")
+    - 1-10% → 1 decimal  (e.g. "3.2%")
+    - >= 10% → 0 decimals (e.g. "67%")
+    """
+    if pct < 1:
+        return f"{pct:.2f}%"
+    elif pct < 10:
+        return f"{pct:.1f}%"
+    else:
+        return f"{pct:.0f}%"
+
+
 # Tier display labels
 _TIER_LABELS = {
     "beginner": "Summary (Simplified)",
@@ -139,6 +156,7 @@ def build_report_html(
     brand_color = b["colors"]["primary"]
 
     metrics_html = _build_metrics_section(report_data)
+    transfers_html = _build_transfers_section(report_data)
     goals_html = _build_goals_section(
         report_data.get("goals", []), brand_color, email_mode=email_mode,
     )
@@ -171,6 +189,7 @@ def build_report_html(
 <div style="max-width: 700px; margin: 0 auto; padding: 20px;">
     {_report_header(b, user_name, period_label, brand_color, schedule_name)}
     {metrics_html}
+    {transfers_html}
     {goals_html}
     {comparison_html}
     {ai_html}
@@ -332,6 +351,77 @@ def _report_footer(brand: dict) -> str:
     </div>"""
 
 
+def _build_transfers_section(data: Dict[str, Any]) -> str:
+    """Render a Capital Movements table with optional trading summary and transfers."""
+    trade_summary = data.get("trade_summary")
+    records = data.get("transfer_records", [])
+    has_trades = trade_summary and trade_summary.get("total_trades", 0) > 0
+
+    if not records and not has_trades:
+        return ""
+
+    # Trading summary row
+    trade_row = ""
+    if has_trades:
+        ts = trade_summary
+        net = ts["net_profit_usd"]
+        color = "#10b981" if net >= 0 else "#ef4444"
+        sign = "+" if net >= 0 else ""
+        w = ts["winning_trades"]
+        lo = ts["losing_trades"]
+        trade_row = f"""
+                <tr>
+                    <td style="padding: 8px; border-bottom: 2px solid #475569;
+                               color: #e2e8f0; font-size: 12px; font-weight: 600;"
+                        colspan="2">Trading Activity &mdash; {ts['total_trades']} trades ({w}W/{lo}L)</td>
+                    <td style="padding: 8px; border-bottom: 2px solid #475569;
+                               color: {color}; font-size: 12px; text-align: right;
+                               font-weight: 700;">{sign}${abs(net):,.2f}</td>
+                </tr>"""
+
+    # Individual transfer rows
+    transfer_rows = ""
+    for rec in records:
+        is_deposit = rec.get("type") == "deposit"
+        color = "#10b981" if is_deposit else "#ef4444"
+        sign = "+" if is_deposit else "-"
+        amt = abs(rec.get("amount_usd", 0))
+        label = rec.get("type", "").capitalize()
+        date_str = rec.get("date", "")
+        transfer_rows += f"""
+                <tr>
+                    <td style="padding: 6px 8px; border-bottom: 1px solid #334155;
+                               color: #94a3b8; font-size: 12px;">{date_str}</td>
+                    <td style="padding: 6px 8px; border-bottom: 1px solid #334155;
+                               color: {color}; font-size: 12px;">{label}</td>
+                    <td style="padding: 6px 8px; border-bottom: 1px solid #334155;
+                               color: {color}; font-size: 12px; text-align: right;
+                               font-weight: 600;">{sign}${amt:,.2f}</td>
+                </tr>"""
+
+    return f"""
+    <div style="margin: 20px 0;">
+        <h3 style="color: #94a3b8; font-size: 13px; text-transform: uppercase;
+                   letter-spacing: 1px; margin: 0 0 15px 0;">Capital Movements</h3>
+        <table style="width: 100%; border-collapse: collapse; background-color: #1e293b;
+                      border-radius: 8px; border: 1px solid #334155;">
+            <thead>
+                <tr>
+                    <th style="padding: 8px; text-align: left; color: #64748b;
+                               font-size: 11px; border-bottom: 1px solid #334155;">Date</th>
+                    <th style="padding: 8px; text-align: left; color: #64748b;
+                               font-size: 11px; border-bottom: 1px solid #334155;">Type</th>
+                    <th style="padding: 8px; text-align: right; color: #64748b;
+                               font-size: 11px; border-bottom: 1px solid #334155;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {trade_row}{transfer_rows}
+            </tbody>
+        </table>
+    </div>"""
+
+
 def _build_metrics_section(data: Dict[str, Any]) -> str:
     """Key metrics cards grid."""
     value_usd = data.get("account_value_usd", 0)
@@ -354,7 +444,7 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
     net_deposits = data.get("net_deposits_usd", 0)
     adjusted_growth = data.get("adjusted_account_growth_usd")
     deposit_row = ""
-    if net_deposits != 0 and adjusted_growth is not None:
+    if adjusted_growth is not None:
         dep_sign = "+" if net_deposits >= 0 else ""
         dep_color = "#3b82f6" if net_deposits >= 0 else "#f59e0b"
         adj_sign = "+" if adjusted_growth >= 0 else ""
@@ -751,7 +841,7 @@ def _build_expense_status_badge(item: dict) -> str:
         badge_bg, badge_color, badge_text = "#065f46", "#6ee7b7", "Covered"
     elif status == "partial":
         cp = item.get("coverage_pct", 0)
-        badge_bg, badge_color, badge_text = "#78350f", "#fcd34d", f"{cp:.0f}%"
+        badge_bg, badge_color, badge_text = "#78350f", "#fcd34d", _fmt_coverage_pct(cp)
     else:
         badge_bg, badge_color, badge_text = "#7f1d1d", "#fca5a5", "Uncovered"
     return (
@@ -1026,7 +1116,7 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
                                      margin-left: 6px;">Expenses / {period.capitalize()}</span>
                     </span>
                     <span style="color: {bar_color}; font-size: 12px; font-weight: 600;">
-                        {pct:.0f}% Covered</span>
+                        {_fmt_coverage_pct(pct)} Covered</span>
                 </div>
                 <div style="background-color: #334155; border-radius: 4px; height: 8px;
                             overflow: hidden; margin-bottom: 10px;">
@@ -1498,6 +1588,68 @@ def generate_pdf(
             pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
 
+        # Capital Movements (trading summary + individual transfers)
+        pdf_trade_summary = report_data.get("trade_summary")
+        pdf_transfers = report_data.get("transfer_records", [])
+        pdf_has_trades = (
+            pdf_trade_summary
+            and pdf_trade_summary.get("total_trades", 0) > 0
+        )
+
+        if pdf_has_trades or pdf_transfers:
+            pdf.ln(6)
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.set_text_color(30, 30, 30)
+            pdf.cell(
+                0, 8, "Capital Movements",
+                new_x="LMARGIN", new_y="NEXT",
+            )
+            pdf.ln(2)
+
+            # Trading summary row
+            if pdf_has_trades:
+                ts = pdf_trade_summary
+                net = ts["net_profit_usd"]
+                t_sign = "+" if net >= 0 else ""
+                w = ts["winning_trades"]
+                lo = ts["losing_trades"]
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.set_text_color(30, 30, 30)
+                pdf.cell(
+                    80, 7,
+                    f"Trading: {ts['total_trades']} trades ({w}W/{lo}L)",
+                    new_x="RIGHT",
+                )
+                pdf.cell(
+                    0, 7, f"{t_sign}${abs(net):,.2f}",
+                    new_x="LMARGIN", new_y="NEXT", align="R",
+                )
+                pdf.set_font("Helvetica", "", 10)
+                pdf.ln(2)
+
+            # Column headers for transfers
+            if pdf_transfers:
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(100, 100, 100)
+                pdf.cell(40, 6, "Date", new_x="RIGHT")
+                pdf.cell(40, 6, "Type", new_x="RIGHT")
+                pdf.cell(0, 6, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
+                for trec in pdf_transfers:
+                    t_date = trec.get("date", "")
+                    t_type = trec.get("type", "").capitalize()
+                    t_amt = abs(trec.get("amount_usd", 0))
+                    t_sign = "+" if trec.get("type") == "deposit" else "-"
+                    pdf.set_text_color(100, 100, 100)
+                    pdf.cell(40, 6, t_date, new_x="RIGHT")
+                    pdf.cell(40, 6, t_type, new_x="RIGHT")
+                    pdf.set_text_color(30, 30, 30)
+                    pdf.set_font("Helvetica", "B", 10)
+                    pdf.cell(
+                        0, 6, f"{t_sign}${t_amt:,.2f}",
+                        new_x="LMARGIN", new_y="NEXT", align="R",
+                    )
+                    pdf.set_font("Helvetica", "", 10)
+
         # Goals
         goals = report_data.get("goals", [])
         if goals:
@@ -1552,7 +1704,7 @@ def generate_pdf(
                     pdf.cell(
                         0, 7,
                         f"{goal_name} (Expenses/{exp_period.capitalize()}) "
-                        f"- {cov_pct:.0f}% Covered",
+                        f"- {_fmt_coverage_pct(cov_pct)} Covered",
                         new_x="LMARGIN", new_y="NEXT",
                     )
                     pdf.set_font("Helvetica", "", 9)
@@ -1567,8 +1719,8 @@ def generate_pdf(
                     for ei in coverage.get("items", []):
                         s = ei.get("status", "uncovered")
                         badge = "OK" if s == "covered" else (
-                            f"{ei.get('coverage_pct', 0):.0f}%" if s == "partial"
-                            else "X"
+                            _fmt_coverage_pct(ei.get('coverage_pct', 0))
+                            if s == "partial" else "X"
                         )
                         norm = ei.get("normalized_amount", 0)
                         pdf.cell(
@@ -1632,7 +1784,8 @@ def generate_pdf(
                             _amt = _ei.get("amount", 0)
                             _s = _ei.get("status", "uncovered")
                             _badge = ("OK" if _s == "covered"
-                                      else f"{_ei.get('coverage_pct', 0):.0f}%"
+                                      else _fmt_coverage_pct(
+                                          _ei.get('coverage_pct', 0))
                                       if _s == "partial" else "X")
                             pdf.cell(
                                 0, 5,

@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.41.0] - 2026-02-24
+
+### Added
+- **Chart activity markers**: Account Value chart now shows categorized markers — trade wins (green), trade losses (red), deposits (blue), withdrawals (amber) — placed on the correct BTC or USD line based on the trading pair or currency
+- **Chart activity endpoint**: New `GET /api/account-value/activity` endpoint aggregates closed trades and transfers by day for chart markers
+- **Trading summary in reports**: Capital Movements section in HTML, PDF, and AI reports now shows a trading activity summary row ("X trades (YW/ZL), net P&L: +$Z.ZZ") above individual deposit/withdrawal rows
+- **Individual transfer table in reports**: HTML, PDF, and AI summaries now show a "Capital Movements" table listing the most recent deposits and withdrawals with dates, types, and amounts
+
+### Changed
+- **Adaptive coverage precision**: Expense coverage percentages now use adaptive decimal places — small values like 0.31% no longer misleadingly round to 0%. Applies to HTML badges, PDF badges, goal headers, and AI prompts
+- **Deposit metrics always visible**: HTML report Key Metrics section now always shows the Net Deposits and Adjusted Growth row, even when deposits are zero (previously hidden when net deposits were exactly 0)
+
 ## [v2.40.16] - 2026-02-23
 
 ### Fixed

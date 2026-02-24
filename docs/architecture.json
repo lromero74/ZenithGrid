@@ -1,7 +1,7 @@
 {
   "project": "BTC-Bot",
-  "version": "v2.40.16",
-  "updated": "2026-02-23",
+  "version": "v2.41.0",
+  "updated": "2026-02-24",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
 
   "stack": {
@@ -37,7 +37,7 @@
   "backend": {
     "routers": [
       { "file": "routers/account_router.py", "prefix": "/api/account", "purpose": "Account balances, aggregate value, portfolio operations" },
-      { "file": "routers/account_value_router.py", "prefix": "/api/account-value", "purpose": "Historical account value snapshots for charting" },
+      { "file": "routers/account_value_router.py", "prefix": "/api/account-value", "purpose": "Historical account value snapshots for charting, daily activity markers (trades, deposits, withdrawals)" },
       { "file": "routers/accounts_router.py", "prefix": "/api/accounts", "purpose": "CRUD for CEX and DEX trading accounts" },
       { "file": "routers/ai_credentials_router.py", "prefix": "/api/ai-credentials", "purpose": "Manage per-user AI provider API keys" },
       { "file": "routers/auth_router.py", "prefix": "/api/auth", "purpose": "Login (with MFA), signup, token refresh, password change, TOTP MFA setup/verify/disable, email MFA, trusted devices, email verification, password reset" },
@@ -132,7 +132,7 @@
     ],
 
     "services": [
-      { "file": "services/account_snapshot_service.py", "purpose": "Captures daily account value snapshots for historical charting; triggers goal progress snapshot capture", "type": "background" },
+      { "file": "services/account_snapshot_service.py", "purpose": "Captures daily account value snapshots for historical charting; triggers goal progress snapshot capture; aggregates daily activity (closed trades, transfers) for chart markers", "type": "background" },
       { "file": "services/ai_credential_service.py", "purpose": "Per-user AI provider credential management and retrieval", "type": "infrastructure" },
       { "file": "services/ai_grid_optimizer.py", "purpose": "AI-powered grid parameter optimization", "type": "analysis" },
       { "file": "services/auto_buy_monitor.py", "purpose": "Auto-converts stablecoins to BTC when balances exceed minimums", "type": "background" },
@@ -159,6 +159,10 @@
       { "file": "services/portfolio_conversion_service.py", "purpose": "Portfolio conversion with progress tracking", "type": "trading" },
       { "file": "services/portfolio_service.py", "purpose": "Portfolio aggregation and balance calculations", "type": "trading" },
       { "file": "services/prop_guard_monitor.py", "purpose": "Background equity monitoring for prop firm accounts every 30s", "type": "background" },
+      { "file": "services/report_ai_service.py", "purpose": "Generates AI-powered summaries for performance reports using per-user AI credentials; tiered output (beginner/comfortable/experienced); includes trading activity context in prompts", "type": "analysis" },
+      { "file": "services/report_data_service.py", "purpose": "Gathers metrics for report generation: account value snapshots, closed positions, profit calculations, goal progress, trade summary stats, prior period comparisons", "type": "analysis" },
+      { "file": "services/report_generator_service.py", "purpose": "Builds HTML report content and generates PDF; includes capital movements table with trading summary and transfers; supports tiered AI summaries with brand styling", "type": "analysis" },
+      { "file": "services/report_scheduler.py", "purpose": "Background task that checks for due report schedules and generates reports; also provides manual trigger function", "type": "background" },
       { "file": "services/season_detector.py", "purpose": "Market season detection using halving cycles and multiple indicators", "type": "analysis" },
       { "file": "services/settings_service.py", "purpose": "User settings retrieval and persistence", "type": "infrastructure" },
       { "file": "services/shutdown_manager.py", "purpose": "Tracks in-flight operations for graceful shutdown", "type": "infrastructure" },
@@ -419,7 +423,7 @@
         { "file": "components/TradingViewChartModal.tsx", "purpose": "TradingView integration for technical analysis" },
         { "file": "components/LightweightChartModal.tsx", "purpose": "Full-featured chart modal with indicators and oscillators" },
         { "file": "components/DepthChart.tsx", "purpose": "Order book depth visualization" },
-        { "file": "components/AccountValueChart.tsx", "purpose": "Account value over time line chart" },
+        { "file": "components/AccountValueChart.tsx", "purpose": "Account value over time line chart with activity markers (trade wins/losses, deposits, withdrawals) on BTC/USD series" },
         { "file": "components/PnLChart.tsx", "purpose": "P&L bar/line chart by time period" },
         { "file": "components/Sparkline.tsx", "purpose": "Minimal inline sparkline chart" },
         { "file": "components/charts/IndicatorSettingsModal.tsx", "purpose": "Indicator parameter configuration" },
@@ -586,7 +590,7 @@
         { "name": "blacklistApi", "purpose": "Blacklist and category management with AI review" },
         { "name": "aiCredentialsApi", "purpose": "AI provider credential management" },
         { "name": "autoBuyApi", "purpose": "Auto-buy BTC settings" },
-        { "name": "accountValueApi", "purpose": "Historical account value snapshots" },
+        { "name": "accountValueApi", "purpose": "Historical account value snapshots and daily activity markers (trades, deposits, withdrawals)" },
         { "name": "reportsApi", "purpose": "Goals CRUD, goal trend data, report schedules, generated reports" }
       ]
     },

@@ -15,6 +15,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+
+def _fmt_ai_coverage_pct(pct: float) -> str:
+    """Format coverage percentage with adaptive precision for AI prompts."""
+    if pct < 1:
+        return f"{pct:.2f}%"
+    elif pct < 10:
+        return f"{pct:.1f}%"
+    else:
+        return f"{pct:.0f}%"
+
+
 # Max tokens for summary generation (3 tiers with structured markdown sections)
 MAX_SUMMARY_TOKENS = 4096
 
@@ -171,7 +182,7 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
                     f"  - {g['name']} (Expenses Goal): "
                     f"Total expenses: {total_exp} {g['target_currency']}/{exp_period}, "
                     f"Income after tax: {income_at}, "
-                    f"Coverage: {cov_pct:.0f}% ({covered_n}/{total_n} items covered), "
+                    f"Coverage: {_fmt_ai_coverage_pct(cov_pct)} ({covered_n}/{total_n} items covered), "
                     f"Based on {g.get('sample_trades', 0)} trades over "
                     f"{g.get('lookback_days_used', 0)} days"
                 )
@@ -225,8 +236,21 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
             "occurred. Present the implied net figure accurately."
         )
 
+    # Trading summary line
+    trade_summary = data.get("trade_summary")
+    trade_line = ""
+    if trade_summary and trade_summary.get("total_trades", 0) > 0:
+        ts = trade_summary
+        ts_sign = "+" if ts["net_profit_usd"] >= 0 else ""
+        trade_line = (
+            f"\n  - Trading activity: {ts['total_trades']} trades "
+            f"({ts['winning_trades']}W/{ts['losing_trades']}L), "
+            f"net P&L: {ts_sign}${abs(ts['net_profit_usd']):,.2f}"
+        )
+
     capital_section = (
         f"\nCapital Movements & Account Reconciliation:"
+        f"{trade_line}"
         f"\n  - Account value change in period: ${account_change:,.2f}"
         f"\n    (from ${start_val:,.2f} to ${end_val:,.2f})"
         f"\n  - Trading profit in period: ${period_profit:,.2f}"
@@ -235,6 +259,19 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
         f"\n  - Adjusted growth (excluding deposits): ${adj_growth:,.2f}"
         f"{source_note}"
     )
+
+    # Append individual transfer records when available
+    transfer_records = data.get("transfer_records", [])
+    if transfer_records:
+        lines = ["\n  Individual transfers (most recent first):"]
+        for tr in transfer_records:
+            tr_type = tr.get("type", "").capitalize()
+            tr_amt = abs(tr.get("amount_usd", 0))
+            tr_sign = "+" if tr.get("type") == "deposit" else "-"
+            lines.append(
+                f"  - {tr.get('date', '')}: {tr_type} {tr_sign}${tr_amt:,.2f}"
+            )
+        capital_section += "\n".join(lines)
 
     prior_section = ""
     prior = data.get("prior_period")

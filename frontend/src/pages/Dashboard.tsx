@@ -450,7 +450,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       )}
 
       {/* Account Value Chart */}
-      <AccountValueChart transferSummary={transferSummary} />
+      <AccountValueChart />
 
       {/* Recent Deals */}
       {recentDeals.length > 0 && (

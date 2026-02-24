@@ -82,6 +82,29 @@ async def capture_snapshots(
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
+@router.get("/activity")
+async def get_daily_activity(
+    days: int = Query(365, ge=1, le=1825, description="Number of days to fetch (max 5 years)"),
+    include_paper_trading: bool = Query(False, description="Include paper trading accounts"),
+    account_id: int = Query(None, description="Specific account ID (omit for all accounts)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    """
+    Get daily activity (trades, deposits, withdrawals) aggregated by day/line/category.
+
+    Used for chart markers on the account value chart.
+    """
+    try:
+        activity = await account_snapshot_service.get_daily_activity(
+            db, current_user.id, days, include_paper_trading, account_id
+        )
+        return activity
+    except Exception as e:
+        logger.error(f"Failed to fetch daily activity: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
 @router.get("/reservations")
 async def get_bidirectional_reservations(
     account_id: int = Query(..., description="Account ID to fetch reservations for"),

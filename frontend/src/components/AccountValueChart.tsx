@@ -4,7 +4,7 @@ import { createChart, ColorType, IChartApi, Time, LineData, SeriesMarker } from 
 import { TrendingUp, DollarSign } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 import { useAccount } from '../contexts/AccountContext'
-import { accountValueApi, type TransferRecentSummary } from '../services/api'
+import { accountValueApi, type ActivityItem } from '../services/api'
 
 interface AccountValueSnapshot {
   date: string
@@ -17,10 +17,38 @@ export type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
 
 interface AccountValueChartProps {
   className?: string
-  transferSummary?: TransferRecentSummary | null
 }
 
-export function AccountValueChart({ className = '', transferSummary }: AccountValueChartProps) {
+// Marker config per activity category
+const MARKER_CONFIG: Record<ActivityItem['category'], {
+  shape: 'arrowUp' | 'arrowDown'
+  position: 'belowBar' | 'aboveBar'
+  color: string
+  label: string
+}> = {
+  trade_win:  { shape: 'arrowUp',   position: 'belowBar', color: '#10b981', label: 'Win' },
+  trade_loss: { shape: 'arrowDown', position: 'aboveBar', color: '#ef4444', label: 'Loss' },
+  deposit:    { shape: 'arrowUp',   position: 'belowBar', color: '#3b82f6', label: 'Deposit' },
+  withdrawal: { shape: 'arrowDown', position: 'aboveBar', color: '#f59e0b', label: 'Withdrawal' },
+}
+
+function formatMarkerText(item: ActivityItem): string {
+  const cfg = MARKER_CONFIG[item.category]
+  const isBtc = item.line === 'btc'
+
+  if (item.category === 'trade_win' || item.category === 'trade_loss') {
+    const sign = item.amount >= 0 ? '+' : ''
+    const amt = isBtc ? `${sign}${item.amount.toFixed(8)} BTC` : `${sign}$${Math.abs(item.amount).toLocaleString()}`
+    const plural = item.count > 1 ? `${item.count} ${cfg.label}s` : cfg.label
+    return `${plural}: ${amt}`
+  }
+  // Deposits/withdrawals
+  const amt = isBtc ? `${item.amount.toFixed(8)} BTC` : `$${Math.abs(item.amount).toLocaleString()}`
+  const plural = item.count > 1 ? `${item.count} ${cfg.label}s` : cfg.label
+  return `${plural}: ${amt}`
+}
+
+export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [showAllAccounts, setShowAllAccounts] = useState(false)
   const chartContainerRef = useRef<HTMLDivElement>(null)
@@ -57,6 +85,16 @@ export function AccountValueChart({ className = '', transferSummary }: AccountVa
       return accountValueApi.getHistory(days, includePaperTrading, accountId)
     },
     refetchInterval: 300000, // Refresh every 5 minutes
+  })
+
+  // Fetch activity data for chart markers
+  const { data: activity } = useQuery<ActivityItem[]>({
+    queryKey: ['account-value-activity', timeRange, includePaperTrading, accountId],
+    queryFn: async () => {
+      const days = getDaysForTimeRange(timeRange)
+      return accountValueApi.getActivity(days, includePaperTrading, accountId)
+    },
+    refetchInterval: 300000,
   })
 
   // Initialize chart
@@ -151,23 +189,33 @@ export function AccountValueChart({ className = '', transferSummary }: AccountVa
     btcSeries.setData(btcData)
     usdSeries.setData(usdData)
 
-    // Add deposit/withdrawal markers on the USD series
-    if (transferSummary?.transfers && transferSummary.transfers.length > 0) {
-      const markers: SeriesMarker<Time>[] = transferSummary.transfers
-        .map(t => {
-          const dateStr = t.occurred_at.split('T')[0]
-          const isDeposit = t.type === 'deposit'
-          const amt = t.amount_usd ? `$${t.amount_usd.toLocaleString()}` : `${t.amount} ${t.currency}`
-          return {
-            time: dateStr as Time,
-            position: isDeposit ? 'belowBar' as const : 'aboveBar' as const,
-            color: isDeposit ? '#3b82f6' : '#f59e0b',
-            shape: isDeposit ? 'arrowUp' as const : 'arrowDown' as const,
-            text: `${isDeposit ? 'Deposit' : 'Withdrawal'}: ${amt}`,
-          }
-        })
-        .sort((a, b) => (a.time as string).localeCompare(b.time as string))
-      usdSeries.setMarkers(markers)
+    // Add activity markers on respective series (BTC or USD line)
+    if (activity && activity.length > 0) {
+      const btcMarkers: SeriesMarker<Time>[] = []
+      const usdMarkers: SeriesMarker<Time>[] = []
+
+      for (const item of activity) {
+        const cfg = MARKER_CONFIG[item.category]
+        const marker: SeriesMarker<Time> = {
+          time: item.date as Time,
+          position: cfg.position,
+          color: cfg.color,
+          shape: cfg.shape,
+          text: formatMarkerText(item),
+        }
+        if (item.line === 'btc') {
+          btcMarkers.push(marker)
+        } else {
+          usdMarkers.push(marker)
+        }
+      }
+
+      // Markers must be sorted by time
+      btcMarkers.sort((a, b) => (a.time as string).localeCompare(b.time as string))
+      usdMarkers.sort((a, b) => (a.time as string).localeCompare(b.time as string))
+
+      if (btcMarkers.length > 0) btcSeries.setMarkers(btcMarkers)
+      if (usdMarkers.length > 0) usdSeries.setMarkers(usdMarkers)
     }
 
     // Fit content
@@ -191,7 +239,7 @@ export function AccountValueChart({ className = '', transferSummary }: AccountVa
         chartRef.current = null
       }
     }
-  }, [history, transferSummary])
+  }, [history, activity])
 
   // Calculate which time range buttons should be enabled based on data span
   const getEnabledTimeRanges = (): Set<TimeRange> => {
@@ -354,14 +402,30 @@ export function AccountValueChart({ className = '', transferSummary }: AccountVa
       </div>
 
       {/* Chart Legend */}
-      <div className="flex items-center justify-center space-x-6 mb-2 text-sm">
+      <div className="flex items-center justify-center gap-4 flex-wrap mb-2 text-xs">
         <div className="flex items-center space-x-2">
           <div className="w-4 h-0.5 bg-orange-400"></div>
-          <span className="text-slate-300">BTC Value (Left Axis)</span>
+          <span className="text-slate-300">BTC Value (Left)</span>
         </div>
         <div className="flex items-center space-x-2">
           <div className="w-4 h-0.5 bg-green-400"></div>
-          <span className="text-slate-300">USD Value (Right Axis)</span>
+          <span className="text-slate-300">USD Value (Right)</span>
+        </div>
+        <div className="flex items-center space-x-1.5">
+          <span className="text-emerald-400">&#9650;</span>
+          <span className="text-slate-400">Win</span>
+        </div>
+        <div className="flex items-center space-x-1.5">
+          <span className="text-red-400">&#9660;</span>
+          <span className="text-slate-400">Loss</span>
+        </div>
+        <div className="flex items-center space-x-1.5">
+          <span className="text-blue-400">&#9650;</span>
+          <span className="text-slate-400">Deposit</span>
+        </div>
+        <div className="flex items-center space-x-1.5">
+          <span className="text-amber-400">&#9660;</span>
+          <span className="text-slate-400">Withdrawal</span>
         </div>
       </div>
 
