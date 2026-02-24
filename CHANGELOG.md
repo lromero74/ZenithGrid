@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.43.0] - 2026-02-24
+
+### Changed
+- **Two-tier AI report summaries**: Report AI analysis simplified from three tiers (Beginner/Comfortable/Experienced) to two — "Summary" (plain language, encouraging) and "Detailed Analysis" (expert depth, opinionated, may include extra sections like Risk Assessment or Strategy Notes)
+- **Expense Coverage section placement**: Expense-type goals now appear immediately after Capital Movements in reports, before other goal types, for better visual flow
+
+### Removed
+- **Per-recipient experience level**: Recipients no longer have an experience level setting — all recipients receive the same report with both Summary and Detailed tiers available
+
 ## [v2.42.0] - 2026-02-24
 
 ### Added

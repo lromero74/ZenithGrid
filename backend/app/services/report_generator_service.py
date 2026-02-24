@@ -39,9 +39,8 @@ def _fmt_coverage_pct(pct: float) -> str:
 
 # Tier display labels
 _TIER_LABELS = {
-    "beginner": "Summary (Simplified)",
-    "comfortable": "AI Performance Analysis",
-    "experienced": "Technical Analysis",
+    "simple": "Summary",
+    "detailed": "Detailed Analysis",
 }
 
 
@@ -96,36 +95,46 @@ def _normalize_ai_summary(
     ai_summary: Union[None, str, dict],
 ) -> Optional[dict]:
     """
-    Normalize ai_summary to a tiered dict.
+    Normalize ai_summary to a tiered dict with keys: simple, detailed.
 
     Handles:
       - None → None
-      - str → {"comfortable": str, "beginner": None, "experienced": None}
-      - dict → pass through
+      - str → {"simple": str, "detailed": None}
+      - dict → pass through (with legacy 3-tier migration)
       - JSON string of a dict → parsed dict
     """
     if ai_summary is None:
         return None
 
     if isinstance(ai_summary, dict):
-        return ai_summary
+        return _migrate_legacy_tiers(ai_summary)
 
     if isinstance(ai_summary, str):
         # Try to parse as JSON dict (stored in DB as json.dumps)
         try:
             parsed = json.loads(ai_summary)
-            if isinstance(parsed, dict) and "comfortable" in parsed:
-                return parsed
+            if isinstance(parsed, dict):
+                return _migrate_legacy_tiers(parsed)
         except (json.JSONDecodeError, TypeError):
             pass
-        # Plain text — wrap as comfortable tier
+        # Plain text — wrap as simple tier
         return {
-            "beginner": None,
-            "comfortable": ai_summary,
-            "experienced": None,
+            "simple": ai_summary,
+            "detailed": None,
         }
 
     return None
+
+
+def _migrate_legacy_tiers(d: dict) -> dict:
+    """Convert old 3-tier (beginner/comfortable/experienced) to 2-tier (simple/detailed)."""
+    if "simple" in d or "detailed" in d:
+        return d
+    # Legacy format — map comfortable→simple, experienced→detailed
+    return {
+        "simple": d.get("comfortable") or d.get("beginner"),
+        "detailed": d.get("experienced"),
+    }
 
 
 def build_report_html(
@@ -133,7 +142,7 @@ def build_report_html(
     ai_summary: Union[None, str, dict],
     user_name: str,
     period_label: str,
-    default_level: str = "comfortable",
+    default_level: str = "simple",
     schedule_name: Optional[str] = None,
     email_mode: bool = False,
 ) -> str:
@@ -145,7 +154,7 @@ def build_report_html(
         ai_summary: AI-generated summary — dict of tiers, plain string, or None
         user_name: User's display name or email
         period_label: e.g. "January 1 - January 7, 2026"
-        default_level: Which tier gets visual prominence
+        default_level: Which tier tab is active by default
         schedule_name: Optional report schedule name (shown as title)
         email_mode: If True, show only the default tier (email clients strip JS)
 
@@ -157,8 +166,17 @@ def build_report_html(
 
     metrics_html = _build_metrics_section(report_data)
     transfers_html = _build_transfers_section(report_data)
+
+    # Split goals: expenses goals go right after Capital Movements
+    all_goals = report_data.get("goals", [])
+    expense_goals = [g for g in all_goals if g.get("target_type") == "expenses"]
+    other_goals = [g for g in all_goals if g.get("target_type") != "expenses"]
+    expense_goals_html = _build_goals_section(
+        expense_goals, brand_color, email_mode=email_mode,
+        section_title="Expense Coverage",
+    )
     goals_html = _build_goals_section(
-        report_data.get("goals", []), brand_color, email_mode=email_mode,
+        other_goals, brand_color, email_mode=email_mode,
     )
     comparison_html = _build_comparison_section(report_data)
 
@@ -190,6 +208,7 @@ def build_report_html(
     {_report_header(b, user_name, period_label, brand_color, schedule_name)}
     {metrics_html}
     {transfers_html}
+    {expense_goals_html}
     {goals_html}
     {comparison_html}
     {ai_html}
@@ -210,7 +229,7 @@ def _build_tabbed_ai_section(
     Uses hidden radio buttons + :checked pseudo-class for tab switching,
     which works under strict CSP without 'unsafe-inline' in script-src.
     """
-    tier_order = ["beginner", "comfortable", "experienced"]
+    tier_order = ["simple", "detailed"]
     available = [(t, ai_summary.get(t)) for t in tier_order if ai_summary.get(t)]
 
     if not available:
@@ -294,7 +313,7 @@ def _build_email_ai_section(
     text = ai_summary.get(default_level)
     if not text:
         # Fallback: try any available tier
-        for tier in ["comfortable", "beginner", "experienced"]:
+        for tier in ["simple", "detailed"]:
             text = ai_summary.get(tier)
             if text:
                 default_level = tier
@@ -539,6 +558,7 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
 def _build_goals_section(
     goals: List[Dict[str, Any]], brand_color: str = "#3b82f6",
     email_mode: bool = False,
+    section_title: str = "Goal Progress",
 ) -> str:
     """Goal progress bars with optional trend charts."""
     if not goals:
@@ -556,7 +576,7 @@ def _build_goals_section(
     return f"""
     <div style="margin: 25px 0;">
         <h3 style="color: #94a3b8; font-size: 13px; text-transform: uppercase;
-                   letter-spacing: 1px; margin: 0 0 15px 0;">Goal Progress</h3>
+                   letter-spacing: 1px; margin: 0 0 15px 0;">{section_title}</h3>
         {goal_rows}
     </div>"""
 
@@ -1671,9 +1691,162 @@ def generate_pdf(
                     )
                     pdf.set_font("Helvetica", "", 10)
 
-        # Goals
-        goals = report_data.get("goals", [])
-        if goals:
+        # Goals — split expenses goals (right after Capital Movements) from others
+        all_goals = report_data.get("goals", [])
+        expense_goals = [g for g in all_goals if g.get("target_type") == "expenses"]
+        other_goals = [g for g in all_goals if g.get("target_type") != "expenses"]
+
+        # Render expenses goals immediately after Capital Movements
+        if expense_goals:
+            pdf.ln(6)
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.set_text_color(30, 30, 30)
+            pdf.cell(0, 8, "Expense Coverage", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "", 10)
+
+            for g in expense_goals:
+                pct = g.get("progress_pct", 0)
+                status = "On Track" if g.get("on_track") else "Behind"
+                curr = g.get("target_currency", "USD")
+                pfx = "$" if curr == "USD" else ""
+                pdf.set_text_color(30, 30, 30)
+                coverage = g.get("expense_coverage", {})
+                exp_period = g.get("expense_period", "monthly")
+                cov_pct = coverage.get("coverage_pct", 0)
+                total_exp = coverage.get("total_expenses", 0)
+                income_at = coverage.get("income_after_tax", 0)
+                pdf.set_font("Helvetica", "B", 10)
+                goal_name = _sanitize_for_pdf(g.get("name", ""))
+                pdf.cell(
+                    0, 7,
+                    f"{goal_name} (Expenses/{exp_period.capitalize()}) "
+                    f"- {_fmt_coverage_pct(cov_pct)} Covered",
+                    new_x="LMARGIN", new_y="NEXT",
+                )
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(80, 80, 80)
+                pdf.cell(
+                    0, 6,
+                    f"Total: {pfx}{total_exp:,.2f} {curr}/{exp_period} | "
+                    f"Income after tax: {pfx}{income_at:,.2f}",
+                    new_x="LMARGIN", new_y="NEXT",
+                )
+                for ei in coverage.get("items", []):
+                    s = ei.get("status", "uncovered")
+                    badge = "OK" if s == "covered" else (
+                        _fmt_coverage_pct(ei.get('coverage_pct', 0))
+                        if s == "partial" else "X"
+                    )
+                    norm = ei.get("normalized_amount", 0)
+                    pdf.cell(
+                        0, 5,
+                        f"  [{badge}] {ei.get('name', '')} - "
+                        f"{pfx}{norm:,.2f}/{exp_period}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                partial_name = coverage.get("partial_item_name")
+                next_name = coverage.get("next_uncovered_name")
+                dep_partial = g.get("deposit_partial")
+                dep_next = g.get("deposit_next")
+                if partial_name and dep_partial is not None:
+                    pdf.cell(
+                        0, 5,
+                        f"  Finish covering {partial_name}: "
+                        f"deposit ~{pfx}{dep_partial:,.2f} {curr}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                if next_name and dep_next is not None:
+                    label = "Then cover" if partial_name else "Cover"
+                    pdf.cell(
+                        0, 5,
+                        f"  {label} {next_name}: "
+                        f"deposit ~{pfx}{dep_next:,.2f} {curr}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                dep = g.get("deposit_needed")
+                if dep is not None:
+                    already = (dep_partial or 0) + (dep_next or 0)
+                    extra = dep - already
+                    if extra > 0 and already > 0:
+                        dep_text = (
+                            f"  Cover all: ~{pfx}{dep:,.2f} {curr} total"
+                            f" (+{pfx}{extra:,.2f} {curr})"
+                        )
+                    else:
+                        dep_text = (
+                            f"  Cover all: deposit ~{pfx}{dep:,.2f} {curr} total"
+                        )
+                    pdf.cell(
+                        0, 5, dep_text,
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                _now = datetime.utcnow()
+                _upcoming = _get_upcoming_items(
+                    coverage.get("items", []), _now,
+                )
+                if _upcoming:
+                    pdf.set_font("Helvetica", "B", 9)
+                    pdf.set_text_color(80, 80, 80)
+                    pdf.cell(
+                        0, 6, "Upcoming:",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.set_font("Helvetica", "", 9)
+                    for _, _ei in _upcoming:
+                        _label = _format_due_label(_ei, now=_now)
+                        _amt = _ei.get("amount", 0)
+                        _s = _ei.get("status", "uncovered")
+                        _badge = ("OK" if _s == "covered"
+                                  else _fmt_coverage_pct(
+                                      _ei.get('coverage_pct', 0))
+                                  if _s == "partial" else "X")
+                        pdf.cell(
+                            0, 5,
+                            f"  {_label} - [{_badge}] "
+                            f"{_ei.get('name', '')} "
+                            f"{pfx}{_amt:,.2f}",
+                            new_x="LMARGIN", new_y="NEXT",
+                        )
+                _daily_inc = g.get("current_daily_income", 0)
+                _proj_lin = g.get("projected_income")
+                _proj_cmp = g.get("projected_income_compound")
+                if _daily_inc or _proj_lin or _proj_cmp:
+                    _tax = g.get("tax_withholding_pct", 0)
+                    _atf = (1 - _tax / 100) if _tax < 100 else 0
+                    _lin_at = (_proj_lin or 0) * _atf
+                    _cmp_at = (_proj_cmp or 0) * _atf
+                    _dep_lin = g.get("deposit_needed")
+                    _dep_cmp = g.get("deposit_needed_compound")
+                    pdf.set_font("Helvetica", "B", 9)
+                    pdf.set_text_color(80, 80, 80)
+                    pdf.cell(
+                        0, 6, "Projections:",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.set_font("Helvetica", "", 9)
+                    _proj_rows = [
+                        ("Target", f"{pfx}{total_exp:,.2f} {curr}/{exp_period}"),
+                        ("Daily Avg Income", f"{pfx}{_daily_inc:,.2f} {curr}"),
+                        ("Linear (after tax)", f"{pfx}{_lin_at:,.2f} {curr}/{exp_period}"),
+                        ("Compound (after tax)", f"{pfx}{_cmp_at:,.2f} {curr}/{exp_period}"),
+                    ]
+                    if _dep_lin is not None:
+                        _proj_rows.append(("Deposit Needed (Linear)", f"{pfx}{_dep_lin:,.2f}"))
+                    if _dep_cmp is not None:
+                        _proj_rows.append(("Deposit Needed (Compound)", f"{pfx}{_dep_cmp:,.2f}"))
+                    _smp = g.get("sample_trades", 0)
+                    _lbk = g.get("lookback_days_used", 0)
+                    _proj_rows.append(("Based on", f"{_smp} trades over {_lbk} days"))
+                    for _lbl, _val in _proj_rows:
+                        pdf.set_text_color(100, 100, 100)
+                        pdf.cell(55, 5, f"  {_lbl}:", new_x="RIGHT")
+                        pdf.set_text_color(30, 30, 30)
+                        pdf.cell(0, 5, _val, new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Helvetica", "", 10)
+
+        # Remaining goals (income, standard)
+        if other_goals:
             pdf.ln(6)
             pdf.set_font("Helvetica", "B", 12)
             pdf.set_text_color(30, 30, 30)
@@ -1681,7 +1854,7 @@ def generate_pdf(
             pdf.ln(2)
             pdf.set_font("Helvetica", "", 10)
 
-            for g in goals:
+            for g in other_goals:
                 pct = g.get("progress_pct", 0)
                 status = "On Track" if g.get("on_track") else "Behind"
                 curr = g.get("target_currency", "USD")
@@ -1713,144 +1886,6 @@ def generate_pdf(
                         f"Based on {sample} trades over {lookback} days",
                         new_x="LMARGIN", new_y="NEXT",
                     )
-                    pdf.set_font("Helvetica", "", 10)
-                elif g.get("target_type") == "expenses":
-                    coverage = g.get("expense_coverage", {})
-                    exp_period = g.get("expense_period", "monthly")
-                    cov_pct = coverage.get("coverage_pct", 0)
-                    total_exp = coverage.get("total_expenses", 0)
-                    income_at = coverage.get("income_after_tax", 0)
-                    pdf.set_font("Helvetica", "B", 10)
-                    goal_name = _sanitize_for_pdf(g.get("name", ""))
-                    pdf.cell(
-                        0, 7,
-                        f"{goal_name} (Expenses/{exp_period.capitalize()}) "
-                        f"- {_fmt_coverage_pct(cov_pct)} Covered",
-                        new_x="LMARGIN", new_y="NEXT",
-                    )
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.set_text_color(80, 80, 80)
-                    pdf.cell(
-                        0, 6,
-                        f"Total: {pfx}{total_exp:,.2f} {curr}/{exp_period} | "
-                        f"Income after tax: {pfx}{income_at:,.2f}",
-                        new_x="LMARGIN", new_y="NEXT",
-                    )
-                    # List expense items in waterfall order
-                    for ei in coverage.get("items", []):
-                        s = ei.get("status", "uncovered")
-                        badge = "OK" if s == "covered" else (
-                            _fmt_coverage_pct(ei.get('coverage_pct', 0))
-                            if s == "partial" else "X"
-                        )
-                        norm = ei.get("normalized_amount", 0)
-                        pdf.cell(
-                            0, 5,
-                            f"  [{badge}] {ei.get('name', '')} - "
-                            f"{pfx}{norm:,.2f}/{exp_period}",
-                            new_x="LMARGIN", new_y="NEXT",
-                        )
-                    # Deposit guidance lines
-                    partial_name = coverage.get("partial_item_name")
-                    next_name = coverage.get("next_uncovered_name")
-                    dep_partial = g.get("deposit_partial")
-                    dep_next = g.get("deposit_next")
-                    if partial_name and dep_partial is not None:
-                        pdf.cell(
-                            0, 5,
-                            f"  Finish covering {partial_name}: "
-                            f"deposit ~{pfx}{dep_partial:,.2f} {curr}",
-                            new_x="LMARGIN", new_y="NEXT",
-                        )
-                    if next_name and dep_next is not None:
-                        label = "Then cover" if partial_name else "Cover"
-                        pdf.cell(
-                            0, 5,
-                            f"  {label} {next_name}: "
-                            f"deposit ~{pfx}{dep_next:,.2f} {curr}",
-                            new_x="LMARGIN", new_y="NEXT",
-                        )
-                    dep = g.get("deposit_needed")
-                    if dep is not None:
-                        already = (dep_partial or 0) + (dep_next or 0)
-                        extra = dep - already
-                        if extra > 0 and already > 0:
-                            dep_text = (
-                                f"  Cover all: ~{pfx}{dep:,.2f} {curr} total"
-                                f" (+{pfx}{extra:,.2f} {curr})"
-                            )
-                        else:
-                            dep_text = (
-                                f"  Cover all: deposit ~{pfx}{dep:,.2f} {curr} total"
-                            )
-                        pdf.cell(
-                            0, 5, dep_text,
-                            new_x="LMARGIN", new_y="NEXT",
-                        )
-                    # Upcoming expenses — reuse _get_upcoming_items
-                    _now = datetime.utcnow()
-                    _upcoming = _get_upcoming_items(
-                        coverage.get("items", []), _now,
-                    )
-                    if _upcoming:
-                        pdf.set_font("Helvetica", "B", 9)
-                        pdf.set_text_color(80, 80, 80)
-                        pdf.cell(
-                            0, 6, "Upcoming:",
-                            new_x="LMARGIN", new_y="NEXT",
-                        )
-                        pdf.set_font("Helvetica", "", 9)
-                        for _, _ei in _upcoming:
-                            _label = _format_due_label(_ei, now=_now)
-                            _amt = _ei.get("amount", 0)
-                            _s = _ei.get("status", "uncovered")
-                            _badge = ("OK" if _s == "covered"
-                                      else _fmt_coverage_pct(
-                                          _ei.get('coverage_pct', 0))
-                                      if _s == "partial" else "X")
-                            pdf.cell(
-                                0, 5,
-                                f"  {_label} - [{_badge}] "
-                                f"{_ei.get('name', '')} "
-                                f"{pfx}{_amt:,.2f}",
-                                new_x="LMARGIN", new_y="NEXT",
-                            )
-                    # Projection table
-                    _daily_inc = g.get("current_daily_income", 0)
-                    _proj_lin = g.get("projected_income")
-                    _proj_cmp = g.get("projected_income_compound")
-                    if _daily_inc or _proj_lin or _proj_cmp:
-                        _tax = g.get("tax_withholding_pct", 0)
-                        _atf = (1 - _tax / 100) if _tax < 100 else 0
-                        _lin_at = (_proj_lin or 0) * _atf
-                        _cmp_at = (_proj_cmp or 0) * _atf
-                        _dep_lin = g.get("deposit_needed")
-                        _dep_cmp = g.get("deposit_needed_compound")
-                        pdf.set_font("Helvetica", "B", 9)
-                        pdf.set_text_color(80, 80, 80)
-                        pdf.cell(
-                            0, 6, "Projections:",
-                            new_x="LMARGIN", new_y="NEXT",
-                        )
-                        pdf.set_font("Helvetica", "", 9)
-                        _proj_rows = [
-                            ("Target", f"{pfx}{total_exp:,.2f} {curr}/{exp_period}"),
-                            ("Daily Avg Income", f"{pfx}{_daily_inc:,.2f} {curr}"),
-                            ("Linear (after tax)", f"{pfx}{_lin_at:,.2f} {curr}/{exp_period}"),
-                            ("Compound (after tax)", f"{pfx}{_cmp_at:,.2f} {curr}/{exp_period}"),
-                        ]
-                        if _dep_lin is not None:
-                            _proj_rows.append(("Deposit Needed (Linear)", f"{pfx}{_dep_lin:,.2f}"))
-                        if _dep_cmp is not None:
-                            _proj_rows.append(("Deposit Needed (Compound)", f"{pfx}{_dep_cmp:,.2f}"))
-                        _smp = g.get("sample_trades", 0)
-                        _lbk = g.get("lookback_days_used", 0)
-                        _proj_rows.append(("Based on", f"{_smp} trades over {_lbk} days"))
-                        for _lbl, _val in _proj_rows:
-                            pdf.set_text_color(100, 100, 100)
-                            pdf.cell(55, 5, f"  {_lbl}:", new_x="RIGHT")
-                            pdf.set_text_color(30, 30, 30)
-                            pdf.cell(0, 5, _val, new_x="LMARGIN", new_y="NEXT")
                     pdf.set_font("Helvetica", "", 10)
                 else:
                     goal_name = _sanitize_for_pdf(g.get("name", ""))
@@ -1977,7 +2012,7 @@ def _render_pdf_markdown(pdf, text: str, br: int, bg: int, bb: int):
 
 def _render_pdf_tiers(pdf, tiered: dict, br: int, bg: int, bb: int):
     """Render all three AI tiers into the PDF."""
-    tier_order = ["beginner", "comfortable", "experienced"]
+    tier_order = ["simple", "detailed"]
 
     for tier in tier_order:
         text = tiered.get(tier)

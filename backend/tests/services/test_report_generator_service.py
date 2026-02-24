@@ -47,12 +47,11 @@ MOCK_BRAND = {
 }
 
 
-def _make_tiered_summary(beginner=None, comfortable=None, experienced=None):
+def _make_tiered_summary(simple=None, detailed=None):
     """Helper to build a tiered AI summary dict."""
     return {
-        "beginner": beginner,
-        "comfortable": comfortable,
-        "experienced": experienced,
+        "simple": simple,
+        "detailed": detailed,
     }
 
 
@@ -81,45 +80,54 @@ class TestNormalizeAiSummary:
     def test_none_returns_none(self):
         assert _normalize_ai_summary(None) is None
 
-    def test_dict_passes_through(self):
-        summary = {"beginner": "easy", "comfortable": "medium", "experienced": "hard"}
+    def test_new_format_dict_passes_through(self):
+        summary = {"simple": "easy", "detailed": "hard"}
         result = _normalize_ai_summary(summary)
-        assert result is summary
+        assert result == summary
 
-    def test_plain_string_wraps_as_comfortable(self):
+    def test_legacy_dict_migrated(self):
+        """Old 3-tier format is converted to 2-tier."""
+        legacy = {"beginner": "b", "comfortable": "c", "experienced": "e"}
+        result = _normalize_ai_summary(legacy)
+        assert result == {"simple": "c", "detailed": "e"}
+
+    def test_plain_string_wraps_as_simple(self):
         result = _normalize_ai_summary("Plain text summary")
         assert result == {
-            "beginner": None,
-            "comfortable": "Plain text summary",
-            "experienced": None,
+            "simple": "Plain text summary",
+            "detailed": None,
         }
 
-    def test_json_string_dict_parsed(self):
-        tiered = {"beginner": "easy", "comfortable": "medium", "experienced": "hard"}
+    def test_json_string_new_format_parsed(self):
+        tiered = {"simple": "easy", "detailed": "hard"}
         json_str = json.dumps(tiered)
         result = _normalize_ai_summary(json_str)
         assert result == tiered
 
-    def test_json_string_without_comfortable_key_wraps_as_string(self):
-        """JSON that parses to a dict but lacks 'comfortable' key is treated as plain text."""
+    def test_json_string_legacy_format_migrated(self):
+        legacy = {"beginner": "b", "comfortable": "c", "experienced": "e"}
+        json_str = json.dumps(legacy)
+        result = _normalize_ai_summary(json_str)
+        assert result == {"simple": "c", "detailed": "e"}
+
+    def test_json_string_unknown_dict_migrated(self):
+        """JSON that parses to a dict without known keys still returns a dict."""
         json_str = json.dumps({"foo": "bar"})
         result = _normalize_ai_summary(json_str)
-        assert result["comfortable"] == json_str
-        assert result["beginner"] is None
-        assert result["experienced"] is None
+        assert result == {"simple": None, "detailed": None}
 
-    def test_invalid_json_string_wraps_as_comfortable(self):
+    def test_invalid_json_string_wraps_as_simple(self):
         result = _normalize_ai_summary("not-valid-json {")
-        assert result["comfortable"] == "not-valid-json {"
+        assert result["simple"] == "not-valid-json {"
 
     def test_non_string_non_dict_returns_none(self):
         """Unexpected types (int, list, etc.) return None."""
         assert _normalize_ai_summary(42) is None
         assert _normalize_ai_summary([1, 2, 3]) is None
 
-    def test_empty_string_wraps_as_comfortable(self):
+    def test_empty_string_wraps_as_simple(self):
         result = _normalize_ai_summary("")
-        assert result["comfortable"] == ""
+        assert result["simple"] == ""
 
 
 # ---------------------------------------------------------------------------
@@ -132,21 +140,21 @@ class TestBuildTabbedAiSectionEmpty:
 
     def test_all_none_returns_empty(self):
         summary = _make_tiered_summary()
-        result = _build_tabbed_ai_section(summary, "comfortable", BRAND_COLOR)
+        result = _build_tabbed_ai_section(summary, "simple", BRAND_COLOR)
         assert result == ""
 
     def test_all_empty_strings_returns_empty(self):
-        summary = _make_tiered_summary(beginner="", comfortable="", experienced="")
-        result = _build_tabbed_ai_section(summary, "comfortable", BRAND_COLOR)
+        summary = _make_tiered_summary(simple="", detailed="")
+        result = _build_tabbed_ai_section(summary, "simple", BRAND_COLOR)
         assert result == ""
 
     def test_empty_dict_returns_empty(self):
-        result = _build_tabbed_ai_section({}, "comfortable", BRAND_COLOR)
+        result = _build_tabbed_ai_section({}, "simple", BRAND_COLOR)
         assert result == ""
 
     def test_none_values_and_missing_keys_returns_empty(self):
         result = _build_tabbed_ai_section(
-            {"beginner": None, "other_key": "ignored"}, "comfortable", BRAND_COLOR,
+            {"simple": None, "other_key": "ignored"}, "simple", BRAND_COLOR,
         )
         assert result == ""
 
@@ -160,34 +168,34 @@ class TestBuildTabbedAiSectionSingle:
     """When only one tier has content, render a single section (no tabs)."""
 
     def test_single_tier_no_tabs(self):
-        summary = _make_tiered_summary(comfortable="Analysis text here.")
-        result = _build_tabbed_ai_section(summary, "comfortable", BRAND_COLOR)
+        summary = _make_tiered_summary(simple="Analysis text here.")
+        result = _build_tabbed_ai_section(summary, "simple", BRAND_COLOR)
         assert "Analysis text here." in result
         # No radio inputs or tab bar
         assert '<input type="radio"' not in result
         assert "ai-tab-bar" not in result
 
     def test_single_tier_uses_correct_label(self):
-        summary = _make_tiered_summary(beginner="Simplified text.")
-        result = _build_tabbed_ai_section(summary, "beginner", BRAND_COLOR)
-        assert "Summary (Simplified)" in result
+        summary = _make_tiered_summary(simple="Simplified text.")
+        result = _build_tabbed_ai_section(summary, "simple", BRAND_COLOR)
+        assert "Summary" in result
 
     def test_single_tier_uses_brand_color(self):
-        summary = _make_tiered_summary(experienced="Technical deep dive.")
-        result = _build_tabbed_ai_section(summary, "experienced", "#ff5500")
+        summary = _make_tiered_summary(detailed="Technical deep dive.")
+        result = _build_tabbed_ai_section(summary, "detailed", "#ff5500")
         assert "#ff5500" in result
 
     def test_single_tier_no_script_tags(self):
-        summary = _make_tiered_summary(comfortable="Content here.")
-        result = _build_tabbed_ai_section(summary, "comfortable", BRAND_COLOR)
+        summary = _make_tiered_summary(simple="Content here.")
+        result = _build_tabbed_ai_section(summary, "simple", BRAND_COLOR)
         assert "<script" not in result.lower()
         assert "onclick" not in result.lower()
 
     def test_single_tier_renders_paragraphs(self):
         summary = _make_tiered_summary(
-            comfortable="First paragraph.\n\nSecond paragraph."
+            simple="First paragraph.\n\nSecond paragraph."
         )
-        result = _build_tabbed_ai_section(summary, "comfortable", BRAND_COLOR)
+        result = _build_tabbed_ai_section(summary, "simple", BRAND_COLOR)
         assert "First paragraph." in result
         assert "Second paragraph." in result
         # Two <p> tags for two paragraphs
@@ -200,72 +208,62 @@ class TestBuildTabbedAiSectionSingle:
 
 
 class TestBuildTabbedAiSectionMultiple:
-    """When multiple tiers have content, render CSS-only tabs."""
+    """When both tiers have content, render CSS-only tabs."""
 
     @pytest.fixture
     def two_tier_summary(self):
         return _make_tiered_summary(
-            beginner="Beginner summary text.",
-            comfortable="Comfortable analysis text.",
-        )
-
-    @pytest.fixture
-    def three_tier_summary(self):
-        return _make_tiered_summary(
-            beginner="Beginner summary text.",
-            comfortable="Comfortable analysis text.",
-            experienced="Experienced technical text.",
+            simple="Summary text.",
+            detailed="Detailed analysis text.",
         )
 
     def test_contains_hidden_radio_inputs(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            two_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         assert '<input type="radio"' in result
-        assert 'id="ai-tab-beginner"' in result
-        assert 'id="ai-tab-comfortable"' in result
+        assert 'id="ai-tab-simple"' in result
+        assert 'id="ai-tab-detailed"' in result
         assert 'style="display:none"' in result
 
     def test_contains_tab_bar_with_labels(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            two_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         assert 'class="ai-tab-bar"' in result
-        assert 'for="ai-tab-beginner"' in result
-        assert 'for="ai-tab-comfortable"' in result
-        assert "Summary (Simplified)" in result
-        assert "AI Performance Analysis" in result
+        assert 'for="ai-tab-simple"' in result
+        assert 'for="ai-tab-detailed"' in result
+        assert "Summary" in result
+        assert "Detailed Analysis" in result
 
-    def test_contains_content_panels(self, three_tier_summary):
+    def test_contains_content_panels(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            three_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
-        assert 'id="ai-panel-beginner"' in result
-        assert 'id="ai-panel-comfortable"' in result
-        assert 'id="ai-panel-experienced"' in result
-        assert "Beginner summary text." in result
-        assert "Comfortable analysis text." in result
-        assert "Experienced technical text." in result
+        assert 'id="ai-panel-simple"' in result
+        assert 'id="ai-panel-detailed"' in result
+        assert "Summary text." in result
+        assert "Detailed analysis text." in result
 
     def test_contains_style_block_with_checked_rules(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            two_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         assert "<style>" in result
         assert ":checked" in result
         # CSS rules for showing panels
-        assert "#ai-tab-beginner:checked ~ #ai-panel-beginner" in result
-        assert "#ai-tab-comfortable:checked ~ #ai-panel-comfortable" in result
+        assert "#ai-tab-simple:checked ~ #ai-panel-simple" in result
+        assert "#ai-tab-detailed:checked ~ #ai-panel-detailed" in result
 
     def test_display_block_uses_important(self, two_tier_summary):
         """CSS display:block must use !important to override inline display:none."""
         result = _build_tabbed_ai_section(
-            two_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         # Each panel's CSS rule must have !important so it overrides inline style
         assert "display: block !important" in result
         # Verify the pattern for each available tier
-        for tier in ["beginner", "comfortable"]:
+        for tier in ["simple", "detailed"]:
             rule = f"#ai-tab-{tier}:checked ~ #ai-panel-{tier}"
             rule_idx = result.index(rule)
             # The !important should appear in the same CSS rule block
@@ -275,71 +273,56 @@ class TestBuildTabbedAiSectionMultiple:
                 f"CSS rule for {tier} panel missing !important"
             )
 
-    def test_display_block_important_three_tiers(self, three_tier_summary):
-        """All three tier panel rules must use !important."""
+    def test_default_level_gets_checked_attribute(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            three_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
-        for tier in ["beginner", "comfortable", "experienced"]:
-            rule = f"#ai-tab-{tier}:checked ~ #ai-panel-{tier}"
-            assert rule in result
-            rule_idx = result.index(rule)
-            rule_end = result.index("}", rule_idx)
-            rule_text = result[rule_idx:rule_end]
-            assert "!important" in rule_text, (
-                f"CSS rule for {tier} panel missing !important"
-            )
+        # The simple radio should have checked
+        simple_radio = re.search(
+            r'<input[^>]*id="ai-tab-simple"[^>]*>', result,
+        )
+        assert simple_radio is not None
+        assert "checked" in simple_radio.group()
 
-    def test_default_level_gets_checked_attribute(self, three_tier_summary):
+        # The detailed radio should NOT have checked
+        detailed_radio = re.search(
+            r'<input[^>]*id="ai-tab-detailed"[^>]*>', result,
+        )
+        assert detailed_radio is not None
+        assert "checked" not in detailed_radio.group()
+
+    def test_different_default_level(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            three_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "detailed", BRAND_COLOR,
         )
-        # The comfortable radio should have checked
-        comfortable_radio = re.search(
-            r'<input[^>]*id="ai-tab-comfortable"[^>]*>', result,
+        detailed_radio = re.search(
+            r'<input[^>]*id="ai-tab-detailed"[^>]*>', result,
         )
-        assert comfortable_radio is not None
-        assert "checked" in comfortable_radio.group()
+        assert detailed_radio is not None
+        assert "checked" in detailed_radio.group()
 
-        # The beginner radio should NOT have checked
-        beginner_radio = re.search(
-            r'<input[^>]*id="ai-tab-beginner"[^>]*>', result,
+        simple_radio = re.search(
+            r'<input[^>]*id="ai-tab-simple"[^>]*>', result,
         )
-        assert beginner_radio is not None
-        assert "checked" not in beginner_radio.group()
+        assert simple_radio is not None
+        assert "checked" not in simple_radio.group()
 
-    def test_different_default_level(self, three_tier_summary):
+    def test_no_script_tags(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            three_tier_summary, "beginner", BRAND_COLOR,
-        )
-        beginner_radio = re.search(
-            r'<input[^>]*id="ai-tab-beginner"[^>]*>', result,
-        )
-        assert beginner_radio is not None
-        assert "checked" in beginner_radio.group()
-
-        comfortable_radio = re.search(
-            r'<input[^>]*id="ai-tab-comfortable"[^>]*>', result,
-        )
-        assert comfortable_radio is not None
-        assert "checked" not in comfortable_radio.group()
-
-    def test_no_script_tags(self, three_tier_summary):
-        result = _build_tabbed_ai_section(
-            three_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         assert "<script" not in result.lower()
         assert "</script>" not in result.lower()
 
-    def test_no_onclick_handlers(self, three_tier_summary):
+    def test_no_onclick_handlers(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            three_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         assert "onclick" not in result.lower()
 
-    def test_no_javascript_anywhere(self, three_tier_summary):
+    def test_no_javascript_anywhere(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            three_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         lower = result.lower()
         assert "javascript:" not in lower
@@ -350,7 +333,7 @@ class TestBuildTabbedAiSectionMultiple:
     def test_panels_default_hidden(self, two_tier_summary):
         """All panels start with display:none (CSS :checked reveals the active one)."""
         result = _build_tabbed_ai_section(
-            two_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         panels = re.findall(r'<div id="ai-panel-[^"]*"[^>]*>', result)
         assert len(panels) == 2
@@ -359,42 +342,41 @@ class TestBuildTabbedAiSectionMultiple:
 
     def test_brand_color_in_css_rules(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            two_tier_summary, "comfortable", "#ff0000",
+            two_tier_summary, "simple", "#ff0000",
         )
         assert "#ff0000" in result
 
-    def test_tier_order_preserved(self, three_tier_summary):
+    def test_tier_order_preserved(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            three_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
-        # Radios should appear in order: beginner, comfortable, experienced
-        beginner_pos = result.index('id="ai-tab-beginner"')
-        comfortable_pos = result.index('id="ai-tab-comfortable"')
-        experienced_pos = result.index('id="ai-tab-experienced"')
-        assert beginner_pos < comfortable_pos < experienced_pos
+        # Radios should appear in order: simple, detailed
+        simple_pos = result.index('id="ai-tab-simple"')
+        detailed_pos = result.index('id="ai-tab-detailed"')
+        assert simple_pos < detailed_pos
 
-    def test_three_tiers_three_radios(self, three_tier_summary):
+    def test_two_tiers_two_radios(self, two_tier_summary):
         result = _build_tabbed_ai_section(
-            three_tier_summary, "comfortable", BRAND_COLOR,
+            two_tier_summary, "simple", BRAND_COLOR,
         )
         radio_count = result.count('<input type="radio"')
-        assert radio_count == 3
+        assert radio_count == 2
 
     def test_multi_paragraph_content(self):
         summary = _make_tiered_summary(
-            beginner="Para one.\n\nPara two.\n\nPara three.",
-            comfortable="Single paragraph.",
+            simple="Para one.\n\nPara two.\n\nPara three.",
+            detailed="Single paragraph.",
         )
-        result = _build_tabbed_ai_section(summary, "comfortable", BRAND_COLOR)
-        # Beginner panel should have 3 <p> tags, comfortable should have 1
-        beginner_panel_match = re.search(
-            r'id="ai-panel-beginner"[^>]*>(.*?)</div>',
+        result = _build_tabbed_ai_section(summary, "simple", BRAND_COLOR)
+        # Simple panel should have 3 <p> tags, detailed should have 1
+        simple_panel_match = re.search(
+            r'id="ai-panel-simple"[^>]*>(.*?)</div>',
             result,
             re.DOTALL,
         )
-        assert beginner_panel_match is not None
-        beginner_content = beginner_panel_match.group(1)
-        assert beginner_content.count("<p ") == 3
+        assert simple_panel_match is not None
+        simple_content = simple_panel_match.group(1)
+        assert simple_content.count("<p ") == 3
 
 
 # ---------------------------------------------------------------------------
@@ -409,9 +391,8 @@ class TestBuildReportHtmlCspCompliance:
     def test_web_mode_no_script_tags(self, mock_brand):
         """Web report (email_mode=False) must not contain <script> tags."""
         ai = _make_tiered_summary(
-            beginner="Beginner text.",
-            comfortable="Comfortable text.",
-            experienced="Experienced text.",
+            simple="Summary text.",
+            detailed="Detailed text.",
         )
         html = build_report_html(
             report_data=_minimal_report_data(),
@@ -426,8 +407,8 @@ class TestBuildReportHtmlCspCompliance:
     def test_web_mode_no_onclick(self, mock_brand):
         """Web report must not contain onclick handlers."""
         ai = _make_tiered_summary(
-            beginner="Beginner text.",
-            comfortable="Comfortable text.",
+            simple="Summary text.",
+            detailed="Detailed text.",
         )
         html = build_report_html(
             report_data=_minimal_report_data(),
@@ -439,7 +420,7 @@ class TestBuildReportHtmlCspCompliance:
 
     @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
     def test_web_mode_no_javascript_protocol(self, mock_brand):
-        ai = _make_tiered_summary(comfortable="Analysis text.")
+        ai = _make_tiered_summary(simple="Analysis text.")
         html = build_report_html(
             report_data=_minimal_report_data(),
             ai_summary=ai,
@@ -452,9 +433,8 @@ class TestBuildReportHtmlCspCompliance:
     def test_email_mode_no_script_tags(self, mock_brand):
         """Email report must also be CSP-safe."""
         ai = _make_tiered_summary(
-            beginner="Beginner text.",
-            comfortable="Comfortable text.",
-            experienced="Experienced text.",
+            simple="Summary text.",
+            detailed="Detailed text.",
         )
         html = build_report_html(
             report_data=_minimal_report_data(),
@@ -470,8 +450,8 @@ class TestBuildReportHtmlCspCompliance:
     def test_web_mode_has_css_tabs(self, mock_brand):
         """Web report with multiple tiers should use CSS-only tabs."""
         ai = _make_tiered_summary(
-            beginner="Beginner text.",
-            comfortable="Comfortable text.",
+            simple="Summary text.",
+            detailed="Detailed text.",
         )
         html = build_report_html(
             report_data=_minimal_report_data(),
@@ -487,9 +467,8 @@ class TestBuildReportHtmlCspCompliance:
     def test_email_mode_no_tabs(self, mock_brand):
         """Email mode should render single section (no tabs/radios)."""
         ai = _make_tiered_summary(
-            beginner="Beginner text.",
-            comfortable="Comfortable text.",
-            experienced="Experienced text.",
+            simple="Summary text.",
+            detailed="Detailed text.",
         )
         html = build_report_html(
             report_data=_minimal_report_data(),
@@ -501,7 +480,7 @@ class TestBuildReportHtmlCspCompliance:
         assert '<input type="radio"' not in html
         assert "ai-tab-bar" not in html
         # But it should still show the default tier content
-        assert "Comfortable text." in html
+        assert "Summary text." in html
 
     @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
     def test_no_ai_summary_shows_placeholder(self, mock_brand):
@@ -543,9 +522,8 @@ class TestBuildReportHtmlCspCompliance:
     def test_no_inline_event_handlers_in_full_html(self, mock_brand):
         """Scan the full HTML for any inline event handler attributes."""
         ai = _make_tiered_summary(
-            beginner="B text.",
-            comfortable="C text.",
-            experienced="E text.",
+            simple="Summary text.",
+            detailed="Detailed text.",
         )
         html = build_report_html(
             report_data=_minimal_report_data(),
@@ -1341,15 +1319,14 @@ class TestGeneratePdfCapitalMetrics:
         """PDF with AI tiered summary containing bullets should not crash."""
         data = self._make_report_data()
         data["_ai_summary"] = {
-            "beginner": (
+            "simple": (
                 "### Performance Overview\n"
                 "- You made **$500** in profit\n"
                 "- Your win rate was **71.4%**\n"
                 "### Capital Movements\n"
                 "- No deposits or withdrawals this period\n"
             ),
-            "comfortable": "### Performance Overview\nSolid period.",
-            "experienced": "### Performance Overview\nAlpha positive.",
+            "detailed": "### Performance Overview\nAlpha positive.",
         }
         result = generate_pdf("<html></html>", data, "Test Report")
         assert result is not None
@@ -1714,3 +1691,80 @@ class TestTransfersSectionCardSpend:
         assert result is not None
         assert isinstance(result, bytes)
         assert len(result) > 100
+
+
+# ---------------------------------------------------------------------------
+# Expense goal ordering — appears right after Capital Movements
+# ---------------------------------------------------------------------------
+
+
+class TestExpenseGoalOrdering:
+    """Expense goals should render right after Capital Movements, before other goals."""
+
+    def _make_expense_goal(self):
+        return {
+            "id": 1, "name": "Monthly Bills", "target_type": "expenses",
+            "target_currency": "USD", "expense_period": "monthly",
+            "progress_pct": 50, "on_track": False,
+            "tax_withholding_pct": 0,
+            "expense_coverage": {
+                "coverage_pct": 50, "total_expenses": 2000,
+                "income_after_tax": 1000, "covered_count": 1,
+                "total_count": 2, "items": [],
+            },
+        }
+
+    def _make_income_goal(self):
+        return {
+            "id": 2, "name": "Monthly Income", "target_type": "income",
+            "target_currency": "USD", "target_value": 5000,
+            "income_period": "monthly", "progress_pct": 30,
+            "on_track": False, "projected_income_linear": 3000,
+            "projected_income_compound": 3500,
+            "sample_trades": 10, "lookback_days_used": 30,
+        }
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_expense_section_before_goal_progress(self, _mock):
+        """Expense Coverage section appears before Goal Progress in HTML."""
+        data = _minimal_report_data()
+        data["goals"] = [self._make_income_goal(), self._make_expense_goal()]
+        html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
+        expense_pos = html.find("Expense Coverage")
+        goal_pos = html.find("Goal Progress")
+        assert expense_pos != -1, "Expense Coverage section not found"
+        assert goal_pos != -1, "Goal Progress section not found"
+        assert expense_pos < goal_pos, "Expense Coverage should come before Goal Progress"
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_expense_section_after_capital_movements(self, _mock):
+        """Expense Coverage appears after Capital Movements in HTML."""
+        data = _minimal_report_data()
+        data["goals"] = [self._make_expense_goal()]
+        data["transfer_records"] = [
+            {"date": "2026-02-20", "type": "deposit", "amount_usd": 500},
+        ]
+        html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
+        cap_pos = html.find("Capital Movements")
+        expense_pos = html.find("Expense Coverage")
+        assert cap_pos != -1, "Capital Movements section not found"
+        assert expense_pos != -1, "Expense Coverage section not found"
+        assert cap_pos < expense_pos, "Capital Movements should come before Expense Coverage"
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_no_expense_goal_no_extra_section(self, _mock):
+        """When no expenses goals exist, no Expense Coverage section appears."""
+        data = _minimal_report_data()
+        data["goals"] = [self._make_income_goal()]
+        html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
+        assert "Expense Coverage" not in html
+        assert "Goal Progress" in html
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_only_expense_goal_no_goal_progress_section(self, _mock):
+        """When only expenses goals exist, Goal Progress section is absent."""
+        data = _minimal_report_data()
+        data["goals"] = [self._make_expense_goal()]
+        html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
+        assert "Expense Coverage" in html
+        assert "Goal Progress" not in html

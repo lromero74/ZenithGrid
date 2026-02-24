@@ -84,10 +84,6 @@ class GoalUpdate(BaseModel):
 
 class RecipientItem(BaseModel):
     email: str = Field(..., min_length=5)
-    level: str = Field(
-        "comfortable",
-        pattern="^(beginner|comfortable|experienced)$",
-    )
 
 
 class ScheduleCreate(BaseModel):
@@ -208,20 +204,16 @@ class ExpenseItemUpdate(BaseModel):
 
 # ----- Helper Functions -----
 
-def _normalize_recipient_for_api(item) -> dict:
+def _normalize_recipient_for_api(item) -> str:
     """
-    Normalize a stored recipient to object format for API responses.
+    Extract email string from a stored recipient.
 
-    Handles both new object format and legacy plain string format.
+    Handles both legacy object format {"email": ..., "level": ...}
+    and plain string format.
     """
     if isinstance(item, dict) and "email" in item:
-        return {
-            "email": item["email"],
-            "level": item.get("level", "comfortable"),
-        }
-    if isinstance(item, str):
-        return {"email": item, "level": "comfortable"}
-    return {"email": str(item), "level": "comfortable"}
+        return item["email"]
+    return str(item)
 
 
 def _goal_to_dict(goal: ReportGoal) -> dict:
@@ -314,7 +306,7 @@ def _report_to_dict(report: Report, include_html: bool = False) -> dict:
     if ai_summary and isinstance(ai_summary, str):
         try:
             parsed = json.loads(ai_summary)
-            if isinstance(parsed, dict) and "comfortable" in parsed:
+            if isinstance(parsed, dict) and ("simple" in parsed or "comfortable" in parsed):
                 ai_summary = parsed
         except (json.JSONDecodeError, TypeError):
             pass
@@ -781,8 +773,8 @@ async def create_schedule(
     from app.services.report_scheduler import build_periodicity_label
 
     next_run = _compute_next_run_for_new_schedule(body)
-    # Serialize recipients to dicts for JSON storage
-    recipients_data = [r.model_dump() for r in body.recipients]
+    # Serialize recipients as plain email strings for JSON storage
+    recipients_data = [r.email for r in body.recipients]
     # Build human-readable periodicity label
     schedule_days_json = (
         json.dumps(body.schedule_days) if body.schedule_days else None
@@ -864,10 +856,10 @@ async def update_schedule(
     update_data = body.model_dump(exclude_unset=True)
     goal_ids = update_data.pop("goal_ids", None)
 
-    # Serialize recipients if present
+    # Serialize recipients as plain email strings
     if "recipients" in update_data and update_data["recipients"] is not None:
         update_data["recipients"] = [
-            r.model_dump() if hasattr(r, "model_dump") else r
+            r.email if hasattr(r, "email") else str(r)
             for r in update_data["recipients"]
         ]
 

@@ -639,7 +639,7 @@ export const accountValueApi = {
 
 // Reports & Goals
 import type {
-  ReportGoal, ReportSchedule, ReportSummary, RecipientItem,
+  ReportGoal, ReportSchedule, ReportSummary,
   ScheduleType, PeriodWindow, LookbackUnit, GoalTrendData,
   ExpenseItem,
 } from '../types'
@@ -654,7 +654,7 @@ export interface ScheduleCreatePayload {
   lookback_unit?: LookbackUnit | null
   force_standard_days?: number[] | null
   account_id?: number | null
-  recipients: RecipientItem[]
+  recipients: string[]
   ai_provider?: string | null
   goal_ids: number[]
   is_enabled?: boolean

@@ -97,20 +97,16 @@ async def run_report_scheduler():
         await asyncio.sleep(900)
 
 
-def _normalize_recipient(item) -> dict:
+def _normalize_recipient(item) -> str:
     """
-    Normalize a recipient to {"email": ..., "level": ...}.
+    Extract email string from a recipient entry.
 
-    Handles both new object format and legacy plain string format.
+    Handles both legacy object format {"email": ..., "level": ...}
+    and plain string format.
     """
     if isinstance(item, dict) and "email" in item:
-        level = item.get("level", "comfortable")
-        if level not in ("beginner", "comfortable", "experienced"):
-            level = "comfortable"
-        return {"email": item["email"], "level": level}
-    if isinstance(item, str):
-        return {"email": item, "level": "comfortable"}
-    return {"email": str(item), "level": "comfortable"}
+        return item["email"]
+    return str(item)
 
 
 async def generate_report_for_schedule(
@@ -212,12 +208,12 @@ async def generate_report_for_schedule(
         db, user.id, report_data, period_label, schedule.ai_provider
     )
 
-    # Build canonical HTML (comfortable is the default for stored report)
+    # Build canonical HTML (simple is the default tab for stored report)
     user_name = user.display_name or user.email
     sched_name = schedule.name if schedule else None
     html_content = build_report_html(
         report_data, ai_summary, user_name, period_label,
-        default_level="comfortable",
+        default_level="simple",
         schedule_name=sched_name,
     )
 
@@ -256,7 +252,7 @@ async def generate_report_for_schedule(
         db.add(report)
         await db.flush()  # Get the report.id
 
-    # Send email — per-recipient with level-specific HTML
+    # Send email to all recipients (same report for everyone)
     if send_email and save and schedule.recipients:
         recipients = [_normalize_recipient(r) for r in schedule.recipients]
         email_sent = await _deliver_report(
@@ -301,10 +297,9 @@ async def _deliver_report(
     schedule_name: Optional[str] = None,
 ) -> bool:
     """
-    Send the report email to each recipient individually with their
-    experience-level-specific HTML.
+    Send the report email to all recipients.
 
-    Caches HTML per level to avoid redundant builds (at most 3 variants).
+    All recipients get the same email-mode HTML (Summary tier as default).
     Returns True if at least one email was sent successfully.
     """
     from app.services.brand_service import get_brand
@@ -319,7 +314,7 @@ async def _deliver_report(
     report_title = schedule_name or "Performance Report"
     subject = f"{b['shortName']} {report_title} \u2014 {period_label}"
 
-    # Plain text fallback (same for all recipients)
+    # Plain text fallback
     data = report.report_data or report_data or {}
     pd = data.get("period_days")
     trades_suffix = f" (last {pd}d)" if pd else ""
@@ -337,29 +332,25 @@ async def _deliver_report(
         if report.period_end else "performance_report.pdf"
     )
 
-    # Cache HTML per level
-    html_cache: dict = {}
+    # Build one HTML for all recipients (email mode shows Summary tier)
+    email_html = build_report_html(
+        report_data, ai_summary, user_name, period_label,
+        default_level="simple",
+        schedule_name=schedule_name,
+        email_mode=True,
+    )
+
     any_sent = False
 
     for recipient in recipients:
-        email = recipient["email"]
-        level = recipient.get("level", "comfortable")
-
-        # Build level-specific HTML (cached)
-        if level not in html_cache:
-            html_cache[level] = build_report_html(
-                report_data, ai_summary, user_name, period_label,
-                default_level=level,
-                schedule_name=schedule_name,
-                email_mode=True,
-            )
+        email = recipient if isinstance(recipient, str) else recipient.get("email", recipient)
 
         try:
             sent = send_report_email(
                 to=email,
                 cc=[],
                 subject=subject,
-                html_body=html_cache[level],
+                html_body=email_html,
                 text_body=text_body,
                 pdf_attachment=pdf_content,
                 pdf_filename=pdf_filename,
@@ -367,7 +358,7 @@ async def _deliver_report(
             if sent:
                 any_sent = True
                 logger.info(
-                    f"Report email sent to {email} (level={level})"
+                    f"Report email sent to {email}"
                 )
             else:
                 logger.warning(

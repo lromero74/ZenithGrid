@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
 import type {
-  ReportGoal, ReportSchedule, RecipientItem, ExperienceLevel,
+  ReportGoal, ReportSchedule,
   ScheduleType, PeriodWindow, LookbackUnit,
 } from '../../types'
 
@@ -23,7 +23,7 @@ export interface ScheduleFormData {
   lookback_unit: LookbackUnit | null
   force_standard_days: number[] | null
   account_id?: number | null
-  recipients: RecipientItem[]
+  recipients: string[]
   ai_provider?: string | null
   goal_ids: number[]
   is_enabled: boolean
@@ -67,28 +67,14 @@ const AI_PROVIDERS = [
   { value: 'gemini', label: 'Google Gemini' },
 ]
 
-const LEVEL_OPTIONS: { value: ExperienceLevel; label: string; color: string }[] = [
-  { value: 'beginner', label: 'Beginner', color: 'text-emerald-400 bg-emerald-900/40 border-emerald-700' },
-  { value: 'comfortable', label: 'Comfortable', color: 'text-blue-400 bg-blue-900/40 border-blue-700' },
-  { value: 'experienced', label: 'Experienced', color: 'text-purple-400 bg-purple-900/40 border-purple-700' },
-]
-
-function normalizeRecipients(raw: unknown[]): RecipientItem[] {
+function normalizeRecipients(raw: unknown[]): string[] {
   if (!raw || !Array.isArray(raw)) return []
   return raw.map(item => {
-    if (typeof item === 'string') {
-      return { email: item, level: 'comfortable' as ExperienceLevel }
-    }
+    if (typeof item === 'string') return item
     if (typeof item === 'object' && item !== null && 'email' in item) {
-      const obj = item as Record<string, unknown>
-      return {
-        email: String(obj.email),
-        level: (['beginner', 'comfortable', 'experienced'].includes(String(obj.level))
-          ? String(obj.level) as ExperienceLevel
-          : 'comfortable'),
-      }
+      return String((item as Record<string, unknown>).email)
     }
-    return { email: String(item), level: 'comfortable' as ExperienceLevel }
+    return String(item)
   })
 }
 
@@ -111,9 +97,8 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
   const [lookbackValue, setLookbackValue] = useState<number>(7)
   const [lookbackUnit, setLookbackUnit] = useState<LookbackUnit>('days')
   const [forceStandardDays, setForceStandardDays] = useState<number[]>([])
-  const [recipients, setRecipients] = useState<RecipientItem[]>([])
+  const [recipients, setRecipients] = useState<string[]>([])
   const [newRecipient, setNewRecipient] = useState('')
-  const [newRecipientLevel, setNewRecipientLevel] = useState<ExperienceLevel>('comfortable')
   const [aiProvider, setAiProvider] = useState('')
   const [selectedGoalIds, setSelectedGoalIds] = useState<number[]>([])
   const [isEnabled, setIsEnabled] = useState(true)
@@ -162,7 +147,6 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setForceStandardDays([])
       setRecipients([])
       setNewRecipient('')
-      setNewRecipientLevel('comfortable')
       setAiProvider('')
       setSelectedGoalIds([])
       setIsEnabled(true)
@@ -173,14 +157,14 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
 
   const addRecipient = () => {
     const email = newRecipient.trim()
-    if (email && !recipients.some(r => r.email === email) && email.includes('@')) {
-      setRecipients([...recipients, { email, level: newRecipientLevel }])
+    if (email && !recipients.includes(email) && email.includes('@')) {
+      setRecipients([...recipients, email])
       setNewRecipient('')
     }
   }
 
   const removeRecipient = (email: string) => {
-    setRecipients(recipients.filter(r => r.email !== email))
+    setRecipients(recipients.filter(r => r !== email))
   }
 
   const toggleGoal = (goalId: number) => {
@@ -326,15 +310,6 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const getLevelBadge = (level: ExperienceLevel) => {
-    const opt = LEVEL_OPTIONS.find(o => o.value === level) || LEVEL_OPTIONS[1]
-    return (
-      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${opt.color}`}>
-        {opt.label}
-      </span>
-    )
   }
 
   const periodStartLabel = scheduleType === 'monthly'
@@ -616,15 +591,6 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                 placeholder="Add email address"
                 className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
               />
-              <select
-                value={newRecipientLevel}
-                onChange={e => setNewRecipientLevel(e.target.value as ExperienceLevel)}
-                className="w-[130px] px-2 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-              >
-                {LEVEL_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
               <button
                 type="button"
                 onClick={addRecipient}
@@ -635,13 +601,12 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
             </div>
             {recipients.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
-                {recipients.map(r => (
-                  <span key={r.email} className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-700 border border-slate-600 rounded-full text-sm text-slate-300">
-                    {getLevelBadge(r.level)}
-                    {r.email}
+                {recipients.map(email => (
+                  <span key={email} className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-700 border border-slate-600 rounded-full text-sm text-slate-300">
+                    {email}
                     <button
                       type="button"
-                      onClick={() => removeRecipient(r.email)}
+                      onClick={() => removeRecipient(email)}
                       className="text-slate-500 hover:text-red-400 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -650,9 +615,6 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                 ))}
               </div>
             )}
-            <p className="text-xs text-slate-500 mt-1">
-              Each recipient receives an individual email with their experience level's summary highlighted
-            </p>
           </div>
 
           {/* Link Goals */}

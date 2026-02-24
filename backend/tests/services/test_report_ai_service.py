@@ -40,9 +40,8 @@ def sample_report_data():
 
 
 FAKE_TIERED_RESPONSE = (
-    "---BEGINNER---\nGreat job!\n"
-    "---COMFORTABLE---\nSolid performance.\n"
-    "---EXPERIENCED---\nAlpha positive."
+    "---SUMMARY---\nGreat job!\n"
+    "---DETAILED---\nAlpha positive."
 )
 
 
@@ -113,7 +112,7 @@ class TestProviderFallback:
 
         assert provider_used == "gemini"
         assert result is not None
-        assert "comfortable" in result
+        assert "simple" in result
 
     @pytest.mark.asyncio
     async def test_fallback_when_preferred_fails(self, mock_db, sample_report_data):
@@ -228,22 +227,19 @@ class TestProviderFallback:
 class TestParseTieredSummary:
     def test_parse_with_delimiters(self):
         result = _parse_tiered_summary(FAKE_TIERED_RESPONSE)
-        assert result["beginner"] == "Great job!"
-        assert result["comfortable"] == "Solid performance."
-        assert result["experienced"] == "Alpha positive."
+        assert result["simple"] == "Great job!"
+        assert result["detailed"] == "Alpha positive."
 
     def test_parse_without_delimiters_falls_back(self):
         result = _parse_tiered_summary("Just a plain summary.")
-        assert result["beginner"] is None
-        assert result["comfortable"] == "Just a plain summary."
-        assert result["experienced"] is None
+        assert result["simple"] == "Just a plain summary."
+        assert result["detailed"] is None
 
     def test_parse_empty_tiers(self):
-        text = "---BEGINNER---\n\n---COMFORTABLE---\nContent\n---EXPERIENCED---\n"
+        text = "---SUMMARY---\n\n---DETAILED---\nContent"
         result = _parse_tiered_summary(text)
-        assert result["beginner"] is None  # empty → None
-        assert result["comfortable"] == "Content"
-        assert result["experienced"] is None  # empty → None
+        assert result["simple"] is None  # empty → None
+        assert result["detailed"] == "Content"
 
 
 # ---------------------------------------------------------------------------
@@ -279,10 +275,10 @@ class TestBuildSummaryPrompt:
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
         assert "NEVER imply that account value change equals trading profit" in prompt
 
-    def test_prompt_always_include_capital_movements_header(self, sample_report_data):
-        """Prompt instructs AI to ALWAYS include ### Capital Movements section."""
+    def test_prompt_includes_capital_movements_in_required_sections(self, sample_report_data):
+        """Prompt lists ### Capital Movements as a required section."""
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
-        assert "ALWAYS include ### Capital Movements" in prompt
+        assert "### Capital Movements" in prompt
 
     def test_prior_period_comparison_included(self, sample_report_data):
         """Prior period data is included when present."""
