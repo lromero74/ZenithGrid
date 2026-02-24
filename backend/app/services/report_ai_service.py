@@ -333,6 +333,10 @@ account value change: how much came from trading profit vs. deposits/withdrawals
 If account value change is significantly different from trading profit, explicitly \
 state that the difference is from deposits or withdrawals — do NOT present the \
 value change as if it resulted from trading.
+- CRITICAL: When both deposits AND withdrawals occurred, you MUST mention BOTH. \
+The math must add up: account_change = trading_profit + deposits - withdrawals. \
+Never cite only deposits and omit withdrawals (or vice versa) — the reader will \
+notice the numbers don't add up.
 - If income projections or forward-looking estimates are present, include a brief \
 disclaimer: past performance does not guarantee future results, projections are \
 estimates based on historical data, and actual results may vary

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, Time, LineData, SeriesMarker } from 'lightweight-charts'
 import { TrendingUp, DollarSign } from 'lucide-react'
@@ -15,22 +15,32 @@ interface AccountValueSnapshot {
 
 export type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
 
+type MarkerCategory = ActivityItem['category']
+
 interface AccountValueChartProps {
   className?: string
 }
 
 // Marker config per activity category
-const MARKER_CONFIG: Record<ActivityItem['category'], {
+const MARKER_CONFIG: Record<MarkerCategory, {
   shape: 'arrowUp' | 'arrowDown'
   position: 'belowBar' | 'aboveBar'
   color: string
   label: string
+  symbol: string
+  textClass: string
 }> = {
-  trade_win:  { shape: 'arrowUp',   position: 'belowBar', color: '#10b981', label: 'Win' },
-  trade_loss: { shape: 'arrowDown', position: 'aboveBar', color: '#ef4444', label: 'Loss' },
-  deposit:    { shape: 'arrowUp',   position: 'belowBar', color: '#3b82f6', label: 'Deposit' },
-  withdrawal: { shape: 'arrowDown', position: 'aboveBar', color: '#f59e0b', label: 'Withdrawal' },
+  trade_win:  { shape: 'arrowUp',   position: 'belowBar', color: '#10b981', label: 'Wins',
+                symbol: '\u25B2', textClass: 'text-emerald-400' },
+  trade_loss: { shape: 'arrowDown', position: 'aboveBar', color: '#ef4444', label: 'Losses',
+                symbol: '\u25BC', textClass: 'text-red-400' },
+  deposit:    { shape: 'arrowUp',   position: 'belowBar', color: '#3b82f6', label: 'Deposits',
+                symbol: '\u25B2', textClass: 'text-blue-400' },
+  withdrawal: { shape: 'arrowDown', position: 'aboveBar', color: '#f59e0b', label: 'Withdrawals',
+                symbol: '\u25BC', textClass: 'text-amber-400' },
 }
+
+const ALL_CATEGORIES: MarkerCategory[] = ['trade_win', 'trade_loss', 'deposit', 'withdrawal']
 
 function formatMarkerText(item: ActivityItem): string {
   const cfg = MARKER_CONFIG[item.category]
@@ -39,18 +49,23 @@ function formatMarkerText(item: ActivityItem): string {
   if (item.category === 'trade_win' || item.category === 'trade_loss') {
     const sign = item.amount >= 0 ? '+' : ''
     const amt = isBtc ? `${sign}${item.amount.toFixed(8)} BTC` : `${sign}$${Math.abs(item.amount).toLocaleString()}`
-    const plural = item.count > 1 ? `${item.count} ${cfg.label}s` : cfg.label
+    const singular = item.category === 'trade_win' ? 'Win' : 'Loss'
+    const plural = item.count > 1 ? `${item.count} ${singular}${item.count > 1 ? (singular === 'Loss' ? 'es' : 's') : ''}` : singular
     return `${plural}: ${amt}`
   }
   // Deposits/withdrawals
   const amt = isBtc ? `${item.amount.toFixed(8)} BTC` : `$${Math.abs(item.amount).toLocaleString()}`
-  const plural = item.count > 1 ? `${item.count} ${cfg.label}s` : cfg.label
+  const singular = cfg.label.replace(/s$/, '')
+  const plural = item.count > 1 ? `${item.count} ${cfg.label}` : singular
   return `${plural}: ${amt}`
 }
 
 export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [showAllAccounts, setShowAllAccounts] = useState(false)
+  const [visibleMarkers, setVisibleMarkers] = useState<Set<MarkerCategory>>(
+    () => new Set(ALL_CATEGORIES)
+  )
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const btcSeriesRef = useRef<any>(null)
@@ -96,6 +111,58 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
     },
     refetchInterval: 300000,
   })
+
+  const toggleCategory = useCallback((cat: MarkerCategory) => {
+    setVisibleMarkers(prev => {
+      const next = new Set(prev)
+      if (next.has(cat)) {
+        next.delete(cat)
+      } else {
+        next.add(cat)
+      }
+      return next
+    })
+  }, [])
+
+  // Apply markers whenever activity data or visibility toggles change
+  useEffect(() => {
+    const btcSeries = btcSeriesRef.current
+    const usdSeries = usdSeriesRef.current
+    if (!btcSeries || !usdSeries) return
+
+    if (!activity || activity.length === 0) {
+      btcSeries.setMarkers([])
+      usdSeries.setMarkers([])
+      return
+    }
+
+    const btcMarkers: SeriesMarker<Time>[] = []
+    const usdMarkers: SeriesMarker<Time>[] = []
+
+    for (const item of activity) {
+      if (!visibleMarkers.has(item.category)) continue
+      const cfg = MARKER_CONFIG[item.category]
+      const marker: SeriesMarker<Time> = {
+        time: item.date as Time,
+        position: cfg.position,
+        color: cfg.color,
+        shape: cfg.shape,
+        text: formatMarkerText(item),
+      }
+      if (item.line === 'btc') {
+        btcMarkers.push(marker)
+      } else {
+        usdMarkers.push(marker)
+      }
+    }
+
+    // Markers must be sorted by time
+    btcMarkers.sort((a, b) => (a.time as string).localeCompare(b.time as string))
+    usdMarkers.sort((a, b) => (a.time as string).localeCompare(b.time as string))
+
+    btcSeries.setMarkers(btcMarkers)
+    usdSeries.setMarkers(usdMarkers)
+  }, [activity, visibleMarkers])
 
   // Initialize chart
   useEffect(() => {
@@ -189,35 +256,6 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
     btcSeries.setData(btcData)
     usdSeries.setData(usdData)
 
-    // Add activity markers on respective series (BTC or USD line)
-    if (activity && activity.length > 0) {
-      const btcMarkers: SeriesMarker<Time>[] = []
-      const usdMarkers: SeriesMarker<Time>[] = []
-
-      for (const item of activity) {
-        const cfg = MARKER_CONFIG[item.category]
-        const marker: SeriesMarker<Time> = {
-          time: item.date as Time,
-          position: cfg.position,
-          color: cfg.color,
-          shape: cfg.shape,
-          text: formatMarkerText(item),
-        }
-        if (item.line === 'btc') {
-          btcMarkers.push(marker)
-        } else {
-          usdMarkers.push(marker)
-        }
-      }
-
-      // Markers must be sorted by time
-      btcMarkers.sort((a, b) => (a.time as string).localeCompare(b.time as string))
-      usdMarkers.sort((a, b) => (a.time as string).localeCompare(b.time as string))
-
-      if (btcMarkers.length > 0) btcSeries.setMarkers(btcMarkers)
-      if (usdMarkers.length > 0) usdSeries.setMarkers(usdMarkers)
-    }
-
     // Fit content
     chart.timeScale().fitContent()
 
@@ -239,7 +277,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         chartRef.current = null
       }
     }
-  }, [history, activity])
+  }, [history])
 
   // Calculate which time range buttons should be enabled based on data span
   const getEnabledTimeRanges = (): Set<TimeRange> => {
@@ -401,32 +439,38 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         </div>
       </div>
 
-      {/* Chart Legend */}
-      <div className="flex items-center justify-center gap-4 flex-wrap mb-2 text-xs">
-        <div className="flex items-center space-x-2">
+      {/* Chart Legend — line indicators (static) + marker toggles (clickable) */}
+      <div className="flex items-center justify-center gap-3 flex-wrap mb-2 text-xs">
+        <div className="flex items-center space-x-1.5">
           <div className="w-4 h-0.5 bg-orange-400"></div>
-          <span className="text-slate-300">BTC Value (Left)</span>
+          <span className="text-slate-300">BTC (Left)</span>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1.5">
           <div className="w-4 h-0.5 bg-green-400"></div>
-          <span className="text-slate-300">USD Value (Right)</span>
+          <span className="text-slate-300">USD (Right)</span>
         </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="text-emerald-400">&#9650;</span>
-          <span className="text-slate-400">Win</span>
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="text-red-400">&#9660;</span>
-          <span className="text-slate-400">Loss</span>
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="text-blue-400">&#9650;</span>
-          <span className="text-slate-400">Deposit</span>
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="text-amber-400">&#9660;</span>
-          <span className="text-slate-400">Withdrawal</span>
-        </div>
+        <span className="text-slate-600">|</span>
+        {ALL_CATEGORIES.map((cat) => {
+          const cfg = MARKER_CONFIG[cat]
+          const active = visibleMarkers.has(cat)
+          return (
+            <button
+              key={cat}
+              onClick={() => toggleCategory(cat)}
+              className={`flex items-center space-x-1 px-1.5 py-0.5 rounded transition-colors ${
+                active
+                  ? 'bg-slate-700/50 hover:bg-slate-600/50'
+                  : 'bg-slate-900/50 opacity-40 hover:opacity-60'
+              }`}
+              title={`${active ? 'Hide' : 'Show'} ${cfg.label.toLowerCase()}`}
+            >
+              <span className={cfg.textClass}>{cfg.symbol}</span>
+              <span className={active ? 'text-slate-300' : 'text-slate-500 line-through'}>
+                {cfg.label}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Chart */}
