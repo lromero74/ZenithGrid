@@ -68,7 +68,7 @@ async def capture_account_snapshot(db: AsyncSession, account: Account) -> bool:
             for pos in pos_result.scalars().all():
                 quote = pos.get_quote_currency()
                 if pos.total_base_acquired and pos.total_base_acquired > 0:
-                    price = await client.get_price(pos.product_id)
+                    price = await client.get_current_price(pos.product_id)
                     if price:
                         current_value = pos.total_base_acquired * price
                         if quote in ("USD", "USDC", "USDT"):

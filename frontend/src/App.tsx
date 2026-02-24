@@ -201,7 +201,8 @@ function AppContent() {
       }
 
       // Refetch periodically while on History page to catch updates from ClosedPositions
-      const interval = setInterval(refetchCounts, 2000)
+      refetchCounts()
+      const interval = setInterval(refetchCounts, 30000)
       return () => clearInterval(interval)
     }
   }, [location.pathname, getAccessToken])

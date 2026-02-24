@@ -33,21 +33,22 @@ def _make_mock_account(
     return account
 
 
-def _make_mock_db():
+def _make_mock_db(account=None):
     """Create a mock async db session."""
     db = AsyncMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
+    db.merge = AsyncMock(side_effect=lambda obj: obj)
     return db
 
 
 def _make_mock_real_client(price=50000.0):
     """Create a mock real exchange client for price data."""
     client = AsyncMock()
-    client.get_price = AsyncMock(return_value=price)
+    client.get_current_price = AsyncMock(return_value=price)
     client.get_btc_usd_price = AsyncMock(return_value=price)
     client.get_eth_usd_price = AsyncMock(return_value=3000.0)
-    client.get_products = AsyncMock(return_value=[])
+    client.list_products = AsyncMock(return_value=[])
     client.get_product = AsyncMock(return_value={})
     client.get_ticker = AsyncMock(return_value={})
     client.get_product_stats = AsyncMock(return_value={})
@@ -254,7 +255,7 @@ class TestPlaceOrder:
         db = _make_mock_db()
         real_client = _make_mock_real_client(price=None)
         # Return None for price
-        real_client.get_price = AsyncMock(return_value=None)
+        real_client.get_current_price = AsyncMock(return_value=None)
         client = PaperTradingClient(account, db, real_client=real_client)
 
         with pytest.raises(Exception, match="Could not get price"):
@@ -392,15 +393,18 @@ class TestBalanceMethods:
         assert result == pytest.approx(15.0)
 
     @pytest.mark.asyncio
-    async def test_get_usd_balance_includes_stablecoins(self):
-        """Happy path: USD balance includes USD + USDC + USDT."""
+    async def test_get_usd_balance_returns_usd_only(self):
+        """Happy path: USD balance returns USD only, not stablecoins."""
         balances = {"BTC": 0.0, "USD": 1000.0, "USDC": 500.0, "USDT": 200.0}
         account = _make_mock_account(paper_balances=balances)
         db = _make_mock_db()
         client = PaperTradingClient(account, db)
 
         result = await client.get_usd_balance()
-        assert result == pytest.approx(1700.0)
+        assert result == pytest.approx(1000.0)
+        # USDC and USDT are separate
+        assert await client.get_usdc_balance() == pytest.approx(500.0)
+        assert await client.get_usdt_balance() == pytest.approx(200.0)
 
     @pytest.mark.asyncio
     async def test_get_balance_specific_currency(self):
@@ -457,7 +461,7 @@ class TestAggregateValues:
         account = _make_mock_account(paper_balances=balances)
         db = _make_mock_db()
         real_client = AsyncMock()
-        real_client.get_price = AsyncMock(return_value=0.05)  # ETH-BTC price
+        real_client.get_current_price = AsyncMock(return_value=0.05)  # ETH-BTC price
         real_client.get_btc_usd_price = AsyncMock(return_value=50000.0)
         client = PaperTradingClient(account, db, real_client=real_client)
 
@@ -489,7 +493,7 @@ class TestAggregateValues:
         account = _make_mock_account(paper_balances=balances)
         db = _make_mock_db()
         real_client = AsyncMock()
-        real_client.get_price = AsyncMock(side_effect=Exception("Network error"))
+        real_client.get_current_price = AsyncMock(side_effect=Exception("Network error"))
         real_client.get_btc_usd_price = AsyncMock(side_effect=Exception("Network error"))
         client = PaperTradingClient(account, db, real_client=real_client)
 
@@ -583,7 +587,7 @@ class TestMarketDataDelegation:
 
         result = await client.get_price("BTC-USD")
         assert result == 42000.0
-        real_client.get_price.assert_called_once_with("BTC-USD")
+        real_client.get_current_price.assert_called_once_with("BTC-USD")
 
     @pytest.mark.asyncio
     async def test_get_price_falls_back_to_public_api(self):
