@@ -11,7 +11,11 @@ interface AccountValueSnapshot {
   timestamp: string
   total_value_btc: number
   total_value_usd: number
+  usd_portion_usd?: number | null
+  btc_portion_btc?: number | null
 }
+
+type ChartMode = 'total' | 'split'
 
 export type TimeRange = '7d' | '14d' | '30d' | '3m' | '6m' | '1y' | 'all'
 
@@ -62,6 +66,7 @@ function formatMarkerText(item: ActivityItem): string {
 
 export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
+  const [chartMode, setChartMode] = useState<ChartMode>('total')
   const [showAllAccounts, setShowAllAccounts] = useState(false)
   const [visibleMarkers, setVisibleMarkers] = useState<Set<MarkerCategory>>(
     () => new Set(ALL_CATEGORIES)
@@ -213,13 +218,17 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
 
     chartRef.current = chart
 
+    const isSplit = chartMode === 'split'
+    const btcLabel = isSplit ? 'BTC Portion' : 'BTC'
+    const usdLabel = isSplit ? 'USD Portion' : 'USD'
+
     // Add BTC line series (left scale - orange)
     const btcSeries = chart.addLineSeries({
       color: '#ff8800',
       lineWidth: 2,
       lineType: 2, // 2 = curved/smooth line
       priceScaleId: 'left',
-      title: 'BTC',
+      title: btcLabel,
       priceFormat: {
         type: 'custom',
         minMove: 0.00000001,
@@ -236,21 +245,26 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       lineWidth: 2,
       lineType: 2, // 2 = curved/smooth line
       priceScaleId: 'right',
-      title: 'USD',
+      title: usdLabel,
       lastValueVisible: false,
       priceLineVisible: false,
     })
     usdSeriesRef.current = usdSeries
 
+    // Filter data based on chart mode
+    const chartData = isSplit
+      ? history.filter(s => s.usd_portion_usd != null && s.btc_portion_btc != null)
+      : history
+
     // Prepare data
-    const btcData: LineData<Time>[] = history.map(snapshot => ({
+    const btcData: LineData<Time>[] = chartData.map(snapshot => ({
       time: snapshot.date as Time,
-      value: snapshot.total_value_btc,
+      value: isSplit ? (snapshot.btc_portion_btc ?? 0) : snapshot.total_value_btc,
     }))
 
-    const usdData: LineData<Time>[] = history.map(snapshot => ({
+    const usdData: LineData<Time>[] = chartData.map(snapshot => ({
       time: snapshot.date as Time,
-      value: snapshot.total_value_usd,
+      value: isSplit ? (snapshot.usd_portion_usd ?? 0) : snapshot.total_value_usd,
     }))
 
     btcSeries.setData(btcData)
@@ -277,7 +291,7 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         chartRef.current = null
       }
     }
-  }, [history])
+  }, [history, chartMode])
 
   // Calculate which time range buttons should be enabled based on data span
   const getEnabledTimeRanges = (): Set<TimeRange> => {
@@ -324,15 +338,24 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
 
   const enabledTimeRanges = getEnabledTimeRanges()
 
-  // Calculate stats
-  const latestValue = history && history.length > 0 ? history[history.length - 1] : null
-  const earliestValue = history && history.length > 0 ? history[0] : null
-  const btcChange = latestValue && earliestValue
-    ? ((latestValue.total_value_btc - earliestValue.total_value_btc) / earliestValue.total_value_btc) * 100
-    : 0
-  const usdChange = latestValue && earliestValue
-    ? ((latestValue.total_value_usd - earliestValue.total_value_usd) / earliestValue.total_value_usd) * 100
-    : 0
+  // Check if any snapshot has portion data (for enabling the split toggle)
+  const hasPortionData = history?.some(s => s.usd_portion_usd != null) ?? false
+
+  // Calculate stats based on chart mode
+  const isSplit = chartMode === 'split'
+  const relevantHistory = isSplit
+    ? history?.filter(s => s.usd_portion_usd != null && s.btc_portion_btc != null)
+    : history
+  const latestValue = relevantHistory && relevantHistory.length > 0 ? relevantHistory[relevantHistory.length - 1] : null
+  const earliestValue = relevantHistory && relevantHistory.length > 0 ? relevantHistory[0] : null
+
+  const latestBtc = isSplit ? (latestValue?.btc_portion_btc ?? 0) : (latestValue?.total_value_btc ?? 0)
+  const earliestBtc = isSplit ? (earliestValue?.btc_portion_btc ?? 0) : (earliestValue?.total_value_btc ?? 0)
+  const latestUsd = isSplit ? (latestValue?.usd_portion_usd ?? 0) : (latestValue?.total_value_usd ?? 0)
+  const earliestUsd = isSplit ? (earliestValue?.usd_portion_usd ?? 0) : (earliestValue?.total_value_usd ?? 0)
+
+  const btcChange = earliestBtc ? ((latestBtc - earliestBtc) / earliestBtc) * 100 : 0
+  const usdChange = earliestUsd ? ((latestUsd - earliestUsd) / earliestUsd) * 100 : 0
 
   if (isLoading) {
     return (
@@ -392,8 +415,20 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         </div>
       </div>
 
-      {/* Account Filter Toggle */}
-      <div className="flex items-center justify-end mb-4">
+      {/* Account Filter + Chart Mode Toggles */}
+      <div className="flex items-center justify-end gap-2 mb-4">
+        {hasPortionData && (
+          <button
+            onClick={() => setChartMode(m => m === 'total' ? 'split' : 'total')}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              chartMode === 'split'
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            {chartMode === 'total' ? 'Total Value' : 'By Quote Currency'}
+          </button>
+        )}
         <button
           onClick={() => setShowAllAccounts(!showAllAccounts)}
           className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
@@ -411,9 +446,11 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-400 mb-1">Current Value (BTC)</p>
+              <p className="text-xs text-slate-400 mb-1">
+                {isSplit ? 'BTC Portion (BTC)' : 'Current Value (BTC)'}
+              </p>
               <p className="text-2xl font-bold text-orange-400">
-                {latestValue?.total_value_btc.toFixed(8) || '0.00000000'}
+                {latestBtc.toFixed(8)}
               </p>
               <p className={`text-sm ${btcChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {btcChange >= 0 ? '+' : ''}{btcChange.toFixed(2)}% ({timeRange})
@@ -426,9 +463,11 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-400 mb-1">Current Value (USD)</p>
+              <p className="text-xs text-slate-400 mb-1">
+                {isSplit ? 'USD Portion (USD)' : 'Current Value (USD)'}
+              </p>
               <p className="text-2xl font-bold text-green-400">
-                ${latestValue?.total_value_usd.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0.00'}
+                ${latestUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </p>
               <p className={`text-sm ${usdChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {usdChange >= 0 ? '+' : ''}{usdChange.toFixed(2)}% ({timeRange})
@@ -443,11 +482,11 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       <div className="flex items-center justify-center gap-3 flex-wrap mb-2 text-xs">
         <div className="flex items-center space-x-1.5">
           <div className="w-4 h-0.5 bg-orange-400"></div>
-          <span className="text-slate-300">BTC (Left)</span>
+          <span className="text-slate-300">{isSplit ? 'BTC Portion (Left)' : 'BTC (Left)'}</span>
         </div>
         <div className="flex items-center space-x-1.5">
           <div className="w-4 h-0.5 bg-green-400"></div>
-          <span className="text-slate-300">USD (Right)</span>
+          <span className="text-slate-300">{isSplit ? 'USD Portion (Right)' : 'USD (Right)'}</span>
         </div>
         <span className="text-slate-600">|</span>
         {ALL_CATEGORIES.map((cat) => {

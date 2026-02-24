@@ -234,6 +234,14 @@ class MultiBotMonitor:
 
                 client = await get_exchange_client_for_account(db, bot.account_id)
                 if client:
+                    # Don't cache paper trading clients — they hold a reference
+                    # to the caller's DB session, which becomes stale after the
+                    # processing cycle ends. A fresh client is created each cycle.
+                    is_paper = (hasattr(client, 'is_paper_trading')
+                                and callable(client.is_paper_trading)
+                                and client.is_paper_trading())
+                    if is_paper:
+                        return client
                     self._exchange_cache[bot.account_id] = client
                     return client
 
@@ -1339,9 +1347,13 @@ class MultiBotMonitor:
                             break
                 if gap_fill is not None and gap_fill > max_synthetic_pct:
                     logger.warning(
-                        f"  Skipping {product_id}: gap_fill_pct={gap_fill:.1f}% > max_synthetic_pct={max_synthetic_pct}%"
+                        f"  Skipping {product_id}: gap_fill_pct={gap_fill:.1f}%"
+                        f" > max_synthetic_pct={max_synthetic_pct}%"
                     )
-                    return {"action": "none", "reason": f"Synthetic candle % too high ({gap_fill:.1f}% > {max_synthetic_pct}%)"}
+                    return {
+                        "action": "none",
+                        "reason": f"Synthetic candle % too high ({gap_fill:.1f}% > {max_synthetic_pct}%)",
+                    }
 
             # Commit any position changes (e.g., previous_indicators for crossing detection)
             if existing_position is not None:

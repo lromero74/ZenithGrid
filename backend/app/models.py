@@ -1225,6 +1225,8 @@ class AccountValueSnapshot(Base):
     snapshot_date = Column(DateTime, nullable=False, index=True)
     total_value_btc = Column(Float, nullable=False, default=0.0)
     total_value_usd = Column(Float, nullable=False, default=0.0)
+    usd_portion_usd = Column(Float, nullable=True)   # USD+USDC+USDT free + USD/USDC/USDT-pair position values
+    btc_portion_btc = Column(Float, nullable=True)   # BTC free + BTC-pair position values (in BTC)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Unique constraint: one snapshot per account per day
@@ -1329,6 +1331,7 @@ class ReportGoal(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
     name = Column(String, nullable=False)  # e.g. "Reach 1 BTC"
     target_type = Column(String, nullable=False)  # "balance" / "profit" / "both"
     target_currency = Column(String, nullable=False, default="USD")  # "USD" / "BTC"
@@ -1505,6 +1508,7 @@ class Report(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
     schedule_id = Column(Integer, ForeignKey("report_schedules.id", ondelete="SET NULL"), nullable=True)
     period_start = Column(DateTime, nullable=False)
     period_end = Column(DateTime, nullable=False)

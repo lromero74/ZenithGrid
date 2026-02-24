@@ -7,6 +7,7 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
 import { useConfirm } from '../contexts/ConfirmContext'
+import { useAccount } from '../contexts/AccountContext'
 import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
 import { ScheduleForm, type ScheduleFormData } from '../components/reports/ScheduleForm'
 import { ReportViewModal } from '../components/reports/ReportViewModal'
@@ -29,6 +30,7 @@ export default function Reports() {
   const tabParam = searchParams.get('tab')
   const activeTab: TabId = (tabParam && VALID_TABS.has(tabParam) ? tabParam : 'goals') as TabId
   const queryClient = useQueryClient()
+  const { selectedAccount } = useAccount()
 
   const confirm = useConfirm()
 
@@ -58,18 +60,18 @@ export default function Reports() {
   // ---------- Queries ----------
 
   const { data: goals = [], isLoading: goalsLoading } = useQuery({
-    queryKey: ['report-goals'],
-    queryFn: reportsApi.getGoals,
+    queryKey: ['report-goals', selectedAccount?.id],
+    queryFn: () => reportsApi.getGoals(selectedAccount?.id),
   })
 
   const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
-    queryKey: ['report-schedules'],
-    queryFn: reportsApi.getSchedules,
+    queryKey: ['report-schedules', selectedAccount?.id],
+    queryFn: () => reportsApi.getSchedules(selectedAccount?.id),
   })
 
   const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ['report-history', historyPage],
-    queryFn: () => reportsApi.getHistory(PAGE_SIZE, historyPage * PAGE_SIZE),
+    queryKey: ['report-history', historyPage, selectedAccount?.id],
+    queryFn: () => reportsApi.getHistory(PAGE_SIZE, historyPage * PAGE_SIZE, undefined, selectedAccount?.id),
   })
 
   // ---------- Mutations ----------
@@ -683,7 +685,10 @@ export default function Reports() {
           if (editingGoal) {
             await updateGoal.mutateAsync({ id: editingGoal.id, data })
           } else {
-            const created = await createGoal.mutateAsync(data)
+            const created = await createGoal.mutateAsync({
+              ...data,
+              account_id: selectedAccount?.id ?? null,
+            })
             if (created.target_type === 'expenses') {
               setExpenseEditorGoal(created)
             }

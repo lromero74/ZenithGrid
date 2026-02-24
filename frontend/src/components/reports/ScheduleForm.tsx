@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
+import { useAccount } from '../../contexts/AccountContext'
 import type {
   ReportGoal, ReportSchedule,
   ScheduleType, PeriodWindow, LookbackUnit,
@@ -88,6 +89,7 @@ function isPeriodStartDay(scheduleType: ScheduleType, periodWindow: PeriodWindow
 }
 
 export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: ScheduleFormProps) {
+  const { selectedAccount } = useAccount()
   const [name, setName] = useState('')
   const [scheduleType, setScheduleType] = useState<ScheduleType>('weekly')
   const [scheduleDays, setScheduleDays] = useState<number[]>([0]) // Default Monday
@@ -309,6 +311,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
         lookback_value: periodWindow === 'trailing' ? lookbackValue : null,
         lookback_unit: periodWindow === 'trailing' ? lookbackUnit : null,
         force_standard_days: forceStandardDays.length > 0 ? forceStandardDays : null,
+        account_id: selectedAccount?.id ?? null,
         recipients,
         ai_provider: aiProvider || null,
         generate_ai_summary: generateAiSummary,

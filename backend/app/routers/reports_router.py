@@ -53,6 +53,7 @@ class GoalCreate(BaseModel):
     tax_withholding_pct: Optional[float] = Field(None, ge=0, le=100)
     time_horizon_months: int = Field(..., ge=1, le=120)
     target_date: Optional[datetime] = None
+    account_id: Optional[int] = None
 
     @model_validator(mode="after")
     def validate_goal_fields(self):
@@ -223,6 +224,7 @@ def _normalize_recipient_for_api(item) -> str:
 def _goal_to_dict(goal: ReportGoal) -> dict:
     d = {
         "id": goal.id,
+        "account_id": goal.account_id,
         "name": goal.name,
         "target_type": goal.target_type,
         "target_currency": goal.target_currency,
@@ -329,6 +331,7 @@ def _report_to_dict(report: Report, include_html: bool = False) -> dict:
 
     result = {
         "id": report.id,
+        "account_id": report.account_id,
         "schedule_id": report.schedule_id,
         "schedule_name": schedule_name,
         "period_start": report.period_start.isoformat() if report.period_start else None,
@@ -373,13 +376,17 @@ def _compute_next_run_for_new_schedule(body) -> datetime:
 
 @router.get("/goals")
 async def list_goals(
+    account_id: Optional[int] = Query(None, description="Filter by account ID"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
-    """List all goals for the current user."""
+    """List all goals for the current user, optionally filtered by account."""
+    filters = [ReportGoal.user_id == current_user.id]
+    if account_id:
+        filters.append(ReportGoal.account_id == account_id)
     result = await db.execute(
         select(ReportGoal)
-        .where(ReportGoal.user_id == current_user.id)
+        .where(and_(*filters))
         .options(selectinload(ReportGoal.expense_items))
         .order_by(ReportGoal.created_at.desc())
     )
@@ -417,6 +424,7 @@ async def create_goal(
 
     goal = ReportGoal(
         user_id=current_user.id,
+        account_id=body.account_id,
         name=body.name,
         target_type=body.target_type,
         target_currency=body.target_currency,
@@ -745,13 +753,17 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
 
 @router.get("/schedules")
 async def list_schedules(
+    account_id: Optional[int] = Query(None, description="Filter by account ID"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[dict]:
-    """List all report schedules for the current user."""
+    """List all report schedules for the current user, optionally filtered by account."""
+    filters = [ReportSchedule.user_id == current_user.id]
+    if account_id:
+        filters.append(ReportSchedule.account_id == account_id)
     result = await db.execute(
         select(ReportSchedule)
-        .where(ReportSchedule.user_id == current_user.id)
+        .where(and_(*filters))
         .options(selectinload(ReportSchedule.goal_links))
         .order_by(ReportSchedule.created_at.desc())
     )
@@ -988,13 +1000,16 @@ async def list_reports(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     schedule_id: Optional[int] = Query(None),
+    account_id: Optional[int] = Query(None, description="Filter by account ID"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """List generated reports (paginated)."""
+    """List generated reports (paginated), optionally filtered by account."""
     filters = [Report.user_id == current_user.id]
     if schedule_id:
         filters.append(Report.schedule_id == schedule_id)
+    if account_id:
+        filters.append(Report.account_id == account_id)
 
     # Get total count
     from sqlalchemy import func
