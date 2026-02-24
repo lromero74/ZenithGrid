@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.46.0] - 2026-02-24
+
+### Added
+- **Expense goal lookahead**: xTD reports now show a greyed-out "Next Month Preview" (or Next Week/Quarter/Year) section beneath Upcoming Expenses, displaying bills due in the first 15 days of the next period — no more surprise rent on the 1st
+- **Togglable per schedule**: New "Show next-period expense preview" checkbox in schedule settings (enabled by default), only visible when an expenses goal is linked
+- **Auto-prior suppression**: Lookahead automatically hides on period-start days (1st of month, Monday) when reports auto-switch to full prior period view
+
 ## [v2.45.3] - 2026-02-24
 
 ### Fixed

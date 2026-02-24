@@ -27,6 +27,7 @@ export interface ScheduleFormData {
   ai_provider?: string | null
   goal_ids: number[]
   is_enabled: boolean
+  show_expense_lookahead: boolean
 }
 
 const SCHEDULE_TYPE_OPTIONS: { value: ScheduleType; label: string }[] = [
@@ -102,6 +103,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
   const [aiProvider, setAiProvider] = useState('')
   const [selectedGoalIds, setSelectedGoalIds] = useState<number[]>([])
   const [isEnabled, setIsEnabled] = useState(true)
+  const [showExpenseLookahead, setShowExpenseLookahead] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -117,6 +119,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setAiProvider(initialData.ai_provider || '')
       setSelectedGoalIds(initialData.goal_ids || [])
       setIsEnabled(initialData.is_enabled)
+      setShowExpenseLookahead(initialData.show_expense_lookahead ?? true)
 
       // Parse schedule_days based on type
       const days = initialData.schedule_days || []
@@ -150,6 +153,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setAiProvider('')
       setSelectedGoalIds([])
       setIsEnabled(true)
+      setShowExpenseLookahead(true)
     }
   }, [initialData, isOpen])
 
@@ -305,6 +309,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
         ai_provider: aiProvider || null,
         goal_ids: selectedGoalIds,
         is_enabled: isEnabled,
+        show_expense_lookahead: showExpenseLookahead,
       })
       onClose()
     } finally {
@@ -653,6 +658,22 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
             />
             <span className="text-sm text-slate-300">Enabled (auto-generate on schedule)</span>
           </label>
+
+          {/* Expense Lookahead Toggle — only when expense goals are selected */}
+          {goals.some(g => selectedGoalIds.includes(g.id) && g.target_type === 'expenses') && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showExpenseLookahead}
+                onChange={e => setShowExpenseLookahead(e.target.checked)}
+                className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500"
+              />
+              <span className="text-sm text-slate-300">
+                Show next-period expense preview
+              </span>
+              <span className="text-xs text-slate-500 ml-1">(upcoming bills from early next period)</span>
+            </label>
+          )}
 
           <div className="flex justify-end space-x-3 pt-2">
             <button

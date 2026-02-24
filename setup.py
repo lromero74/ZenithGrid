@@ -1565,6 +1565,7 @@ def initialize_database(project_root):
                 lookback_value INTEGER,
                 lookback_unit TEXT,
                 force_standard_days TEXT,
+                show_expense_lookahead INTEGER DEFAULT 1,
                 is_enabled INTEGER DEFAULT 1,
                 recipients TEXT,
                 ai_provider TEXT,
