@@ -157,9 +157,10 @@ export const useNewsFilters = ({
 
   const toggleSource = useCallback((sourceId: string) => {
     if (sourceSelectAll) {
-      // Switching from "all" to selecting only this source
+      // Deselect this source: select all EXCEPT the clicked one
+      const allIds = (newsData?.sources || []).map(s => s.id)
       setSourceSelectAll(false)
-      setSelectedSources(new Set([sourceId]))
+      setSelectedSources(new Set(allIds.filter(id => id !== sourceId)))
     } else {
       setSelectedSources(prev => {
         const next = new Set(prev)
@@ -172,7 +173,7 @@ export const useNewsFilters = ({
       })
     }
     setCurrentPage(1)
-  }, [sourceSelectAll])
+  }, [sourceSelectAll, newsData?.sources])
 
   const toggleAllSources = useCallback(() => {
     if (sourceSelectAll) {
@@ -210,8 +211,10 @@ export const useNewsFilters = ({
 
   const toggleVideoSource = useCallback((sourceId: string) => {
     if (videoSourceSelectAll) {
+      // Deselect this source: select all EXCEPT the clicked one
+      const allIds = (videoData?.sources || []).map(s => s.id)
       setVideoSourceSelectAll(false)
-      setSelectedVideoSources(new Set([sourceId]))
+      setSelectedVideoSources(new Set(allIds.filter(id => id !== sourceId)))
     } else {
       setSelectedVideoSources(prev => {
         const next = new Set(prev)
@@ -224,7 +227,7 @@ export const useNewsFilters = ({
       })
     }
     setVideoPage(1)
-  }, [videoSourceSelectAll])
+  }, [videoSourceSelectAll, videoData?.sources])
 
   const toggleAllVideoSources = useCallback(() => {
     if (videoSourceSelectAll) {
