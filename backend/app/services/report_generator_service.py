@@ -1956,7 +1956,7 @@ def generate_pdf(
         logger.warning("fpdf2 not installed, skipping PDF generation")
         return None
     except Exception as e:
-        logger.error(f"PDF generation failed: {e}")
+        logger.error(f"PDF generation failed: {e}", exc_info=True)
         return None
 
 
@@ -1978,6 +1978,7 @@ def _render_pdf_markdown(pdf, text: str, br: int, bg: int, bb: int):
             paragraph = " ".join(buf)
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(60, 60, 60)
+            pdf.set_x(pdf.l_margin)  # Reset x after bullet indents
             pdf.multi_cell(0, 6, paragraph, markdown=True)
             buf.clear()
 
