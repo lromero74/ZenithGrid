@@ -374,18 +374,37 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
                 if conds:
                     strat_lines.append(f"    {label}: {conds}")
         strat_lines.append(
-            "  NOTE: These are DCA (Dollar Cost Averaging) bots that enter on "
-            "momentum/indicator signals and take small profits. Safety orders "
-            "require BOTH a minimum price drop from entry (price_deviation, "
-            "multiplied by safety_order_step_scale for each subsequent order — "
-            "e.g. 2% for SO1, 4% for SO2, 8% for SO3) AND the momentum "
-            "indicator conditions to be met. This prevents premature averaging "
-            "down — the bot waits for a real dip plus renewed momentum before "
-            "adding to a position. High win rates are expected because positions "
-            "only close when profitable. Wins are typically small and quick; "
-            "losing positions may take much longer as they wait for both a "
-            "sufficient price drop and favorable momentum signals to DCA down."
+            "  STRATEGY NOTES (use these to inform your analysis):"
         )
+        strat_lines.append(
+            "  - DCA Mechanics: These bots enter on momentum/indicator signals "
+            "and take small profits. Safety orders require BOTH a minimum price "
+            "drop from entry (price_deviation, multiplied by "
+            "safety_order_step_scale for each subsequent order — e.g. 2% for "
+            "SO1, 4% for SO2, 8% for SO3) AND the momentum indicator "
+            "conditions to be met. This prevents premature averaging down. "
+            "High win rates are expected — positions close only when profitable."
+        )
+        # Detect BTC-pair bots and add crypto-maximalist context
+        has_btc_pairs = any(
+            any(p.endswith("-BTC") for p in bs.get("pairs", []))
+            for bs in bot_strategies
+        )
+        if has_btc_pairs:
+            strat_lines.append(
+                "  - BTC Accumulation Strategy: Bots trading alt/BTC pairs "
+                "are denominated in BTC — profits and losses are in BTC, not "
+                "USD. The goal is to accumulate more BTC by trading more "
+                "volatile altcoins against it. Since crypto assets tend to "
+                "move together as a risk class, alt volatility relative to "
+                "BTC creates opportunities to 'mine' BTC through trading. "
+                "Open positions holding top-tier altcoins are not considered "
+                "dead capital — the user is a crypto maximalist who accepts "
+                "alt exposure, knowing that quality crypto assets tend to "
+                "appreciate against fiat long-term even if BTC outpaces them. "
+                "Do NOT frame BTC-pair positions as 'capital lockup' or "
+                "'opportunity cost' — the user is intentionally holding crypto."
+            )
         strategy_section = "\n".join(strat_lines)
 
     return f"""Analyze this trading report for the period: {period_label}.

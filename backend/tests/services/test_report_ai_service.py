@@ -414,8 +414,11 @@ class TestBuildSummaryPrompt:
         assert "safety_order_volume_scale=2" in prompt
         assert "Entry signals:" in prompt
         assert "bb_percent crossing_above 10" in prompt
-        assert "DCA (Dollar Cost Averaging)" in prompt
+        assert "DCA Mechanics" in prompt
         assert "minimum price drop from entry" in prompt
+        # ETH-BTC pair should trigger BTC accumulation note
+        assert "BTC Accumulation Strategy" in prompt
+        assert "Do NOT frame BTC-pair positions" in prompt
 
     def test_strategy_multiple_conditions_and_logic(self, sample_report_data):
         """Multiple conditions joined by AND appear in prompt."""
@@ -464,6 +467,20 @@ class TestBuildSummaryPrompt:
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
         assert "trailing_tp=0.5%" in prompt
         assert "stop_loss=enabled" in prompt
+
+    def test_usd_only_bots_no_btc_accumulation_note(self, sample_report_data):
+        """USD-pair-only bots should NOT get BTC accumulation context."""
+        sample_report_data["bot_strategies"] = [{
+            "name": "USD Bot",
+            "strategy_type": "dca_grid",
+            "pairs": ["SOL-USD", "ETH-USD"],
+            "config": {"take_profit_percentage": 2},
+            "trades_in_period": 5,
+            "wins_in_period": 4,
+        }]
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "DCA Mechanics" in prompt
+        assert "BTC Accumulation Strategy" not in prompt
 
     def test_no_bot_strategies_no_section(self, sample_report_data):
         """No strategy section when bot_strategies is empty."""
