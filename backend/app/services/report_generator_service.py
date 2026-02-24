@@ -429,10 +429,10 @@ def _build_transfers_section(data: Dict[str, Any]) -> str:
         total_staking = sum(abs(r.get("amount_usd", 0)) for r in staking)
         staking_row = f"""
                 <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #334155;
+                    <td style="padding: 8px; border-bottom: 2px solid #475569;
                                color: #e2e8f0; font-size: 12px; font-weight: 600;"
                         colspan="2">Staking Rewards &mdash; {len(staking)} deposits</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #334155;
+                    <td style="padding: 8px; border-bottom: 2px solid #475569;
                                color: #10b981; font-size: 12px; text-align: right;
                                font-weight: 700;">+${total_staking:,.2f}</td>
                 </tr>"""
