@@ -153,8 +153,8 @@ class TestProviderFallback:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_all_providers_fail_returns_none(self, mock_db, sample_report_data):
-        """When all providers fail, returns (None, None)."""
+    async def test_all_providers_no_credentials_returns_none(self, mock_db, sample_report_data):
+        """When no provider has credentials, returns (None, None)."""
         with patch(
             "app.ai_service.get_ai_client",
             new_callable=AsyncMock,
@@ -169,6 +169,32 @@ class TestProviderFallback:
             )
 
         assert result is None
+        assert provider_used is None
+
+    @pytest.mark.asyncio
+    async def test_all_providers_fail_at_call_returns_error(self, mock_db, sample_report_data):
+        """When credentials found but all AI calls fail, returns error dict."""
+        mock_client = MagicMock()
+        mock_model = MagicMock()
+        mock_model.generate_content_async = AsyncMock(
+            side_effect=Exception("429 Rate limited")
+        )
+        mock_client.GenerativeModel.return_value = mock_model
+
+        with patch("app.ai_service.get_ai_client", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_client
+
+            result, provider_used = await generate_report_summary(
+                db=mock_db,
+                user_id=1,
+                report_data=sample_report_data,
+                period_label="Jan 1 - Jan 7, 2026",
+                provider="gemini",
+            )
+
+        assert isinstance(result, dict)
+        assert "_error" in result
+        assert result["_error"] == "all_providers_failed"
         assert provider_used is None
 
     @pytest.mark.asyncio
@@ -241,6 +267,18 @@ class TestParseTieredSummary:
         result = _parse_tiered_summary(text)
         assert result["simple"] is None  # empty → None
         assert result["detailed"] == "Content"
+
+    def test_parse_strips_stray_delimiters(self):
+        """Stray delimiter artifacts like ---DELIMITER--- are stripped."""
+        text = (
+            "---SUMMARY---\nGreat job!\n---DELIMITER---\n"
+            "---DETAILED---\nAlpha positive.\n---END---"
+        )
+        result = _parse_tiered_summary(text)
+        assert "DELIMITER" not in result["simple"]
+        assert result["simple"] == "Great job!"
+        assert "END" not in result["detailed"]
+        assert result["detailed"] == "Alpha positive."
 
 
 # ---------------------------------------------------------------------------

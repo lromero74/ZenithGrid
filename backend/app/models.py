@@ -1456,6 +1456,7 @@ class ReportSchedule(Base):
     is_enabled = Column(Boolean, default=True)
     recipients = Column(JSON, nullable=True)  # List of email addresses
     ai_provider = Column(String, nullable=True)  # claude/openai/gemini — null = user's default
+    generate_ai_summary = Column(Boolean, default=True)
     last_run_at = Column(DateTime, nullable=True)
     next_run_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

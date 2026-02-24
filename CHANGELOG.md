@@ -5,6 +5,18 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.47.0] - 2026-02-24
+
+### Added
+- **Bulk delete for report history**: Select multiple reports with checkboxes and delete them all at once — email-app-style multi-select with select-all, bulk action bar, and confirmation dialog
+- **AI summary toggle per schedule**: New toggle switch in schedule settings to enable/disable AI-powered insights — skips AI provider calls entirely when off, useful when credits are exhausted or summaries aren't needed
+- Toggle switches for all schedule boolean settings (Enabled, AI Insights, Expense Preview) — consistent, modern UI replacing old checkboxes
+
+### Fixed
+- **AI credential error message**: Reports now show "AI insights temporarily unavailable — provider rate-limited or credits exhausted" instead of the misleading "Add AI provider credentials" when providers exist but calls fail
+- **Stray delimiter artifacts in AI summaries**: AI-generated `---DELIMITER---` text no longer leaks into rendered report content
+- **Maintenance page CSP compliance**: Nginx maintenance page now uses external script instead of inline (blocked by CSP)
+
 ## [v2.46.0] - 2026-02-24
 
 ### Added

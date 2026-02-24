@@ -110,6 +110,7 @@ class ScheduleCreate(BaseModel):
     ai_provider: Optional[str] = Field(
         None, pattern="^(claude|openai|gemini)$"
     )
+    generate_ai_summary: bool = True
     goal_ids: List[int] = Field(default_factory=list)
     is_enabled: bool = True
     show_expense_lookahead: bool = True
@@ -152,6 +153,7 @@ class ScheduleUpdate(BaseModel):
     account_id: Optional[int] = None
     recipients: Optional[List[RecipientItem]] = None
     ai_provider: Optional[str] = None
+    generate_ai_summary: Optional[bool] = None
     goal_ids: Optional[List[int]] = None
     is_enabled: Optional[bool] = None
     show_expense_lookahead: Optional[bool] = None
@@ -286,6 +288,10 @@ def _schedule_to_dict(schedule: ReportSchedule) -> dict:
         "is_enabled": schedule.is_enabled,
         "recipients": recipients,
         "ai_provider": schedule.ai_provider,
+        "generate_ai_summary": (
+            schedule.generate_ai_summary
+            if schedule.generate_ai_summary is not None else True
+        ),
         "show_expense_lookahead": (
             schedule.show_expense_lookahead
             if schedule.show_expense_lookahead is not None else True
@@ -814,6 +820,7 @@ async def create_schedule(
         show_expense_lookahead=body.show_expense_lookahead,
         recipients=recipients_data,
         ai_provider=body.ai_provider,
+        generate_ai_summary=body.generate_ai_summary,
         next_run_at=next_run,
     )
     db.add(schedule)
@@ -1053,6 +1060,32 @@ async def delete_report(
     await db.delete(report)
     await db.commit()
     return {"detail": "Report deleted"}
+
+
+class BulkDeleteRequest(BaseModel):
+    report_ids: List[int] = Field(..., min_length=1, max_length=100)
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_reports(
+    body: BulkDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Delete multiple reports at once."""
+    result = await db.execute(
+        select(Report).where(
+            Report.id.in_(body.report_ids),
+            Report.user_id == current_user.id,
+        )
+    )
+    reports = list(result.scalars().all())
+    if not reports:
+        raise HTTPException(status_code=404, detail="No matching reports found")
+    for report in reports:
+        await db.delete(report)
+    await db.commit()
+    return {"deleted": len(reports)}
 
 
 @router.get("/{report_id}/pdf")

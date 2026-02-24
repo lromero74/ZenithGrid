@@ -219,9 +219,12 @@ async def generate_report_for_schedule(
             report_data["prior_period"] = prior_data
 
     # Generate AI summary (returns dict of tiers or None)
-    ai_summary, ai_provider_used = await generate_report_summary(
-        db, user.id, report_data, period_label, schedule.ai_provider
-    )
+    if schedule.generate_ai_summary is not False:
+        ai_summary, ai_provider_used = await generate_report_summary(
+            db, user.id, report_data, period_label, schedule.ai_provider
+        )
+    else:
+        ai_summary, ai_provider_used = None, None
 
     # Build canonical HTML (simple is the default tab for stored report)
     user_name = user.display_name or user.email

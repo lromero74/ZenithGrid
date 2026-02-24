@@ -8,6 +8,7 @@ Returns two tiers (simple, detailed) in a single AI call.
 """
 
 import logging
+import re
 from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,6 +86,8 @@ _SYSTEM_MESSAGE = (
 # Delimiters used to split the AI response into tiers
 _DELIM_SIMPLE = "---SUMMARY---"
 _DELIM_DETAILED = "---DETAILED---"
+# Regex to strip stray delimiter-like artifacts the AI sometimes adds
+_STRAY_DELIM_RE = re.compile(r'---[A-Z_]+---')
 
 
 async def generate_report_summary(
@@ -115,6 +118,7 @@ async def generate_report_summary(
     else:
         providers_to_try = all_providers
 
+    any_client_obtained = False
     for prov in providers_to_try:
         try:
             from app.ai_service import get_ai_client
@@ -127,6 +131,7 @@ async def generate_report_summary(
             logger.warning(f"AI provider {prov} not available: {e}")
             continue
 
+        any_client_obtained = True
         prompt = _build_summary_prompt(report_data, period_label)
 
         try:
@@ -138,6 +143,12 @@ async def generate_report_summary(
             logger.warning(f"AI summary generation failed with {prov}: {e}")
             continue
 
+    if any_client_obtained:
+        logger.warning(
+            f"All AI providers failed for user {user_id} "
+            "(credentials found but calls errored)"
+        )
+        return {"_error": "all_providers_failed"}, None
     logger.info(f"No AI provider available for user {user_id}, skipping summary")
     return None, None
 
@@ -169,9 +180,13 @@ def _parse_tiered_summary(text: str) -> dict:
     after_simple = text.split(_DELIM_SIMPLE, 1)[1]
     simple_text, detailed_text = after_simple.split(_DELIM_DETAILED, 1)
 
+    # Strip stray delimiter artifacts the AI may include (e.g. "---DELIMITER---")
+    simple_clean = _STRAY_DELIM_RE.sub('', simple_text).strip() or None
+    detailed_clean = _STRAY_DELIM_RE.sub('', detailed_text).strip() or None
+
     return {
-        "simple": simple_text.strip() or None,
-        "detailed": detailed_text.strip() or None,
+        "simple": simple_clean,
+        "detailed": detailed_clean,
     }
 
 

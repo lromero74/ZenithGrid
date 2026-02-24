@@ -1569,6 +1569,7 @@ def initialize_database(project_root):
                 is_enabled INTEGER DEFAULT 1,
                 recipients TEXT,
                 ai_provider TEXT,
+                generate_ai_summary INTEGER DEFAULT 1,
                 last_run_at DATETIME,
                 next_run_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

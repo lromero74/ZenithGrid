@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Target, Calendar, FileText, Plus, Pencil, Trash2, Play, Eye, Download,
-  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, Receipt
+  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, Receipt, Square, CheckSquare
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
@@ -51,6 +51,9 @@ export default function Reports() {
   // History pagination
   const [historyPage, setHistoryPage] = useState(0)
   const PAGE_SIZE = 20
+
+  // Multi-select state
+  const [selectedReportIds, setSelectedReportIds] = useState<Set<number>>(new Set())
 
   // ---------- Queries ----------
 
@@ -116,6 +119,14 @@ export default function Reports() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['report-history'] }),
   })
 
+  const bulkDeleteReports = useMutation({
+    mutationFn: (ids: number[]) => reportsApi.bulkDeleteReports(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['report-history'] })
+      setSelectedReportIds(new Set())
+    },
+  })
+
   // ---------- Handlers ----------
 
   const handleViewReport = useCallback(async (reportId: number) => {
@@ -138,6 +149,41 @@ export default function Reports() {
       deleteReport.mutate(reportId)
     }
   }, [deleteReport, confirm])
+
+  const toggleReportSelection = useCallback((id: number) => {
+    setSelectedReportIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleSelectAll = useCallback(() => {
+    const pageIds = historyData?.reports.map(r => r.id) || []
+    const allSelected = pageIds.length > 0 && pageIds.every(id => selectedReportIds.has(id))
+    if (allSelected) {
+      setSelectedReportIds(new Set())
+    } else {
+      setSelectedReportIds(new Set(pageIds))
+    }
+  }, [historyData, selectedReportIds])
+
+  const handleBulkDelete = useCallback(async () => {
+    const count = selectedReportIds.size
+    if (count === 0) return
+    if (await confirm({
+      title: `Delete ${count} Report${count > 1 ? 's' : ''}`,
+      message: `Delete ${count} selected report${count > 1 ? 's' : ''}? This cannot be undone.`,
+      variant: 'danger',
+      confirmLabel: 'Delete',
+    })) {
+      bulkDeleteReports.mutate([...selectedReportIds])
+    }
+  }, [selectedReportIds, confirm, bulkDeleteReports])
+
+  // Clear selection on page change
+  useEffect(() => { setSelectedReportIds(new Set()) }, [historyPage])
 
   // ---------- Render Helpers ----------
 
@@ -431,11 +477,40 @@ export default function Reports() {
           </div>
         ) : (
           <>
+            {/* Bulk action bar */}
+            {selectedReportIds.size > 0 && (
+              <div className="flex items-center gap-3 mb-3 p-2 bg-slate-800 rounded-lg border border-slate-700">
+                <span className="text-sm text-slate-300">
+                  {selectedReportIds.size} selected
+                </span>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleteReports.isPending}
+                  className="text-red-400 hover:text-red-300 text-sm font-medium disabled:opacity-50"
+                >
+                  {bulkDeleteReports.isPending ? 'Deleting...' : 'Delete Selected'}
+                </button>
+                <button
+                  onClick={() => setSelectedReportIds(new Set())}
+                  className="text-slate-400 hover:text-slate-300 text-sm ml-auto"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
             {/* Desktop table */}
             <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
+                    <th className="py-2 px-2 w-8">
+                      <button onClick={toggleSelectAll} className="text-slate-400 hover:text-white transition-colors">
+                        {reports.length > 0 && reports.every(r => selectedReportIds.has(r.id))
+                          ? <CheckSquare className="w-4 h-4 text-blue-400" />
+                          : <Square className="w-4 h-4" />}
+                      </button>
+                    </th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Report</th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Period</th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-slate-400">Status</th>
@@ -445,7 +520,14 @@ export default function Reports() {
                 </thead>
                 <tbody>
                   {reports.map(report => (
-                    <tr key={report.id} className="border-b border-slate-700/50 hover:bg-slate-800/50">
+                    <tr key={report.id} className={`border-b border-slate-700/50 hover:bg-slate-800/50 ${selectedReportIds.has(report.id) ? 'bg-slate-800/70' : ''}`}>
+                      <td className="py-2.5 px-2">
+                        <button onClick={() => toggleReportSelection(report.id)} className="text-slate-400 hover:text-white transition-colors">
+                          {selectedReportIds.has(report.id)
+                            ? <CheckSquare className="w-4 h-4 text-blue-400" />
+                            : <Square className="w-4 h-4" />}
+                        </button>
+                      </td>
                       <td className="py-2.5 px-3">
                         <div className="text-sm text-slate-200">{report.schedule_name || report.periodicity}</div>
                         <div className="text-xs text-slate-500">{report.periodicity}</div>
@@ -491,15 +573,22 @@ export default function Reports() {
             {/* Mobile cards */}
             <div className="sm:hidden space-y-2">
               {reports.map(report => (
-                <div key={report.id} className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+                <div key={report.id} className={`bg-slate-800 border rounded-lg p-3 ${selectedReportIds.has(report.id) ? 'border-blue-500/50' : 'border-slate-700'}`}>
                   <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm text-white">
-                        {formatDate(report.period_start)} — {formatDate(report.period_end)}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-slate-400 capitalize">{report.periodicity}</span>
-                        {getStatusBadge(report.delivery_status)}
+                    <div className="flex items-start gap-2">
+                      <button onClick={() => toggleReportSelection(report.id)} className="mt-0.5 text-slate-400 hover:text-white transition-colors">
+                        {selectedReportIds.has(report.id)
+                          ? <CheckSquare className="w-4 h-4 text-blue-400" />
+                          : <Square className="w-4 h-4" />}
+                      </button>
+                      <div>
+                        <p className="text-sm text-white">
+                          {formatDate(report.period_start)} — {formatDate(report.period_end)}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-slate-400 capitalize">{report.periodicity}</span>
+                          {getStatusBadge(report.delivery_status)}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">

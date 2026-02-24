@@ -25,6 +25,7 @@ export interface ScheduleFormData {
   account_id?: number | null
   recipients: string[]
   ai_provider?: string | null
+  generate_ai_summary: boolean
   goal_ids: number[]
   is_enabled: boolean
   show_expense_lookahead: boolean
@@ -101,6 +102,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
   const [recipients, setRecipients] = useState<string[]>([])
   const [newRecipient, setNewRecipient] = useState('')
   const [aiProvider, setAiProvider] = useState('')
+  const [generateAiSummary, setGenerateAiSummary] = useState(true)
   const [selectedGoalIds, setSelectedGoalIds] = useState<number[]>([])
   const [isEnabled, setIsEnabled] = useState(true)
   const [showExpenseLookahead, setShowExpenseLookahead] = useState(true)
@@ -117,6 +119,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setForceStandardDays(initialData.force_standard_days || [])
       setRecipients(normalizeRecipients(initialData.recipients as unknown[]))
       setAiProvider(initialData.ai_provider || '')
+      setGenerateAiSummary(initialData.generate_ai_summary ?? true)
       setSelectedGoalIds(initialData.goal_ids || [])
       setIsEnabled(initialData.is_enabled)
       setShowExpenseLookahead(initialData.show_expense_lookahead ?? true)
@@ -151,6 +154,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setRecipients([])
       setNewRecipient('')
       setAiProvider('')
+      setGenerateAiSummary(true)
       setSelectedGoalIds([])
       setIsEnabled(true)
       setShowExpenseLookahead(true)
@@ -307,6 +311,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
         force_standard_days: forceStandardDays.length > 0 ? forceStandardDays : null,
         recipients,
         ai_provider: aiProvider || null,
+        generate_ai_summary: generateAiSummary,
         goal_ids: selectedGoalIds,
         is_enabled: isEnabled,
         show_expense_lookahead: showExpenseLookahead,
@@ -570,19 +575,83 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
             )}
           </div>
 
-          {/* AI Provider */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">AI Provider</label>
-            <select
-              value={aiProvider}
-              onChange={e => setAiProvider(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-            >
-              {AI_PROVIDERS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+          {/* Toggle switches */}
+          <div className="space-y-3">
+            {/* Enabled */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-300">Enabled (auto-generate on schedule)</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isEnabled}
+                onClick={() => setIsEnabled(!isEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  isEnabled ? 'bg-blue-600' : 'bg-slate-600'
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                  isEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+
+            {/* AI-Powered Insights */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-300">AI-Powered Insights</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={generateAiSummary}
+                onClick={() => setGenerateAiSummary(!generateAiSummary)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  generateAiSummary ? 'bg-blue-600' : 'bg-slate-600'
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                  generateAiSummary ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+
+            {/* Expense Lookahead — only when expense goals are selected */}
+            {goals.some(g => selectedGoalIds.includes(g.id) && g.target_type === 'expenses') && (
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm text-slate-300">Next-period expense preview</span>
+                  <span className="text-xs text-slate-500 ml-1">(upcoming bills)</span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showExpenseLookahead}
+                  onClick={() => setShowExpenseLookahead(!showExpenseLookahead)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                    showExpenseLookahead ? 'bg-blue-600' : 'bg-slate-600'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                    showExpenseLookahead ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* AI Provider — only visible when AI insights enabled */}
+          {generateAiSummary && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">AI Provider</label>
+              <select
+                value={aiProvider}
+                onChange={e => setAiProvider(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              >
+                {AI_PROVIDERS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Email Recipients */}
           <div>
@@ -646,33 +715,6 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
                 ))}
               </div>
             </div>
-          )}
-
-          {/* Enabled Toggle */}
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isEnabled}
-              onChange={e => setIsEnabled(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500"
-            />
-            <span className="text-sm text-slate-300">Enabled (auto-generate on schedule)</span>
-          </label>
-
-          {/* Expense Lookahead Toggle — only when expense goals are selected */}
-          {goals.some(g => selectedGoalIds.includes(g.id) && g.target_type === 'expenses') && (
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showExpenseLookahead}
-                onChange={e => setShowExpenseLookahead(e.target.checked)}
-                className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500"
-              />
-              <span className="text-sm text-slate-300">
-                Show next-period expense preview
-              </span>
-              <span className="text-xs text-slate-500 ml-1">(upcoming bills from early next period)</span>
-            </label>
           )}
 
           <div className="flex justify-end space-x-3 pt-2">
