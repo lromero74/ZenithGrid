@@ -20,6 +20,9 @@ from app.services.brand_service import get_brand
 
 logger = logging.getLogger(__name__)
 
+# Number of days into the next period to show in the expense lookahead
+LOOKAHEAD_DAYS = 15
+
 
 def _fmt_coverage_pct(pct: float) -> str:
     """Format expense coverage percentage with adaptive precision.
@@ -171,9 +174,11 @@ def build_report_html(
     all_goals = report_data.get("goals", [])
     expense_goals = [g for g in all_goals if g.get("target_type") == "expenses"]
     other_goals = [g for g in all_goals if g.get("target_type") != "expenses"]
+    schedule_meta = report_data.get("_schedule_meta")
     expense_goals_html = _build_goals_section(
         expense_goals, brand_color, email_mode=email_mode,
         section_title="Expense Coverage",
+        schedule_meta=schedule_meta,
     )
     goals_html = _build_goals_section(
         other_goals, brand_color, email_mode=email_mode,
@@ -577,6 +582,7 @@ def _build_goals_section(
     goals: List[Dict[str, Any]], brand_color: str = "#3b82f6",
     email_mode: bool = False,
     section_title: str = "Goal Progress",
+    schedule_meta: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Goal progress bars with optional trend charts."""
     if not goals:
@@ -587,7 +593,9 @@ def _build_goals_section(
         if g.get("target_type") == "income":
             goal_rows += _build_income_goal_card(g)
         elif g.get("target_type") == "expenses":
-            goal_rows += _build_expenses_goal_card(g, email_mode=email_mode)
+            goal_rows += _build_expenses_goal_card(
+                g, email_mode=email_mode, schedule_meta=schedule_meta,
+            )
         else:
             goal_rows += _build_standard_goal_card(g, brand_color)
 
@@ -854,6 +862,119 @@ def _get_upcoming_items(items: list, now: datetime) -> List:
     return upcoming
 
 
+def _get_lookahead_items(
+    items: list, now: datetime, period_window: str,
+) -> List:
+    """Return expense items due in the first LOOKAHEAD_DAYS of the next period.
+
+    Only applicable for xTD windows (mtd, wtd, qtd, ytd).
+    Returns list of (sort_key, item_copy) tuples where item_copy includes
+    '_lookahead_due_date' for correct date label rendering.
+    """
+    import calendar
+    from dateutil.relativedelta import relativedelta
+
+    if period_window not in ("mtd", "wtd", "qtd", "ytd"):
+        return []
+
+    # Compute next period start and lookahead end
+    today_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if period_window == "mtd":
+        if now.month == 12:
+            next_start = today_date.replace(year=now.year + 1, month=1, day=1)
+        else:
+            next_start = today_date.replace(month=now.month + 1, day=1)
+    elif period_window == "wtd":
+        days_until_monday = (7 - now.weekday()) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_start = today_date + timedelta(days=days_until_monday)
+    elif period_window == "qtd":
+        q_month = ((now.month - 1) // 3) * 3 + 1
+        q_start = today_date.replace(month=q_month, day=1)
+        next_start = q_start + relativedelta(months=3)
+    elif period_window == "ytd":
+        next_start = today_date.replace(year=now.year + 1, month=1, day=1)
+    else:
+        return []
+
+    lookahead_end = next_start + timedelta(days=LOOKAHEAD_DAYS)
+
+    _MULTI_MONTH_FREQS = {"quarterly", "semi_annual", "yearly"}
+    _WEEKLY_FREQS = {"weekly", "biweekly"}
+
+    upcoming = []
+    for item in items:
+        dd = item.get("due_day")
+        freq = item.get("frequency", "monthly")
+        anchor = item.get("frequency_anchor")
+
+        # every_n_days: compute next occurrence from next_start onwards
+        if freq == "every_n_days" and anchor and item.get("frequency_n"):
+            next_dt = _next_every_n_days_date(
+                anchor, item["frequency_n"], next_start
+            )
+            if next_start <= next_dt < lookahead_end:
+                days_from_start = (next_dt - next_start).days
+                item_copy = dict(item)
+                item_copy["_lookahead_due_date"] = next_dt
+                upcoming.append((days_from_start, item_copy))
+            continue
+
+        if dd is None:
+            continue
+
+        dm = item.get("due_month")
+
+        if freq in _WEEKLY_FREQS:
+            if freq == "biweekly" and anchor:
+                next_dt = _next_biweekly_date(anchor, dd, next_start)
+            else:
+                days_until = (dd - next_start.weekday()) % 7
+                next_dt = next_start + timedelta(days=days_until)
+            if next_start <= next_dt < lookahead_end:
+                days_from_start = (next_dt - next_start).days
+                item_copy = dict(item)
+                item_copy["_lookahead_due_date"] = next_dt
+                upcoming.append((days_from_start, item_copy))
+            continue
+
+        # Monthly and multi-month frequencies
+        check_month = next_start.month
+        check_year = next_start.year
+
+        if freq in _MULTI_MONTH_FREQS and dm is not None:
+            if freq == "yearly" and check_month != dm:
+                continue
+            elif freq == "semi_annual":
+                if check_month not in (dm, ((dm + 5) % 12) + 1):
+                    continue
+            elif freq == "quarterly":
+                quarter_months = {
+                    ((dm - 1 + 3 * i) % 12) + 1 for i in range(4)
+                }
+                if check_month not in quarter_months:
+                    continue
+
+        last_day = calendar.monthrange(check_year, check_month)[1]
+        resolved = last_day if dd == -1 else min(dd, last_day)
+
+        try:
+            due_date = next_start.replace(day=resolved)
+        except ValueError:
+            continue
+
+        if next_start <= due_date < lookahead_end:
+            days_from_start = (due_date - next_start).days
+            item_copy = dict(item)
+            item_copy["_lookahead_due_date"] = due_date
+            upcoming.append((days_from_start, item_copy))
+
+    upcoming.sort(key=lambda x: x[0])
+    return upcoming
+
+
 def _format_due_label(item: dict, now: Optional[datetime] = None) -> str:
     """Format a human-readable due label for an expense item."""
     freq = item.get("frequency", "monthly")
@@ -923,7 +1044,10 @@ def _expense_name_html(item: dict, color: str = "#f1f5f9") -> str:
     return name
 
 
-def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> str:
+def _build_expenses_goal_card(
+    g: Dict[str, Any], email_mode: bool = False,
+    schedule_meta: Optional[Dict[str, Any]] = None,
+) -> str:
     """Expenses goal card with Coverage + Upcoming tabs."""
     from datetime import datetime as _dt
 
@@ -1103,6 +1227,60 @@ def _build_expenses_goal_card(g: Dict[str, Any], email_mode: bool = False) -> st
                 </tr>
                 {upcoming_rows}
             </table>"""
+
+    # ---- Lookahead section (next period preview) ----
+    meta = schedule_meta or {}
+    pw = meta.get("period_window", "full_prior")
+    show_lookahead = meta.get("show_expense_lookahead", True)
+
+    is_xtd = pw in ("mtd", "wtd", "qtd", "ytd")
+    if show_lookahead and is_xtd and items:
+        lookahead_raw = _get_lookahead_items(items, now, pw)
+        if lookahead_raw:
+            _period_labels = {
+                "mtd": "Next Month",
+                "wtd": "Next Week",
+                "qtd": "Next Quarter",
+                "ytd": "Next Year",
+            }
+            la_label = _period_labels.get(pw, "Next Period")
+
+            lookahead_rows = ""
+            for _, la_item in lookahead_raw:
+                bill_amount = la_item.get("amount", 0)
+                due_date = la_item.get("_lookahead_due_date")
+                if due_date:
+                    due_label = (
+                        f"{_MONTH_ABBREVS[due_date.month - 1]} "
+                        f"{_ordinal_day(due_date.day)}"
+                    )
+                else:
+                    due_label = _format_due_label(la_item, now=now)
+                lookahead_rows += f"""
+                    <tr style="opacity: 0.5;">
+                        <td style="padding: 4px 0; color: #94a3b8; font-size: 12px;
+                                   font-weight: 600;">{due_label}</td>
+                        <td style="padding: 4px 0; color: #64748b; font-size: 11px;">
+                            {la_item.get('category', '')}</td>
+                        <td style="padding: 4px 0; color: #94a3b8; font-size: 12px;">
+                            {_expense_name_html(la_item, color="#94a3b8")}</td>
+                        <td style="padding: 4px 0; color: #94a3b8; text-align: right;
+                                   font-size: 12px;">
+                            {prefix}{bill_amount:{fmt}}</td>
+                        <td style="padding: 4px 6px; text-align: center;">
+                            {_build_expense_status_badge(la_item)}</td>
+                    </tr>"""
+            upcoming_content += f"""
+                <div style="margin-top: 12px; padding-top: 8px;
+                            border-top: 1px dashed #334155;">
+                    <p style="color: #475569; font-size: 10px; font-weight: 600;
+                              text-transform: uppercase; letter-spacing: 0.5px;
+                              margin: 0 0 6px 0;">
+                        {la_label} Preview</p>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        {lookahead_rows}
+                    </table>
+                </div>"""
 
     # ---- Projection section (parallels income goal projections) ----
     projection_content = ""
@@ -1848,6 +2026,50 @@ def generate_pdf(
                             f"{pfx}{_amt:,.2f}",
                             new_x="LMARGIN", new_y="NEXT",
                         )
+                # Lookahead items for PDF
+                _meta = report_data.get("_schedule_meta", {})
+                _pw = _meta.get("period_window", "full_prior")
+                _show_la = _meta.get("show_expense_lookahead", True)
+                if _show_la and _pw in ("mtd", "wtd", "qtd", "ytd"):
+                    _lookahead = _get_lookahead_items(
+                        coverage.get("items", []), _now, _pw,
+                    )
+                    if _lookahead:
+                        _la_labels = {
+                            "mtd": "Next Month",
+                            "wtd": "Next Week",
+                            "qtd": "Next Quarter",
+                            "ytd": "Next Year",
+                        }
+                        pdf.set_font("Helvetica", "B", 9)
+                        pdf.set_text_color(150, 150, 150)
+                        pdf.cell(
+                            0, 6,
+                            f"{_la_labels.get(_pw, 'Next Period')} Preview:",
+                            new_x="LMARGIN", new_y="NEXT",
+                        )
+                        pdf.set_font("Helvetica", "", 9)
+                        pdf.set_text_color(150, 150, 150)
+                        for _, _la_ei in _lookahead:
+                            _la_due = _la_ei.get("_lookahead_due_date")
+                            if _la_due:
+                                _la_lbl = (
+                                    f"{_MONTH_ABBREVS[_la_due.month - 1]} "
+                                    f"{_ordinal_day(_la_due.day)}"
+                                )
+                            else:
+                                _la_lbl = _format_due_label(
+                                    _la_ei, now=_now
+                                )
+                            _la_amt = _la_ei.get("amount", 0)
+                            pdf.cell(
+                                0, 5,
+                                f"  {_la_lbl} - "
+                                f"{_la_ei.get('name', '')} "
+                                f"{pfx}{_la_amt:,.2f}",
+                                new_x="LMARGIN", new_y="NEXT",
+                            )
+                        pdf.set_text_color(80, 80, 80)
                 _daily_inc = g.get("current_daily_income", 0)
                 _proj_lin = g.get("projected_income")
                 _proj_cmp = g.get("projected_income_compound")

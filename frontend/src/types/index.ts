@@ -533,6 +533,7 @@ export interface ReportSchedule {
   lookback_value: number | null
   lookback_unit: LookbackUnit | null
   force_standard_days: number[] | null
+  show_expense_lookahead: boolean
   account_id?: number | null
   is_enabled: boolean
   recipients: string[]

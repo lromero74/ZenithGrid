@@ -169,6 +169,21 @@ async def generate_report_for_schedule(
     period_days = (period_end - period_start).days
     report_data["period_days"] = period_days
 
+    # Pass schedule metadata for features that need period context
+    _pw = schedule.period_window or "full_prior"
+    _is_auto_prior = (
+        _pw in ("mtd", "wtd")
+        and _should_auto_prior(schedule, _pw, now)
+    )
+    report_data["_schedule_meta"] = {
+        "period_window": _pw,
+        "show_expense_lookahead": bool(
+            getattr(schedule, "show_expense_lookahead", True)
+        ) and not _is_auto_prior,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+    }
+
     # Fetch trend data for non-income goals (for chart embedding)
     from app.services.goal_snapshot_service import (
         backfill_goal_snapshots,

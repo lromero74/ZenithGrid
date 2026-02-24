@@ -1452,6 +1452,7 @@ class ReportSchedule(Base):
     lookback_value = Column(Integer, nullable=True)  # N for trailing window
     lookback_unit = Column(String, nullable=True)  # days/weeks/months/years for trailing
     force_standard_days = Column(String, nullable=True)  # JSON: days that skip auto-prior wrap-up
+    show_expense_lookahead = Column(Boolean, default=True)
     is_enabled = Column(Boolean, default=True)
     recipients = Column(JSON, nullable=True)  # List of email addresses
     ai_provider = Column(String, nullable=True)  # claude/openai/gemini — null = user's default

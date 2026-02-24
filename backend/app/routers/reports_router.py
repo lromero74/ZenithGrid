@@ -112,6 +112,7 @@ class ScheduleCreate(BaseModel):
     )
     goal_ids: List[int] = Field(default_factory=list)
     is_enabled: bool = True
+    show_expense_lookahead: bool = True
 
     @model_validator(mode="after")
     def validate_schedule_fields(self):
@@ -153,6 +154,7 @@ class ScheduleUpdate(BaseModel):
     ai_provider: Optional[str] = None
     goal_ids: Optional[List[int]] = None
     is_enabled: Optional[bool] = None
+    show_expense_lookahead: Optional[bool] = None
 
 
 class GenerateRequest(BaseModel):
@@ -284,6 +286,10 @@ def _schedule_to_dict(schedule: ReportSchedule) -> dict:
         "is_enabled": schedule.is_enabled,
         "recipients": recipients,
         "ai_provider": schedule.ai_provider,
+        "show_expense_lookahead": (
+            schedule.show_expense_lookahead
+            if schedule.show_expense_lookahead is not None else True
+        ),
         "goal_ids": goal_ids,
         "last_run_at": (
             schedule.last_run_at.isoformat()
@@ -805,6 +811,7 @@ async def create_schedule(
         lookback_unit=body.lookback_unit,
         force_standard_days=force_standard_json,
         is_enabled=body.is_enabled,
+        show_expense_lookahead=body.show_expense_lookahead,
         recipients=recipients_data,
         ai_provider=body.ai_provider,
         next_run_at=next_run,
