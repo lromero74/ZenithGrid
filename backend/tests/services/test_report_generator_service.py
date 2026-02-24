@@ -1801,3 +1801,58 @@ class TestExpenseGoalOrdering:
         html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
         assert "Expense Coverage" in html
         assert "Goal Progress" not in html
+
+
+# ---------------------------------------------------------------------------
+# Account name in report header
+# ---------------------------------------------------------------------------
+
+
+class TestAccountNameInReport:
+    """Tests for account_name display in HTML and PDF reports."""
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_html_header_includes_account_name(self, _mock):
+        """HTML report header should show account name when provided."""
+        html = build_report_html(
+            report_data=_minimal_report_data(),
+            ai_summary=None,
+            user_name="Alice",
+            period_label="Feb 1 - Feb 24, 2026",
+            account_name="Paper Trading",
+        )
+        assert "Paper Trading" in html
+        assert "Prepared for Alice" in html
+
+    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    def test_html_header_without_account_name(self, _mock):
+        """HTML report header should work fine without account name."""
+        html = build_report_html(
+            report_data=_minimal_report_data(),
+            ai_summary=None,
+            user_name="Alice",
+            period_label="Feb 1 - Feb 24, 2026",
+        )
+        assert "Prepared for Alice" in html
+
+    def test_pdf_includes_account_name(self):
+        """PDF should show account name when provided."""
+        data = _minimal_report_data()
+        result = generate_pdf(
+            "<html></html>", report_data=data,
+            schedule_name="Weekly Report",
+            account_name="Live Trading",
+        )
+        assert result is not None
+        assert isinstance(result, bytes)
+        assert len(result) > 100
+
+    def test_pdf_without_account_name(self):
+        """PDF should generate fine without account name."""
+        data = _minimal_report_data()
+        result = generate_pdf(
+            "<html></html>", report_data=data,
+            schedule_name="Weekly Report",
+        )
+        assert result is not None
+        assert isinstance(result, bytes)

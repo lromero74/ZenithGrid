@@ -493,6 +493,7 @@ export interface ReportGoal {
   income_period?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
   expense_period?: 'weekly' | 'monthly' | 'quarterly' | 'yearly' | null
   tax_withholding_pct?: number
+  expense_sort_mode?: 'amount_asc' | 'amount_desc' | 'custom'
   expense_item_count?: number
   time_horizon_months: number
   start_date: string | null
@@ -515,6 +516,7 @@ export interface ExpenseItem {
   due_month?: number | null
   login_url?: string | null
   is_active: boolean
+  sort_order?: number
   normalized_amount?: number
   created_at: string | null
 }

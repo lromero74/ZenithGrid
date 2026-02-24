@@ -1,14 +1,32 @@
 import { useState, useEffect } from 'react'
-import { X, Plus, Pencil, Trash2 } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, GripVertical, ChevronsUp, ChevronsDown } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { reportsApi } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
 import type { ExpenseItem } from '../../types'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface ExpenseItemsEditorProps {
   goalId: number
   expensePeriod: string
   currency: string
+  sortMode: string
   onClose: () => void
 }
 
@@ -57,19 +75,211 @@ function formatDueBadge(item: ExpenseItem): string | null {
   return `Due ${dayPart}`
 }
 
-export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }: ExpenseItemsEditorProps) {
+// Sortable expense row for drag-to-reorder
+function SortableExpenseRow({
+  item, index, total, prefix, periodLabel, isCustom,
+  onEdit, onDelete, onMoveToTop, onMoveToBottom, onMoveTo,
+}: {
+  item: ExpenseItem
+  index: number
+  total: number
+  prefix: string
+  periodLabel: string
+  isCustom: boolean
+  onEdit: (item: ExpenseItem) => void
+  onDelete: (id: number) => void
+  onMoveToTop: (id: number) => void
+  onMoveToBottom: (id: number) => void
+  onMoveTo: (id: number, pos: number) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id, disabled: !isCustom })
+
+  const [moveToInput, setMoveToInput] = useState('')
+  const [showMoveTo, setShowMoveTo] = useState(false)
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  }
+
+  const badge = formatDueBadge(item)
+  const position = index + 1
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 p-3 bg-slate-700/50 rounded-lg border border-slate-600 ${
+        isDragging ? 'ring-2 ring-blue-500' : ''
+      }`}
+    >
+      {/* Drag handle + position number */}
+      {isCustom && (
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 touch-none"
+            title="Drag to reorder"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Position badge */}
+      <span className="text-[10px] font-mono text-slate-500 shrink-0 w-10 text-center"
+        title={`Position ${position} of ${total}`}
+      >
+        #{position}/{total}
+      </span>
+
+      {/* Item details */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
+            {item.category}
+          </span>
+          <span className="font-medium text-white truncate">{item.name}</span>
+        </div>
+        <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+          <span>
+            {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
+          </span>
+          {item.frequency === 'every_n_days' && item.frequency_n && (
+            <span>(every {item.frequency_n} days)</span>
+          )}
+          {badge && (
+            <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
+              {badge}
+            </span>
+          )}
+          <span className="text-slate-500">|</span>
+          <span className="text-blue-400">
+            {prefix}{(item.normalized_amount || 0).toLocaleString(
+              undefined, { maximumFractionDigits: 2 }
+            )}{periodLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-0.5 ml-2 shrink-0">
+        {isCustom && (
+          <>
+            <button
+              onClick={() => onMoveToTop(item.id)}
+              disabled={index === 0}
+              className="p-1 text-slate-500 hover:text-white disabled:opacity-30 transition-colors"
+              title="Move to top"
+            >
+              <ChevronsUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onMoveToBottom(item.id)}
+              disabled={index === total - 1}
+              className="p-1 text-slate-500 hover:text-white disabled:opacity-30 transition-colors"
+              title="Move to bottom"
+            >
+              <ChevronsDown className="w-3.5 h-3.5" />
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowMoveTo(!showMoveTo)}
+                className="p-1 text-slate-500 hover:text-white transition-colors text-[10px] font-mono"
+                title="Move to position..."
+              >
+                #
+              </button>
+              {showMoveTo && (
+                <div className="absolute right-0 top-full mt-1 z-20 bg-slate-700 border border-slate-600
+                  rounded p-1.5 flex items-center gap-1 shadow-lg">
+                  <input
+                    type="number"
+                    min="1"
+                    max={total}
+                    step="1"
+                    value={moveToInput}
+                    onChange={e => {
+                      const v = e.target.value.replace(/[^0-9]/g, '')
+                      setMoveToInput(v)
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && moveToInput) {
+                        onMoveTo(item.id, parseInt(moveToInput))
+                        setShowMoveTo(false)
+                        setMoveToInput('')
+                      } else if (e.key === 'Escape') {
+                        setShowMoveTo(false)
+                        setMoveToInput('')
+                      }
+                    }}
+                    placeholder={`1-${total}`}
+                    autoFocus
+                    className="w-14 px-1.5 py-0.5 bg-slate-800 border border-slate-500 rounded text-xs
+                      text-white focus:outline-none focus:border-blue-500 placeholder-slate-500"
+                  />
+                  <button
+                    onClick={() => {
+                      if (moveToInput) {
+                        onMoveTo(item.id, parseInt(moveToInput))
+                        setShowMoveTo(false)
+                        setMoveToInput('')
+                      }
+                    }}
+                    className="px-1.5 py-0.5 bg-blue-600 text-white text-[10px] rounded hover:bg-blue-700"
+                  >
+                    Go
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        <button
+          onClick={() => onEdit(item)}
+          className="p-1.5 text-slate-400 hover:text-white transition-colors"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => onDelete(item.id)}
+          className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function ExpenseItemsEditor({ goalId, expensePeriod, currency, sortMode, onClose }: ExpenseItemsEditorProps) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const prefix = currency === 'BTC' ? '' : '$'
   const periodLabel = expensePeriod === 'weekly' ? '/wk' :
     expensePeriod === 'quarterly' ? '/qtr' :
     expensePeriod === 'yearly' ? '/yr' : '/mo'
+  const isCustom = sortMode === 'custom'
 
   // Fetch items
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['expense-items', goalId],
     queryFn: () => reportsApi.getExpenseItems(goalId),
   })
+
+  // Local ordered list for optimistic drag reorder
+  const [localItems, setLocalItems] = useState<ExpenseItem[]>([])
+  useEffect(() => { setLocalItems(items) }, [items])
 
   // Fetch categories
   const { data: categories = [] } = useQuery({
@@ -169,6 +379,51 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     mutationFn: (id: number) => reportsApi.deleteExpenseItem(goalId, id),
     onSuccess: invalidate,
   })
+  const reorderItems = useMutation({
+    mutationFn: (itemIds: number[]) => reportsApi.reorderExpenseItems(goalId, itemIds),
+    onSuccess: invalidate,
+  })
+
+  // Persist a new order (optimistic local update + API call)
+  const persistOrder = (newItems: ExpenseItem[]) => {
+    setLocalItems(newItems)
+    reorderItems.mutate(newItems.map(i => i.id))
+  }
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = localItems.findIndex(i => i.id === active.id)
+    const newIndex = localItems.findIndex(i => i.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    persistOrder(arrayMove(localItems, oldIndex, newIndex))
+  }
+
+  const handleMoveToTop = (id: number) => {
+    const idx = localItems.findIndex(i => i.id === id)
+    if (idx <= 0) return
+    persistOrder(arrayMove(localItems, idx, 0))
+  }
+
+  const handleMoveToBottom = (id: number) => {
+    const idx = localItems.findIndex(i => i.id === id)
+    if (idx === -1 || idx >= localItems.length - 1) return
+    persistOrder(arrayMove(localItems, idx, localItems.length - 1))
+  }
+
+  const handleMoveTo = (id: number, position: number) => {
+    const idx = localItems.findIndex(i => i.id === id)
+    if (idx === -1) return
+    const target = Math.max(0, Math.min(position - 1, localItems.length - 1))
+    if (target === idx) return
+    persistOrder(arrayMove(localItems, idx, target))
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -208,7 +463,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     }
   }
 
-  const totalNormalized = items.reduce((sum, i) => sum + (i.normalized_amount || 0), 0)
+  const displayItems = localItems
+  const totalNormalized = displayItems.reduce((sum, i) => sum + (i.normalized_amount || 0), 0)
 
   const pillBase = 'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors'
   const pillActive = 'bg-blue-600 border-blue-500 text-white'
@@ -424,12 +680,41 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     </form>
   )
 
+  const itemsList = (
+    <div className="space-y-2">
+      {displayItems.map((item, index) => (
+        <SortableExpenseRow
+          key={item.id}
+          item={item}
+          index={index}
+          total={displayItems.length}
+          prefix={prefix}
+          periodLabel={periodLabel}
+          isCustom={isCustom}
+          onEdit={setEditing}
+          onDelete={async (id) => {
+            if (await confirm({ title: 'Delete Expense', message: 'Delete this expense?', variant: 'danger', confirmLabel: 'Delete' }))
+              deleteItem.mutate(id)
+          }}
+          onMoveToTop={handleMoveToTop}
+          onMoveToBottom={handleMoveToBottom}
+          onMoveTo={handleMoveTo}
+        />
+      ))}
+    </div>
+  )
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="w-full max-w-2xl bg-slate-800 rounded-lg shadow-2xl border border-slate-700 max-h-[85vh]
         flex flex-col relative">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white">Manage Expenses</h3>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Manage Expenses</h3>
+            {isCustom && displayItems.length > 1 && (
+              <p className="text-xs text-slate-500 mt-0.5">Drag to reorder or use controls to set priority</p>
+            )}
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -439,67 +724,29 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
           {/* Item list */}
           {isLoading ? (
             <div className="text-center py-4 text-slate-400">Loading...</div>
-          ) : items.length === 0 ? (
+          ) : displayItems.length === 0 ? (
             <div className="text-center py-6 text-slate-500">
               No expense items yet. Add your first expense below.
             </div>
+          ) : isCustom ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={displayItems.map(i => i.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {itemsList}
+              </SortableContext>
+            </DndContext>
           ) : (
-            <div className="space-y-2">
-              {items.map(item => {
-                const badge = formatDueBadge(item)
-                return (
-                  <div key={item.id}
-                    className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg border
-                      border-slate-600">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-0.5 rounded bg-slate-600 text-slate-300">
-                          {item.category}
-                        </span>
-                        <span className="font-medium text-white truncate">{item.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-                        <span>
-                          {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
-                        </span>
-                        {item.frequency === 'every_n_days' && item.frequency_n && (
-                          <span>(every {item.frequency_n} days)</span>
-                        )}
-                        {badge && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
-                            {badge}
-                          </span>
-                        )}
-                        <span className="text-slate-500">|</span>
-                        <span className="text-blue-400">
-                          {prefix}{(item.normalized_amount || 0).toLocaleString(
-                            undefined, { maximumFractionDigits: 2 }
-                          )}{periodLabel}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 ml-2">
-                      <button
-                        onClick={() => setEditing(item)}
-                        className="p-1.5 text-slate-400 hover:text-white transition-colors"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={async () => { if (await confirm({ title: 'Delete Expense', message: 'Delete this expense?', variant: 'danger', confirmLabel: 'Delete' })) deleteItem.mutate(item.id) }}
-                        className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            itemsList
           )}
 
           {/* Total */}
-          {items.length > 0 && (
+          {displayItems.length > 0 && (
             <div className="flex justify-between items-center px-3 py-2 bg-slate-700 rounded-lg">
               <span className="text-sm text-slate-300 font-medium">Total ({expensePeriod})</span>
               <span className="text-sm text-white font-semibold">

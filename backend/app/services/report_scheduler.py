@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import async_session_maker
 from app.models import (
+    Account,
     GoalProgressSnapshot,
     Report,
     ReportGoal,
@@ -228,11 +229,23 @@ async def generate_report_for_schedule(
 
     # Build canonical HTML (simple is the default tab for stored report)
     user_name = user.display_name or user.email
+
+    # Fetch account name for display in report header
+    account_name = None
+    if schedule.account_id:
+        acct_result = await db.execute(
+            select(Account).where(Account.id == schedule.account_id)
+        )
+        acct = acct_result.scalar_one_or_none()
+        if acct:
+            account_name = acct.name
+
     sched_name = schedule.name if schedule else None
     html_content = build_report_html(
         report_data, ai_summary, user_name, period_label,
         default_level="simple",
         schedule_name=sched_name,
+        account_name=account_name,
     )
 
     # Generate PDF (includes all three tiers with no emphasis)
@@ -241,6 +254,7 @@ async def generate_report_for_schedule(
         pdf_data["_ai_summary"] = ai_summary
     pdf_content = generate_pdf(
         html_content, report_data=pdf_data, schedule_name=sched_name,
+        account_name=account_name,
     )
 
     # Store ai_summary as JSON string for the DB
@@ -277,6 +291,7 @@ async def generate_report_for_schedule(
         email_sent = await _deliver_report(
             report, recipients, ai_summary, report_data, user_name,
             period_label, pdf_content, schedule_name=sched_name,
+            account_name=account_name,
         )
         if email_sent:
             report.delivery_status = "sent"
@@ -314,6 +329,7 @@ async def _deliver_report(
     period_label: str,
     pdf_content: Optional[bytes],
     schedule_name: Optional[str] = None,
+    account_name: Optional[str] = None,
 ) -> bool:
     """
     Send the report email to all recipients.
@@ -357,6 +373,7 @@ async def _deliver_report(
         default_level="simple",
         schedule_name=schedule_name,
         email_mode=True,
+        account_name=account_name,
     )
 
     any_sent = False

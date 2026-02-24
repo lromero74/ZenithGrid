@@ -29,6 +29,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Scheduled Email Reports**: Automated daily, weekly, monthly, quarterly, and yearly reports with xTD period summaries
 - **Financial Goals**: Set USD or BTC targets with deadlines, tracked via daily snapshots and trend analysis
 - **AI-Powered Insights**: Multi-provider AI analysis in email reports (Claude, GPT, Gemini, Grok, Groq)
+- **Expense Coverage Waterfall**: Three sort modes (smallest-first, largest-first, custom drag-to-reorder) for prioritizing expense coverage
 - **Expense Goal Lookahead**: Next-period preview to project whether goals are on track
 - **Account-Scoped Reports**: Filter reports by paper trading vs live accounts
 - **Email Delivery**: Automated delivery via AWS SES

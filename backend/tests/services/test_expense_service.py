@@ -309,6 +309,100 @@ class TestComputeExpenseCoverageDueDay:
         assert result["items"][0]["login_url"] is None
 
 
+class TestCoverageSortModes:
+    """Test the sort_mode parameter for coverage waterfall ordering."""
+
+    def test_coverage_amount_asc_is_default(self):
+        """Default sort puts smallest expenses first."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Rent", 1500, "monthly"),
+            _mock_item("Netflix", 15, "monthly"),
+            _mock_item("Gym", 50, "monthly"),
+        ]
+        result = compute_expense_coverage(items, "monthly", 5000.0, 0.0)
+        names = [i["name"] for i in result["items"]]
+        assert names == ["Netflix", "Gym", "Rent"]
+
+    def test_coverage_amount_desc_reverses_order(self):
+        """amount_desc puts largest expenses first."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Netflix", 15, "monthly"),
+            _mock_item("Gym", 50, "monthly"),
+            _mock_item("Rent", 1500, "monthly"),
+        ]
+        result = compute_expense_coverage(
+            items, "monthly", 5000.0, 0.0, sort_mode="amount_desc"
+        )
+        names = [i["name"] for i in result["items"]]
+        assert names == ["Rent", "Gym", "Netflix"]
+
+    def test_coverage_amount_desc_partial_coverage(self):
+        """With desc sort and limited income, the largest item gets covered first."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Netflix", 15, "monthly"),
+            _mock_item("Gym", 50, "monthly"),
+            _mock_item("Rent", 1500, "monthly"),
+        ]
+        # $1540 covers Rent (1500) + partial Gym (50), Netflix uncovered
+        result = compute_expense_coverage(
+            items, "monthly", 1540.0, 0.0, sort_mode="amount_desc"
+        )
+        rent = result["items"][0]
+        gym = result["items"][1]
+        netflix = result["items"][2]
+        assert rent["status"] == "covered"
+        assert gym["status"] == "partial"
+        assert gym["coverage_pct"] == pytest.approx(80.0)  # 40/50
+        assert netflix["status"] == "uncovered"
+
+    def test_coverage_custom_uses_sort_order(self):
+        """Custom mode sorts by sort_order field."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Rent", 1500, "monthly", sort_order=2),
+            _mock_item("Netflix", 15, "monthly", sort_order=0),
+            _mock_item("Gym", 50, "monthly", sort_order=1),
+        ]
+        result = compute_expense_coverage(
+            items, "monthly", 5000.0, 0.0, sort_mode="custom"
+        )
+        names = [i["name"] for i in result["items"]]
+        assert names == ["Netflix", "Gym", "Rent"]
+
+    def test_coverage_custom_partial_respects_order(self):
+        """Custom order determines which items get covered first."""
+        from app.services.expense_service import compute_expense_coverage
+        # Custom order: Rent first, then Netflix, then Gym
+        items = [
+            _mock_item("Rent", 1500, "monthly", sort_order=0),
+            _mock_item("Netflix", 15, "monthly", sort_order=1),
+            _mock_item("Gym", 50, "monthly", sort_order=2),
+        ]
+        # $1520 covers Rent + Netflix, partial Gym
+        result = compute_expense_coverage(
+            items, "monthly", 1520.0, 0.0, sort_mode="custom"
+        )
+        rent = result["items"][0]
+        netflix = result["items"][1]
+        gym = result["items"][2]
+        assert rent["name"] == "Rent"
+        assert rent["status"] == "covered"
+        assert netflix["name"] == "Netflix"
+        assert netflix["status"] == "covered"
+        assert gym["name"] == "Gym"
+        assert gym["status"] == "partial"
+
+    def test_sort_order_included_in_output(self):
+        """sort_order field should be in the output items."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Netflix", 15, "monthly", sort_order=5)]
+        result = compute_expense_coverage(items, "monthly", 100.0, 0.0)
+        assert result["items"][0]["sort_order"] == 5
+
+
 class TestDefaultExpenseCategories:
     """Verify the default category list."""
 
@@ -324,7 +418,8 @@ class TestDefaultExpenseCategories:
 
 def _mock_item(name: str, amount: float, frequency: str,
                frequency_n: int = None, due_day: int = None,
-               due_month: int = None, login_url: str = None):
+               due_month: int = None, login_url: str = None,
+               sort_order: int = 0):
     """Create a mock expense item for testing."""
     item = MagicMock()
     item.name = name
@@ -336,4 +431,5 @@ def _mock_item(name: str, amount: float, frequency: str,
     item.due_month = due_month
     item.login_url = login_url
     item.is_active = True
+    item.sort_order = sort_order
     return item

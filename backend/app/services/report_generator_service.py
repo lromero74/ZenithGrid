@@ -148,6 +148,7 @@ def build_report_html(
     default_level: str = "simple",
     schedule_name: Optional[str] = None,
     email_mode: bool = False,
+    account_name: Optional[str] = None,
 ) -> str:
     """
     Build the full HTML report.
@@ -218,7 +219,7 @@ def build_report_html(
 <body style="margin: 0; padding: 0; background-color: #0f172a; color: #e2e8f0;
              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
 <div style="max-width: 700px; margin: 0 auto; padding: 20px;">
-    {_report_header(b, user_name, period_label, brand_color, schedule_name)}
+    {_report_header(b, user_name, period_label, brand_color, schedule_name, account_name)}
     {metrics_html}
     {transfers_html}
     {expense_goals_html}
@@ -353,10 +354,13 @@ def _render_single_ai_section(text: str, label: str, brand_color: str) -> str:
 
 def _report_header(
     brand: dict, user_name: str, period_label: str, brand_color: str,
-    schedule_name: Optional[str] = None,
+    schedule_name: Optional[str] = None, account_name: Optional[str] = None,
 ) -> str:
-    """Report header with brand name, report title, and period."""
+    """Report header with brand name, report title, account, and period."""
     title = schedule_name or "Performance Report"
+    prepared_for = user_name
+    if account_name:
+        prepared_for += f" &mdash; {account_name}"
     return f"""
     <div style="text-align: center; padding: 25px 0; border-bottom: 1px solid #334155;">
         <h1 style="color: {brand_color}; margin: 0; font-size: 26px;">{brand['shortName']}</h1>
@@ -367,7 +371,7 @@ def _report_header(
         <h2 style="color: #f1f5f9; margin: 0 0 5px 0; font-size: 20px;">
             {title}</h2>
         <p style="color: #94a3b8; margin: 0; font-size: 14px;">
-            {period_label} &mdash; Prepared for {user_name}</p>
+            {period_label} &mdash; Prepared for {prepared_for}</p>
     </div>"""
 
 
@@ -1730,6 +1734,7 @@ def generate_pdf(
     html_content: str,
     report_data: Optional[Dict] = None,
     schedule_name: Optional[str] = None,
+    account_name: Optional[str] = None,
 ) -> Optional[bytes]:
     """
     Generate a PDF report using fpdf2.
@@ -1773,6 +1778,12 @@ def generate_pdf(
         pdf.cell(0, 10, title, new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(100, 100, 100)
+        if account_name:
+            pdf.cell(
+                0, 6,
+                f"Account: {_sanitize_for_pdf(account_name)}",
+                new_x="LMARGIN", new_y="NEXT",
+            )
         now_str = datetime.utcnow().strftime("%B %d, %Y at %H:%M UTC")
         pdf.cell(0, 6, f"Generated on {now_str}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(8)
