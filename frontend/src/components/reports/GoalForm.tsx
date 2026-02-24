@@ -221,7 +221,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-500 mt-1">All expenses will be normalized to this period</p>
+                <p className="text-xs text-slate-500 mt-1">How often to compare income vs expenses</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Tax Withholding %</label>
@@ -320,7 +320,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Time Horizon</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Goal Deadline</label>
             <div className="flex items-center gap-1 mb-2">
               <button
                 type="button"
@@ -365,6 +365,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData }: GoalFormPro
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
               />
             )}
+            <p className="text-xs text-slate-500 mt-1">When you want to reach this goal by</p>
           </div>
 
           <div className="flex justify-end space-x-3 pt-2">
