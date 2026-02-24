@@ -786,7 +786,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
 
         {/* Form overlay — renders on top of the list */}
         {showForm && (
-          <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center p-6 z-10">
+          <div className="absolute inset-0 bg-black/85 rounded-lg flex items-center justify-center p-6 z-10">
             <div className="w-full max-w-lg">
               {expenseForm}
             </div>
