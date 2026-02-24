@@ -38,13 +38,13 @@
 
 ## Competitive Advantages to Highlight
 1. **AI-powered strategies** - Not just grid bots, actual AI decision-making
-2. **Clean modern UI** - Better than 3Commas' cluttered interface
+2. **Clean modern UI** - Intuitive, streamlined interface design
 3. **Transparent reasoning** - See exactly why AI made each decision
 4. **Self-hostable option** - For privacy-conscious traders
-5. **Post-3Commas-breach market** - Trust is low, opportunity is high
+5. **Growing demand for self-hosted, transparent solutions** - Trust in SaaS platforms is low, opportunity is high
 
 ## Pricing Research (Competitors)
-- 3Commas: $29-99/month
+- Leading SaaS platforms: $29-99/month
 - Pionex: Free (exchange-integrated)
 - Cryptohopper: $19-99/month
 - Bitsgap: $29-149/month
@@ -55,4 +55,4 @@
 1. Does this work for multiple users, not just me?
 2. Are credentials stored securely (encrypted, not in code)?
 3. Is this feature something users would pay for?
-4. Does it help differentiate from 3Commas?
+4. Does it help differentiate from existing platforms?

@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import { Plus, X, Parentheses, CircleSlash } from 'lucide-react'
 
-// Condition types matching 3Commas
+// Condition types for indicator-based strategies
 export type ConditionType =
   | 'rsi'
   | 'macd'

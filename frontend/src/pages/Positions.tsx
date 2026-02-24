@@ -235,7 +235,7 @@ export default function Positions() {
           </div>
         </div>
 
-        {/* Overall Stats Panel - 3Commas Style */}
+        {/* Overall Stats Panel */}
         <OverallStatsPanel
           stats={stats}
           completedStats={completedStats}
@@ -244,7 +244,7 @@ export default function Positions() {
           onRefreshBalances={refetchBalances}
         />
 
-        {/* Filters - 3Commas Style (Account, Bot, Pair) */}
+        {/* Filters (Account, Bot, Pair) */}
         <FilterPanel
           filterBot={filterBot}
           setFilterBot={setFilterBot}
@@ -265,7 +265,7 @@ export default function Positions() {
           </div>
         ) : (
           <div className="space-y-2">
-            {/* Column Headers - 3Commas Style (hidden on mobile) */}
+            {/* Column Headers (hidden on mobile) */}
             <div className="hidden sm:block bg-slate-800/50 rounded-lg border border-slate-700/50 px-4 py-2">
               <div className="grid grid-cols-12 gap-4 items-center text-xs text-slate-400">
                 <div
@@ -453,7 +453,7 @@ export default function Positions() {
         position={lightweightChartPosition}
       />
 
-      {/* Notes Modal (like 3Commas) */}
+      {/* Notes Modal */}
       <NotesModal
         isOpen={showNotesModal}
         isProcessing={isProcessing}

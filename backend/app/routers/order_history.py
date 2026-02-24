@@ -2,7 +2,7 @@
 Order History API Router
 
 Provides endpoints for viewing order history (successful and failed orders).
-Similar to 3Commas order history page.
+Complete order history page with filtering and pagination.
 """
 
 from datetime import datetime
@@ -70,7 +70,7 @@ async def get_order_history(
     Get order history with optional filtering.
 
     Returns all order attempts (successful and failed) in reverse chronological order.
-    Similar to 3Commas order history.
+    Provides a complete audit trail of all trading activity.
     """
     # Build query - include account_id from Bot for filtering
     # CRITICAL: Always filter by current user's bots for multi-user isolation

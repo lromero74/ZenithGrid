@@ -505,7 +505,7 @@ class Position(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     # Sequential attempt number (ALL positions: success + failed)
     user_attempt_number = Column(Integer, nullable=True, index=True)
-    # User-specific deal number (SUCCESSFUL deals only, like 3Commas)
+    # User-specific deal number (SUCCESSFUL deals only)
     user_deal_number = Column(Integer, nullable=True, index=True)
     product_id = Column(String, default="ETH-BTC")  # Trading pair (e.g., "ETH-BTC", "SOL-USD")
     status = Column(String, default="open")  # open, closed
@@ -522,7 +522,7 @@ class Position(Base):
     dex_router = Column(String, nullable=True)  # DEX router address (for DEX positions)
     wallet_address = Column(String, nullable=True)  # Wallet address used (for DEX positions)
 
-    # Strategy config snapshot (frozen at position creation - like 3Commas)
+    # Strategy config snapshot (frozen at position creation)
     strategy_config_snapshot = Column(JSON, nullable=True)  # Bot's strategy_config at time of position creation
 
     # Initial balance tracking (quote currency = BTC for BTC pairs, USD for USD pairs)
@@ -561,11 +561,11 @@ class Position(Base):
     # Trailing Stop Loss tracking
     highest_price_since_entry = Column(Float, nullable=True)  # Highest price since position opened (for trailing SL)
 
-    # Error tracking (like 3Commas - show errors in UI with tooltips)
+    # Error tracking (show errors in UI with tooltips)
     last_error_message = Column(String, nullable=True)  # Last error message (e.g., from failed DCA)
     last_error_timestamp = Column(DateTime, nullable=True)  # When the error occurred
 
-    # Notes (like 3Commas - user can add notes to positions)
+    # Notes (user can add notes to positions)
     notes = Column(Text, nullable=True)  # User notes for this position
 
     # Limit close tracking
@@ -893,7 +893,7 @@ class PendingOrder(Base):
 class OrderHistory(Base):
     """
     Tracks all order attempts (successful and failed) for audit trail and debugging.
-    Similar to 3Commas order history.
+    Complete order history for audit trail.
     """
 
     __tablename__ = "order_history"

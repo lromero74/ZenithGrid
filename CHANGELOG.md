@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.50.0] - 2026-02-24
+
+### Added
+- **Paper/Live trading badges on notifications**: Order fill toast notifications now show an amber "PAPER" or green "LIVE" badge so you can immediately tell which account triggered the alert
+
+### Fixed
+- **Deal chart Y-axis label duplication**: Fixed a bug where entry, TP, SL, and SO price labels on the expanded deal chart would duplicate every few seconds until the axis was unreadable
+- **Position card notes click region**: Narrowed the clickable area for the notes placeholder to just the icon and text, instead of spanning the full card width
+- **setup.py schema sync**: Added 3 missing tables (email_verification_tokens, prop_firm_state, prop_firm_equity_snapshots), 6 missing columns, fixed 2 wrong defaults, and synced seed data (151 content sources, 352 coins) to match the current database schema
+- **update.py color constant**: Fixed undefined `Colors.FAIL` reference (now `Colors.RED`)
+
+### Changed
+- **De-branded documentation and code**: Replaced all competitor-specific references with neutral language across README, docs, and code comments. Renamed `ThreeCommasStyleForm` component to `DCABudgetConfigForm`
+
 ## [v2.49.1] - 2026-02-24
 
 ### Changed

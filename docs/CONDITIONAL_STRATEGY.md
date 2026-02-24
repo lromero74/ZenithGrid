@@ -1,8 +1,8 @@
-# Conditional Strategy System (3Commas-Style)
+# Conditional Strategy System
 
 ## Overview
 
-The condition-based strategy system allows users to mix and match technical indicators with comparison operators to build custom trading rules, similar to 3Commas DCA bots. Conditions are organized into three phases: base order (entry), safety order (DCA), and take profit (exit).
+The condition-based strategy system allows users to mix and match technical indicators with comparison operators to build custom trading rules. Conditions are organized into three phases: base order (entry), safety order (DCA), and take profit (exit).
 
 ## Architecture
 

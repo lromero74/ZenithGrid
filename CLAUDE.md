@@ -20,7 +20,7 @@ This file is the authoritative source of truth for how to work on ZenithGrid. Re
 6. **Back up the database** before any migration or schema change: `cp backend/trading.db backend/trading.db.bak.$(date +%s)`
 7. **Stop services before migrations.** `./bot.sh stop`, then migrate, then restart.
 8. **Bots created during development must NOT be started.** Create them in a stopped state.
-9. **Think "How does 3Commas do it?"** when building features — match their UX patterns.
+9. **Think "How do leading platforms do it?"** when building features — match best-in-class UX patterns.
 10. **Test first.** Write failing tests before writing implementation code. No feature ships without tests. See the TDD section below.
 
 ## Test-Driven Development
@@ -219,7 +219,7 @@ When building features, always ask:
 1. Does this work for multiple users, not just one?
 2. Are credentials stored securely (encrypted, not in code)?
 3. Would users pay for this feature?
-4. Does it differentiate from 3Commas?
+4. Does it differentiate from existing platforms?
 
 See `COMMERCIALIZATION.md` for the full roadmap.
 

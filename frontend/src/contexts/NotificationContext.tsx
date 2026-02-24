@@ -17,6 +17,7 @@ interface OrderFillEvent {
   profit?: number
   profit_percentage?: number
   position_id: number
+  is_paper_trading?: boolean
   timestamp: string
 }
 
@@ -194,6 +195,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       amount,
       price,
       profit,
+      isPaperTrading: event.is_paper_trading,
     })
 
     // Play audio if enabled

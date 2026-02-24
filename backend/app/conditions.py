@@ -1,5 +1,5 @@
 """
-Flexible Condition Framework (3Commas-style)
+Flexible Condition Framework (Indicator-Based)
 
 Allows mixing and matching indicators with comparison operators:
 - Greater than (>)

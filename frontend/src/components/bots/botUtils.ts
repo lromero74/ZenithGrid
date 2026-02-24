@@ -50,7 +50,7 @@ export const getDefaultFormData = (): BotFormData => ({
   strategy_type: '',
   product_id: 'ETH-BTC',  // Legacy fallback
   product_ids: [],  // Start with empty array, user will select
-  split_budget_across_pairs: false,  // Default to independent budgets (3Commas style)
+  split_budget_across_pairs: false,  // Default to independent budgets (deal-based allocation)
   reserved_btc_balance: 0,  // No reserved balance by default
   reserved_usd_balance: 0,  // No reserved balance by default
   budget_percentage: 0,  // No budget percentage by default

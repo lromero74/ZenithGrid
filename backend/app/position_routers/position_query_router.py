@@ -159,7 +159,7 @@ async def get_pnl_timeseries(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get P&L time series data for cumulative profit chart (3Commas-style).
+    Get P&L time series data for cumulative profit chart.
 
     Returns cumulative profit over time from closed positions.
     If account_id is provided, only returns data for that account.

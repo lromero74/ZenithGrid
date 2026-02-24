@@ -38,9 +38,9 @@ export interface Position {
   profit_usd?: number;
   strategy_config_snapshot?: Record<string, any>;  // Snapshot of bot config when position opened
   pending_orders_count?: number;  // Count of unfilled limit orders (for Active orders display)
-  last_error_message?: string | null;  // Last error message (like 3Commas - for UI display)
+  last_error_message?: string | null;  // Last error message (for UI display)
   last_error_timestamp?: string | null;  // When the error occurred
-  notes?: string | null;  // User notes for position (like 3Commas)
+  notes?: string | null;  // User notes for position
   closing_via_limit?: boolean;  // Whether position is closing via limit order
   limit_close_order_id?: string | null;  // Coinbase order ID for limit close
   limit_order_details?: LimitOrderDetails | null;  // Details of the limit close order

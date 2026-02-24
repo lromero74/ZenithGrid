@@ -6,7 +6,7 @@ interface UsePositionFiltersProps {
 }
 
 export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps) => {
-  // Filtering and sorting state (like 3Commas) - persisted to localStorage
+  // Filtering and sorting state - persisted to localStorage
   const [filterBot, setFilterBot] = useState<number | 'all'>(() => {
     try { const v = localStorage.getItem('zenith-positions-filter-bot'); return v && v !== 'all' ? Number(v) : 'all' } catch { return 'all' }
   })
@@ -30,7 +30,7 @@ export const usePositionFilters = ({ positionsWithPnL }: UsePositionFiltersProps
   useEffect(() => { try { localStorage.setItem('zenith-positions-sort-by', sortBy) } catch { /* ignored */ } }, [sortBy])
   useEffect(() => { try { localStorage.setItem('zenith-positions-sort-order', sortOrder) } catch { /* ignored */ } }, [sortOrder])
 
-  // Apply filters and sorting (like 3Commas)
+  // Apply filters and sorting
   // Use memoized positionsWithPnL instead of recalculating
   const openPositions = useMemo(() => {
     return positionsWithPnL.filter(p => {

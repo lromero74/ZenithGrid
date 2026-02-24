@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNotifications } from '../../../contexts/NotificationContext'
 import { Bot, StrategyParameter } from '../../../types'
-import ThreeCommasStyleForm from '../../../components/ThreeCommasStyleForm'
+import DCABudgetConfigForm from '../../../components/DCABudgetConfigForm'
 import PhaseConditionSelector from '../../../components/PhaseConditionSelector'
 import DexConfigSection from '../../../components/DexConfigSection'
 import { isParameterVisible } from '../../../components/bots'
@@ -641,7 +641,7 @@ export function BotFormModal({
               <span className="text-blue-400">4.</span> Markets & Trading Pairs
             </h3>
 
-            {/* Trading Pairs (3Commas Style Multi-Select with Single Market Constraint) */}
+            {/* Trading Pairs (Multi-Select with Single Market Constraint) */}
           <div>
             <label className="block text-sm font-medium mb-2">
               Pairs
@@ -660,7 +660,7 @@ export function BotFormModal({
               // Check if a market is locked (2+ pairs selected from same market)
               const isMarketLocked = formData.product_ids.length >= 2
 
-              // Handler for pair checkbox change with 3Commas logic
+              // Handler for pair checkbox change with market-lock logic
               const handlePairToggle = (pairValue: string, isChecked: boolean) => {
                 const pairMarket = getMarket(pairValue)
 
@@ -1092,7 +1092,7 @@ export function BotFormModal({
                         <span className="text-yellow-400">○ Disabled:</span> Each deal gets full budget allocation independently.
                         <br />
                         <span className="text-xs text-slate-400">
-                          Example: 30% max usage × {formData.strategy_config?.max_concurrent_deals || 1} deals = up to {30 * (formData.strategy_config?.max_concurrent_deals || 1)}% total (3Commas style)
+                          Example: 30% max usage × {formData.strategy_config?.max_concurrent_deals || 1} deals = up to {30 * (formData.strategy_config?.max_concurrent_deals || 1)}% total (deal-based allocation)
                         </span>
                       </>
                     )}
@@ -1115,7 +1115,7 @@ export function BotFormModal({
 
           {/* Dynamic Strategy Parameters */}
           {(formData.strategy_type === 'conditional_dca' || formData.strategy_type === 'indicator_based') ? (
-            <ThreeCommasStyleForm
+            <DCABudgetConfigForm
               config={formData.strategy_config}
               onChange={(newConfig) =>
                 setFormData({ ...formData, strategy_config: newConfig })

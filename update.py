@@ -265,7 +265,7 @@ def show_changelog(project_root, changelog_arg):
     elif versions_behind <= 5:
         installed_color = '\033[38;5;208m'  # Orange (ANSI 256 color) - 3-5 versions behind
     else:
-        installed_color = Colors.FAIL  # Red - 6+ versions behind
+        installed_color = Colors.RED  # Red - 6+ versions behind
 
     if is_exact:
         print(f"Installed: {installed_color}{Colors.BOLD}{current_version}{Colors.ENDC}")

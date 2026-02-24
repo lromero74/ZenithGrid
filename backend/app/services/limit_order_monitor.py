@@ -106,6 +106,9 @@ class LimitOrderMonitor:
                     self.db.add(trade)
 
                     # Broadcast partial fill notification
+                    is_paper = (hasattr(self.exchange, 'is_paper_trading')
+                                and callable(self.exchange.is_paper_trading)
+                                and self.exchange.is_paper_trading())
                     await ws_manager.broadcast_order_fill(
                         fill_type="partial_fill",
                         product_id=position.product_id,
@@ -114,6 +117,7 @@ class LimitOrderMonitor:
                         price=avg_fill_price,
                         position_id=position.id,
                         user_id=position.user_id,
+                        is_paper_trading=is_paper,
                     )
 
                     # Update position totals (reduce remaining base, add quote received)
@@ -534,6 +538,9 @@ class LimitOrderMonitor:
                 logger.info(f"Position {position.id} closed successfully via limit order")
 
                 # Broadcast sell order fill notification
+                is_paper = (hasattr(self.exchange, 'is_paper_trading')
+                            and callable(self.exchange.is_paper_trading)
+                            and self.exchange.is_paper_trading())
                 await ws_manager.broadcast_order_fill(
                     fill_type="sell_order",
                     product_id=position.product_id,
@@ -544,6 +551,7 @@ class LimitOrderMonitor:
                     profit=position.profit_quote,
                     profit_percentage=position.profit_percentage,
                     user_id=position.user_id,
+                    is_paper_trading=is_paper,
                 )
 
             elif order_status in ["CANCELLED", "EXPIRED", "FAILED"]:

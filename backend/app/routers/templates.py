@@ -249,7 +249,7 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db), current_use
     if existing_defaults:
         return {"message": "Default templates already exist", "count": len(existing_defaults)}
 
-    # Default templates matching 3Commas presets
+    # Default bot templates (Conservative, Balanced, Aggressive)
     default_templates = [
         {
             "name": "Conservative DCA",
