@@ -36,6 +36,32 @@ def _ai_transfer_label(rec: dict) -> str:
     return rec.get("type", "").capitalize()
 
 
+def _summarize_conditions(conditions_obj: Optional[dict]) -> str:
+    """Summarize indicator conditions into a concise human-readable string."""
+    if not conditions_obj or not isinstance(conditions_obj, dict):
+        return ""
+    groups = conditions_obj.get("groups", [])
+    if not groups:
+        return ""
+    group_strs = []
+    for grp in groups:
+        conds = grp.get("conditions", [])
+        parts = []
+        for c in conds:
+            ind = c.get("type", c.get("indicator", "?"))
+            op = c.get("operator", "")
+            val = c.get("value", "")
+            tf = c.get("timeframe", "")
+            parts.append(f"{ind} {op} {val} ({tf})")
+        if parts:
+            logic = grp.get("logic", "and").upper()
+            group_strs.append(f" {logic} ".join(parts))
+    if not group_strs:
+        return ""
+    group_logic = conditions_obj.get("groupLogic", "and").upper()
+    return f" {group_logic} ".join(f"({g})" if len(group_strs) > 1 else g for g in group_strs)
+
+
 def _fmt_ai_coverage_pct(pct: float) -> str:
     """Format coverage percentage with adaptive precision for AI prompts."""
     if pct < 1:
@@ -294,6 +320,64 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
             f"\n  - Prior account value: ${prior.get('account_value_usd', 0):,.2f}"
         )
 
+    # Bot strategy context — helps the AI interpret win rates and trade patterns
+    strategy_section = ""
+    bot_strategies = data.get("bot_strategies", [])
+    if bot_strategies:
+        strat_lines = ["\nTrading Strategy Context:"]
+        for bs in bot_strategies:
+            cfg = bs.get("config", {})
+            st = bs.get("strategy_type", "unknown")
+            pairs = ", ".join(bs.get("pairs", []))
+            trades = bs.get("trades_in_period", 0)
+            wins = bs.get("wins_in_period", 0)
+            strat_lines.append(
+                f"  Bot: {bs['name']} ({st}, {pairs}) — "
+                f"{trades} trades ({wins}W/{trades - wins}L)"
+            )
+            # Core DCA parameters
+            params = []
+            tp = cfg.get("take_profit_percentage")
+            if tp is not None:
+                params.append(f"take_profit={tp}%")
+            mso = cfg.get("max_safety_orders")
+            if mso is not None:
+                params.append(f"max_safety_orders={mso}")
+            so_pct = cfg.get("safety_order_percentage")
+            if so_pct is not None:
+                params.append(f"safety_order_size={so_pct}%")
+            pd = cfg.get("price_deviation")
+            if pd is not None:
+                params.append(f"price_deviation={pd}%")
+            mcd = cfg.get("max_concurrent_deals")
+            if mcd is not None:
+                params.append(f"max_concurrent_deals={mcd}")
+            if cfg.get("trailing_take_profit"):
+                params.append(f"trailing_tp={cfg.get('trailing_deviation', 0)}%")
+            if cfg.get("stop_loss_enabled"):
+                params.append("stop_loss=enabled")
+            if params:
+                strat_lines.append(f"    Config: {', '.join(params)}")
+            # Summarize indicator conditions
+            for phase, label in [
+                ("base_order_conditions", "Entry signals"),
+                ("take_profit_conditions", "Take profit signals"),
+                ("safety_order_conditions", "Safety order signals"),
+            ]:
+                conds = _summarize_conditions(cfg.get(phase))
+                if conds:
+                    strat_lines.append(f"    {label}: {conds}")
+        strat_lines.append(
+            "  NOTE: These are DCA (Dollar Cost Averaging) bots that enter on "
+            "momentum/indicator signals and take small profits. Safety orders "
+            "only trigger on renewed momentum (not blindly on price drops). "
+            "High win rates are expected — positions close only when profitable. "
+            "Unrealized losses exist in open positions still waiting for signals. "
+            "Wins are typically small and quick; losing positions may take much "
+            "longer as they wait for favorable re-entry signals to DCA down."
+        )
+        strategy_section = "\n".join(strat_lines)
+
     return f"""Analyze this trading report for the period: {period_label}.
 
 Report Data:
@@ -303,7 +387,7 @@ Report Data:
 - Total Trades: {data.get('total_trades', 0)}
 - Win/Loss: {data.get('winning_trades', 0)}W / {data.get('losing_trades', 0)}L
 - Win Rate: {data.get('win_rate', 0):.1f}%
-{goals_section}{capital_section}{prior_section}
+{goals_section}{capital_section}{prior_section}{strategy_section}
 
 Write TWO versions separated by the exact delimiters below.
 

@@ -16,7 +16,8 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    Account, AccountTransfer, AccountValueSnapshot, Position, Report, ReportGoal,
+    Account, AccountTransfer, AccountValueSnapshot, Bot, Position, Report,
+    ReportGoal,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,35 @@ async def gather_report_data(
         p.profit_quote or 0 for p in closed_positions
         if p.get_quote_currency() == "BTC"
     )
+
+    # Collect bot strategy context for AI analysis
+    bot_ids = list({p.bot_id for p in closed_positions if p.bot_id})
+    bot_strategies = []
+    if bot_ids:
+        bot_result = await db.execute(
+            select(Bot).where(Bot.id.in_(bot_ids))
+        )
+        bots = {b.id: b for b in bot_result.scalars().all()}
+        for bid in bot_ids:
+            bot = bots.get(bid)
+            if not bot:
+                continue
+            cfg = bot.strategy_config or {}
+            pairs = bot.product_ids or ([bot.product_id] if bot.product_id else [])
+            # Count trades per bot in this period
+            bot_trades = sum(1 for p in closed_positions if p.bot_id == bid)
+            bot_wins = sum(
+                1 for p in closed_positions
+                if p.bot_id == bid and (p.profit_usd or 0) > 0
+            )
+            bot_strategies.append({
+                "name": bot.name,
+                "strategy_type": bot.strategy_type,
+                "pairs": pairs,
+                "config": cfg,
+                "trades_in_period": bot_trades,
+                "wins_in_period": bot_wins,
+            })
 
     # Compute goal progress — use the report's period bounds for lookback
     goal_data = []
@@ -178,6 +208,7 @@ async def gather_report_data(
         "deposits_source": deposits_source,
         "transfer_records": transfer_records,
         "trade_summary": trade_summary,
+        "bot_strategies": bot_strategies,
     }
 
 

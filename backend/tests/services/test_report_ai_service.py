@@ -8,6 +8,7 @@ from app.services.report_ai_service import (
     generate_report_summary,
     _build_summary_prompt,
     _parse_tiered_summary,
+    _summarize_conditions,
 )
 
 
@@ -372,3 +373,140 @@ class TestBuildSummaryPrompt:
         }
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
         assert "Trading activity:" not in prompt
+
+    def test_bot_strategies_included(self, sample_report_data):
+        """Bot strategy context appears in prompt when present."""
+        sample_report_data["bot_strategies"] = [{
+            "name": "DCA Bot",
+            "strategy_type": "dca_grid",
+            "pairs": ["ETH-BTC", "SOL-USD"],
+            "config": {
+                "take_profit_percentage": 2,
+                "max_safety_orders": 8,
+                "safety_order_percentage": 100,
+                "price_deviation": 2,
+                "max_concurrent_deals": 2,
+                "base_order_conditions": {
+                    "groups": [{
+                        "conditions": [{
+                            "type": "bb_percent",
+                            "operator": "crossing_above",
+                            "value": 10,
+                            "timeframe": "FIFTEEN_MINUTE",
+                        }],
+                        "logic": "and",
+                    }],
+                    "groupLogic": "and",
+                },
+            },
+            "trades_in_period": 15,
+            "wins_in_period": 12,
+        }]
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Trading Strategy Context" in prompt
+        assert "DCA Bot" in prompt
+        assert "dca_grid" in prompt
+        assert "take_profit=2%" in prompt
+        assert "max_safety_orders=8" in prompt
+        assert "Entry signals:" in prompt
+        assert "bb_percent crossing_above 10" in prompt
+        assert "DCA (Dollar Cost Averaging)" in prompt
+
+    def test_strategy_multiple_conditions_and_logic(self, sample_report_data):
+        """Multiple conditions joined by AND appear in prompt."""
+        sample_report_data["bot_strategies"] = [{
+            "name": "Multi Signal Bot",
+            "strategy_type": "indicator_based",
+            "pairs": ["BTC-USD"],
+            "config": {
+                "take_profit_percentage": 1.5,
+                "max_safety_orders": 2,
+                "base_order_conditions": {
+                    "groups": [{
+                        "conditions": [
+                            {"type": "rsi", "operator": "greater_than",
+                             "value": 50, "timeframe": "FIFTEEN_MINUTE"},
+                            {"type": "volume_rsi", "operator": "increasing",
+                             "value": 2, "timeframe": "THREE_MINUTE"},
+                        ],
+                        "logic": "and",
+                    }],
+                    "groupLogic": "and",
+                },
+            },
+            "trades_in_period": 5,
+            "wins_in_period": 4,
+        }]
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "rsi greater_than 50" in prompt
+        assert "volume_rsi increasing 2" in prompt
+        assert " AND " in prompt
+
+    def test_strategy_trailing_tp_and_stop_loss(self, sample_report_data):
+        """Trailing take profit and stop loss flags appear when enabled."""
+        sample_report_data["bot_strategies"] = [{
+            "name": "Trailing Bot",
+            "strategy_type": "dca_grid",
+            "pairs": ["SOL-USD"],
+            "config": {
+                "trailing_take_profit": True,
+                "trailing_deviation": 0.5,
+                "stop_loss_enabled": True,
+            },
+            "trades_in_period": 3,
+            "wins_in_period": 2,
+        }]
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "trailing_tp=0.5%" in prompt
+        assert "stop_loss=enabled" in prompt
+
+    def test_no_bot_strategies_no_section(self, sample_report_data):
+        """No strategy section when bot_strategies is empty."""
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Trading Strategy Context" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# _summarize_conditions
+# ---------------------------------------------------------------------------
+
+class TestSummarizeConditions:
+    def test_single_condition(self):
+        conds = {
+            "groups": [{
+                "conditions": [
+                    {"type": "bb_percent", "operator": "crossing_above",
+                     "value": 10, "timeframe": "FIFTEEN_MINUTE"}
+                ],
+                "logic": "and",
+            }],
+            "groupLogic": "and",
+        }
+        result = _summarize_conditions(conds)
+        assert "bb_percent crossing_above 10 (FIFTEEN_MINUTE)" in result
+
+    def test_multiple_conditions_and(self):
+        conds = {
+            "groups": [{
+                "conditions": [
+                    {"type": "rsi", "operator": "greater_than",
+                     "value": 50, "timeframe": "FIVE_MINUTE"},
+                    {"type": "volume_rsi", "operator": "increasing",
+                     "value": 2, "timeframe": "THREE_MINUTE"},
+                ],
+                "logic": "and",
+            }],
+            "groupLogic": "and",
+        }
+        result = _summarize_conditions(conds)
+        assert "rsi greater_than 50 (FIVE_MINUTE)" in result
+        assert " AND " in result
+        assert "volume_rsi increasing 2 (THREE_MINUTE)" in result
+
+    def test_empty_conditions(self):
+        assert _summarize_conditions(None) == ""
+        assert _summarize_conditions({}) == ""
+        assert _summarize_conditions({"groups": []}) == ""
+
+    def test_no_conditions_key(self):
+        assert _summarize_conditions({"groups": [{"conditions": []}]}) == ""
