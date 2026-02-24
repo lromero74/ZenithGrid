@@ -25,17 +25,30 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Bot Templates**: Quick-start from Conservative/Balanced/Aggressive presets
 - **6 Advanced Strategies**: Indicator-Based (custom), Bull Flag Scanner, AI Spot Opinion, Triangular Arbitrage, Spatial Arbitrage, Statistical Arbitrage
 
+### 📈 Reports & Goal Tracking
+- **Scheduled Email Reports**: Automated daily, weekly, monthly, quarterly, and yearly reports with xTD period summaries
+- **Financial Goals**: Set USD or BTC targets with deadlines, tracked via daily snapshots and trend analysis
+- **AI-Powered Insights**: Multi-provider AI analysis in email reports (Claude, GPT, Gemini, Grok, Groq)
+- **Expense Goal Lookahead**: Next-period preview to project whether goals are on track
+- **Account-Scoped Reports**: Filter reports by paper trading vs live accounts
+- **Email Delivery**: Automated delivery via AWS SES
+
 ### 📊 Professional Dashboard
 - **3Commas-Style Deals**: Active positions with real-time P&L
 - **TradingView Charts**: Professional candlestick charts with indicators
 - **Position Markers**: Entry price, TP/SL lines, safety order levels
+- **Account Value Charts**: Historical BTC + USD value lines with split view by quote currency
+- **Daily Activity Markers**: Trade wins/losses, deposits, and withdrawals overlaid on charts
 - **Portfolio Tracking**: Real-time portfolio value and allocation (CEX & DEX)
+- **Transfer Tracking**: Deposit and withdrawal history synced from exchange
 - **Trade History**: Complete audit trail of all trades
+- **Closed Positions Page**: Dedicated history view with "new items" badges for recent closures
 - **Performance Metrics**: Win rate, total profit, active deals
-- **News Aggregation**: Configurable multi-source crypto news with category filtering and subscription management
+- **News Aggregation**: Configurable multi-source crypto news with advanced category and source filtering
 - **Article Reader with TTS**: Full article content with text-to-speech, voice cycling, and word-level sync
 - **YouTube Integration**: Educational content from crypto channels
 - **Market Intelligence**: 16+ indicator cards — Fear & Greed, BTC Dominance, Altseason Index, ATH Distance, Hash Rate, Mempool, Lightning Network, Stablecoin Market Cap, BTC RSI, Halving Countdown, US Debt, and more
+- **In-App Version History**: Click the version number in the header to see the changelog
 
 ### 🔐 Security & Multi-User
 - **HTTPS**: Nginx reverse proxy with Let's Encrypt SSL (auto-renewing)
@@ -56,7 +69,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **MT5 Bridge**: FTMO and prop firm trading via custom EA bridge
 - **DEX**: On-chain swaps on Ethereum, Arbitrum, Polygon, Base
 - **PropGuard**: Automated drawdown protection for prop firm accounts (daily + total limits, kill switch)
-- **Paper Trading**: Simulated exchange client for risk-free strategy testing
+- **Paper Trading**: Simulated exchange with real market prices, virtual balances (BTC, ETH, USD, USDC, USDT), account-scoped isolation from live data, and full bot support (same strategies as live)
 
 ## 🏗️ Architecture
 
@@ -296,6 +309,11 @@ python3 update.py --yes
 | **MFA / 2FA** | ✅ | ✅ **TOTP + Email MFA** |
 | **HTTPS / SSL** | ✅ | ✅ **Let's Encrypt auto-renewing** |
 | **Category Filtering** | ❌ | ✅ **5 categories** |
+| **Scheduled Email Reports** | ❌ | ✅ **Daily/weekly/monthly/quarterly/yearly** |
+| **Financial Goal Tracking** | ❌ | ✅ **USD & BTC targets with deadlines** |
+| **Account Value Charts** | Basic | ✅ **Historical lines + split view** |
+| **Transfer History** | ✅ | ✅ **Auto-synced from exchange** |
+| **In-App Version History** | ❌ | ✅ **Clickable changelog** |
 | **Self-Hosted** | ❌ | ✅ |
 | **No Monthly Fees** | ❌ | ✅ |
 | **Full Source Control** | ❌ | ✅ |
@@ -322,6 +340,7 @@ python3 update.py --yes
 - **PropGuard**: Automated prop firm drawdown monitoring with daily/total limits and kill switch
 - **API Key Encryption** (Fernet AES-128-CBC + HMAC-SHA256)
 - **Multi-User Support** with full data isolation
+- **Account-Scoped Isolation**: Paper trading and live trading data kept completely separate
 - **MFA**: TOTP (authenticator app) or email-based two-factor authentication
 - **HTTPS**: Nginx + Let's Encrypt with auto-renewing certificates
 - **Security Headers**: HSTS + CSP to prevent MITM and XSS
@@ -358,6 +377,9 @@ python3 update.py --yes
 - AI decision logs with reasoning
 - News articles, TTS audio cache, and seen status
 - Account value snapshots for historical charting
+- Scheduled reports and email delivery history
+- Financial goals and progress snapshots
+- Account transfers (deposits and withdrawals)
 - Prop firm equity snapshots and drawdown history
 
 ## 🌱 Roadmap
@@ -380,11 +402,16 @@ python3 update.py --yes
 - [x] **PropGuard** prop firm safety monitoring
 - [x] **Paper trading mode**
 - [x] **Email verification & password reset** (AWS SES)
+- [x] **Scheduled email reports** (daily/weekly/monthly/quarterly/yearly)
+- [x] **Financial goal tracking** (USD & BTC targets with deadlines)
+- [x] **Account value charting** (historical lines + split view)
+- [x] **Transfer sync** (deposit/withdrawal history from exchange)
+- [x] **Account-scoped filtering** (paper vs live isolation)
 - [ ] **Enhanced sentiment analysis** (Twitter/X, social signals)
+- [ ] **Enhanced report templates** (custom layouts, additional metrics)
+- [ ] **Webhook integrations** (Slack, Discord, custom endpoints)
 - [ ] **Backtesting system** for strategy validation
 - [ ] **Additional exchanges** (Binance, Kraken, etc.)
-- [ ] **Telegram / email alerts** for position events
-- [ ] **Performance analytics dashboard** (advanced metrics)
 - [ ] **Mobile app** (React Native)
 
 ## 🐛 Troubleshooting
