@@ -134,12 +134,12 @@ async def gather_report_data(
     )
     all_transfers = transfer_result.scalars().all()
 
-    # Serialize individual transfer records (most recent first, top 10)
+    # Serialize individual transfer records (most recent first)
     sorted_transfers = sorted(
         all_transfers,
         key=lambda t: t.occurred_at or datetime.min,
         reverse=True,
-    )[:10]
+    )
     transfer_records = [
         {
             "date": t.occurred_at.strftime("%Y-%m-%d") if t.occurred_at else "",
