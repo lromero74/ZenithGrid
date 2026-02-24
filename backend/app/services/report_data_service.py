@@ -117,6 +117,7 @@ async def gather_report_data(
             period_profit_btc=period_profit_btc,
             period_start=period_start,
             period_end=period_end,
+            account_id=account_id,
         )
         goal_data.append(goal_progress)
 
@@ -249,6 +250,7 @@ async def compute_goal_progress(
     period_profit_btc: float,
     period_start: Optional[datetime] = None,
     period_end: Optional[datetime] = None,
+    account_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Compute progress towards a goal.
@@ -260,13 +262,13 @@ async def compute_goal_progress(
     if goal.target_type == "income":
         return await _compute_income_goal_progress(
             db, goal, current_usd, current_btc,
-            period_start, period_end,
+            period_start, period_end, account_id,
         )
 
     if goal.target_type == "expenses":
         return await _compute_expenses_goal_progress(
             db, goal, current_usd, current_btc,
-            period_start, period_end,
+            period_start, period_end, account_id,
         )
 
     is_btc = goal.target_currency == "BTC"
@@ -312,6 +314,7 @@ async def _compute_income_goal_progress(
     current_btc: float,
     period_start: Optional[datetime] = None,
     period_end: Optional[datetime] = None,
+    account_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Compute income goal progress by analyzing closed position profits.
@@ -346,6 +349,8 @@ async def _compute_income_goal_progress(
         Position.closed_at >= lookback_start,
         Position.closed_at <= lookback_end,
     ]
+    if account_id:
+        pos_filters.append(Position.account_id == account_id)
     result = await db.execute(select(Position).where(and_(*pos_filters)))
     closed_positions = result.scalars().all()
 
@@ -432,6 +437,7 @@ async def _compute_expenses_goal_progress(
     current_btc: float,
     period_start: Optional[datetime] = None,
     period_end: Optional[datetime] = None,
+    account_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Compute expenses goal progress by analyzing income vs expense items.
@@ -467,6 +473,8 @@ async def _compute_expenses_goal_progress(
         Position.closed_at >= lookback_start,
         Position.closed_at <= lookback_end,
     ]
+    if account_id:
+        pos_filters.append(Position.account_id == account_id)
     result = await db.execute(select(Position).where(and_(*pos_filters)))
     closed_positions = result.scalars().all()
 

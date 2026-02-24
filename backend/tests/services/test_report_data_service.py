@@ -616,6 +616,83 @@ class TestComputeGoalProgress:
         assert result["on_track"] is False
 
     @pytest.mark.asyncio
+    async def test_income_goal_filters_by_account_id(self, db_session):
+        """Income goal only counts positions from the specified account."""
+        _make_user(db_session)
+        # Account 1 (live): $100 profit
+        _make_position(db_session, account_id=1, profit_usd=100.0,
+                       closed_at=datetime(2025, 1, 10))
+        # Account 2 (paper): $50 profit — should be excluded
+        _make_position(db_session, account_id=2, profit_usd=50.0,
+                       closed_at=datetime(2025, 1, 15))
+        await db_session.flush()
+
+        goal = _make_goal(target_type="income", target_currency="USD",
+                          target_value=500.0, income_period="monthly")
+
+        # With account_id=1: only $100 profit
+        result = await compute_goal_progress(
+            db_session, goal,
+            current_usd=5000.0, current_btc=0.1,
+            period_profit_usd=100.0, period_profit_btc=0.0,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            account_id=1,
+        )
+        assert result["sample_trades"] == 1
+        # daily = 100/30, projected = (100/30)*30 = 100
+        assert abs(result["projected_income_linear"] - 100.0) < 0.01
+
+        # Without account_id: both accounts ($150 total)
+        result_all = await compute_goal_progress(
+            db_session, goal,
+            current_usd=5000.0, current_btc=0.1,
+            period_profit_usd=150.0, period_profit_btc=0.0,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+        )
+        assert result_all["sample_trades"] == 2
+        assert abs(result_all["projected_income_linear"] - 150.0) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_expenses_goal_filters_by_account_id(self, db_session):
+        """Expenses goal only counts positions from the specified account."""
+        _make_user(db_session)
+        # Account 1 (live): $200 profit
+        _make_position(db_session, account_id=1, profit_usd=200.0,
+                       closed_at=datetime(2025, 1, 10))
+        # Account 2 (paper): $300 profit — should be excluded
+        _make_position(db_session, account_id=2, profit_usd=300.0,
+                       closed_at=datetime(2025, 1, 15))
+        await db_session.flush()
+
+        goal = _make_goal(target_type="expenses", target_currency="USD",
+                          target_value=1000.0, expense_period="monthly",
+                          tax_pct=0)
+
+        with patch(
+            "app.services.expense_service.compute_expense_coverage"
+        ) as mock_cov:
+            mock_cov.return_value = {
+                "coverage_pct": 50.0,
+                "income_after_tax": 200.0,
+                "shortfall": 200.0,
+                "total_expenses": 400.0,
+            }
+            result = await compute_goal_progress(
+                db_session, goal,
+                current_usd=5000.0, current_btc=0.1,
+                period_profit_usd=200.0, period_profit_btc=0.0,
+                period_start=datetime(2025, 1, 1),
+                period_end=datetime(2025, 1, 31),
+                account_id=1,
+            )
+
+        assert result["sample_trades"] == 1
+        # daily = 200/30, projected = (200/30)*30 = 200
+        assert abs(result["projected_income"] - 200.0) < 0.01
+
+    @pytest.mark.asyncio
     async def test_expenses_goal_delegates(self, db_session):
         """Expenses goal type calls _compute_expenses_goal_progress."""
         _make_user(db_session)
