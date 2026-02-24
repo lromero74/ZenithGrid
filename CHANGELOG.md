@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.51.0] - 2026-02-24
+
+### Added
+- **Bot actions menu on deal cards**: Click the bot name on any position card to stop/start the bot or open it for editing in the Bots page
+- **Persistent deal chart settings**: Chart type, timeframe, Heikin-Ashi toggle, and indicators now persist across deal cards — change settings once and they apply to every chart you open
+
 ## [v2.50.1] - 2026-02-24
 
 ### Changed

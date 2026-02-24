@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { BarChart3, Building2, Wallet, Scale } from 'lucide-react'
 import { useAccount, getChainName } from '../contexts/AccountContext'
 import { useConfirm } from '../contexts/ConfirmContext'
@@ -31,6 +32,7 @@ export default function Positions() {
   const { selectedAccount } = useAccount()
   const confirm = useConfirm()
   const { addToast } = useNotifications()
+  const navigate = useNavigate()
 
   // Modal and UI state
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null)
@@ -393,6 +395,7 @@ export default function Positions() {
                 }}
                 onCheckSlippage={handleCheckSlippage}
                 onRefetch={refetchPositions}
+                onEditBot={(bot) => navigate('/bots', { state: { editBot: bot } })}
               />
             ))}
           </div>
