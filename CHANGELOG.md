@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.44.2] - 2026-02-24
+
+### Added
+- **BTC accumulation context for AI**: AI reports now understand the crypto-maximalist thesis behind BTC-pair trading — that alt/BTC trades are a BTC accumulation strategy, not traditional trading with "capital lockup" risk
+
+### Fixed
+- **AI strategy context accuracy**: Restructured strategy notes to clearly separate DCA mechanics from investment philosophy, preventing generic risk warnings that miss the point of the strategy
+
 ## [v2.44.1] - 2026-02-24
 
 ### Fixed
