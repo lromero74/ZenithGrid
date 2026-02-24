@@ -435,16 +435,28 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
             )
         strategy_section = "\n".join(strat_lines)
 
+    total_trades = data.get('total_trades', 0)
+    if total_trades > 0:
+        trade_stats = (
+            f"- Total Trades: {total_trades}\n"
+            f"- Win/Loss: {data.get('winning_trades', 0)}W / {data.get('losing_trades', 0)}L\n"
+            f"- Win Rate: {data.get('win_rate', 0):.1f}%"
+        )
+    else:
+        trade_stats = "- Total Trades: 0 (no trades closed in this period)"
+
     return f"""Analyze this trading report for the period: {period_label}.
 
 Report Data:
 - Account Value: ${data.get('account_value_usd', 0):,.2f} ({data.get('account_value_btc', 0):.6f} BTC)
 - Period Start Value: ${data.get('period_start_value_usd', 0):,.2f}
 - Period Profit: ${data.get('period_profit_usd', 0):,.2f} ({data.get('period_profit_btc', 0):.8f} BTC)
-- Total Trades: {data.get('total_trades', 0)}
-- Win/Loss: {data.get('winning_trades', 0)}W / {data.get('losing_trades', 0)}L
-- Win Rate: {data.get('win_rate', 0):.1f}%
+{trade_stats}
 {goals_section}{capital_section}{prior_section}{strategy_section}
+
+IMPORTANT: If there were zero trades in the period, do NOT mention win rate, \
+win/loss ratios, or imply poor performance. Simply note that no trades closed \
+during this period. Focus on account value changes, capital movements, and goals instead.
 
 Write TWO versions separated by the exact delimiters below.
 
