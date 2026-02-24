@@ -417,18 +417,20 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
 
       {/* Account Filter + Chart Mode Toggles */}
       <div className="flex items-center justify-end gap-2 mb-4">
-        {hasPortionData && (
-          <button
-            onClick={() => setChartMode(m => m === 'total' ? 'split' : 'total')}
-            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-              chartMode === 'split'
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
-          >
-            {chartMode === 'total' ? 'Total Value' : 'By Quote Currency'}
-          </button>
-        )}
+        <button
+          onClick={() => setChartMode(m => m === 'total' ? 'split' : 'total')}
+          disabled={!hasPortionData && chartMode === 'total'}
+          title={!hasPortionData ? 'Portion data will appear after the next daily snapshot' : undefined}
+          className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+            chartMode === 'split'
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : hasPortionData
+              ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+          }`}
+        >
+          {chartMode === 'total' ? 'Total Value' : 'By Quote Currency'}
+        </button>
         <button
           onClick={() => setShowAllAccounts(!showAllAccounts)}
           className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
