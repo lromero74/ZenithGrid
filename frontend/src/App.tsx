@@ -247,7 +247,7 @@ function AppContent() {
 
               {/* Market Season Indicator - desktop standalone */}
               {seasonInfo && (
-                <div className={`hidden lg:flex items-center space-x-1.5 px-3 py-2 mr-6 rounded-lg border ${
+                <div className={`hidden lg:flex items-center justify-center space-x-1.5 px-3 py-2 mr-6 rounded-lg border min-w-[200px] ${
                   seasonInfo.season === 'accumulation' ? 'bg-pink-900/30 border-pink-700/50' :
                   seasonInfo.season === 'bull' ? 'bg-green-900/30 border-green-700/50' :
                   seasonInfo.season === 'distribution' ? 'bg-orange-900/30 border-orange-700/50' :
