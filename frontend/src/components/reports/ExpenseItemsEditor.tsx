@@ -26,7 +26,6 @@ interface ExpenseItemsEditorProps {
   goalId: number
   expensePeriod: string
   currency: string
-  sortMode: string
   onClose: () => void
 }
 
@@ -77,7 +76,7 @@ function formatDueBadge(item: ExpenseItem): string | null {
 
 // Sortable expense row for drag-to-reorder
 function SortableExpenseRow({
-  item, index, total, prefix, periodLabel, isCustom,
+  item, index, total, prefix, periodLabel,
   onEdit, onDelete, onMoveToTop, onMoveToBottom, onMoveTo,
 }: {
   item: ExpenseItem
@@ -85,7 +84,6 @@ function SortableExpenseRow({
   total: number
   prefix: string
   periodLabel: string
-  isCustom: boolean
   onEdit: (item: ExpenseItem) => void
   onDelete: (id: number) => void
   onMoveToTop: (id: number) => void
@@ -99,7 +97,7 @@ function SortableExpenseRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id, disabled: !isCustom })
+  } = useSortable({ id: item.id })
 
   const [moveToInput, setMoveToInput] = useState('')
   const [showMoveTo, setShowMoveTo] = useState(false)
@@ -122,19 +120,17 @@ function SortableExpenseRow({
         isDragging ? 'ring-2 ring-blue-500' : ''
       }`}
     >
-      {/* Drag handle + position number */}
-      {isCustom && (
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 touch-none"
-            title="Drag to reorder"
-          >
-            <GripVertical className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {/* Drag handle */}
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 touch-none"
+          title="Drag to reorder"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      </div>
 
       {/* Position badge */}
       <span className="text-[10px] font-mono text-slate-500 shrink-0 w-10 text-center"
@@ -174,77 +170,73 @@ function SortableExpenseRow({
 
       {/* Actions */}
       <div className="flex items-center gap-0.5 ml-2 shrink-0">
-        {isCustom && (
-          <>
-            <button
-              onClick={() => onMoveToTop(item.id)}
-              disabled={index === 0}
-              className="p-1 text-slate-500 hover:text-white disabled:opacity-30 transition-colors"
-              title="Move to top"
-            >
-              <ChevronsUp className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => onMoveToBottom(item.id)}
-              disabled={index === total - 1}
-              className="p-1 text-slate-500 hover:text-white disabled:opacity-30 transition-colors"
-              title="Move to bottom"
-            >
-              <ChevronsDown className="w-3.5 h-3.5" />
-            </button>
-            <div className="relative">
+        <button
+          onClick={() => onMoveToTop(item.id)}
+          disabled={index === 0}
+          className="p-1 text-slate-500 hover:text-white disabled:opacity-30 transition-colors"
+          title="Move to top"
+        >
+          <ChevronsUp className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => onMoveToBottom(item.id)}
+          disabled={index === total - 1}
+          className="p-1 text-slate-500 hover:text-white disabled:opacity-30 transition-colors"
+          title="Move to bottom"
+        >
+          <ChevronsDown className="w-3.5 h-3.5" />
+        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowMoveTo(!showMoveTo)}
+            className="p-1 text-slate-500 hover:text-white transition-colors text-[10px] font-mono"
+            title="Move to position..."
+          >
+            #
+          </button>
+          {showMoveTo && (
+            <div className="absolute right-0 top-full mt-1 z-20 bg-slate-700 border border-slate-600
+              rounded p-1.5 flex items-center gap-1 shadow-lg">
+              <input
+                type="number"
+                min="1"
+                max={total}
+                step="1"
+                value={moveToInput}
+                onChange={e => {
+                  const v = e.target.value.replace(/[^0-9]/g, '')
+                  setMoveToInput(v)
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && moveToInput) {
+                    onMoveTo(item.id, parseInt(moveToInput))
+                    setShowMoveTo(false)
+                    setMoveToInput('')
+                  } else if (e.key === 'Escape') {
+                    setShowMoveTo(false)
+                    setMoveToInput('')
+                  }
+                }}
+                placeholder={`1-${total}`}
+                autoFocus
+                className="w-14 px-1.5 py-0.5 bg-slate-800 border border-slate-500 rounded text-xs
+                  text-white focus:outline-none focus:border-blue-500 placeholder-slate-500"
+              />
               <button
-                onClick={() => setShowMoveTo(!showMoveTo)}
-                className="p-1 text-slate-500 hover:text-white transition-colors text-[10px] font-mono"
-                title="Move to position..."
+                onClick={() => {
+                  if (moveToInput) {
+                    onMoveTo(item.id, parseInt(moveToInput))
+                    setShowMoveTo(false)
+                    setMoveToInput('')
+                  }
+                }}
+                className="px-1.5 py-0.5 bg-blue-600 text-white text-[10px] rounded hover:bg-blue-700"
               >
-                #
+                Go
               </button>
-              {showMoveTo && (
-                <div className="absolute right-0 top-full mt-1 z-20 bg-slate-700 border border-slate-600
-                  rounded p-1.5 flex items-center gap-1 shadow-lg">
-                  <input
-                    type="number"
-                    min="1"
-                    max={total}
-                    step="1"
-                    value={moveToInput}
-                    onChange={e => {
-                      const v = e.target.value.replace(/[^0-9]/g, '')
-                      setMoveToInput(v)
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && moveToInput) {
-                        onMoveTo(item.id, parseInt(moveToInput))
-                        setShowMoveTo(false)
-                        setMoveToInput('')
-                      } else if (e.key === 'Escape') {
-                        setShowMoveTo(false)
-                        setMoveToInput('')
-                      }
-                    }}
-                    placeholder={`1-${total}`}
-                    autoFocus
-                    className="w-14 px-1.5 py-0.5 bg-slate-800 border border-slate-500 rounded text-xs
-                      text-white focus:outline-none focus:border-blue-500 placeholder-slate-500"
-                  />
-                  <button
-                    onClick={() => {
-                      if (moveToInput) {
-                        onMoveTo(item.id, parseInt(moveToInput))
-                        setShowMoveTo(false)
-                        setMoveToInput('')
-                      }
-                    }}
-                    className="px-1.5 py-0.5 bg-blue-600 text-white text-[10px] rounded hover:bg-blue-700"
-                  >
-                    Go
-                  </button>
-                </div>
-              )}
             </div>
-          </>
-        )}
+          )}
+        </div>
         <button
           onClick={() => onEdit(item)}
           className="p-1.5 text-slate-400 hover:text-white transition-colors"
@@ -262,14 +254,13 @@ function SortableExpenseRow({
   )
 }
 
-export function ExpenseItemsEditor({ goalId, expensePeriod, currency, sortMode, onClose }: ExpenseItemsEditorProps) {
+export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }: ExpenseItemsEditorProps) {
   const queryClient = useQueryClient()
   const confirm = useConfirm()
   const prefix = currency === 'BTC' ? '' : '$'
   const periodLabel = expensePeriod === 'weekly' ? '/wk' :
     expensePeriod === 'quarterly' ? '/qtr' :
     expensePeriod === 'yearly' ? '/yr' : '/mo'
-  const isCustom = sortMode === 'custom'
 
   // Fetch items
   const { data: items = [], isLoading } = useQuery({
@@ -690,7 +681,6 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, sortMode, 
           total={displayItems.length}
           prefix={prefix}
           periodLabel={periodLabel}
-          isCustom={isCustom}
           onEdit={setEditing}
           onDelete={async (id) => {
             if (await confirm({ title: 'Delete Expense', message: 'Delete this expense?', variant: 'danger', confirmLabel: 'Delete' }))
@@ -711,7 +701,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, sortMode, 
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <div>
             <h3 className="text-lg font-semibold text-white">Manage Expenses</h3>
-            {isCustom && displayItems.length > 1 && (
+            {displayItems.length > 1 && (
               <p className="text-xs text-slate-500 mt-0.5">Drag to reorder or use controls to set priority</p>
             )}
           </div>
@@ -728,7 +718,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, sortMode, 
             <div className="text-center py-6 text-slate-500">
               No expense items yet. Add your first expense below.
             </div>
-          ) : isCustom ? (
+          ) : (
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -741,8 +731,6 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, sortMode, 
                 {itemsList}
               </SortableContext>
             </DndContext>
-          ) : (
-            itemsList
           )}
 
           {/* Total */}

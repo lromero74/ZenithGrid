@@ -727,7 +727,6 @@ export default function Reports() {
           goalId={expenseEditorGoal.id}
           expensePeriod={expenseEditorGoal.expense_period || 'monthly'}
           currency={expenseEditorGoal.target_currency}
-          sortMode={expenseEditorGoal.expense_sort_mode || 'amount_asc'}
           onClose={() => setExpenseEditorGoal(null)}
         />
       )}

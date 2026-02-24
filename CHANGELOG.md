@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.52.4] - 2026-02-24
+
+### Fixed
+- **Expense reorder always available**: Drag-to-reorder, move-to-top/bottom, and move-to-position controls now work in the Manage Expenses modal regardless of waterfall sort mode
+
 ## [v2.52.3] - 2026-02-24
 
 ### Fixed
