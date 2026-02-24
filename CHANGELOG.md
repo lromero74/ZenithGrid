@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.44.0] - 2026-02-24
+
+### Added
+- **Bot strategy context in AI reports**: AI summaries now receive actual bot configurations — indicator entry/exit conditions (BB%, RSI, Volume RSI), take profit targets, safety order settings, and DCA mechanics — for bots that had trades in the period, so the AI can accurately interpret win rates and trading patterns
+
+## [v2.43.1] - 2026-02-24
+
+### Fixed
+- **PDF generation crash**: Fixed "Not enough horizontal space" error when AI summary had bullet points followed by paragraph text
+- **PDF error logging**: PDF errors now include full stack traces
+
 ## [v2.43.0] - 2026-02-24
 
 ### Changed
