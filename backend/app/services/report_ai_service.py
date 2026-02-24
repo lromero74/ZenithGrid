@@ -4,8 +4,7 @@ Report AI Service
 Generates AI-powered summaries for performance reports using
 the user's own AI provider credentials.
 
-Returns three experience-level tiers (beginner, comfortable, experienced)
-in a single AI call.
+Returns two tiers (simple, detailed) in a single AI call.
 """
 
 import logging
@@ -47,24 +46,19 @@ def _fmt_ai_coverage_pct(pct: float) -> str:
         return f"{pct:.0f}%"
 
 
-# Max tokens for summary generation (3 tiers with structured markdown sections)
+# Max tokens for summary generation (2 tiers with structured markdown sections)
 MAX_SUMMARY_TOKENS = 4096
 
 # System message for all AI providers — sets the role and output format
 _SYSTEM_MESSAGE = (
     "You are a trading performance analyst writing structured report summaries. "
     "Format your output using markdown: ### for section headers, **bold** for key "
-    "figures, - for bullet lists. Every summary MUST include these sections in order: "
-    "### Performance Overview, ### Goal Progress (if goal data is present), "
-    "### Capital Movements (if deposit/withdrawal data is present), "
-    "### Outlook & Action Items. Keep each section concise (2-4 sentences or a short "
-    "bullet list). Be factual — never invent data not provided."
+    "figures, - for bullet lists. Be factual — never invent data not provided."
 )
 
 # Delimiters used to split the AI response into tiers
-_DELIM_BEGINNER = "---BEGINNER---"
-_DELIM_COMFORTABLE = "---COMFORTABLE---"
-_DELIM_EXPERIENCED = "---EXPERIENCED---"
+_DELIM_SIMPLE = "---SUMMARY---"
+_DELIM_DETAILED = "---DETAILED---"
 
 
 async def generate_report_summary(
@@ -86,7 +80,7 @@ async def generate_report_summary(
 
     Returns:
         Tuple of (tiered_summary_dict, provider_used) or (None, None) if no AI available.
-        tiered_summary_dict has keys: beginner, comfortable, experienced
+        tiered_summary_dict has keys: simple, detailed
     """
     all_providers = ["claude", "openai", "gemini"]
     if provider:
@@ -124,44 +118,35 @@ async def generate_report_summary(
 
 def _parse_tiered_summary(text: str) -> dict:
     """
-    Parse a delimited AI response into three tiers.
+    Parse a delimited AI response into two tiers.
 
     Expected format:
-        ---BEGINNER---
-        ... beginner text ...
-        ---COMFORTABLE---
-        ... comfortable text ...
-        ---EXPERIENCED---
-        ... experienced text ...
+        ---SUMMARY---
+        ... simple text ...
+        ---DETAILED---
+        ... detailed text ...
 
     Fallback: if delimiters are not found, the entire response is
-    assigned to the 'comfortable' tier.
+    assigned to the 'simple' tier.
     """
     has_delimiters = (
-        _DELIM_BEGINNER in text
-        and _DELIM_COMFORTABLE in text
-        and _DELIM_EXPERIENCED in text
+        _DELIM_SIMPLE in text
+        and _DELIM_DETAILED in text
     )
 
     if not has_delimiters:
         return {
-            "beginner": None,
-            "comfortable": text.strip(),
-            "experienced": None,
+            "simple": text.strip(),
+            "detailed": None,
         }
 
-    parts = {}
+    after_simple = text.split(_DELIM_SIMPLE, 1)[1]
+    simple_text, detailed_text = after_simple.split(_DELIM_DETAILED, 1)
 
-    # Split on the three delimiters in order
-    after_beginner = text.split(_DELIM_BEGINNER, 1)[1]
-    beginner_text, rest = after_beginner.split(_DELIM_COMFORTABLE, 1)
-    comfortable_text, experienced_text = rest.split(_DELIM_EXPERIENCED, 1)
-
-    parts["beginner"] = beginner_text.strip() or None
-    parts["comfortable"] = comfortable_text.strip() or None
-    parts["experienced"] = experienced_text.strip() or None
-
-    return parts
+    return {
+        "simple": simple_text.strip() or None,
+        "detailed": detailed_text.strip() or None,
+    }
 
 
 def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
@@ -320,33 +305,36 @@ Report Data:
 - Win Rate: {data.get('win_rate', 0):.1f}%
 {goals_section}{capital_section}{prior_section}
 
-Write THREE versions separated by the exact delimiters below. All versions MUST use \
-the same section structure (### headers in order), but pitched for different audiences.
+Write TWO versions separated by the exact delimiters below.
 
-Formatting rules (apply to ALL tiers):
-- Use ### for section headers (### Performance Overview, ### Goal Progress, etc.)
-- Use **bold** for key figures and important numbers
-- Use - bullet lists for action items in the Outlook section
-- Keep each section concise: 2-4 sentences or a short bullet list
-- Only include ### Goal Progress if goal data is present above
-- ALWAYS include ### Capital Movements — explain the account value change breakdown
-
-{_DELIM_BEGINNER}
-(For beginners: plain language, explain jargon, encouraging tone. Focus on \
+{_DELIM_SIMPLE}
+(Summary version: plain language, explain jargon, encouraging tone. Focus on \
 "what does this mean for me?" Use a few approachable symbols at section headers \
 for visual warmth — not childish or overloaded, just welcoming.)
 
-{_DELIM_COMFORTABLE}
-(For comfortable users: data-driven but approachable, highlight key trends, note \
-goal progress, suggest 1-2 actionable items. Professional but friendly. Light use \
-of symbols at section headers only.)
+Required sections in order:
+### Performance Overview, ### Goal Progress (if goal data present), \
+### Capital Movements, ### Outlook & Action Items.
+Keep each section concise: 2-4 sentences or a short bullet list.
 
-{_DELIM_EXPERIENCED}
-(For experienced traders: technical, concise, focus on alpha/risk metrics, win rate \
-analysis, period-over-period delta. Skip basic explanations. Professional — use \
-financial symbols (%, +/-, currency) but minimal decorative symbols.)
+Formatting: ### for headers, **bold** for key figures, - for bullet lists.
 
-Guidelines for ALL tiers:
+{_DELIM_DETAILED}
+(Detailed version: expert-level depth, technical, opinionated. Analyze alpha, \
+risk metrics, win rate trends, period-over-period delta. Skip basic explanations. \
+Professional — use financial symbols (%, +/-, currency) but minimal decorative symbols. \
+You MAY add extra sections beyond the required ones if the data warrants it — e.g. \
+### Risk Assessment, ### Strategy Notes, ### Optimization Ideas. Offer your \
+analytical opinion and suggest specific, actionable improvements.)
+
+Required sections in order:
+### Performance Overview, ### Goal Progress (if goal data present), \
+### Capital Movements, ### Outlook & Action Items.
+Additional sections are encouraged after the required ones.
+
+Formatting: ### for headers, **bold** for key figures, - for bullet lists.
+
+Guidelines for BOTH versions:
 - Be factual — do not hallucinate data not provided above
 - CRITICAL: NEVER imply that account value change equals trading profit. The \
 account value change includes deposits and withdrawals. Always break down the \
