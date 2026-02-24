@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.49.1] - 2026-02-24
+
+### Changed
+- **README comprehensive update**: Added missing feature descriptions for reports & goal tracking, account value charts, transfer tracking, closed positions page, paper trading details, in-app version history, and account-scoped isolation. Updated comparison table, safety features, roadmap, and database stores sections to reflect v2.30–v2.49 features.
+
 ## [v2.49.0] - 2026-02-24
 
 ### Added
