@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Transaction types we care about for deposit/withdrawal tracking
 DEPOSIT_TYPES = {"fiat_deposit", "exchange_deposit", "send"}
-WITHDRAWAL_TYPES = {"fiat_withdrawal", "exchange_withdrawal"}
+WITHDRAWAL_TYPES = {"fiat_withdrawal", "exchange_withdrawal", "cardspend"}
 ALL_TRANSFER_TYPES = DEPOSIT_TYPES | WITHDRAWAL_TYPES
 
 

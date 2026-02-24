@@ -1549,6 +1549,7 @@ class AccountTransfer(Base):
     amount_usd = Column(Float, nullable=True)  # USD equivalent at time of transfer
     occurred_at = Column(DateTime, nullable=False, index=True)
     source = Column(String, default="coinbase_api")  # 'coinbase_api' or 'manual'
+    original_type = Column(String, nullable=True)  # Coinbase txn type: cardspend, fiat_withdrawal, etc.
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

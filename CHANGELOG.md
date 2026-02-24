@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.42.0] - 2026-02-24
+
+### Added
+- **Card spend itemization on reports**: Coinbase Card transactions now show as "Card Spend (BTC)" or "Card Spend (USD)" instead of generic "Withdrawal" in HTML, PDF, and AI report summaries
+- **Transfer type labels**: All transfers now display descriptive labels — "Bank Deposit", "Bank Withdrawal", "Crypto Transfer", "Exchange Transfer" — across reports and AI narratives
+- **Card spend on USD chart line**: Coinbase Card spend markers now appear on the USD line of the Dashboard Account Value chart (previously appeared on BTC line since the currency is BTC)
+
 ## [v2.41.1] - 2026-02-24
 
 ### Added

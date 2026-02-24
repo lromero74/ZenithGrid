@@ -367,7 +367,10 @@ async def get_daily_activity(
         # the chart with misleading deposit markers
         if (t.amount_usd or 0) < 1.0:
             continue
-        is_btc = (t.currency or "").upper() == "BTC"
+        # Card spends are BTC-denominated on Coinbase but are really
+        # USD purchases — show them on the USD line with their USD value
+        is_cardspend = (t.original_type or "") == "cardspend"
+        is_btc = (t.currency or "").upper() == "BTC" and not is_cardspend
         line = "btc" if is_btc else "usd"
         category = t.transfer_type  # "deposit" or "withdrawal"
         amount = t.amount if is_btc else (t.amount_usd or 0)

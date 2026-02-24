@@ -16,6 +16,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 
+_AI_TRANSFER_LABELS = {
+    "cardspend": "Card Spend",
+    "fiat_deposit": "Bank Deposit",
+    "fiat_withdrawal": "Bank Withdrawal",
+    "send": "Crypto Transfer",
+    "exchange_deposit": "Exchange Transfer",
+    "exchange_withdrawal": "Exchange Transfer",
+}
+
+
+def _ai_transfer_label(rec: dict) -> str:
+    """Map original_type to a descriptive label for AI prompts."""
+    ot = rec.get("original_type")
+    if ot and ot in _AI_TRANSFER_LABELS:
+        label = _AI_TRANSFER_LABELS[ot]
+        if ot == "cardspend":
+            label += f" ({rec.get('currency', 'USD')})"
+        return label
+    return rec.get("type", "").capitalize()
+
+
 def _fmt_ai_coverage_pct(pct: float) -> str:
     """Format coverage percentage with adaptive precision for AI prompts."""
     if pct < 1:
@@ -265,7 +286,7 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
     if transfer_records:
         lines = ["\n  Individual transfers (most recent first):"]
         for tr in transfer_records:
-            tr_type = tr.get("type", "").capitalize()
+            tr_type = _ai_transfer_label(tr)
             tr_amt = abs(tr.get("amount_usd", 0))
             tr_sign = "+" if tr.get("type") == "deposit" else "-"
             lines.append(

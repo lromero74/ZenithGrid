@@ -26,6 +26,7 @@ from app.services.report_generator_service import (
     _ordinal_day,
     _render_pdf_markdown,
     _sanitize_for_pdf,
+    _transfer_label,
     build_report_html,
     generate_pdf,
 )
@@ -1587,3 +1588,129 @@ class TestBuildReportHtmlTransfers:
         )
         assert "Capital Movements" in html
         assert "+$150.00" in html
+
+
+# ---------------------------------------------------------------------------
+# _transfer_label — original_type → human-readable label
+# ---------------------------------------------------------------------------
+
+
+class TestTransferLabel:
+    """Tests for _transfer_label mapping original_type to display labels."""
+
+    def test_cardspend_btc(self):
+        rec = {"original_type": "cardspend", "type": "withdrawal", "currency": "BTC"}
+        assert _transfer_label(rec) == "Card Spend (BTC)"
+
+    def test_cardspend_usd(self):
+        rec = {"original_type": "cardspend", "type": "withdrawal", "currency": "USD"}
+        assert _transfer_label(rec) == "Card Spend (USD)"
+
+    def test_cardspend_no_currency_defaults_usd(self):
+        rec = {"original_type": "cardspend", "type": "withdrawal"}
+        assert _transfer_label(rec) == "Card Spend (USD)"
+
+    def test_fiat_withdrawal(self):
+        rec = {"original_type": "fiat_withdrawal", "type": "withdrawal"}
+        assert _transfer_label(rec) == "Bank Withdrawal"
+
+    def test_fiat_deposit(self):
+        rec = {"original_type": "fiat_deposit", "type": "deposit"}
+        assert _transfer_label(rec) == "Bank Deposit"
+
+    def test_send(self):
+        rec = {"original_type": "send", "type": "deposit"}
+        assert _transfer_label(rec) == "Crypto Transfer"
+
+    def test_exchange_deposit(self):
+        rec = {"original_type": "exchange_deposit", "type": "deposit"}
+        assert _transfer_label(rec) == "Exchange Transfer"
+
+    def test_exchange_withdrawal(self):
+        rec = {"original_type": "exchange_withdrawal", "type": "withdrawal"}
+        assert _transfer_label(rec) == "Exchange Transfer"
+
+    def test_fallback_no_original_type(self):
+        """When original_type is None, fall back to type.capitalize()."""
+        rec = {"type": "withdrawal"}
+        assert _transfer_label(rec) == "Withdrawal"
+
+    def test_fallback_none_original_type(self):
+        rec = {"original_type": None, "type": "deposit"}
+        assert _transfer_label(rec) == "Deposit"
+
+    def test_fallback_unknown_original_type(self):
+        """Unknown original_type values fall back to type.capitalize()."""
+        rec = {"original_type": "staking_reward", "type": "deposit"}
+        assert _transfer_label(rec) == "Deposit"
+
+    def test_fallback_empty_record(self):
+        assert _transfer_label({}) == ""
+
+
+# ---------------------------------------------------------------------------
+# _build_transfers_section — Card Spend label rendering
+# ---------------------------------------------------------------------------
+
+
+class TestTransfersSectionCardSpend:
+    """Transfer table renders Card Spend labels from original_type."""
+
+    def test_html_renders_card_spend_label(self):
+        data = {"transfer_records": [
+            {"date": "2026-02-20", "type": "withdrawal", "amount_usd": 12.50,
+             "currency": "BTC", "original_type": "cardspend"},
+        ]}
+        html = _build_transfers_section(data)
+        assert "Card Spend (BTC)" in html
+        assert "Withdrawal" not in html
+
+    def test_html_renders_bank_withdrawal_label(self):
+        data = {"transfer_records": [
+            {"date": "2026-02-20", "type": "withdrawal", "amount_usd": 500.0,
+             "currency": "USD", "original_type": "fiat_withdrawal"},
+        ]}
+        html = _build_transfers_section(data)
+        assert "Bank Withdrawal" in html
+
+    def test_html_renders_bank_deposit_label(self):
+        data = {"transfer_records": [
+            {"date": "2026-02-15", "type": "deposit", "amount_usd": 1000.0,
+             "currency": "USD", "original_type": "fiat_deposit"},
+        ]}
+        html = _build_transfers_section(data)
+        assert "Bank Deposit" in html
+
+    def test_html_fallback_no_original_type(self):
+        """Legacy records without original_type still show capitalized type."""
+        data = {"transfer_records": [
+            {"date": "2026-02-15", "type": "deposit", "amount_usd": 100.0},
+        ]}
+        html = _build_transfers_section(data)
+        assert "Deposit" in html
+
+    def test_pdf_renders_card_spend_label(self):
+        """PDF output with card spend records should not crash."""
+        data = {
+            "account_value_usd": 10000.0,
+            "account_value_btc": 0.1,
+            "period_start_value_usd": 9500.0,
+            "period_profit_usd": 500.0,
+            "period_profit_btc": 0.005,
+            "total_trades": 10,
+            "winning_trades": 7,
+            "losing_trades": 3,
+            "win_rate": 70.0,
+            "net_deposits_usd": -12.50,
+            "total_deposits_usd": 0,
+            "total_withdrawals_usd": 12.50,
+            "adjusted_account_growth_usd": 512.50,
+            "transfer_records": [
+                {"date": "2026-02-20", "type": "withdrawal", "amount_usd": 12.50,
+                 "currency": "BTC", "original_type": "cardspend"},
+            ],
+        }
+        result = generate_pdf("<html></html>", data, "Test Report")
+        assert result is not None
+        assert isinstance(result, bytes)
+        assert len(result) > 100

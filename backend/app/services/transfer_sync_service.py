@@ -115,6 +115,7 @@ async def sync_transfers(
                 amount_usd=t.get("amount_usd"),
                 occurred_at=occurred_at,
                 source="coinbase_api",
+                original_type=t.get("coinbase_type"),
             )
             db.add(transfer)
             new_count += 1
