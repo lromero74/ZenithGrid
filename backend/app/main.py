@@ -469,8 +469,8 @@ async def startup_event():
     try:
         import aiosqlite
         db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
-        async with aiosqlite.connect(db_path) as raw_conn:
-            # VACUUM cannot run inside a transaction
+        # isolation_level=None → autocommit (VACUUM can't run in a transaction)
+        async with aiosqlite.connect(db_path, isolation_level=None) as raw_conn:
             await raw_conn.execute("PRAGMA journal_mode=WAL")
             await raw_conn.execute("VACUUM")
         print("🚀 Database VACUUM completed successfully")
