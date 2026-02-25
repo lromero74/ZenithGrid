@@ -465,6 +465,19 @@ async def startup_event():
     await init_db()
     print("🚀 Database initialized successfully")
 
+    # VACUUM to reclaim space and optimize page layout
+    try:
+        import aiosqlite
+        db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
+        async with aiosqlite.connect(db_path) as raw_conn:
+            # VACUUM cannot run inside a transaction
+            await raw_conn.execute("PRAGMA journal_mode=WAL")
+            await raw_conn.execute("VACUUM")
+        print("🚀 Database VACUUM completed successfully")
+    except Exception as e:
+        logger.warning(f"Database VACUUM failed (non-fatal): {e}")
+        print(f"⚠️ Database VACUUM failed (non-fatal): {e}")
+
     # Start multi-bot monitor (gets exchange clients per-bot from accounts)
     print("🚀 Starting multi-bot monitor...")
     await price_monitor.start_async()

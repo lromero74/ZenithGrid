@@ -5,12 +5,16 @@ Tests the paper trading exchange client that simulates order execution
 without hitting real exchanges. Uses mock Account and db sessions.
 """
 
+import asyncio
 import json
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.exchange_clients.paper_trading_client import PaperTradingClient
+from app.exchange_clients.paper_trading_client import (
+    PaperTradingClient,
+    _account_balance_locks,
+)
 
 
 # =========================================================
@@ -34,11 +38,24 @@ def _make_mock_account(
 
 
 def _make_mock_db(account=None):
-    """Create a mock async db session."""
+    """Create a mock async db session.
+
+    If ``account`` is given, ``db.execute()`` returns a result whose
+    ``.scalar_one_or_none()`` yields that account — used by
+    ``_reload_balances()`` to fetch fresh paper_balances from DB.
+    When ``account`` is None, ``scalar_one_or_none()`` returns None
+    so ``_reload_balances()`` keeps the in-memory snapshot.
+    """
     db = AsyncMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
     db.merge = AsyncMock(side_effect=lambda obj: obj)
+
+    # Always wire up execute → scalar_one_or_none properly
+    result_mock = MagicMock()
+    result_mock.scalar_one_or_none.return_value = account  # None when no account
+    db.execute = AsyncMock(return_value=result_mock)
+
     return db
 
 
@@ -746,3 +763,215 @@ class TestConvenienceMethods:
 
         result = await client.sell_for_usd(0.5, "BTC-USD")
         assert result["success"] is True
+
+
+# =========================================================
+# Concurrent balance safety (race condition fix)
+# =========================================================
+
+
+class TestConcurrentBalanceSafety:
+    """Tests for per-account locking and fresh DB reads in place_order.
+
+    These verify that concurrent paper trading clients sharing the same
+    account do not silently overwrite each other's balance changes.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clear_lock_registry(self):
+        """Ensure a clean lock registry for each test."""
+        _account_balance_locks.clear()
+        yield
+        _account_balance_locks.clear()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_buys_same_account_no_balance_loss(self):
+        """Happy path: two concurrent buys on the same account both deduct BTC.
+
+        Simulates two bots buying different alts from the same paper account.
+        Without locking, last-writer-wins would silently drop one deduction.
+        """
+        ACCOUNT_ID = 3
+        initial = {"BTC": 1.0, "ETH": 0.0, "UNI": 0.0}
+        account = _make_mock_account(paper_balances=initial, account_id=ACCOUNT_ID)
+
+        # Track the "DB state" that _reload_balances reads —
+        # updated by _save_balances via the mock
+        db_state = {"balances": json.dumps(initial)}
+
+        def make_db():
+            db = AsyncMock()
+            db.commit = AsyncMock()
+            db.refresh = AsyncMock()
+            db.merge = AsyncMock(side_effect=lambda obj: obj)
+
+            # _reload_balances reads from DB via execute()
+            async def fake_execute(stmt):
+                result = MagicMock()
+                fresh_account = MagicMock()
+                fresh_account.paper_balances = db_state["balances"]
+                result.scalar_one_or_none.return_value = fresh_account
+                return result
+
+            db.execute = AsyncMock(side_effect=fake_execute)
+            return db
+
+        real_client = _make_mock_real_client(price=0.001)  # cheap alts
+
+        # Create two clients (simulating two bots)
+        db1 = make_db()
+        client1 = PaperTradingClient(account, db1, real_client=real_client)
+
+        db2 = make_db()
+        client2 = PaperTradingClient(account, db2, real_client=real_client)
+
+        # Intercept _save_balances to persist to our shared db_state
+        original_save1 = client1._save_balances
+        original_save2 = client2._save_balances
+
+        async def patched_save1():
+            db_state["balances"] = json.dumps(client1.balances)
+            await original_save1()
+
+        async def patched_save2():
+            db_state["balances"] = json.dumps(client2.balances)
+            await original_save2()
+
+        client1._save_balances = patched_save1
+        client2._save_balances = patched_save2
+
+        # Run two buys concurrently
+        results = await asyncio.gather(
+            client1.place_order("ETH-BTC", "buy", "market", funds=0.1),
+            client2.place_order("UNI-BTC", "buy", "market", funds=0.2),
+        )
+
+        assert results[0]["success"] is True
+        assert results[1]["success"] is True
+
+        # Final DB state should reflect BOTH deductions
+        final = json.loads(db_state["balances"])
+        assert final["BTC"] == pytest.approx(0.7, abs=1e-8)
+
+    @pytest.mark.asyncio
+    async def test_concurrent_buy_and_sell_same_account(self):
+        """Edge case: concurrent buy + sell produce correct final balances."""
+        ACCOUNT_ID = 3
+        initial = {"BTC": 1.0, "ETH": 10.0, "UNI": 0.0}
+        account = _make_mock_account(paper_balances=initial, account_id=ACCOUNT_ID)
+
+        db_state = {"balances": json.dumps(initial)}
+
+        def make_db():
+            db = AsyncMock()
+            db.commit = AsyncMock()
+            db.refresh = AsyncMock()
+            db.merge = AsyncMock(side_effect=lambda obj: obj)
+
+            async def fake_execute(stmt):
+                result = MagicMock()
+                fresh_account = MagicMock()
+                fresh_account.paper_balances = db_state["balances"]
+                result.scalar_one_or_none.return_value = fresh_account
+                return result
+
+            db.execute = AsyncMock(side_effect=fake_execute)
+            return db
+
+        real_client = _make_mock_real_client(price=0.05)  # ETH-BTC
+
+        db1 = make_db()
+        client1 = PaperTradingClient(account, db1, real_client=real_client)
+
+        db2 = make_db()
+        client2 = PaperTradingClient(account, db2, real_client=real_client)
+
+        original_save1 = client1._save_balances
+        original_save2 = client2._save_balances
+
+        async def patched_save1():
+            db_state["balances"] = json.dumps(client1.balances)
+            await original_save1()
+
+        async def patched_save2():
+            db_state["balances"] = json.dumps(client2.balances)
+            await original_save2()
+
+        client1._save_balances = patched_save1
+        client2._save_balances = patched_save2
+
+        # Buy ETH with 0.1 BTC, sell 5 ETH for BTC — concurrently
+        results = await asyncio.gather(
+            client1.place_order("ETH-BTC", "buy", "market", funds=0.1),
+            client2.place_order("ETH-BTC", "sell", "market", size=5.0),
+        )
+
+        assert results[0]["success"] is True
+        assert results[1]["success"] is True
+
+        final = json.loads(db_state["balances"])
+        # BTC: 1.0 - 0.1 (buy) + 0.25 (sell 5 ETH * 0.05) = 1.15
+        assert final["BTC"] == pytest.approx(1.15, abs=1e-8)
+        # ETH: 10 + 2 (bought 0.1/0.05) - 5 (sold) = 7
+        assert final["ETH"] == pytest.approx(7.0, abs=1e-8)
+
+    @pytest.mark.asyncio
+    async def test_lock_released_on_insufficient_balance_error(self):
+        """Failure case: insufficient funds error still releases the lock.
+
+        If the lock wasn't released, a subsequent order would deadlock.
+        """
+        ACCOUNT_ID = 3
+        initial = {"BTC": 0.01, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=initial, account_id=ACCOUNT_ID)
+        db = _make_mock_db(account=account)
+        real_client = _make_mock_real_client(price=0.05)
+        client = PaperTradingClient(account, db, real_client=real_client)
+
+        # First order fails — insufficient funds
+        with pytest.raises(Exception, match="Insufficient BTC"):
+            await client.place_order("ETH-BTC", "buy", "market", funds=1.0)
+
+        # Second order should NOT deadlock (lock was released)
+        # Give the account enough funds via reload mock
+        account.paper_balances = json.dumps({"BTC": 5.0, "ETH": 0.0})
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = account
+        db.execute = AsyncMock(return_value=result_mock)
+
+        result = await asyncio.wait_for(
+            client.place_order("ETH-BTC", "buy", "market", funds=0.1),
+            timeout=2.0,  # Would hang forever if lock stuck
+        )
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_reload_balances_reads_fresh_from_db(self):
+        """Happy path: _reload_balances() picks up externally modified balances.
+
+        After another client modifies the DB, reloading should see the new values.
+        """
+        ACCOUNT_ID = 3
+        initial = {"BTC": 1.0, "ETH": 0.0}
+        account = _make_mock_account(paper_balances=initial, account_id=ACCOUNT_ID)
+
+        # DB returns different balances than what we initialized with
+        modified = {"BTC": 0.5, "ETH": 5.0, "UNI": 100.0}
+        db_account = MagicMock()
+        db_account.paper_balances = json.dumps(modified)
+
+        db = _make_mock_db()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = db_account
+        db.execute = AsyncMock(return_value=result_mock)
+
+        client = PaperTradingClient(account, db, real_client=None)
+
+        # Initially has the stale snapshot
+        assert client.balances["BTC"] == 1.0
+
+        # After reload, should have fresh values
+        await client._reload_balances()
+        assert client.balances["BTC"] == pytest.approx(0.5)
+        assert client.balances["ETH"] == pytest.approx(5.0)
+        assert client.balances["UNI"] == pytest.approx(100.0)

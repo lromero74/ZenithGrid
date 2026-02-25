@@ -5,18 +5,32 @@ Simulates order execution for paper trading accounts without hitting real exchan
 Uses real market data for price feeds but fakes order fills and balance updates.
 """
 
+import asyncio
 import json
 import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exchange_clients.base import ExchangeClient
 from app.models import Account
 
 logger = logging.getLogger(__name__)
+
+# Per-account asyncio locks to serialize balance operations.
+# Without this, concurrent PaperTradingClient instances for the same account
+# read stale snapshots of paper_balances and the last writer silently wins.
+_account_balance_locks: Dict[int, asyncio.Lock] = {}
+
+
+def _get_account_lock(account_id: int) -> asyncio.Lock:
+    """Return (or create) the asyncio.Lock for a given paper account."""
+    if account_id not in _account_balance_locks:
+        _account_balance_locks[account_id] = asyncio.Lock()
+    return _account_balance_locks[account_id]
 
 
 class PaperTradingClient(ExchangeClient):
@@ -60,9 +74,21 @@ class PaperTradingClient(ExchangeClient):
 
         logger.info(f"Initialized paper trading client for account {account.id}")
 
+    async def _reload_balances(self):
+        """Re-read paper_balances from the database for the current account.
+
+        Must be called inside the per-account lock so we never operate on a
+        stale in-memory snapshot.
+        """
+        result = await self.db.execute(
+            select(Account).where(Account.id == self.account.id)
+        )
+        fresh = result.scalar_one_or_none()
+        if fresh and fresh.paper_balances:
+            self.balances = json.loads(fresh.paper_balances)
+
     async def _save_balances(self):
         """Save current balances to database with retry for SQLite lock contention."""
-        import asyncio
         for attempt in range(3):
             try:
                 # Merge to ensure account is persistent in the current session
@@ -98,7 +124,10 @@ class PaperTradingClient(ExchangeClient):
             return None
 
     async def get_all_balances(self) -> Dict[str, float]:
-        """Get all virtual balances."""
+        """Get all virtual balances (re-reads from DB for consistency)."""
+        lock = _get_account_lock(self.account.id)
+        async with lock:
+            await self._reload_balances()
         return self.balances.copy()
 
     async def place_order(
@@ -129,57 +158,63 @@ class PaperTradingClient(ExchangeClient):
         """
         base_currency, quote_currency = product_id.split("-")
 
-        # Get current market price
+        # Get current market price OUTSIDE the lock (slow network call)
         current_price = await self.get_price(product_id)
         if not current_price:
             raise Exception(f"Could not get price for {product_id}")
 
-        # Calculate order size
-        if side == "buy":
-            if funds:
-                # Market buy with funds
-                actual_size = funds / current_price
-                actual_funds = funds
-            elif size:
-                # Buy specific size
+        # Serialize all balance mutations for this account.
+        # Inside the lock: re-read fresh balances → check → modify → save.
+        lock = _get_account_lock(self.account.id)
+        async with lock:
+            await self._reload_balances()
+
+            # Calculate order size
+            if side == "buy":
+                if funds:
+                    # Market buy with funds
+                    actual_size = funds / current_price
+                    actual_funds = funds
+                elif size:
+                    # Buy specific size
+                    actual_size = size
+                    actual_funds = size * current_price
+                else:
+                    raise ValueError("Must specify either size or funds for buy order")
+
+                # Check sufficient quote currency
+                available_quote = self.balances.get(quote_currency, 0.0)
+                if available_quote < actual_funds:
+                    raise Exception(
+                        f"Insufficient {quote_currency} balance. "
+                        f"Available: {available_quote}, Required: {actual_funds}"
+                    )
+
+                # Execute simulated buy
+                self.balances[quote_currency] -= actual_funds
+                self.balances[base_currency] = self.balances.get(base_currency, 0.0) + actual_size
+
+            else:  # sell
+                if not size:
+                    raise ValueError("Must specify size for sell order")
+
                 actual_size = size
                 actual_funds = size * current_price
-            else:
-                raise ValueError("Must specify either size or funds for buy order")
 
-            # Check sufficient quote currency
-            available_quote = self.balances.get(quote_currency, 0.0)
-            if available_quote < actual_funds:
-                raise Exception(
-                    f"Insufficient {quote_currency} balance. "
-                    f"Available: {available_quote}, Required: {actual_funds}"
-                )
+                # Check sufficient base currency
+                available_base = self.balances.get(base_currency, 0.0)
+                if available_base < actual_size:
+                    raise Exception(
+                        f"Insufficient {base_currency} balance. "
+                        f"Available: {available_base}, Required: {actual_size}"
+                    )
 
-            # Execute simulated buy
-            self.balances[quote_currency] -= actual_funds
-            self.balances[base_currency] = self.balances.get(base_currency, 0.0) + actual_size
+                # Execute simulated sell
+                self.balances[base_currency] -= actual_size
+                self.balances[quote_currency] = self.balances.get(quote_currency, 0.0) + actual_funds
 
-        else:  # sell
-            if not size:
-                raise ValueError("Must specify size for sell order")
-
-            actual_size = size
-            actual_funds = size * current_price
-
-            # Check sufficient base currency
-            available_base = self.balances.get(base_currency, 0.0)
-            if available_base < actual_size:
-                raise Exception(
-                    f"Insufficient {base_currency} balance. "
-                    f"Available: {available_base}, Required: {actual_size}"
-                )
-
-            # Execute simulated sell
-            self.balances[base_currency] -= actual_size
-            self.balances[quote_currency] = self.balances.get(quote_currency, 0.0) + actual_funds
-
-        # Save updated balances
-        await self._save_balances()
+            # Save updated balances
+            await self._save_balances()
 
         # Generate fake order ID
         order_id = f"paper-{uuid.uuid4()}"
