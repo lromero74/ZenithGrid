@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.53.3] - 2026-02-25
+
+### Fixed
+- **PDF expense coverage table**: Reduced Name column width so Category and Amount fields no longer overlap
+- **PDF next month preview table**: Now matches the Upcoming table layout with Category and color-coded Status columns
+
 ## [v2.53.2] - 2026-02-25
 
 ### Added

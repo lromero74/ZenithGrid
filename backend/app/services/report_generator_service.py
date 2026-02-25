@@ -1973,8 +1973,8 @@ def generate_pdf(
                 cov_items = coverage.get("items", [])
                 if cov_items:
                     col_status = 15
-                    col_cat = 30
-                    col_amt = 35
+                    col_cat = 28
+                    col_amt = 32
                     col_name = pdf.w - pdf.l_margin - pdf.r_margin - col_status - col_cat - col_amt
                     pdf.set_font("Helvetica", "B", 8)
                     pdf.set_text_color(120, 120, 120)
@@ -2116,15 +2116,19 @@ def generate_pdf(
                             f"{_la_labels.get(_pw, 'Next Period')} Preview:",
                             new_x="LMARGIN", new_y="NEXT",
                         )
-                        # Lookahead items table header
-                        la_due_w = 35
-                        la_amt_w = 35
-                        la_name_w = pdf.w - pdf.l_margin - pdf.r_margin - la_due_w - la_amt_w
+                        # Lookahead items table header (matches Upcoming layout)
+                        la_due_w = 30
+                        la_cat_w = 28
+                        la_status_w = 15
+                        la_amt_w = 32
+                        la_name_w = pdf.w - pdf.l_margin - pdf.r_margin - la_due_w - la_cat_w - la_status_w - la_amt_w
                         pdf.set_font("Helvetica", "B", 8)
                         pdf.set_text_color(150, 150, 150)
                         pdf.cell(la_due_w, 5, "Due", new_x="RIGHT")
+                        pdf.cell(la_cat_w, 5, "Category", new_x="RIGHT")
                         pdf.cell(la_name_w, 5, "Name", new_x="RIGHT")
-                        pdf.cell(la_amt_w, 5, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
+                        pdf.cell(la_amt_w, 5, "Amount", new_x="RIGHT", align="R")
+                        pdf.cell(la_status_w, 5, "Status", new_x="LMARGIN", new_y="NEXT")
                         pdf.set_font("Helvetica", "", 9)
                         pdf.set_text_color(150, 150, 150)
                         for _, _la_ei in _lookahead:
@@ -2140,12 +2144,26 @@ def generate_pdf(
                                 )
                             _la_amt = _la_ei.get("amount", 0)
                             _la_name = _sanitize_for_pdf(_la_ei.get('name', ''))
+                            _la_s = _la_ei.get("status", "uncovered")
+                            _la_badge = ("OK" if _la_s == "covered"
+                                         else _fmt_coverage_pct(
+                                             _la_ei.get('coverage_pct', 0))
+                                         if _la_s == "partial" else "X")
                             pdf.cell(la_due_w, 5, _la_lbl, new_x="RIGHT")
+                            pdf.cell(la_cat_w, 5, _la_ei.get('category', ''), new_x="RIGHT")
                             pdf.cell(la_name_w, 5, _la_name, new_x="RIGHT")
+                            pdf.cell(la_amt_w, 5, f"{pfx}{_la_amt:,.2f}", new_x="RIGHT", align="R")
+                            if _la_s == "covered":
+                                pdf.set_text_color(34, 197, 94)
+                            elif _la_s == "partial":
+                                pdf.set_text_color(234, 179, 8)
+                            else:
+                                pdf.set_text_color(239, 68, 68)
                             pdf.cell(
-                                la_amt_w, 5, f"{pfx}{_la_amt:,.2f}",
-                                new_x="LMARGIN", new_y="NEXT", align="R",
+                                la_status_w, 5, _la_badge,
+                                new_x="LMARGIN", new_y="NEXT",
                             )
+                            pdf.set_text_color(150, 150, 150)
                         pdf.set_text_color(80, 80, 80)
                 _daily_inc = g.get("current_daily_income", 0)
                 _proj_lin = g.get("projected_income")
