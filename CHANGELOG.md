@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.53.6] - 2026-02-25
+
+### Changed
+- **PDF expense coverage table**: Reordered columns to Category | Name | Amount | Status for better readability
+- **PDF expense coverage title**: Now reads "Returns Cover X% of Monthly Expenses" instead of the redundant "(Expenses/Monthly) - X% Covered"
+
 ## [v2.53.5] - 2026-02-25
 
 ### Changed
