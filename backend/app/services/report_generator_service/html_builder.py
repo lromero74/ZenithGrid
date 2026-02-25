@@ -615,6 +615,7 @@ def _build_goals_section(
         elif g.get("target_type") == "expenses":
             goal_rows += _build_expenses_goal_card(
                 g, email_mode=email_mode, schedule_meta=schedule_meta,
+                brand_color=brand_color, inline_images=inline_images,
             )
         else:
             goal_rows += _build_standard_goal_card(

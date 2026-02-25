@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Account,
     AccountValueSnapshot,
+    ExpenseItem,
     GoalProgressSnapshot,
     Position,
     ReportGoal,
@@ -40,12 +41,12 @@ async def capture_goal_snapshots(
         hour=0, minute=0, second=0, microsecond=0
     )
 
-    # Get all active goals that support snapshots (not income/expenses)
+    # Get all active goals that support snapshots (not income)
     result = await db.execute(
         select(ReportGoal).where(
             ReportGoal.user_id == user_id,
             ReportGoal.is_active.is_(True),
-            ReportGoal.target_type.notin_(["income", "expenses"]),
+            ReportGoal.target_type.notin_(["income"]),
         )
     )
     goals = result.scalars().all()
@@ -80,10 +81,15 @@ async def capture_goal_snapshots(
 
     count = 0
     for goal in goals:
-        current_value = _get_current_value_for_goal(
-            goal, current_usd, current_btc, profit_usd, profit_btc
-        )
-        target = _get_target_for_goal(goal)
+        if goal.target_type == "expenses":
+            current_value, target = await _get_expense_snapshot_values(
+                db, goal,
+            )
+        else:
+            current_value = _get_current_value_for_goal(
+                goal, current_usd, current_btc, profit_usd, profit_btc
+            )
+            target = _get_target_for_goal(goal)
 
         progress_pct = (current_value / target * 100) if target > 0 else 0.0
         progress_pct = min(progress_pct, 100.0)
@@ -151,6 +157,59 @@ def _get_target_for_goal(goal: ReportGoal) -> float:
     return goal.target_value
 
 
+async def _get_expense_snapshot_values(
+    db: AsyncSession,
+    goal: ReportGoal,
+) -> tuple:
+    """
+    Compute snapshot values for an expense-type goal.
+
+    Returns (income_after_tax, total_expenses).
+    """
+    from app.services.expense_service import compute_expense_coverage
+
+    expense_period = goal.expense_period or "monthly"
+    tax_pct = goal.tax_withholding_pct or 0
+    period_multipliers = {
+        "weekly": 7, "monthly": 30, "quarterly": 91, "yearly": 365,
+    }
+    period_days = period_multipliers.get(expense_period, 30)
+
+    # Compute daily income from closed positions since goal start
+    now = datetime.utcnow()
+    days_elapsed = max((now - goal.start_date).days, 1)
+
+    profit_result = await db.execute(
+        select(func.sum(Position.profit_usd)).where(
+            Position.user_id == goal.user_id,
+            Position.status == "closed",
+            Position.closed_at >= goal.start_date,
+            Position.closed_at <= now,
+        )
+    )
+    row = profit_result.one_or_none()
+    total_profit = (row[0] or 0.0) if row else 0.0
+
+    daily_income = total_profit / days_elapsed
+    projected_income = daily_income * period_days
+
+    # Load active expense items
+    items_result = await db.execute(
+        select(ExpenseItem).where(
+            ExpenseItem.goal_id == goal.id,
+            ExpenseItem.is_active.is_(True),
+        ).order_by(ExpenseItem.sort_order, ExpenseItem.created_at)
+    )
+    expense_items = items_result.scalars().all()
+
+    coverage = compute_expense_coverage(
+        expense_items, expense_period, projected_income, tax_pct,
+        sort_mode="custom",
+    )
+
+    return (coverage["income_after_tax"], coverage["total_expenses"])
+
+
 async def backfill_goal_snapshots(
     db: AsyncSession,
     goal: ReportGoal,
@@ -163,9 +222,12 @@ async def backfill_goal_snapshots(
 
     Returns the number of snapshots created.
     """
-    if goal.target_type in ("income", "expenses"):
-        logger.info(f"Skipping backfill for {goal.target_type} goal {goal.id}")
+    if goal.target_type == "income":
+        logger.info(f"Skipping backfill for income goal {goal.id}")
         return 0
+
+    if goal.target_type == "expenses":
+        return await _backfill_expense_goal_snapshots(db, goal)
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     start = goal.start_date.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -336,6 +398,148 @@ async def backfill_goal_snapshots(
     return count
 
 
+async def _backfill_expense_goal_snapshots(
+    db: AsyncSession,
+    goal: ReportGoal,
+) -> int:
+    """
+    Backfill goal progress snapshots for an expense-type goal.
+
+    For each day from start_date to today, computes income_after_tax
+    (from cumulative closed-position profit) vs total_expenses.
+    """
+    from app.services.expense_service import compute_expense_coverage
+
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    start = goal.start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if start > today:
+        return 0
+
+    expense_period = goal.expense_period or "monthly"
+    tax_pct = goal.tax_withholding_pct or 0
+    period_multipliers = {
+        "weekly": 7, "monthly": 30, "quarterly": 91, "yearly": 365,
+    }
+    period_days = period_multipliers.get(expense_period, 30)
+
+    # Load active expense items once (current state)
+    items_result = await db.execute(
+        select(ExpenseItem).where(
+            ExpenseItem.goal_id == goal.id,
+            ExpenseItem.is_active.is_(True),
+        ).order_by(ExpenseItem.sort_order, ExpenseItem.created_at)
+    )
+    expense_items = items_result.scalars().all()
+
+    if not expense_items:
+        logger.info(f"No expense items for goal {goal.id}, skipping backfill")
+        return 0
+
+    # Get all closed positions from start to today for cumulative profit
+    pos_result = await db.execute(
+        select(Position)
+        .where(
+            Position.user_id == goal.user_id,
+            Position.status == "closed",
+            Position.closed_at >= start,
+            Position.closed_at <= today + timedelta(days=1),
+        )
+        .order_by(Position.closed_at)
+    )
+    positions = pos_result.scalars().all()
+
+    # Pre-start cumulative profit
+    pre_result = await db.execute(
+        select(func.sum(Position.profit_usd)).where(
+            Position.user_id == goal.user_id,
+            Position.status == "closed",
+            Position.closed_at < start,
+        )
+    )
+    pre_row = pre_result.one_or_none()
+    cumulative_profit = (pre_row[0] or 0.0) if pre_row else 0.0
+
+    # Build cumulative profit by date
+    profit_by_date: Dict[str, float] = {}
+    pos_idx = 0
+    current_date = start
+    while current_date <= today:
+        while pos_idx < len(positions):
+            pos_date = positions[pos_idx].closed_at.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            if pos_date <= current_date:
+                cumulative_profit += positions[pos_idx].profit_usd or 0
+                pos_idx += 1
+            else:
+                break
+        profit_by_date[current_date.isoformat()] = cumulative_profit
+        current_date += timedelta(days=1)
+
+    # Check which dates already have snapshots
+    existing_result = await db.execute(
+        select(GoalProgressSnapshot.snapshot_date).where(
+            GoalProgressSnapshot.goal_id == goal.id,
+        )
+    )
+    existing_dates = {
+        row[0].replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        for row in existing_result.fetchall()
+    }
+
+    total_duration = (goal.target_date - goal.start_date).total_seconds()
+
+    count = 0
+    current_date = start
+    while current_date <= today:
+        date_key = current_date.isoformat()
+
+        if date_key in existing_dates:
+            current_date += timedelta(days=1)
+            continue
+
+        cum_profit = profit_by_date.get(date_key, 0.0)
+        days_elapsed = max((current_date - start).days, 1)
+        daily_income = cum_profit / days_elapsed
+        projected_income = daily_income * period_days
+
+        coverage = compute_expense_coverage(
+            expense_items, expense_period, projected_income, tax_pct,
+            sort_mode="custom",
+        )
+
+        income_after_tax = coverage["income_after_tax"]
+        total_expenses = coverage["total_expenses"]
+        coverage_pct = coverage["coverage_pct"]
+
+        elapsed = (current_date - goal.start_date).total_seconds()
+        time_pct = (elapsed / total_duration * 100) if total_duration > 0 else 100
+        on_track = coverage_pct >= time_pct
+
+        snap = GoalProgressSnapshot(
+            goal_id=goal.id,
+            user_id=goal.user_id,
+            snapshot_date=current_date,
+            current_value=round(income_after_tax, 2),
+            target_value=round(total_expenses, 2),
+            progress_pct=round(min(coverage_pct, 100.0), 2),
+            on_track=on_track,
+        )
+        db.add(snap)
+        count += 1
+        current_date += timedelta(days=1)
+
+    if count > 0:
+        await db.flush()
+        logger.info(
+            f"Backfilled {count} expense snapshots for goal {goal.id} "
+            f"({goal.name})"
+        )
+
+    return count
+
+
 async def get_goal_trend_data(
     db: AsyncSession,
     goal: ReportGoal,
@@ -365,7 +569,7 @@ async def get_goal_trend_data(
     snapshots = result.scalars().all()
 
     # Compute ideal start value
-    if goal.target_type == "profit":
+    if goal.target_type in ("profit", "expenses"):
         ideal_start = 0.0
     else:
         ideal_start = snapshots[0].current_value if snapshots else 0.0

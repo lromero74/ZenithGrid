@@ -192,7 +192,7 @@ async def generate_report_for_schedule(
     )
     goal_orm_map = {g.id: g for g in goals}
     for goal_dict in report_data.get("goals", []):
-        if goal_dict.get("target_type") in ("income", "expenses"):
+        if goal_dict.get("target_type") in ("income",):
             continue
         gid = goal_dict.get("goal_id")
         if gid and gid in goal_orm_map:

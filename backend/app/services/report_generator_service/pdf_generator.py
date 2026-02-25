@@ -296,6 +296,10 @@ def generate_pdf(
                     f"Income after tax: {pfx}{income_at:,.2f}",
                     new_x="LMARGIN", new_y="NEXT",
                 )
+                # Trend chart
+                trend_data = g.get("trend_data")
+                if trend_data:
+                    _render_pdf_trend_chart(pdf, trend_data, (br, bg, bb))
                 # Coverage items table header
                 cov_items = coverage.get("items", [])
                 if cov_items:
