@@ -2099,96 +2099,70 @@ def generate_pdf(
             pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
 
-        # Capital Movements (trading summary + individual transfers)
-        pdf_trade_summary = report_data.get("trade_summary")
-        pdf_transfers = report_data.get("transfer_records", [])
-        pdf_has_trades = (
-            pdf_trade_summary
-            and pdf_trade_summary.get("total_trades", 0) > 0
-        )
-
-        if pdf_has_trades or pdf_transfers:
-            pdf.ln(6)
-            pdf.set_font("Helvetica", "B", 12)
-            pdf.set_text_color(30, 30, 30)
-            pdf.cell(
-                0, 8, "Capital Movements",
-                new_x="LMARGIN", new_y="NEXT",
-            )
-            pdf.ln(2)
-
-            # Trading summary row
-            if pdf_has_trades:
-                ts = pdf_trade_summary
-                net = ts["net_profit_usd"]
-                t_sign = "+" if net >= 0 else ""
-                w = ts["winning_trades"]
-                lo = ts["losing_trades"]
-                pdf.set_font("Helvetica", "B", 10)
-                pdf.set_text_color(30, 30, 30)
-                pdf.cell(
-                    80, 7,
-                    f"Trading: {ts['total_trades']} trades ({w}W/{lo}L)",
-                    new_x="RIGHT",
-                )
-                pdf.cell(
-                    0, 7, f"{t_sign}${abs(net):,.2f}",
-                    new_x="LMARGIN", new_y="NEXT", align="R",
-                )
-                pdf.set_font("Helvetica", "", 10)
-                pdf.ln(2)
-
-            # Staking rewards summary row (aggregated)
-            pdf_staking = [
-                r for r in pdf_transfers
-                if r.get("original_type") == "send" and r.get("type") == "deposit"
-            ]
-            pdf_other = [r for r in pdf_transfers if r not in pdf_staking]
-            if pdf_staking:
-                stk_total = sum(abs(r.get("amount_usd", 0)) for r in pdf_staking)
-                pdf.set_font("Helvetica", "B", 10)
-                pdf.set_text_color(30, 30, 30)
-                pdf.cell(
-                    80, 7,
-                    f"Staking Rewards: {len(pdf_staking)} deposits",
-                    new_x="RIGHT",
-                )
-                pdf.cell(
-                    0, 7, f"+${stk_total:,.2f}",
-                    new_x="LMARGIN", new_y="NEXT", align="R",
-                )
-                pdf.set_font("Helvetica", "", 10)
-                pdf.ln(2)
-
-            # Column headers for individual transfers
-            if pdf_other:
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_text_color(100, 100, 100)
-                pdf.cell(40, 6, "Date", new_x="RIGHT")
-                pdf.cell(40, 6, "Type", new_x="RIGHT")
-                pdf.cell(0, 6, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
-                for trec in pdf_other:
-                    t_date = trec.get("date", "")
-                    t_type = _transfer_label(trec)
-                    t_amt = abs(trec.get("amount_usd", 0))
-                    t_sign = "+" if trec.get("type") == "deposit" else "-"
-                    pdf.set_text_color(100, 100, 100)
-                    pdf.cell(40, 6, t_date, new_x="RIGHT")
-                    pdf.cell(40, 6, t_type, new_x="RIGHT")
-                    pdf.set_text_color(30, 30, 30)
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.cell(
-                        0, 6, f"{t_sign}${t_amt:,.2f}",
-                        new_x="LMARGIN", new_y="NEXT", align="R",
-                    )
-                    pdf.set_font("Helvetica", "", 10)
-
-        # Goals — split expenses goals (right after Capital Movements) from others
+        # Goals — split expenses goals from others
         all_goals = report_data.get("goals", [])
         expense_goals = [g for g in all_goals if g.get("target_type") == "expenses"]
         other_goals = [g for g in all_goals if g.get("target_type") != "expenses"]
 
-        # Render expenses goals immediately after Capital Movements
+        # Goal Progress (income + standard goals) — rendered before Capital Movements
+        if other_goals:
+            pdf.ln(6)
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.set_text_color(30, 30, 30)
+            pdf.cell(0, 8, "Goal Progress", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "", 10)
+
+            for g in other_goals:
+                pct = g.get("progress_pct", 0)
+                status = "On Track" if g.get("on_track") else "Behind"
+                curr = g.get("target_currency", "USD")
+                pfx = "$" if curr == "USD" else ""
+                pdf.set_text_color(30, 30, 30)
+
+                if g.get("target_type") == "income":
+                    period = g.get("income_period", "monthly")
+                    pdf.set_font("Helvetica", "B", 10)
+                    goal_name = _sanitize_for_pdf(g.get("name", ""))
+                    pdf.cell(
+                        0, 7,
+                        f"{goal_name} (Income/{period.capitalize()}) - {status}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(80, 80, 80)
+                    pdf.cell(
+                        0, 6,
+                        f"Target: {pfx}{g.get('target_value', 0)} {curr}/{period} | "
+                        f"Linear: {pfx}{g.get('projected_income_linear', 0)} | "
+                        f"Compound: {pfx}{g.get('projected_income_compound', 0)}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    sample = g.get("sample_trades", 0)
+                    lookback = g.get("lookback_days_used", 0)
+                    pdf.cell(
+                        0, 6,
+                        f"Based on {sample} trades over {lookback} days",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    pdf.set_font("Helvetica", "", 10)
+                else:
+                    goal_name = _sanitize_for_pdf(g.get("name", ""))
+                    pdf.cell(
+                        0, 7,
+                        f"{goal_name}: {pct:.1f}% "
+                        f"({pfx}{g.get('current_value', 0)} / "
+                        f"{pfx}{g.get('target_value', 0)} {curr}) - {status}",
+                        new_x="LMARGIN", new_y="NEXT",
+                    )
+                    # Render trend chart if data available
+                    trend_data = g.get("trend_data")
+                    if trend_data:
+                        _render_pdf_trend_chart(
+                            pdf, trend_data, (br, bg, bb),
+                        )
+
+        # Expense Coverage goals
         if expense_goals:
             pdf.ln(6)
             pdf.set_font("Helvetica", "B", 12)
@@ -2554,63 +2528,89 @@ def generate_pdf(
                         pdf.cell(0, 5, _val, new_x="LMARGIN", new_y="NEXT")
                 pdf.set_font("Helvetica", "", 10)
 
-        # Remaining goals (income, standard)
-        if other_goals:
+        # Capital Movements (trading summary + individual transfers)
+        pdf_trade_summary = report_data.get("trade_summary")
+        pdf_transfers = report_data.get("transfer_records", [])
+        pdf_has_trades = (
+            pdf_trade_summary
+            and pdf_trade_summary.get("total_trades", 0) > 0
+        )
+
+        if pdf_has_trades or pdf_transfers:
             pdf.ln(6)
             pdf.set_font("Helvetica", "B", 12)
             pdf.set_text_color(30, 30, 30)
-            pdf.cell(0, 8, "Goal Progress", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(
+                0, 8, "Capital Movements",
+                new_x="LMARGIN", new_y="NEXT",
+            )
             pdf.ln(2)
-            pdf.set_font("Helvetica", "", 10)
 
-            for g in other_goals:
-                pct = g.get("progress_pct", 0)
-                status = "On Track" if g.get("on_track") else "Behind"
-                curr = g.get("target_currency", "USD")
-                pfx = "$" if curr == "USD" else ""
+            # Trading summary row
+            if pdf_has_trades:
+                ts = pdf_trade_summary
+                net = ts["net_profit_usd"]
+                t_sign = "+" if net >= 0 else ""
+                w = ts["winning_trades"]
+                lo = ts["losing_trades"]
+                pdf.set_font("Helvetica", "B", 10)
                 pdf.set_text_color(30, 30, 30)
+                pdf.cell(
+                    80, 7,
+                    f"Trading: {ts['total_trades']} trades ({w}W/{lo}L)",
+                    new_x="RIGHT",
+                )
+                pdf.cell(
+                    0, 7, f"{t_sign}${abs(net):,.2f}",
+                    new_x="LMARGIN", new_y="NEXT", align="R",
+                )
+                pdf.set_font("Helvetica", "", 10)
+                pdf.ln(2)
 
-                if g.get("target_type") == "income":
-                    period = g.get("income_period", "monthly")
+            # Staking rewards summary row (aggregated)
+            pdf_staking = [
+                r for r in pdf_transfers
+                if r.get("original_type") == "send" and r.get("type") == "deposit"
+            ]
+            pdf_other = [r for r in pdf_transfers if r not in pdf_staking]
+            if pdf_staking:
+                stk_total = sum(abs(r.get("amount_usd", 0)) for r in pdf_staking)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.set_text_color(30, 30, 30)
+                pdf.cell(
+                    80, 7,
+                    f"Staking Rewards: {len(pdf_staking)} deposits",
+                    new_x="RIGHT",
+                )
+                pdf.cell(
+                    0, 7, f"+${stk_total:,.2f}",
+                    new_x="LMARGIN", new_y="NEXT", align="R",
+                )
+                pdf.set_font("Helvetica", "", 10)
+                pdf.ln(2)
+
+            # Column headers for individual transfers
+            if pdf_other:
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(100, 100, 100)
+                pdf.cell(40, 6, "Date", new_x="RIGHT")
+                pdf.cell(40, 6, "Type", new_x="RIGHT")
+                pdf.cell(0, 6, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
+                for trec in pdf_other:
+                    t_date = trec.get("date", "")
+                    t_type = _transfer_label(trec)
+                    t_amt = abs(trec.get("amount_usd", 0))
+                    t_sign = "+" if trec.get("type") == "deposit" else "-"
+                    pdf.set_text_color(100, 100, 100)
+                    pdf.cell(40, 6, t_date, new_x="RIGHT")
+                    pdf.cell(40, 6, t_type, new_x="RIGHT")
+                    pdf.set_text_color(30, 30, 30)
                     pdf.set_font("Helvetica", "B", 10)
-                    goal_name = _sanitize_for_pdf(g.get("name", ""))
                     pdf.cell(
-                        0, 7,
-                        f"{goal_name} (Income/{period.capitalize()}) - {status}",
-                        new_x="LMARGIN", new_y="NEXT",
-                    )
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.set_text_color(80, 80, 80)
-                    pdf.cell(
-                        0, 6,
-                        f"Target: {pfx}{g.get('target_value', 0)} {curr}/{period} | "
-                        f"Linear: {pfx}{g.get('projected_income_linear', 0)} | "
-                        f"Compound: {pfx}{g.get('projected_income_compound', 0)}",
-                        new_x="LMARGIN", new_y="NEXT",
-                    )
-                    sample = g.get("sample_trades", 0)
-                    lookback = g.get("lookback_days_used", 0)
-                    pdf.cell(
-                        0, 6,
-                        f"Based on {sample} trades over {lookback} days",
-                        new_x="LMARGIN", new_y="NEXT",
+                        0, 6, f"{t_sign}${t_amt:,.2f}",
+                        new_x="LMARGIN", new_y="NEXT", align="R",
                     )
                     pdf.set_font("Helvetica", "", 10)
-                else:
-                    goal_name = _sanitize_for_pdf(g.get("name", ""))
-                    pdf.cell(
-                        0, 7,
-                        f"{goal_name}: {pct:.1f}% "
-                        f"({pfx}{g.get('current_value', 0)} / "
-                        f"{pfx}{g.get('target_value', 0)} {curr}) - {status}",
-                        new_x="LMARGIN", new_y="NEXT",
-                    )
-                    # Render trend chart if data available
-                    trend_data = g.get("trend_data")
-                    if trend_data:
-                        _render_pdf_trend_chart(
-                            pdf, trend_data, (br, bg, bb),
-                        )
 
         # Prior Period Comparison
         prior = report_data.get("prior_period")
