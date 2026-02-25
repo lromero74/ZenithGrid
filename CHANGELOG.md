@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.58.2] - 2026-02-25
+
+### Fixed
+- **Chart labels overlapping recent candles**: Added right-edge padding to all chart panels so price labels and last-value markers don't crowd the most recent candles.
+
 ## [v2.58.1] - 2026-02-25
 
 ### Fixed
