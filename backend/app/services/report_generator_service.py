@@ -1969,8 +1969,9 @@ def generate_pdf(
                 goal_name = _sanitize_for_pdf(g.get("name", ""))
                 pdf.cell(
                     0, 7,
-                    f"{goal_name} (Expenses/{exp_period.capitalize()}) "
-                    f"- {_fmt_coverage_pct(cov_pct)} Covered",
+                    f"{goal_name} \u2014 Returns Cover "
+                    f"{_fmt_coverage_pct(cov_pct)} of "
+                    f"{exp_period.capitalize()} Expenses",
                     new_x="LMARGIN", new_y="NEXT",
                 )
                 pdf.set_font("Helvetica", "", 9)
@@ -2021,10 +2022,10 @@ def generate_pdf(
                     pdf.set_font("Helvetica", "B", 8)
                     pdf.set_text_color(120, 120, 120)
                     pdf.set_x(_tbl_x)
-                    pdf.cell(col_status, 5, "Status", new_x="RIGHT")
-                    pdf.cell(col_name, 5, "Name", new_x="RIGHT")
                     pdf.cell(col_cat, 5, "Category", new_x="RIGHT")
-                    pdf.cell(col_amt, 5, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
+                    pdf.cell(col_name, 5, "Name", new_x="RIGHT")
+                    pdf.cell(col_amt, 5, "Amount", new_x="RIGHT", align="R")
+                    pdf.cell(col_status, 5, "Status", new_x="LMARGIN", new_y="NEXT")
                     pdf.set_draw_color(200, 200, 205)
                     pdf.line(_tbl_x, pdf.get_y(), _tbl_x + _tbl_w, pdf.get_y())
                     # Draw rows
@@ -2034,23 +2035,23 @@ def generate_pdf(
                         if _ri % 2 == 1:
                             pdf.set_fill_color(245, 245, 250)
                             pdf.rect(_tbl_x, pdf.get_y(), _tbl_w, 5, "F")
+                        pdf.set_text_color(120, 120, 120)
+                        _c_txt = _truncate_to_width(pdf, cat, col_cat)
+                        pdf.cell(col_cat, 5, _c_txt, new_x="RIGHT")
+                        pdf.set_text_color(80, 80, 80)
+                        _n_txt = _truncate_to_width(pdf, name, col_name)
+                        pdf.cell(col_name, 5, _n_txt, new_x="RIGHT")
+                        pdf.set_text_color(80, 80, 80)
+                        pdf.cell(col_amt, 5, amt, new_x="RIGHT", align="R")
                         if s == "covered":
                             pdf.set_text_color(34, 197, 94)
                         elif s == "partial":
                             pdf.set_text_color(234, 179, 8)
                         else:
                             pdf.set_text_color(239, 68, 68)
-                        pdf.cell(col_status, 5, badge, new_x="RIGHT")
-                        pdf.set_text_color(80, 80, 80)
-                        _n_txt = _truncate_to_width(pdf, name, col_name)
-                        pdf.cell(col_name, 5, _n_txt, new_x="RIGHT")
-                        pdf.set_text_color(120, 120, 120)
-                        _c_txt = _truncate_to_width(pdf, cat, col_cat)
-                        pdf.cell(col_cat, 5, _c_txt, new_x="RIGHT")
-                        pdf.set_text_color(80, 80, 80)
                         pdf.cell(
-                            col_amt, 5, amt,
-                            new_x="LMARGIN", new_y="NEXT", align="R",
+                            col_status, 5, badge,
+                            new_x="LMARGIN", new_y="NEXT",
                         )
                     # Table outline
                     pdf.set_draw_color(200, 200, 205)
