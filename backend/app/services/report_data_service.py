@@ -166,10 +166,19 @@ async def gather_report_data(
     # Accounting identity: account_change = profit + net_deposits
     # When no transfer records exist, compute implied net deposits from
     # the difference between account change and trading profit.
+    # Skip for paper trading accounts — they have no real transfers and
+    # BTC price movement would be misattributed as withdrawals.
     account_growth_usd = end_value["usd"] - start_value["usd"]
     implied_net_deposits = round(account_growth_usd - period_profit_usd, 2)
 
-    if not all_transfers and abs(implied_net_deposits) >= 0.01:
+    is_paper = False
+    if account_id:
+        acct_result = await db.execute(
+            select(Account.is_paper_trading).where(Account.id == account_id)
+        )
+        is_paper = bool(acct_result.scalar())
+
+    if not all_transfers and abs(implied_net_deposits) >= 0.01 and not is_paper:
         # No transfer records — use the implied value
         net_deposits_usd = implied_net_deposits
         deposits_source = "implied"
