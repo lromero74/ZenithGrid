@@ -865,6 +865,8 @@ class TestNativeCurrencyAccounting:
         # So implied deposit = $100
         assert data["net_deposits_usd"] == pytest.approx(100.0)
         assert data["deposits_source"] == "implied"
+        # Unrealized PnL change = $300 (from 0 to 300)
+        assert data["unrealized_pnl_change_usd"] == pytest.approx(300.0)
 
     @pytest.mark.asyncio
     async def test_fallback_when_portions_null(self, db_session):

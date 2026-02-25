@@ -183,6 +183,7 @@ async def gather_report_data(
     start_btc_price = start_value.get("btc_usd_price")
 
     market_value_effect_usd = None
+    unrealized_pnl_change_usd = None
 
     if (start_btc is not None and end_btc is not None
             and start_usd_portion is not None and end_usd_portion is not None
@@ -198,9 +199,21 @@ async def gather_report_data(
         end_upnl_btc = end_value.get("unrealized_pnl_btc")
 
         if (start_upnl_usd is not None and end_upnl_usd is not None):
-            usd_implied_deposit -= (end_upnl_usd - start_upnl_usd)
+            usd_upnl_delta = end_upnl_usd - start_upnl_usd
+            usd_implied_deposit -= usd_upnl_delta
+            # Track total unrealized PnL change in USD
+            unrealized_pnl_change_usd = round(usd_upnl_delta, 2)
         if (start_upnl_btc is not None and end_upnl_btc is not None):
-            btc_implied_deposit -= (end_upnl_btc - start_upnl_btc)
+            btc_upnl_delta = end_upnl_btc - start_upnl_btc
+            btc_implied_deposit -= btc_upnl_delta
+            # Add BTC unrealized PnL change converted to USD
+            btc_upnl_usd = round(btc_upnl_delta * end_btc_price, 2)
+            if unrealized_pnl_change_usd is not None:
+                unrealized_pnl_change_usd = round(
+                    unrealized_pnl_change_usd + btc_upnl_usd, 2
+                )
+            else:
+                unrealized_pnl_change_usd = btc_upnl_usd
 
         # Combine: BTC deposits valued at end-of-period price
         implied_net_deposits = round(
@@ -258,6 +271,9 @@ async def gather_report_data(
         "trade_summary": trade_summary,
         "bot_strategies": bot_strategies,
         "market_value_effect_usd": market_value_effect_usd,
+        "unrealized_pnl_change_usd": unrealized_pnl_change_usd,
+        "start_btc_usd_price": start_btc_price,
+        "end_btc_usd_price": end_btc_price,
     }
 
 

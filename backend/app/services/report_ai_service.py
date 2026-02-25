@@ -300,9 +300,30 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
     mve_line = ""
     if mve is not None:
         mve_sign = "+" if mve >= 0 else ""
+        start_bp = data.get("start_btc_usd_price")
+        end_bp = data.get("end_btc_usd_price")
+        btc_price_detail = ""
+        if start_bp and end_bp:
+            bp_dir = "rose" if end_bp >= start_bp else "fell"
+            btc_price_detail = (
+                f"\n    BTC price {bp_dir} from ${start_bp:,.2f} to "
+                f"${end_bp:,.2f} during the period"
+            )
         mve_line = (
-            f"\n  - Market value effect (BTC price change): "
+            f"\n  - Market value effect (BTC price movement): "
             f"{mve_sign}${abs(mve):,.2f}"
+            f"{btc_price_detail}"
+        )
+
+    upnl_line = ""
+    upnl_change = data.get("unrealized_pnl_change_usd")
+    if upnl_change is not None and abs(upnl_change) >= 0.01:
+        upnl_sign = "+" if upnl_change >= 0 else ""
+        upnl_line = (
+            f"\n  - Open position value change (unrealized): "
+            f"{upnl_sign}${abs(upnl_change):,.2f}"
+            f"\n    (price movement on assets held in open trades, "
+            f"e.g. ETH, BTC-pair positions)"
         )
 
     capital_section = (
@@ -310,7 +331,8 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
         f"{trade_line}"
         f"\n  - Account value change in period: ${account_change:,.2f}"
         f"\n    (from ${start_val:,.2f} to ${end_val:,.2f})"
-        f"\n  - Trading profit in period: ${period_profit:,.2f}"
+        f"\n  - Trading profit in period (realized): ${period_profit:,.2f}"
+        f"{upnl_line}"
         f"\n  - Net deposits/withdrawals: ${net_deposits:,.2f}"
         f"\n    (Deposits: ${total_dep:,.2f} / Withdrawals: ${total_wth:,.2f})"
         f"\n  - Adjusted growth (excluding deposits): ${adj_growth:,.2f}"
@@ -501,11 +523,19 @@ Formatting: ### for headers, **bold** for key figures, - for bullet lists.
 Guidelines for BOTH versions:
 - Be factual — do not hallucinate data not provided above
 - CRITICAL: NEVER imply that account value change equals trading profit. The \
-account value change includes deposits and withdrawals. Always break down the \
-account value change: how much came from trading profit vs. deposits/withdrawals. \
-If account value change is significantly different from trading profit, explicitly \
-state that the difference is from deposits or withdrawals — do NOT present the \
-value change as if it resulted from trading.
+account value change includes deposits, withdrawals, AND BTC price movement. \
+Always break down the account value change: how much came from trading profit, \
+how much from BTC price movement (market value effect), how much from open \
+position value changes (unrealized PnL), and how much from deposits/withdrawals. \
+If a "Market value effect" figure is provided, it shows how much of the USD value \
+change is purely from BTC price changing — NOT from trading or deposits. \
+If an "Open position value change" figure is provided, it shows how much value \
+changed in currently-open trades due to asset price movement (e.g. ETH dropping). \
+Explain these clearly to the reader. For example: "BTC fell from $86k to $67k, \
+which accounts for -$45,000 of the value decrease — your trading performance was \
+actually positive." Do NOT lump market value effect or unrealized position changes \
+into "capital movements" — they are separate concepts (market conditions, not \
+user actions).
 - CRITICAL: When both deposits AND withdrawals occurred, you MUST mention BOTH. \
 The math must add up: account_change = trading_profit + deposits - withdrawals. \
 Never cite only deposits and omit withdrawals (or vice versa) — the reader will \

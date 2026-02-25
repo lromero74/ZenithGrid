@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.55.1] - 2026-02-25
+
+### Fixed
+- **AI report summaries now explain market context**: AI summaries include BTC start/end prices, open position value changes (e.g. ETH price movement), and clear instructions to separate market conditions from trading performance and capital movements
+
 ## [v2.55.0] - 2026-02-25
 
 ### Added
