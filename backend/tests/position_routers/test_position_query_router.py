@@ -715,31 +715,37 @@ class TestGetRealizedPnl:
         """Happy path: all-time PnL accumulates across all closed positions."""
         from app.position_routers.position_query_router import get_realized_pnl
 
+        # Pin "now" to a fixed past date at 15:00 UTC so boundaries are deterministic
+        fixed_now = datetime(2025, 8, 20, 15, 0, 0)
+
         user, account = await _create_user_with_account(db_session)
 
-        # Create positions closed at various times
         await _create_position(
             db_session, account,
             status="closed",
-            closed_at=datetime.utcnow() - timedelta(days=400),
+            closed_at=fixed_now - timedelta(days=400),
             profit_usd=100.0,
             product_id="ETH-USD",
             btc_usd_price_at_close=50000.0,
         )
+        # Closed today at 10:00 — well after midnight, well before "now"
         await _create_position(
             db_session, account,
             status="closed",
-            closed_at=datetime.utcnow() - timedelta(hours=1),
+            closed_at=fixed_now.replace(hour=10),
             profit_usd=50.0,
             product_id="ETH-USD",
             btc_usd_price_at_close=50000.0,
         )
 
-        result = await get_realized_pnl(
-            account_id=None,
-            db=db_session,
-            current_user=user,
-        )
+        with patch("datetime.datetime") as mock_dt:
+            mock_dt.utcnow.return_value = fixed_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+            result = await get_realized_pnl(
+                account_id=None,
+                db=db_session,
+                current_user=user,
+            )
         assert result["alltime_profit_usd"] == 150.0
         # Today's profit should only include the recent one
         assert result["daily_profit_usd"] == 50.0
