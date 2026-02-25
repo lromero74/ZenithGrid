@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.59.1] - 2026-02-25
+
+### Fixed
+- **Dashboard chart crash on account toggle**: Clicking the "Showing: paper trading" / "Showing: All Accounts" button threw "Object is disposed" errors because chart series refs weren't cleared when the chart was recreated. Series refs are now properly nulled on disposal.
+- **"All Accounts" toggle hidden for paper trading**: When a paper trading account is selected, the "Showing: All Accounts" button is no longer shown since mixing real and paper trading data in one chart is meaningless.
+
 ## [v2.59.0] - 2026-02-25
 
 ### Added

@@ -80,6 +80,11 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   // Determine if we should include paper trading accounts
   const includePaperTrading = selectedAccount?.is_paper_trading || false
 
+  // Reset "show all" when switching to paper trading (mixing real + paper is meaningless)
+  useEffect(() => {
+    if (includePaperTrading) setShowAllAccounts(false)
+  }, [includePaperTrading])
+
   // Determine which account(s) to show
   const accountId = showAllAccounts ? undefined : selectedAccount?.id
 
@@ -173,10 +178,12 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
   useEffect(() => {
     if (!chartContainerRef.current || !history || history.length === 0) return
 
-    // Clear existing chart
+    // Clear existing chart and series refs
     if (chartRef.current) {
       chartRef.current.remove()
       chartRef.current = null
+      btcSeriesRef.current = null
+      usdSeriesRef.current = null
     }
 
     const chart = createChart(chartContainerRef.current, {
@@ -289,6 +296,8 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
       if (chartRef.current) {
         chartRef.current.remove()
         chartRef.current = null
+        btcSeriesRef.current = null
+        usdSeriesRef.current = null
       }
     }
   }, [history, chartMode])
@@ -431,16 +440,18 @@ export function AccountValueChart({ className = '' }: AccountValueChartProps) {
         >
           {chartMode === 'total' ? 'Total Value' : 'By Quote Currency'}
         </button>
-        <button
-          onClick={() => setShowAllAccounts(!showAllAccounts)}
-          className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-            showAllAccounts
-              ? 'bg-purple-600 text-white hover:bg-purple-700'
-              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-          }`}
-        >
-          {showAllAccounts ? 'Showing: All Accounts' : `Showing: ${selectedAccount?.name || 'Current Account'}`}
-        </button>
+        {!includePaperTrading && (
+          <button
+            onClick={() => setShowAllAccounts(!showAllAccounts)}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              showAllAccounts
+                ? 'bg-purple-600 text-white hover:bg-purple-700'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            {showAllAccounts ? 'Showing: All Accounts' : `Showing: ${selectedAccount?.name || 'Current Account'}`}
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}
