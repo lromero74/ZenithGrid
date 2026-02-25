@@ -594,40 +594,42 @@ def compute_period_bounds_flexible(
     user has opted out via force_standard_days.
     """
     window = schedule.period_window or "full_prior"
-    period_end = run_at.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    # For full_prior, truncate to midnight (clean period boundaries).
+    # For to-date/trailing windows, use the actual run time so trades
+    # closed today are included.
+    midnight = run_at.replace(hour=0, minute=0, second=0, microsecond=0)
+    period_end = midnight if window == "full_prior" else run_at
 
     # Auto-prior: period-start days switch to full prior period
     if window in ("mtd", "wtd") and _should_auto_prior(
-        schedule, window, period_end
+        schedule, window, midnight
     ):
         stype = schedule.schedule_type or "weekly"
-        return _compute_full_prior_bounds(stype, period_end, schedule)
+        return _compute_full_prior_bounds(stype, midnight, schedule)
 
     if window == "trailing":
         val = schedule.lookback_value or 7
         unit = schedule.lookback_unit or "days"
         if unit == "days":
-            period_start = period_end - timedelta(days=val)
+            period_start = midnight - timedelta(days=val)
         elif unit == "weeks":
-            period_start = period_end - timedelta(weeks=val)
+            period_start = midnight - timedelta(weeks=val)
         elif unit == "months":
-            period_start = period_end - relativedelta(months=val)
+            period_start = midnight - relativedelta(months=val)
         elif unit == "years":
-            period_start = period_end - relativedelta(years=val)
+            period_start = midnight - relativedelta(years=val)
         else:
-            period_start = period_end - timedelta(days=val)
+            period_start = midnight - timedelta(days=val)
         return period_start, period_end
 
     if window == "wtd":
         # Monday of current week through run_at
-        weekday = period_end.weekday()  # 0=Mon
-        period_start = period_end - timedelta(days=weekday)
+        weekday = midnight.weekday()  # 0=Mon
+        period_start = midnight - timedelta(days=weekday)
         return period_start, period_end
 
     if window == "mtd":
-        period_start = period_end.replace(day=1)
+        period_start = midnight.replace(day=1)
         return period_start, period_end
 
     if window == "qtd":
@@ -638,20 +640,20 @@ def compute_period_bounds_flexible(
         # Find the most recent quarter start <= run_at month
         quarter_month = q_months[0]
         for m in q_months:
-            if m <= period_end.month:
+            if m <= midnight.month:
                 quarter_month = m
-        period_start = period_end.replace(
+        period_start = midnight.replace(
             month=quarter_month, day=1
         )
         # If quarter_month is after current month, it started last year
-        if quarter_month > period_end.month:
+        if quarter_month > midnight.month:
             period_start = period_start.replace(
-                year=period_end.year - 1
+                year=midnight.year - 1
             )
         return period_start, period_end
 
     if window == "ytd":
-        period_start = period_end.replace(month=1, day=1)
+        period_start = midnight.replace(month=1, day=1)
         return period_start, period_end
 
     # full_prior (default) — complete previous period based on schedule_type
