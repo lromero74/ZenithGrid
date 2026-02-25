@@ -411,7 +411,99 @@ class TestDefaultExpenseCategories:
         assert "Housing" in DEFAULT_EXPENSE_CATEGORIES
         assert "Utilities" in DEFAULT_EXPENSE_CATEGORIES
         assert "Subscriptions" in DEFAULT_EXPENSE_CATEGORIES
-        assert len(DEFAULT_EXPENSE_CATEGORIES) == 12
+        assert "Donations" in DEFAULT_EXPENSE_CATEGORIES
+        assert len(DEFAULT_EXPENSE_CATEGORIES) == 13
+
+
+class TestPercentOfIncomeDonations:
+    """Test percent-of-income donation items in the coverage waterfall."""
+
+    def test_pre_tax_basic(self):
+        """10% pre-tax of $1000 income = $100."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Tithe", 0, "monthly", category="Donations",
+                       amount_mode="percent_of_income",
+                       percent_of_income=10.0, percent_basis="pre_tax"),
+        ]
+        result = compute_expense_coverage(items, "monthly", 1000.0, 0.0)
+        assert result["items"][0]["normalized_amount"] == pytest.approx(100.0)
+        assert result["items"][0]["amount_mode"] == "percent_of_income"
+        assert result["items"][0]["percent_of_income"] == 10.0
+        assert result["items"][0]["percent_basis"] == "pre_tax"
+
+    def test_post_tax_basic(self):
+        """10% post-tax of $1000 with 20% tax = 10% of $800 = $80."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Tithe", 0, "monthly", category="Donations",
+                       amount_mode="percent_of_income",
+                       percent_of_income=10.0, percent_basis="post_tax"),
+        ]
+        result = compute_expense_coverage(items, "monthly", 1000.0, 20.0)
+        assert result["items"][0]["normalized_amount"] == pytest.approx(80.0)
+
+    def test_mixed_percent_and_fixed(self):
+        """Percent and fixed items coexist in the waterfall."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Rent", 1500, "monthly"),
+            _mock_item("Tithe", 0, "monthly", category="Donations",
+                       amount_mode="percent_of_income",
+                       percent_of_income=10.0, percent_basis="pre_tax"),
+        ]
+        # Income $2000, tax 0%. Tithe = 10% of $2000 = $200
+        # Total expenses = 1500 + 200 = 1700
+        result = compute_expense_coverage(items, "monthly", 2000.0, 0.0)
+        assert result["total_expenses"] == pytest.approx(1700.0)
+        # Sorted ascending: Tithe ($200) then Rent ($1500)
+        assert result["items"][0]["name"] == "Tithe"
+        assert result["items"][0]["normalized_amount"] == pytest.approx(200.0)
+        assert result["items"][1]["name"] == "Rent"
+
+    def test_zero_income_yields_zero_donation(self):
+        """With zero income, percent donation = $0."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Tithe", 0, "monthly", category="Donations",
+                       amount_mode="percent_of_income",
+                       percent_of_income=10.0, percent_basis="pre_tax"),
+        ]
+        result = compute_expense_coverage(items, "monthly", 0.0, 0.0)
+        assert result["items"][0]["normalized_amount"] == pytest.approx(0.0)
+
+    def test_fixed_items_default_amount_mode(self):
+        """Existing fixed items have amount_mode='fixed' in output."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [_mock_item("Netflix", 15, "monthly")]
+        result = compute_expense_coverage(items, "monthly", 100.0, 0.0)
+        assert result["items"][0]["amount_mode"] == "fixed"
+        assert "percent_of_income" not in result["items"][0]
+
+    def test_percent_item_no_frequency_normalization(self):
+        """Percent items compute from income, not from frequency normalization."""
+        from app.services.expense_service import compute_expense_coverage
+        # Even though amount=0 and frequency=monthly, the normalized amount
+        # should come from percent_of_income calculation, not normalize_item_to_period
+        items = [
+            _mock_item("Tithe", 0, "monthly", category="Donations",
+                       amount_mode="percent_of_income",
+                       percent_of_income=5.0, percent_basis="pre_tax"),
+        ]
+        result = compute_expense_coverage(items, "monthly", 2000.0, 0.0)
+        assert result["items"][0]["normalized_amount"] == pytest.approx(100.0)
+
+    def test_percent_with_quarterly_period(self):
+        """Percent-of-income is based on period income, not monthly."""
+        from app.services.expense_service import compute_expense_coverage
+        items = [
+            _mock_item("Tithe", 0, "monthly", category="Donations",
+                       amount_mode="percent_of_income",
+                       percent_of_income=10.0, percent_basis="pre_tax"),
+        ]
+        # projected_income for quarterly period = $3000
+        result = compute_expense_coverage(items, "quarterly", 3000.0, 0.0)
+        assert result["items"][0]["normalized_amount"] == pytest.approx(300.0)
 
 
 # ----- Helpers -----
@@ -419,11 +511,14 @@ class TestDefaultExpenseCategories:
 def _mock_item(name: str, amount: float, frequency: str,
                frequency_n: int = None, due_day: int = None,
                due_month: int = None, login_url: str = None,
-               sort_order: int = 0):
+               sort_order: int = 0, category: str = "General",
+               amount_mode: str = "fixed",
+               percent_of_income: float = None,
+               percent_basis: str = None):
     """Create a mock expense item for testing."""
     item = MagicMock()
     item.name = name
-    item.category = "General"
+    item.category = category
     item.amount = amount
     item.frequency = frequency
     item.frequency_n = frequency_n
@@ -432,4 +527,7 @@ def _mock_item(name: str, amount: float, frequency: str,
     item.login_url = login_url
     item.is_active = True
     item.sort_order = sort_order
+    item.amount_mode = amount_mode
+    item.percent_of_income = percent_of_income
+    item.percent_basis = percent_basis
     return item

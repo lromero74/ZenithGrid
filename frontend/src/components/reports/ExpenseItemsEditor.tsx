@@ -148,11 +148,19 @@ function SortableExpenseRow({
           <span className="font-medium text-white truncate">{item.name}</span>
         </div>
         <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-          <span>
-            {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
-          </span>
-          {item.frequency === 'every_n_days' && item.frequency_n && (
-            <span>(every {item.frequency_n} days)</span>
+          {item.amount_mode === 'percent_of_income' ? (
+            <span>
+              {item.percent_of_income}% {item.percent_basis === 'post_tax' ? 'post-tax' : 'pre-tax'}
+            </span>
+          ) : (
+            <>
+              <span>
+                {prefix}{item.amount.toLocaleString()}{FREQ_LABELS[item.frequency] || ''}
+              </span>
+              {item.frequency === 'every_n_days' && item.frequency_n && (
+                <span>(every {item.frequency_n} days)</span>
+              )}
+            </>
           )}
           {badge && (
             <span className="px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300 text-[10px]">
@@ -293,6 +301,13 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
   const [dueDow, setDueDow] = useState('')  // day of week (0-6) for weekly/biweekly
   const [anchor, setAnchor] = useState('')  // start date for biweekly
   const [loginUrl, setLoginUrl] = useState('')
+  const [amountMode, setAmountMode] = useState<'fixed' | 'percent_of_income'>('fixed')
+  const [percentOfIncome, setPercentOfIncome] = useState('')
+  const [percentBasis, setPercentBasis] = useState<'pre_tax' | 'post_tax'>('pre_tax')
+
+  const resolvedCategory = category === '__custom__' ? customCategory : category
+  const isDonations = resolvedCategory.toLowerCase() === 'donations'
+  const isPercentMode = isDonations && amountMode === 'percent_of_income'
 
   const needsMonth = frequency === 'quarterly' || frequency === 'semi_annual' || frequency === 'yearly'
   const needsDow = frequency === 'weekly' || frequency === 'biweekly'
@@ -313,6 +328,9 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
     setDueDow('')
     setAnchor('')
     setLoginUrl('')
+    setAmountMode('fixed')
+    setPercentOfIncome('')
+    setPercentBasis('pre_tax')
     setEditing(null)
     setShowForm(false)
   }
@@ -348,6 +366,9 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
 
       setDueMonth(editing.due_month ? String(editing.due_month) : '')
       setLoginUrl(editing.login_url || '')
+      setAmountMode(editing.amount_mode || 'fixed')
+      setPercentOfIncome(editing.percent_of_income ? String(editing.percent_of_income) : '')
+      setPercentBasis(editing.percent_basis || 'pre_tax')
       setShowForm(true)
     }
   }, [editing, categories])
@@ -428,31 +449,38 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const resolvedCategory = category === '__custom__' ? customCategory : category
+    const finalCategory = category === '__custom__' ? customCategory : category
     const data: any = {
-      category: resolvedCategory,
+      category: finalCategory,
       name,
-      amount: parseFloat(amount),
-      frequency,
+      amount: isPercentMode ? 0 : parseFloat(amount),
+      frequency: isPercentMode ? 'monthly' : frequency,
+      amount_mode: isPercentMode ? 'percent_of_income' : 'fixed',
     }
-    if (frequency === 'every_n_days') {
+    if (isPercentMode) {
+      data.percent_of_income = parseFloat(percentOfIncome)
+      data.percent_basis = percentBasis
+    }
+    if (!isPercentMode && frequency === 'every_n_days') {
       data.frequency_n = parseInt(frequencyN)
     }
-    // Due date — frequency-aware
-    if (needsDow && dueDow !== '') {
-      data.due_day = parseInt(dueDow)
-    } else if (needsDom) {
-      if (dueDayLast) {
-        data.due_day = -1
-      } else if (dueDay) {
-        data.due_day = parseInt(dueDay)
+    // Due date — frequency-aware (only for fixed mode)
+    if (!isPercentMode) {
+      if (needsDow && dueDow !== '') {
+        data.due_day = parseInt(dueDow)
+      } else if (needsDom) {
+        if (dueDayLast) {
+          data.due_day = -1
+        } else if (dueDay) {
+          data.due_day = parseInt(dueDay)
+        }
       }
-    }
-    if (needsMonth && dueMonth) {
-      data.due_month = parseInt(dueMonth)
-    }
-    if (needsAnchor && anchor) {
-      data.frequency_anchor = anchor
+      if (needsMonth && dueMonth) {
+        data.due_month = parseInt(dueMonth)
+      }
+      if (needsAnchor && anchor) {
+        data.frequency_anchor = anchor
+      }
     }
     if (loginUrl.trim()) {
       data.login_url = loginUrl.trim()
@@ -524,22 +552,89 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
         </div>
       </div>
 
-      {/* Amount on its own row */}
-      <div>
-        <label className="block text-xs text-slate-400 mb-1">Amount ({currency})</label>
-        <input
-          type="number"
-          step={currency === 'BTC' ? '0.00000001' : '0.01'}
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
-          required
-          min="0"
-          className={`w-full ${inputCls}`}
-        />
-      </div>
+      {/* Amount mode toggle — Donations only */}
+      {isDonations && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-1.5">Amount Mode</label>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setAmountMode('fixed')}
+              className={`${pillBase} ${amountMode === 'fixed' ? pillActive : pillInactive}`}
+            >
+              Fixed Amount
+            </button>
+            <button
+              type="button"
+              onClick={() => setAmountMode('percent_of_income')}
+              className={`${pillBase} ${amountMode === 'percent_of_income' ? pillActive : pillInactive}`}
+            >
+              % of Income
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* Frequency pills */}
-      <div>
+      {/* Amount — fixed mode */}
+      {!isPercentMode && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Amount ({currency})</label>
+          <input
+            type="number"
+            step={currency === 'BTC' ? '0.00000001' : '0.01'}
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            required
+            min="0"
+            className={`w-full ${inputCls}`}
+          />
+        </div>
+      )}
+
+      {/* Percent of income — percent mode */}
+      {isPercentMode && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Percentage of Income</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="100"
+                value={percentOfIncome}
+                onChange={e => setPercentOfIncome(e.target.value)}
+                required
+                placeholder="10"
+                className={`w-24 ${inputCls} placeholder-slate-500`}
+              />
+              <span className="text-sm text-slate-400">%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5">Income Basis</label>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPercentBasis('pre_tax')}
+                className={`${pillBase} ${percentBasis === 'pre_tax' ? pillActive : pillInactive}`}
+              >
+                Pre-Tax
+              </button>
+              <button
+                type="button"
+                onClick={() => setPercentBasis('post_tax')}
+                className={`${pillBase} ${percentBasis === 'post_tax' ? pillActive : pillInactive}`}
+              >
+                Post-Tax
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Frequency pills — hidden in percent mode */}
+      {!isPercentMode && <div>
         <label className="block text-xs text-slate-400 mb-1.5">Frequency</label>
         <div className="flex flex-wrap gap-1.5">
           {FREQUENCY_PILLS.map(o => (
@@ -578,10 +673,10 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Due date — frequency-aware */}
-      {showDueSection && (
+      {!isPercentMode && showDueSection && (
         <div>
           <label className="block text-xs text-slate-400 mb-1.5">
             Due Date (optional)
@@ -670,7 +765,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose }:
       <div className="flex justify-end">
         <button
           type="submit"
-          disabled={createItem.isPending || updateItem.isPending || !name || !amount
+          disabled={createItem.isPending || updateItem.isPending || !name
+            || (isPercentMode ? !percentOfIncome : !amount)
             || (!category || (category === '__custom__' && !customCategory))}
           className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium
             rounded transition-colors"

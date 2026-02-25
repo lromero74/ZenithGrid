@@ -19,7 +19,7 @@ _DAYS_PER_MONTH = 30.4375
 DEFAULT_EXPENSE_CATEGORIES = [
     "Housing", "Utilities", "Transportation", "Food",
     "Insurance", "Healthcare", "Subscriptions", "Entertainment",
-    "Education", "Debt", "Personal", "Other",
+    "Education", "Debt", "Donations", "Personal", "Other",
 ]
 
 
@@ -97,8 +97,21 @@ def compute_expense_coverage(
     # Normalize and sort items
     normalized = []
     for item in items:
-        norm_amount = normalize_item_to_period(item, period)
-        normalized.append({
+        amount_mode = getattr(item, "amount_mode", "fixed") or "fixed"
+        pct_of_income = getattr(item, "percent_of_income", None)
+        pct_basis = getattr(item, "percent_basis", None)
+
+        if amount_mode == "percent_of_income" and pct_of_income:
+            # Calculate dollar amount from percentage of income
+            basis = (projected_income if pct_basis == "pre_tax"
+                     else income_after_tax)
+            dollar_amount = pct_of_income / 100.0 * basis
+            # Already in the goal period — no frequency normalization needed
+            norm_amount = round(dollar_amount, 2)
+        else:
+            norm_amount = normalize_item_to_period(item, period)
+
+        entry = {
             "id": getattr(item, "id", None),
             "name": item.name,
             "category": item.category,
@@ -111,7 +124,12 @@ def compute_expense_coverage(
             "login_url": getattr(item, "login_url", None),
             "sort_order": getattr(item, "sort_order", 0),
             "normalized_amount": round(norm_amount, 2),
-        })
+            "amount_mode": amount_mode,
+        }
+        if amount_mode == "percent_of_income":
+            entry["percent_of_income"] = pct_of_income
+            entry["percent_basis"] = pct_basis
+        normalized.append(entry)
 
     if sort_mode == "amount_desc":
         normalized.sort(key=lambda x: x["normalized_amount"], reverse=True)
@@ -215,6 +233,7 @@ async def recalculate_goal_target(db: AsyncSession, goal) -> float:
     total_monthly = sum(
         normalize_to_monthly(item.amount, item.frequency, item.frequency_n)
         for item in items
+        if (getattr(item, "amount_mode", "fixed") or "fixed") == "fixed"
     )
     period = goal.expense_period or "monthly"
     total_period = normalize_monthly_to_period(total_monthly, period)
