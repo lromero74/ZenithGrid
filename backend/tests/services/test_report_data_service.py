@@ -303,6 +303,28 @@ class TestGatherReportData:
         assert data["deposits_source"] == "implied"
 
     @pytest.mark.asyncio
+    async def test_paper_account_skips_implied_deposits(self, db_session):
+        """Paper trading accounts don't use implied deposits (BTC price
+        fluctuations would be misattributed as withdrawals)."""
+        _make_user(db_session)
+        _make_account(db_session, is_paper=True)
+        # BTC dropped: same BTC but lower USD value — no real transfers
+        _make_snapshot(db_session, date=datetime(2025, 1, 1), usd=200000, btc=2.3)
+        _make_snapshot(db_session, date=datetime(2025, 1, 31), usd=167000, btc=2.5)
+        await db_session.flush()
+
+        data = await gather_report_data(
+            db_session, user_id=1, account_id=1,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            goals=[],
+        )
+
+        # Should NOT attribute BTC price drop to implied withdrawals
+        assert data["net_deposits_usd"] == pytest.approx(0.0)
+        assert data["deposits_source"] == "transfers"
+
+    @pytest.mark.asyncio
     async def test_bot_strategies_collected(self, db_session):
         """Happy path: bot strategy info collected for closed positions."""
         _make_user(db_session)
