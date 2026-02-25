@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.56.4] - 2026-02-25
+
+### Fixed
+- **AI summary incorrectly reporting withdrawals**: When no deposit/withdrawal records exist (e.g. paper trading), the AI summary was misinterpreting an accounting residual as "net withdrawals" — attributing BTC price drops to money being withdrawn. The prompt now clearly separates confirmed transfers from valuation reconciliation and instructs the AI to never use deposit/withdrawal language when no transfer records exist.
+
 ## [v2.56.3] - 2026-02-25
 
 ### Fixed
