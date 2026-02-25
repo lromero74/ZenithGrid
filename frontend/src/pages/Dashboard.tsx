@@ -437,8 +437,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         )
       })()}
 
-      {/* Deposit/withdrawal note */}
-      {transferSummary && transferSummary.last_30d_net_deposits_usd !== 0 && (
+      {/* Deposit/withdrawal note (hide for paper trading — no real deposits) */}
+      {transferSummary && transferSummary.last_30d_net_deposits_usd !== 0 && !selectedAccount?.is_paper_trading && (
         <div className="px-3 py-2 bg-blue-900/20 border border-blue-800/30 rounded-lg">
           <p className="text-xs text-blue-300">
             {transferSummary.last_30d_net_deposits_usd > 0

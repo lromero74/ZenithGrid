@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.59.2] - 2026-02-25
+
+### Fixed
+- **Paper trading balance race condition**: Multiple paper bots running concurrently on the same account could silently overwrite each other's balance changes (last writer wins). Balance operations are now serialized with per-account locks and always re-read from the database before modifying.
+- **Paper balance data repair**: Restored lost balances for UNI, BCH, and ATOM on the paper trading account by reconciling with open position holdings. Cleared the "Insufficient UNI balance" error on deal #212.
+- **Dashboard transfer note on paper accounts**: The deposit/withdrawal note no longer shows for paper trading accounts, which have no real deposits.
+
+### Added
+- **Database VACUUM on startup**: SQLite VACUUM runs automatically at startup to reclaim space and optimize page layout.
+
 ## [v2.59.1] - 2026-02-25
 
 ### Fixed
