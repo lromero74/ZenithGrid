@@ -814,30 +814,37 @@ export function ArticleReaderMiniPlayer() {
                   // Show spinner during content fetch OR TTS generation
                   const showSpinner = isLoading || articleContentLoading
                   return (
-                    <button
-                      onClick={togglePlayPause}
-                      disabled={showSpinner}
-                      className={`flex items-center justify-center rounded-full ${
-                        showSpinner
-                          ? 'bg-slate-600'  // Grey while loading
-                          : error
-                            ? 'bg-red-600 hover:bg-red-500'  // Red only when showing retry
-                            : 'bg-green-600 hover:bg-green-500'  // Green for play/pause
-                      } text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
-                      title={showSpinner ? "Loading..." : error ? "Retry" : isPaused || isReady ? "Play" : "Pause"}
-                    >
-                      {showSpinner ? (
-                        <div className={`animate-spin border-2 border-white border-t-transparent rounded-full ${isExpanded ? 'w-6 h-6' : 'w-4 h-4'}`} />
-                      ) : error ? (
-                        <RefreshCw className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
-                      ) : isPaused || isReady ? (
-                        <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
-                      ) : isPlaying ? (
-                        <Pause className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
-                      ) : (
-                        <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
+                    <div className="flex flex-col items-center gap-0.5">
+                      <button
+                        onClick={togglePlayPause}
+                        disabled={showSpinner}
+                        className={`flex items-center justify-center rounded-full ${
+                          showSpinner
+                            ? 'bg-slate-600'  // Grey while loading
+                            : error
+                              ? 'bg-red-600 hover:bg-red-500'  // Red only when showing retry
+                              : 'bg-green-600 hover:bg-green-500'  // Green for play/pause
+                        } text-white transition-colors ${isExpanded ? 'w-12 h-12' : 'w-9 h-9'}`}
+                        title={showSpinner ? "Loading..." : error ? "Retry" : isPaused || isReady ? "Play" : "Pause"}
+                      >
+                        {showSpinner ? (
+                          <div className={`animate-spin border-2 border-white border-t-transparent rounded-full ${isExpanded ? 'w-6 h-6' : 'w-4 h-4'}`} />
+                        ) : error ? (
+                          <RefreshCw className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
+                        ) : isPaused || isReady ? (
+                          <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
+                        ) : isPlaying ? (
+                          <Pause className={isExpanded ? 'w-6 h-6' : 'w-4 h-4'} />
+                        ) : (
+                          <Play className={`${isExpanded ? 'w-6 h-6' : 'w-4 h-4'} ml-0.5`} fill="white" />
+                        )}
+                      </button>
+                      {showSpinner && (
+                        <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                          {articleContentLoading ? 'Loading...' : 'Generating...'}
+                        </span>
                       )}
-                    </button>
+                    </div>
                   )
                 })()}
 

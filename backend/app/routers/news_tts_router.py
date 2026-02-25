@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 import edge_tts
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
@@ -202,19 +202,34 @@ class VoiceSubscriptionUpdate(BaseModel):
 # =============================================================================
 
 async def _generate_tts(
-    text: str, voice_name: str, rate: str
+    text: str, voice_name: str, rate: str,
+    disconnect_check=None,
 ) -> tuple:
-    """Generate TTS audio and word boundaries. Returns (audio_bytes, words)."""
+    """Generate TTS audio and word boundaries. Returns (audio_bytes, words).
+
+    If disconnect_check is provided (an async callable returning bool),
+    it is called every 20 audio chunks. On disconnect, raises
+    asyncio.CancelledError to release semaphores early.
+    """
     communicate = edge_tts.Communicate(
         text, voice_name, rate=rate, boundary="WordBoundary"
     )
 
     audio_chunks = []
     word_boundaries = []
+    chunk_count = 0
 
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
             audio_chunks.append(chunk["data"])
+            chunk_count += 1
+            # Check for client disconnect every 20 audio chunks
+            if disconnect_check and chunk_count % 20 == 0:
+                if await disconnect_check():
+                    logger.info("Client disconnected during TTS generation")
+                    raise asyncio.CancelledError(
+                        "Client disconnected"
+                    )
         elif chunk["type"] == "WordBoundary":
             offset_sec = chunk["offset"] / 10_000_000
             duration_sec = chunk["duration"] / 10_000_000
@@ -234,6 +249,7 @@ async def _get_or_create_tts(
     rate: str,
     user_id: int,
     audio_needed: bool = True,
+    disconnect_check=None,
 ) -> tuple:
     """Get cached TTS or generate new one.
 
@@ -286,7 +302,10 @@ async def _get_or_create_tts(
             # File missing — regenerate below
 
         # Generate new TTS
-        audio_data, words = await _generate_tts(text, voice_name, rate)
+        audio_data, words = await _generate_tts(
+            text, voice_name, rate,
+            disconnect_check=disconnect_check,
+        )
 
         # Save to filesystem
         article_dir = TTS_CACHE_DIR / str(article_id)
@@ -400,6 +419,7 @@ async def get_tts_voices(current_user: User = Depends(get_current_user)):
 @router.post("/tts-sync")
 async def text_to_speech_with_sync(
     body: TTSSyncRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -426,8 +446,11 @@ async def text_to_speech_with_sync(
 
     user_semaphore = _get_user_tts_semaphore(current_user.id)
 
+    async def _check_disconnect():
+        return await request.is_disconnected()
+
     try:
-        async with asyncio.timeout(60):
+        async with asyncio.timeout(90):
             async with user_semaphore:
                 async with _tts_semaphore:
                     if body.article_id:
@@ -436,6 +459,7 @@ async def text_to_speech_with_sync(
                             body.article_id, voice, text, rate,
                             current_user.id,
                             audio_needed=False,
+                            disconnect_check=_check_disconnect,
                         )
                         # Record history
                         await _update_tts_history(
@@ -459,6 +483,7 @@ async def text_to_speech_with_sync(
                     else:
                         audio_data, words = await _generate_tts(
                             text, voice_name, rate,
+                            disconnect_check=_check_disconnect,
                         )
                         audio_base64 = base64.b64encode(
                             audio_data
@@ -470,6 +495,11 @@ async def text_to_speech_with_sync(
                             "rate": rate,
                         }
 
+    except asyncio.CancelledError:
+        logger.info(
+            f"TTS cancelled (client disconnect) for user {current_user.id}"
+        )
+        return {"error": "cancelled"}
     except TimeoutError:
         raise HTTPException(
             status_code=503,
@@ -636,16 +666,21 @@ async def prepare_tts(
 
     user_semaphore = _get_user_tts_semaphore(current_user.id)
 
+    # Non-blocking: if user already has TTS in flight, skip prefetch
+    try:
+        await asyncio.wait_for(user_semaphore.acquire(), timeout=0.5)
+    except asyncio.TimeoutError:
+        return {"ok": True}  # User has TTS in flight, skip silently
+
     try:
         async with asyncio.timeout(60):
-            async with user_semaphore:
-                async with _tts_semaphore:
-                    await _get_or_create_tts(
-                        body.article_id, voice, body.text, rate,
-                        current_user.id,
-                        audio_needed=False,
-                    )
-                    return {"ok": True}
+            async with _tts_semaphore:
+                await _get_or_create_tts(
+                    body.article_id, voice, body.text, rate,
+                    current_user.id,
+                    audio_needed=False,
+                )
+                return {"ok": True}
 
     except TimeoutError:
         raise HTTPException(
@@ -658,6 +693,8 @@ async def prepare_tts(
         raise HTTPException(
             status_code=500, detail="TTS preparation failed"
         )
+    finally:
+        user_semaphore.release()
 
 
 # =============================================================================
