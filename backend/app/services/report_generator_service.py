@@ -1984,23 +1984,56 @@ def generate_pdf(
                 # Coverage items table header
                 cov_items = coverage.get("items", [])
                 if cov_items:
-                    col_status = 15
-                    col_cat = 48
-                    col_amt = 32
-                    col_name = pdf.w - pdf.l_margin - pdf.r_margin - col_status - col_cat - col_amt
-                    pdf.set_font("Helvetica", "B", 8)
-                    pdf.set_text_color(120, 120, 120)
-                    pdf.cell(col_status, 5, "Status", new_x="RIGHT")
-                    pdf.cell(col_name, 5, "Name", new_x="RIGHT")
-                    pdf.cell(col_cat, 5, "Category", new_x="RIGHT")
-                    pdf.cell(col_amt, 5, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
-                    pdf.set_font("Helvetica", "", 9)
+                    _tbl_inset = 8
+                    _tbl_x = pdf.l_margin + _tbl_inset
+                    _tbl_w = pdf.w - pdf.l_margin - pdf.r_margin - 2 * _tbl_inset
+                    _buf = 4
+                    # Pre-compute display values
+                    _cov_rows = []
                     for ei in cov_items:
                         s = ei.get("status", "uncovered")
                         badge = "OK" if s == "covered" else (
                             _fmt_coverage_pct(ei.get('coverage_pct', 0))
                             if s == "partial" else "X"
                         )
+                        name = _sanitize_for_pdf(ei.get('name', ''))
+                        cat = ei.get('category', '')
+                        norm = ei.get("normalized_amount", 0)
+                        amt = f"{pfx}{norm:,.2f}/{exp_period}"
+                        _cov_rows.append((s, badge, name, cat, amt))
+                    # Measure column widths from content
+                    pdf.set_font("Helvetica", "", 9)
+                    col_status = max(
+                        pdf.get_string_width("Status"),
+                        max((pdf.get_string_width(r[1]) for r in _cov_rows), default=0),
+                    ) + _buf
+                    col_cat = max(
+                        pdf.get_string_width("Category"),
+                        max((pdf.get_string_width(r[3]) for r in _cov_rows), default=0),
+                    ) + _buf
+                    col_amt = max(
+                        pdf.get_string_width("Amount"),
+                        max((pdf.get_string_width(r[4]) for r in _cov_rows), default=0),
+                    ) + _buf
+                    col_name = _tbl_w - col_status - col_cat - col_amt
+                    # Draw header
+                    _tbl_y_start = pdf.get_y()
+                    pdf.set_font("Helvetica", "B", 8)
+                    pdf.set_text_color(120, 120, 120)
+                    pdf.set_x(_tbl_x)
+                    pdf.cell(col_status, 5, "Status", new_x="RIGHT")
+                    pdf.cell(col_name, 5, "Name", new_x="RIGHT")
+                    pdf.cell(col_cat, 5, "Category", new_x="RIGHT")
+                    pdf.cell(col_amt, 5, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
+                    pdf.set_draw_color(200, 200, 205)
+                    pdf.line(_tbl_x, pdf.get_y(), _tbl_x + _tbl_w, pdf.get_y())
+                    # Draw rows
+                    pdf.set_font("Helvetica", "", 9)
+                    for _ri, (s, badge, name, cat, amt) in enumerate(_cov_rows):
+                        pdf.set_x(_tbl_x)
+                        if _ri % 2 == 1:
+                            pdf.set_fill_color(245, 245, 250)
+                            pdf.rect(_tbl_x, pdf.get_y(), _tbl_w, 5, "F")
                         if s == "covered":
                             pdf.set_text_color(34, 197, 94)
                         elif s == "partial":
@@ -2009,17 +2042,20 @@ def generate_pdf(
                             pdf.set_text_color(239, 68, 68)
                         pdf.cell(col_status, 5, badge, new_x="RIGHT")
                         pdf.set_text_color(80, 80, 80)
-                        name_txt = _sanitize_for_pdf(ei.get('name', ''))
-                        pdf.cell(col_name, 5, name_txt, new_x="RIGHT")
+                        _n_txt = _truncate_to_width(pdf, name, col_name)
+                        pdf.cell(col_name, 5, _n_txt, new_x="RIGHT")
                         pdf.set_text_color(120, 120, 120)
-                        cat_txt = _truncate_to_width(pdf, ei.get('category', ''), col_cat)
-                        pdf.cell(col_cat, 5, cat_txt, new_x="RIGHT")
-                        norm = ei.get("normalized_amount", 0)
+                        _c_txt = _truncate_to_width(pdf, cat, col_cat)
+                        pdf.cell(col_cat, 5, _c_txt, new_x="RIGHT")
                         pdf.set_text_color(80, 80, 80)
                         pdf.cell(
-                            col_amt, 5, f"{pfx}{norm:,.2f}/{exp_period}",
+                            col_amt, 5, amt,
                             new_x="LMARGIN", new_y="NEXT", align="R",
                         )
+                    # Table outline
+                    pdf.set_draw_color(200, 200, 205)
+                    pdf.rect(_tbl_x, _tbl_y_start, _tbl_w, pdf.get_y() - _tbl_y_start)
+                    pdf.set_draw_color(0, 0, 0)
                 partial_name = coverage.get("partial_item_name")
                 next_name = coverage.get("next_uncovered_name")
                 dep_partial = g.get("deposit_partial")
@@ -2060,44 +2096,110 @@ def generate_pdf(
                 _upcoming = _get_upcoming_items(
                     coverage.get("items", []), _now,
                 )
-                if _upcoming:
+                _meta = report_data.get("_schedule_meta", {})
+                _pw = _meta.get("period_window", "full_prior")
+                _show_la = _meta.get("show_expense_lookahead", True)
+                _lookahead = []
+                if _show_la and _pw in ("mtd", "wtd", "qtd", "ytd"):
+                    _lookahead = _get_lookahead_items(
+                        coverage.get("items", []), _now, _pw,
+                    )
+                # Pre-compute display rows for both tables
+                _uc_rows = []
+                for _, _ei in _upcoming:
+                    _s = _ei.get("status", "uncovered")
+                    _badge = ("OK" if _s == "covered"
+                              else _fmt_coverage_pct(
+                                  _ei.get('coverage_pct', 0))
+                              if _s == "partial" else "X")
+                    _uc_rows.append((
+                        _format_due_label(_ei, now=_now),
+                        _ei.get('category', ''),
+                        _sanitize_for_pdf(_ei.get('name', '')),
+                        f"{pfx}{_ei.get('amount', 0):,.2f}",
+                        _s, _badge,
+                    ))
+                _la_rows = []
+                for _, _la_ei in _lookahead:
+                    _la_s = _la_ei.get("status", "uncovered")
+                    _la_badge = ("OK" if _la_s == "covered"
+                                 else _fmt_coverage_pct(
+                                     _la_ei.get('coverage_pct', 0))
+                                 if _la_s == "partial" else "X")
+                    _la_due = _la_ei.get("_lookahead_due_date")
+                    if _la_due:
+                        _la_lbl = (
+                            f"{_MONTH_ABBREVS[_la_due.month - 1]} "
+                            f"{_ordinal_day(_la_due.day)}"
+                        )
+                    else:
+                        _la_lbl = _format_due_label(_la_ei, now=_now)
+                    _la_rows.append((
+                        _la_lbl,
+                        _la_ei.get('category', ''),
+                        _sanitize_for_pdf(_la_ei.get('name', '')),
+                        f"{pfx}{_la_ei.get('amount', 0):,.2f}",
+                        _la_s, _la_badge,
+                    ))
+                # Measure shared column widths across both tables
+                _uc_inset = 8
+                _uc_x = pdf.l_margin + _uc_inset
+                _uc_w = pdf.w - pdf.l_margin - pdf.r_margin - 2 * _uc_inset
+                _all_sched = _uc_rows + _la_rows
+                if _all_sched:
+                    _buf = 4
+                    pdf.set_font("Helvetica", "", 9)
+                    uc_due = max(
+                        pdf.get_string_width("Due"),
+                        max((pdf.get_string_width(r[0]) for r in _all_sched), default=0),
+                    ) + _buf
+                    uc_cat = max(
+                        pdf.get_string_width("Category"),
+                        max((pdf.get_string_width(r[1]) for r in _all_sched), default=0),
+                    ) + _buf
+                    uc_amt = max(
+                        pdf.get_string_width("Amount"),
+                        max((pdf.get_string_width(r[3]) for r in _all_sched), default=0),
+                    ) + _buf
+                    uc_status = max(
+                        pdf.get_string_width("Status"),
+                        max((pdf.get_string_width(r[5]) for r in _all_sched), default=0),
+                    ) + _buf
+                    uc_name = _uc_w - uc_due - uc_cat - uc_amt - uc_status
+                # --- Upcoming table ---
+                if _uc_rows:
                     pdf.set_font("Helvetica", "B", 9)
                     pdf.set_text_color(80, 80, 80)
                     pdf.cell(
                         0, 6, "Upcoming:",
                         new_x="LMARGIN", new_y="NEXT",
                     )
-                    # Upcoming items table header
-                    uc_due = 30
-                    uc_cat = 48
-                    uc_status = 15
-                    uc_amt = 32
-                    uc_name = pdf.w - pdf.l_margin - pdf.r_margin - uc_due - uc_cat - uc_status - uc_amt
+                    _uc_y_start = pdf.get_y()
                     pdf.set_font("Helvetica", "B", 8)
                     pdf.set_text_color(120, 120, 120)
+                    pdf.set_x(_uc_x)
                     pdf.cell(uc_due, 5, "Due", new_x="RIGHT")
                     pdf.cell(uc_cat, 5, "Category", new_x="RIGHT")
                     pdf.cell(uc_name, 5, "Name", new_x="RIGHT")
                     pdf.cell(uc_amt, 5, "Amount", new_x="RIGHT", align="R")
                     pdf.cell(uc_status, 5, "Status", new_x="LMARGIN", new_y="NEXT")
+                    pdf.set_draw_color(200, 200, 205)
+                    pdf.line(_uc_x, pdf.get_y(), _uc_x + _uc_w, pdf.get_y())
                     pdf.set_font("Helvetica", "", 9)
-                    for _, _ei in _upcoming:
-                        _label = _format_due_label(_ei, now=_now)
-                        _amt = _ei.get("amount", 0)
-                        _s = _ei.get("status", "uncovered")
-                        _badge = ("OK" if _s == "covered"
-                                  else _fmt_coverage_pct(
-                                      _ei.get('coverage_pct', 0))
-                                  if _s == "partial" else "X")
+                    for _ri, (due, cat, name, amt, _s, badge) in enumerate(_uc_rows):
+                        pdf.set_x(_uc_x)
+                        if _ri % 2 == 1:
+                            pdf.set_fill_color(245, 245, 250)
+                            pdf.rect(_uc_x, pdf.get_y(), _uc_w, 5, "F")
                         pdf.set_text_color(80, 80, 80)
-                        pdf.cell(uc_due, 5, _label, new_x="RIGHT")
+                        pdf.cell(uc_due, 5, due, new_x="RIGHT")
                         pdf.set_text_color(120, 120, 120)
-                        _cat_txt = _truncate_to_width(pdf, _ei.get('category', ''), uc_cat)
-                        pdf.cell(uc_cat, 5, _cat_txt, new_x="RIGHT")
+                        _c_txt = _truncate_to_width(pdf, cat, uc_cat)
+                        pdf.cell(uc_cat, 5, _c_txt, new_x="RIGHT")
                         pdf.set_text_color(80, 80, 80)
-                        _name_txt = _sanitize_for_pdf(_ei.get('name', ''))
-                        pdf.cell(uc_name, 5, _name_txt, new_x="RIGHT")
-                        pdf.cell(uc_amt, 5, f"{pfx}{_amt:,.2f}", new_x="RIGHT", align="R")
+                        _n_txt = _truncate_to_width(pdf, name, uc_name)
+                        pdf.cell(uc_name, 5, _n_txt, new_x="RIGHT")
+                        pdf.cell(uc_amt, 5, amt, new_x="RIGHT", align="R")
                         if _s == "covered":
                             pdf.set_text_color(34, 197, 94)
                         elif _s == "partial":
@@ -2105,81 +2207,66 @@ def generate_pdf(
                         else:
                             pdf.set_text_color(239, 68, 68)
                         pdf.cell(
-                            uc_status, 5, _badge,
+                            uc_status, 5, badge,
                             new_x="LMARGIN", new_y="NEXT",
                         )
-                # Lookahead items for PDF
-                _meta = report_data.get("_schedule_meta", {})
-                _pw = _meta.get("period_window", "full_prior")
-                _show_la = _meta.get("show_expense_lookahead", True)
-                if _show_la and _pw in ("mtd", "wtd", "qtd", "ytd"):
-                    _lookahead = _get_lookahead_items(
-                        coverage.get("items", []), _now, _pw,
+                    pdf.set_draw_color(200, 200, 205)
+                    pdf.rect(_uc_x, _uc_y_start, _uc_w, pdf.get_y() - _uc_y_start)
+                    pdf.set_draw_color(0, 0, 0)
+                # --- Lookahead table ---
+                if _la_rows:
+                    _la_labels = {
+                        "mtd": "Next Month",
+                        "wtd": "Next Week",
+                        "qtd": "Next Quarter",
+                        "ytd": "Next Year",
+                    }
+                    pdf.set_font("Helvetica", "B", 9)
+                    pdf.set_text_color(150, 150, 150)
+                    pdf.cell(
+                        0, 6,
+                        f"{_la_labels.get(_pw, 'Next Period')} Preview:",
+                        new_x="LMARGIN", new_y="NEXT",
                     )
-                    if _lookahead:
-                        _la_labels = {
-                            "mtd": "Next Month",
-                            "wtd": "Next Week",
-                            "qtd": "Next Quarter",
-                            "ytd": "Next Year",
-                        }
-                        pdf.set_font("Helvetica", "B", 9)
-                        pdf.set_text_color(150, 150, 150)
+                    _la_y_start = pdf.get_y()
+                    pdf.set_font("Helvetica", "B", 8)
+                    pdf.set_text_color(150, 150, 150)
+                    pdf.set_x(_uc_x)
+                    pdf.cell(uc_due, 5, "Due", new_x="RIGHT")
+                    pdf.cell(uc_cat, 5, "Category", new_x="RIGHT")
+                    pdf.cell(uc_name, 5, "Name", new_x="RIGHT")
+                    pdf.cell(uc_amt, 5, "Amount", new_x="RIGHT", align="R")
+                    pdf.cell(uc_status, 5, "Status", new_x="LMARGIN", new_y="NEXT")
+                    pdf.set_draw_color(200, 200, 205)
+                    pdf.line(_uc_x, pdf.get_y(), _uc_x + _uc_w, pdf.get_y())
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(150, 150, 150)
+                    for _ri, (due, cat, name, amt, _s, badge) in enumerate(_la_rows):
+                        pdf.set_x(_uc_x)
+                        if _ri % 2 == 1:
+                            pdf.set_fill_color(245, 245, 250)
+                            pdf.rect(_uc_x, pdf.get_y(), _uc_w, 5, "F")
+                        pdf.cell(uc_due, 5, due, new_x="RIGHT")
+                        _c_txt = _truncate_to_width(pdf, cat, uc_cat)
+                        pdf.cell(uc_cat, 5, _c_txt, new_x="RIGHT")
+                        _n_txt = _truncate_to_width(pdf, name, uc_name)
+                        pdf.cell(uc_name, 5, _n_txt, new_x="RIGHT")
+                        pdf.cell(uc_amt, 5, amt, new_x="RIGHT", align="R")
+                        if _s == "covered":
+                            pdf.set_text_color(34, 197, 94)
+                        elif _s == "partial":
+                            pdf.set_text_color(234, 179, 8)
+                        else:
+                            pdf.set_text_color(239, 68, 68)
                         pdf.cell(
-                            0, 6,
-                            f"{_la_labels.get(_pw, 'Next Period')} Preview:",
+                            uc_status, 5, badge,
                             new_x="LMARGIN", new_y="NEXT",
                         )
-                        # Lookahead items table header (matches Upcoming layout)
-                        la_due_w = 30
-                        la_cat_w = 48
-                        la_status_w = 15
-                        la_amt_w = 32
-                        la_name_w = pdf.w - pdf.l_margin - pdf.r_margin - la_due_w - la_cat_w - la_status_w - la_amt_w
-                        pdf.set_font("Helvetica", "B", 8)
                         pdf.set_text_color(150, 150, 150)
-                        pdf.cell(la_due_w, 5, "Due", new_x="RIGHT")
-                        pdf.cell(la_cat_w, 5, "Category", new_x="RIGHT")
-                        pdf.cell(la_name_w, 5, "Name", new_x="RIGHT")
-                        pdf.cell(la_amt_w, 5, "Amount", new_x="RIGHT", align="R")
-                        pdf.cell(la_status_w, 5, "Status", new_x="LMARGIN", new_y="NEXT")
-                        pdf.set_font("Helvetica", "", 9)
-                        pdf.set_text_color(150, 150, 150)
-                        for _, _la_ei in _lookahead:
-                            _la_due = _la_ei.get("_lookahead_due_date")
-                            if _la_due:
-                                _la_lbl = (
-                                    f"{_MONTH_ABBREVS[_la_due.month - 1]} "
-                                    f"{_ordinal_day(_la_due.day)}"
-                                )
-                            else:
-                                _la_lbl = _format_due_label(
-                                    _la_ei, now=_now
-                                )
-                            _la_amt = _la_ei.get("amount", 0)
-                            _la_name = _sanitize_for_pdf(_la_ei.get('name', ''))
-                            _la_s = _la_ei.get("status", "uncovered")
-                            _la_badge = ("OK" if _la_s == "covered"
-                                         else _fmt_coverage_pct(
-                                             _la_ei.get('coverage_pct', 0))
-                                         if _la_s == "partial" else "X")
-                            pdf.cell(la_due_w, 5, _la_lbl, new_x="RIGHT")
-                            _la_cat_txt = _truncate_to_width(pdf, _la_ei.get('category', ''), la_cat_w)
-                            pdf.cell(la_cat_w, 5, _la_cat_txt, new_x="RIGHT")
-                            pdf.cell(la_name_w, 5, _la_name, new_x="RIGHT")
-                            pdf.cell(la_amt_w, 5, f"{pfx}{_la_amt:,.2f}", new_x="RIGHT", align="R")
-                            if _la_s == "covered":
-                                pdf.set_text_color(34, 197, 94)
-                            elif _la_s == "partial":
-                                pdf.set_text_color(234, 179, 8)
-                            else:
-                                pdf.set_text_color(239, 68, 68)
-                            pdf.cell(
-                                la_status_w, 5, _la_badge,
-                                new_x="LMARGIN", new_y="NEXT",
-                            )
-                            pdf.set_text_color(150, 150, 150)
-                        pdf.set_text_color(80, 80, 80)
+                    pdf.set_draw_color(200, 200, 205)
+                    pdf.rect(_uc_x, _la_y_start, _uc_w, pdf.get_y() - _la_y_start)
+                    pdf.set_draw_color(0, 0, 0)
+                    pdf.set_text_color(80, 80, 80)
                 _daily_inc = g.get("current_daily_income", 0)
                 _proj_lin = g.get("projected_income")
                 _proj_cmp = g.get("projected_income_compound")
