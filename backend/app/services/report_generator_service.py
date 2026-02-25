@@ -2589,28 +2589,64 @@ def generate_pdf(
                 pdf.set_font("Helvetica", "", 10)
                 pdf.ln(2)
 
-            # Column headers for individual transfers
+            # Individual transfers table (styled)
             if pdf_other:
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_text_color(100, 100, 100)
-                pdf.cell(40, 6, "Date", new_x="RIGHT")
-                pdf.cell(40, 6, "Type", new_x="RIGHT")
-                pdf.cell(0, 6, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
+                _tf_inset = 8
+                _tf_x = pdf.l_margin + _tf_inset
+                _tf_w = pdf.w - pdf.l_margin - pdf.r_margin - 2 * _tf_inset
+                _tf_buf = 4
+                # Pre-compute row display values
+                _tf_rows = []
                 for trec in pdf_other:
                     t_date = trec.get("date", "")
                     t_type = _transfer_label(trec)
                     t_amt = abs(trec.get("amount_usd", 0))
                     t_sign = "+" if trec.get("type") == "deposit" else "-"
+                    _tf_rows.append((t_date, t_type, f"{t_sign}${t_amt:,.2f}"))
+                # Measure column widths
+                pdf.set_font("Helvetica", "", 9)
+                col_date = max(
+                    pdf.get_string_width("Date"),
+                    max((pdf.get_string_width(r[0]) for r in _tf_rows), default=0),
+                ) + _tf_buf
+                col_amt = max(
+                    pdf.get_string_width("Amount"),
+                    max((pdf.get_string_width(r[2]) for r in _tf_rows), default=0),
+                ) + _tf_buf
+                col_type = _tf_w - col_date - col_amt
+                # Header
+                _tf_y_start = pdf.get_y()
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_text_color(120, 120, 120)
+                pdf.set_x(_tf_x)
+                pdf.cell(col_date, 5, "Date", new_x="RIGHT")
+                pdf.cell(col_type, 5, "Type", new_x="RIGHT")
+                pdf.cell(col_amt, 5, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
+                pdf.set_draw_color(200, 200, 205)
+                pdf.line(_tf_x, pdf.get_y(), _tf_x + _tf_w, pdf.get_y())
+                # Rows
+                pdf.set_font("Helvetica", "", 9)
+                for _ri, (t_date, t_type, t_amt_str) in enumerate(_tf_rows):
+                    pdf.set_x(_tf_x)
+                    if _ri % 2 == 1:
+                        pdf.set_fill_color(245, 245, 250)
+                        pdf.rect(_tf_x, pdf.get_y(), _tf_w, 5, "F")
                     pdf.set_text_color(100, 100, 100)
-                    pdf.cell(40, 6, t_date, new_x="RIGHT")
-                    pdf.cell(40, 6, t_type, new_x="RIGHT")
+                    pdf.cell(col_date, 5, t_date, new_x="RIGHT")
+                    pdf.set_text_color(80, 80, 80)
+                    _t_txt = _truncate_to_width(pdf, t_type, col_type)
+                    pdf.cell(col_type, 5, _t_txt, new_x="RIGHT")
                     pdf.set_text_color(30, 30, 30)
-                    pdf.set_font("Helvetica", "B", 10)
+                    pdf.set_font("Helvetica", "B", 9)
                     pdf.cell(
-                        0, 6, f"{t_sign}${t_amt:,.2f}",
+                        col_amt, 5, t_amt_str,
                         new_x="LMARGIN", new_y="NEXT", align="R",
                     )
-                    pdf.set_font("Helvetica", "", 10)
+                    pdf.set_font("Helvetica", "", 9)
+                # Table outline
+                pdf.set_draw_color(200, 200, 205)
+                pdf.rect(_tf_x, _tf_y_start, _tf_w, pdf.get_y() - _tf_y_start)
+                pdf.set_draw_color(0, 0, 0)
 
         # Prior Period Comparison
         prior = report_data.get("prior_period")
