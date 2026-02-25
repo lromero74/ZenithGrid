@@ -464,6 +464,8 @@ export function useIndicators({
           timeVisible: true,
           secondsVisible: false,
           visible: false,
+          fixLeftEdge: true,
+          fixRightEdge: true,
         },
       })
 

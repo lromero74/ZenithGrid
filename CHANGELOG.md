@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.58.1] - 2026-02-25
+
+### Fixed
+- **Chart zoom shrinks past data bounds**: The actively-scrolled chart could zoom out beyond its data edges while synced charts stopped at their bounds, creating visual gaps. All charts now anchor to their data edges so zoom and pan stay consistent across panels.
+
 ## [v2.58.0] - 2026-02-25
 
 ### Added
