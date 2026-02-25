@@ -608,15 +608,10 @@ async def list_expense_items(
 ) -> List[dict]:
     """List all expense items for a goal."""
     goal = await _get_user_goal(db, goal_id, current_user.id)
-    sort_mode = goal.expense_sort_mode or "amount_asc"
-    if sort_mode == "custom":
-        order = ExpenseItem.sort_order
-    else:
-        order = ExpenseItem.created_at
     result = await db.execute(
         select(ExpenseItem)
         .where(ExpenseItem.goal_id == goal.id)
-        .order_by(order)
+        .order_by(ExpenseItem.sort_order, ExpenseItem.created_at)
     )
     items = result.scalars().all()
     return [_expense_item_to_dict(i, goal.expense_period) for i in items]

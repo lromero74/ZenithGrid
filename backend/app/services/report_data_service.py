@@ -490,20 +490,19 @@ async def _compute_expenses_goal_progress(
     daily_income = total_profit / lookback_days_actual if lookback_days_actual > 0 else 0
     projected_income = daily_income * period_days
 
-    # Load active expense items
+    # Load active expense items (sorted by user-defined order)
     items_result = await db.execute(
         select(ExpenseItem).where(
             ExpenseItem.goal_id == goal.id,
             ExpenseItem.is_active.is_(True),
-        )
+        ).order_by(ExpenseItem.sort_order, ExpenseItem.created_at)
     )
     expense_items = items_result.scalars().all()
 
-    # Run coverage waterfall
-    sort_mode = getattr(goal, "expense_sort_mode", None) or "custom"
+    # Run coverage waterfall using user-defined order
     coverage = compute_expense_coverage(
         expense_items, expense_period, projected_income, tax_pct,
-        sort_mode=sort_mode,
+        sort_mode="custom",
     )
 
     # Compound projection (same formula as income goal)
