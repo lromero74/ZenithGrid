@@ -868,42 +868,39 @@ async def get_account_portfolio(
             )
 
             btc_usd_price = await get_public_btc_price()
-            eth_btc_price = await get_public_price("ETH-BTC")
 
-            # Calculate totals
-            btc_balance = balances.get("BTC", 0.0)
-            eth_balance = balances.get("ETH", 0.0)
-            usd_balance = balances.get("USD", 0.0)
-            usdc_balance = balances.get("USDC", 0.0)
-            usdt_balance = balances.get("USDT", 0.0)
-
-            total_btc = btc_balance + (eth_balance * eth_btc_price)
-            total_usd = (total_btc * btc_usd_price) + usd_balance + usdc_balance + usdt_balance
+            # Fetch BTC prices for all non-stablecoin currencies
+            altcoin_btc_prices = {}
+            for currency in balances:
+                if currency in ("BTC", "USD", "USDC", "USDT"):
+                    continue
+                try:
+                    altcoin_btc_prices[currency] = await get_public_price(f"{currency}-BTC")
+                except Exception:
+                    altcoin_btc_prices[currency] = 0.0
 
             # Build holdings array (compatible with frontend Portfolio page)
             holdings = []
+            total_btc = 0.0
+            total_usd = 0.0
             for currency, amount in balances.items():
                 if amount > 0:
-                    # Calculate USD and BTC values for this holding
                     if currency == "BTC":
-                        usd_value = amount * btc_usd_price
                         btc_value = amount
+                        usd_value = amount * btc_usd_price
                         current_price_usd = btc_usd_price
-                    elif currency == "ETH":
-                        btc_value = amount * eth_btc_price
-                        usd_value = btc_value * btc_usd_price
-                        current_price_usd = eth_btc_price * btc_usd_price
-                    elif currency in ["USD", "USDC", "USDT"]:
+                    elif currency in ("USD", "USDC", "USDT"):
                         usd_value = amount
                         btc_value = amount / btc_usd_price if btc_usd_price > 0 else 0
                         current_price_usd = 1.0
                     else:
-                        # Unknown currency
-                        usd_value = 0
-                        btc_value = 0
-                        current_price_usd = 0
+                        btc_price = altcoin_btc_prices.get(currency, 0.0)
+                        btc_value = amount * btc_price
+                        usd_value = btc_value * btc_usd_price
+                        current_price_usd = btc_price * btc_usd_price
 
-                    percentage = (usd_value / total_usd * 100) if total_usd > 0 else 0
+                    total_btc += btc_value
+                    total_usd += usd_value
 
                     holdings.append({
                         "asset": currency,
@@ -913,8 +910,13 @@ async def get_account_portfolio(
                         "current_price_usd": current_price_usd,
                         "usd_value": usd_value,
                         "btc_value": btc_value,
-                        "percentage": percentage
+                        "percentage": 0.0,
                     })
+
+            # Calculate allocation percentages now that we have totals
+            for holding in holdings:
+                if total_usd > 0:
+                    holding["percentage"] = (holding["usd_value"] / total_usd) * 100
 
             return {
                 "holdings": holdings,

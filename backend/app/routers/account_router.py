@@ -340,26 +340,44 @@ async def get_portfolio(
                     btc_usd_price = await client.get_btc_usd_price()
                 except Exception:
                     pass
+
+                # Fetch BTC prices for all altcoins in one pass
+                altcoin_btc_prices = {}
+                for currency in client.balances:
+                    if currency in ("BTC", "USD", "USDC", "USDT"):
+                        continue
+                    try:
+                        price = await client.get_current_price(f"{currency}-BTC")
+                        altcoin_btc_prices[currency] = price
+                    except Exception:
+                        altcoin_btc_prices[currency] = 0.0
+
                 assets = []
                 for currency, balance in client.balances.items():
                     if balance > 0:
+                        if currency == "BTC":
+                            btc_value = balance
+                            usd_value = balance * btc_usd_price
+                            price_usd = btc_usd_price
+                        elif currency in ("USD", "USDC", "USDT"):
+                            btc_value = balance / btc_usd_price if btc_usd_price > 0 else 0.0
+                            usd_value = balance
+                            price_usd = 1.0
+                        else:
+                            btc_price = altcoin_btc_prices.get(currency, 0.0)
+                            btc_value = balance * btc_price
+                            usd_value = btc_value * btc_usd_price
+                            price_usd = btc_price * btc_usd_price
+
                         assets.append({
                             "asset": currency,
                             "total_balance": balance,
                             "available_balance": balance,
                             "hold_balance": 0.0,
-                            "usd_value": (
-                                balance * btc_usd_price if currency == "BTC"
-                                else balance if currency in ("USD", "USDC")
-                                else 0.0
-                            ),
-                            "btc_value": balance if currency == "BTC" else 0.0,
+                            "usd_value": usd_value,
+                            "btc_value": btc_value,
                             "allocation_pct": 0.0,
-                            "price_usd": (
-                                btc_usd_price if currency == "BTC"
-                                else 1.0 if currency in ("USD", "USDC")
-                                else 0.0
-                            ),
+                            "price_usd": price_usd,
                             "change_24h": 0.0,
                         })
                 return {
