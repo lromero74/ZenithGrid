@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.59.3] - 2026-02-25
+
+### Added
+- **Test coverage sweep**: Added 374 unit tests across 11 previously untested modules including trading engine, exchange clients, AI service, URL utilities, robots checker, brand service, and several routers (transfers, seasonality, account value, order history).
+
 ## [v2.59.2] - 2026-02-25
 
 ### Fixed
