@@ -10,13 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, Bot, Position, User
-from app.position_routers.dependencies import get_coinbase
 from app.position_routers.helpers import compute_resize_budget
 from app.auth.dependencies import get_current_user
 from app.schemas.position import UpdatePositionSettingsRequest
+from app.services.exchange_service import get_exchange_client_for_account
 
 from app.trading_engine_v2 import StrategyTradingEngine
 
@@ -69,7 +68,6 @@ async def force_close_position(
     position_id: int,
     skip_slippage_guard: bool = False,
     db: AsyncSession = Depends(get_db),
-    coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(get_current_user)
 ):
     """Force close a position at current market price"""
@@ -101,15 +99,24 @@ async def force_close_position(
         if not bot:
             raise HTTPException(status_code=404, detail="Bot not found for this position")
 
+        # Get the correct exchange client for this position's account
+        # (paper trading positions need PaperTradingClient, not the real Coinbase client)
+        exchange = await get_exchange_client_for_account(db, position.account_id)
+        if not exchange:
+            raise HTTPException(
+                status_code=503,
+                detail="Could not create exchange client for this position's account."
+            )
+
         # Get current price for the position's product
-        current_price = await coinbase.get_current_price(position.product_id)
+        current_price = await exchange.get_current_price(position.product_id)
 
         # Slippage guard — warn user if slippage will erode profit
         config = position.strategy_config_snapshot or {}
         if config.get("slippage_guard", False) and not skip_slippage_guard:
             from app.trading_engine.book_depth_guard import check_sell_slippage
             proceed, guard_reason = await check_sell_slippage(
-                coinbase, position.product_id, position, config
+                exchange, position.product_id, position, config
             )
             if not proceed:
                 return {
@@ -124,7 +131,7 @@ async def force_close_position(
 
         # Execute sell using trading engine
         engine = StrategyTradingEngine(
-            db=db, exchange=coinbase, bot=bot, strategy=strategy, product_id=position.product_id
+            db=db, exchange=exchange, bot=bot, strategy=strategy, product_id=position.product_id
         )
         trade, profit_quote, profit_percentage = await engine.execute_sell(
             position=position, current_price=current_price, signal_data=None
@@ -137,7 +144,8 @@ async def force_close_position(
         }
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error force-closing position {position_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
