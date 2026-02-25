@@ -21,6 +21,7 @@ The first and only DCA bot platform with built-in AI decision-making:
 - **Budget Splitting**: Optional budget division across pairs for safer allocation
 - **Category Filtering**: Filter trading pairs by APPROVED, BORDERLINE, QUESTIONABLE, MEME, BLACKLISTED
 - **Conditional DCA**: Custom conditions per phase (base order, safety orders, take profit)
+- **Slippage Guard**: Order book depth protection ensures market orders don't execute at unfavorable prices
 - **Multi-Timeframe**: Different timeframes per indicator (5m, 15m, 30m, 1h, 4h, 1d)
 - **Bot Templates**: Quick-start from Conservative/Balanced/Aggressive presets
 - **6 Advanced Strategies**: Indicator-Based (custom), Bull Flag Scanner, AI Spot Opinion, Triangular Arbitrage, Spatial Arbitrage, Statistical Arbitrage
@@ -337,6 +338,7 @@ python3 update.py --yes
 - **Take Profit** targets (percentage or conditions-based)
 - **Trailing Stop Loss** with deviation percentage
 - **Trailing Take Profit** with pullback protection
+- **Slippage Guard**: Order book depth check before market orders — blocks execution if estimated slippage would erode profit below target
 - **Safety Order** ladder with configurable steps
 - **PropGuard**: Automated prop firm drawdown monitoring with daily/total limits and kill switch
 - **API Key Encryption** (Fernet AES-128-CBC + HMAC-SHA256)

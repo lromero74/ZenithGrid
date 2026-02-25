@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.53.1] - 2026-02-25
+
+### Changed
+- **Slippage guard enabled on all sample bots**: New bots created from templates now have slippage guard on by default
+- **README updated**: Added slippage guard to safety features and strategy features documentation
+
 ## [v2.53.0] - 2026-02-25
 
 ### Added
