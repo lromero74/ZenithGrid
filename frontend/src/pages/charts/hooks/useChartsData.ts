@@ -6,13 +6,11 @@ import type { CandleData } from '../../../utils/indicators'
 export function useChartsData(
   selectedPair: string,
   selectedInterval: string,
-  chartType: string,
-  useHeikinAshi: boolean,
-  indicators: any[],
   accountId?: number | null,
 ) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dataVersion, setDataVersion] = useState(0)
   const lastUpdateRef = useRef<string>('')
   const candleDataRef = useRef<CandleData[]>([])
 
@@ -49,9 +47,9 @@ export function useChartsData(
     if (!productsData?.products) {
       // Fallback to default pairs while loading
       return [
-        { value: 'BTC-USD', label: 'BTC/USD', group: 'USD Pairs', inPortfolio: false },
-        { value: 'ETH-USD', label: 'ETH/USD', group: 'USD Pairs', inPortfolio: false },
-        { value: 'SOL-USD', label: 'SOL/USD', group: 'USD Pairs', inPortfolio: false },
+        { value: 'BTC-USD', label: 'BTC/USD', group: 'USD', inPortfolio: false },
+        { value: 'ETH-USD', label: 'ETH/USD', group: 'USD', inPortfolio: false },
+        { value: 'SOL-USD', label: 'SOL/USD', group: 'USD', inPortfolio: false },
       ]
     }
 
@@ -69,7 +67,7 @@ export function useChartsData(
       return {
         value: product.product_id,
         label: `${base}/${quote}`,
-        group: quote === 'USD' ? 'USD Pairs' : 'BTC Pairs',
+        group: quote,
         inPortfolio: inPortfolio
       }
     })
@@ -79,9 +77,12 @@ export function useChartsData(
 
   // Fetch and update chart data
   useEffect(() => {
+    // Reset tracking state so the data update effect re-applies on new data
+    lastUpdateRef.current = ''
+    candleDataRef.current = []
+    setLoading(true)
+
     const fetchCandles = async () => {
-      const isInitialLoad = lastUpdateRef.current === ''
-      setLoading(isInitialLoad)
       setError(null)
 
       try {
@@ -110,7 +111,7 @@ export function useChartsData(
         }
 
         candleDataRef.current = candles
-        // Note: lastUpdateRef is managed by Charts.tsx to track what's been rendered
+        setDataVersion(v => v + 1)
       } catch (err: any) {
         console.error('Error fetching candles:', err)
         setError(err.response?.data?.detail || 'Failed to load chart data')
@@ -123,7 +124,7 @@ export function useChartsData(
     const interval = setInterval(fetchCandles, 30000)
 
     return () => clearInterval(interval)
-  }, [selectedPair, selectedInterval, chartType, indicators, useHeikinAshi])
+  }, [selectedPair, selectedInterval])
 
   return {
     portfolio,
@@ -131,6 +132,7 @@ export function useChartsData(
     TRADING_PAIRS,
     loading,
     error,
+    dataVersion,
     candleDataRef,
     lastUpdateRef,
   }
