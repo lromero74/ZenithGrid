@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.55.5] - 2026-02-25
+
+### Changed
+- **PDF transfers table styled to match other tables**: Individual transfer rows now use the same inset table style with header row, zebra striping, border outline, and measured column widths as expense coverage tables
+
 ## [v2.55.4] - 2026-02-25
 
 ### Fixed
