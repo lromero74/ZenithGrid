@@ -628,3 +628,75 @@ class TestSendReportEmail:
         call_kwargs = patch_ses.send_raw_email.call_args[1]
         raw_msg = call_kwargs["RawMessage"]["Data"]
         assert "report.pdf" not in raw_msg
+
+    def test_report_email_with_inline_images_embeds_cid(
+        self, ses_enabled, patch_ses
+    ):
+        """Happy path: inline images are CID-embedded in multipart/related."""
+        from app.services.email_service import send_report_email
+
+        # Minimal valid 1x1 PNG
+        import struct
+        import zlib
+        png_header = b"\x89PNG\r\n\x1a\n"
+        ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+        ihdr_crc = struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data) & 0xFFFFFFFF)
+        ihdr = struct.pack(">I", 13) + b"IHDR" + ihdr_data + ihdr_crc
+        raw_row = b"\x00\xff\x00\x00"
+        compressed = zlib.compress(raw_row)
+        idat_crc = struct.pack(">I", zlib.crc32(b"IDAT" + compressed) & 0xFFFFFFFF)
+        idat = struct.pack(">I", len(compressed)) + b"IDAT" + compressed + idat_crc
+        iend_crc = struct.pack(">I", zlib.crc32(b"IEND") & 0xFFFFFFFF)
+        iend = struct.pack(">I", 0) + b"IEND" + iend_crc
+        fake_png = png_header + ihdr + idat + iend
+
+        inline_images = [("goal-chart-42", fake_png)]
+        result = send_report_email(
+            to="user@example.com",
+            cc=[],
+            subject="Report",
+            html_body='<img src="cid:goal-chart-42">',
+            text_body="Report",
+            inline_images=inline_images,
+        )
+        assert result is True
+        call_kwargs = patch_ses.send_raw_email.call_args[1]
+        raw_msg = call_kwargs["RawMessage"]["Data"]
+        assert "goal-chart-42" in raw_msg
+        assert "multipart/related" in raw_msg
+
+    def test_report_email_no_inline_images_no_related(
+        self, ses_enabled, patch_ses
+    ):
+        """Edge case: without inline images, no multipart/related wrapper."""
+        from app.services.email_service import send_report_email
+
+        send_report_email(
+            to="user@example.com",
+            cc=[],
+            subject="Report",
+            html_body="<p>No images</p>",
+            text_body="Report",
+            inline_images=None,
+        )
+        call_kwargs = patch_ses.send_raw_email.call_args[1]
+        raw_msg = call_kwargs["RawMessage"]["Data"]
+        assert "multipart/related" not in raw_msg
+
+    def test_report_email_empty_inline_images_no_related(
+        self, ses_enabled, patch_ses
+    ):
+        """Edge case: empty inline_images list behaves like None."""
+        from app.services.email_service import send_report_email
+
+        send_report_email(
+            to="user@example.com",
+            cc=[],
+            subject="Report",
+            html_body="<p>No images</p>",
+            text_body="Report",
+            inline_images=[],
+        )
+        call_kwargs = patch_ses.send_raw_email.call_args[1]
+        raw_msg = call_kwargs["RawMessage"]["Data"]
+        assert "multipart/related" not in raw_msg

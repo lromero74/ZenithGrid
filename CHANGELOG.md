@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.55.3] - 2026-02-25
+
+### Fixed
+- **Goal trend charts now display in emailed reports**: Charts are rendered as PNG images and embedded via CID inline attachments, since email clients strip SVG tags
+- **Report section ordering improved**: Goals and expense coverage now appear above Capital Movements in all report views (email, PDF, and web)
+
 ## [v2.55.2] - 2026-02-25
 
 ### Fixed

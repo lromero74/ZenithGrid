@@ -241,9 +241,11 @@ def send_report_email(
     text_body: str,
     pdf_attachment: bytes = None,
     pdf_filename: str = "report.pdf",
+    inline_images: list = None,
 ) -> bool:
     """
-    Send a report email with optional PDF attachment and CC recipients.
+    Send a report email with optional PDF attachment, CC recipients,
+    and CID-embedded inline images.
 
     Uses SES send_raw_email for MIME multipart support.
     """
@@ -252,6 +254,7 @@ def send_report_email(
         return False
 
     from email.mime.application import MIMEApplication
+    from email.mime.image import MIMEImage
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
 
@@ -264,9 +267,23 @@ def send_report_email(
             msg["Cc"] = ", ".join(cc)
 
         # Build the body (HTML + text alternative)
+        # When inline images are present, wrap HTML in multipart/related
+        # so CID references resolve correctly.
         body_part = MIMEMultipart("alternative")
         body_part.attach(MIMEText(text_body, "plain", "utf-8"))
-        body_part.attach(MIMEText(html_body, "html", "utf-8"))
+
+        if inline_images:
+            related_part = MIMEMultipart("related")
+            related_part.attach(MIMEText(html_body, "html", "utf-8"))
+            for cid, png_bytes in inline_images:
+                img_part = MIMEImage(png_bytes, "png")
+                img_part.add_header("Content-ID", f"<{cid}>")
+                img_part.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
+                related_part.attach(img_part)
+            body_part.attach(related_part)
+        else:
+            body_part.attach(MIMEText(html_body, "html", "utf-8"))
+
         msg.attach(body_part)
 
         # Attach PDF if provided
