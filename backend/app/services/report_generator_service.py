@@ -1730,6 +1730,18 @@ def _sanitize_for_pdf(text: str) -> str:
     return text.encode("latin-1", errors="replace").decode("latin-1")
 
 
+def _truncate_to_width(pdf, text: str, max_width: float) -> str:
+    """Truncate text with '...' suffix if it exceeds the given cell width (mm)."""
+    if pdf.get_string_width(text) <= max_width:
+        return text
+    ellipsis = "..."
+    ew = pdf.get_string_width(ellipsis)
+    for i in range(len(text), 0, -1):
+        if pdf.get_string_width(text[:i]) + ew <= max_width:
+            return text[:i] + ellipsis
+    return ellipsis
+
+
 def generate_pdf(
     html_content: str,
     report_data: Optional[Dict] = None,
@@ -1973,7 +1985,7 @@ def generate_pdf(
                 cov_items = coverage.get("items", [])
                 if cov_items:
                     col_status = 15
-                    col_cat = 28
+                    col_cat = 48
                     col_amt = 32
                     col_name = pdf.w - pdf.l_margin - pdf.r_margin - col_status - col_cat - col_amt
                     pdf.set_font("Helvetica", "B", 8)
@@ -2000,7 +2012,8 @@ def generate_pdf(
                         name_txt = _sanitize_for_pdf(ei.get('name', ''))
                         pdf.cell(col_name, 5, name_txt, new_x="RIGHT")
                         pdf.set_text_color(120, 120, 120)
-                        pdf.cell(col_cat, 5, ei.get('category', ''), new_x="RIGHT")
+                        cat_txt = _truncate_to_width(pdf, ei.get('category', ''), col_cat)
+                        pdf.cell(col_cat, 5, cat_txt, new_x="RIGHT")
                         norm = ei.get("normalized_amount", 0)
                         pdf.set_text_color(80, 80, 80)
                         pdf.cell(
@@ -2056,7 +2069,7 @@ def generate_pdf(
                     )
                     # Upcoming items table header
                     uc_due = 30
-                    uc_cat = 28
+                    uc_cat = 48
                     uc_status = 15
                     uc_amt = 32
                     uc_name = pdf.w - pdf.l_margin - pdf.r_margin - uc_due - uc_cat - uc_status - uc_amt
@@ -2079,7 +2092,8 @@ def generate_pdf(
                         pdf.set_text_color(80, 80, 80)
                         pdf.cell(uc_due, 5, _label, new_x="RIGHT")
                         pdf.set_text_color(120, 120, 120)
-                        pdf.cell(uc_cat, 5, _ei.get('category', ''), new_x="RIGHT")
+                        _cat_txt = _truncate_to_width(pdf, _ei.get('category', ''), uc_cat)
+                        pdf.cell(uc_cat, 5, _cat_txt, new_x="RIGHT")
                         pdf.set_text_color(80, 80, 80)
                         _name_txt = _sanitize_for_pdf(_ei.get('name', ''))
                         pdf.cell(uc_name, 5, _name_txt, new_x="RIGHT")
@@ -2118,7 +2132,7 @@ def generate_pdf(
                         )
                         # Lookahead items table header (matches Upcoming layout)
                         la_due_w = 30
-                        la_cat_w = 28
+                        la_cat_w = 48
                         la_status_w = 15
                         la_amt_w = 32
                         la_name_w = pdf.w - pdf.l_margin - pdf.r_margin - la_due_w - la_cat_w - la_status_w - la_amt_w
@@ -2150,7 +2164,8 @@ def generate_pdf(
                                              _la_ei.get('coverage_pct', 0))
                                          if _la_s == "partial" else "X")
                             pdf.cell(la_due_w, 5, _la_lbl, new_x="RIGHT")
-                            pdf.cell(la_cat_w, 5, _la_ei.get('category', ''), new_x="RIGHT")
+                            _la_cat_txt = _truncate_to_width(pdf, _la_ei.get('category', ''), la_cat_w)
+                            pdf.cell(la_cat_w, 5, _la_cat_txt, new_x="RIGHT")
                             pdf.cell(la_name_w, 5, _la_name, new_x="RIGHT")
                             pdf.cell(la_amt_w, 5, f"{pfx}{_la_amt:,.2f}", new_x="RIGHT", align="R")
                             if _la_s == "covered":

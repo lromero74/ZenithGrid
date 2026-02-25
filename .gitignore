@@ -97,3 +97,4 @@ frontend/public/branding/
 backend/trading.db.local.backup*
 backend/trading.db.prod
 CLAUDE.md
+.claude-musings.md
