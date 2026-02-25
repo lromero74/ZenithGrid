@@ -46,6 +46,25 @@ class LimitOrderMonitor:
                 )
                 return
 
+            # Paper orders are always immediately filled — auto-resolve them
+            # PaperTradingClient.create_limit_order() delegates to create_market_order()
+            # which fills instantly. If a paper order is still "pending", it's a phantom record.
+            if position.limit_close_order_id.startswith("paper-"):
+                fill_size = pending_order.base_amount or position.total_base_acquired
+                fill_value = pending_order.limit_price * fill_size
+                logger.info(
+                    f"Position {position.id}: Auto-resolving paper order "
+                    f"{position.limit_close_order_id} as filled "
+                    f"({fill_size} @ {pending_order.limit_price:.8f})"
+                )
+                synthetic_order_data = {
+                    "status": "FILLED",
+                    "filled_size": str(fill_size),
+                    "filled_value": str(fill_value),
+                }
+                await self._process_order_completion(position, pending_order, synthetic_order_data, "FILLED")
+                return
+
             # Fetch order status from exchange
             order_data = await self.exchange.get_order(position.limit_close_order_id)
 
@@ -53,7 +72,7 @@ class LimitOrderMonitor:
                 logger.warning(f"Could not fetch order data for {position.limit_close_order_id}")
                 return
 
-            order_status = order_data.get("status", "UNKNOWN")
+            order_status = order_data.get("status", "UNKNOWN").upper()
             logger.info(f"Position {position.id} limit order {position.limit_close_order_id} status: {order_status}")
 
             # Handle different order statuses
@@ -65,6 +84,11 @@ class LimitOrderMonitor:
 
                 # Check if order has been pending too long and should fallback to bid
                 await self._check_bid_fallback(position, pending_order, order_data)
+            else:
+                logger.warning(
+                    f"Position {position.id}: Unrecognized order status '{order_status}' "
+                    f"for order {position.limit_close_order_id}"
+                )
 
         except Exception as e:
             logger.error(f"Error checking limit order for position {position.id}: {e}")
@@ -568,3 +592,44 @@ class LimitOrderMonitor:
         except Exception as e:
             logger.error(f"Error processing order completion for position {position.id}: {e}")
             await self.db.rollback()
+
+
+async def sweep_orphaned_pending_orders(db: AsyncSession) -> int:
+    """Clean up pending_order records whose positions are already closed/cancelled.
+
+    These are data hygiene issues — the position was closed by another path
+    (market sell, manual close, etc.) but the pending_order record was never
+    updated. Without cleanup they accumulate and cause confusion.
+
+    Returns the number of records cleaned up.
+    """
+    try:
+        stmt = (
+            select(PendingOrder, Position.status)
+            .join(Position, PendingOrder.position_id == Position.id)
+            .where(
+                PendingOrder.status.in_(["pending", "partially_filled"]),
+                Position.status.in_(["closed", "cancelled"])
+            )
+        )
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        count = 0
+        for po, pos_status in rows:
+            logger.warning(
+                f"Sweeping orphaned pending order {po.id} "
+                f"(order: {po.order_id}, position: {po.position_id}, "
+                f"position status: {pos_status})"
+            )
+            po.status = "orphaned"
+            count += 1
+
+        if count > 0:
+            await db.commit()
+            logger.info(f"Swept {count} orphaned pending order(s)")
+
+        return count
+    except Exception as e:
+        logger.error(f"Error sweeping orphaned pending orders: {e}")
+        return 0

@@ -385,6 +385,10 @@ def generate_pdf(
                     pdf.set_draw_color(200, 200, 205)
                     pdf.rect(_tbl_x, _tbl_y_start, _tbl_w, _cov_total_h)
                     pdf.set_draw_color(0, 0, 0)
+                # Expense changes from prior report
+                _render_expense_changes_pdf(
+                    pdf, g.get("expense_changes"), pfx, curr,
+                )
                 partial_name = coverage.get("partial_item_name")
                 next_name = coverage.get("next_uncovered_name")
                 dep_partial = g.get("deposit_partial")
@@ -842,6 +846,85 @@ def generate_pdf(
     except Exception as e:
         logger.error(f"PDF generation failed: {e}", exc_info=True)
         return None
+
+
+def _render_expense_changes_pdf(pdf, changes: dict, prefix: str, curr: str):
+    """Render expense changes section into PDF.
+
+    Args:
+        pdf: FPDF instance.
+        changes: Dict with keys: increased, decreased, added, removed.
+        prefix: Currency prefix ("$" or "").
+        curr: Currency label ("USD" or "BTC").
+    """
+    if not changes:
+        return
+
+    section_config = [
+        ("increased", "Increased", (239, 68, 68)),       # red
+        ("decreased", "Decreased", (16, 185, 129)),      # green
+        ("added", "Added", (245, 158, 11)),              # amber
+        ("removed", "Removed", (16, 185, 129)),          # green
+    ]
+
+    has_any = any(changes.get(k) for k, _, _ in section_config)
+    if not has_any:
+        return
+
+    # Estimate height needed (header + items)
+    total_items = sum(len(changes.get(k, [])) for k, _, _ in section_config)
+    est_height = 8 + total_items * 5 + 4 * 6  # header + rows + sub-headers
+    if pdf.will_page_break(est_height):
+        pdf.add_page()
+
+    # Section header
+    pdf.set_draw_color(180, 180, 190)
+    y = pdf.get_y()
+    pdf.line(pdf.l_margin, y, pdf.w - pdf.r_margin, y)
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(100, 100, 110)
+    pdf.cell(0, 5, "Changes from Prior Report", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+
+    fmt = ".8f" if curr == "BTC" else ",.2f"
+
+    for key, label, (r, g_c, b) in section_config:
+        items = changes.get(key)
+        if not items:
+            continue
+
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(r, g_c, b)
+        pdf.cell(0, 5, label, new_x="LMARGIN", new_y="NEXT")
+
+        pdf.set_font("Helvetica", "", 8)
+        for item in items:
+            name = _sanitize_for_pdf(item.get("name", ""))
+            amount = item.get("amount", 0)
+
+            if key in ("increased", "decreased"):
+                delta = item.get("delta", 0)
+                pct = item.get("pct_delta", 0)
+                sign = "+" if delta > 0 else ""
+                right_text = (
+                    f"{prefix}{amount:{fmt}}  "
+                    f"{sign}{prefix}{delta:{fmt}} ({sign}{pct:.1f}%)"
+                )
+            elif key == "added":
+                right_text = f"{prefix}{amount:{fmt}}  (new)"
+            else:
+                right_text = f"-{prefix}{amount:{fmt}}  (removed)"
+
+            pdf.set_text_color(80, 80, 80)
+            name_w = pdf.w - pdf.l_margin - pdf.r_margin - pdf.get_string_width(right_text) - 4
+            name_txt = _truncate_to_width(pdf, name, name_w)
+            pdf.cell(name_w, 4, name_txt, new_x="RIGHT")
+            pdf.set_text_color(r, g_c, b)
+            pdf.cell(0, 4, right_text, new_x="LMARGIN", new_y="NEXT", align="R")
+
+    pdf.ln(2)
+    pdf.set_draw_color(0, 0, 0)
 
 
 def _render_pdf_markdown(pdf, text: str, br: int, bg: int, bb: int):

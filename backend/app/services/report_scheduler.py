@@ -218,6 +218,7 @@ async def generate_report_for_schedule(
         )
         if prior_data:
             report_data["prior_period"] = prior_data
+            _compute_expense_changes(report_data, prior_data)
 
     # Generate AI summary (returns dict of tiers or None)
     if schedule.generate_ai_summary is not False:
@@ -410,6 +411,99 @@ async def _deliver_report(
             )
 
     return any_sent
+
+
+def _compute_expense_changes(report_data: dict, prior_data: dict) -> None:
+    """
+    Compare expense items between current and prior report, annotating changes.
+
+    For each expense goal in report_data, finds the matching prior goal by
+    goal_id and compares items by their DB primary key (id). Classifies items
+    as increased, decreased, added, or removed. Stores result as
+    g["expense_changes"] dict on each matching goal.
+    """
+    prior_goals = {
+        g.get("goal_id"): g
+        for g in prior_data.get("goals", [])
+        if g.get("target_type") == "expenses"
+    }
+
+    for g in report_data.get("goals", []):
+        if g.get("target_type") != "expenses":
+            continue
+
+        prior_g = prior_goals.get(g.get("goal_id"))
+        if not prior_g:
+            continue
+
+        current_items = {
+            item["id"]: item
+            for item in g.get("expense_coverage", {}).get("items", [])
+            if item.get("id") is not None
+        }
+        prior_items = {
+            item["id"]: item
+            for item in prior_g.get("expense_coverage", {}).get("items", [])
+            if item.get("id") is not None
+        }
+
+        increased = []
+        decreased = []
+        added = []
+        removed = []
+
+        # Items in both: compare normalized_amount
+        for item_id, cur in current_items.items():
+            prior = prior_items.get(item_id)
+            if prior is None:
+                added.append({
+                    "name": cur.get("name", ""),
+                    "amount": cur.get("normalized_amount", 0),
+                })
+                continue
+
+            cur_amt = cur.get("normalized_amount", 0)
+            prior_amt = prior.get("normalized_amount", 0)
+            delta = round(cur_amt - prior_amt, 2)
+
+            if abs(delta) < 0.01:
+                continue
+
+            pct_delta = (
+                round(delta / prior_amt * 100, 1) if prior_amt else 0
+            )
+
+            entry = {
+                "name": cur.get("name", ""),
+                "amount": cur_amt,
+                "delta": delta,
+                "pct_delta": pct_delta,
+            }
+            if delta > 0:
+                increased.append(entry)
+            else:
+                decreased.append(entry)
+
+        # Items only in prior: removed
+        for item_id, prior in prior_items.items():
+            if item_id not in current_items:
+                removed.append({
+                    "name": prior.get("name", ""),
+                    "amount": prior.get("normalized_amount", 0),
+                })
+
+        changes = {}
+        if increased:
+            changes["increased"] = increased
+        if decreased:
+            changes["decreased"] = decreased
+        if added:
+            changes["added"] = added
+        if removed:
+            changes["removed"] = removed
+
+        if changes:
+            g["expense_changes"] = changes
 
 
 # ---- Flexible scheduling helpers ----

@@ -434,7 +434,14 @@ async def execute_sell(
     config: Dict = position.strategy_config_snapshot or {}
     take_profit_order_type = config.get("take_profit_order_type", "market")
 
-    if take_profit_order_type == "limit" and not force_market:
+    # Paper trading cannot simulate pending limit orders — always use market
+    is_paper = (
+        hasattr(exchange, 'is_paper_trading')
+        and callable(exchange.is_paper_trading)
+        and exchange.is_paper_trading()
+    )
+
+    if take_profit_order_type == "limit" and not force_market and not is_paper:
         # Use limit order at mark price (mid between bid/ask)
         try:
             # Get ticker to calculate mark price

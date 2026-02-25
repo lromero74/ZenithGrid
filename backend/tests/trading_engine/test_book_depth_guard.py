@@ -318,8 +318,8 @@ class TestCheckSellSlippage:
         assert reason is None
 
     @pytest.mark.asyncio
-    async def test_trailing_mode_uses_max_sell_slippage(self):
-        """Trailing mode: same logic as fixed — uses max_sell_slippage_pct."""
+    async def test_trailing_mode_uses_vwap_profit_floor(self):
+        """Trailing mode: uses VWAP profit vs TP% floor, not raw slippage."""
         exchange = AsyncMock()
         exchange.get_product_book = AsyncMock(return_value={
             "pricebook": {
@@ -329,15 +329,91 @@ class TestCheckSellSlippage:
         })
         position = MagicMock()
         position.total_base_acquired = 0.1
-        position.average_buy_price = 45000.0
+        position.average_buy_price = 45000.0  # VWAP profit = 11.1%
 
         config = {
             "take_profit_mode": "trailing",
-            "max_sell_slippage_pct": 0.5,
+            "take_profit_percentage": 3.0,
         }
 
         proceed, reason = await check_sell_slippage(exchange, "BTC-USD", position, config)
         assert proceed is True
+        assert reason is None
+
+    @pytest.mark.asyncio
+    async def test_trailing_mode_blocks_when_vwap_profit_below_tp(self):
+        """Trailing mode: VWAP profit below TP% floor — blocked."""
+        exchange = AsyncMock()
+        exchange.get_product_book = AsyncMock(return_value={
+            "pricebook": {
+                "bids": [{"price": "50000.00", "size": "10.0"}],
+                "asks": [],
+            }
+        })
+        position = MagicMock()
+        position.total_base_acquired = 0.5
+        position.average_buy_price = 49000.0  # VWAP profit = 2.04% < 3%
+
+        config = {
+            "take_profit_mode": "trailing",
+            "take_profit_percentage": 3.0,
+        }
+
+        proceed, reason = await check_sell_slippage(exchange, "BTC-USD", position, config)
+        assert proceed is False
+        assert "VWAP profit" in reason
+
+    @pytest.mark.asyncio
+    async def test_trailing_mode_allows_high_slippage_when_profit_sufficient(self):
+        """Trailing mode: large book slippage OK if VWAP profit above floor."""
+        exchange = AsyncMock()
+        # Best bid 50000, but thin top — VWAP will be ~49000 (2% slippage)
+        exchange.get_product_book = AsyncMock(return_value={
+            "pricebook": {
+                "bids": [
+                    {"price": "50000.00", "size": "0.01"},   # thin top
+                    {"price": "49000.00", "size": "10.0"},   # bulk here
+                ],
+                "asks": [],
+            }
+        })
+        position = MagicMock()
+        position.total_base_acquired = 1.0
+        position.average_buy_price = 40000.0  # VWAP ~49000, profit ~22.5%
+
+        config = {
+            "take_profit_mode": "trailing",
+            "take_profit_percentage": 3.0,
+            "max_sell_slippage_pct": 0.5,  # would block in fixed mode
+        }
+
+        proceed, reason = await check_sell_slippage(exchange, "BTC-USD", position, config)
+        # 2% book slippage would block fixed mode, but trailing checks
+        # VWAP profit (22.5%) vs TP floor (3%) — passes easily
+        assert proceed is True
+
+    @pytest.mark.asyncio
+    async def test_trailing_mode_default_tp_floor(self):
+        """Trailing mode: falls back to 3.0% default when TP% not set."""
+        exchange = AsyncMock()
+        exchange.get_product_book = AsyncMock(return_value={
+            "pricebook": {
+                "bids": [{"price": "50000.00", "size": "10.0"}],
+                "asks": [],
+            }
+        })
+        position = MagicMock()
+        position.total_base_acquired = 0.5
+        position.average_buy_price = 49000.0  # profit 2.04% < default 3.0%
+
+        config = {
+            "take_profit_mode": "trailing",
+            # no take_profit_percentage — defaults to 3.0
+        }
+
+        proceed, reason = await check_sell_slippage(exchange, "BTC-USD", position, config)
+        assert proceed is False
+        assert "VWAP profit" in reason
 
     @pytest.mark.asyncio
     async def test_skips_when_no_get_product_book(self):
@@ -380,7 +456,7 @@ class TestCheckSellSlippage:
 
     @pytest.mark.asyncio
     async def test_legacy_trailing_mode_inference(self):
-        """Legacy config: trailing_take_profit=True maps to trailing mode."""
+        """Legacy config: trailing_take_profit=True inferred as trailing, uses profit floor."""
         exchange = AsyncMock()
         exchange.get_product_book = AsyncMock(return_value={
             "pricebook": {
