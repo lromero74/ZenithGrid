@@ -461,22 +461,22 @@ async def startup_event():
         logger.critical("SECURITY: Run setup.py to generate a secure JWT secret, or set JWT_SECRET_KEY in .env")
         raise RuntimeError("JWT_SECRET_KEY must be set to a secure value before starting the application")
 
-    print("🚀 Initializing database...")
-    await init_db()
-    print("🚀 Database initialized successfully")
-
-    # VACUUM to reclaim space and optimize page layout
+    # VACUUM before init_db() — needs exclusive access (no engine yet)
     try:
-        import aiosqlite
+        import sqlite3
         db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
-        # isolation_level=None → autocommit (VACUUM can't run in a transaction)
-        async with aiosqlite.connect(db_path, isolation_level=None) as raw_conn:
-            await raw_conn.execute("PRAGMA journal_mode=WAL")
-            await raw_conn.execute("VACUUM")
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("VACUUM")
+        conn.close()
         print("🚀 Database VACUUM completed successfully")
     except Exception as e:
         logger.warning(f"Database VACUUM failed (non-fatal): {e}")
         print(f"⚠️ Database VACUUM failed (non-fatal): {e}")
+
+    print("🚀 Initializing database...")
+    await init_db()
+    print("🚀 Database initialized successfully")
 
     # Start multi-bot monitor (gets exchange clients per-bot from accounts)
     print("🚀 Starting multi-bot monitor...")
