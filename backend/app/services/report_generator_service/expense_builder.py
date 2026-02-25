@@ -5,7 +5,7 @@ Part of the report_generator_service package.
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # Number of days into the next period to show in the expense lookahead
@@ -339,6 +339,8 @@ def _expense_name_html(item: dict, color: str = "#f1f5f9") -> str:
 def _build_expenses_goal_card(
     g: Dict[str, Any], email_mode: bool = False,
     schedule_meta: Optional[Dict[str, Any]] = None,
+    brand_color: str = "#3b82f6",
+    inline_images: Optional[List[Tuple[str, bytes]]] = None,
 ) -> str:
     """Expenses goal card with Coverage + Upcoming tabs."""
     coverage = g.get("expense_coverage", {})
@@ -662,6 +664,40 @@ def _build_expenses_goal_card(
                                 height: 100%; border-radius: 4px;"></div>
                 </div>
             </div>"""
+
+    # ---- Trend chart (SVG for web, PNG for email) ----
+    trend_html = ""
+    trend_data = g.get("trend_data")
+    if trend_data:
+        from app.services.report_generator_service.html_builder import (
+            _build_trend_chart_svg,
+            _render_trend_chart_png,
+        )
+        if email_mode and inline_images is not None:
+            png_bytes = _render_trend_chart_png(
+                trend_data, brand_color, currency,
+            )
+            if png_bytes:
+                cid = f"goal-chart-{goal_id}"
+                inline_images.append((cid, png_bytes))
+                trend_html = (
+                    '<div style="padding: 0 12px 10px 12px;">'
+                    f'<img src="cid:{cid}" width="660"'
+                    ' style="width:100%;height:auto;display:block;'
+                    'border-radius:6px;" alt="Expense coverage trend"/>'
+                    '</div>'
+                )
+        else:
+            svg_html = _build_trend_chart_svg(
+                trend_data, brand_color, currency,
+            )
+            trend_html = (
+                f'<div style="padding: 0 12px 10px 12px;">'
+                f'{svg_html}</div>'
+            )
+
+    if trend_html:
+        header_html += trend_html
 
     if email_mode:
         # ---- Email: stacked sections (no CSS tabs) ----

@@ -5,6 +5,13 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.57.0] - 2026-02-25
+
+### Added
+- **Expense coverage goal trend charts**: Expense goals now display actual-vs-ideal progress charts showing income after tax trending toward full expense coverage over time. Charts appear in web reports (SVG), emailed reports (PNG), and PDF reports — matching the visual style of existing balance/profit goal charts.
+- **Expense goal daily snapshots**: The daily snapshot cycle now captures progress for expense goals, enabling historical trend tracking and chart rendering.
+- **Expense goal backfill**: When generating a report for a goal with no prior snapshots, historical data is automatically backfilled from closed-position profit history.
+
 ## [v2.56.4] - 2026-02-25
 
 ### Fixed
