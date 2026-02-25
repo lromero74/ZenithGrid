@@ -125,6 +125,15 @@ class IndicatorBasedStrategy(TradingStrategy):
                     max_value=10000.0,
                     group="Base Order",
                 ),
+                StrategyParameter(
+                    name="base_execution_type",
+                    display_name="Base Order Execution",
+                    description="Market (instant fill) or Limit (at current price)",
+                    type="str",
+                    default="market",
+                    options=["market", "limit"],
+                    group="Base Order",
+                ),
                 # ========================================
                 # SAFETY ORDER (DCA) SETTINGS
                 # ========================================
@@ -206,13 +215,22 @@ class IndicatorBasedStrategy(TradingStrategy):
                     options=["base_order", "average_price", "last_buy"],
                     group="Safety Orders",
                 ),
+                StrategyParameter(
+                    name="dca_execution_type",
+                    display_name="DCA Order Execution",
+                    description="Market (instant fill) or Limit (at current price)",
+                    type="str",
+                    default="market",
+                    options=["market", "limit"],
+                    group="Safety Orders",
+                ),
                 # ========================================
                 # TAKE PROFIT SETTINGS
                 # ========================================
                 StrategyParameter(
                     name="take_profit_percentage",
                     display_name="Take Profit %",
-                    description="Target profit % from average buy price",
+                    description="Profit target % from average buy price",
                     type="float",
                     default=3.0,
                     min_value=0.1,
@@ -220,31 +238,15 @@ class IndicatorBasedStrategy(TradingStrategy):
                     group="Take Profit",
                 ),
                 StrategyParameter(
-                    name="take_profit_order_type",
-                    display_name="Take Profit Order Type",
-                    description="Use limit or market order for take profit",
+                    name="take_profit_mode",
+                    display_name="Take Profit Mode",
+                    description=(
+                        "Fixed: sell at TP%. Trailing: trail from peak after TP%."
+                        " Minimum: TP% is floor, conditions trigger exit."
+                    ),
                     type="str",
-                    default="limit",
-                    options=["limit", "market"],
-                    group="Take Profit",
-                ),
-                StrategyParameter(
-                    name="min_profit_for_conditions",
-                    display_name="Min Profit for Condition Exit (Override)",
-                    description="Override: Min profit % for condition exits. If not set, uses Take Profit %",
-                    type="float",
-                    default=None,  # None = use take_profit_percentage
-                    min_value=-50.0,
-                    max_value=50.0,
-                    group="Take Profit",
-                    optional=True,  # Only show if user wants to override
-                ),
-                StrategyParameter(
-                    name="trailing_take_profit",
-                    display_name="Trailing Take Profit",
-                    description="Enable trailing take profit",
-                    type="bool",
-                    default=False,
+                    default="fixed",
+                    options=["fixed", "trailing", "minimum"],
                     group="Take Profit",
                 ),
                 StrategyParameter(
@@ -256,6 +258,49 @@ class IndicatorBasedStrategy(TradingStrategy):
                     min_value=0.1,
                     max_value=10.0,
                     group="Take Profit",
+                    visible_when={"take_profit_mode": "trailing"},
+                ),
+                StrategyParameter(
+                    name="take_profit_order_type",
+                    display_name="Exit Order Execution",
+                    description="Market (instant fill) or Limit (at mark price)",
+                    type="str",
+                    default="market",
+                    options=["market", "limit"],
+                    group="Take Profit",
+                ),
+                # ========================================
+                # SLIPPAGE GUARD
+                # ========================================
+                StrategyParameter(
+                    name="slippage_guard",
+                    display_name="Slippage Guard",
+                    description="Check order book depth before market orders to prevent excessive slippage",
+                    type="bool",
+                    default=False,
+                    group="Slippage Guard",
+                ),
+                StrategyParameter(
+                    name="max_buy_slippage_pct",
+                    display_name="Max Buy Slippage %",
+                    description="Max % above best ask for buy VWAP",
+                    type="float",
+                    default=0.5,
+                    min_value=0.01,
+                    max_value=5.0,
+                    group="Slippage Guard",
+                    visible_when={"slippage_guard": True},
+                ),
+                StrategyParameter(
+                    name="max_sell_slippage_pct",
+                    display_name="Max Sell Slippage %",
+                    description="Max % below best bid for sell VWAP (fixed/trailing modes)",
+                    type="float",
+                    default=0.5,
+                    min_value=0.01,
+                    max_value=5.0,
+                    group="Slippage Guard",
+                    visible_when={"slippage_guard": True},
                 ),
                 # ========================================
                 # STOP LOSS SETTINGS
@@ -1385,10 +1430,26 @@ class IndicatorBasedStrategy(TradingStrategy):
             if profit_pct <= sl_pct:
                 return True, f"Stop loss triggered at {profit_pct:.2f}%"
 
-        # Check take profit %
+        # Determine take profit mode (with legacy fallback)
         tp_pct = self.config.get("take_profit_percentage")
-        if tp_pct is not None and profit_pct >= tp_pct:
+        tp_mode = self.config.get("take_profit_mode")
+        if tp_mode is None:
+            # Legacy: infer mode from old fields
             if self.config.get("trailing_take_profit", False):
+                tp_mode = "trailing"
+            elif self.config.get("min_profit_for_conditions") is not None:
+                tp_mode = "minimum"
+            else:
+                tp_mode = "fixed"
+
+        # --- FIXED mode: hard sell at TP% ---
+        if tp_mode == "fixed":
+            if tp_pct is not None and profit_pct >= tp_pct:
+                return True, f"Take profit target reached: {profit_pct:.2f}%"
+
+        # --- TRAILING mode: activate trail when TP% hit, sell on deviation ---
+        elif tp_mode == "trailing":
+            if tp_pct is not None and profit_pct >= tp_pct:
                 trailing_dev = self.config.get("trailing_deviation", 1.0)
                 if not hasattr(position, "trailing_tp_active"):
                     position.trailing_tp_active = True
@@ -1404,24 +1465,16 @@ class IndicatorBasedStrategy(TradingStrategy):
                 if current_price <= trigger:
                     return True, f"Trailing TP triggered (profit: {profit_pct:.2f}%)"
                 return False, f"Trailing TP active (profit: {profit_pct:.2f}%)"
-            else:
-                return True, f"Take profit target reached: {profit_pct:.2f}%"
 
-        # Check take profit conditions
-        # CRITICAL: Use take_profit_percentage as default min profit for condition exits
-        # This prevents selling at low profits just because conditions triggered
-        if take_profit_signal and self.take_profit_conditions:
-            # If min_profit_for_conditions is explicitly set to a non-None value, use it
-            # Otherwise fall back to take_profit_percentage
-            # NOTE: We check for None explicitly because dict.get() returns 0.0 if that's the stored value
-            min_profit_override = self.config.get("min_profit_for_conditions")
-            if min_profit_override is not None:
-                min_profit = min_profit_override
-            else:
-                min_profit = self.config.get("take_profit_percentage", 3.0)
-            if profit_pct >= min_profit:
-                return True, f"Take profit conditions met (profit: {profit_pct:.2f}%)"
-            return False, f"Conditions met but profit too low ({profit_pct:.2f}% < {min_profit}%)"
+        # --- MINIMUM mode: TP% is floor, conditions trigger exit ---
+        elif tp_mode == "minimum":
+            if take_profit_signal and self.take_profit_conditions:
+                min_profit = tp_pct if tp_pct is not None else 3.0
+                if profit_pct >= min_profit:
+                    return True, f"Take profit conditions met (profit: {profit_pct:.2f}%)"
+                return False, f"Conditions met but profit too low ({profit_pct:.2f}% < {min_profit}%)"
+            if not self.take_profit_conditions:
+                logger.warning("Minimum TP mode with no conditions configured - will never sell via TP")
 
         target_str = f"{tp_pct}%" if tp_pct is not None else "conditions"
         return False, f"Holding (profit: {profit_pct:.2f}%, target: {target_str})"

@@ -67,20 +67,13 @@ async def execute_buy(
         logger.warning(f"Rejecting order for {product_id} - shutdown in progress")
         raise RuntimeError("Cannot place orders - shutdown in progress")
 
-    # Check if this is a safety order that should use limit orders
-    is_safety_order = trade_type.startswith("safety_order")
     config: Dict = position.strategy_config_snapshot or {}
-    safety_order_type = config.get("safety_order_type", "market")
 
-    if is_safety_order and safety_order_type == "limit":
-        # Place limit order instead of market order
-        # Calculate limit price (use current price as-is for now)
-        # Note: In the future, this could apply a discount or use strategy-specific logic
+    # Check if this is a base order that should use limit orders
+    is_base_order = trade_type == "initial"
+    if is_base_order and config.get("base_execution_type") == "limit":
         limit_price = current_price
-
-        logger.info(f"  📋 Placing limit buy order: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
-
-        # Limit order placed; fill tracking handled by limit_order_monitor service
+        logger.info(f"  📋 Placing limit base buy: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
         _pending_order = await execute_limit_buy(  # noqa: F841
             db=db,
             exchange=exchange,
@@ -93,9 +86,27 @@ async def execute_buy(
             trade_type=trade_type,
             signal_data=signal_data,
         )
+        return None
 
-        # Return None for limit orders (no Trade created yet)
-        # The order monitoring service will create the Trade when filled
+    # Check if this is a safety order that should use limit orders
+    is_safety_order = trade_type.startswith("safety_order")
+    dca_execution_type = config.get("dca_execution_type", "market")
+
+    if is_safety_order and dca_execution_type == "limit":
+        limit_price = current_price
+        logger.info(f"  📋 Placing limit DCA buy: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
+        _pending_order = await execute_limit_buy(  # noqa: F841
+            db=db,
+            exchange=exchange,
+            trading_client=trading_client,
+            bot=bot,
+            product_id=product_id,
+            position=position,
+            quote_amount=quote_amount,
+            limit_price=limit_price,
+            trade_type=trade_type,
+            signal_data=signal_data,
+        )
         return None
 
     # Execute market order (immediate execution)

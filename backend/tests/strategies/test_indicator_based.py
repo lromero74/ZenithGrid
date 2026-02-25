@@ -39,7 +39,7 @@ def _make_strategy(config_overrides=None):
         "take_profit_percentage": 3.0,
         "stop_loss_enabled": False,
         "stop_loss_percentage": -10.0,
-        "trailing_take_profit": False,
+        "take_profit_mode": "fixed",
         "trailing_stop_loss": False,
         "base_order_conditions": [],
         "base_order_logic": "and",
@@ -692,7 +692,7 @@ class TestShouldSell:
         """TTP activates when TP% hit but does not sell until trailing deviation."""
         strategy = _make_strategy({
             "take_profit_percentage": 3.0,
-            "trailing_take_profit": True,
+            "take_profit_mode": "trailing",
             "trailing_deviation": 1.0,
         })
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
@@ -724,16 +724,16 @@ class TestShouldSell:
 
     @pytest.mark.asyncio
     async def test_condition_based_sell_with_min_profit(self):
-        """Condition-based exit requires min profit; profit must meet conditions threshold."""
+        """Condition-based exit requires min profit; profit must meet threshold."""
         strategy = _make_strategy({
-            "take_profit_percentage": 10.0,  # High TP% so percentage check does NOT trigger
-            "min_profit_for_conditions": 3.0,  # Lower threshold for condition-based sell
+            "take_profit_percentage": 3.0,
+            "take_profit_mode": "minimum",
             "take_profit_conditions": [{"type": "rsi", "operator": "crossing_below", "value": 70}],
         })
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
         signal = {"take_profit_signal": True}
 
-        # profit = 4%, min_profit_for_conditions = 3% => conditions sell
+        # profit = 4% >= min 3% => conditions sell
         should, reason = await strategy.should_sell(signal, position, current_price=104.0)
         assert should is True
         assert "conditions met" in reason.lower()
@@ -743,6 +743,7 @@ class TestShouldSell:
         """Conditions met but profit too low => hold."""
         strategy = _make_strategy({
             "take_profit_percentage": 3.0,
+            "take_profit_mode": "minimum",
             "take_profit_conditions": [{"type": "rsi"}],
         })
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
@@ -754,17 +755,17 @@ class TestShouldSell:
         assert "profit too low" in reason.lower()
 
     @pytest.mark.asyncio
-    async def test_min_profit_override(self):
-        """min_profit_for_conditions overrides take_profit_percentage."""
+    async def test_minimum_mode_low_tp_threshold(self):
+        """Minimum mode: low TP% floor allows sell at small profit."""
         strategy = _make_strategy({
-            "take_profit_percentage": 10.0,
-            "min_profit_for_conditions": 1.0,
+            "take_profit_percentage": 1.0,
+            "take_profit_mode": "minimum",
             "take_profit_conditions": [{"type": "rsi"}],
         })
         position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
         signal = {"take_profit_signal": True}
 
-        # profit = 2%, min override = 1% => sell
+        # profit = 2% >= min 1% => sell
         should, reason = await strategy.should_sell(signal, position, current_price=102.0)
         assert should is True
 
@@ -810,6 +811,195 @@ class TestShouldSell:
 
         assert should is True
         assert "TTP" in reason
+
+
+# =====================================================================
+# take_profit_mode — new mode-aware sell logic
+# =====================================================================
+
+
+class TestTakeProfitModes:
+    """Tests for the take_profit_mode system (fixed/trailing/minimum)."""
+
+    @pytest.mark.asyncio
+    async def test_fixed_mode_sells_at_tp_percentage(self):
+        """Fixed mode: sell when profit >= TP%."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 3.0,
+            "take_profit_mode": "fixed",
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": False}
+
+        # profit = 3.5% >= 3.0%
+        should, reason = await strategy.should_sell(signal, position, current_price=103.5)
+        assert should is True
+        assert "Take profit target" in reason
+
+    @pytest.mark.asyncio
+    async def test_fixed_mode_holds_below_tp(self):
+        """Fixed mode: hold when profit < TP%."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 3.0,
+            "take_profit_mode": "fixed",
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": False}
+
+        # profit = 2%
+        should, reason = await strategy.should_sell(signal, position, current_price=102.0)
+        assert should is False
+
+    @pytest.mark.asyncio
+    async def test_trailing_mode_activates_on_target(self):
+        """Trailing mode: activates trailing when TP% hit but holds for deviation."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 3.0,
+            "take_profit_mode": "trailing",
+            "trailing_deviation": 1.0,
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": False}
+
+        # profit = 5% > TP 3%, trailing activates but deviation not hit
+        should, reason = await strategy.should_sell(signal, position, current_price=105.0)
+        assert should is False
+        assert "Trailing TP active" in reason
+
+    @pytest.mark.asyncio
+    async def test_trailing_mode_triggers_on_deviation(self):
+        """Trailing mode: sells when price drops from peak by deviation %."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 3.0,
+            "take_profit_mode": "trailing",
+            "trailing_deviation": 1.0,
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        position.trailing_tp_active = True
+        position.highest_price_since_tp = 110.0  # peak at 110
+        signal = {"take_profit_signal": False}
+
+        # trigger = 110 * (1 - 0.01) = 108.9; price = 108 < 108.9
+        should, reason = await strategy.should_sell(signal, position, current_price=108.0)
+        assert should is True
+        assert "Trailing TP triggered" in reason
+
+    @pytest.mark.asyncio
+    async def test_trailing_mode_holds_below_tp(self):
+        """Trailing mode: does not activate when profit < TP%."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 5.0,
+            "take_profit_mode": "trailing",
+            "trailing_deviation": 1.0,
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": False}
+
+        # profit = 2% < TP 5%
+        should, reason = await strategy.should_sell(signal, position, current_price=102.0)
+        assert should is False
+        assert "Holding" in reason
+
+    @pytest.mark.asyncio
+    async def test_minimum_mode_conditions_met_above_floor(self):
+        """Minimum mode: sell when conditions fire AND profit >= TP%."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 2.0,
+            "take_profit_mode": "minimum",
+            "take_profit_conditions": [{"type": "rsi", "operator": "crossing_below", "value": 70}],
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": True}
+
+        # profit = 4% >= min 2%
+        should, reason = await strategy.should_sell(signal, position, current_price=104.0)
+        assert should is True
+        assert "conditions met" in reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_minimum_mode_conditions_met_profit_too_low(self):
+        """Minimum mode: hold when conditions fire but profit < TP%."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 5.0,
+            "take_profit_mode": "minimum",
+            "take_profit_conditions": [{"type": "rsi", "operator": "crossing_below", "value": 70}],
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": True}
+
+        # profit = 2% < min 5%
+        should, reason = await strategy.should_sell(signal, position, current_price=102.0)
+        assert should is False
+        assert "profit too low" in reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_minimum_mode_no_signal_holds(self):
+        """Minimum mode: hold when conditions haven't fired even if profit is high."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 2.0,
+            "take_profit_mode": "minimum",
+            "take_profit_conditions": [{"type": "rsi", "operator": "crossing_below", "value": 70}],
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": False}
+
+        # profit = 10% but conditions haven't fired
+        should, reason = await strategy.should_sell(signal, position, current_price=110.0)
+        assert should is False
+        assert "Holding" in reason
+
+    @pytest.mark.asyncio
+    async def test_minimum_mode_no_conditions_configured_holds(self):
+        """Minimum mode with no conditions: holds (warns, never sells via TP)."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 2.0,
+            "take_profit_mode": "minimum",
+            "take_profit_conditions": [],
+        })
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": False}
+
+        should, reason = await strategy.should_sell(signal, position, current_price=110.0)
+        assert should is False
+
+    @pytest.mark.asyncio
+    async def test_legacy_trailing_take_profit_inferred_as_trailing(self):
+        """Legacy: trailing_take_profit=True infers trailing mode."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 3.0,
+            "trailing_take_profit": True,
+            "trailing_deviation": 1.0,
+            # No take_profit_mode set — legacy field
+        })
+        # Remove the mode so legacy inference kicks in
+        del strategy.config["take_profit_mode"]
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": False}
+
+        # profit = 5% > TP 3%, should activate trailing
+        should, reason = await strategy.should_sell(signal, position, current_price=105.0)
+        assert should is False
+        assert "Trailing TP active" in reason
+
+    @pytest.mark.asyncio
+    async def test_legacy_min_profit_for_conditions_inferred_as_minimum(self):
+        """Legacy: min_profit_for_conditions set infers minimum mode."""
+        strategy = _make_strategy({
+            "take_profit_percentage": 10.0,
+            "min_profit_for_conditions": 3.0,
+            "take_profit_conditions": [{"type": "rsi"}],
+        })
+        del strategy.config["take_profit_mode"]
+        position = _make_mock_position(avg_price=100.0, total_base=0.1, total_quote=10.0)
+        signal = {"take_profit_signal": True}
+
+        # profit = 4%, min_profit = TP% = 10% (minimum mode uses take_profit_percentage)
+        # But legacy min_profit_for_conditions is 3.0, and mode is inferred...
+        # In the new code, minimum mode uses tp_pct directly (take_profit_percentage)
+        # profit = 4% < 10% => should NOT sell
+        should, reason = await strategy.should_sell(signal, position, current_price=104.0)
+        assert should is False
+        assert "profit too low" in reason.lower()
 
 
 # =====================================================================
