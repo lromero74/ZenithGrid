@@ -284,15 +284,24 @@ class PhaseConditionEvaluator:
 
         # Handle crossing operators
         if operator in ["crossing_above", "crossing_below"]:
-            # Use candle-based prev_ values as primary source for crossing detection.
-            # These compare the two most recent CLOSED candles, which is the true
-            # definition of a crossing — it happened on the latest candle close.
-            # Fall back to check-cycle cache only when candle-based prev_ is unavailable.
-            previous_val = self._get_previous_indicator_value(condition_type, condition, current_indicators)
+            # Use TWO sources for crossing detection and fire if EITHER detects a crossing:
+            #
+            # 1. Candle-based prev_ values: compare the two most recent CLOSED candles.
+            #    Catches crossings that happen on a single candle close.
+            #
+            # 2. Check-cycle cache (previous_indicators from last bot check):
+            #    Catches crossings that span multiple candles. Without this, a rapid
+            #    drop through a threshold (e.g., BB% from 95→80 in two candles) is
+            #    missed because the candle-based prev already shows both values on
+            #    the same side of the threshold by the time the bot checks.
+            candle_prev_val = self._get_previous_indicator_value(condition_type, condition, current_indicators)
 
-            # Fallback to check-cycle cache (for indicators without prev_ calculation)
-            if previous_val is None and previous_indicators is not None:
-                previous_val = self._get_indicator_value(condition_type, condition, previous_indicators)
+            cycle_prev_val = None
+            if previous_indicators is not None:
+                cycle_prev_val = self._get_indicator_value(condition_type, condition, previous_indicators)
+
+            # Use candle-based as primary for logging; fall back to cycle if candle-based unavailable
+            previous_val = candle_prev_val if candle_prev_val is not None else cycle_prev_val
 
             if previous_val is None:
                 print(
@@ -315,35 +324,57 @@ class PhaseConditionEvaluator:
             # not real momentum shifts. Require at least one side of the crossing to
             # be meaningfully away from the threshold to count as a real crossing.
             crossing_epsilon = 1e-7
-            prev_meaningful = abs(previous_val - value) > crossing_epsilon
-            curr_meaningful = abs(current_val - value) > crossing_epsilon
 
-            if not prev_meaningful and not curr_meaningful:
-                print(
-                    f"[DEBUG] Crossing filtered: both values within noise threshold "
-                    f"(prev={previous_val}, curr={current_val}, threshold={value}, epsilon={crossing_epsilon})"
-                )
-                if capture_details:
-                    detail["result"] = False
-                    detail["filtered"] = "crossing_noise"
-                    return False, detail
-                return False
+            def _check_crossing(prev, curr, thresh, op):
+                """Check if a crossing occurred between prev and curr values."""
+                prev_meaningful = abs(prev - thresh) > crossing_epsilon
+                curr_meaningful = abs(curr - thresh) > crossing_epsilon
+                if not prev_meaningful and not curr_meaningful:
+                    return False
+                if op == "crossing_above":
+                    return prev <= thresh and curr > thresh
+                else:  # crossing_below
+                    return prev >= thresh and curr < thresh
+
+            # Check candle-based crossing
+            candle_crossed = False
+            if candle_prev_val is not None:
+                candle_crossed = _check_crossing(candle_prev_val, current_val, value, operator)
+
+            # Check cycle-based crossing (from last bot check to current)
+            cycle_crossed = False
+            if cycle_prev_val is not None:
+                cycle_crossed = _check_crossing(cycle_prev_val, current_val, value, operator)
+
+            result = candle_crossed or cycle_crossed
+
+            crossing_source = ""
+            if candle_crossed and cycle_crossed:
+                crossing_source = "both candle+cycle"
+            elif cycle_crossed:
+                crossing_source = "cycle-based"
+            elif candle_crossed:
+                crossing_source = "candle-based"
 
             if operator == "crossing_above":
-                result = previous_val <= value and current_val > value
                 print(
                     f"[DEBUG] Crossing above result: {result} "
-                    f"(was {previous_val} <= {value} and now {current_val} > {value})"
+                    f"(candle_prev={candle_prev_val}, cycle_prev={cycle_prev_val}, "
+                    f"current={current_val}, threshold={value}"
+                    f"{f', source={crossing_source}' if result else ''})"
                 )
             else:  # crossing_below
-                result = previous_val >= value and current_val < value
                 print(
                     f"[DEBUG] Crossing below result: {result} "
-                    f"(was {previous_val} >= {value} and now {current_val} < {value})"
+                    f"(candle_prev={candle_prev_val}, cycle_prev={cycle_prev_val}, "
+                    f"current={current_val}, threshold={value}"
+                    f"{f', source={crossing_source}' if result else ''})"
                 )
 
             if capture_details:
                 detail["result"] = result
+                if cycle_crossed and not candle_crossed:
+                    detail["crossing_source"] = "cycle"
                 return result, detail
             return result
 

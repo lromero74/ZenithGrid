@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.56.2] - 2026-02-25
+
+### Fixed
+- **Crossing detection missing rapid threshold crossings**: When an indicator (BB%, RSI, etc.) moved through a threshold within 1-2 candle periods, the crossing was missed because the candle-based previous value was already on the same side of the threshold. Now also checks the cycle-based previous (from the last bot check) to catch these rapid crossings. Affects all crossing_above/crossing_below conditions for both live and paper trading bots.
+
 ## [v2.56.1] - 2026-02-25
 
 ### Fixed
