@@ -368,12 +368,15 @@ async def _deliver_report(
     )
 
     # Build one HTML for all recipients (email mode shows Summary tier)
+    # inline_images collects (cid, png_bytes) tuples for CID embedding
+    inline_images = []
     email_html = build_report_html(
         report_data, ai_summary, user_name, period_label,
         default_level="simple",
         schedule_name=schedule_name,
         email_mode=True,
         account_name=account_name,
+        inline_images=inline_images,
     )
 
     any_sent = False
@@ -390,6 +393,7 @@ async def _deliver_report(
                 text_body=text_body,
                 pdf_attachment=pdf_content,
                 pdf_filename=pdf_filename,
+                inline_images=inline_images,
             )
             if sent:
                 any_sent = True

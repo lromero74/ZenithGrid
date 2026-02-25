@@ -1732,7 +1732,7 @@ class TestTransfersSectionCardSpend:
 
 
 class TestExpenseGoalOrdering:
-    """Expense goals should render right after Capital Movements, before other goals."""
+    """Goals above Capital Movements; expense goals after other goals, before transfers."""
 
     def _make_expense_goal(self):
         return {
@@ -1758,20 +1758,20 @@ class TestExpenseGoalOrdering:
         }
 
     @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
-    def test_expense_section_before_goal_progress(self, _mock):
-        """Expense Coverage section appears before Goal Progress in HTML."""
+    def test_goal_progress_before_expense_coverage(self, _mock):
+        """Goal Progress appears before Expense Coverage in HTML."""
         data = _minimal_report_data()
         data["goals"] = [self._make_income_goal(), self._make_expense_goal()]
         html = build_report_html(data, None, "Test", "Jan 1-7, 2026")
-        expense_pos = html.find("Expense Coverage")
         goal_pos = html.find("Goal Progress")
-        assert expense_pos != -1, "Expense Coverage section not found"
+        expense_pos = html.find("Expense Coverage")
         assert goal_pos != -1, "Goal Progress section not found"
-        assert expense_pos < goal_pos, "Expense Coverage should come before Goal Progress"
+        assert expense_pos != -1, "Expense Coverage section not found"
+        assert goal_pos < expense_pos, "Goal Progress should come before Expense Coverage"
 
     @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
-    def test_expense_section_after_capital_movements(self, _mock):
-        """Expense Coverage appears after Capital Movements in HTML."""
+    def test_expense_section_before_capital_movements(self, _mock):
+        """Expense Coverage appears before Capital Movements in HTML."""
         data = _minimal_report_data()
         data["goals"] = [self._make_expense_goal()]
         data["transfer_records"] = [
@@ -1782,7 +1782,7 @@ class TestExpenseGoalOrdering:
         expense_pos = html.find("Expense Coverage")
         assert cap_pos != -1, "Capital Movements section not found"
         assert expense_pos != -1, "Expense Coverage section not found"
-        assert cap_pos < expense_pos, "Capital Movements should come before Expense Coverage"
+        assert expense_pos < cap_pos, "Expense Coverage should come before Capital Movements"
 
     @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
     def test_no_expense_goal_no_extra_section(self, _mock):

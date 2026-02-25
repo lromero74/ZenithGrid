@@ -8,13 +8,15 @@ Supports tiered AI summaries (beginner/comfortable/experienced) and
 uses the brand's primary accent color instead of hardcoded blue.
 """
 
+import io
 import json
 import logging
 import re as _re
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import markdown as _md
+from PIL import Image, ImageDraw, ImageFont
 
 from app.services.brand_service import get_brand
 
@@ -149,6 +151,7 @@ def build_report_html(
     schedule_name: Optional[str] = None,
     email_mode: bool = False,
     account_name: Optional[str] = None,
+    inline_images: Optional[List[Tuple[str, bytes]]] = None,
 ) -> str:
     """
     Build the full HTML report.
@@ -161,6 +164,8 @@ def build_report_html(
         default_level: Which tier tab is active by default
         schedule_name: Optional report schedule name (shown as title)
         email_mode: If True, show only the default tier (email clients strip JS)
+        inline_images: Mutable list; PNG chart images are appended as (cid, bytes)
+            tuples for CID embedding in email. Only used when email_mode=True.
 
     Returns:
         Complete HTML string
@@ -180,9 +185,11 @@ def build_report_html(
         expense_goals, brand_color, email_mode=email_mode,
         section_title="Expense Coverage",
         schedule_meta=schedule_meta,
+        inline_images=inline_images,
     )
     goals_html = _build_goals_section(
         other_goals, brand_color, email_mode=email_mode,
+        inline_images=inline_images,
     )
     comparison_html = _build_comparison_section(report_data)
 
@@ -221,9 +228,9 @@ def build_report_html(
 <div style="max-width: 700px; margin: 0 auto; padding: 20px;">
     {_report_header(b, user_name, period_label, brand_color, schedule_name, account_name)}
     {metrics_html}
-    {transfers_html}
-    {expense_goals_html}
     {goals_html}
+    {expense_goals_html}
+    {transfers_html}
     {comparison_html}
     {ai_html}
     {_report_footer(b)}
@@ -619,6 +626,7 @@ def _build_goals_section(
     email_mode: bool = False,
     section_title: str = "Goal Progress",
     schedule_meta: Optional[Dict[str, Any]] = None,
+    inline_images: Optional[List[Tuple[str, bytes]]] = None,
 ) -> str:
     """Goal progress bars with optional trend charts."""
     if not goals:
@@ -633,7 +641,10 @@ def _build_goals_section(
                 g, email_mode=email_mode, schedule_meta=schedule_meta,
             )
         else:
-            goal_rows += _build_standard_goal_card(g, brand_color)
+            goal_rows += _build_standard_goal_card(
+                g, brand_color, email_mode=email_mode,
+                inline_images=inline_images,
+            )
 
     return f"""
     <div style="margin: 25px 0;">
@@ -644,7 +655,10 @@ def _build_goals_section(
 
 
 def _build_standard_goal_card(
-    g: Dict[str, Any], brand_color: str = "#3b82f6",
+    g: Dict[str, Any],
+    brand_color: str = "#3b82f6",
+    email_mode: bool = False,
+    inline_images: Optional[List[Tuple[str, bytes]]] = None,
 ) -> str:
     """Standard balance/profit/both goal card with progress bar and trend chart."""
     pct = g.get("progress_pct", 0)
@@ -658,11 +672,25 @@ def _build_standard_goal_card(
     track_label = "On Track" if g.get("on_track") else "Behind"
     track_color = "#10b981" if g.get("on_track") else "#f59e0b"
 
-    # Trend chart SVG (if trend data is available)
-    trend_svg = ""
+    # Trend chart (SVG for web, PNG for email)
+    trend_html = ""
     trend_data = g.get("trend_data")
     if trend_data:
-        trend_svg = _build_trend_chart_svg(trend_data, brand_color, currency)
+        if email_mode and inline_images is not None:
+            png_bytes = _render_trend_chart_png(trend_data, brand_color, currency)
+            if png_bytes:
+                goal_id = g.get("id", id(g))
+                cid = f"goal-chart-{goal_id}"
+                inline_images.append((cid, png_bytes))
+                trend_html = (
+                    '<div style="margin-top: 10px;">'
+                    f'<img src="cid:{cid}" width="660"'
+                    ' style="width:100%;height:auto;display:block;'
+                    'border-radius:6px;" alt="Goal trend chart"/>'
+                    '</div>'
+                )
+        else:
+            trend_html = _build_trend_chart_svg(trend_data, brand_color, currency)
 
     return f"""
         <div style="margin: 0 0 15px 0; padding: 12px; background-color: #1e293b;
@@ -684,7 +712,7 @@ def _build_standard_goal_card(
                     {prefix}{current} / {prefix}{target} {currency}</span>
                 <span style="color: #94a3b8; font-size: 12px;">{pct:.1f}%</span>
             </div>
-            {trend_svg}
+            {trend_html}
         </div>"""
 
 
@@ -1639,6 +1667,179 @@ def _build_trend_chart_svg(
                         font-family="sans-serif">Ideal</text>
                 </svg>
             </div>"""
+
+
+def _load_chart_font(size: int) -> ImageFont.FreeTypeFont:
+    """Load a sans-serif font for chart rendering, with fallback."""
+    for path in [
+        "/usr/share/fonts/google-noto-vf/NotoSans[wght].ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]:
+        try:
+            return ImageFont.truetype(path, size)
+        except (OSError, IOError):
+            continue
+    return ImageFont.load_default()
+
+
+def _render_trend_chart_png(
+    trend_data: Dict[str, Any],
+    brand_color: str,
+    currency: str = "USD",
+) -> bytes:
+    """
+    Render a goal trend chart as a PNG image using Pillow.
+
+    Mirrors _build_trend_chart_svg() visuals: dark background, grid lines,
+    y-axis labels, dashed ideal line, solid actual line, area fill, legend.
+
+    Rendered at 2x resolution (1320x400) for retina displays.
+    Returns PNG bytes.
+    """
+    data_points = trend_data.get("data_points", [])
+    if len(data_points) < 2:
+        return b""
+
+    # 2x resolution for retina — displayed at 660x200 via HTML width
+    scale = 2
+    width, height = 660 * scale, 200 * scale
+    ml, mr, mt, mb = 65 * scale, 15 * scale, 20 * scale, 35 * scale
+    cw = width - ml - mr
+    ch = height - mt - mb
+
+    # Extract values
+    actual = [p["current_value"] for p in data_points]
+    ideal = [p["ideal_value"] for p in data_points]
+    all_vals = actual + ideal
+
+    min_val = min(all_vals)
+    max_val = max(all_vals)
+    val_range = max_val - min_val
+    if val_range == 0:
+        val_range = max_val * 0.1 or 1.0
+    min_val -= val_range * 0.05
+    max_val += val_range * 0.05
+    val_range = max_val - min_val
+
+    n = len(data_points)
+
+    def sx(i):
+        return ml + (i / (n - 1)) * cw
+
+    def sy(v):
+        return mt + (1 - (v - min_val) / val_range) * ch
+
+    is_on_track = data_points[-1].get("on_track", False)
+    actual_color = "#10b981" if is_on_track else "#f59e0b"
+
+    # Parse hex colors to RGB tuples
+    def hex_to_rgb(h: str) -> Tuple[int, int, int]:
+        h = h.lstrip("#")
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+    bg_rgb = hex_to_rgb("#1a2332")
+    grid_rgb = hex_to_rgb("#334155")
+    label_rgb = hex_to_rgb("#64748b")
+    legend_text_rgb = hex_to_rgb("#94a3b8")
+    actual_rgb = hex_to_rgb(actual_color)
+    brand_rgb = hex_to_rgb(brand_color)
+
+    # Create image
+    img = Image.new("RGB", (width, height), bg_rgb)
+    draw = ImageDraw.Draw(img, "RGBA")
+
+    # Fonts (scaled)
+    font_label = _load_chart_font(9 * scale)
+    font_legend = _load_chart_font(9 * scale)
+
+    # Grid lines + Y-axis labels
+    n_grids = 4
+    for i in range(n_grids + 1):
+        gy = int(mt + (i / n_grids) * ch)
+        draw.line([(ml, gy), (width - mr, gy)], fill=grid_rgb, width=1)
+        val = max_val - (i / n_grids) * val_range
+        label = _format_chart_value(val, currency)
+        bbox = draw.textbbox((0, 0), label, font=font_label)
+        tw = bbox[2] - bbox[0]
+        draw.text((ml - 5 * scale - tw, gy - (bbox[3] - bbox[1]) // 2),
+                  label, fill=label_rgb, font=font_label)
+
+    # Build coordinate lists
+    actual_coords = [(int(sx(i)), int(sy(v))) for i, v in enumerate(actual)]
+    ideal_coords = [(int(sx(i)), int(sy(v))) for i, v in enumerate(ideal)]
+
+    # Area fill under actual line (semi-transparent)
+    area_fill_color = actual_rgb + (20,)  # ~8% opacity
+    area_polygon = actual_coords + [
+        (int(sx(n - 1)), int(mt + ch)),
+        (int(sx(0)), int(mt + ch)),
+    ]
+    draw.polygon(area_polygon, fill=area_fill_color)
+
+    # Ideal line (dashed)
+    dash_len = 6 * scale
+    gap_len = 4 * scale
+    brand_rgba = brand_rgb + (179,)  # ~70% opacity
+    for i in range(len(ideal_coords) - 1):
+        x0, y0 = ideal_coords[i]
+        x1, y1 = ideal_coords[i + 1]
+        dx = x1 - x0
+        dy = y1 - y0
+        seg_len = (dx ** 2 + dy ** 2) ** 0.5
+        if seg_len == 0:
+            continue
+        ux, uy = dx / seg_len, dy / seg_len
+        pos = 0.0
+        drawing = True
+        while pos < seg_len:
+            step = dash_len if drawing else gap_len
+            end = min(pos + step, seg_len)
+            if drawing:
+                draw.line(
+                    [(int(x0 + ux * pos), int(y0 + uy * pos)),
+                     (int(x0 + ux * end), int(y0 + uy * end))],
+                    fill=brand_rgba, width=max(1, int(1.5 * scale)),
+                )
+            pos = end
+            drawing = not drawing
+
+    # Actual line (solid)
+    draw.line(actual_coords, fill=actual_rgb, width=2 * scale)
+
+    # X-axis date labels
+    first_date = data_points[0]["date"]
+    last_date = data_points[-1]["date"]
+    date_y = height - 5 * scale
+    draw.text((ml, date_y - font_label.size), first_date,
+              fill=label_rgb, font=font_label)
+    last_bbox = draw.textbbox((0, 0), last_date, font=font_label)
+    last_tw = last_bbox[2] - last_bbox[0]
+    draw.text((width - mr - last_tw, date_y - font_label.size),
+              last_date, fill=label_rgb, font=font_label)
+
+    # Legend
+    leg_x = ml
+    leg_y = height - 20 * scale
+    # Actual line sample
+    draw.line([(leg_x, leg_y), (leg_x + 20 * scale, leg_y)],
+              fill=actual_rgb, width=2 * scale)
+    draw.text((leg_x + 25 * scale, leg_y - font_legend.size // 2),
+              "Actual", fill=legend_text_rgb, font=font_legend)
+    # Ideal line sample (dashed approximation — short solid segment)
+    ideal_leg_x = leg_x + 80 * scale
+    for dx in range(0, 20 * scale, (dash_len + gap_len)):
+        end = min(dx + dash_len, 20 * scale)
+        draw.line(
+            [(ideal_leg_x + dx, leg_y), (ideal_leg_x + end, leg_y)],
+            fill=brand_rgba, width=max(1, int(1.5 * scale)),
+        )
+    draw.text((ideal_leg_x + 25 * scale, leg_y - font_legend.size // 2),
+              "Ideal", fill=legend_text_rgb, font=font_legend)
+
+    # Export as PNG
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
 
 
 def _build_comparison_section(data: Dict[str, Any]) -> str:
