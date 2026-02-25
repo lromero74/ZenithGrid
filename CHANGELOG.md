@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.53.5] - 2026-02-25
+
+### Changed
+- **PDF expense tables**: Tables are now slightly narrower than page content with a light outline border, header separator line, and zebra-striped rows for easier horizontal scanning
+- **PDF expense tables**: Column widths now auto-size to fit the widest value in each column instead of using fixed widths — Upcoming and Next Month Preview tables share consistent column sizing
+
 ## [v2.53.4] - 2026-02-25
 
 ### Fixed
