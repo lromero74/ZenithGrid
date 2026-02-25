@@ -394,6 +394,7 @@ async def execute_sell(
     position: Position,
     current_price: float,
     signal_data: Optional[Dict[str, Any]] = None,
+    force_market: bool = False,
 ) -> Tuple[Optional[Trade], float, float]:
     """
     Execute a sell order for entire position (market or limit based on configuration)
@@ -429,10 +430,11 @@ async def execute_sell(
         return None, 0.0, 0.0
 
     # Check if we should use a limit order for closing
+    # Stop loss and trailing stop loss always use market orders (force_market=True)
     config: Dict = position.strategy_config_snapshot or {}
     take_profit_order_type = config.get("take_profit_order_type", "market")
 
-    if take_profit_order_type == "limit":
+    if take_profit_order_type == "limit" and not force_market:
         # Use limit order at mark price (mid between bid/ask)
         try:
             # Get ticker to calculate mark price

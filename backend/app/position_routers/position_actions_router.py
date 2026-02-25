@@ -67,6 +67,7 @@ async def cancel_position(
 @router.post("/{position_id}/force-close")
 async def force_close_position(
     position_id: int,
+    skip_slippage_guard: bool = False,
     db: AsyncSession = Depends(get_db),
     coinbase: CoinbaseClient = Depends(get_coinbase),
     current_user: User = Depends(get_current_user)
@@ -102,6 +103,19 @@ async def force_close_position(
 
         # Get current price for the position's product
         current_price = await coinbase.get_current_price(position.product_id)
+
+        # Slippage guard — warn user if slippage will erode profit
+        config = position.strategy_config_snapshot or {}
+        if config.get("slippage_guard", False) and not skip_slippage_guard:
+            from app.trading_engine.book_depth_guard import check_sell_slippage
+            proceed, guard_reason = await check_sell_slippage(
+                coinbase, position.product_id, position, config
+            )
+            if not proceed:
+                return {
+                    "slippage_warning": guard_reason,
+                    "requires_confirmation": True,
+                }
 
         # Create strategy instance for this bot
         from app.strategies import StrategyRegistry

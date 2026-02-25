@@ -10,14 +10,19 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
   const [isProcessing, setIsProcessing] = useState(false)
   const { addToast } = useNotifications()
 
-  const handleClosePosition = async (closeConfirmPositionId: number | null) => {
+  const handleClosePosition = async (closeConfirmPositionId: number | null, skipSlippageGuard = false) => {
     if (!closeConfirmPositionId) return
 
     setIsProcessing(true)
     try {
-      const result = await positionsApi.close(closeConfirmPositionId)
+      const result = await positionsApi.close(closeConfirmPositionId, skipSlippageGuard)
+      if (result.requires_confirmation) {
+        // Inline slippage guard blocked the close — show warning as toast
+        addToast({ type: 'error', title: 'Slippage Warning', message: result.slippage_warning || 'High slippage detected — use slippage check first' })
+        return { success: false, slippageBlocked: true }
+      }
       refetchPositions()
-      addToast({ type: 'success', title: 'Position Closed', message: `Profit: ${result.profit_quote.toFixed(8)} (${result.profit_percentage.toFixed(2)}%)` })
+      addToast({ type: 'success', title: 'Position Closed', message: `Profit: ${(result.profit_quote ?? 0).toFixed(8)} (${(result.profit_percentage ?? 0).toFixed(2)}%)` })
       return { success: true }
     } catch (err: any) {
       addToast({ type: 'error', title: 'Close Failed', message: err.response?.data?.detail || err.message })

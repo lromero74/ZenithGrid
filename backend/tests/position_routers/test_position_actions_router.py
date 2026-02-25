@@ -263,6 +263,114 @@ class TestForceClosePosition:
         assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
+    @patch("app.position_routers.position_actions_router.StrategyTradingEngine")
+    @patch("app.strategies.StrategyRegistry")
+    async def test_force_close_slippage_guard_blocks(self, mock_registry, mock_engine_cls, db_session):
+        """Slippage guard enabled and blocks → returns requires_confirmation."""
+        from app.position_routers.position_actions_router import force_close_position
+
+        user, account = await _create_user_with_account(db_session, email="fc_slip@example.com")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(
+            db_session, account, bot=bot, status="open",
+            strategy_config_snapshot={"slippage_guard": True, "take_profit_percentage": 1.5},
+        )
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+
+        with patch(
+            "app.trading_engine.book_depth_guard.check_sell_slippage",
+            new_callable=AsyncMock,
+            return_value=(False, "VWAP profit 0.8% < TP 1.5%"),
+        ):
+            result = await force_close_position(
+                position_id=pos.id,
+                db=db_session,
+                coinbase=mock_coinbase,
+                current_user=user,
+            )
+
+        assert result["requires_confirmation"] is True
+        assert "VWAP profit" in result["slippage_warning"]
+        # Engine should NOT have been called
+        mock_engine_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.position_actions_router.StrategyTradingEngine")
+    @patch("app.strategies.StrategyRegistry")
+    async def test_force_close_slippage_guard_skip(self, mock_registry, mock_engine_cls, db_session):
+        """Slippage guard enabled but skip=True → close proceeds."""
+        from app.position_routers.position_actions_router import force_close_position
+
+        user, account = await _create_user_with_account(db_session, email="fc_skip@example.com")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(
+            db_session, account, bot=bot, status="open",
+            strategy_config_snapshot={"slippage_guard": True, "take_profit_percentage": 1.5},
+        )
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+
+        mock_strategy = MagicMock()
+        mock_registry.get_strategy.return_value = mock_strategy
+
+        mock_engine_instance = AsyncMock()
+        mock_engine_instance.execute_sell = AsyncMock(return_value=(MagicMock(), 0.005, 2.5))
+        mock_engine_cls.return_value = mock_engine_instance
+
+        result = await force_close_position(
+            position_id=pos.id,
+            skip_slippage_guard=True,
+            db=db_session,
+            coinbase=mock_coinbase,
+            current_user=user,
+        )
+
+        assert result["message"] == f"Position {pos.id} closed successfully"
+        assert result["profit_quote"] == 0.005
+
+    @pytest.mark.asyncio
+    @patch("app.position_routers.position_actions_router.StrategyTradingEngine")
+    @patch("app.strategies.StrategyRegistry")
+    async def test_force_close_slippage_guard_passes(self, mock_registry, mock_engine_cls, db_session):
+        """Slippage guard enabled and passes → close proceeds normally."""
+        from app.position_routers.position_actions_router import force_close_position
+
+        user, account = await _create_user_with_account(db_session, email="fc_pass@example.com")
+        bot = await _create_bot(db_session, user, account)
+        pos = await _create_position(
+            db_session, account, bot=bot, status="open",
+            strategy_config_snapshot={"slippage_guard": True, "take_profit_percentage": 1.5},
+        )
+
+        mock_coinbase = AsyncMock()
+        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+
+        mock_strategy = MagicMock()
+        mock_registry.get_strategy.return_value = mock_strategy
+
+        mock_engine_instance = AsyncMock()
+        mock_engine_instance.execute_sell = AsyncMock(return_value=(MagicMock(), 0.01, 5.0))
+        mock_engine_cls.return_value = mock_engine_instance
+
+        with patch(
+            "app.trading_engine.book_depth_guard.check_sell_slippage",
+            new_callable=AsyncMock,
+            return_value=(True, None),
+        ):
+            result = await force_close_position(
+                position_id=pos.id,
+                db=db_session,
+                coinbase=mock_coinbase,
+                current_user=user,
+            )
+
+        assert result["message"] == f"Position {pos.id} closed successfully"
+        assert result["profit_quote"] == 0.01
+
+    @pytest.mark.asyncio
     async def test_force_close_position_no_bot_returns_404(self, db_session):
         """Edge case: position with no associated bot returns 404."""
         from app.position_routers.position_actions_router import force_close_position

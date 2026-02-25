@@ -204,9 +204,13 @@ export const positionsApi = {
     api.get<Trade[]>(`/positions/${id}/trades`).then((res) => res.data),
   getAILogs: (id: number, includeBeforeOpen = true) =>
     api.get<AIBotLog[]>(`/positions/${id}/ai-logs`, { params: { include_before_open: includeBeforeOpen } }).then((res) => res.data),
-  close: (id: number) =>
-    api.post<{ message: string; profit_quote: number; profit_percentage: number }>(`/positions/${id}/force-close`)
-      .then((res) => res.data),
+  close: (id: number, skipSlippageGuard = false) =>
+    api.post<{
+      message?: string; profit_quote?: number; profit_percentage?: number;
+      slippage_warning?: string; requires_confirmation?: boolean;
+    }>(`/positions/${id}/force-close`, null, {
+      params: skipSlippageGuard ? { skip_slippage_guard: true } : undefined,
+    }).then((res) => res.data),
   addFunds: (id: number, btcAmount: number) =>
     api.post<{ message: string; trade_id: number; price: number; eth_acquired: number }>(`/positions/${id}/add-funds`, { btc_amount: btcAmount })
       .then((res) => res.data),
