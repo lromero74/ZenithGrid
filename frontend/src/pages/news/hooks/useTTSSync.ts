@@ -416,7 +416,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     // Need to fetch new audio - with retry logic
     setIsLoading(true)
 
-    const MAX_RETRIES = 3
+    const MAX_RETRIES = 2
     const BACKOFF_BASE_MS = 1000  // 1s, 2s, 4s backoff
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -428,10 +428,11 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
       try {
         abortControllerRef.current = new AbortController()
 
-        // Add timeout - abort if TTS takes longer than 45 seconds
+        // Add timeout - abort if TTS takes longer than 90 seconds
+        // (edge_tts on t2.micro can take 25-50s for long uncached articles)
         const timeoutId = setTimeout(() => {
           abortControllerRef.current?.abort()
-        }, 45000)
+        }, 90000)
 
         const response = await authFetch('/api/news/tts-sync', {
           method: 'POST',

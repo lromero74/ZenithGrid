@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.59.4] - 2026-02-25
+
+### Fixed
+- **TTS generation timeout on long articles**: Increased backend TTS timeout from 60s to 90s and frontend timeout from 45s to 90s to handle long uncached articles on t2.micro.
+- **TTS resource waste on disconnect**: Backend now detects client disconnects during TTS generation and cancels early instead of finishing unused audio.
+- **TTS prefetch blocking**: Prefetch endpoint no longer blocks when user already has TTS in flight, preventing queue stalls.
+
+### Changed
+- **TTS loading indicator**: Play button now shows "Loading..." or "Generating..." status text under the spinner so users can see what's happening.
+
 ## [v2.59.3] - 2026-02-25
 
 ### Added
