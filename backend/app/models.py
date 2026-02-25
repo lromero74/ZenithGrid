@@ -1227,6 +1227,9 @@ class AccountValueSnapshot(Base):
     total_value_usd = Column(Float, nullable=False, default=0.0)
     usd_portion_usd = Column(Float, nullable=True)   # USD+USDC+USDT free + USD/USDC/USDT-pair position values
     btc_portion_btc = Column(Float, nullable=True)   # BTC free + BTC-pair position values (in BTC)
+    unrealized_pnl_usd = Column(Float, nullable=True)   # From USD-pair open positions
+    unrealized_pnl_btc = Column(Float, nullable=True)   # From BTC-pair open positions (in BTC)
+    btc_usd_price = Column(Float, nullable=True)         # BTC/USD price at snapshot time
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Unique constraint: one snapshot per account per day

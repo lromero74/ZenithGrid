@@ -277,10 +277,11 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
     if deposits_source == "implied":
         source_note = (
             "\n  NOTE: No individual deposit/withdrawal records are available. "
-            "The net deposits figure above is computed from the accounting identity: "
-            "net deposits = account value change - trading profit. "
-            "Do NOT say 'no deposits were made' — the math proves deposits/withdrawals "
-            "occurred. Present the implied net figure accurately."
+            "Net deposits are computed using native-currency accounting: "
+            "each currency's balance change minus its realized profit, "
+            "then combined at end-of-period prices. "
+            "Do NOT say 'no deposits were made' — present the implied "
+            "net figure accurately."
         )
 
     # Trading summary line
@@ -295,6 +296,15 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
             f"net P&L: {ts_sign}${abs(ts['net_profit_usd']):,.2f}"
         )
 
+    mve = data.get("market_value_effect_usd")
+    mve_line = ""
+    if mve is not None:
+        mve_sign = "+" if mve >= 0 else ""
+        mve_line = (
+            f"\n  - Market value effect (BTC price change): "
+            f"{mve_sign}${abs(mve):,.2f}"
+        )
+
     capital_section = (
         f"\nCapital Movements & Account Reconciliation:"
         f"{trade_line}"
@@ -304,6 +314,7 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
         f"\n  - Net deposits/withdrawals: ${net_deposits:,.2f}"
         f"\n    (Deposits: ${total_dep:,.2f} / Withdrawals: ${total_wth:,.2f})"
         f"\n  - Adjusted growth (excluding deposits): ${adj_growth:,.2f}"
+        f"{mve_line}"
         f"{source_note}"
     )
 

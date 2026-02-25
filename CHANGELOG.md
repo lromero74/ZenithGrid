@@ -5,6 +5,19 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.55.0] - 2026-02-25
+
+### Added
+- **Market Value Effect metric**: Reports now show how much of the account's USD value change is attributable to BTC price movement alone, separate from trading performance and deposits
+- **Native-currency accounting for deposits/withdrawals**: Report deposit calculations now work per-currency in native units (BTC in BTC, USD in USD) before combining, eliminating phantom deposits/withdrawals caused by BTC price swings
+- **Unrealized PnL tracking in snapshots**: Daily account snapshots now capture unrealized profit/loss from open positions and the current BTC/USD price, enabling more accurate deposit isolation
+
+### Fixed
+- **All accounts (not just paper) showing phantom withdrawals**: BTC price drops were misattributed as large withdrawals in any account holding BTC — native-currency accounting now correctly separates market movement from actual capital flows
+
+### Removed
+- Paper trading workaround for implied deposits — replaced by the universal native-currency accounting fix
+
 ## [v2.54.3] - 2026-02-25
 
 ### Fixed
