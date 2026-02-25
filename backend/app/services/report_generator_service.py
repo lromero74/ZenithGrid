@@ -544,7 +544,7 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
                 </td>
             </tr>"""
 
-    return f"""
+    html = f"""
     <div style="margin: 20px 0;">
         <h3 style="color: #94a3b8; font-size: 13px; text-transform: uppercase;
                    letter-spacing: 1px; margin: 0 0 15px 0;">Key Metrics</h3>
@@ -588,6 +588,30 @@ def _build_metrics_section(data: Dict[str, Any]) -> str:
             </tr>{deposit_row}
         </table>
     </div>"""
+
+    # Market Value Effect row (appended after the table if available)
+    mve = data.get("market_value_effect_usd")
+    if mve is not None:
+        mve_sign = "+" if mve >= 0 else ""
+        mve_color = "#a78bfa" if mve >= 0 else "#f59e0b"
+        html += f"""
+    <div style="margin: -10px 0 20px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td style="width: 100%; padding: 12px; background-color: #1e293b;
+                           border: 1px solid #334155; border-radius: 0 0 8px 8px;">
+                    <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+                        Market Value Effect (BTC price change)</p>
+                    <p style="color: {mve_color}; font-size: 20px; font-weight: 700;
+                             margin: 5px 0 0 0;">{mve_sign}${abs(mve):,.2f}</p>
+                    <p style="color: #94a3b8; font-size: 12px; margin: 3px 0 0 0;">
+                        USD value change from BTC price movement alone</p>
+                </td>
+            </tr>
+        </table>
+    </div>"""
+
+    return html
 
 
 def _build_goals_section(
@@ -1857,6 +1881,13 @@ def generate_pdf(
         metrics.append(
             ("Adjusted Growth", f"{adj_sign}${abs(pdf_adj_growth):,.2f}")
         )
+        pdf_mve = report_data.get("market_value_effect_usd")
+        if pdf_mve is not None:
+            mve_sign = "+" if pdf_mve >= 0 else "-"
+            metrics.append(
+                ("Market Value Effect",
+                 f"{mve_sign}${abs(pdf_mve):,.2f}")
+            )
 
         pdf.set_font("Helvetica", "", 10)
         for label, value in metrics:

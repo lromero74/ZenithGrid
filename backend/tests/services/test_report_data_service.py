@@ -46,11 +46,18 @@ def _make_account(db_session, user_id=1, account_id=1, is_active=True,
 
 
 def _make_snapshot(db_session, user_id=1, account_id=1,
-                   date=None, usd=1000.0, btc=0.02):
+                   date=None, usd=1000.0, btc=0.02,
+                   usd_portion=None, btc_portion=None,
+                   unrealized_pnl_usd=None, unrealized_pnl_btc=None,
+                   btc_usd_price=None):
     snap = AccountValueSnapshot(
         user_id=user_id, account_id=account_id,
         snapshot_date=date or datetime(2025, 1, 15),
         total_value_usd=usd, total_value_btc=btc,
+        usd_portion_usd=usd_portion, btc_portion_btc=btc_portion,
+        unrealized_pnl_usd=unrealized_pnl_usd,
+        unrealized_pnl_btc=unrealized_pnl_btc,
+        btc_usd_price=btc_usd_price,
     )
     db_session.add(snap)
     return snap
@@ -149,7 +156,8 @@ class TestGetAccountValueAt:
             db_session, user_id=1, account_id=1,
             at_date=datetime(2025, 1, 1),
         )
-        assert result == {"usd": 0.0, "btc": 0.0}
+        assert result["usd"] == 0.0
+        assert result["btc"] == 0.0
 
     @pytest.mark.asyncio
     async def test_all_accounts_sums_latest_per_account(self, db_session):
@@ -301,28 +309,6 @@ class TestGatherReportData:
 
         assert data["net_deposits_usd"] == pytest.approx(500.0)
         assert data["deposits_source"] == "implied"
-
-    @pytest.mark.asyncio
-    async def test_paper_account_skips_implied_deposits(self, db_session):
-        """Paper trading accounts don't use implied deposits (BTC price
-        fluctuations would be misattributed as withdrawals)."""
-        _make_user(db_session)
-        _make_account(db_session, is_paper=True)
-        # BTC dropped: same BTC but lower USD value — no real transfers
-        _make_snapshot(db_session, date=datetime(2025, 1, 1), usd=200000, btc=2.3)
-        _make_snapshot(db_session, date=datetime(2025, 1, 31), usd=167000, btc=2.5)
-        await db_session.flush()
-
-        data = await gather_report_data(
-            db_session, user_id=1, account_id=1,
-            period_start=datetime(2025, 1, 1),
-            period_end=datetime(2025, 1, 31),
-            goals=[],
-        )
-
-        # Should NOT attribute BTC price drop to implied withdrawals
-        assert data["net_deposits_usd"] == pytest.approx(0.0)
-        assert data["deposits_source"] == "transfers"
 
     @pytest.mark.asyncio
     async def test_bot_strategies_collected(self, db_session):
@@ -743,3 +729,282 @@ class TestComputeGoalProgress:
         assert result["target_type"] == "expenses"
         assert result["expense_period"] == "monthly"
         assert result["tax_withholding_pct"] == 25
+
+
+# ===========================================================================
+# Tests for native-currency accounting
+# ===========================================================================
+
+
+class TestNativeCurrencyAccounting:
+    """Tests for native-currency deposit/withdrawal accounting."""
+
+    @pytest.mark.asyncio
+    async def test_btc_price_drop_no_phantom_withdrawal(self, db_session):
+        """BTC price drops $33k with no trades or transfers — no phantom
+        withdrawal, market_value_effect explains the USD change."""
+        _make_user(db_session)
+        _make_account(db_session, is_paper=True)
+        # Start: 2 BTC at $100k = $200k total, $0 USD portion
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 1),
+            usd=200000, btc=2.0,
+            usd_portion=0.0, btc_portion=2.0,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=100000.0,
+        )
+        # End: 2 BTC at $67k = $134k total, $0 USD portion
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 31),
+            usd=134000, btc=2.0,
+            usd_portion=0.0, btc_portion=2.0,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=67000.0,
+        )
+        await db_session.flush()
+
+        data = await gather_report_data(
+            db_session, user_id=1, account_id=1,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            goals=[],
+        )
+
+        # No trades, no transfers, BTC unchanged — implied deposits = $0
+        assert data["net_deposits_usd"] == pytest.approx(0.0)
+        assert data["deposits_source"] == "transfers"
+        # Market value effect = 2 BTC * (67000 - 100000) = -$66,000
+        assert data["market_value_effect_usd"] == pytest.approx(-66000.0)
+
+    @pytest.mark.asyncio
+    async def test_native_currency_mixed_account_with_trades(self, db_session):
+        """USD+BTC account with trades in both currencies — correct split."""
+        _make_user(db_session)
+        _make_account(db_session)
+        # Start: $5000 USD, 0.5 BTC at $80k
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 1),
+            usd=45000, btc=0.5625,
+            usd_portion=5000.0, btc_portion=0.5,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=80000.0,
+        )
+        # End: $5100 USD, 0.51 BTC at $82k — $100 USD profit, 0.01 BTC profit
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 31),
+            usd=46920, btc=0.5722,
+            usd_portion=5100.0, btc_portion=0.51,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=82000.0,
+        )
+        # USD-pair trade: $100 profit
+        _make_position(
+            db_session, product_id="ETH-USD", profit_usd=100.0,
+            profit_quote=100.0, closed_at=datetime(2025, 1, 15),
+        )
+        # BTC-pair trade: 0.01 BTC profit ($820 at end price)
+        _make_position(
+            db_session, product_id="ETH-BTC", profit_usd=820.0,
+            profit_quote=0.01, closed_at=datetime(2025, 1, 20),
+        )
+        await db_session.flush()
+
+        data = await gather_report_data(
+            db_session, user_id=1, account_id=1,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            goals=[],
+        )
+
+        # USD portion: end(5100) - start(5000) - usd_profit(100) = 0
+        # BTC portion: end(0.51) - start(0.5) - btc_profit(0.01) = 0
+        # Combined implied = 0 * 82000 + 0 = $0
+        assert data["net_deposits_usd"] == pytest.approx(0.0)
+        assert data["deposits_source"] == "transfers"
+        # Market value effect = 0.5 * (82000 - 80000) = $1000
+        assert data["market_value_effect_usd"] == pytest.approx(1000.0)
+
+    @pytest.mark.asyncio
+    async def test_unrealized_pnl_subtracted_from_remainder(self, db_session):
+        """Unrealized PnL change is subtracted to isolate actual deposits."""
+        _make_user(db_session)
+        _make_account(db_session)
+        # Start: $10000 USD, 0 BTC, $0 unrealized
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 1),
+            usd=10000, btc=0.0,
+            usd_portion=10000.0, btc_portion=0.0,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=80000.0,
+        )
+        # End: $10500 USD, 0 BTC, $300 unrealized (from open positions)
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 31),
+            usd=10500, btc=0.0,
+            usd_portion=10500.0, btc_portion=0.0,
+            unrealized_pnl_usd=300.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=80000.0,
+        )
+        # One closed trade with $100 realized profit
+        _make_position(
+            db_session, product_id="ETH-USD", profit_usd=100.0,
+            profit_quote=100.0, closed_at=datetime(2025, 1, 15),
+        )
+        await db_session.flush()
+
+        data = await gather_report_data(
+            db_session, user_id=1, account_id=1,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            goals=[],
+        )
+
+        # USD portion change: 10500 - 10000 = 500
+        # Minus realized: 500 - 100 = 400
+        # Minus unrealized change: 400 - (300 - 0) = 100
+        # So implied deposit = $100
+        assert data["net_deposits_usd"] == pytest.approx(100.0)
+        assert data["deposits_source"] == "implied"
+
+    @pytest.mark.asyncio
+    async def test_fallback_when_portions_null(self, db_session):
+        """Old snapshots without portion data fall back to legacy formula."""
+        _make_user(db_session)
+        _make_account(db_session)
+        # Old-style snapshots: no portions, no btc_usd_price
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 1),
+            usd=5000, btc=0.1,
+        )
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 31),
+            usd=5500, btc=0.1,
+        )
+        await db_session.flush()
+
+        data = await gather_report_data(
+            db_session, user_id=1, account_id=1,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            goals=[],
+        )
+
+        # Legacy: implied = account_growth - profit = 500 - 0 = 500
+        assert data["net_deposits_usd"] == pytest.approx(500.0)
+        assert data["deposits_source"] == "implied"
+        # No market value effect when portions are NULL
+        assert data["market_value_effect_usd"] is None
+
+    @pytest.mark.asyncio
+    async def test_paper_account_btc_drop_native_currency(self, db_session):
+        """Paper trading account: BTC price drop correctly handled by
+        native-currency accounting (replaces old is_paper workaround)."""
+        _make_user(db_session)
+        _make_account(db_session, is_paper=True)
+        # Paper account: 2.3 BTC at $86956/BTC, some USD
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 1),
+            usd=200000, btc=2.3,
+            usd_portion=500.0, btc_portion=2.3,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=86739.13,
+        )
+        # BTC dropped to $72565/BTC, gained 0.2 BTC from trading
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 31),
+            usd=167500, btc=2.5,
+            usd_portion=500.0, btc_portion=2.5,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=66800.0,
+        )
+        # BTC-pair trade: +0.2 BTC profit
+        _make_position(
+            db_session, product_id="ETH-BTC", profit_usd=13360.0,
+            profit_quote=0.2, closed_at=datetime(2025, 1, 20),
+        )
+        await db_session.flush()
+
+        data = await gather_report_data(
+            db_session, user_id=1, account_id=1,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            goals=[],
+        )
+
+        # BTC: end(2.5) - start(2.3) - btc_profit(0.2) = 0
+        # USD: end(500) - start(500) - usd_profit(0) = 0
+        # Combined = 0
+        assert data["net_deposits_usd"] == pytest.approx(0.0)
+        assert data["deposits_source"] == "transfers"
+        # Market value effect = 2.3 * (66800 - 86739.13) = -$45,860
+        assert data["market_value_effect_usd"] == pytest.approx(-45860.0, abs=1.0)
+
+    @pytest.mark.asyncio
+    async def test_get_account_value_at_returns_expanded_fields(self, db_session):
+        """_get_account_value_at returns all new snapshot fields."""
+        _make_user(db_session)
+        _make_account(db_session)
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 15),
+            usd=10000, btc=0.1,
+            usd_portion=8000.0, btc_portion=0.1,
+            unrealized_pnl_usd=50.0, unrealized_pnl_btc=0.001,
+            btc_usd_price=90000.0,
+        )
+        await db_session.flush()
+
+        result = await _get_account_value_at(
+            db_session, user_id=1, account_id=1,
+            at_date=datetime(2025, 1, 16),
+        )
+
+        assert result["usd"] == 10000.0
+        assert result["btc"] == 0.1
+        assert result["usd_portion_usd"] == 8000.0
+        assert result["btc_portion_btc"] == 0.1
+        assert result["unrealized_pnl_usd"] == 50.0
+        assert result["unrealized_pnl_btc"] == 0.001
+        assert result["btc_usd_price"] == 90000.0
+
+    @pytest.mark.asyncio
+    async def test_btc_pair_profit_native_currency(self, db_session):
+        """BTC-pair trades don't leak into USD deposits calculation."""
+        _make_user(db_session)
+        _make_account(db_session)
+        # Start: $1000 USD, 1.0 BTC at $80k
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 1),
+            usd=81000, btc=1.0125,
+            usd_portion=1000.0, btc_portion=1.0,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=80000.0,
+        )
+        # End: $1000 USD, 1.05 BTC (gained 0.05 from trade) at $80k
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 31),
+            usd=85000, btc=1.0625,
+            usd_portion=1000.0, btc_portion=1.05,
+            unrealized_pnl_usd=0.0, unrealized_pnl_btc=0.0,
+            btc_usd_price=80000.0,
+        )
+        # BTC-pair trade: 0.05 BTC profit
+        _make_position(
+            db_session, product_id="ETH-BTC", profit_usd=4000.0,
+            profit_quote=0.05, closed_at=datetime(2025, 1, 20),
+        )
+        await db_session.flush()
+
+        data = await gather_report_data(
+            db_session, user_id=1, account_id=1,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            goals=[],
+        )
+
+        # BTC: end(1.05) - start(1.0) - btc_profit(0.05) = 0
+        # USD: end(1000) - start(1000) - usd_profit(0) = 0
+        # Combined = 0
+        assert data["net_deposits_usd"] == pytest.approx(0.0)
+        assert data["deposits_source"] == "transfers"
+        # No BTC price change → market value effect = 0
+        assert data["market_value_effect_usd"] == pytest.approx(0.0)

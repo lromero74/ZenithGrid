@@ -341,7 +341,7 @@ class TestBuildSummaryPrompt:
         sample_report_data["net_deposits_usd"] = 309.16
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
         assert "Do NOT say 'no deposits were made'" in prompt
-        assert "accounting identity" in prompt
+        assert "native-currency accounting" in prompt
 
     def test_transfers_source_no_implied_note(self, sample_report_data):
         """When deposits_source is 'transfers', no implied note is added."""

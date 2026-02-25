@@ -163,22 +163,60 @@ async def gather_report_data(
     )
     net_deposits_usd = round(total_deposits_usd - total_withdrawals_usd, 2)
 
-    # Accounting identity: account_change = profit + net_deposits
-    # When no transfer records exist, compute implied net deposits from
-    # the difference between account change and trading profit.
-    # Skip for paper trading accounts — they have no real transfers and
-    # BTC price movement would be misattributed as withdrawals.
+    # Native-currency accounting: compute implied net deposits per currency
+    # in native units, then combine. BTC price movements cancel out in
+    # BTC terms, preventing phantom deposits/withdrawals.
     account_growth_usd = end_value["usd"] - start_value["usd"]
-    implied_net_deposits = round(account_growth_usd - period_profit_usd, 2)
 
-    is_paper = False
-    if account_id:
-        acct_result = await db.execute(
-            select(Account.is_paper_trading).where(Account.id == account_id)
+    # Realized profit from USD-pair positions only
+    realized_profit_usd_pairs = sum(
+        p.profit_usd or 0 for p in closed_positions
+        if p.get_quote_currency() != "BTC"
+    )
+
+    # Extract portion data from start/end snapshots
+    start_btc = start_value.get("btc_portion_btc")
+    end_btc = end_value.get("btc_portion_btc")
+    start_usd_portion = start_value.get("usd_portion_usd")
+    end_usd_portion = end_value.get("usd_portion_usd")
+    end_btc_price = end_value.get("btc_usd_price")
+    start_btc_price = start_value.get("btc_usd_price")
+
+    market_value_effect_usd = None
+
+    if (start_btc is not None and end_btc is not None
+            and start_usd_portion is not None and end_usd_portion is not None
+            and end_btc_price is not None):
+        # Native-currency accounting per currency
+        btc_implied_deposit = (end_btc - start_btc) - period_profit_btc
+        usd_implied_deposit = (end_usd_portion - start_usd_portion) - realized_profit_usd_pairs
+
+        # Subtract unrealized PnL changes if available (isolate actual deposits)
+        start_upnl_usd = start_value.get("unrealized_pnl_usd")
+        end_upnl_usd = end_value.get("unrealized_pnl_usd")
+        start_upnl_btc = start_value.get("unrealized_pnl_btc")
+        end_upnl_btc = end_value.get("unrealized_pnl_btc")
+
+        if (start_upnl_usd is not None and end_upnl_usd is not None):
+            usd_implied_deposit -= (end_upnl_usd - start_upnl_usd)
+        if (start_upnl_btc is not None and end_upnl_btc is not None):
+            btc_implied_deposit -= (end_upnl_btc - start_upnl_btc)
+
+        # Combine: BTC deposits valued at end-of-period price
+        implied_net_deposits = round(
+            btc_implied_deposit * end_btc_price + usd_implied_deposit, 2
         )
-        is_paper = bool(acct_result.scalar())
 
-    if not all_transfers and abs(implied_net_deposits) >= 0.01 and not is_paper:
+        # Market Value Effect: how much USD value changed from BTC price alone
+        if start_btc_price is not None:
+            market_value_effect_usd = round(
+                start_btc * (end_btc_price - start_btc_price), 2
+            )
+    else:
+        # Fallback for old snapshots without portion data
+        implied_net_deposits = round(account_growth_usd - period_profit_usd, 2)
+
+    if not all_transfers and abs(implied_net_deposits) >= 0.01:
         # No transfer records — use the implied value
         net_deposits_usd = implied_net_deposits
         deposits_source = "implied"
@@ -219,6 +257,7 @@ async def gather_report_data(
         "transfer_records": transfer_records,
         "trade_summary": trade_summary,
         "bot_strategies": bot_strategies,
+        "market_value_effect_usd": market_value_effect_usd,
     }
 
 
@@ -596,8 +635,20 @@ async def _get_account_value_at(
     user_id: int,
     account_id: Optional[int],
     at_date: datetime,
-) -> Dict[str, float]:
-    """Get the closest account value snapshot on or before at_date."""
+) -> Dict[str, Any]:
+    """Get the closest account value snapshot on or before at_date.
+
+    Returns dict with usd, btc, plus expanded native-currency fields:
+    btc_portion_btc, usd_portion_usd, unrealized_pnl_usd,
+    unrealized_pnl_btc, btc_usd_price.
+    """
+    default = {
+        "usd": 0.0, "btc": 0.0,
+        "btc_portion_btc": None, "usd_portion_usd": None,
+        "unrealized_pnl_usd": None, "unrealized_pnl_btc": None,
+        "btc_usd_price": None,
+    }
+
     filters = [
         AccountValueSnapshot.user_id == user_id,
         AccountValueSnapshot.snapshot_date <= at_date,
@@ -615,7 +666,15 @@ async def _get_account_value_at(
         )
         snapshot = result.scalar_one_or_none()
         if snapshot:
-            return {"usd": snapshot.total_value_usd, "btc": snapshot.total_value_btc}
+            return {
+                "usd": snapshot.total_value_usd,
+                "btc": snapshot.total_value_btc,
+                "btc_portion_btc": snapshot.btc_portion_btc,
+                "usd_portion_usd": snapshot.usd_portion_usd,
+                "unrealized_pnl_usd": snapshot.unrealized_pnl_usd,
+                "unrealized_pnl_btc": snapshot.unrealized_pnl_btc,
+                "btc_usd_price": snapshot.btc_usd_price,
+            }
     else:
         # All accounts — sum the latest snapshot per account
         # Exclude paper trading and inactive accounts (matches account_snapshot_service)
@@ -638,6 +697,11 @@ async def _get_account_value_at(
             select(
                 func.sum(AccountValueSnapshot.total_value_usd),
                 func.sum(AccountValueSnapshot.total_value_btc),
+                func.sum(AccountValueSnapshot.btc_portion_btc),
+                func.sum(AccountValueSnapshot.usd_portion_usd),
+                func.sum(AccountValueSnapshot.unrealized_pnl_usd),
+                func.sum(AccountValueSnapshot.unrealized_pnl_btc),
+                func.max(AccountValueSnapshot.btc_usd_price),
             )
             .join(
                 subq,
@@ -650,6 +714,13 @@ async def _get_account_value_at(
         )
         row = result.one_or_none()
         if row and row[0] is not None:
-            return {"usd": row[0], "btc": row[1]}
+            return {
+                "usd": row[0], "btc": row[1],
+                "btc_portion_btc": row[2],
+                "usd_portion_usd": row[3],
+                "unrealized_pnl_usd": row[4],
+                "unrealized_pnl_btc": row[5],
+                "btc_usd_price": row[6],
+            }
 
-    return {"usd": 0.0, "btc": 0.0}
+    return default
