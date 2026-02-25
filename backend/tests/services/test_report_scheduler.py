@@ -350,7 +350,7 @@ class TestComputePeriodBoundsFlexible:
         assert end == datetime(2025, 3, 1, 0, 0, 0)
 
     def test_wtd_window(self):
-        """Happy path: week-to-date from Monday to run_at."""
+        """Happy path: week-to-date from Monday to run_at (includes current time)."""
         sched = _make_schedule(
             schedule_type="weekly", period_window="wtd",
         )
@@ -358,52 +358,52 @@ class TestComputePeriodBoundsFlexible:
         run_at = datetime(2025, 3, 19, 10, 0, 0)
         start, end = compute_period_bounds_flexible(sched, run_at)
         assert start == datetime(2025, 3, 17, 0, 0, 0)  # Monday
-        assert end == datetime(2025, 3, 19, 0, 0, 0)
+        assert end == run_at  # Includes today's trades
 
     def test_mtd_window(self):
-        """Happy path: month-to-date from 1st to run_at."""
+        """Happy path: month-to-date from 1st to run_at (includes current time)."""
         sched = _make_schedule(
             schedule_type="monthly", period_window="mtd",
         )
         run_at = datetime(2025, 3, 15, 10, 0, 0)
         start, end = compute_period_bounds_flexible(sched, run_at)
         assert start == datetime(2025, 3, 1, 0, 0, 0)
-        assert end == datetime(2025, 3, 15, 0, 0, 0)
+        assert end == run_at  # Includes today's trades
 
     def test_ytd_window(self):
-        """Happy path: year-to-date from Jan 1 to run_at."""
+        """Happy path: year-to-date from Jan 1 to run_at (includes current time)."""
         sched = _make_schedule(
             schedule_type="monthly", period_window="ytd",
         )
         run_at = datetime(2025, 6, 15, 10, 0, 0)
         start, end = compute_period_bounds_flexible(sched, run_at)
         assert start == datetime(2025, 1, 1, 0, 0, 0)
-        assert end == datetime(2025, 6, 15, 0, 0, 0)
+        assert end == run_at  # Includes today's trades
 
     def test_trailing_days(self):
-        """Happy path: trailing 7 days."""
+        """Happy path: trailing 7 days (end includes current time)."""
         sched = _make_schedule(
             schedule_type="weekly", period_window="trailing",
             lookback_value=7, lookback_unit="days",
         )
         run_at = datetime(2025, 3, 15, 10, 0, 0)
         start, end = compute_period_bounds_flexible(sched, run_at)
-        assert end == datetime(2025, 3, 15, 0, 0, 0)
+        assert end == run_at  # Includes today's trades
         assert start == datetime(2025, 3, 8, 0, 0, 0)
 
     def test_trailing_months(self):
-        """Happy path: trailing 3 months."""
+        """Happy path: trailing 3 months (end includes current time)."""
         sched = _make_schedule(
             schedule_type="monthly", period_window="trailing",
             lookback_value=3, lookback_unit="months",
         )
         run_at = datetime(2025, 6, 15, 10, 0, 0)
         start, end = compute_period_bounds_flexible(sched, run_at)
-        assert end == datetime(2025, 6, 15, 0, 0, 0)
+        assert end == run_at  # Includes today's trades
         assert start == datetime(2025, 3, 15, 0, 0, 0)
 
     def test_qtd_window(self):
-        """Happy path: quarter-to-date."""
+        """Happy path: quarter-to-date (includes current time)."""
         sched = _make_schedule(
             schedule_type="quarterly", period_window="qtd",
             quarter_start_month=1,
@@ -412,7 +412,7 @@ class TestComputePeriodBoundsFlexible:
         start, end = compute_period_bounds_flexible(sched, run_at)
         # Q starts: 1, 4, 7, 10 — most recent <= May is April
         assert start == datetime(2025, 4, 1, 0, 0, 0)
-        assert end == datetime(2025, 5, 15, 0, 0, 0)
+        assert end == run_at  # Includes today's trades
 
     def test_full_prior_daily(self):
         """Happy path: full_prior daily = yesterday."""
