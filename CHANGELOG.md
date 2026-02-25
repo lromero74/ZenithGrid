@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.54.3] - 2026-02-25
+
+### Fixed
+- **Orphan image cleanup**: News article cleanup now deletes the exact articles it collected file paths for, preventing image and TTS files from being left on disk when their DB records are removed
+
+### Removed
+- Eliminated redundant `cleanup_old_articles()` function that duplicated deletion logic and caused the orphan file leak
+
 ## [v2.54.2] - 2026-02-25
 
 ### Fixed

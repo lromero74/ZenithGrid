@@ -28,7 +28,7 @@ import aiohttp
 import feedparser
 import trafilatura
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import desc, select, update
+from sqlalchemy import delete, desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
@@ -407,69 +407,6 @@ async def store_article_in_db(
     )
     db.add(article)
     return article
-
-
-async def cleanup_old_articles(
-    db: AsyncSession,
-    max_age_days: int = NEWS_ITEM_MAX_AGE_DAYS,
-    min_keep: int = 5,
-) -> int:
-    """Delete old articles using per-source retention: keep the greater of
-    min_keep articles or articles within max_age_days, per source.
-    Articles with no source_id use flat max_age_days cutoff."""
-    from sqlalchemy import delete
-
-    # Use naive datetime to match SQLite's naive storage (avoids aware vs naive comparison)
-    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
-    total_deleted = 0
-
-    # Per-source cleanup: for each source_id, keep newer of min_keep or age
-    source_ids_result = await db.execute(
-        select(NewsArticle.source_id).where(
-            NewsArticle.source_id.isnot(None)
-        ).group_by(NewsArticle.source_id)
-    )
-    source_ids = [row[0] for row in source_ids_result.all()]
-
-    for sid in source_ids:
-        # Get the published_at of the min_keep-th newest article
-        nth_result = await db.execute(
-            select(NewsArticle.published_at)
-            .where(NewsArticle.source_id == sid)
-            .order_by(desc(NewsArticle.published_at))
-            .offset(min_keep - 1)
-            .limit(1)
-        )
-        nth_date = nth_result.scalar()
-
-        # Effective cutoff: keep articles newer than whichever is older
-        # (the age cutoff or the min_keep boundary)
-        if nth_date and nth_date < cutoff:
-            effective_cutoff = nth_date
-        else:
-            effective_cutoff = cutoff
-
-        result = await db.execute(
-            delete(NewsArticle).where(
-                NewsArticle.source_id == sid,
-                NewsArticle.published_at < effective_cutoff,
-            )
-        )
-        total_deleted += result.rowcount
-
-    # Flat cutoff for articles with no source_id (legacy/orphan)
-    result = await db.execute(
-        delete(NewsArticle).where(
-            NewsArticle.source_id.is_(None),
-            NewsArticle.fetched_at < cutoff,
-        )
-    )
-    total_deleted += result.rowcount
-
-    if total_deleted > 0:
-        await db.commit()
-        logger.info(f"Cleaned up {total_deleted} old news articles")
-    return total_deleted
 
 
 async def get_seen_content_ids(
@@ -1454,18 +1391,25 @@ async def cleanup_articles_with_images(
             if row[1]:
                 paths_to_delete.append(row[1])
 
-        # Delete TTS DB records for articles being removed
+        # Delete TTS DB records and articles for the exact IDs we collected
+        articles_deleted = 0
         if article_ids_to_delete:
             await db.execute(
                 ArticleTTS.__table__.delete().where(
                     ArticleTTS.article_id.in_(article_ids_to_delete)
                 )
             )
+            result = await db.execute(
+                delete(NewsArticle).where(
+                    NewsArticle.id.in_(article_ids_to_delete)
+                )
+            )
+            articles_deleted = result.rowcount
             await db.commit()
-
-        articles_deleted = await cleanup_old_articles(
-            db, max_age_days=max_age_days, min_keep=min_keep
-        )
+            if articles_deleted:
+                logger.info(
+                    f"Cleaned up {articles_deleted} old news articles"
+                )
 
     # Delete image files
     for filename in paths_to_delete:
