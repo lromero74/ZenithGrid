@@ -655,6 +655,45 @@ async def create_expense_item(
     return _expense_item_to_dict(item, goal.expense_period)
 
 
+class ExpenseReorderRequest(BaseModel):
+    item_ids: List[int] = Field(..., min_length=1)
+
+
+@router.put("/goals/{goal_id}/expenses/reorder")
+async def reorder_expense_items(
+    goal_id: int,
+    body: ExpenseReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Set sort_order for expense items based on provided ID order."""
+    goal = await _get_user_goal(db, goal_id, current_user.id)
+
+    # Fetch all items for this goal owned by this user
+    result = await db.execute(
+        select(ExpenseItem).where(
+            ExpenseItem.goal_id == goal.id,
+            ExpenseItem.user_id == current_user.id,
+        )
+    )
+    items_by_id = {item.id: item for item in result.scalars().all()}
+
+    # Validate all IDs belong to this goal
+    invalid = set(body.item_ids) - set(items_by_id.keys())
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid item IDs: {list(invalid)}",
+        )
+
+    # Set sort_order based on position in the list
+    for idx, item_id in enumerate(body.item_ids):
+        items_by_id[item_id].sort_order = idx
+
+    await db.commit()
+    return {"detail": "Expense items reordered", "count": len(body.item_ids)}
+
+
 @router.put("/goals/{goal_id}/expenses/{item_id}")
 async def update_expense_item(
     goal_id: int,
@@ -715,45 +754,6 @@ async def delete_expense_item(
     await recalculate_goal_target(db, goal)
     await db.commit()
     return {"detail": "Expense item deleted"}
-
-
-class ExpenseReorderRequest(BaseModel):
-    item_ids: List[int] = Field(..., min_length=1)
-
-
-@router.put("/goals/{goal_id}/expenses/reorder")
-async def reorder_expense_items(
-    goal_id: int,
-    body: ExpenseReorderRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> dict:
-    """Set sort_order for expense items based on provided ID order."""
-    goal = await _get_user_goal(db, goal_id, current_user.id)
-
-    # Fetch all items for this goal owned by this user
-    result = await db.execute(
-        select(ExpenseItem).where(
-            ExpenseItem.goal_id == goal.id,
-            ExpenseItem.user_id == current_user.id,
-        )
-    )
-    items_by_id = {item.id: item for item in result.scalars().all()}
-
-    # Validate all IDs belong to this goal
-    invalid = set(body.item_ids) - set(items_by_id.keys())
-    if invalid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid item IDs: {list(invalid)}",
-        )
-
-    # Set sort_order based on position in the list
-    for idx, item_id in enumerate(body.item_ids):
-        items_by_id[item_id].sort_order = idx
-
-    await db.commit()
-    return {"detail": "Expense items reordered", "count": len(body.item_ids)}
 
 
 async def _get_user_goal(
