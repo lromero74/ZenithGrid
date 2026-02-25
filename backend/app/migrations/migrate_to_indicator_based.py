@@ -178,10 +178,11 @@ def convert_conditional_dca(config: Dict[str, Any]) -> Dict[str, Any]:
 
     # Take profit settings
     new_config["take_profit_percentage"] = config.get("take_profit_percentage", 3.0)
-    new_config["take_profit_order_type"] = config.get("take_profit_order_type", "limit")
-    new_config["min_profit_for_conditions"] = config.get("min_profit_for_conditions", 0.0)
-    new_config["trailing_take_profit"] = config.get("trailing_take_profit", False)
+    new_config["take_profit_order_type"] = config.get("take_profit_order_type", "market")
+    new_config["take_profit_mode"] = config.get("take_profit_mode", "fixed")
     new_config["trailing_deviation"] = config.get("trailing_deviation", 1.0)
+    new_config["base_execution_type"] = config.get("base_execution_type", "market")
+    new_config["dca_execution_type"] = config.get("dca_execution_type", "market")
 
     # Stop loss settings
     new_config["stop_loss_enabled"] = config.get("stop_loss_enabled", False)

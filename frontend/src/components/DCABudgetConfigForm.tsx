@@ -556,6 +556,22 @@ function DCABudgetConfigForm({
           )}
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Base Order Execution
+            </label>
+            <select
+              value={config.base_execution_type || 'market'}
+              onChange={(e) => updateConfig('base_execution_type', e.target.value)}
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            >
+              <option value="market">Market (instant fill)</option>
+              <option value="limit">Limit (at current price)</option>
+            </select>
+          </div>
+        </div>
+
         {/* Base Order Entry Conditions */}
         <AdvancedConditionBuilder
           title="Base Order Entry Conditions"
@@ -751,6 +767,22 @@ function DCABudgetConfigForm({
         </div>
 
         {/* Safety Order Entry Conditions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              DCA Order Execution
+            </label>
+            <select
+              value={config.dca_execution_type || 'market'}
+              onChange={(e) => updateConfig('dca_execution_type', e.target.value)}
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            >
+              <option value="market">Market (instant fill)</option>
+              <option value="limit">Limit (at current price)</option>
+            </select>
+          </div>
+        </div>
+
         <AdvancedConditionBuilder
           title="Safety Order Entry Conditions (Optional)"
           description="Additional conditions for DCA. Price target must ALWAYS be met first, then these conditions are checked."
@@ -823,33 +855,61 @@ function DCABudgetConfigForm({
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">
-              Always active (minimum profit target)
+              {(config.take_profit_mode || 'fixed') === 'fixed' && 'Hard target — sell immediately when reached'}
+              {(config.take_profit_mode || 'fixed') === 'trailing' && 'Activates trailing — then trails from peak'}
+              {(config.take_profit_mode || 'fixed') === 'minimum' && 'Minimum profit floor for condition exits'}
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Condition Exit Override %
-              <span className="text-slate-500 font-normal ml-1">(optional)</span>
+              Take Profit Mode
+            </label>
+            <select
+              value={config.take_profit_mode || 'fixed'}
+              onChange={(e) => updateConfig('take_profit_mode', e.target.value)}
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            >
+              <option value="fixed">Fixed (sell at TP%)</option>
+              <option value="trailing">Trailing (trail from peak after TP%)</option>
+              <option value="minimum">Minimum (TP% is floor, conditions trigger exit)</option>
+            </select>
+          </div>
+
+          {(config.take_profit_mode || 'fixed') === 'trailing' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Trailing Deviation %
             </label>
             <input
               type="number"
-              value={config.min_profit_for_conditions !== undefined && config.min_profit_for_conditions !== null
-                ? config.min_profit_for_conditions
-                : ''}
-              onChange={(e) => {
-                const val = e.target.value === '' ? undefined : safeParseFloat(e.target.value)
-                updateConfig('min_profit_for_conditions', val)
-              }}
-              min="-50"
-              max="50"
+              value={getNumericValue(config.trailing_deviation, 1.0)}
+              onChange={(e) =>
+                updateConfig('trailing_deviation', safeParseFloat(e.target.value) ?? 1.0)
+              }
+              min="0.1"
+              max="10"
               step="0.1"
-              placeholder={`${config.take_profit_percentage || 3}%`}
               className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
             />
             <p className="text-xs text-slate-400 mt-1">
-              Uses Take Profit % by default. Set only to allow condition exits at different profit.
+              How far price can drop from peak before selling
             </p>
+          </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Exit Order Execution
+            </label>
+            <select
+              value={config.take_profit_order_type || 'market'}
+              onChange={(e) => updateConfig('take_profit_order_type', e.target.value)}
+              className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+            >
+              <option value="market">Market (instant fill)</option>
+              <option value="limit">Limit (at mark price)</option>
+            </select>
           </div>
 
           <div>
@@ -876,45 +936,92 @@ function DCABudgetConfigForm({
               />
             )}
           </div>
-
-          <div className="md:col-span-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-1">
-              <input
-                type="checkbox"
-                checked={config.trailing_take_profit || false}
-                onChange={(e) => updateConfig('trailing_take_profit', e.target.checked)}
-                className="rounded"
-              />
-              Enable Trailing Take Profit
-            </label>
-            {config.trailing_take_profit && (
-              <div className="mt-2">
-                <label className="block text-sm text-slate-400 mb-1">Trailing Deviation %</label>
-                <input
-                  type="number"
-                  value={getNumericValue(config.trailing_deviation, 1.0)}
-                  onChange={(e) =>
-                    updateConfig('trailing_deviation', safeParseFloat(e.target.value) ?? 1.0)
-                  }
-                  min="0.1"
-                  max="10"
-                  step="0.1"
-                  className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
-                />
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Take Profit Conditions */}
-        <AdvancedConditionBuilder
-          title="Additional Exit Conditions (Optional)"
-          description="Extra conditions to trigger sell (TP% always applies). Use groups for complex exit logic."
-          expression={takeProfitExpression}
-          onChange={(expression) => updateConfig('take_profit_conditions', expression)}
-        />
+        {/* Take Profit Conditions - only visible in minimum mode */}
+        {(config.take_profit_mode || 'fixed') === 'minimum' && (
+        <>
+          {(!config.take_profit_conditions ||
+            (Array.isArray(config.take_profit_conditions) && config.take_profit_conditions.length === 0) ||
+            (config.take_profit_conditions?.groups && config.take_profit_conditions.groups.length === 0)) && (
+          <div className="bg-amber-900/30 border border-amber-700/50 rounded p-3 mb-4">
+            <p className="text-xs text-amber-400">
+              Minimum mode requires exit conditions. Without conditions, the bot will never sell via take profit.
+            </p>
+          </div>
+          )}
+
+          <AdvancedConditionBuilder
+            title="Exit Conditions (Required)"
+            description="Conditions that trigger sell when profit is above TP%. At least one condition required."
+            expression={takeProfitExpression}
+            onChange={(expression) => updateConfig('take_profit_conditions', expression)}
+          />
+        </>
+        )}
       </div>
       )}
+
+      {/* Slippage Guard */}
+      <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+        <label className="flex items-center gap-2 text-lg font-semibold text-white mb-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.slippage_guard || false}
+            onChange={(e) => updateConfig('slippage_guard', e.target.checked)}
+            className="rounded"
+          />
+          Slippage Guard
+        </label>
+        <p className="text-xs text-slate-400 mb-4">
+          Checks order book depth before market orders and blocks execution if estimated slippage exceeds
+          the threshold. Skips silently when book data is unavailable (paper trading, API errors).
+        </p>
+
+        {config.slippage_guard && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Max Buy Slippage %
+              </label>
+              <input
+                type="number"
+                value={getNumericValue(config.max_buy_slippage_pct, 0.5)}
+                onChange={(e) =>
+                  updateConfig('max_buy_slippage_pct', safeParseFloat(e.target.value) ?? 0.5)
+                }
+                min="0.01"
+                max="5"
+                step="0.1"
+                className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+              />
+              <p className="text-xs text-slate-400 mt-1">Max % above best ask price for buy orders</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Max Sell Slippage %
+              </label>
+              <input
+                type="number"
+                value={getNumericValue(config.max_sell_slippage_pct, 0.5)}
+                onChange={(e) =>
+                  updateConfig('max_sell_slippage_pct', safeParseFloat(e.target.value) ?? 0.5)
+                }
+                min="0.01"
+                max="5"
+                step="0.1"
+                className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Max % below best bid price.
+                {(config.take_profit_mode || 'fixed') === 'minimum'
+                  ? ' In Minimum TP mode, your TP% serves as the floor instead.'
+                  : ''}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Summary */}
       <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
@@ -950,6 +1057,8 @@ function DCABudgetConfigForm({
               </p>
               <p>
                 📤 <strong>Exit:</strong> Take Profit {config.take_profit_percentage || 3}%
+                {' '}({config.take_profit_mode || 'fixed'})
+                {' '}via {config.take_profit_order_type || 'market'}
                 {takeProfitExpression.groups.length > 0 &&
                   ` + ${takeProfitExpression.groups.length} group(s), ${takeProfitExpression.groups.reduce((sum, g) => sum + g.conditions.length, 0)} condition(s)`}
               </p>

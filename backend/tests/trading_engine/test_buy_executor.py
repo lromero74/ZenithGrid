@@ -307,7 +307,7 @@ class TestExecuteBuy:
         tc = _make_trading_client()
         bot = _make_bot()
         position = _make_position(
-            strategy_config_snapshot={"safety_order_type": "limit"}
+            strategy_config_snapshot={"dca_execution_type": "limit"}
         )
 
         # execute_limit_buy returns a PendingOrder, execute_buy should return None for limit orders
@@ -417,6 +417,111 @@ class TestExecuteBuy:
 
         assert trade is not None
         assert position.user_deal_number == 42
+
+    @pytest.mark.asyncio
+    async def test_base_execution_type_limit_routes_to_limit_buy(self):
+        """Base order with base_execution_type='limit' routes to execute_limit_buy."""
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot()
+        position = _make_position(
+            strategy_config_snapshot={"base_execution_type": "limit"}
+        )
+
+        trade = await execute_buy(
+            db=db,
+            exchange=exchange,
+            trading_client=tc,
+            bot=bot,
+            product_id="ETH-USD",
+            position=position,
+            quote_amount=100.0,
+            current_price=3000.0,
+            trade_type="initial",
+        )
+
+        # Limit order path returns None trade
+        assert trade is None
+        tc.buy_limit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_base_execution_type_market_routes_to_market_buy(self):
+        """Base order with base_execution_type='market' (default) uses market buy."""
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot()
+        position = _make_position(
+            strategy_config_snapshot={"base_execution_type": "market"}
+        )
+
+        trade = await execute_buy(
+            db=db,
+            exchange=exchange,
+            trading_client=tc,
+            bot=bot,
+            product_id="ETH-USD",
+            position=position,
+            quote_amount=100.0,
+            current_price=3000.0,
+            trade_type="initial",
+        )
+
+        assert trade is not None
+        tc.buy.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_dca_execution_type_limit_routes_to_limit_buy(self):
+        """DCA order with dca_execution_type='limit' routes to execute_limit_buy."""
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot()
+        position = _make_position(
+            strategy_config_snapshot={"dca_execution_type": "limit"}
+        )
+
+        trade = await execute_buy(
+            db=db,
+            exchange=exchange,
+            trading_client=tc,
+            bot=bot,
+            product_id="ETH-USD",
+            position=position,
+            quote_amount=50.0,
+            current_price=2900.0,
+            trade_type="safety_order_1",
+        )
+
+        assert trade is None
+        tc.buy_limit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_dca_execution_type_market_uses_market_buy(self):
+        """DCA order with dca_execution_type='market' (default) uses market buy."""
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot()
+        position = _make_position(
+            strategy_config_snapshot={"dca_execution_type": "market"}
+        )
+
+        trade = await execute_buy(
+            db=db,
+            exchange=exchange,
+            trading_client=tc,
+            bot=bot,
+            product_id="ETH-USD",
+            position=position,
+            quote_amount=50.0,
+            current_price=2900.0,
+            trade_type="safety_order_1",
+        )
+
+        assert trade is not None
+        tc.buy.assert_awaited_once()
 
 
 # ===========================================================================

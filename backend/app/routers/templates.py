@@ -265,14 +265,14 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db), current_use
                 "safety_order_step_scale": 1.0,  # Linear
                 "safety_order_volume_scale": 1.0,  # Same size
                 "take_profit_percentage": 1.5,  # 1.5% profit target
-                "trailing_take_profit": False,
+                "take_profit_mode": "fixed",
                 "trailing_deviation": 0.5,
                 "stop_loss_enabled": True,
                 "stop_loss_percentage": -5.0,  # -5% stop loss
                 "base_order_conditions": [],
                 "safety_order_conditions": [],
                 "take_profit_conditions": [],
-                "min_profit_for_conditions": 0.0,
+                "take_profit_order_type": "market",
             },
             "product_ids": [],
             "split_budget_across_pairs": False,
@@ -291,14 +291,14 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db), current_use
                 "safety_order_step_scale": 1.2,  # Slightly increasing gaps
                 "safety_order_volume_scale": 1.5,  # Martingale scaling
                 "take_profit_percentage": 2.0,  # 2% profit target
-                "trailing_take_profit": False,
+                "take_profit_mode": "fixed",
                 "trailing_deviation": 0.5,
                 "stop_loss_enabled": True,
                 "stop_loss_percentage": -10.0,  # -10% stop loss
                 "base_order_conditions": [],
                 "safety_order_conditions": [],
                 "take_profit_conditions": [],
-                "min_profit_for_conditions": 0.0,
+                "take_profit_order_type": "market",
             },
             "product_ids": [],
             "split_budget_across_pairs": False,
@@ -317,14 +317,14 @@ async def seed_default_templates(db: AsyncSession = Depends(get_db), current_use
                 "safety_order_step_scale": 1.5,  # Increasing gaps
                 "safety_order_volume_scale": 2.0,  # Aggressive martingale
                 "take_profit_percentage": 3.0,  # 3% profit target
-                "trailing_take_profit": False,
+                "take_profit_mode": "fixed",
                 "trailing_deviation": 1.0,
                 "stop_loss_enabled": False,  # No stop loss (risky!)
                 "stop_loss_percentage": -20.0,
                 "base_order_conditions": [],
                 "safety_order_conditions": [],
                 "take_profit_conditions": [],
-                "min_profit_for_conditions": 0.0,
+                "take_profit_order_type": "market",
             },
             "product_ids": [],
             "split_budget_across_pairs": False,

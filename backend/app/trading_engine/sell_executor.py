@@ -66,17 +66,15 @@ async def execute_sell_short(
         logger.warning(f"Rejecting short sell order for {product_id} - shutdown in progress")
         raise RuntimeError("Cannot place orders - shutdown in progress")
 
+    config: Dict = position.strategy_config_snapshot or {}
+
     # Check if this is a safety order that should use limit orders
     is_safety_order = trade_type.startswith("safety_order")
-    config: Dict = position.strategy_config_snapshot or {}
-    safety_order_type = config.get("safety_order_type", "market")
+    dca_execution_type = config.get("dca_execution_type", "market")
 
-    if is_safety_order and safety_order_type == "limit":
-        # Place limit sell order for short safety order
+    if is_safety_order and dca_execution_type == "limit":
         limit_price = current_price
-
         logger.info(f"  📋 Placing limit short sell order: {base_amount:.8f} BTC @ {limit_price:.8f}")
-
         # TODO: Short safety orders use market orders only; limit logic not yet implemented
         # For now, fall through to market order
         logger.warning("  ⚠️ Limit short safety orders not yet implemented - using market order")
@@ -432,7 +430,7 @@ async def execute_sell(
 
     # Check if we should use a limit order for closing
     config: Dict = position.strategy_config_snapshot or {}
-    take_profit_order_type = config.get("take_profit_order_type", "limit")
+    take_profit_order_type = config.get("take_profit_order_type", "market")
 
     if take_profit_order_type == "limit":
         # Use limit order at mark price (mid between bid/ask)
@@ -486,12 +484,8 @@ async def execute_sell(
             profit_pct = (profit_amount / position.total_quote_spent) * 100
 
             # Get minimum profit threshold from config
-            # Use same logic as should_sell() to determine minimum profit requirement
-            min_profit_override = config.get("min_profit_for_conditions")
-            if min_profit_override is not None:
-                min_profit = min_profit_override
-            else:
-                min_profit = config.get("take_profit_percentage", 3.0)
+            # Use take_profit_percentage as the profit floor
+            min_profit = config.get("take_profit_percentage", 3.0)
 
             if profit_pct < min_profit:
                 logger.warning(

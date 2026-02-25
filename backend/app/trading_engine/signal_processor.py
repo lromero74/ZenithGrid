@@ -765,6 +765,28 @@ async def process_signal(
                     commit_on_error=not is_new_position,
                 )
             else:
+                # Slippage guard for market buy orders
+                buy_config = bot.strategy_config or {}
+                exec_key = "base_execution_type" if trade_type == "initial" else "dca_execution_type"
+                if buy_config.get(exec_key, "market") == "market" and buy_config.get("slippage_guard", False):
+                    from app.trading_engine.book_depth_guard import check_buy_slippage
+                    proceed, guard_reason = await check_buy_slippage(
+                        exchange, product_id, quote_amount, buy_config
+                    )
+                    if not proceed:
+                        logger.warning(f"  🛡️ Slippage guard blocked buy: {guard_reason}")
+                        if is_new_position and position:
+                            position.status = "failed"
+                            position.last_error_message = f"Slippage guard: {guard_reason}"
+                            position.last_error_timestamp = datetime.utcnow()
+                            position.closed_at = datetime.utcnow()
+                            await db.commit()
+                        return {
+                            "action": "hold",
+                            "reason": f"Slippage guard: {guard_reason}",
+                            "signal": signal_data,
+                        }
+
                 # LONG ORDER: Buy BTC with USD (existing logic)
                 trade = await execute_buy(
                     db=db,
@@ -854,28 +876,35 @@ async def process_signal(
             # should_sell checked profit at current_price (candle close), but limit orders
             # are placed at mark price (bid/ask midpoint) which can be significantly lower
             config = position.strategy_config_snapshot or {}
-            take_profit_order_type = config.get("take_profit_order_type", "limit")
-            min_profit_for_conditions = config.get("min_profit_for_conditions")
+            take_profit_order_type = config.get("take_profit_order_type", "market")
+            take_profit_mode = config.get("take_profit_mode")
+            if take_profit_mode is None:
+                # Legacy inference
+                if config.get("trailing_take_profit", False):
+                    take_profit_mode = "trailing"
+                elif config.get("min_profit_for_conditions") is not None:
+                    take_profit_mode = "minimum"
+                else:
+                    take_profit_mode = "fixed"
 
-            if take_profit_order_type == "limit" and min_profit_for_conditions is not None:
-                # Get actual mark price to verify profit
+            # For limit orders, verify profit at mark price meets threshold
+            if take_profit_order_type == "limit":
+                tp_pct = config.get("take_profit_percentage", 3.0)
                 try:
                     ticker = await exchange.get_ticker(product_id)
                     best_bid = float(ticker.get("best_bid", 0))
                     best_ask = float(ticker.get("best_ask", 0))
                     mark_price = (best_bid + best_ask) / 2 if best_bid > 0 and best_ask > 0 else current_price
 
-                    # Calculate profit at mark price
                     mark_value = position.total_base_acquired * mark_price
                     mark_profit = mark_value - position.total_quote_spent
                     mark_profit_pct = (mark_profit / position.total_quote_spent) * 100
 
-                    if mark_profit_pct < min_profit_for_conditions:
+                    if mark_profit_pct < tp_pct:
                         logger.info(
                             f"  ⚠️ Sell conditions met BUT mark price profit ({mark_profit_pct:.2f}%) "
-                            f"< min_profit_for_conditions ({min_profit_for_conditions}%) - HOLDING"
+                            f"< take_profit ({tp_pct}%) - HOLDING"
                         )
-                        # Record as hold - wait for better price
                         signal = Signal(
                             position_id=position.id,
                             timestamp=datetime.utcnow(),
@@ -887,7 +916,7 @@ async def process_signal(
                             action_taken="hold",
                             reason=(
                                 f"Conditions met but mark profit"
-                                f" {mark_profit_pct:.2f}% < {min_profit_for_conditions}%"
+                                f" {mark_profit_pct:.2f}% < {tp_pct}%"
                             ),
                         )
                         db.add(signal)
@@ -896,7 +925,7 @@ async def process_signal(
                             "action": "hold",
                             "reason": (
                                 f"Sell blocked: mark profit"
-                                f" {mark_profit_pct:.2f}% < {min_profit_for_conditions}%"
+                                f" {mark_profit_pct:.2f}% < {tp_pct}%"
                             ),
                             "signal": signal_data,
                             "position": position,
@@ -904,11 +933,39 @@ async def process_signal(
                     else:
                         logger.info(
                             f"  ✓ Mark price profit ({mark_profit_pct:.2f}%)"
-                            f" >= min_profit ({min_profit_for_conditions}%)"
+                            f" >= take_profit ({tp_pct}%)"
                             " - proceeding"
                         )
                 except Exception as e:
                     logger.warning(f"Could not verify mark price profit, proceeding with sell: {e}")
+
+            # Slippage guard for market sell orders
+            if take_profit_order_type == "market" and config.get("slippage_guard", False):
+                from app.trading_engine.book_depth_guard import check_sell_slippage
+                proceed, guard_reason = await check_sell_slippage(
+                    exchange, product_id, position, config
+                )
+                if not proceed:
+                    logger.info(f"  🛡️ Slippage guard blocked sell: {guard_reason}")
+                    signal = Signal(
+                        position_id=position.id,
+                        timestamp=datetime.utcnow(),
+                        signal_type="hold",
+                        macd_value=signal_data.get("macd_value", 0),
+                        macd_signal=signal_data.get("macd_signal", 0),
+                        macd_histogram=signal_data.get("macd_histogram", 0),
+                        price=current_price,
+                        action_taken="hold",
+                        reason=f"Slippage guard: {guard_reason}",
+                    )
+                    db.add(signal)
+                    await db.commit()
+                    return {
+                        "action": "hold",
+                        "reason": f"Slippage guard: {guard_reason}",
+                        "signal": signal_data,
+                        "position": position,
+                    }
 
             # Check if limit close order already pending
             if position.closing_via_limit:

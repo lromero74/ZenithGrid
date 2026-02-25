@@ -184,18 +184,16 @@ class LimitOrderMonitor:
                 return
 
             # Get config parameters - use POSITION's frozen config for profit threshold
-            # This ensures we respect the min_profit_for_conditions that was set when position opened
             bot_config = bot.strategy_config or {}
             position_config = position.strategy_config_snapshot or {}
 
             fallback_enabled = bot_config.get("limit_order_fallback_enabled", True)
             timeout_seconds = bot_config.get("limit_order_timeout_seconds", 60)
 
-            # CRITICAL: Use min_profit_for_conditions from position's frozen config
-            # This prevents selling below the profit threshold the user set
+            # Use take_profit_percentage as the profit floor for limit order fallback
+            # Legacy: also check min_profit_for_conditions for old configs
             min_profit_threshold_pct = position_config.get("min_profit_for_conditions")
             if min_profit_threshold_pct is None:
-                # Fall back to take_profit_percentage, then bot's min_profit_threshold_pct, then default
                 min_profit_threshold_pct = position_config.get(
                     "take_profit_percentage",
                     bot_config.get("min_profit_threshold_pct", 0.5)

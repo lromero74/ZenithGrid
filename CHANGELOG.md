@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.53.0] - 2026-02-25
+
+### Added
+- **Slippage Guard**: New toggleable order book depth check before market orders — blocks execution if estimated slippage exceeds the configured threshold (buy and sell sides)
+- **Per-phase order execution type**: Base orders and DCA orders can now independently be set to market or limit execution
+
+### Changed
+- **Take Profit mode redesign**: Replaced legacy trailing/condition fields with a clear three-mode selector — Fixed (sell at TP%), Trailing (trail from peak after TP%), Minimum (TP% is floor, conditions trigger exit)
+- **Default exit order type changed to market**: New bots default to market exit orders instead of limit
+- **Coverage items table in PDF reports**: Improved formatting with color-coded status badges and columnar layout
+
 ## [v2.52.9] - 2026-02-25
 
 ### Fixed
