@@ -515,6 +515,9 @@ export interface ExpenseItem {
   due_day?: number | null
   due_month?: number | null
   login_url?: string | null
+  amount_mode?: 'fixed' | 'percent_of_income'
+  percent_of_income?: number | null
+  percent_basis?: 'pre_tax' | 'post_tax' | null
   is_active: boolean
   sort_order?: number
   normalized_amount?: number

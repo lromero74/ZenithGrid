@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.54.0] - 2026-02-25
+
+### Added
+- **Donations expense category**: New built-in category for tracking charitable giving and tithes
+- **Percent-of-income expenses**: Donation items can be set as a percentage of pre-tax or post-tax income instead of a fixed dollar amount — the calculated amount updates dynamically with income projections
+- **Amount mode toggle**: When adding a Donations expense, choose between "Fixed Amount" or "% of Income" modes with a pre/post tax selector
+
+### Fixed
+- **PDF report crash**: Fixed encoding error when generating PDF reports with expense coverage titles (Unicode em-dash in title string was incompatible with Helvetica font)
+
 ## [v2.53.6] - 2026-02-25
 
 ### Changed

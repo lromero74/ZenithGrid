@@ -1084,6 +1084,17 @@ def _build_expenses_goal_card(
     item_rows = ""
     for item in items:
         norm = item.get("normalized_amount", 0)
+        if item.get("amount_mode") == "percent_of_income":
+            pct_val = item.get("percent_of_income", 0)
+            basis_lbl = item.get("percent_basis", "pre_tax")
+            basis_str = "pre-tax" if basis_lbl == "pre_tax" else "post-tax"
+            amt_html = (
+                f'{prefix}{norm:{fmt}}'
+                f'<br><span style="color:#94a3b8;font-size:10px;">'
+                f'{pct_val:g}% {basis_str}</span>'
+            )
+        else:
+            amt_html = f"{prefix}{norm:{fmt}}"
         item_rows += f"""
             <tr>
                 <td style="padding: 4px 0; color: #94a3b8; font-size: 11px;">
@@ -1091,7 +1102,7 @@ def _build_expenses_goal_card(
                 <td style="padding: 4px 0; color: #f1f5f9; font-size: 12px;">
                     {_expense_name_html(item)}</td>
                 <td style="padding: 4px 0; color: #f1f5f9; text-align: right; font-size: 12px;">
-                    {prefix}{norm:{fmt}}</td>
+                    {amt_html}</td>
                 <td style="padding: 4px 6px; text-align: center;">
                     {_build_expense_status_badge(item)}</td>
             </tr>"""
@@ -1969,7 +1980,7 @@ def generate_pdf(
                 goal_name = _sanitize_for_pdf(g.get("name", ""))
                 pdf.cell(
                     0, 7,
-                    f"{goal_name} \u2014 Returns Cover "
+                    f"{goal_name} - Returns Cover "
                     f"{_fmt_coverage_pct(cov_pct)} of "
                     f"{exp_period.capitalize()} Expenses",
                     new_x="LMARGIN", new_y="NEXT",
@@ -2000,7 +2011,13 @@ def generate_pdf(
                         name = _sanitize_for_pdf(ei.get('name', ''))
                         cat = ei.get('category', '')
                         norm = ei.get("normalized_amount", 0)
-                        amt = f"{pfx}{norm:,.2f}/{exp_period}"
+                        if ei.get("amount_mode") == "percent_of_income":
+                            pct_val = ei.get("percent_of_income", 0)
+                            basis_label = ei.get("percent_basis", "pre_tax")
+                            basis_str = "pre-tax" if basis_label == "pre_tax" else "post-tax"
+                            amt = f"{pfx}{norm:,.2f} ({pct_val:g}% {basis_str})"
+                        else:
+                            amt = f"{pfx}{norm:,.2f}/{exp_period}"
                         _cov_rows.append((s, badge, name, cat, amt))
                     # Measure column widths from content
                     pdf.set_font("Helvetica", "", 9)

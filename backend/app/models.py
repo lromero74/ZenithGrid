@@ -1393,6 +1393,9 @@ class ExpenseItem(Base):
     due_day = Column(Integer, nullable=True)  # Day of month (1-31, -1 for last day)
     due_month = Column(Integer, nullable=True)  # Month (1-12) for quarterly/semi_annual/yearly
     login_url = Column(String, nullable=True)  # URL to payment/login page
+    amount_mode = Column(String, default="fixed")  # 'fixed' or 'percent_of_income'
+    percent_of_income = Column(Float, nullable=True)  # e.g. 10.0 for 10%
+    percent_basis = Column(String, nullable=True)  # 'pre_tax' or 'post_tax'
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)

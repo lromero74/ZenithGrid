@@ -177,7 +177,7 @@ class PreviewRequest(BaseModel):
 class ExpenseItemCreate(BaseModel):
     category: str = Field(..., min_length=1, max_length=100)
     name: str = Field(..., min_length=1, max_length=200)
-    amount: float = Field(..., gt=0)
+    amount: float = Field(..., ge=0)
     frequency: str = Field(
         ...,
         pattern="^(daily|weekly|biweekly|every_n_days|semi_monthly|monthly|quarterly|semi_annual|yearly)$",
@@ -187,6 +187,13 @@ class ExpenseItemCreate(BaseModel):
     due_day: Optional[int] = Field(None, ge=-1, le=31)
     due_month: Optional[int] = Field(None, ge=1, le=12)
     login_url: Optional[str] = Field(None, max_length=500)
+    amount_mode: Optional[str] = Field(
+        "fixed", pattern="^(fixed|percent_of_income)$"
+    )
+    percent_of_income: Optional[float] = Field(None, gt=0, le=100)
+    percent_basis: Optional[str] = Field(
+        None, pattern="^(pre_tax|post_tax)$"
+    )
 
     @model_validator(mode="after")
     def validate_frequency_n(self):
@@ -194,13 +201,17 @@ class ExpenseItemCreate(BaseModel):
             raise ValueError("frequency_n is required when frequency is 'every_n_days'")
         if self.due_day is not None and self.due_day == 0:
             raise ValueError("due_day must be -1 (last day) or 1-31")
+        if self.amount_mode == "percent_of_income" and not self.percent_of_income:
+            raise ValueError(
+                "percent_of_income is required when amount_mode is 'percent_of_income'"
+            )
         return self
 
 
 class ExpenseItemUpdate(BaseModel):
     category: Optional[str] = Field(None, min_length=1, max_length=100)
     name: Optional[str] = Field(None, min_length=1, max_length=200)
-    amount: Optional[float] = Field(None, gt=0)
+    amount: Optional[float] = Field(None, ge=0)
     frequency: Optional[str] = Field(
         None,
         pattern="^(daily|weekly|biweekly|every_n_days|semi_monthly|monthly|quarterly|semi_annual|yearly)$",
@@ -210,6 +221,13 @@ class ExpenseItemUpdate(BaseModel):
     due_day: Optional[int] = Field(None, ge=-1, le=31)
     due_month: Optional[int] = Field(None, ge=1, le=12)
     login_url: Optional[str] = Field(None, max_length=500)
+    amount_mode: Optional[str] = Field(
+        None, pattern="^(fixed|percent_of_income)$"
+    )
+    percent_of_income: Optional[float] = Field(None, gt=0, le=100)
+    percent_basis: Optional[str] = Field(
+        None, pattern="^(pre_tax|post_tax)$"
+    )
     is_active: Optional[bool] = None
 
 
@@ -645,6 +663,9 @@ async def create_expense_item(
         due_day=body.due_day,
         due_month=body.due_month,
         login_url=body.login_url,
+        amount_mode=body.amount_mode or "fixed",
+        percent_of_income=body.percent_of_income,
+        percent_basis=body.percent_basis,
     )
     db.add(item)
     await db.flush()
@@ -788,6 +809,9 @@ def _expense_item_to_dict(item: ExpenseItem, period: str = None) -> dict:
         "due_day": item.due_day,
         "due_month": item.due_month,
         "login_url": item.login_url,
+        "amount_mode": getattr(item, "amount_mode", "fixed") or "fixed",
+        "percent_of_income": getattr(item, "percent_of_income", None),
+        "percent_basis": getattr(item, "percent_basis", None),
         "is_active": item.is_active,
         "sort_order": item.sort_order or 0,
         "created_at": item.created_at.isoformat() if item.created_at else None,
