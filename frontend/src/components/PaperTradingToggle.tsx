@@ -66,7 +66,7 @@ export function PaperTradingToggle() {
   }
 
   return (
-    <div className="relative flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-3 py-2 bg-slate-700 rounded-lg border border-slate-600">
+    <div className="relative flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 h-[38px]">
       {/* Live Trading Icon */}
       <div className={`flex items-center space-x-1 transition-opacity ${
         !hasLiveAccount ? 'opacity-25' : !effectivePaperMode ? 'opacity-100' : 'opacity-40'
