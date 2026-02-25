@@ -71,6 +71,7 @@ export function useChartManagement(
         secondsVisible: false,
         fixLeftEdge: true,
         fixRightEdge: true,
+        rightOffset: 5,
       },
       rightPriceScale: {
         visible: true,

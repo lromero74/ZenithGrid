@@ -466,6 +466,7 @@ export function useIndicators({
           visible: false,
           fixLeftEdge: true,
           fixRightEdge: true,
+          rightOffset: 5,
         },
       })
 
