@@ -519,6 +519,101 @@ class TestEvaluateSingleConditionCrossing:
         assert detail["previous_value"] == 25.0
         assert detail["actual_value"] == 35.0
 
+    def test_crossing_below_cycle_based_detection(self, evaluator):
+        """
+        Cycle-based crossing detection: candle-based prev already dropped below threshold
+        but check-cycle prev was still above — crossing should be detected.
+
+        This matches the real-world scenario where BB% drops from 90.08 to 80.84 in
+        two candle periods. The candle-based prev shows 83.83 (< 90) so candle-based
+        misses the crossing, but the cycle-based prev was 90.08 (>= 90) from the
+        last bot check.
+        """
+        condition = {"type": "rsi", "operator": "crossing_below", "value": 90, "timeframe": "FIVE_MINUTE"}
+        # Candle-based: both current and prev are already below 90
+        current = {
+            "FIVE_MINUTE_rsi_14": 80.84,
+            "prev_FIVE_MINUTE_rsi_14": 83.83,
+        }
+        # Cycle-based: previous check saw value above 90
+        previous = {"FIVE_MINUTE_rsi_14": 90.08}
+        assert evaluator._evaluate_single_condition(condition, current, previous) is True
+
+    def test_crossing_above_cycle_based_detection(self, evaluator):
+        """
+        Cycle-based crossing detection for crossing_above: candle-based prev already
+        rose above threshold but check-cycle prev was still below.
+        """
+        condition = {"type": "rsi", "operator": "crossing_above", "value": 30, "timeframe": "FIVE_MINUTE"}
+        # Candle-based: both current and prev are already above 30
+        current = {
+            "FIVE_MINUTE_rsi_14": 40.0,
+            "prev_FIVE_MINUTE_rsi_14": 35.0,
+        }
+        # Cycle-based: previous check saw value below 30
+        previous = {"FIVE_MINUTE_rsi_14": 28.0}
+        assert evaluator._evaluate_single_condition(condition, current, previous) is True
+
+    def test_crossing_below_candle_based_still_works(self, evaluator):
+        """Candle-based crossing still works when cycle-based would also trigger."""
+        condition = {"type": "rsi", "operator": "crossing_below", "value": 70, "timeframe": "FIVE_MINUTE"}
+        current = {
+            "FIVE_MINUTE_rsi_14": 65.0,
+            "prev_FIVE_MINUTE_rsi_14": 75.0,
+        }
+        previous = {"FIVE_MINUTE_rsi_14": 72.0}
+        assert evaluator._evaluate_single_condition(condition, current, previous) is True
+
+    def test_crossing_below_neither_source_triggers(self, evaluator):
+        """Neither candle-based nor cycle-based prev indicates a crossing."""
+        condition = {"type": "rsi", "operator": "crossing_below", "value": 90, "timeframe": "FIVE_MINUTE"}
+        # Both candle-based values below 90
+        current = {
+            "FIVE_MINUTE_rsi_14": 80.0,
+            "prev_FIVE_MINUTE_rsi_14": 85.0,
+        }
+        # Cycle-based also below 90
+        previous = {"FIVE_MINUTE_rsi_14": 88.0}
+        assert evaluator._evaluate_single_condition(condition, current, previous) is False
+
+    def test_crossing_cycle_based_with_capture_details(self, evaluator):
+        """Cycle-based crossing includes source in details."""
+        condition = {"type": "rsi", "operator": "crossing_below", "value": 90, "timeframe": "FIVE_MINUTE"}
+        current = {
+            "FIVE_MINUTE_rsi_14": 80.0,
+            "prev_FIVE_MINUTE_rsi_14": 83.0,
+        }
+        previous = {"FIVE_MINUTE_rsi_14": 95.0}
+        result, detail = evaluator._evaluate_single_condition(
+            condition, current, previous, capture_details=True
+        )
+        assert result is True
+        assert detail["crossing_source"] == "cycle"
+
+    def test_crossing_bb_percent_cycle_based(self, evaluator):
+        """BB% crossing_below using cycle-based detection — the exact real-world scenario."""
+        condition = {
+            "type": "bb_percent", "operator": "crossing_below", "value": 90,
+            "timeframe": "THREE_MINUTE", "period": 20, "std_dev": 2,
+        }
+        # Candle-based: both below 90 (candle-based prev_ values)
+        current = {
+            "THREE_MINUTE_price": 1.975e-05,
+            "THREE_MINUTE_bb_upper_20_2": 1.9812e-05,
+            "THREE_MINUTE_bb_lower_20_2": 1.9489e-05,
+            "prev_THREE_MINUTE_price": 1.975e-05,
+            "prev_THREE_MINUTE_bb_upper_20_2": 1.9803e-05,
+            "prev_THREE_MINUTE_bb_lower_20_2": 1.9475e-05,
+        }
+        # Cycle-based: previous check had BB% above 90
+        # BB% = (1.973 - 1.9455) / (1.976 - 1.9455) * 100 = 90.16
+        previous = {
+            "THREE_MINUTE_price": 1.973e-05,
+            "THREE_MINUTE_bb_upper_20_2": 1.976e-05,
+            "THREE_MINUTE_bb_lower_20_2": 1.9455e-05,
+        }
+        assert evaluator._evaluate_single_condition(condition, current, previous) is True
+
 
 # ---------------------------------------------------------------------------
 # _evaluate_single_condition — increasing/decreasing operators
