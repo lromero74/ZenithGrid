@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.55.6] - 2026-02-25
+
+### Fixed
+- **PDF table borders crossing page breaks**: All bordered tables (expense coverage, upcoming, lookahead, transfers) now check remaining page space and break to a new page before rendering if needed, preventing split borders
+- **PDF expense summary label**: Changed "Total:" to "Total Required:" so users don't confuse expense target with income
+
+### Changed
+- **PDF deposit guidance text**: The "Finish covering / Then cover / Cover all" deposit hints below expense tables now use a smaller centered font with spacing to visually associate them with the table above
+- **PDF section spacing**: Added vertical gaps before "Next Month Preview" and "Projections" headers for clearer visual separation
+
 ## [v2.55.5] - 2026-02-25
 
 ### Changed
