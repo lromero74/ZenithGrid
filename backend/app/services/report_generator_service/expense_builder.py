@@ -323,6 +323,92 @@ def _build_expense_status_badge(item: dict) -> str:
     )
 
 
+def _build_expense_changes_html(
+    changes: Optional[Dict[str, Any]],
+    prefix: str,
+    fmt: str,
+) -> str:
+    """Render 'Changes from Prior Report' section for an expense goal.
+
+    Args:
+        changes: Dict with optional keys: increased, decreased, added, removed.
+        prefix: Currency prefix ("$" or "").
+        fmt: Format string for amounts (",.2f" or ".8f").
+
+    Returns:
+        HTML string, or "" if no changes.
+    """
+    if not changes:
+        return ""
+
+    sections = []
+
+    _section_config = [
+        ("increased", "Increased", "#ef4444", True),
+        ("decreased", "Decreased", "#10b981", True),
+        ("added", "Added", "#f59e0b", False),
+        ("removed", "Removed", "#10b981", False),
+    ]
+
+    for key, label, color, show_delta in _section_config:
+        items = changes.get(key)
+        if not items:
+            continue
+
+        rows = ""
+        for item in items:
+            name = item.get("name", "")
+            amount = item.get("amount", 0)
+
+            if show_delta:
+                delta = item.get("delta", 0)
+                pct = item.get("pct_delta", 0)
+                sign = "+" if delta >= 0 else "-"
+                abs_delta = abs(delta)
+                abs_pct = abs(pct)
+                delta_str = (
+                    f'{sign}{prefix}{abs_delta:{fmt}}'
+                    f' ({sign}{abs_pct:.1f}%)'
+                )
+            elif key == "added":
+                delta_str = "(new)"
+            else:
+                delta_str = "(removed)"
+
+            amt_prefix = "-" if key == "removed" else ""
+            rows += (
+                f'<div style="display: flex; justify-content: space-between;'
+                f' align-items: center; padding: 2px 0;">'
+                f'<span style="color: #e2e8f0; font-size: 12px;">{name}</span>'
+                f'<span style="color: {color}; font-size: 12px; white-space: nowrap;">'
+                f'{amt_prefix}{prefix}{amount:{fmt}}'
+                f'&nbsp;&nbsp;'
+                f'<span style="font-size: 11px;">{delta_str}</span>'
+                f'</span>'
+                f'</div>'
+            )
+
+        sections.append(
+            f'<div style="margin-bottom: 6px;">'
+            f'<p style="color: {color}; font-size: 10px; font-weight: 600;'
+            f' text-transform: uppercase; letter-spacing: 0.5px;'
+            f' margin: 0 0 2px 0;">{label}</p>'
+            f'{rows}</div>'
+        )
+
+    if not sections:
+        return ""
+
+    return (
+        f'<div style="border-top: 1px dashed #334155; margin-top: 10px;'
+        f' padding-top: 8px;">'
+        f'<p style="color: #94a3b8; font-size: 11px; font-weight: 600;'
+        f' margin: 0 0 6px 0;">Changes from Prior Report</p>'
+        f'{"".join(sections)}'
+        f'</div>'
+    )
+
+
 def _expense_name_html(item: dict, color: str = "#f1f5f9") -> str:
     """Render expense name, linked to login_url if set."""
     name = item.get("name", "")
@@ -440,6 +526,10 @@ def _build_expenses_goal_card(
                         {tax_pct:.1f}%</td>
                 </tr>"""
 
+    changes_html = _build_expense_changes_html(
+        g.get("expense_changes"), prefix, fmt,
+    )
+
     coverage_content = f"""
             <table style="width: 100%; border-collapse: collapse; font-size: 12px;
                           margin-bottom: 10px;">
@@ -473,6 +563,7 @@ def _build_expenses_goal_card(
                 </tr>
                 {item_rows}
             </table>
+            {changes_html}
             {dep_line}"""
 
     # ---- Upcoming tab content ----

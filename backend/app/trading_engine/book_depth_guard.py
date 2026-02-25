@@ -6,8 +6,8 @@ if estimated slippage exceeds acceptable thresholds.
 
 Buy side: walks ASK side, blocks if VWAP > max_buy_slippage_pct above best ask.
 Sell side:
-  - Minimum mode: blocks if VWAP profit < take_profit_percentage (TP% is the floor).
-  - Fixed/Trailing mode: blocks if VWAP > max_sell_slippage_pct below best bid.
+  - Minimum/Trailing mode: blocks if VWAP profit < take_profit_percentage (profit floor).
+  - Fixed mode: blocks if VWAP > max_sell_slippage_pct below best bid.
 
 Gracefully skips when book data is unavailable (paper trading, API errors).
 """
@@ -170,8 +170,8 @@ async def check_sell_slippage(
         else:
             take_profit_mode = "fixed"
 
-    if take_profit_mode == "minimum":
-        # In minimum mode, TP% is the natural floor — check VWAP profit directly
+    if take_profit_mode in ("minimum", "trailing"):
+        # Minimum/Trailing: TP% is the profit floor — check VWAP profit directly
         tp_pct = config.get("take_profit_percentage", 3.0)
         avg_price = position.average_buy_price
         if avg_price and avg_price > 0:
@@ -184,7 +184,7 @@ async def check_sell_slippage(
                 logger.warning(f"Slippage guard BLOCKED sell: {reason}")
                 return False, reason
     else:
-        # Fixed/Trailing mode: check slippage below best bid
+        # Fixed mode: check raw slippage below best bid
         max_sell_slip = config.get("max_sell_slippage_pct", 0.5)
         if best_bid > 0:
             slip_pct = ((best_bid - vwap) / best_bid) * 100

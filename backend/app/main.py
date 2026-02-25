@@ -164,6 +164,7 @@ async def run_limit_order_monitor():
     from app.database import async_session_maker
     from app.models import Position
     from app.services.exchange_service import get_exchange_client_for_account
+    from app.services.limit_order_monitor import sweep_orphaned_pending_orders
 
     # Run startup reconciliation once
     print("🔄 Running startup reconciliation for limit orders...")
@@ -225,6 +226,9 @@ async def run_limit_order_monitor():
         print(f"   ❌ Error in startup reconciliation: {e}")
 
     # Main monitoring loop
+    sweep_counter = 0
+    SWEEP_INTERVAL = 30  # Every 30 iterations (5 minutes at 10s interval)
+
     while True:
         try:
             async with async_session_maker() as db:
@@ -245,6 +249,12 @@ async def run_limit_order_monitor():
                         if exchange:
                             monitor = LimitOrderMonitor(db, exchange)
                             await monitor.check_single_position_limit_order(position)
+
+                # Periodic orphaned record sweep (every ~5 minutes)
+                sweep_counter += 1
+                if sweep_counter >= SWEEP_INTERVAL:
+                    sweep_counter = 0
+                    await sweep_orphaned_pending_orders(db)
         except Exception as e:
             logger.error(f"Error in limit order monitor loop: {e}")
 

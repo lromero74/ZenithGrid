@@ -5,6 +5,22 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.59.0] - 2026-02-25
+
+### Added
+- **Expense changes tracking in reports**: Reports now show what changed since the prior report — items that increased, decreased, were added, or were removed, with color-coded deltas in both HTML emails and PDF exports.
+- **Orphaned pending order sweep**: The limit order monitor now automatically cleans up stale pending order records whose positions are already closed, running every 5 minutes.
+- **Paper order auto-resolution**: Paper trading orders stuck as "pending" are now automatically detected and resolved as filled by the limit order monitor.
+
+### Fixed
+- **Paper trading limit orders permanently stuck**: Paper trading accounts that used limit sell orders would create phantom "pending" records that could never be resolved, blocking all future sell evaluation for those positions. Paper accounts now correctly skip the limit order path and execute as market orders.
+- **Case-insensitive order status matching**: The limit order monitor now normalizes status strings to uppercase before comparison, preventing mismatches between exchange clients that return different cases (e.g., "filled" vs "FILLED").
+- **Trailing mode slippage guard too restrictive**: Trailing take-profit exits were blocked by the same raw slippage check as fixed mode, which asks the wrong question for a trailing exit. Trailing mode now uses the VWAP profit floor check (like minimum mode), allowing profitable exits even when the order book is thin.
+- **Silent failures in limit order monitor**: Unrecognized order statuses now log a warning instead of silently doing nothing.
+
+### Changed
+- **Order fill sound effects**: Buy orders now play a descending tone (money spent) and sell orders play an ascending chime (money made), swapping the previous assignment.
+
 ## [v2.58.2] - 2026-02-25
 
 ### Fixed

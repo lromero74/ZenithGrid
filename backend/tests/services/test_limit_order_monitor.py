@@ -521,3 +521,192 @@ class TestCancelAndReplaceOrder:
         # Should process as fill, not place a new order
         mock_complete.assert_awaited_once()
         exchange.create_limit_order.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Paper order auto-resolution tests
+# ---------------------------------------------------------------------------
+
+class TestPaperOrderAutoResolution:
+    """Tests for automatic resolution of paper trading orders."""
+
+    @pytest.mark.asyncio
+    @patch('app.services.limit_order_monitor.ws_manager')
+    async def test_paper_order_auto_resolved_as_filled(self, mock_ws):
+        """Happy path: paper order detected and auto-resolved via _process_order_completion."""
+        db = AsyncMock()
+        pending_order = _make_pending_order(
+            order_id="paper-abc123",
+            base_amount=5.0,
+            limit_price=0.002,
+            filled_base_amount=0,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = pending_order
+        db.execute = AsyncMock(return_value=mock_result)
+
+        exchange = AsyncMock()
+        exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
+        mock_ws.broadcast_order_fill = AsyncMock()
+
+        monitor = LimitOrderMonitor(db, exchange)
+
+        position = _make_position(
+            limit_close_order_id="paper-abc123",
+            total_quote_spent=0.01,
+            total_base_acquired=5.0,
+            total_quote_received=None,
+        )
+
+        # Mock bot query for reserved balance return
+        mock_bot = MagicMock()
+        mock_bot.reserved_btc_balance = 0.05
+        bot_result = MagicMock()
+        bot_result.scalars.return_value.first.return_value = mock_bot
+        db.execute = AsyncMock(side_effect=[mock_result, bot_result])
+
+        await monitor.check_single_position_limit_order(position)
+
+        # Should NOT call exchange.get_order (paper orders skip exchange check)
+        exchange.get_order.assert_not_awaited()
+
+        # Position should be closed
+        assert position.status == "closed"
+        assert position.closing_via_limit is False
+        assert position.limit_close_order_id is None
+
+        # Pending order should be filled
+        assert pending_order.status == "filled"
+
+    @pytest.mark.asyncio
+    async def test_real_order_not_auto_resolved(self):
+        """Edge case: real order (no paper- prefix) goes through normal flow."""
+        db = AsyncMock()
+        pending_order = _make_pending_order(order_id="real-order-123")
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = pending_order
+        db.execute = AsyncMock(return_value=mock_result)
+
+        exchange = AsyncMock()
+        exchange.get_order = AsyncMock(return_value={
+            "status": "OPEN",
+            "filled_size": "0",
+            "filled_value": "0",
+        })
+
+        monitor = LimitOrderMonitor(db, exchange)
+        with patch.object(monitor, '_process_partial_fills', new_callable=AsyncMock), \
+             patch.object(monitor, '_check_bid_fallback', new_callable=AsyncMock):
+            position = _make_position(limit_close_order_id="real-order-123")
+            await monitor.check_single_position_limit_order(position)
+
+            # SHOULD call exchange.get_order for real orders
+            exchange.get_order.assert_awaited_once_with("real-order-123")
+
+    @pytest.mark.asyncio
+    @patch('app.services.limit_order_monitor.ws_manager')
+    async def test_paper_order_uses_limit_price_for_fill(self, mock_ws):
+        """Paper order auto-resolution uses limit_price * base_amount as fill value."""
+        db = AsyncMock()
+        pending_order = _make_pending_order(
+            order_id="paper-xyz",
+            base_amount=10.0,
+            limit_price=0.003,
+            filled_base_amount=0,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = pending_order
+        db.execute = AsyncMock(return_value=mock_result)
+
+        exchange = AsyncMock()
+        exchange.get_btc_usd_price = AsyncMock(return_value=50000.0)
+        mock_ws.broadcast_order_fill = AsyncMock()
+
+        monitor = LimitOrderMonitor(db, exchange)
+        with patch.object(monitor, '_process_order_completion', new_callable=AsyncMock) as mock_complete:
+            position = _make_position(
+                limit_close_order_id="paper-xyz",
+                total_base_acquired=10.0,
+            )
+            await monitor.check_single_position_limit_order(position)
+
+            # Should call _process_order_completion with synthetic data
+            mock_complete.assert_awaited_once()
+            call_args = mock_complete.call_args
+            order_data = call_args[0][2]  # Third positional arg
+            assert float(order_data["filled_size"]) == pytest.approx(10.0)
+            assert float(order_data["filled_value"]) == pytest.approx(0.03)  # 10.0 * 0.003
+            assert call_args[0][3] == "FILLED"
+
+    @pytest.mark.asyncio
+    async def test_paper_order_no_pending_record_clears_flags(self):
+        """Edge case: paper order with no PendingOrder record still returns early."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = None  # No pending order
+        db.execute = AsyncMock(return_value=mock_result)
+
+        exchange = AsyncMock()
+        monitor = LimitOrderMonitor(db, exchange)
+
+        position = _make_position(limit_close_order_id="paper-missing")
+        await monitor.check_single_position_limit_order(position)
+
+        # Should return early (no pending order)
+        exchange.get_order.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# sweep_orphaned_pending_orders tests
+# ---------------------------------------------------------------------------
+
+class TestSweepOrphanedPendingOrders:
+    """Tests for the sweep_orphaned_pending_orders function."""
+
+    @pytest.mark.asyncio
+    async def test_sweep_marks_orphaned_records(self):
+        """Happy path: pending orders with closed positions get marked orphaned."""
+        from app.services.limit_order_monitor import sweep_orphaned_pending_orders
+
+        po1 = _make_pending_order(order_id="order-1", status="pending")
+        po2 = _make_pending_order(order_id="order-2", status="pending")
+
+        db = AsyncMock()
+        mock_result = MagicMock()
+        # Return tuples of (PendingOrder, position_status)
+        mock_result.all.return_value = [(po1, "closed"), (po2, "cancelled")]
+        db.execute = AsyncMock(return_value=mock_result)
+
+        count = await sweep_orphaned_pending_orders(db)
+
+        assert count == 2
+        assert po1.status == "orphaned"
+        assert po2.status == "orphaned"
+        db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_sweep_no_orphans_found(self):
+        """Edge case: no orphaned records, nothing to clean up."""
+        from app.services.limit_order_monitor import sweep_orphaned_pending_orders
+
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+        db.execute = AsyncMock(return_value=mock_result)
+
+        count = await sweep_orphaned_pending_orders(db)
+
+        assert count == 0
+        db.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_sweep_handles_db_error(self):
+        """Failure: DB error is caught and logged, does not raise."""
+        from app.services.limit_order_monitor import sweep_orphaned_pending_orders
+
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=Exception("DB connection error"))
+
+        count = await sweep_orphaned_pending_orders(db)
+
+        assert count == 0

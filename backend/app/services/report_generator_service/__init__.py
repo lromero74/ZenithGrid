@@ -26,6 +26,7 @@ from app.services.report_generator_service.html_builder import (  # noqa: F401
 )
 from app.services.report_generator_service.expense_builder import (  # noqa: F401
     LOOKAHEAD_DAYS,
+    _build_expense_changes_html,
     _build_expenses_goal_card,
     _expense_name_html,
     _fmt_coverage_pct,

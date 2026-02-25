@@ -17,23 +17,23 @@ interface AudioConfig {
 
 // Different sounds for different order types
 const AUDIO_CONFIGS: Record<OrderFillType, AudioConfig[]> = {
-  // Base order: Upbeat rising tone (new position opened)
+  // Base order: Descending tone (money spent)
   base_order: [
-    { frequency: 523.25, duration: 0.1, type: 'sine', gain: 0.3 },
-    { frequency: 659.25, duration: 0.1, type: 'sine', gain: 0.3 },
-    { frequency: 783.99, duration: 0.15, type: 'sine', gain: 0.3, rampDown: true },
+    { frequency: 880, duration: 0.1, type: 'sine', gain: 0.35 },
+    { frequency: 783.99, duration: 0.1, type: 'sine', gain: 0.3 },
+    { frequency: 659.25, duration: 0.1, type: 'sine', gain: 0.25 },
+    { frequency: 523.25, duration: 0.2, type: 'sine', gain: 0.2, rampDown: true },
   ],
   // DCA order: Double beep (averaging down)
   dca_order: [
     { frequency: 440, duration: 0.08, type: 'sine', gain: 0.25 },
     { frequency: 440, duration: 0.08, type: 'sine', gain: 0.25 },
   ],
-  // Sell order: Celebratory descending chime (profit taken!)
+  // Sell order: Ascending chime (money made!)
   sell_order: [
-    { frequency: 880, duration: 0.1, type: 'sine', gain: 0.35 },
-    { frequency: 783.99, duration: 0.1, type: 'sine', gain: 0.3 },
-    { frequency: 659.25, duration: 0.1, type: 'sine', gain: 0.25 },
-    { frequency: 523.25, duration: 0.2, type: 'sine', gain: 0.2, rampDown: true },
+    { frequency: 523.25, duration: 0.1, type: 'sine', gain: 0.3 },
+    { frequency: 659.25, duration: 0.1, type: 'sine', gain: 0.3 },
+    { frequency: 783.99, duration: 0.15, type: 'sine', gain: 0.3, rampDown: true },
   ],
   // Partial fill: Single soft beep
   partial_fill: [
