@@ -16,6 +16,7 @@ import { getPriceFormat } from '../helpers'
 interface UseIndicatorsProps {
   chartRef: MutableRefObject<IChartApi | null>
   selectedPair: string
+  indicatorChartsRef: MutableRefObject<Map<string, IChartApi>>
   syncAllChartsToRange: (sourceChartId: string, timeRange: Range<Time> | null, indicatorChartsRef: Map<string, IChartApi>) => void
   syncCallbacksRef: MutableRefObject<Map<string, (timeRange: Range<Time> | null) => void>>
 }
@@ -23,6 +24,7 @@ interface UseIndicatorsProps {
 export function useIndicators({
   chartRef,
   selectedPair,
+  indicatorChartsRef,
   syncAllChartsToRange,
   syncCallbacksRef,
 }: UseIndicatorsProps) {
@@ -43,7 +45,6 @@ export function useIndicators({
   const [editingIndicator, setEditingIndicator] = useState<IndicatorConfig | null>(null)
 
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map())
-  const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
 
   // Save indicators to localStorage
   useEffect(() => {
@@ -451,6 +452,12 @@ export function useIndicators({
           vertLines: { color: '#334155' },
           horzLines: { color: '#334155' },
         },
+        rightPriceScale: {
+          visible: true,
+          autoScale: true,
+          borderVisible: true,
+          borderColor: '#334155',
+        },
         width: container.clientWidth,
         height: 200,
         timeScale: {
@@ -508,7 +515,7 @@ export function useIndicators({
         indicatorChartsRef.current.delete(id)
       }
     })
-  }, [indicators, syncAllChartsToRange, syncCallbacksRef])
+  }, [indicators, indicatorChartsRef, syncAllChartsToRange, syncCallbacksRef])
 
   // Cleanup indicator charts when component unmounts
   useEffect(() => {
@@ -537,7 +544,7 @@ export function useIndicators({
       })
       indicatorChartsRef.current.clear()
     }
-  }, [syncCallbacksRef])
+  }, [indicatorChartsRef, syncCallbacksRef])
 
   return {
     indicators,

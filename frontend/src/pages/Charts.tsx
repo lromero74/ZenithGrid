@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BarChart2, X, Settings, Search, Activity } from 'lucide-react'
+import { IChartApi } from 'lightweight-charts'
 import {
   calculateHeikinAshi,
   TIME_INTERVALS,
@@ -9,6 +10,7 @@ import { useChartsData } from './charts/hooks/useChartsData'
 import { useChartManagement } from './charts/hooks/useChartManagement'
 import { useIndicators } from './charts/hooks/useIndicators'
 import { transformPriceData, transformVolumeData, filterIndicators, groupIndicatorsByCategory } from './charts/helpers'
+import { PairSelector } from './charts/PairSelector'
 
 function Charts() {
   const [selectedPair, setSelectedPair] = useState(() => {
@@ -43,6 +45,9 @@ function Charts() {
     localStorage.setItem('chart-heikin-ashi', useHeikinAshi.toString())
   }, [useHeikinAshi])
 
+  // Shared ref for indicator charts — used by both useChartManagement (sync) and useIndicators (create/destroy)
+  const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
+
   // Initialize chart management hook (creates main chart and manages series)
   const {
     chartContainerRef,
@@ -52,7 +57,7 @@ function Charts() {
     isCleanedUpRef,
     syncCallbacksRef,
     syncAllChartsToRange,
-  } = useChartManagement(chartType, selectedPair, { current: new Map() })
+  } = useChartManagement(chartType, selectedPair, indicatorChartsRef)
 
   // Initialize indicators hook (manages all indicator state and rendering)
   const {
@@ -70,6 +75,7 @@ function Charts() {
   } = useIndicators({
     chartRef,
     selectedPair,
+    indicatorChartsRef,
     syncCallbacksRef,
     syncAllChartsToRange,
   })
@@ -79,19 +85,20 @@ function Charts() {
     TRADING_PAIRS,
     loading,
     error,
+    dataVersion,
     candleDataRef,
     lastUpdateRef,
-  } = useChartsData(selectedPair, selectedInterval, chartType, useHeikinAshi, indicators)
+  } = useChartsData(selectedPair, selectedInterval)
 
-  // Update chart data when candles are fetched
-  // Note: 'loading' is included as a dependency to trigger re-run when data fetch completes
+  // Update chart data when candles are fetched or display settings change
   useEffect(() => {
     if (!mainSeriesRef.current || !volumeSeriesRef.current || isCleanedUpRef.current) return
     if (!candleDataRef.current.length) return
 
     const candles = candleDataRef.current
+    const indicatorKey = indicators.map(i => `${i.id}:${JSON.stringify(i.settings)}`).join(',')
     const latestCandleKey = candles.length > 0
-      ? `${candles[candles.length - 1].time}_${candles[candles.length - 1].close}_${useHeikinAshi}`
+      ? `${candles[candles.length - 1].time}_${candles[candles.length - 1].close}_${useHeikinAshi}_${chartType}_${indicatorKey}`
       : ''
 
     if (latestCandleKey !== lastUpdateRef.current) {
@@ -122,12 +129,7 @@ function Charts() {
         }
       }
     }
-  }, [candleDataRef, mainSeriesRef, volumeSeriesRef, isCleanedUpRef, chartRef, chartType, useHeikinAshi, indicators, renderIndicators, lastUpdateRef, loading])
-
-  // Reset last update when pair or interval changes
-  useEffect(() => {
-    lastUpdateRef.current = ''
-  }, [selectedPair, selectedInterval, lastUpdateRef])
+  }, [candleDataRef, mainSeriesRef, volumeSeriesRef, isCleanedUpRef, chartRef, chartType, useHeikinAshi, indicators, renderIndicators, lastUpdateRef, dataVersion])
 
   const filteredIndicators = filterIndicators(indicatorSearch)
 
@@ -141,26 +143,11 @@ function Charts() {
       {/* Toolbar */}
       <div className="bg-slate-800 rounded-lg p-3 flex items-center gap-3 flex-wrap">
         {/* Pair Selector */}
-        <select
-          value={selectedPair}
-          onChange={(e) => setSelectedPair(e.target.value)}
-          className="bg-slate-700 text-white px-3 py-2 rounded text-sm font-medium border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <optgroup label="USD Pairs">
-            {TRADING_PAIRS.filter((p: { value: string; label: string; group: string; inPortfolio?: boolean }) => p.group === 'USD Pairs').map((pair: { value: string; label: string; group: string; inPortfolio?: boolean }) => (
-              <option key={pair.value} value={pair.value}>
-                {pair.inPortfolio ? '• ' : ''}{pair.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="BTC Pairs">
-            {TRADING_PAIRS.filter((p: { value: string; label: string; group: string; inPortfolio?: boolean }) => p.group === 'BTC Pairs').map((pair: { value: string; label: string; group: string; inPortfolio?: boolean }) => (
-              <option key={pair.value} value={pair.value}>
-                {pair.inPortfolio ? '• ' : ''}{pair.label}
-              </option>
-            ))}
-          </optgroup>
-        </select>
+        <PairSelector
+          pairs={TRADING_PAIRS}
+          selectedPair={selectedPair}
+          onSelectPair={setSelectedPair}
+        />
 
         <div className="w-px h-6 bg-slate-600 hidden sm:block" />
 

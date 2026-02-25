@@ -5,6 +5,17 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.58.0] - 2026-02-25
+
+### Added
+- **Market selector with search**: Charts page now has a searchable pair dropdown with market tabs (USD, USDC, BTC, etc.) replacing the basic select element. Portfolio pairs are highlighted with a green dot and sorted first.
+
+### Fixed
+- **Chart controls require page refresh**: Changing chart type, time interval, or indicators now takes effect immediately without needing to refresh the page. Only Heikin-Ashi toggle worked before — now all controls update the chart in real-time.
+- **Indicator charts not syncing with main chart**: Zooming or panning the main price chart now correctly syncs RSI, MACD, and Stochastic panels, and vice versa.
+- **MACD chart missing Y-axis values**: The MACD oscillator panel now displays price scale values on the right axis.
+- **Unnecessary API re-fetches**: Changing display-only settings (chart type, HA toggle, indicators) no longer triggers a data re-fetch — only pair or interval changes fetch new candle data.
+
 ## [v2.57.0] - 2026-02-25
 
 ### Added
