@@ -2195,7 +2195,7 @@ def generate_pdf(
                 pdf.set_text_color(80, 80, 80)
                 pdf.cell(
                     0, 6,
-                    f"Total: {pfx}{total_exp:,.2f} {curr}/{exp_period} | "
+                    f"Total Required: {pfx}{total_exp:,.2f} {curr}/{exp_period} | "
                     f"Income after tax: {pfx}{income_at:,.2f}",
                     new_x="LMARGIN", new_y="NEXT",
                 )
@@ -2240,6 +2240,10 @@ def generate_pdf(
                         max((pdf.get_string_width(r[4]) for r in _cov_rows), default=0),
                     ) + _buf
                     col_name = _tbl_w - col_status - col_cat - col_amt
+                    # Ensure table fits on current page
+                    _cov_total_h = 5 + len(_cov_rows) * 5
+                    if pdf.will_page_break(_cov_total_h):
+                        pdf.add_page()
                     # Draw header
                     _tbl_y_start = pdf.get_y()
                     pdf.set_font("Helvetica", "B", 8)
@@ -2278,26 +2282,35 @@ def generate_pdf(
                         )
                     # Table outline
                     pdf.set_draw_color(200, 200, 205)
-                    pdf.rect(_tbl_x, _tbl_y_start, _tbl_w, pdf.get_y() - _tbl_y_start)
+                    pdf.rect(_tbl_x, _tbl_y_start, _tbl_w, _cov_total_h)
                     pdf.set_draw_color(0, 0, 0)
                 partial_name = coverage.get("partial_item_name")
                 next_name = coverage.get("next_uncovered_name")
                 dep_partial = g.get("deposit_partial")
                 dep_next = g.get("deposit_next")
+                _has_dep_text = False
                 if partial_name and dep_partial is not None:
+                    if not _has_dep_text:
+                        pdf.set_font("Helvetica", "", 8)
+                        pdf.set_text_color(120, 120, 120)
+                        _has_dep_text = True
                     pdf.cell(
                         0, 5,
-                        f"  Finish covering {partial_name}: "
+                        f"Finish covering {partial_name}: "
                         f"deposit ~{pfx}{dep_partial:,.2f} {curr}",
-                        new_x="LMARGIN", new_y="NEXT",
+                        new_x="LMARGIN", new_y="NEXT", align="C",
                     )
                 if next_name and dep_next is not None:
                     label = "Then cover" if partial_name else "Cover"
+                    if not _has_dep_text:
+                        pdf.set_font("Helvetica", "", 8)
+                        pdf.set_text_color(120, 120, 120)
+                        _has_dep_text = True
                     pdf.cell(
                         0, 5,
-                        f"  {label} {next_name}: "
+                        f"{label} {next_name}: "
                         f"deposit ~{pfx}{dep_next:,.2f} {curr}",
-                        new_x="LMARGIN", new_y="NEXT",
+                        new_x="LMARGIN", new_y="NEXT", align="C",
                     )
                 dep = g.get("deposit_needed")
                 if dep is not None:
@@ -2305,17 +2318,23 @@ def generate_pdf(
                     extra = dep - already
                     if extra > 0 and already > 0:
                         dep_text = (
-                            f"  Cover all: ~{pfx}{dep:,.2f} {curr} total"
+                            f"Cover all: ~{pfx}{dep:,.2f} {curr} total"
                             f" (+{pfx}{extra:,.2f} {curr})"
                         )
                     else:
                         dep_text = (
-                            f"  Cover all: deposit ~{pfx}{dep:,.2f} {curr} total"
+                            f"Cover all: deposit ~{pfx}{dep:,.2f} {curr} total"
                         )
+                    if not _has_dep_text:
+                        pdf.set_font("Helvetica", "", 8)
+                        pdf.set_text_color(120, 120, 120)
+                        _has_dep_text = True
                     pdf.cell(
                         0, 5, dep_text,
-                        new_x="LMARGIN", new_y="NEXT",
+                        new_x="LMARGIN", new_y="NEXT", align="C",
                     )
+                if _has_dep_text:
+                    pdf.ln(4)
                 _now = datetime.utcnow()
                 _upcoming = _get_upcoming_items(
                     coverage.get("items", []), _now,
@@ -2392,6 +2411,10 @@ def generate_pdf(
                     uc_name = _uc_w - uc_due - uc_cat - uc_amt - uc_status
                 # --- Upcoming table ---
                 if _uc_rows:
+                    # Ensure upcoming table fits on current page
+                    _uc_total_h = 5 + len(_uc_rows) * 5
+                    if pdf.will_page_break(6 + _uc_total_h):
+                        pdf.add_page()
                     pdf.set_font("Helvetica", "B", 9)
                     pdf.set_text_color(80, 80, 80)
                     pdf.cell(
@@ -2435,10 +2458,15 @@ def generate_pdf(
                             new_x="LMARGIN", new_y="NEXT",
                         )
                     pdf.set_draw_color(200, 200, 205)
-                    pdf.rect(_uc_x, _uc_y_start, _uc_w, pdf.get_y() - _uc_y_start)
+                    pdf.rect(_uc_x, _uc_y_start, _uc_w, _uc_total_h)
                     pdf.set_draw_color(0, 0, 0)
                 # --- Lookahead table ---
                 if _la_rows:
+                    pdf.ln(3)
+                    # Ensure lookahead table fits on current page
+                    _la_total_h = 5 + len(_la_rows) * 5
+                    if pdf.will_page_break(6 + _la_total_h):
+                        pdf.add_page()
                     _la_labels = {
                         "mtd": "Next Month",
                         "wtd": "Next Week",
@@ -2488,13 +2516,14 @@ def generate_pdf(
                         )
                         pdf.set_text_color(150, 150, 150)
                     pdf.set_draw_color(200, 200, 205)
-                    pdf.rect(_uc_x, _la_y_start, _uc_w, pdf.get_y() - _la_y_start)
+                    pdf.rect(_uc_x, _la_y_start, _uc_w, _la_total_h)
                     pdf.set_draw_color(0, 0, 0)
                     pdf.set_text_color(80, 80, 80)
                 _daily_inc = g.get("current_daily_income", 0)
                 _proj_lin = g.get("projected_income")
                 _proj_cmp = g.get("projected_income_compound")
                 if _daily_inc or _proj_lin or _proj_cmp:
+                    pdf.ln(3)
                     _tax = g.get("tax_withholding_pct", 0)
                     _atf = (1 - _tax / 100) if _tax < 100 else 0
                     _lin_at = (_proj_lin or 0) * _atf
@@ -2614,6 +2643,10 @@ def generate_pdf(
                     max((pdf.get_string_width(r[2]) for r in _tf_rows), default=0),
                 ) + _tf_buf
                 col_type = _tf_w - col_date - col_amt
+                # Ensure table fits on current page to avoid split border
+                _tf_total_h = 5 + len(_tf_rows) * 5
+                if pdf.will_page_break(_tf_total_h):
+                    pdf.add_page()
                 # Header
                 _tf_y_start = pdf.get_y()
                 pdf.set_font("Helvetica", "B", 8)
@@ -2621,7 +2654,10 @@ def generate_pdf(
                 pdf.set_x(_tf_x)
                 pdf.cell(col_date, 5, "Date", new_x="RIGHT")
                 pdf.cell(col_type, 5, "Type", new_x="RIGHT")
-                pdf.cell(col_amt, 5, "Amount", new_x="LMARGIN", new_y="NEXT", align="R")
+                pdf.cell(
+                    col_amt, 5, "Amount",
+                    new_x="LMARGIN", new_y="NEXT", align="R",
+                )
                 pdf.set_draw_color(200, 200, 205)
                 pdf.line(_tf_x, pdf.get_y(), _tf_x + _tf_w, pdf.get_y())
                 # Rows
@@ -2645,7 +2681,9 @@ def generate_pdf(
                     pdf.set_font("Helvetica", "", 9)
                 # Table outline
                 pdf.set_draw_color(200, 200, 205)
-                pdf.rect(_tf_x, _tf_y_start, _tf_w, pdf.get_y() - _tf_y_start)
+                pdf.rect(
+                    _tf_x, _tf_y_start, _tf_w, _tf_total_h,
+                )
                 pdf.set_draw_color(0, 0, 0)
 
         # Prior Period Comparison
