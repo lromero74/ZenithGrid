@@ -273,16 +273,6 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
     adj_growth = data.get("adjusted_account_growth_usd", 0)
 
     deposits_source = data.get("deposits_source", "transfers")
-    source_note = ""
-    if deposits_source == "implied":
-        source_note = (
-            "\n  NOTE: No individual deposit/withdrawal records are available. "
-            "Net deposits are computed using native-currency accounting: "
-            "each currency's balance change minus its realized profit, "
-            "then combined at end-of-period prices. "
-            "Do NOT say 'no deposits were made' — present the implied "
-            "net figure accurately."
-        )
 
     # Trading summary line
     trade_summary = data.get("trade_summary")
@@ -326,19 +316,46 @@ def _build_summary_prompt(data: Dict[str, Any], period_label: str) -> str:
             f"e.g. ETH, BTC-pair positions)"
         )
 
-    capital_section = (
-        f"\nCapital Movements & Account Reconciliation:"
-        f"{trade_line}"
-        f"\n  - Account value change in period: ${account_change:,.2f}"
-        f"\n    (from ${start_val:,.2f} to ${end_val:,.2f})"
-        f"\n  - Trading profit in period (realized): ${period_profit:,.2f}"
-        f"{upnl_line}"
-        f"\n  - Net deposits/withdrawals: ${net_deposits:,.2f}"
-        f"\n    (Deposits: ${total_dep:,.2f} / Withdrawals: ${total_wth:,.2f})"
-        f"\n  - Adjusted growth (excluding deposits): ${adj_growth:,.2f}"
-        f"{mve_line}"
-        f"{source_note}"
-    )
+    if deposits_source == "implied":
+        # No actual transfer records — present a reconciliation breakdown
+        # so the AI doesn't misinterpret the residual as real withdrawals
+        residual = net_deposits
+        residual_sign = "+" if residual >= 0 else ""
+        capital_section = (
+            f"\nAccount Value Reconciliation:"
+            f"{trade_line}"
+            f"\n  - Account value change in period: ${account_change:,.2f}"
+            f"\n    (from ${start_val:,.2f} to ${end_val:,.2f})"
+            f"\n  - Trading profit in period (realized): ${period_profit:,.2f}"
+            f"{upnl_line}"
+            f"{mve_line}"
+            f"\n  - Accounting residual: {residual_sign}${abs(residual):,.2f}"
+            f"\n    (This is a BALANCING FIGURE from native-currency accounting, "
+            f"NOT confirmed deposits or withdrawals. It includes valuation "
+            f"rounding, altcoin price changes not captured above, and any "
+            f"unrecorded transfers. Do NOT present this as 'deposits' or "
+            f"'withdrawals' — describe it as 'other valuation changes' or "
+            f"omit it if small relative to market value effect.)"
+            f"\n  IMPORTANT: No deposit or withdrawal records exist for this "
+            f"period. Do NOT say money was deposited or withdrawn unless "
+            f"you have explicit transfer records. The account value change "
+            f"is explained by: trading profit + market value effect + "
+            f"unrealized PnL changes + valuation adjustments."
+        )
+    else:
+        # Real transfer records available — show actual deposits/withdrawals
+        capital_section = (
+            f"\nCapital Movements & Account Reconciliation:"
+            f"{trade_line}"
+            f"\n  - Account value change in period: ${account_change:,.2f}"
+            f"\n    (from ${start_val:,.2f} to ${end_val:,.2f})"
+            f"\n  - Trading profit in period (realized): ${period_profit:,.2f}"
+            f"{upnl_line}"
+            f"\n  - Net deposits/withdrawals: ${net_deposits:,.2f}"
+            f"\n    (Deposits: ${total_dep:,.2f} / Withdrawals: ${total_wth:,.2f})"
+            f"\n  - Adjusted growth (excluding deposits): ${adj_growth:,.2f}"
+            f"{mve_line}"
+        )
 
     # Append transfer records — aggregate staking rewards, list others individually
     transfer_records = data.get("transfer_records", [])
@@ -523,10 +540,9 @@ Formatting: ### for headers, **bold** for key figures, - for bullet lists.
 Guidelines for BOTH versions:
 - Be factual — do not hallucinate data not provided above
 - CRITICAL: NEVER imply that account value change equals trading profit. The \
-account value change includes deposits, withdrawals, AND BTC price movement. \
-Always break down the account value change: how much came from trading profit, \
-how much from BTC price movement (market value effect), how much from open \
-position value changes (unrealized PnL), and how much from deposits/withdrawals. \
+account value change includes trading profit, BTC price movement, unrealized \
+PnL changes, and possibly deposits/withdrawals. \
+Always break down the account value change into its components. \
 If a "Market value effect" figure is provided, it shows how much of the USD value \
 change is purely from BTC price changing — NOT from trading or deposits. \
 If an "Open position value change" figure is provided, it shows how much value \
@@ -536,10 +552,17 @@ which accounts for -$45,000 of the value decrease — your trading performance w
 actually positive." Do NOT lump market value effect or unrealized position changes \
 into "capital movements" — they are separate concepts (market conditions, not \
 user actions).
-- CRITICAL: When both deposits AND withdrawals occurred, you MUST mention BOTH. \
-The math must add up: account_change = trading_profit + deposits - withdrawals. \
-Never cite only deposits and omit withdrawals (or vice versa) — the reader will \
-notice the numbers don't add up.
+- CRITICAL: If the data section is labeled "Account Value Reconciliation" (not \
+"Capital Movements"), there are NO confirmed deposit/withdrawal records. Do NOT \
+use the words "deposit", "withdrawal", "net withdrawal", or "net deposit" ANYWHERE \
+in your response. The account value change is explained ENTIRELY by: market \
+conditions (BTC price movement), trading profit/loss, and unrealized PnL changes. \
+Any "Accounting residual" figure is a rounding/valuation artifact — mention it \
+only if large, and describe it as "other valuation changes", never as transfers.
+- When actual transfer records ARE provided (labeled "Capital Movements"), mention \
+both deposits AND withdrawals if both occurred. The math must add up: \
+account_change = trading_profit + deposits - withdrawals + market_value_effect. \
+Never cite only deposits and omit withdrawals (or vice versa).
 - If income projections or forward-looking estimates are present, include a brief \
 disclaimer: past performance does not guarantee future results, projections are \
 estimates based on historical data, and actual results may vary

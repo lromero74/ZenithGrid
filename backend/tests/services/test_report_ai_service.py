@@ -288,8 +288,9 @@ class TestParseTieredSummary:
 class TestBuildSummaryPrompt:
     """Prompt must always include capital movement reconciliation data."""
 
-    def test_capital_section_always_present_zero_deposits(self, sample_report_data):
-        """Capital movement section appears even when net deposits are zero."""
+    def test_capital_section_transfers_mode(self, sample_report_data):
+        """Capital movement section with actual transfer records."""
+        sample_report_data["deposits_source"] = "transfers"
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
         assert "Capital Movements & Account Reconciliation" in prompt
         assert "Account value change in period" in prompt
@@ -299,6 +300,7 @@ class TestBuildSummaryPrompt:
 
     def test_capital_section_with_deposits(self, sample_report_data):
         """Capital section shows correct deposit/withdrawal breakdown."""
+        sample_report_data["deposits_source"] = "transfers"
         sample_report_data["net_deposits_usd"] = 5000.0
         sample_report_data["total_deposits_usd"] = 6000.0
         sample_report_data["total_withdrawals_usd"] = 1000.0
@@ -335,19 +337,48 @@ class TestBuildSummaryPrompt:
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
         assert "Prior Period Comparison" not in prompt
 
-    def test_implied_deposits_source_adds_note(self, sample_report_data):
-        """When deposits_source is 'implied', prompt warns AI not to say no deposits."""
+    def test_implied_deposits_uses_reconciliation_format(self, sample_report_data):
+        """When deposits_source is 'implied', uses reconciliation format without
+        deposit/withdrawal language."""
         sample_report_data["deposits_source"] = "implied"
-        sample_report_data["net_deposits_usd"] = 309.16
+        sample_report_data["net_deposits_usd"] = -36027.59
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
-        assert "Do NOT say 'no deposits were made'" in prompt
-        assert "native-currency accounting" in prompt
+        # Data section should use reconciliation header
+        assert "\nAccount Value Reconciliation:" in prompt
+        # Should NOT have capital movements as a data section header
+        assert "Capital Movements & Account Reconciliation:" not in prompt
+        # Should label residual as accounting residual, not deposits
+        assert "Accounting residual" in prompt
+        assert "BALANCING FIGURE" in prompt
+        # Should NOT contain deposit/withdrawal data labels
+        assert "Net deposits/withdrawals:" not in prompt
+        # Should contain explicit instruction not to use deposit language
+        assert "Do NOT say money was deposited or withdrawn" in prompt
 
-    def test_transfers_source_no_implied_note(self, sample_report_data):
-        """When deposits_source is 'transfers', no implied note is added."""
+    def test_implied_deposits_small_residual(self, sample_report_data):
+        """Small implied residual is shown with correct sign."""
+        sample_report_data["deposits_source"] = "implied"
+        sample_report_data["net_deposits_usd"] = 12.50
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Accounting residual: +$12.50" in prompt
+
+    def test_transfers_source_uses_capital_movements_format(self, sample_report_data):
+        """When deposits_source is 'transfers', uses capital movements format."""
         sample_report_data["deposits_source"] = "transfers"
         prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
-        assert "Do NOT say 'no deposits were made'" not in prompt
+        assert "Capital Movements & Account Reconciliation:" in prompt
+        assert "Net deposits/withdrawals:" in prompt
+        # Should NOT have accounting residual in data section
+        assert "Accounting residual:" not in prompt
+
+    def test_implied_guidelines_forbid_deposit_language(self, sample_report_data):
+        """When implied, guidelines explicitly forbid deposit/withdrawal words."""
+        sample_report_data["deposits_source"] = "implied"
+        sample_report_data["net_deposits_usd"] = -5000.0
+        prompt = _build_summary_prompt(sample_report_data, "Jan 1 - Jan 7, 2026")
+        assert "Do NOT use the words" in prompt
+        assert '"deposit"' in prompt or "deposit" in prompt
+        assert '"withdrawal"' in prompt or "withdrawal" in prompt
 
     def test_individual_transfers_in_prompt(self, sample_report_data):
         """Non-staking transfer records are listed individually in the prompt."""
