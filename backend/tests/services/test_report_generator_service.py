@@ -387,7 +387,7 @@ class TestBuildTabbedAiSectionMultiple:
 class TestBuildReportHtmlCspCompliance:
     """Ensure the full HTML report output is CSP-safe (no inline JS)."""
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_web_mode_no_script_tags(self, mock_brand):
         """Web report (email_mode=False) must not contain <script> tags."""
         ai = _make_tiered_summary(
@@ -403,7 +403,7 @@ class TestBuildReportHtmlCspCompliance:
         assert "<script" not in html.lower()
         assert "</script>" not in html.lower()
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_web_mode_no_onclick(self, mock_brand):
         """Web report must not contain onclick handlers."""
         ai = _make_tiered_summary(
@@ -418,7 +418,7 @@ class TestBuildReportHtmlCspCompliance:
         )
         assert "onclick" not in html.lower()
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_web_mode_no_javascript_protocol(self, mock_brand):
         ai = _make_tiered_summary(simple="Analysis text.")
         html = build_report_html(
@@ -429,7 +429,7 @@ class TestBuildReportHtmlCspCompliance:
         )
         assert "javascript:" not in html.lower()
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_email_mode_no_script_tags(self, mock_brand):
         """Email report must also be CSP-safe."""
         ai = _make_tiered_summary(
@@ -446,7 +446,7 @@ class TestBuildReportHtmlCspCompliance:
         assert "<script" not in html.lower()
         assert "onclick" not in html.lower()
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_web_mode_has_css_tabs(self, mock_brand):
         """Web report with multiple tiers should use CSS-only tabs."""
         ai = _make_tiered_summary(
@@ -463,7 +463,7 @@ class TestBuildReportHtmlCspCompliance:
         assert ":checked" in html
         assert '<input type="radio"' in html
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_email_mode_no_tabs(self, mock_brand):
         """Email mode should render single section (no tabs/radios)."""
         ai = _make_tiered_summary(
@@ -482,7 +482,7 @@ class TestBuildReportHtmlCspCompliance:
         # But it should still show the default tier content
         assert "Summary text." in html
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_no_ai_summary_shows_placeholder(self, mock_brand):
         """When ai_summary is None, show the 'add credentials' prompt."""
         html = build_report_html(
@@ -494,7 +494,7 @@ class TestBuildReportHtmlCspCompliance:
         assert "AI provider credentials" in html
         assert "<script" not in html.lower()
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_string_ai_summary_uses_single_section(self, mock_brand):
         """Plain string ai_summary should render as single section (no tabs)."""
         html = build_report_html(
@@ -507,7 +507,7 @@ class TestBuildReportHtmlCspCompliance:
         assert '<input type="radio"' not in html
         assert "<script" not in html.lower()
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_schedule_name_in_title(self, mock_brand):
         html = build_report_html(
             report_data=_minimal_report_data(),
@@ -518,7 +518,7 @@ class TestBuildReportHtmlCspCompliance:
         )
         assert "Weekly Summary" in html
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_no_inline_event_handlers_in_full_html(self, mock_brand):
         """Scan the full HTML for any inline event handler attributes."""
         ai = _make_tiered_summary(
@@ -978,7 +978,7 @@ class TestBuildReportHtmlEmailModeGoals:
     @pytest.fixture()
     def mock_brand(self):
         with patch(
-            "app.services.report_generator_service.get_brand",
+            "app.services.report_generator_service.html_builder.get_brand",
             return_value=MOCK_BRAND,
         ):
             yield
@@ -1514,7 +1514,7 @@ class TestTransfersSection:
 class TestMetricsSectionDeposits:
     """Deposit/withdrawal row in key metrics always shows."""
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_deposits_row_shown_when_zero(self, mock_brand):
         """Deposit row should appear even when net_deposits is 0."""
         data = _minimal_report_data()
@@ -1529,7 +1529,7 @@ class TestMetricsSectionDeposits:
         assert "Net Deposits" in html
         assert "Adjusted Growth" in html
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_deposits_row_hidden_when_no_adjusted(self, mock_brand):
         """If adjusted_account_growth_usd is missing entirely, no deposit row."""
         data = _minimal_report_data()
@@ -1584,7 +1584,7 @@ class TestGeneratePdfTransferRecords:
 class TestBuildReportHtmlTransfers:
     """Transfer table appears in the full HTML report."""
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_transfers_section_in_full_report(self, mock_brand):
         data = _minimal_report_data()
         data["transfer_records"] = [
@@ -1757,7 +1757,7 @@ class TestExpenseGoalOrdering:
             "sample_trades": 10, "lookback_days_used": 30,
         }
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_goal_progress_before_expense_coverage(self, _mock):
         """Goal Progress appears before Expense Coverage in HTML."""
         data = _minimal_report_data()
@@ -1769,7 +1769,7 @@ class TestExpenseGoalOrdering:
         assert expense_pos != -1, "Expense Coverage section not found"
         assert goal_pos < expense_pos, "Goal Progress should come before Expense Coverage"
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_expense_section_before_capital_movements(self, _mock):
         """Expense Coverage appears before Capital Movements in HTML."""
         data = _minimal_report_data()
@@ -1784,7 +1784,7 @@ class TestExpenseGoalOrdering:
         assert expense_pos != -1, "Expense Coverage section not found"
         assert expense_pos < cap_pos, "Expense Coverage should come before Capital Movements"
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_no_expense_goal_no_extra_section(self, _mock):
         """When no expenses goals exist, no Expense Coverage section appears."""
         data = _minimal_report_data()
@@ -1793,7 +1793,7 @@ class TestExpenseGoalOrdering:
         assert "Expense Coverage" not in html
         assert "Goal Progress" in html
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_only_expense_goal_no_goal_progress_section(self, _mock):
         """When only expenses goals exist, Goal Progress section is absent."""
         data = _minimal_report_data()
@@ -1811,7 +1811,7 @@ class TestExpenseGoalOrdering:
 class TestAccountNameInReport:
     """Tests for account_name display in HTML and PDF reports."""
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_html_header_includes_account_name(self, _mock):
         """HTML report header should show account name when provided."""
         html = build_report_html(
@@ -1824,7 +1824,7 @@ class TestAccountNameInReport:
         assert "Paper Trading" in html
         assert "Prepared for Alice" in html
 
-    @patch("app.services.report_generator_service.get_brand", return_value=MOCK_BRAND)
+    @patch("app.services.report_generator_service.html_builder.get_brand", return_value=MOCK_BRAND)
     def test_html_header_without_account_name(self, _mock):
         """HTML report header should work fine without account name."""
         html = build_report_html(
