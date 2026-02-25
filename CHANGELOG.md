@@ -5,6 +5,15 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.53.2] - 2026-02-25
+
+### Added
+- **Slippage guard on manual close**: "Close at market" on deal cards now checks order book depth before selling — warns the user if slippage will erode profit, with options to proceed anyway or switch to a limit order
+- **Stop loss helper text**: Stop loss field now shows a % suffix and explains the value (e.g. "-10 = sell at a 10% loss")
+
+### Fixed
+- **Stop loss always sells at market**: Stop loss and trailing stop loss now force market orders regardless of take-profit order type configuration — previously a limit TP config could cause stop losses to place limit orders instead of executing immediately
+
 ## [v2.53.1] - 2026-02-25
 
 ### Changed

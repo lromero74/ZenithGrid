@@ -499,11 +499,14 @@ export default function Positions() {
             setSlippageData(null)
             setPendingMarketClosePositionId(null)
           }}
-          onProceedWithMarket={() => {
+          onProceedWithMarket={async () => {
+            const posId = pendingMarketClosePositionId
             setShowSlippageWarning(false)
-            setCloseConfirmPositionId(pendingMarketClosePositionId)
-            setShowCloseConfirm(true)
+            setSlippageData(null)
             setPendingMarketClosePositionId(null)
+            if (posId) {
+              await performClosePosition(posId, true)
+            }
           }}
           onSwitchToLimit={() => {
             setShowSlippageWarning(false)

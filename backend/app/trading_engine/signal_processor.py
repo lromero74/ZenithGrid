@@ -967,6 +967,10 @@ async def process_signal(
                         "position": position,
                     }
 
+            # Stop loss / trailing stop always execute at market (no limit orders)
+            sell_reason_lower = sell_reason.lower()
+            is_stop_loss = "stop loss" in sell_reason_lower or "tsl triggered" in sell_reason_lower
+
             # Check if limit close order already pending
             if position.closing_via_limit:
                 logger.warning(
@@ -1038,6 +1042,7 @@ async def process_signal(
                     position=position,
                     current_price=current_price,
                     signal_data=signal_data,
+                    force_market=is_stop_loss,
                 )
 
             # If trade is None, a limit order was placed - position stays open

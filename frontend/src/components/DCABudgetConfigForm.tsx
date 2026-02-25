@@ -923,17 +923,25 @@ function DCABudgetConfigForm({
               Enable Stop Loss
             </label>
             {config.stop_loss_enabled && (
-              <input
-                type="number"
-                value={getNumericValue(config.stop_loss_percentage, -10)}
-                onChange={(e) =>
-                  updateConfig('stop_loss_percentage', safeParseFloat(e.target.value) ?? -10)
-                }
-                min="-50"
-                max="-0.1"
-                step="0.1"
-                className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
-              />
+              <div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={getNumericValue(config.stop_loss_percentage, -10)}
+                    onChange={(e) =>
+                      updateConfig('stop_loss_percentage', safeParseFloat(e.target.value) ?? -10)
+                    }
+                    min="-50"
+                    max="-0.1"
+                    step="0.1"
+                    className="w-full bg-slate-700 text-white px-3 py-2 rounded border border-slate-600"
+                  />
+                  <span className="text-slate-400 text-sm whitespace-nowrap">%</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Sell if the deal drops this % below average buy price (e.g. -10 = sell at a 10% loss)
+                </p>
+              </div>
             )}
           </div>
         </div>

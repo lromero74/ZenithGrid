@@ -420,6 +420,48 @@ class TestExecuteSell:
         assert profit_quote == 0.0
         tc.sell.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_sell_force_market_ignores_limit_config(self):
+        """Stop loss sells use market even when take_profit_order_type is limit."""
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot()
+        pos = _make_position(strategy_config_snapshot={"take_profit_order_type": "limit"})
+
+        trade, profit_quote, profit_pct = await execute_sell(
+            db=db, exchange=exchange, trading_client=tc,
+            bot=bot, product_id="ETH-USD", position=pos,
+            current_price=3000.0, signal_data=None,
+            force_market=True,
+        )
+
+        # Should have used market sell, not limit sell
+        tc.sell.assert_awaited_once()
+        tc.sell_limit.assert_not_awaited()
+        assert trade is not None
+
+    @pytest.mark.asyncio
+    async def test_sell_limit_config_respected_when_not_forced(self):
+        """TP sells use limit when configured and force_market is False."""
+        db = _make_db()
+        exchange = _make_exchange()
+        tc = _make_trading_client()
+        bot = _make_bot()
+        pos = _make_position(strategy_config_snapshot={"take_profit_order_type": "limit"})
+
+        trade, profit_quote, profit_pct = await execute_sell(
+            db=db, exchange=exchange, trading_client=tc,
+            bot=bot, product_id="ETH-USD", position=pos,
+            current_price=3000.0, signal_data=None,
+            force_market=False,
+        )
+
+        # Should have used limit sell
+        tc.sell_limit.assert_awaited_once()
+        # Limit sell returns None trade (pending)
+        assert trade is None
+
 
 # ===========================================================================
 # execute_sell_short (open/add to short positions)
