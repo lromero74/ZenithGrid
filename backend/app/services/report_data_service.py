@@ -682,7 +682,7 @@ async def _get_account_value_at(
         )
         snapshot = result.scalar_one_or_none()
         if snapshot:
-            return {
+            return _enrich_snapshot_data({
                 "usd": snapshot.total_value_usd,
                 "btc": snapshot.total_value_btc,
                 "btc_portion_btc": snapshot.btc_portion_btc,
@@ -690,7 +690,7 @@ async def _get_account_value_at(
                 "unrealized_pnl_usd": snapshot.unrealized_pnl_usd,
                 "unrealized_pnl_btc": snapshot.unrealized_pnl_btc,
                 "btc_usd_price": snapshot.btc_usd_price,
-            }
+            })
     else:
         # All accounts — sum the latest snapshot per account
         # Exclude paper trading and inactive accounts (matches account_snapshot_service)
@@ -730,13 +730,30 @@ async def _get_account_value_at(
         )
         row = result.one_or_none()
         if row and row[0] is not None:
-            return {
+            return _enrich_snapshot_data({
                 "usd": row[0], "btc": row[1],
                 "btc_portion_btc": row[2],
                 "usd_portion_usd": row[3],
                 "unrealized_pnl_usd": row[4],
                 "unrealized_pnl_btc": row[5],
                 "btc_usd_price": row[6],
-            }
+            })
 
     return default
+
+
+def _enrich_snapshot_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Derive btc_usd_price from snapshot totals when not stored directly.
+
+    For snapshots captured before v2.55.0, btc_usd_price is NULL.
+    We can derive it: btc_price = (total_usd - usd_portion) / btc_portion.
+    """
+    if (data["btc_usd_price"] is None
+            and data.get("btc_portion_btc") is not None
+            and data.get("usd_portion_usd") is not None
+            and data["btc_portion_btc"] > 0):
+        btc_value_usd = data["usd"] - data["usd_portion_usd"]
+        data["btc_usd_price"] = round(
+            btc_value_usd / data["btc_portion_btc"], 2
+        )
+    return data

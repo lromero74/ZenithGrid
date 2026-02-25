@@ -898,6 +898,48 @@ class TestNativeCurrencyAccounting:
         assert data["market_value_effect_usd"] is None
 
     @pytest.mark.asyncio
+    async def test_btc_price_derived_from_old_snapshots(self, db_session):
+        """Pre-v2.55 snapshots (no btc_usd_price) derive BTC price from
+        total_value_usd - usd_portion / btc_portion, enabling native-currency
+        accounting on historical data."""
+        _make_user(db_session)
+        _make_account(db_session, is_paper=True)
+        # Old snapshot: has portions but no btc_usd_price
+        # total_usd=200000, usd_portion=500, btc_portion=2.3
+        # → derived btc_price = (200000 - 500) / 2.3 ≈ 86739.13
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 1),
+            usd=200000, btc=2.3,
+            usd_portion=500.0, btc_portion=2.3,
+        )
+        # End: btc_price = (167500 - 500) / 2.5 = 66800
+        _make_snapshot(
+            db_session, date=datetime(2025, 1, 31),
+            usd=167500, btc=2.5,
+            usd_portion=500.0, btc_portion=2.5,
+        )
+        _make_position(
+            db_session, product_id="ETH-BTC", profit_usd=13360.0,
+            profit_quote=0.2, closed_at=datetime(2025, 1, 20),
+        )
+        await db_session.flush()
+
+        data = await gather_report_data(
+            db_session, user_id=1, account_id=1,
+            period_start=datetime(2025, 1, 1),
+            period_end=datetime(2025, 1, 31),
+            goals=[],
+        )
+
+        # Native-currency accounting should work via derived prices
+        assert data["net_deposits_usd"] == pytest.approx(0.0)
+        assert data["deposits_source"] == "transfers"
+        # Market value effect should be computed (not None)
+        assert data["market_value_effect_usd"] is not None
+        # 2.3 * (66800 - 86739.13) ≈ -45,860
+        assert data["market_value_effect_usd"] == pytest.approx(-45860.0, abs=2.0)
+
+    @pytest.mark.asyncio
     async def test_paper_account_btc_drop_native_currency(self, db_session):
         """Paper trading account: BTC price drop correctly handled by
         native-currency accounting (replaces old is_paper workaround)."""
