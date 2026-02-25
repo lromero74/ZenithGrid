@@ -195,7 +195,8 @@ class TestForceClosePosition:
     @pytest.mark.asyncio
     @patch("app.position_routers.position_actions_router.StrategyTradingEngine")
     @patch("app.strategies.StrategyRegistry")
-    async def test_force_close_succeeds(self, mock_registry, mock_engine_cls, db_session):
+    @patch("app.position_routers.position_actions_router.get_exchange_client_for_account")
+    async def test_force_close_succeeds(self, mock_get_client, mock_registry, mock_engine_cls, db_session):
         """Happy path: force closing an open position executes sell and returns profit."""
         from app.position_routers.position_actions_router import force_close_position
 
@@ -203,8 +204,9 @@ class TestForceClosePosition:
         bot = await _create_bot(db_session, user, account)
         pos = await _create_position(db_session, account, bot=bot, status="open")
 
-        mock_coinbase = AsyncMock()
-        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+        mock_exchange = AsyncMock()
+        mock_exchange.get_current_price = AsyncMock(return_value=0.03)
+        mock_get_client.return_value = mock_exchange
 
         mock_strategy = MagicMock()
         mock_registry.get_strategy.return_value = mock_strategy
@@ -216,14 +218,13 @@ class TestForceClosePosition:
         result = await force_close_position(
             position_id=pos.id,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
         assert result["message"] == f"Position {pos.id} closed successfully"
         assert result["profit_quote"] == 0.005
         assert result["profit_percentage"] == 2.5
-        mock_coinbase.get_current_price.assert_awaited_once_with("ETH-BTC")
+        mock_exchange.get_current_price.assert_awaited_once_with("ETH-BTC")
 
     @pytest.mark.asyncio
     async def test_force_close_position_not_found(self, db_session):
@@ -232,13 +233,11 @@ class TestForceClosePosition:
         from fastapi import HTTPException
 
         user, account = await _create_user_with_account(db_session, email="fc_404@example.com")
-        mock_coinbase = AsyncMock()
 
         with pytest.raises(HTTPException) as exc_info:
             await force_close_position(
                 position_id=99999,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 404
@@ -251,13 +250,11 @@ class TestForceClosePosition:
 
         user, account = await _create_user_with_account(db_session, email="fc_closed@example.com")
         pos = await _create_position(db_session, account, status="closed")
-        mock_coinbase = AsyncMock()
 
         with pytest.raises(HTTPException) as exc_info:
             await force_close_position(
                 position_id=pos.id,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 400
@@ -265,7 +262,8 @@ class TestForceClosePosition:
     @pytest.mark.asyncio
     @patch("app.position_routers.position_actions_router.StrategyTradingEngine")
     @patch("app.strategies.StrategyRegistry")
-    async def test_force_close_slippage_guard_blocks(self, mock_registry, mock_engine_cls, db_session):
+    @patch("app.position_routers.position_actions_router.get_exchange_client_for_account")
+    async def test_force_close_slippage_guard_blocks(self, mock_get_client, mock_registry, mock_engine_cls, db_session):
         """Slippage guard enabled and blocks → returns requires_confirmation."""
         from app.position_routers.position_actions_router import force_close_position
 
@@ -276,8 +274,9 @@ class TestForceClosePosition:
             strategy_config_snapshot={"slippage_guard": True, "take_profit_percentage": 1.5},
         )
 
-        mock_coinbase = AsyncMock()
-        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+        mock_exchange = AsyncMock()
+        mock_exchange.get_current_price = AsyncMock(return_value=0.03)
+        mock_get_client.return_value = mock_exchange
 
         with patch(
             "app.trading_engine.book_depth_guard.check_sell_slippage",
@@ -287,7 +286,6 @@ class TestForceClosePosition:
             result = await force_close_position(
                 position_id=pos.id,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
 
@@ -299,7 +297,8 @@ class TestForceClosePosition:
     @pytest.mark.asyncio
     @patch("app.position_routers.position_actions_router.StrategyTradingEngine")
     @patch("app.strategies.StrategyRegistry")
-    async def test_force_close_slippage_guard_skip(self, mock_registry, mock_engine_cls, db_session):
+    @patch("app.position_routers.position_actions_router.get_exchange_client_for_account")
+    async def test_force_close_slippage_guard_skip(self, mock_get_client, mock_registry, mock_engine_cls, db_session):
         """Slippage guard enabled but skip=True → close proceeds."""
         from app.position_routers.position_actions_router import force_close_position
 
@@ -310,8 +309,9 @@ class TestForceClosePosition:
             strategy_config_snapshot={"slippage_guard": True, "take_profit_percentage": 1.5},
         )
 
-        mock_coinbase = AsyncMock()
-        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+        mock_exchange = AsyncMock()
+        mock_exchange.get_current_price = AsyncMock(return_value=0.03)
+        mock_get_client.return_value = mock_exchange
 
         mock_strategy = MagicMock()
         mock_registry.get_strategy.return_value = mock_strategy
@@ -324,7 +324,6 @@ class TestForceClosePosition:
             position_id=pos.id,
             skip_slippage_guard=True,
             db=db_session,
-            coinbase=mock_coinbase,
             current_user=user,
         )
 
@@ -334,7 +333,8 @@ class TestForceClosePosition:
     @pytest.mark.asyncio
     @patch("app.position_routers.position_actions_router.StrategyTradingEngine")
     @patch("app.strategies.StrategyRegistry")
-    async def test_force_close_slippage_guard_passes(self, mock_registry, mock_engine_cls, db_session):
+    @patch("app.position_routers.position_actions_router.get_exchange_client_for_account")
+    async def test_force_close_slippage_guard_passes(self, mock_get_client, mock_registry, mock_engine_cls, db_session):
         """Slippage guard enabled and passes → close proceeds normally."""
         from app.position_routers.position_actions_router import force_close_position
 
@@ -345,8 +345,9 @@ class TestForceClosePosition:
             strategy_config_snapshot={"slippage_guard": True, "take_profit_percentage": 1.5},
         )
 
-        mock_coinbase = AsyncMock()
-        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+        mock_exchange = AsyncMock()
+        mock_exchange.get_current_price = AsyncMock(return_value=0.03)
+        mock_get_client.return_value = mock_exchange
 
         mock_strategy = MagicMock()
         mock_registry.get_strategy.return_value = mock_strategy
@@ -363,7 +364,6 @@ class TestForceClosePosition:
             result = await force_close_position(
                 position_id=pos.id,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
 
@@ -371,21 +371,22 @@ class TestForceClosePosition:
         assert result["profit_quote"] == 0.01
 
     @pytest.mark.asyncio
-    async def test_force_close_position_no_bot_returns_404(self, db_session):
+    @patch("app.position_routers.position_actions_router.get_exchange_client_for_account")
+    async def test_force_close_position_no_bot_returns_404(self, mock_get_client, db_session):
         """Edge case: position with no associated bot returns 404."""
         from app.position_routers.position_actions_router import force_close_position
         from fastapi import HTTPException
 
         user, account = await _create_user_with_account(db_session, email="fc_nobot@example.com")
         pos = await _create_position(db_session, account, bot=None, status="open")
-        mock_coinbase = AsyncMock()
-        mock_coinbase.get_current_price = AsyncMock(return_value=0.03)
+        mock_exchange = AsyncMock()
+        mock_exchange.get_current_price = AsyncMock(return_value=0.03)
+        mock_get_client.return_value = mock_exchange
 
         with pytest.raises(HTTPException) as exc_info:
             await force_close_position(
                 position_id=pos.id,
                 db=db_session,
-                coinbase=mock_coinbase,
                 current_user=user,
             )
         assert exc_info.value.status_code == 404

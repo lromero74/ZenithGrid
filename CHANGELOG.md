@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.56.1] - 2026-02-25
+
+### Fixed
+- **Force-close on paper trading positions**: Manual close button now correctly uses the paper trading client instead of the real exchange client, which was causing a 500 error
+
 ## [v2.56.0] - 2026-02-25
 
 ### Changed
