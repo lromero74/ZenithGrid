@@ -237,15 +237,11 @@ def _build_pdf_goals_section(pdf, report_data: Dict, brand_rgb: tuple):
                     _render_pdf_trend_chart(
                         pdf, trend_data, (br, bg, bb),
                     )
-                # Render minimap if enabled and far from target
+                # Render minimap when chart doesn't reach target
                 chart_settings = g.get("chart_settings", {})
                 if chart_settings.get("show_minimap"):
-                    from datetime import datetime as _dt_pdf
                     try:
-                        today = _dt_pdf.utcnow()
-                        tgt = _dt_pdf.strptime(chart_settings["target_date"], "%Y-%m-%d")
-                        if (tgt - today).days > chart_settings.get("minimap_threshold_days", 90):
-                            _render_pdf_minimap(
+                        _render_pdf_minimap(
                                 pdf,
                                 chart_settings.get("full_data_points", []),
                                 chart_settings.get("horizon_date", ""),
@@ -303,18 +299,14 @@ def _build_pdf_expense_goal(pdf, g: Dict, report_data: Dict, brand_rgb: tuple):
     # Minimap
     chart_settings = g.get("chart_settings", {})
     if chart_settings.get("show_minimap"):
-        from datetime import datetime as _dt_pdf
         try:
-            today = _dt_pdf.utcnow()
-            tgt = _dt_pdf.strptime(chart_settings["target_date"], "%Y-%m-%d")
-            if (tgt - today).days > chart_settings.get("minimap_threshold_days", 90):
-                _render_pdf_minimap(
-                    pdf,
-                    chart_settings.get("full_data_points", []),
-                    chart_settings.get("horizon_date", ""),
-                    chart_settings["target_date"],
-                    (br, bg, bb),
-                )
+            _render_pdf_minimap(
+                pdf,
+                chart_settings.get("full_data_points", []),
+                chart_settings.get("horizon_date", ""),
+                chart_settings["target_date"],
+                (br, bg, bb),
+            )
         except (KeyError, ValueError):
             pass
     # Coverage items table header

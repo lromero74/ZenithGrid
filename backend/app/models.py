@@ -1479,8 +1479,9 @@ class ReportSchedule(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Chart display settings
-    chart_horizon = Column(String, default="auto")  # "auto", "full", or integer days
-    chart_lookahead_multiplier = Column(Float, default=1.0)  # For auto: multiplier × period_days
+    chart_horizon = Column(String, default="auto")  # "auto", "elapsed", "full", or integer days
+    chart_lookahead_multiplier = Column(Float, default=1.0)  # For auto/elapsed: multiplier × base
+    show_minimap = Column(Boolean, default=True)  # Show minimap when chart doesn't reach target
 
     # Relationships
     user = relationship("User", back_populates="report_schedules")

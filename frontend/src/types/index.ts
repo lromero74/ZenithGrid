@@ -555,6 +555,7 @@ export interface ReportSchedule {
   generate_ai_summary: boolean
   chart_horizon?: string
   chart_lookahead_multiplier?: number
+  show_minimap?: boolean
   goal_ids: number[]
   last_run_at: string | null
   next_run_at: string | null
@@ -604,7 +605,5 @@ export interface GoalTrendData {
   data_points: GoalTrendPoint[]
   chart_settings?: {
     chart_horizon: string
-    show_minimap: boolean
-    minimap_threshold_days: number
   }
 }

@@ -57,8 +57,7 @@ class GoalCreate(BaseModel):
     target_date: Optional[datetime] = None
     account_id: Optional[int] = None
     chart_horizon: Optional[str] = Field("auto", pattern=r"^(auto|elapsed|full|[0-9]+)$")
-    show_minimap: Optional[bool] = True
-    minimap_threshold_days: Optional[int] = Field(90, ge=7, le=3650)
+    show_minimap: Optional[bool] = True  # Legacy; minimap now controlled per schedule
 
     @model_validator(mode="after")
     def validate_goal_fields(self):
@@ -90,8 +89,7 @@ class GoalUpdate(BaseModel):
     target_date: Optional[datetime] = None
     is_active: Optional[bool] = None
     chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|elapsed|full|[0-9]+)$")
-    show_minimap: Optional[bool] = None
-    minimap_threshold_days: Optional[int] = Field(None, ge=7, le=3650)
+    show_minimap: Optional[bool] = None  # Legacy; minimap now controlled per schedule
 
 
 class RecipientItem(BaseModel):
@@ -131,6 +129,7 @@ class ScheduleCreate(BaseModel):
     show_expense_lookahead: bool = True
     chart_horizon: Optional[str] = Field("auto", pattern=r"^(auto|elapsed|full|[0-9]+)$")
     chart_lookahead_multiplier: Optional[float] = Field(1.0, ge=0.01, le=10.0)
+    show_minimap: Optional[bool] = True
 
     @model_validator(mode="after")
     def validate_schedule_fields(self):
@@ -176,6 +175,7 @@ class ScheduleUpdate(BaseModel):
     show_expense_lookahead: Optional[bool] = None
     chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|elapsed|full|[0-9]+)$")
     chart_lookahead_multiplier: Optional[float] = Field(None, ge=0.01, le=10.0)
+    show_minimap: Optional[bool] = None
 
 
 class GenerateRequest(BaseModel):
@@ -344,6 +344,10 @@ def _schedule_to_dict(schedule: ReportSchedule) -> dict:
         "chart_lookahead_multiplier": (
             schedule.chart_lookahead_multiplier
             if schedule.chart_lookahead_multiplier is not None else 1.0
+        ),
+        "show_minimap": (
+            schedule.show_minimap
+            if schedule.show_minimap is not None else True
         ),
         "goal_ids": goal_ids,
         "last_run_at": (
@@ -609,10 +613,11 @@ async def get_goal_trend(
     trend_data = await get_goal_trend_data(db, goal, parsed_from, parsed_to)
 
     # Include chart display settings for frontend clipping/minimap
+    # Note: show_minimap is now schedule-level, but the trend endpoint
+    # doesn't know which schedule is viewing. Default to True and let
+    # frontend decide based on horizon vs target comparison.
     trend_data["chart_settings"] = {
         "chart_horizon": goal.chart_horizon or "auto",
-        "show_minimap": goal.show_minimap if goal.show_minimap is not None else True,
-        "minimap_threshold_days": goal.minimap_threshold_days or 90,
     }
 
     return trend_data

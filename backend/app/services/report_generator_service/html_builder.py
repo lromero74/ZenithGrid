@@ -729,23 +729,18 @@ def _build_standard_goal_card(
         else:
             trend_html = _build_trend_chart_svg(trend_data, brand_color, currency)
 
-    # Minimap: show full timeline overview when enabled and far from target
+    # Minimap: show full timeline overview when chart doesn't reach target
     minimap_html = ""
     chart_settings = g.get("chart_settings", {})
     if chart_settings.get("show_minimap") and trend_html:
-        from datetime import datetime as _dt_mm
         try:
-            today = _dt_mm.utcnow()
-            target_dt = _dt_mm.strptime(chart_settings["target_date"], "%Y-%m-%d")
-            days_to_target = (target_dt - today).days
-            if days_to_target > chart_settings.get("minimap_threshold_days", 90):
-                minimap_html = _build_minimap_svg(
-                    full_data_points=chart_settings.get("full_data_points", []),
-                    horizon_date=chart_settings.get("horizon_date", ""),
-                    target_date=chart_settings["target_date"],
-                    brand_color=brand_color,
-                    currency=currency,
-                )
+            minimap_html = _build_minimap_svg(
+                full_data_points=chart_settings.get("full_data_points", []),
+                horizon_date=chart_settings.get("horizon_date", ""),
+                target_date=chart_settings["target_date"],
+                brand_color=brand_color,
+                currency=currency,
+            )
         except (KeyError, ValueError):
             pass
 

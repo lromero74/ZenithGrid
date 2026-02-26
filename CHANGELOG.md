@@ -5,6 +5,16 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.63.3] - 2026-02-26
+
+### Changed
+- **Minimap shows only when needed**: The overview minimap now appears only when the main chart doesn't extend to the target date, instead of using a fixed days-from-target threshold. No minimap clutter when the full timeline is already visible.
+- **Minimap toggle moved to schedule settings**: The minimap on/off checkbox is now in the schedule's "Chart Display" section alongside horizon and multiplier, instead of being on each individual goal. Simplifies configuration — one place for all chart display options.
+
+### Removed
+- **Goal-level chart display section**: Removed the collapsible "Chart Display" section from the goal form (minimap toggle + threshold). All chart display options are now on the schedule.
+- **Minimap threshold setting**: Removed the configurable days-from-target threshold — no longer needed since minimap visibility is automatic based on whether the chart reaches the target.
+
 ## [v2.63.2] - 2026-02-26
 
 ### Fixed

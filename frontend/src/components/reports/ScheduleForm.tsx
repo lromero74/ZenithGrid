@@ -32,6 +32,7 @@ export interface ScheduleFormData {
   show_expense_lookahead: boolean
   chart_horizon?: string
   chart_lookahead_multiplier?: number
+  show_minimap?: boolean
 }
 
 const SCHEDULE_TYPE_OPTIONS: { value: ScheduleType; label: string }[] = [
@@ -116,6 +117,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
   const [chartHorizon, setChartHorizon] = useState<string>('auto')
   const [customHorizonDays, setCustomHorizonDays] = useState('90')
   const [lookaheadMultiplier, setLookaheadMultiplier] = useState('1')
+  const [showMinimap, setShowMinimap] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -143,6 +145,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
         setCustomHorizonDays(ch)
       }
       setLookaheadMultiplier(String(initialData.chart_lookahead_multiplier ?? 1))
+      setShowMinimap(initialData.show_minimap !== false)
 
       // Parse schedule_days based on type
       const days = initialData.schedule_days || []
@@ -181,6 +184,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setChartHorizon('auto')
       setCustomHorizonDays('90')
       setLookaheadMultiplier('1')
+      setShowMinimap(true)
     }
   }, [initialData, isOpen])
 
@@ -341,6 +345,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
         show_expense_lookahead: showExpenseLookahead,
         chart_horizon: chartHorizon === 'custom' ? customHorizonDays : chartHorizon,
         chart_lookahead_multiplier: parseFloat(lookaheadMultiplier) || 1,
+        show_minimap: showMinimap,
       })
       onClose()
     } finally {
@@ -825,6 +830,19 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
             {chartHorizon === 'full' && (
               <p className="text-xs text-slate-500">Shows entire timeline from start to target date</p>
             )}
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="showMinimap"
+                checked={showMinimap}
+                onChange={e => setShowMinimap(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500"
+              />
+              <label htmlFor="showMinimap" className="text-xs text-slate-400">
+                Show overview minimap when chart doesn't reach target
+              </label>
+            </div>
           </div>
 
           <div className="flex justify-end space-x-3 pt-2">

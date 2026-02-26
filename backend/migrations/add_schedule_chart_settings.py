@@ -23,6 +23,7 @@ def run_migration():
     columns = [
         ("chart_horizon", "TEXT DEFAULT 'auto'"),
         ("chart_lookahead_multiplier", "REAL DEFAULT 1.0"),
+        ("show_minimap", "INTEGER DEFAULT 1"),
     ]
 
     for col_name, col_def in columns:
