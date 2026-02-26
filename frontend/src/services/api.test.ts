@@ -536,8 +536,18 @@ describe('positionsApi', () => {
     })
 
     const result = await positionsApi.resizeAllBudgets()
-    expect(api.post).toHaveBeenCalledWith('/positions/resize-all-budgets')
+    expect(api.post).toHaveBeenCalledWith('/positions/resize-all-budgets', null, { params: {} })
     expect(result.updated_count).toBe(3)
+  })
+
+  test('resizeAllBudgets passes account_id when provided', async () => {
+    vi.mocked(api.post).mockResolvedValue({
+      data: { message: 'done', updated_count: 1, total_count: 1, results: [] },
+    })
+
+    const result = await positionsApi.resizeAllBudgets(42)
+    expect(api.post).toHaveBeenCalledWith('/positions/resize-all-budgets', null, { params: { account_id: 42 } })
+    expect(result.updated_count).toBe(1)
   })
 
   test('getRealizedPnL passes accountId when provided', async () => {
