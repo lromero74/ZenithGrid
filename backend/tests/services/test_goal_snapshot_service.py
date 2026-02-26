@@ -278,12 +278,17 @@ class TestGetGoalTrendData:
         await db_session.flush()
 
         result = await get_goal_trend_data(db_session, goal)
-        assert len(result["data_points"]) == 5
+        # 5 real snapshots + 1 target endpoint
+        assert len(result["data_points"]) == 6
         assert result["goal"]["target_value"] == 100000.0
         first_point = result["data_points"][0]
         assert "ideal_value" in first_point
         assert "current_value" in first_point
         assert "date" in first_point
+        # Last point is the projected target endpoint
+        last_point = result["data_points"][-1]
+        assert last_point["current_value"] is None
+        assert last_point["ideal_value"] == 100000.0
 
     @pytest.mark.asyncio
     async def test_profit_goal_ideal_starts_at_zero(self, db_session):
@@ -657,12 +662,17 @@ class TestExpenseGoalTrendData:
         await db_session.flush()
 
         result = await get_goal_trend_data(db_session, goal)
-        assert len(result["data_points"]) == 5
+        # 5 real snapshots + 1 target endpoint
+        assert len(result["data_points"]) == 6
         assert result["ideal_start_value"] == 0.0
         assert result["ideal_end_value"] == 600.0
         # First point ideal should be near 0 (small fraction elapsed)
         first = result["data_points"][0]
         assert first["ideal_value"] < 20.0
+        # Last point is projected target endpoint
+        last = result["data_points"][-1]
+        assert last["current_value"] is None
+        assert last["ideal_value"] == 600.0
 
 
 # ---- Account-level filtering tests ----

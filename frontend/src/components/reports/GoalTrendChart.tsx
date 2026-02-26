@@ -40,22 +40,26 @@ function CustomTooltip({ active, payload, label, targetCurrency }: {
         })}
       </div>
       <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-0.5 bg-blue-400" />
-          <span className="text-sm text-slate-300">Actual: </span>
-          <span className={`text-sm font-semibold ${point.on_track ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {format(point.current_value)}
-          </span>
-        </div>
+        {point.current_value != null && (
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-0.5 bg-blue-400" />
+            <span className="text-sm text-slate-300">Actual: </span>
+            <span className={`text-sm font-semibold ${point.on_track ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {format(point.current_value)}
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <div className="w-3 h-0.5 bg-slate-500" />
           <span className="text-sm text-slate-300">Ideal: </span>
           <span className="text-sm text-slate-400">{format(point.ideal_value)}</span>
         </div>
-        <div className="text-xs text-slate-500 mt-1">
-          Progress: {point.progress_pct.toFixed(1)}%
-          {point.on_track ? ' — On track' : ' — Behind target'}
-        </div>
+        {point.progress_pct != null && (
+          <div className="text-xs text-slate-500 mt-1">
+            Progress: {point.progress_pct.toFixed(1)}%
+            {point.on_track ? ' — On track' : ' — Behind target'}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -139,7 +143,9 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
     )
   }
 
-  const lastPoint = points[points.length - 1]
+  // Use the last real data point (skip projected endpoint where on_track is null)
+  const realPoints = points.filter(p => p.on_track != null)
+  const lastPoint = realPoints.length > 0 ? realPoints[realPoints.length - 1] : points[0]
   const isOnTrack = lastPoint.on_track
 
   return (
@@ -208,7 +214,7 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
                 fill={`url(#goalActual-${goalId})`}
                 isAnimationActive={false}
               />
-              {/* Ideal trend line (dashed, no fill) */}
+              {/* Ideal trend line (dashed, no fill) — connectNulls so it extends to target */}
               <Line
                 type="linear"
                 dataKey="ideal_value"
@@ -217,6 +223,7 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
                 strokeWidth={1.5}
                 strokeDasharray="6 3"
                 dot={false}
+                connectNulls
                 isAnimationActive={false}
               />
             </ComposedChart>

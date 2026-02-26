@@ -552,10 +552,10 @@ async def get_goal_trend(
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
 
-    if goal.target_type in ("income", "expenses"):
+    if goal.target_type == "income":
         raise HTTPException(
             status_code=400,
-            detail=f"Trend charts are not supported for {goal.target_type} goals"
+            detail="Trend charts are not supported for income goals"
         )
 
     # Auto-backfill if no snapshots exist yet

@@ -617,7 +617,15 @@ async def _compute_expenses_goal_progress(
 
     precision = 8 if is_btc else 2
     progress_pct = coverage["coverage_pct"]
-    on_track = progress_pct >= 100.0
+
+    # On-track: compare coverage progress against time elapsed toward target date
+    time_elapsed_pct = 0.0
+    if goal.start_date and goal.target_date:
+        total_duration = (goal.target_date - goal.start_date).total_seconds()
+        elapsed = (now - goal.start_date).total_seconds()
+        if total_duration > 0:
+            time_elapsed_pct = min(max(elapsed / total_duration * 100, 0), 100)
+    on_track = progress_pct >= time_elapsed_pct
 
     return {
         "goal_id": goal.id,
@@ -628,7 +636,7 @@ async def _compute_expenses_goal_progress(
         "current_value": round(coverage["income_after_tax"], precision),
         "progress_pct": round(min(progress_pct, 100), 1),
         "on_track": on_track,
-        "time_elapsed_pct": 0,  # Not time-based
+        "time_elapsed_pct": round(time_elapsed_pct, 1),
         # Expenses-specific fields
         "expense_period": expense_period,
         "tax_withholding_pct": tax_pct,

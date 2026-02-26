@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Target, Calendar, FileText, Plus, Pencil, Trash2, Play, Eye, Download,
-  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, Receipt, Square, CheckSquare
+  CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, Receipt, Square, CheckSquare, TrendingUp
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
@@ -12,6 +12,7 @@ import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
 import { ScheduleForm, type ScheduleFormData } from '../components/reports/ScheduleForm'
 import { ReportViewModal } from '../components/reports/ReportViewModal'
 import { GoalProgressBar } from '../components/reports/GoalProgressBar'
+import { GoalTrendChart } from '../components/reports/GoalTrendChart'
 import { ExpenseItemsEditor } from '../components/reports/ExpenseItemsEditor'
 import type { ReportGoal, ReportSchedule, ReportSummary } from '../types'
 
@@ -42,6 +43,7 @@ export default function Reports() {
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [editingGoal, setEditingGoal] = useState<ReportGoal | null>(null)
   const [expenseEditorGoal, setExpenseEditorGoal] = useState<ReportGoal | null>(null)
+  const [trendGoalId, setTrendGoalId] = useState<number | null>(null)
 
   // Schedule state
   const [showScheduleForm, setShowScheduleForm] = useState(false)
@@ -292,6 +294,15 @@ export default function Reports() {
                     {!goal.is_active && (
                       <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">Inactive</span>
                     )}
+                    {goal.target_type !== 'income' && (
+                      <button
+                        onClick={() => setTrendGoalId(trendGoalId === goal.id ? null : goal.id)}
+                        className={`p-1 transition-colors ${trendGoalId === goal.id ? 'text-blue-400' : 'text-slate-400 hover:text-blue-400'}`}
+                        title="View Trend"
+                      >
+                        <TrendingUp className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => { setEditingGoal(goal); setShowGoalForm(true) }}
                       className="p-1 text-slate-400 hover:text-blue-400 transition-colors"
@@ -364,6 +375,17 @@ export default function Reports() {
                 <p className="text-xs text-slate-500 mt-2">
                   {formatDate(goal.start_date)} &rarr; {formatDate(goal.target_date)}
                 </p>
+
+                {trendGoalId === goal.id && (
+                  <div className="mt-3">
+                    <GoalTrendChart
+                      goalId={goal.id}
+                      goalName={goal.name}
+                      targetCurrency={goal.target_currency as 'USD' | 'BTC'}
+                      onClose={() => setTrendGoalId(null)}
+                    />
+                  </div>
+                )}
 
               </div>
             )
