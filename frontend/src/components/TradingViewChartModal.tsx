@@ -50,17 +50,21 @@ export default function TradingViewChartModal({
   const [isWidgetLoading, setIsWidgetLoading] = useState(false)
 
   useEffect(() => {
-    // Prevent body scroll when modal is open
+    // Prevent body scroll when modal is open + Escape key to dismiss
     if (isOpen) {
       document.body.style.overflow = 'hidden'
+      const handleKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose()
+      }
+      document.addEventListener('keydown', handleKey)
+      return () => {
+        document.body.style.overflow = 'unset'
+        document.removeEventListener('keydown', handleKey)
+      }
     } else {
       document.body.style.overflow = 'unset'
     }
-
-    return () => {
-      document.body.style.overflow = 'unset'
-    }
-  }, [isOpen])
+  }, [isOpen, onClose])
 
   useEffect(() => {
     if (!isOpen || !containerRef.current) return
@@ -153,13 +157,13 @@ export default function TradingViewChartModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 rounded-lg w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
+      <div className="bg-slate-900 rounded-lg w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col pb-16 sm:pb-0" onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-white">TV Chart</h2>
-            <div className="text-sm text-slate-400">{symbol}</div>
+        <div className="flex items-center justify-between p-2 sm:p-4 border-b border-slate-700 gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-white">TV Chart</h2>
+            <div className="text-sm text-slate-400 truncate">{symbol}</div>
 
             {position && (
               <div className="flex items-center gap-3 text-xs">
