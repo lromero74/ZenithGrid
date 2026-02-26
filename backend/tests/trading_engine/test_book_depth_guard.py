@@ -416,6 +416,56 @@ class TestCheckSellSlippage:
         assert "VWAP profit" in reason
 
     @pytest.mark.asyncio
+    async def test_minimum_mode_none_tp_percentage_uses_default(self):
+        """Minimum mode: take_profit_percentage=None should fall back to 3.0%, not crash."""
+        exchange = AsyncMock()
+        exchange.get_product_book = AsyncMock(return_value={
+            "pricebook": {
+                "bids": [{"price": "50000.00", "size": "10.0"}],
+                "asks": [],
+            }
+        })
+        position = MagicMock()
+        position.total_base_acquired = 0.5
+        position.average_buy_price = 49000.0  # profit 2.04% < default 3.0%
+
+        config = {
+            "take_profit_mode": "minimum",
+            "take_profit_percentage": None,  # explicitly None — was crashing
+        }
+
+        proceed, reason = await check_sell_slippage(exchange, "BTC-USD", position, config)
+        assert proceed is False
+        assert "VWAP profit" in reason
+
+    @pytest.mark.asyncio
+    async def test_fixed_mode_none_max_slippage_uses_default(self):
+        """Fixed mode: max_sell_slippage_pct=None should fall back to 0.5%, not crash."""
+        exchange = AsyncMock()
+        exchange.get_product_book = AsyncMock(return_value={
+            "pricebook": {
+                "bids": [
+                    {"price": "50000.00", "size": "0.01"},
+                    {"price": "49000.00", "size": "10.0"},
+                ],
+                "asks": [],
+            }
+        })
+        position = MagicMock()
+        position.total_base_acquired = 1.0
+        position.average_buy_price = 45000.0
+
+        config = {
+            "take_profit_mode": "fixed",
+            "take_profit_percentage": 3.0,
+            "max_sell_slippage_pct": None,  # explicitly None
+        }
+
+        proceed, reason = await check_sell_slippage(exchange, "BTC-USD", position, config)
+        assert proceed is False
+        assert "slippage" in reason.lower()
+
+    @pytest.mark.asyncio
     async def test_skips_when_no_get_product_book(self):
         """Graceful degradation: exchange without order book support."""
         exchange = MagicMock(spec=[])  # no attributes

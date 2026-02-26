@@ -172,7 +172,7 @@ async def check_sell_slippage(
 
     if take_profit_mode in ("minimum", "trailing"):
         # Minimum/Trailing: TP% is the profit floor — check VWAP profit directly
-        tp_pct = config.get("take_profit_percentage", 3.0)
+        tp_pct = config.get("take_profit_percentage") or 3.0
         avg_price = position.average_buy_price
         if avg_price and avg_price > 0:
             vwap_profit_pct = ((vwap - avg_price) / avg_price) * 100
@@ -185,7 +185,7 @@ async def check_sell_slippage(
                 return False, reason
     else:
         # Fixed mode: check raw slippage below best bid
-        max_sell_slip = config.get("max_sell_slippage_pct", 0.5)
+        max_sell_slip = config.get("max_sell_slippage_pct") or 0.5
         if best_bid > 0:
             slip_pct = ((best_bid - vwap) / best_bid) * 100
             if slip_pct > max_sell_slip:
