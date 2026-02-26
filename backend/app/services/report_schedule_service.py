@@ -151,13 +151,23 @@ async def update_schedule_record(
     goal_ids = update_data.pop("goal_ids", None)
 
     # Serialize recipients as dicts with email + color_scheme
+    # Note: model_dump() converts RecipientItem to dicts, so handle both
     if "recipients" in update_data and update_data["recipients"] is not None:
-        update_data["recipients"] = [
-            {"email": r.email, "color_scheme": r.color_scheme}
-            if hasattr(r, "email")
-            else {"email": str(r), "color_scheme": "dark"}
-            for r in update_data["recipients"]
-        ]
+        serialized = []
+        for r in update_data["recipients"]:
+            if isinstance(r, dict):
+                serialized.append({
+                    "email": r["email"],
+                    "color_scheme": r.get("color_scheme", "dark"),
+                })
+            elif hasattr(r, "email"):
+                serialized.append({
+                    "email": r.email,
+                    "color_scheme": r.color_scheme,
+                })
+            else:
+                serialized.append({"email": str(r), "color_scheme": "dark"})
+        update_data["recipients"] = serialized
 
     # Convert list fields to JSON strings for DB storage
     if "schedule_days" in update_data:
