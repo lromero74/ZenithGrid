@@ -15,6 +15,8 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.exceptions import AppError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -109,7 +111,7 @@ async def get_prices_batch(products: str, coinbase: CoinbaseClient = Depends(get
             "prices": prices,
             "time": datetime.utcnow().isoformat(),
         }
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred")

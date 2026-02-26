@@ -5,7 +5,6 @@ Handles market and limit buy orders
 
 import asyncio
 import logging
-import math
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -15,13 +14,245 @@ from app.currency_utils import get_quote_currency
 from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.order_validation import validate_order_size
-from app.product_precision import get_base_precision
 from app.services.shutdown_manager import shutdown_manager
-from app.services.websocket_manager import ws_manager
+from app.services.websocket_manager import ws_manager, OrderFillEvent
 from app.trading_client import TradingClient
-from app.trading_engine.order_logger import log_order_to_history
+from app.trading_engine.fill_reconciler import reconcile_order_fill
+from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
 
 logger = logging.getLogger(__name__)
+
+
+async def _validate_and_reject(
+    db: AsyncSession,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    quote_amount: float,
+    current_price: float,
+    trade_type: str,
+    commit_on_error: bool,
+    exchange: ExchangeClient,
+) -> None:
+    """
+    Validate order meets minimum size requirements and reject if invalid.
+
+    Logs the failed order to history, records error on position (for DCA orders),
+    and raises ValueError if validation fails.
+
+    Args:
+        db: Database session
+        bot: Bot instance
+        product_id: Trading pair
+        position: Current position
+        quote_amount: Amount of quote currency to spend
+        current_price: Current market price
+        trade_type: Order type identifier
+        commit_on_error: Whether to commit errors to DB
+        exchange: Exchange client for validation
+
+    Raises:
+        ValueError: If order does not meet minimum size requirements
+    """
+    is_valid, error_msg = await validate_order_size(exchange, product_id, quote_amount=quote_amount)
+
+    if not is_valid:
+        logger.warning(f"Order validation failed: {error_msg}")
+
+        # Log failed order to history
+        await log_order_to_history(
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="BUY", order_type="MARKET",
+                trade_type=trade_type, quote_amount=quote_amount,
+                price=current_price, status="failed", error_message=error_msg,
+            ),
+        )
+
+        # Save error to position for UI display (only for DCA orders)
+        if commit_on_error:
+            position.last_error_message = error_msg
+            position.last_error_timestamp = datetime.utcnow()
+            await db.commit()
+        raise ValueError(error_msg)
+
+
+async def _reconcile_buy_fill(
+    exchange: ExchangeClient,
+    order_id: str,
+    product_id: str,
+) -> tuple:
+    """
+    Fetch actual fill data from exchange with retry logic.
+
+    Uses the shared fill reconciler with BTC fee adjustment and precision
+    rounding enabled (specific to buy orders).
+
+    Args:
+        exchange: Exchange client instance
+        order_id: The exchange order ID to check
+        product_id: Trading pair
+
+    Returns:
+        Tuple of (actual_base_amount, actual_quote_amount, actual_price)
+    """
+    logger.info(f"Fetching order details for order_id: {order_id}")
+
+    fill_data = await reconcile_order_fill(
+        exchange=exchange,
+        order_id=order_id,
+        product_id=product_id,
+        max_retries=10,
+        adjust_btc_fees=True,
+        round_base_to_precision=True,
+    )
+
+    return fill_data.filled_size, fill_data.filled_value, fill_data.average_price
+
+
+async def _create_buy_trade_record(
+    db: AsyncSession,
+    position: Position,
+    order_id: str,
+    actual_base_amount: float,
+    actual_quote_amount: float,
+    actual_price: float,
+    trade_type: str,
+    signal_data: Optional[Dict[str, Any]],
+) -> Trade:
+    """
+    Create Trade record and update Position with actual filled amounts.
+
+    Clears previous errors, updates position totals, assigns deal number
+    on first successful trade, and commits immediately.
+
+    Args:
+        db: Database session
+        position: Current position to update
+        order_id: Exchange order ID
+        actual_base_amount: Actual base currency filled
+        actual_quote_amount: Actual quote currency filled
+        actual_price: Actual average fill price
+        trade_type: Order type identifier
+        signal_data: Optional signal metadata
+
+    Returns:
+        Committed Trade record
+    """
+    trade = Trade(
+        position_id=position.id,
+        timestamp=datetime.utcnow(),
+        side="buy",
+        quote_amount=actual_quote_amount,
+        base_amount=actual_base_amount,
+        price=actual_price,
+        trade_type=trade_type,
+        order_id=order_id,
+        macd_value=signal_data.get("macd_value") if signal_data else None,
+        macd_signal=signal_data.get("macd_signal") if signal_data else None,
+        macd_histogram=signal_data.get("macd_histogram") if signal_data else None,
+    )
+
+    db.add(trade)
+
+    # Clear any previous errors on successful trade
+    position.last_error_message = None
+    position.last_error_timestamp = None
+
+    # Update position totals with ACTUAL filled amounts
+    position.total_quote_spent += actual_quote_amount
+    position.total_base_acquired += actual_base_amount
+    # Update average buy price manually (don't use update_averages() - it triggers lazy loading)
+    if position.total_base_acquired > 0:
+        position.average_buy_price = position.total_quote_spent / position.total_base_acquired
+    else:
+        position.average_buy_price = 0.0
+
+    # Assign deal number on FIRST successful trade (base order success)
+    # This ensures only successfully opened positions get deal numbers
+    if position.user_deal_number is None and position.user_id:
+        from app.trading_engine.position_manager import get_next_user_deal_number
+        position.user_deal_number = await get_next_user_deal_number(db, position.user_id)
+        logger.info(f"  Assigned deal #{position.user_deal_number} (attempt #{position.user_attempt_number})")
+
+    # CRITICAL: Commit trade and position update IMMEDIATELY
+    # This ensures we never lose a trade record even if subsequent operations fail
+    await db.commit()
+    await db.refresh(trade)
+
+    return trade
+
+
+async def _post_buy_operations(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    order_id: str,
+    actual_base_amount: float,
+    actual_quote_amount: float,
+    actual_price: float,
+    trade_type: str,
+) -> None:
+    """
+    Non-critical post-buy operations: logging, WebSocket notifications, cache invalidation.
+
+    All operations are best-effort and will not raise exceptions if they fail.
+    The trade record has already been committed before this is called.
+
+    Args:
+        db: Database session
+        exchange: Exchange client instance
+        trading_client: TradingClient instance
+        bot: Bot instance
+        product_id: Trading pair
+        position: Current position
+        order_id: Exchange order ID
+        actual_base_amount: Actual base currency filled
+        actual_quote_amount: Actual quote currency filled
+        actual_price: Actual average fill price
+        trade_type: Order type identifier
+    """
+    # Log successful order to history (best-effort)
+    try:
+        await log_order_to_history(
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="BUY", order_type="MARKET",
+                trade_type=trade_type, quote_amount=actual_quote_amount,
+                price=actual_price, status="success",
+                order_id=order_id, base_amount=actual_base_amount,
+            ),
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log order to history (trade was recorded): {e}")
+
+    # Broadcast order fill notification via WebSocket (best-effort)
+    try:
+        fill_type = "base_order" if trade_type == "initial" else "dca_order"
+        is_paper = (hasattr(exchange, 'is_paper_trading')
+                    and callable(exchange.is_paper_trading)
+                    and exchange.is_paper_trading())
+        await ws_manager.broadcast_order_fill(OrderFillEvent(
+            fill_type=fill_type,
+            product_id=product_id,
+            base_amount=actual_base_amount,
+            quote_amount=actual_quote_amount,
+            price=actual_price,
+            position_id=position.id,
+            user_id=position.user_id,
+            is_paper_trading=is_paper,
+        ))
+    except Exception as e:
+        logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
+
+    # Invalidate balance cache after trade (best-effort)
+    try:
+        await trading_client.invalidate_balance_cache()
+    except Exception as e:
+        logger.warning(f"Failed to invalidate balance cache (trade was recorded): {e}")
 
 
 async def execute_buy(
@@ -73,7 +304,7 @@ async def execute_buy(
     is_base_order = trade_type == "initial"
     if is_base_order and config.get("base_execution_type") == "limit":
         limit_price = current_price
-        logger.info(f"  📋 Placing limit base buy: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
+        logger.info(f"  Placing limit base buy: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
         _pending_order = await execute_limit_buy(  # noqa: F841
             db=db,
             exchange=exchange,
@@ -94,7 +325,7 @@ async def execute_buy(
 
     if is_safety_order and dca_execution_type == "limit":
         limit_price = current_price
-        logger.info(f"  📋 Placing limit DCA buy: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
+        logger.info(f"  Placing limit DCA buy: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f}")
         _pending_order = await execute_limit_buy(  # noqa: F841
             db=db,
             exchange=exchange,
@@ -111,32 +342,17 @@ async def execute_buy(
 
     # Execute market order (immediate execution)
     # Validate order meets minimum size requirements
-    is_valid, error_msg = await validate_order_size(exchange, product_id, quote_amount=quote_amount)
-
-    if not is_valid:
-        logger.warning(f"Order validation failed: {error_msg}")
-
-        # Log failed order to history
-        await log_order_to_history(
-            db=db,
-            bot=bot,
-            product_id=product_id,
-            position=position,
-            side="BUY",
-            order_type="MARKET",
-            trade_type=trade_type,
-            quote_amount=quote_amount,
-            price=current_price,
-            status="failed",
-            error_message=error_msg,
-        )
-
-        # Save error to position for UI display (only for DCA orders)
-        if commit_on_error:
-            position.last_error_message = error_msg
-            position.last_error_timestamp = datetime.utcnow()
-            await db.commit()
-        raise ValueError(error_msg)
+    await _validate_and_reject(
+        db=db,
+        bot=bot,
+        product_id=product_id,
+        position=position,
+        quote_amount=quote_amount,
+        current_price=current_price,
+        trade_type=trade_type,
+        commit_on_error=commit_on_error,
+        exchange=exchange,
+    )
 
     # Execute order via TradingClient (currency-agnostic)
     # Actual fill amounts will be fetched from exchange after order executes
@@ -151,10 +367,12 @@ async def execute_buy(
             error_msg = f"PropGuard blocked: {order_response.get('error', 'Safety check failed')}"
             logger.warning(f"  PropGuard blocked buy order for {product_id}: {error_msg}")
             await log_order_to_history(
-                db=db, bot=bot, product_id=product_id, position=position,
-                side="BUY", order_type="MARKET", trade_type=trade_type,
-                quote_amount=quote_amount, price=current_price,
-                status="failed", error_message=error_msg,
+                db=db, bot=bot, position=position,
+                entry=OrderLogEntry(
+                    product_id=product_id, side="BUY", order_type="MARKET",
+                    trade_type=trade_type, quote_amount=quote_amount,
+                    price=current_price, status="failed", error_message=error_msg,
+                ),
             )
             if commit_on_error:
                 position.last_error_message = error_msg
@@ -202,17 +420,12 @@ async def execute_buy(
 
             # Log failed order to history
             await log_order_to_history(
-                db=db,
-                bot=bot,
-                product_id=product_id,
-                position=position,
-                side="BUY",
-                order_type="MARKET",
-                trade_type=trade_type,
-                quote_amount=quote_amount,
-                price=current_price,
-                status="failed",
-                error_message=full_error,
+                db=db, bot=bot, position=position,
+                entry=OrderLogEntry(
+                    product_id=product_id, side="BUY", order_type="MARKET",
+                    trade_type=trade_type, quote_amount=quote_amount,
+                    price=current_price, status="failed", error_message=full_error,
+                ),
             )
 
             # Record error on position (only for DCA orders)
@@ -224,110 +437,18 @@ async def execute_buy(
             raise ValueError(f"Exchange order failed: {full_error}")
 
         # Fetch actual fill data from exchange with retry logic
-        # Market orders can take time to fill on illiquid pairs - retry up to 10 times over ~30s
-        logger.info(f"Fetching order details for order_id: {order_id}")
-
-        actual_base_amount = 0.0
-        actual_quote_amount = 0.0
-        actual_price = 0.0
-
-        import asyncio
-
-        max_retries = 10  # Increased from 5 to handle slow fills
-        for attempt in range(max_retries):
-            if attempt > 0:
-                # Wait before retrying (exponential backoff: 0.5s, 1s, 2s, 4s, 8s, then 5s intervals)
-                if attempt < 5:
-                    delay = 0.5 * (2 ** (attempt - 1))
-                else:
-                    delay = 5.0  # Cap at 5s for remaining attempts
-                logger.info(f"Waiting {delay}s before retry {attempt + 1}/{max_retries}...")
-                await asyncio.sleep(delay)
-
-            try:
-                order_details = await exchange.get_order(order_id)
-            except Exception as get_err:
-                logger.warning(
-                    f"Attempt {attempt + 1}/{max_retries}: "
-                    f"get_order({order_id}) failed: {get_err}"
-                )
-                if attempt == max_retries - 1:
-                    logger.error(
-                        f"Order {order_id} placed but fill data "
-                        f"unavailable after {max_retries} attempts. "
-                        f"Recording with zero amounts. "
-                        f"Use scripts/fix_position.py to reconcile."
-                    )
-                continue
-
-            # get_order() already unwraps the "order" key - access fields directly
-            filled_size_str = order_details.get("filled_size", "0")
-            filled_value_str = order_details.get("filled_value", "0")
-            avg_price_str = order_details.get("average_filled_price", "0")
-            total_fees_str = order_details.get("total_fees", "0")
-
-            # Convert to floats
-            gross_base_amount = float(filled_size_str)
-            actual_quote_amount = float(filled_value_str)
-            actual_price = float(avg_price_str)
-            total_fees = float(total_fees_str)
-
-            # For BTC pair buy orders, fees are charged IN the base currency (the crypto you buy)
-            # So filled_size is GROSS, and you actually receive filled_size - fee_in_base
-            # For USD pairs, fees are charged in USD (quote currency), so filled_size is NET
-            #
-            # Since total_fees is in USD, we need to convert to base currency for BTC pairs
-            is_btc_pair = product_id.endswith("-BTC")
-            if is_btc_pair and actual_price > 0 and total_fees > 0:
-                if actual_quote_amount > 0:
-                    fee_rate = total_fees / actual_quote_amount
-                    fee_in_base = gross_base_amount * fee_rate
-                    actual_base_amount = gross_base_amount - fee_in_base
-                    logger.info(
-                        f"BTC pair fee adjustment: gross={gross_base_amount:.8f}, "
-                        f"fee_rate={fee_rate:.4%}, fee_in_base={fee_in_base:.8f}, "
-                        f"net={actual_base_amount:.8f}"
-                    )
-                else:
-                    actual_base_amount = gross_base_amount
-            else:
-                actual_base_amount = gross_base_amount
-
-            # CRITICAL: Round actual_base_amount down to exchange's base_increment
-            # This ensures we never record more than we can sell (avoids precision loss on sell)
-            precision = get_base_precision(product_id)
-            actual_base_amount_raw = actual_base_amount
-            actual_base_amount = math.floor(actual_base_amount * (10 ** precision)) / (10 ** precision)
-
-            if actual_base_amount_raw != actual_base_amount:
-                logger.info(
-                    f"Rounded base amount to increment: raw={actual_base_amount_raw:.8f}, "
-                    f"rounded={actual_base_amount:.8f} (precision={precision} decimals)"
-                )
-
-            # Check if order has filled (non-zero amounts)
-            if actual_base_amount > 0 and actual_quote_amount > 0:
-                logger.info(
-                    f"Order filled - Base: {actual_base_amount}, "
-                    f"Quote: {actual_quote_amount}, Avg Price: {actual_price}"
-                )
-                break
-            else:
-                logger.warning(
-                    f"Attempt {attempt + 1}/{max_retries}: Order not yet filled (amounts still zero)"
-                )
-                if attempt == max_retries - 1:
-                    logger.error(
-                        f"Order {order_id} did not fill after {max_retries} "
-                        f"attempts (~30s) - recording with zero amounts. "
-                        f"This position will need manual reconciliation."
-                    )
+        actual_base_amount, actual_quote_amount, actual_price = await _reconcile_buy_fill(
+            exchange=exchange,
+            order_id=order_id,
+            product_id=product_id,
+        )
 
         # Final validation check
         if actual_base_amount == 0 or actual_quote_amount == 0:
             logger.error(
                 f"WARNING: Order {order_id} has zero fill amounts after all retries! "
-                f"Position #{position.id} will show 0% filled. Manual fix required using scripts/fix_position.py"
+                f"Position #{position.id} will show 0% filled. "
+                f"Manual fix required using scripts/fix_position.py"
             )
 
     except Exception as e:
@@ -337,117 +458,55 @@ async def execute_buy(
         # ValueError exceptions were already logged above, so skip those
         if not isinstance(e, ValueError):
             await log_order_to_history(
-                db=db,
-                bot=bot,
-                product_id=product_id,
-                position=position,
-                side="BUY",
-                order_type="MARKET",
-                trade_type=trade_type,
-                quote_amount=quote_amount,
-                price=current_price,
-                status="failed",
-                error_message=str(e),
+                db=db, bot=bot, position=position,
+                entry=OrderLogEntry(
+                    product_id=product_id, side="BUY", order_type="MARKET",
+                    trade_type=trade_type, quote_amount=quote_amount,
+                    price=current_price, status="failed", error_message=str(e),
+                ),
             )
 
-        # Record error on position if it's not already recorded (only for DCA orders)
-        if commit_on_error and position and not position.last_error_message:
-            position.last_error_message = str(e)
-            position.last_error_timestamp = datetime.utcnow()
-            await db.commit()
+        # Record error on position for UI display and commit order history
+        if position:
+            if not position.last_error_message:
+                position.last_error_message = str(e)
+                position.last_error_timestamp = datetime.utcnow()
+            try:
+                await db.commit()
+            except Exception:
+                pass  # Don't mask the original error
         raise
 
     finally:
         await shutdown_manager.decrement_in_flight()
 
     # Record trade with ACTUAL filled amounts from exchange
-    trade = Trade(
-        position_id=position.id,
-        timestamp=datetime.utcnow(),
-        side="buy",
-        quote_amount=actual_quote_amount,  # Use actual filled value
-        base_amount=actual_base_amount,  # Use actual filled size
-        price=actual_price,  # Use actual average price
-        trade_type=trade_type,
+    trade = await _create_buy_trade_record(
+        db=db,
+        position=position,
         order_id=order_id,
-        macd_value=signal_data.get("macd_value") if signal_data else None,
-        macd_signal=signal_data.get("macd_signal") if signal_data else None,
-        macd_histogram=signal_data.get("macd_histogram") if signal_data else None,
+        actual_base_amount=actual_base_amount,
+        actual_quote_amount=actual_quote_amount,
+        actual_price=actual_price,
+        trade_type=trade_type,
+        signal_data=signal_data,
     )
-
-    db.add(trade)
-
-    # Clear any previous errors on successful trade
-    position.last_error_message = None
-    position.last_error_timestamp = None
-
-    # Update position totals with ACTUAL filled amounts
-    position.total_quote_spent += actual_quote_amount
-    position.total_base_acquired += actual_base_amount
-    # Update average buy price manually (don't use update_averages() - it triggers lazy loading)
-    if position.total_base_acquired > 0:
-        position.average_buy_price = position.total_quote_spent / position.total_base_acquired
-    else:
-        position.average_buy_price = 0.0
-
-    # Assign deal number on FIRST successful trade (base order success)
-    # This ensures only successfully opened positions get deal numbers
-    if position.user_deal_number is None and position.user_id:
-        from app.trading_engine.position_manager import get_next_user_deal_number
-        position.user_deal_number = await get_next_user_deal_number(db, position.user_id)
-        logger.info(f"  📊 Assigned deal #{position.user_deal_number} (attempt #{position.user_attempt_number})")
-
-    # CRITICAL: Commit trade and position update IMMEDIATELY
-    # This ensures we never lose a trade record even if subsequent operations fail
-    await db.commit()
-    await db.refresh(trade)
 
     # === NON-CRITICAL OPERATIONS BELOW ===
     # These can fail without losing the trade record
-
-    # Log successful order to history (best-effort)
-    try:
-        await log_order_to_history(
-            db=db,
-            bot=bot,
-            product_id=product_id,
-            position=position,
-            side="BUY",
-            order_type="MARKET",
-            trade_type=trade_type,
-            quote_amount=actual_quote_amount,
-            price=actual_price,
-            status="success",
-            order_id=order_id,
-            base_amount=actual_base_amount,
-        )
-    except Exception as e:
-        logger.warning(f"Failed to log order to history (trade was recorded): {e}")
-
-    # Broadcast order fill notification via WebSocket (best-effort)
-    try:
-        fill_type = "base_order" if trade_type == "initial" else "dca_order"
-        is_paper = (hasattr(exchange, 'is_paper_trading')
-                    and callable(exchange.is_paper_trading)
-                    and exchange.is_paper_trading())
-        await ws_manager.broadcast_order_fill(
-            fill_type=fill_type,
-            product_id=product_id,
-            base_amount=actual_base_amount,
-            quote_amount=actual_quote_amount,
-            price=actual_price,
-            position_id=position.id,
-            user_id=position.user_id,
-            is_paper_trading=is_paper,
-        )
-    except Exception as e:
-        logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
-
-    # Invalidate balance cache after trade (best-effort)
-    try:
-        await trading_client.invalidate_balance_cache()
-    except Exception as e:
-        logger.warning(f"Failed to invalidate balance cache (trade was recorded): {e}")
+    await _post_buy_operations(
+        db=db,
+        exchange=exchange,
+        trading_client=trading_client,
+        bot=bot,
+        product_id=product_id,
+        position=position,
+        order_id=order_id,
+        actual_base_amount=actual_base_amount,
+        actual_quote_amount=actual_quote_amount,
+        actual_price=actual_price,
+        trade_type=trade_type,
+    )
 
     return trade
 
@@ -531,7 +590,7 @@ async def execute_limit_buy(
     await db.refresh(pending_order)
 
     logger.info(
-        f"✅ Placed limit buy order: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f} (Order ID: {order_id})"
+        f"Placed limit buy order: {quote_amount:.8f} {quote_currency} @ {limit_price:.8f} (Order ID: {order_id})"
     )
 
     return pending_order
@@ -599,10 +658,10 @@ async def execute_buy_close_short(
 
     if take_profit_order_type == "limit":
         # TODO: Short close currently uses market orders only; limit close not yet implemented
-        logger.warning("  ⚠️ Limit close orders for shorts not yet implemented - using market order")
+        logger.warning("  Limit close orders for shorts not yet implemented - using market order")
 
     # Execute market buy order to close short
-    logger.info(f"  💱 Executing MARKET close (buy back) @ {current_price:.8f}")
+    logger.info(f"  Executing MARKET close (buy back) @ {current_price:.8f}")
 
     # Execute order via TradingClient
     order_id = None
@@ -683,7 +742,7 @@ async def execute_buy_close_short(
         f"  SHORT CLOSED: Sold @ avg ${position.short_average_sell_price:.2f}, "
         f"bought back @ ${average_filled_price:.2f}"
     )
-    logger.info(f"  💰 P&L: ${profit_quote:.2f} ({profit_percentage:.2f}%)")
+    logger.info(f"  P&L: ${profit_quote:.2f} ({profit_percentage:.2f}%)")
 
     # Get BTC/USD price for USD profit tracking
     try:
@@ -723,18 +782,13 @@ async def execute_buy_close_short(
     # Log to order history (best-effort)
     try:
         await log_order_to_history(
-            db=db,
-            bot=bot,
-            product_id=product_id,
-            position=position,
-            side="BUY",
-            order_type="MARKET",
-            trade_type="close_short",
-            quote_amount=usd_spent_to_close,
-            price=average_filled_price,
-            status="success",
-            order_id=order_id,
-            base_amount=filled_size,
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="BUY", order_type="MARKET",
+                trade_type="close_short", quote_amount=usd_spent_to_close,
+                price=average_filled_price, status="success",
+                order_id=order_id, base_amount=filled_size,
+            ),
         )
     except Exception as e:
         logger.warning(f"Failed to log close-short to history: {e}")
@@ -744,7 +798,7 @@ async def execute_buy_close_short(
         is_paper = (hasattr(exchange, 'is_paper_trading')
                     and callable(exchange.is_paper_trading)
                     and exchange.is_paper_trading())
-        await ws_manager.broadcast_order_fill(
+        await ws_manager.broadcast_order_fill(OrderFillEvent(
             fill_type="close_short",
             product_id=product_id,
             base_amount=filled_size,
@@ -755,10 +809,10 @@ async def execute_buy_close_short(
             profit_percentage=profit_percentage,
             user_id=position.user_id,
             is_paper_trading=is_paper,
-        )
+        ))
     except Exception as e:
         logger.warning(f"Failed to broadcast short close WebSocket notification: {e}")
 
-    logger.info(f"  ✅ SHORT POSITION CLOSED: Profit ${profit_quote:.2f} ({profit_percentage:.2f}%)")
+    logger.info(f"  SHORT POSITION CLOSED: Profit ${profit_quote:.2f} ({profit_percentage:.2f}%)")
 
     return trade, profit_quote, profit_percentage

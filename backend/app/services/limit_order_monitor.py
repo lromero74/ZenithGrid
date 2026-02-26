@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exchange_clients.base import ExchangeClient
 from app.models import PendingOrder, Position, Trade
-from app.services.websocket_manager import ws_manager
+from app.services.websocket_manager import ws_manager, OrderFillEvent
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class LimitOrderMonitor:
                     is_paper = (hasattr(self.exchange, 'is_paper_trading')
                                 and callable(self.exchange.is_paper_trading)
                                 and self.exchange.is_paper_trading())
-                    await ws_manager.broadcast_order_fill(
+                    await ws_manager.broadcast_order_fill(OrderFillEvent(
                         fill_type="partial_fill",
                         product_id=position.product_id,
                         base_amount=new_fill_size,
@@ -142,7 +142,7 @@ class LimitOrderMonitor:
                         position_id=position.id,
                         user_id=position.user_id,
                         is_paper_trading=is_paper,
-                    )
+                    ))
 
                     # Update position totals (reduce remaining base, add quote received)
                     if not position.total_quote_received:
@@ -563,7 +563,7 @@ class LimitOrderMonitor:
                 is_paper = (hasattr(self.exchange, 'is_paper_trading')
                             and callable(self.exchange.is_paper_trading)
                             and self.exchange.is_paper_trading())
-                await ws_manager.broadcast_order_fill(
+                await ws_manager.broadcast_order_fill(OrderFillEvent(
                     fill_type="sell_order",
                     product_id=position.product_id,
                     base_amount=filled_size,
@@ -574,7 +574,7 @@ class LimitOrderMonitor:
                     profit_percentage=position.profit_percentage,
                     user_id=position.user_id,
                     is_paper_trading=is_paper,
-                )
+                ))
 
             elif order_status in ["CANCELLED", "EXPIRED", "FAILED"]:
                 # Order cancelled/expired - reset position flags

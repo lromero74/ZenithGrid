@@ -12,7 +12,7 @@ export { useNewsFilters } from './useNewsFilters'
 export type { UseNewsFiltersReturn } from './useNewsFilters'
 
 export { useTTSSync } from './useTTSSync'
-export type { WordTiming } from './useTTSSync'
+export type { WordTiming, UseTTSSyncReturn } from './useTTSSync'
 
 export { useSeenStatus } from './useSeenStatus'
 export type { UseSeenStatusReturn } from './useSeenStatus'

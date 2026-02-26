@@ -8,7 +8,7 @@ and bidirectional budget configuration validation.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from fastapi import HTTPException
+from app.exceptions import ValidationError
 
 from app.services.bot_validation_service import (
     validate_quote_currency,
@@ -45,11 +45,11 @@ class TestValidateQuoteCurrency:
         assert result is None
 
     def test_mixed_quote_currencies_raises(self):
-        """Failure: mixed quote currencies raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        """Failure: mixed quote currencies raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
             validate_quote_currency(["ETH-BTC", "SOL-USD"])
         assert exc_info.value.status_code == 400
-        assert "same quote currency" in exc_info.value.detail
+        assert "same quote currency" in exc_info.value.message
 
     def test_single_pair_no_dash(self):
         """Edge case: single pair without dash returns None (no quotes found)."""
@@ -58,7 +58,7 @@ class TestValidateQuoteCurrency:
 
     def test_mixed_with_three_currencies_raises(self):
         """Failure: three different quote currencies also raises."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             validate_quote_currency(["ETH-BTC", "SOL-USD", "ADA-USDC"])
         assert exc_info.value.status_code == 400
 
@@ -162,17 +162,17 @@ class TestValidateBidirectionalBudgetConfig:
         }
 
         from app.services.bot_validation_service import validate_bidirectional_budget_config
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             await validate_bidirectional_budget_config(
                 db_session, bot, quote_currency="USD"
             )
         assert exc_info.value.status_code == 400
-        assert "sum to 100%" in exc_info.value.detail
+        assert "sum to 100%" in exc_info.value.message
 
     @pytest.mark.asyncio
     @patch("app.services.exchange_service.get_exchange_client_for_account")
     async def test_no_exchange_client_raises(self, mock_get_exchange, db_session):
-        """Failure: missing exchange client raises HTTPException."""
+        """Failure: missing exchange client raises ValidationError."""
         mock_get_exchange.return_value = None
 
         bot = MagicMock()
@@ -183,7 +183,7 @@ class TestValidateBidirectionalBudgetConfig:
         bot.account_id = 1
 
         from app.services.bot_validation_service import validate_bidirectional_budget_config
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             await validate_bidirectional_budget_config(
                 db_session, bot, quote_currency="USD"
             )
@@ -192,7 +192,7 @@ class TestValidateBidirectionalBudgetConfig:
     @pytest.mark.asyncio
     @patch("app.services.exchange_service.get_exchange_client_for_account")
     async def test_zero_budget_percentage_raises(self, mock_get_exchange, db_session):
-        """Failure: zero budget_percentage raises HTTPException."""
+        """Failure: zero budget_percentage raises ValidationError."""
         mock_exchange = AsyncMock()
         mock_exchange.get_account = AsyncMock(return_value={
             "USD": 5000.0, "USDC": 0.0, "USDT": 0.0, "BTC": 0.5
@@ -210,12 +210,12 @@ class TestValidateBidirectionalBudgetConfig:
         bot.account_id = 1
 
         from app.services.bot_validation_service import validate_bidirectional_budget_config
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             await validate_bidirectional_budget_config(
                 db_session, bot, quote_currency="USD"
             )
         assert exc_info.value.status_code == 400
-        assert "Budget percentage must be > 0" in exc_info.value.detail
+        assert "Budget percentage must be > 0" in exc_info.value.message
 
     @pytest.mark.asyncio
     @patch("app.services.budget_calculator.validate_bidirectional_budget")
@@ -241,9 +241,9 @@ class TestValidateBidirectionalBudgetConfig:
         bot.id = 1
 
         from app.services.bot_validation_service import validate_bidirectional_budget_config
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             await validate_bidirectional_budget_config(
                 db_session, bot, quote_currency="USD"
             )
         assert exc_info.value.status_code == 400
-        assert "Insufficient USD" in exc_info.value.detail
+        assert "Insufficient USD" in exc_info.value.message

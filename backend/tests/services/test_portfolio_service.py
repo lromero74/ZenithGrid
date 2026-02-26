@@ -473,9 +473,9 @@ class TestGetGenericCexPortfolio:
 
     @pytest.mark.asyncio
     async def test_no_exchange_client_raises_503(self, db_session):
-        """Failure: raises HTTPException 503 when exchange client unavailable."""
+        """Failure: raises ExchangeUnavailableError when exchange client unavailable."""
         from app.services.portfolio_service import get_generic_cex_portfolio
-        from fastapi import HTTPException
+        from app.exceptions import ExchangeUnavailableError
 
         account = MagicMock()
         account.id = 301
@@ -485,16 +485,16 @@ class TestGetGenericCexPortfolio:
             new_callable=AsyncMock,
             return_value=None,
         ):
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ExchangeUnavailableError) as exc_info:
                 await get_generic_cex_portfolio(account=account, db=db_session)
 
             assert exc_info.value.status_code == 503
 
     @pytest.mark.asyncio
     async def test_exchange_balance_fetch_failure_raises_503(self, db_session):
-        """Failure: raises HTTPException 503 when balance fetch fails."""
+        """Failure: raises ExchangeUnavailableError when balance fetch fails."""
         from app.services.portfolio_service import get_generic_cex_portfolio
-        from fastapi import HTTPException
+        from app.exceptions import ExchangeUnavailableError
 
         account = MagicMock()
         account.id = 302
@@ -507,7 +507,7 @@ class TestGetGenericCexPortfolio:
             new_callable=AsyncMock,
             return_value=mock_exchange,
         ):
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ExchangeUnavailableError) as exc_info:
                 await get_generic_cex_portfolio(account=account, db=db_session)
 
             assert exc_info.value.status_code == 503

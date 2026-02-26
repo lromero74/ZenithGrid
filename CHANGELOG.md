@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.60.0] - 2026-02-26
+
+### Changed
+- **Major structural refactoring**: Eliminated all spaghetti-check findings — 1 CRITICAL bidirectional dependency, 137 HIGH, and 230 MEDIUM structural issues resolved across the entire codebase.
+- **auth_router.py split into sub-routers**: 2151-line monolith decomposed into 9 focused modules under `auth_routers/` (core auth, email verification, password reset, TOTP MFA, email MFA, device trust, preferences, shared helpers, rate limiters).
+- **multi_bot_monitor.py split into monitor package**: 2039-line file decomposed into focused modules (`batch_analyzer`, `pair_processor`, `bull_flag_processor`) with the core class trimmed to 861 lines.
+- **Business logic extracted from routers to services**: `account_router` (1035→176 lines), `news_metrics_router` (1105→323 lines), `accounts_router` (1132→893 lines), `reports_router` (1262→1065 lines) — all now thin endpoint wrappers.
+- **news_router ↔ news_fetch_service circular dependency eliminated**: Moved 12 business logic functions from router to service layer, fixing the only CRITICAL finding.
+- **God functions decomposed**: `process_signal()` (951 lines, CC=86) broken into 7 focused helpers; `execute_buy()`/`execute_sell()` decomposed with shared `fill_reconciler` module.
+- **Strategy definitions made data-driven**: `get_definition()` methods in `indicator_based.py` and `grid_trading.py` converted from 400+ lines of constructor calls to compact parameter config lists.
+- **Domain exceptions replace HTTPException in services**: New `exceptions.py` with `AppError`, `ValidationError`, `ExchangeUnavailableError`, `NotFoundError` — services no longer coupled to FastAPI.
+- **Parameter dataclasses for heavy-param functions**: `create_exchange_client()`, `log_order_to_history()`, `broadcast_order_fill()` now use typed dataclass parameters instead of 10-15 positional args.
+- **Frontend components extracted**: `News.tsx` (1586→477 lines) split into `ArticleSection`, `VideoSection`, `NewsFilterBar`, `ArticlePreviewModal`. `BotFormModal.tsx` (1540→1362 lines) with `useBotForm` hook, `CoinCategorySelector`, `StrategyConfigSection` extracted.
+
 ## [v2.59.4] - 2026-02-25
 
 ### Fixed

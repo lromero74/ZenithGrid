@@ -16,11 +16,257 @@ from app.exchange_clients.base import ExchangeClient
 from app.models import Bot, PendingOrder, Position, Trade
 from app.product_precision import get_base_precision
 from app.services.shutdown_manager import shutdown_manager
-from app.services.websocket_manager import ws_manager
+from app.services.websocket_manager import ws_manager, OrderFillEvent
 from app.trading_client import TradingClient
-from app.trading_engine.order_logger import log_order_to_history
+from app.trading_engine.fill_reconciler import reconcile_order_fill
+from app.trading_engine.order_logger import log_order_to_history, OrderLogEntry
 
 logger = logging.getLogger(__name__)
+
+
+async def _try_limit_sell(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    product_id: str,
+    position: Position,
+    current_price: float,
+    signal_data: Optional[Dict[str, Any]],
+) -> Tuple[bool, Optional[Tuple[None, float, float]]]:
+    """
+    Attempt to place a limit sell order at mark price.
+
+    Gets the ticker to calculate the mark price (mid between bid/ask) and
+    places a limit sell order. If successful, returns early result. If the
+    limit order placement fails, returns False so the caller can attempt
+    a market order fallback.
+
+    Args:
+        db: Database session
+        exchange: Exchange client instance
+        trading_client: TradingClient instance
+        bot: Bot instance
+        product_id: Trading pair
+        position: Current position to close
+        current_price: Current market price (fallback)
+        signal_data: Optional signal metadata
+
+    Returns:
+        Tuple of (handled, result). If handled is True, result contains the
+        return value (None, 0.0, 0.0). If handled is False, result is None
+        and the caller should fall back to market order.
+    """
+    try:
+        # Get ticker to calculate mark price
+        ticker = await exchange.get_ticker(product_id)
+        best_bid = float(
+            ticker.get("best_bid", 0) or ticker.get("bid", 0)
+        )
+        best_ask = float(
+            ticker.get("best_ask", 0) or ticker.get("ask", 0)
+        )
+
+        # Use mark price (mid-point) as limit price
+        if best_bid > 0 and best_ask > 0:
+            limit_price = (best_bid + best_ask) / 2
+        else:
+            # Fallback to current price if bid/ask not available
+            limit_price = current_price
+
+        # Use full position amount (execute_limit_sell will handle precision rounding)
+        base_amount = position.total_base_acquired
+
+        logger.info(f"  Placing LIMIT close order @ {limit_price:.8f} (mark price)")
+
+        # Place limit order and return - position stays open until filled
+        # Limit order placed; fill tracking handled by limit_order_monitor service
+        _pending_order = await execute_limit_sell(  # noqa: F841
+            db=db,
+            exchange=exchange,
+            trading_client=trading_client,
+            bot=bot,
+            product_id=product_id,
+            position=position,
+            base_amount=base_amount,
+            limit_price=limit_price,
+            signal_data=signal_data,
+        )
+
+        # Return None trade since order is pending
+        # Actual Trade record will be created when limit order fills
+        return True, (None, 0.0, 0.0)
+
+    except Exception as e:
+        logger.warning(f"Failed to place limit close order: {e}. Checking if market order is viable...")
+        return False, None
+
+
+async def _validate_market_fallback(
+    position: Position,
+    current_price: float,
+    config: Dict,
+) -> bool:
+    """
+    Validate that profit is sufficient before falling back to a market order.
+
+    When a limit sell order fails, this checks whether the current profit
+    still meets the minimum take_profit_percentage threshold. If profit has
+    dropped below the target, the sell is aborted to prevent selling below
+    the desired profit level.
+
+    Args:
+        position: Current position
+        current_price: Current market price
+        config: Strategy config snapshot
+
+    Returns:
+        True if market fallback is approved (profit sufficient), False to abort.
+    """
+    current_value = position.total_base_acquired * current_price
+    profit_amount = current_value - position.total_quote_spent
+    profit_pct = (profit_amount / position.total_quote_spent) * 100
+
+    # Get minimum profit threshold from config
+    # Use take_profit_percentage as the profit floor
+    min_profit = config.get("take_profit_percentage", 3.0)
+
+    if profit_pct < min_profit:
+        logger.warning(
+            f"Aborting market order fallback - current profit {profit_pct:.2f}% is below "
+            f"minimum target {min_profit:.2f}%. Will retry on next check cycle."
+        )
+        return False
+
+    logger.info(
+        f"Market order fallback approved - current profit {profit_pct:.2f}% >= "
+        f"minimum {min_profit:.2f}%. Proceeding with market order."
+    )
+    return True
+
+
+async def _reconcile_sell_fill(
+    exchange: ExchangeClient,
+    order_id: str,
+    product_id: str,
+    fallback_base: float,
+    fallback_price: float,
+) -> tuple:
+    """
+    Fetch actual sell fill data from exchange with retry logic.
+
+    Uses the shared fill reconciler with fallback estimates for cases where
+    fill data is unavailable after all retries.
+
+    Args:
+        exchange: Exchange client instance
+        order_id: The exchange order ID to check
+        product_id: Trading pair
+        fallback_base: Estimated base amount if fill data unavailable
+        fallback_price: Estimated price if fill data unavailable
+
+    Returns:
+        Tuple of (actual_base_sold, quote_received, actual_price)
+    """
+    logger.info(f"Fetching fill data for sell order {order_id}")
+
+    fill_data = await reconcile_order_fill(
+        exchange=exchange,
+        order_id=order_id,
+        product_id=product_id,
+        max_retries=10,
+        adjust_btc_fees=False,
+        round_base_to_precision=False,
+        fallback_base=fallback_base,
+        fallback_price=fallback_price,
+    )
+
+    actual_price = fill_data.average_price if fill_data.average_price > 0 else fallback_price
+    return fill_data.filled_size, fill_data.filled_value, actual_price
+
+
+async def _create_sell_trade_record(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    position: Position,
+    order_id: str,
+    product_id: str,
+    actual_base_sold: float,
+    quote_received: float,
+    actual_price: float,
+    signal_data: Optional[Dict[str, Any]],
+) -> Tuple[Trade, float, float]:
+    """
+    Create Trade record, compute profit, and close the position.
+
+    Calculates profit in both quote currency and USD, creates the Trade
+    record, updates position status to closed, and commits immediately.
+
+    Args:
+        db: Database session
+        exchange: Exchange client instance (for BTC/USD price)
+        position: Current position to close
+        order_id: Exchange order ID
+        product_id: Trading pair
+        actual_base_sold: Actual base currency sold
+        quote_received: Actual quote currency received
+        actual_price: Actual average fill price
+        signal_data: Optional signal metadata
+
+    Returns:
+        Tuple of (trade, profit_quote, profit_percentage)
+    """
+    quote_currency = get_quote_currency(product_id)
+
+    # Calculate profit using actual fill data
+    profit_quote = quote_received - position.total_quote_spent
+    profit_percentage = (profit_quote / position.total_quote_spent) * 100
+
+    # Get BTC/USD price for USD profit tracking
+    try:
+        btc_usd_price_at_close = await exchange.get_btc_usd_price()
+        # Convert profit to USD if quote is BTC
+        if quote_currency == "BTC":
+            profit_usd = profit_quote * btc_usd_price_at_close
+        else:  # quote is USD
+            profit_usd = profit_quote
+    except Exception:
+        btc_usd_price_at_close = None
+        profit_usd = None
+
+    # Record trade with actual fill data
+    trade = Trade(
+        position_id=position.id,
+        timestamp=datetime.utcnow(),
+        side="sell",
+        quote_amount=quote_received,
+        base_amount=actual_base_sold,
+        price=actual_price,
+        trade_type="sell",
+        order_id=order_id,
+        macd_value=signal_data.get("macd_value") if signal_data else None,
+        macd_signal=signal_data.get("macd_signal") if signal_data else None,
+        macd_histogram=signal_data.get("macd_histogram") if signal_data else None,
+    )
+
+    db.add(trade)
+
+    # Close position using actual fill data
+    position.status = "closed"
+    position.closed_at = datetime.utcnow()
+    position.sell_price = actual_price
+    position.total_quote_received = quote_received
+    position.profit_quote = profit_quote
+    position.profit_percentage = profit_percentage
+    position.btc_usd_price_at_close = btc_usd_price_at_close
+    position.profit_usd = profit_usd
+
+    # CRITICAL: Commit trade and position close IMMEDIATELY
+    # This ensures we never lose a sell record even if subsequent operations fail
+    await db.commit()
+    await db.refresh(trade)
+
+    return trade, profit_quote, profit_percentage
 
 
 async def execute_sell_short(
@@ -74,13 +320,13 @@ async def execute_sell_short(
 
     if is_safety_order and dca_execution_type == "limit":
         limit_price = current_price
-        logger.info(f"  📋 Placing limit short sell order: {base_amount:.8f} BTC @ {limit_price:.8f}")
+        logger.info(f"  Placing limit short sell order: {base_amount:.8f} BTC @ {limit_price:.8f}")
         # TODO: Short safety orders use market orders only; limit logic not yet implemented
         # For now, fall through to market order
-        logger.warning("  ⚠️ Limit short safety orders not yet implemented - using market order")
+        logger.warning("  Limit short safety orders not yet implemented - using market order")
 
     # Execute market sell order (immediate execution)
-    logger.info(f"  💱 Executing SHORT SELL: {base_amount:.8f} BTC @ {current_price:.8f}")
+    logger.info(f"  Executing SHORT SELL: {base_amount:.8f} BTC @ {current_price:.8f}")
 
     # Round base_amount down to proper precision (floor to avoid INSUFFICIENT_FUND)
     precision = get_base_precision(product_id)
@@ -92,7 +338,7 @@ async def execute_sell_short(
     )
     if not is_valid:
         error = f"Order validation failed: {error_msg}"
-        logger.error(f"  ❌ {error}")
+        logger.error(f"  {error}")
         if commit_on_error:
             position.last_error_message = error
             position.last_error_timestamp = datetime.utcnow()
@@ -245,18 +491,13 @@ async def execute_sell_short(
     # Log to order history (best-effort)
     try:
         await log_order_to_history(
-            db=db,
-            bot=bot,
-            product_id=product_id,
-            position=position,
-            side="SELL",
-            order_type="MARKET",
-            trade_type=trade_type,
-            quote_amount=quote_received,
-            price=actual_price,
-            status="success",
-            order_id=order_id,
-            base_amount=actual_base_sold,
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="SELL", order_type="MARKET",
+                trade_type=trade_type, quote_amount=quote_received,
+                price=actual_price, status="success",
+                order_id=order_id, base_amount=actual_base_sold,
+            ),
         )
     except Exception as e:
         logger.warning(f"Failed to log short sell to history: {e}")
@@ -379,7 +620,7 @@ async def execute_limit_sell(
     # Get base currency name from product_id
     base_currency = product_id.split("-")[0]
     logger.info(
-        f"✅ Placed limit sell order: {base_amount:.8f} {base_currency} @ {limit_price:.8f} (Order ID: {order_id})"
+        f"Placed limit sell order: {base_amount:.8f} {base_currency} @ {limit_price:.8f} (Order ID: {order_id})"
     )
 
     return pending_order
@@ -413,8 +654,6 @@ async def execute_sell(
         Tuple of (trade, profit_quote, profit_percentage)
         If limit order is placed, returns (None, 0.0, 0.0) and position remains open
     """
-    quote_currency = get_quote_currency(product_id)
-
     # Check if shutdown is in progress - reject new orders
     if shutdown_manager.is_shutting_down:
         logger.warning(f"Rejecting sell order for {product_id} - shutdown in progress")
@@ -424,7 +663,7 @@ async def execute_sell(
     # If position is already closing via limit order, don't place another one
     if position.closing_via_limit:
         logger.warning(
-            f"⚠️ Position #{position.id} already has a pending limit close order "
+            f"Position #{position.id} already has a pending limit close order "
             f"(order_id: {position.limit_close_order_id}). Skipping duplicate sell."
         )
         return None, 0.0, 0.0
@@ -434,7 +673,7 @@ async def execute_sell(
     config: Dict = position.strategy_config_snapshot or {}
     take_profit_order_type = config.get("take_profit_order_type", "market")
 
-    # Paper trading cannot simulate pending limit orders — always use market
+    # Paper trading cannot simulate pending limit orders -- always use market
     is_paper = (
         hasattr(exchange, 'is_paper_trading')
         and callable(exchange.is_paper_trading)
@@ -442,82 +681,54 @@ async def execute_sell(
     )
 
     if take_profit_order_type == "limit" and not force_market and not is_paper:
-        # Use limit order at mark price (mid between bid/ask)
-        try:
-            # Get ticker to calculate mark price
-            ticker = await exchange.get_ticker(product_id)
-            best_bid = float(
-                ticker.get("best_bid", 0) or ticker.get("bid", 0)
-            )
-            best_ask = float(
-                ticker.get("best_ask", 0) or ticker.get("ask", 0)
-            )
+        # Try placing a limit sell order
+        handled, result = await _try_limit_sell(
+            db=db,
+            exchange=exchange,
+            trading_client=trading_client,
+            bot=bot,
+            product_id=product_id,
+            position=position,
+            current_price=current_price,
+            signal_data=signal_data,
+        )
 
-            # Use mark price (mid-point) as limit price
-            if best_bid > 0 and best_ask > 0:
-                limit_price = (best_bid + best_ask) / 2
-            else:
-                # Fallback to current price if bid/ask not available
-                limit_price = current_price
+        if handled:
+            return result
 
-            # Use full position amount (execute_limit_sell will handle precision rounding)
-            base_amount = position.total_base_acquired
-
-            logger.info(f"  📊 Placing LIMIT close order @ {limit_price:.8f} (mark price)")
-
-            # Place limit order and return - position stays open until filled
-            # Limit order placed; fill tracking handled by limit_order_monitor service
-            _pending_order = await execute_limit_sell(  # noqa: F841
-                db=db,
-                exchange=exchange,
-                trading_client=trading_client,
-                bot=bot,
-                product_id=product_id,
-                position=position,
-                base_amount=base_amount,
-                limit_price=limit_price,
-                signal_data=signal_data,
-            )
-
-            # Return None trade since order is pending
-            # Actual Trade record will be created when limit order fills
+        # Limit order failed - validate profit before market fallback
+        if not await _validate_market_fallback(position, current_price, config):
             return None, 0.0, 0.0
-
-        except Exception as e:
-            logger.warning(f"Failed to place limit close order: {e}. Checking if market order is viable...")
-
-            # SAFETY CHECK: Re-validate profit before falling back to market order
-            # If price dropped significantly during the limit order attempt, abort instead of selling below target
-            current_value = position.total_base_acquired * current_price
-            profit_amount = current_value - position.total_quote_spent
-            profit_pct = (profit_amount / position.total_quote_spent) * 100
-
-            # Get minimum profit threshold from config
-            # Use take_profit_percentage as the profit floor
-            min_profit = config.get("take_profit_percentage", 3.0)
-
-            if profit_pct < min_profit:
-                logger.warning(
-                    f"⚠️ Aborting market order fallback - current profit {profit_pct:.2f}% is below "
-                    f"minimum target {min_profit:.2f}%. Will retry on next check cycle."
-                )
-                return None, 0.0, 0.0
-
-            logger.info(
-                f"✅ Market order fallback approved - current profit {profit_pct:.2f}% >= "
-                f"minimum {min_profit:.2f}%. Proceeding with market order."
-            )
-            # Fall through to market order execution below
+        # Fall through to market order execution below
 
     # Execute market order (default behavior or fallback)
-    logger.info(f"  💱 Executing MARKET close order @ {current_price:.8f}")
+    logger.info(f"  Executing MARKET close order @ {current_price:.8f}")
 
     # Round base_amount down to proper precision (floor to avoid INSUFFICIENT_FUND)
     precision = get_base_precision(product_id)
-    base_amount = math.floor(position.total_base_acquired * (10 ** precision)) / (10 ** precision)
+    raw_amount = position.total_base_acquired
+
+    # For paper trading: cap at actual available balance to prevent
+    # mismatch between position tracking and simulated balances
+    if is_paper:
+        base_currency = product_id.split("-")[0]
+        try:
+            bal_info = await exchange.get_balance(base_currency)
+            available = float(bal_info.get("available", bal_info.get("balance", 0)))
+            if available < raw_amount:
+                logger.warning(
+                    f"  Paper balance mismatch: position says {raw_amount:.8f} "
+                    f"{base_currency} but only {available:.8f} available. "
+                    f"Using available balance."
+                )
+                raw_amount = available
+        except Exception as e:
+            logger.warning(f"Could not check paper balance: {e}")
+
+    base_amount = math.floor(raw_amount * (10 ** precision)) / (10 ** precision)
 
     logger.info(
-        f"  💰 Selling {base_amount:.8f} {product_id.split('-')[0]} "
+        f"  Selling {base_amount:.8f} {product_id.split('-')[0]} "
         f"(raw: {position.total_base_acquired:.8f}, precision: {precision} decimals)"
     )
 
@@ -569,47 +780,13 @@ async def execute_sell(
             )
 
         # Fetch actual fill data from exchange with retry
-        logger.info(f"Fetching fill data for sell order {order_id}")
-        max_retries = 10
-        for attempt in range(max_retries):
-            if attempt > 0:
-                delay = min(0.5 * (2 ** (attempt - 1)), 5.0)
-                await asyncio.sleep(delay)
-
-            try:
-                order_details = await exchange.get_order(order_id)
-                filled_size = float(order_details.get("filled_size", "0"))
-                filled_value = float(order_details.get("filled_value", "0"))
-                avg_price = float(
-                    order_details.get("average_filled_price", "0")
-                )
-
-                if filled_size > 0 and filled_value > 0:
-                    actual_base_sold = filled_size
-                    quote_received = filled_value
-                    actual_price = avg_price if avg_price > 0 else current_price
-                    logger.info(
-                        f"Sell order filled: {actual_base_sold:.8f} @ "
-                        f"{actual_price:.8f} = {quote_received:.8f}"
-                    )
-                    break
-
-                logger.warning(
-                    f"Attempt {attempt + 1}/{max_retries}: "
-                    f"Sell order not yet filled"
-                )
-            except Exception as fill_err:
-                logger.warning(
-                    f"Attempt {attempt + 1}/{max_retries}: "
-                    f"Failed to get fill data: {fill_err}"
-                )
-
-            if attempt == max_retries - 1:
-                logger.warning(
-                    f"Could not fetch fill data for {order_id} after "
-                    f"{max_retries} attempts. Using estimate: "
-                    f"{base_amount} @ {current_price}"
-                )
+        actual_base_sold, quote_received, actual_price = await _reconcile_sell_fill(
+            exchange=exchange,
+            order_id=order_id,
+            product_id=product_id,
+            fallback_base=base_amount,
+            fallback_price=current_price,
+        )
 
     except Exception as e:
         logger.error(f"Error executing sell order: {e}")
@@ -622,21 +799,19 @@ async def execute_sell(
         except Exception:
             pass  # Don't mask the original error
 
-        # Log failed sell to order history (best-effort)
+        # Log failed sell to order history and commit so it persists
+        # (log_order_to_history only adds to session, doesn't commit)
         try:
             await log_order_to_history(
-                db=db,
-                bot=bot,
-                product_id=product_id,
-                position=position,
-                side="SELL",
-                order_type="MARKET",
-                trade_type="sell",
-                quote_amount=base_amount * current_price,
-                price=current_price,
-                status="failed",
-                error_message=str(e)[:200],
+                db=db, bot=bot, position=position,
+                entry=OrderLogEntry(
+                    product_id=product_id, side="SELL", order_type="MARKET",
+                    trade_type="sell", quote_amount=base_amount * current_price,
+                    price=current_price, status="failed",
+                    error_message=str(e)[:200],
+                ),
             )
+            await db.commit()
         except Exception:
             pass
 
@@ -645,53 +820,18 @@ async def execute_sell(
     finally:
         await shutdown_manager.decrement_in_flight()
 
-    # Calculate profit using actual fill data
-    profit_quote = quote_received - position.total_quote_spent
-    profit_percentage = (profit_quote / position.total_quote_spent) * 100
-
-    # Get BTC/USD price for USD profit tracking
-    try:
-        btc_usd_price_at_close = await exchange.get_btc_usd_price()
-        # Convert profit to USD if quote is BTC
-        if quote_currency == "BTC":
-            profit_usd = profit_quote * btc_usd_price_at_close
-        else:  # quote is USD
-            profit_usd = profit_quote
-    except Exception:
-        btc_usd_price_at_close = None
-        profit_usd = None
-
-    # Record trade with actual fill data
-    trade = Trade(
-        position_id=position.id,
-        timestamp=datetime.utcnow(),
-        side="sell",
-        quote_amount=quote_received,
-        base_amount=actual_base_sold,
-        price=actual_price,
-        trade_type="sell",
+    # Create trade record, compute profit, and close position
+    trade, profit_quote, profit_percentage = await _create_sell_trade_record(
+        db=db,
+        exchange=exchange,
+        position=position,
         order_id=order_id,
-        macd_value=signal_data.get("macd_value") if signal_data else None,
-        macd_signal=signal_data.get("macd_signal") if signal_data else None,
-        macd_histogram=signal_data.get("macd_histogram") if signal_data else None,
+        product_id=product_id,
+        actual_base_sold=actual_base_sold,
+        quote_received=quote_received,
+        actual_price=actual_price,
+        signal_data=signal_data,
     )
-
-    db.add(trade)
-
-    # Close position using actual fill data
-    position.status = "closed"
-    position.closed_at = datetime.utcnow()
-    position.sell_price = actual_price
-    position.total_quote_received = quote_received
-    position.profit_quote = profit_quote
-    position.profit_percentage = profit_percentage
-    position.btc_usd_price_at_close = btc_usd_price_at_close
-    position.profit_usd = profit_usd
-
-    # CRITICAL: Commit trade and position close IMMEDIATELY
-    # This ensures we never lose a sell record even if subsequent operations fail
-    await db.commit()
-    await db.refresh(trade)
 
     # === NON-CRITICAL OPERATIONS BELOW ===
     # These can fail without losing the trade record
@@ -699,18 +839,13 @@ async def execute_sell(
     # Log successful sell to order history (best-effort)
     try:
         await log_order_to_history(
-            db=db,
-            bot=bot,
-            product_id=product_id,
-            position=position,
-            side="SELL",
-            order_type="MARKET",
-            trade_type="sell",
-            quote_amount=quote_received,
-            price=actual_price,
-            status="success",
-            order_id=order_id,
-            base_amount=actual_base_sold,
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id=product_id, side="SELL", order_type="MARKET",
+                trade_type="sell", quote_amount=quote_received,
+                price=actual_price, status="success",
+                order_id=order_id, base_amount=actual_base_sold,
+            ),
         )
     except Exception as e:
         logger.warning(f"Failed to log sell order to history (trade was recorded): {e}")
@@ -720,7 +855,7 @@ async def execute_sell(
         is_paper = (hasattr(exchange, 'is_paper_trading')
                     and callable(exchange.is_paper_trading)
                     and exchange.is_paper_trading())
-        await ws_manager.broadcast_order_fill(
+        await ws_manager.broadcast_order_fill(OrderFillEvent(
             fill_type="sell_order",
             product_id=product_id,
             base_amount=actual_base_sold,
@@ -731,7 +866,7 @@ async def execute_sell(
             profit_percentage=profit_percentage,
             user_id=position.user_id,
             is_paper_trading=is_paper,
-        )
+        ))
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket notification (trade was recorded): {e}")
 
@@ -745,7 +880,7 @@ async def execute_sell(
     # By resetting last_signal_check, the bot will run on the next monitor cycle
     # When a deal closes, immediately look for new opportunities
     try:
-        logger.info("🔄 Position closed - triggering immediate re-analysis to find replacement")
+        logger.info("Position closed - triggering immediate re-analysis to find replacement")
         bot.last_signal_check = None
         await db.commit()
     except Exception as e:

@@ -93,7 +93,7 @@ class TestGetUserPaperAccount:
     @pytest.mark.asyncio
     async def test_returns_paper_account_for_paper_only_user(self, db_session, user_with_paper_account):
         """Happy path: returns paper account when user has no live account."""
-        from app.routers.account_router import get_user_paper_account
+        from app.services.portfolio_service import get_user_paper_account
 
         user, paper = user_with_paper_account
         result = await get_user_paper_account(db_session, user.id)
@@ -104,7 +104,7 @@ class TestGetUserPaperAccount:
     @pytest.mark.asyncio
     async def test_returns_none_when_live_account_exists(self, db_session, user_with_live_account):
         """Edge case: returns None when user has a live CEX account."""
-        from app.routers.account_router import get_user_paper_account
+        from app.services.portfolio_service import get_user_paper_account
 
         user, live = user_with_live_account
         result = await get_user_paper_account(db_session, user.id)
@@ -113,7 +113,7 @@ class TestGetUserPaperAccount:
     @pytest.mark.asyncio
     async def test_returns_none_for_user_without_accounts(self, db_session):
         """Edge case: returns None for user with no accounts at all."""
-        from app.routers.account_router import get_user_paper_account
+        from app.services.portfolio_service import get_user_paper_account
 
         user = User(
             email="noaccts@example.com",
@@ -139,8 +139,8 @@ class TestGetCoinbaseFromDb:
     @pytest.mark.asyncio
     async def test_no_account_returns_503(self, db_session):
         """Failure: no CEX account returns 503."""
-        from fastapi import HTTPException
-        from app.routers.account_router import get_coinbase_from_db
+        from app.exceptions import ExchangeUnavailableError
+        from app.services.portfolio_service import get_coinbase_from_db
 
         user = User(
             email="noacct_coinbase@example.com",
@@ -151,15 +151,15 @@ class TestGetCoinbaseFromDb:
         db_session.add(user)
         await db_session.flush()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ExchangeUnavailableError) as exc_info:
             await get_coinbase_from_db(db_session, user.id)
         assert exc_info.value.status_code == 503
 
     @pytest.mark.asyncio
     async def test_account_without_credentials_returns_503(self, db_session):
         """Failure: account without API credentials returns 503."""
-        from fastapi import HTTPException
-        from app.routers.account_router import get_coinbase_from_db
+        from app.exceptions import ExchangeUnavailableError
+        from app.services.portfolio_service import get_coinbase_from_db
 
         user = User(
             email="nocreds_coinbase@example.com",
@@ -183,28 +183,28 @@ class TestGetCoinbaseFromDb:
         db_session.add(account)
         await db_session.flush()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ExchangeUnavailableError) as exc_info:
             await get_coinbase_from_db(db_session, user.id)
         assert exc_info.value.status_code == 503
-        assert "credentials" in exc_info.value.detail.lower()
+        assert "credentials" in exc_info.value.message.lower()
 
     @pytest.mark.asyncio
     async def test_paper_trading_account_is_excluded(self, db_session, user_with_paper_account):
         """Edge case: paper trading account is not used by get_coinbase_from_db."""
-        from fastapi import HTTPException
-        from app.routers.account_router import get_coinbase_from_db
+        from app.exceptions import ExchangeUnavailableError
+        from app.services.portfolio_service import get_coinbase_from_db
 
         user, _ = user_with_paper_account
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ExchangeUnavailableError) as exc_info:
             await get_coinbase_from_db(db_session, user.id)
         assert exc_info.value.status_code == 503
 
     @pytest.mark.asyncio
-    @patch("app.routers.account_router.create_exchange_client")
-    @patch("app.routers.account_router.is_encrypted", return_value=False)
+    @patch("app.services.portfolio_service.create_exchange_client")
+    @patch("app.services.portfolio_service.is_encrypted", return_value=False)
     async def test_valid_account_returns_client(self, mock_encrypted, mock_create, db_session, user_with_live_account):
         """Happy path: valid account returns exchange client."""
-        from app.routers.account_router import get_coinbase_from_db
+        from app.services.portfolio_service import get_coinbase_from_db
 
         mock_client = MagicMock()
         mock_create.return_value = mock_client
@@ -224,15 +224,13 @@ class TestGetBalances:
     """Tests for GET /api/account/balances"""
 
     @pytest.mark.asyncio
-    @patch("app.routers.account_router.get_public_price", new_callable=AsyncMock, create=True)
-    @patch("app.routers.account_router.get_public_btc_price", new_callable=AsyncMock, create=True)
-    async def test_paper_trading_balances(self, mock_btc_price, mock_price, db_session, user_with_paper_account):
+    async def test_paper_trading_balances(self, db_session, user_with_paper_account):
         """Happy path: paper trading account returns virtual balances."""
         from app.routers.account_router import get_balances
 
         user, paper_account = user_with_paper_account
 
-        # We need to patch the imports inside the function
+        # Patch the deferred imports used inside portfolio_service.get_account_balances
         with patch(
             "app.coinbase_api.public_market_data.get_current_price",
             new_callable=AsyncMock, return_value=0.035
@@ -254,8 +252,8 @@ class TestGetBalances:
 
     @pytest.mark.asyncio
     async def test_no_account_returns_404(self, db_session):
-        """Failure: no active account returns 404 or 500 (caught by exception handler)."""
-        from fastapi import HTTPException
+        """Failure: no active account raises an error."""
+        from app.exceptions import AppError
         from app.routers.account_router import get_balances
 
         user = User(
@@ -267,15 +265,14 @@ class TestGetBalances:
         db_session.add(user)
         await db_session.flush()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             await get_balances(account_id=None, db=db_session, current_user=user)
-        # The function catches generic exceptions and raises 500, or raises 404 for no account
-        assert exc_info.value.status_code in (404, 500)
+        assert exc_info.value.status_code in (404, 503)
 
     @pytest.mark.asyncio
     async def test_nonexistent_account_id_returns_error(self, db_session):
-        """Failure: non-existent account_id returns 404 or 500."""
-        from fastapi import HTTPException
+        """Failure: non-existent account_id raises an error."""
+        from app.exceptions import AppError
         from app.routers.account_router import get_balances
 
         user = User(
@@ -287,9 +284,9 @@ class TestGetBalances:
         db_session.add(user)
         await db_session.flush()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             await get_balances(account_id=99999, db=db_session, current_user=user)
-        assert exc_info.value.status_code in (404, 500)
+        assert exc_info.value.status_code in (404, 503)
 
 
 # =============================================================================

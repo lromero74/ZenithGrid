@@ -18,7 +18,7 @@ from app.services.indicator_log_service import log_indicator_evaluation
 from app.strategies import TradingStrategy
 from app.trading_client import TradingClient
 from app.trading_engine.buy_executor import execute_buy
-from app.trading_engine.order_logger import log_order_to_history, save_ai_log
+from app.trading_engine.order_logger import log_order_to_history, save_ai_log, OrderLogEntry
 from app.trading_engine.perps_executor import execute_perps_close, execute_perps_open
 from app.trading_engine.position_manager import create_position, get_active_position, get_open_positions_count
 from app.trading_engine.sell_executor import execute_sell
@@ -167,150 +167,119 @@ def _calculate_market_context_with_indicators(
 _POSITION_NOT_SET = object()  # sentinel to distinguish None from not-provided
 
 
-async def process_signal(
+async def _handle_ai_failsafe(
     db: AsyncSession,
     exchange: ExchangeClient,
     trading_client: TradingClient,
     bot: Bot,
-    strategy: TradingStrategy,
+    position: Position,
     product_id: str,
-    candles: List[Dict[str, Any]],
     current_price: float,
-    pre_analyzed_signal: Optional[Dict[str, Any]] = None,
-    candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
-    position_override: Any = _POSITION_NOT_SET,
-) -> Dict[str, Any]:
+    strategy: TradingStrategy,
+) -> Optional[Dict[str, Any]]:
+    """Handle AI failsafe sell when signal analysis returned None.
+
+    Only applies to ai_autonomous bots with an existing position.
+    Returns a result dict if failsafe was triggered, None otherwise.
     """
-    Process market data with bot's strategy
+    if bot.strategy_type != "ai_autonomous" or position is None:
+        return None
 
-    Args:
-        db: Database session
-        exchange: Exchange client instance (CEX or DEX)
-        trading_client: TradingClient instance
-        bot: Bot instance
-        strategy: TradingStrategy instance
-        product_id: Trading pair (e.g., 'ETH-BTC')
-        candles: Recent candle data
-        current_price: Current market price
-        pre_analyzed_signal: Optional pre-analyzed signal from batch mode (prevents duplicate AI calls)
-        candles_by_timeframe: Optional dict of {timeframe: candles} for multi-timeframe indicator calculation
+    logger.warning(f"  🛡️ AI analysis failed for {product_id} - checking failsafe for position #{position.id}")
 
-    Returns:
-        Dict with action taken and details
-    """
-    quote_currency = get_quote_currency(product_id)
+    # Check if failsafe should sell to protect profit
+    should_sell_failsafe, failsafe_reason = await strategy.should_sell_failsafe(position, current_price)
 
-    # Get current state FIRST (needed for web search context)
-    # If position_override is provided, use it (supports simultaneous same-pair deals)
-    if position_override is not _POSITION_NOT_SET:
-        position = position_override
-    else:
-        position = await get_active_position(db, bot, product_id)
+    if not should_sell_failsafe:
+        logger.info(f"  Failsafe checked but not triggered: {failsafe_reason}")
+        return None
 
-    # Determine action context for web search
-    action_context = "hold"  # Default for positions that exist
-    if position is None:
-        action_context = "open"  # Considering opening a new position
-    # (We'll update to "close" or "dca" later based on actual decision)
+    logger.warning(f"  🛡️ FAILSAFE ACTIVATED: {failsafe_reason}")
 
-    # Use pre-analyzed signal if provided (from batch mode), otherwise analyze now
-    if pre_analyzed_signal:
-        signal_data = pre_analyzed_signal
-        logger.info(f"  Using pre-analyzed signal from batch mode (confidence: {signal_data.get('confidence')}%)")
-    else:
-        # Analyze signal using strategy (with position, context, db, and user_id)
-        signal_data = await strategy.analyze_signal(
-            candles, current_price, position=position, action_context=action_context,
-            db=db, user_id=bot.user_id
+    # Check if limit close order already pending
+    if position.closing_via_limit:
+        logger.warning(
+            f"  ⚠️ Position #{position.id} already has a pending limit close order, skipping failsafe sell"
         )
+        return {
+            "action": "failsafe_limit_close_already_pending",
+            "reason": f"Limit order already pending (order_id: {position.limit_close_order_id})",
+            "position_id": position.id,
+        }
 
-    if not signal_data:
-        # AI FAILSAFE: If AI analysis failed and we have a position in profit, auto-sell to protect it
-        if bot.strategy_type == "ai_autonomous" and position is not None:
-            logger.warning(f"  🛡️ AI analysis failed for {product_id} - checking failsafe for position #{position.id}")
+    # Execute sell with limit order (mark price → bid fallback after 60s)
+    # This uses the existing execute_sell function which handles limit orders
+    trade, profit_quote, profit_pct = await execute_sell(
+        db=db,
+        exchange=exchange,
+        trading_client=trading_client,
+        bot=bot,
+        product_id=product_id,
+        position=position,
+        current_price=current_price,
+        signal_data={
+            "signal_type": "sell",
+            "confidence": 100,
+            "reasoning": failsafe_reason,
+        },
+    )
 
-            # Check if failsafe should sell to protect profit
-            should_sell_failsafe, failsafe_reason = await strategy.should_sell_failsafe(position, current_price)
+    # If trade is None, a limit order was placed - position stays open
+    if trade is None:
+        logger.warning(
+            f"  🛡️ Failsafe limit close order placed for position #{position.id},"
+            " waiting for fill"
+        )
+        return {
+            "action": "failsafe_limit_close_pending",
+            "reason": failsafe_reason,
+            "limit_order_placed": True,
+            "position_id": position.id,
+        }
 
-            if should_sell_failsafe:
-                logger.warning(f"  🛡️ FAILSAFE ACTIVATED: {failsafe_reason}")
+    # Record signal for market sell
+    signal = Signal(
+        position_id=position.id,
+        timestamp=datetime.utcnow(),
+        signal_type="sell",
+        macd_value=0,
+        macd_signal=0,
+        macd_histogram=0,
+        price=current_price,
+        action_taken="sell",
+        reason=failsafe_reason,
+    )
+    db.add(signal)
+    await db.commit()
 
-                # Check if limit close order already pending
-                if position.closing_via_limit:
-                    logger.warning(
-                        f"  ⚠️ Position #{position.id} already has a pending limit close order, skipping failsafe sell"
-                    )
-                    return {
-                        "action": "failsafe_limit_close_already_pending",
-                        "reason": f"Limit order already pending (order_id: {position.limit_close_order_id})",
-                        "position_id": position.id,
-                    }
+    logger.warning(f"  🛡️ FAILSAFE SELL COMPLETED: Profit protected at {profit_pct:.2f}%")
 
-                # Execute sell with limit order (mark price → bid fallback after 60s)
-                # This uses the existing execute_sell function which handles limit orders
-                trade, profit_quote, profit_pct = await execute_sell(
-                    db=db,
-                    exchange=exchange,
-                    trading_client=trading_client,
-                    bot=bot,
-                    product_id=product_id,
-                    position=position,
-                    current_price=current_price,
-                    signal_data={
-                        "signal_type": "sell",
-                        "confidence": 100,
-                        "reasoning": failsafe_reason,
-                    },
-                )
+    return {
+        "action": "failsafe_sell",
+        "reason": failsafe_reason,
+        "signal": None,
+        "trade": trade,
+        "position": position,
+        "profit_quote": profit_quote,
+        "profit_percentage": profit_pct,
+    }
 
-                # If trade is None, a limit order was placed - position stays open
-                if trade is None:
-                    logger.warning(
-                        f"  🛡️ Failsafe limit close order placed for position #{position.id},"
-                        " waiting for fill"
-                    )
-                    return {
-                        "action": "failsafe_limit_close_pending",
-                        "reason": failsafe_reason,
-                        "limit_order_placed": True,
-                        "position_id": position.id,
-                    }
 
-                # Record signal for market sell
-                signal = Signal(
-                    position_id=position.id,
-                    timestamp=datetime.utcnow(),
-                    signal_type="sell",
-                    macd_value=0,
-                    macd_signal=0,
-                    macd_histogram=0,
-                    price=current_price,
-                    action_taken="sell",
-                    reason=failsafe_reason,
-                )
-                db.add(signal)
-                await db.commit()
+async def _calculate_budget(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    position: Optional[Position],
+    product_id: str,
+    quote_currency: str,
+    aggregate_value: Optional[float],
+) -> tuple:
+    """Calculate budget allocation for the bot.
 
-                logger.warning(f"  🛡️ FAILSAFE SELL COMPLETED: Profit protected at {profit_pct:.2f}%")
-
-                return {
-                    "action": "failsafe_sell",
-                    "reason": failsafe_reason,
-                    "signal": None,
-                    "trade": trade,
-                    "position": position,
-                    "profit_quote": profit_quote,
-                    "profit_percentage": profit_pct,
-                }
-            else:
-                logger.info(f"  Failsafe checked but not triggered: {failsafe_reason}")
-
-        return {"action": "none", "reason": "No signal detected", "signal": None}
-
-    # Get bot's available balance (budget-based or total portfolio)
-    # Calculate aggregate portfolio value for bot budgeting
+    Returns (quote_balance, aggregate_value) tuple.
+    """
     print(f"🔍 Bot budget_percentage: {bot.budget_percentage}%, quote_currency: {quote_currency}")
-    aggregate_value = None
     if bot.budget_percentage > 0:
         # Bot uses percentage-based budgeting - calculate aggregate value
         # CRITICAL: Bypass cache for position creation to ensure accurate budget allocation after deposits/withdrawals
@@ -374,27 +343,24 @@ async def process_signal(
         quote_balance = await trading_client.get_quote_balance(product_id)
         logger.info(f"  💰 Using total portfolio balance: {quote_balance}")
 
-    # Log AI thinking immediately after analysis (if AI bot and not already logged in batch mode)
-    if bot.strategy_type == "ai_autonomous" and not signal_data.get("_already_logged", False):
-        # DEBUG: This should NOT be called in batch mode!
-        import traceback
+    return quote_balance, aggregate_value
 
-        stack = "".join(traceback.format_stack()[-5:-1])
-        logger.warning(f"  ⚠️ save_ai_log called despite _already_logged check! Bot #{bot.id} {product_id}")
-        logger.warning(f"  _already_logged={signal_data.get('_already_logged')}")
-        logger.warning(f"  Call stack:\n{stack}")
 
-        # Log what the AI thinks, not what the bot will do
-        ai_signal = signal_data.get("signal_type", "none")
-        if ai_signal == "buy":
-            decision = "buy"
-        elif ai_signal == "sell":
-            decision = "sell"
-        else:
-            decision = "hold"
-        await save_ai_log(db, bot, product_id, signal_data, decision, current_price, position)
+async def _decide_buy(
+    db: AsyncSession,
+    bot: Bot,
+    strategy: TradingStrategy,
+    signal_data: Dict[str, Any],
+    position: Optional[Position],
+    quote_balance: float,
+    aggregate_value: Optional[float],
+    product_id: str,
+    current_price: float,
+) -> tuple:
+    """Decide whether to buy, including all checks (max deals, cooldown, blacklist).
 
-    # Check if we should buy (only if bot is active)
+    Returns (should_buy, quote_amount, buy_reason) tuple.
+    """
     should_buy = False
     quote_amount = 0
     buy_reason = ""
@@ -549,11 +515,13 @@ async def process_signal(
                             )
                             if not await _is_duplicate_failed_order(db, bot.id, product_id, "initial", buy_reason):
                                 await log_order_to_history(
-                                    db=db, bot=bot, product_id=product_id,
-                                    position=None, side="BUY", order_type="MARKET",
-                                    trade_type="initial", quote_amount=0.0,
-                                    price=current_price, status="failed",
-                                    error_message=buy_reason
+                                    db=db, bot=bot, position=None,
+                                    entry=OrderLogEntry(
+                                        product_id=product_id, side="BUY", order_type="MARKET",
+                                        trade_type="initial", quote_amount=0.0,
+                                        price=current_price, status="failed",
+                                        error_message=buy_reason,
+                                    ),
                                 )
                                 await db.commit()
         else:
@@ -589,11 +557,13 @@ async def process_signal(
                 )
                 if not is_dup:
                     await log_order_to_history(
-                        db=db, bot=bot, product_id=product_id,
-                        position=position, side="BUY", order_type="MARKET",
-                        trade_type="safety_order", quote_amount=0.0,
-                        price=current_price, status="failed",
-                        error_message=buy_reason
+                        db=db, bot=bot, position=position,
+                        entry=OrderLogEntry(
+                            product_id=product_id, side="BUY", order_type="MARKET",
+                            trade_type="safety_order", quote_amount=0.0,
+                            price=current_price, status="failed",
+                            error_message=buy_reason,
+                        ),
                     )
                     await db.commit()
     else:
@@ -635,318 +605,316 @@ async def process_signal(
                     )
                     if not is_dup:
                         await log_order_to_history(
-                            db=db, bot=bot, product_id=product_id,
-                            position=position, side="BUY", order_type="MARKET",
-                            trade_type="safety_order", quote_amount=0.0,
-                            price=current_price, status="failed",
-                            error_message=buy_reason
+                            db=db, bot=bot, position=position,
+                            entry=OrderLogEntry(
+                                product_id=product_id, side="BUY", order_type="MARKET",
+                                trade_type="safety_order", quote_amount=0.0,
+                                price=current_price, status="failed",
+                                error_message=buy_reason,
+                            ),
                         )
                         await db.commit()
 
-    if should_buy:
-        # Get BTC/USD price for logging
-        try:
-            btc_usd_price = await exchange.get_btc_usd_price()
-        except Exception:
-            btc_usd_price = None
+    return should_buy, quote_amount, buy_reason
 
-        quote_formatted = format_with_usd(quote_amount, product_id, btc_usd_price)
-        logger.info(f"  💰 BUY DECISION: will buy {quote_formatted} worth of {product_id}")
 
-        # Determine trade type
-        is_new_position = position is None
-        trade_type = "initial" if is_new_position else "dca"
+async def _execute_buy_trade(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    strategy: TradingStrategy,
+    position: Optional[Position],
+    product_id: str,
+    quote_amount: float,
+    quote_balance: float,
+    current_price: float,
+    signal_data: Dict[str, Any],
+    aggregate_value: Optional[float],
+    buy_reason: str,
+) -> Optional[Dict[str, Any]]:
+    """Execute buy trade (initial or DCA), handling position creation and routing.
 
-        # Check if this is a short order (bidirectional DCA)
-        direction = signal_data.get("direction", "long")
-        is_short = direction == "short"
+    Returns a result dict if a buy was executed (or failed), None should not happen
+    since this is only called when should_buy is True.
+    """
+    # Get BTC/USD price for logging
+    try:
+        btc_usd_price = await exchange.get_btc_usd_price()
+    except Exception:
+        btc_usd_price = None
 
+    quote_formatted = format_with_usd(quote_amount, product_id, btc_usd_price)
+    logger.info(f"  💰 BUY DECISION: will buy {quote_formatted} worth of {product_id}")
+
+    # Determine trade type
+    is_new_position = position is None
+    trade_type = "initial" if is_new_position else "dca"
+
+    # Check if this is a short order (bidirectional DCA)
+    direction = signal_data.get("direction", "long")
+    is_short = direction == "short"
+
+    if is_new_position:
+        action_verb = "SELL" if is_short else "BUY"
+        logger.info(
+            f"  🔨 Executing {trade_type} {action_verb} order FIRST"
+            " (position will be created after success)..."
+        )
+    else:
+        action_verb = "sell" if is_short else "buy"
+        logger.info(f"  🔨 Executing {trade_type} {action_verb} order for existing position...")
+
+    # Execute order FIRST - don't create position until we know trade succeeds
+    try:
+        # For new positions, we need to create position for the trade to reference
+        # BUT we do it in a transaction that will rollback if trade fails
         if is_new_position:
-            action_verb = "SELL" if is_short else "BUY"
+            logger.info("  📝 Creating position (will commit only if trade succeeds)...")
+
+            # Extract bull_flag pattern data if present (for pattern-based TP/SL)
+            pattern_data = None
+            indicators = signal_data.get("indicators", {}) if signal_data else {}
+            if indicators.get("bull_flag") == 1:
+                pattern_data = {
+                    "entry_price": indicators.get("bull_flag_entry"),
+                    "stop_loss": indicators.get("bull_flag_stop"),
+                    "take_profit_target": indicators.get("bull_flag_target"),
+                    "pattern_type": "bull_flag",
+                }
+                logger.info(
+                    f"  🎯 Bull flag pattern detected - using pattern targets:"
+                    f" SL={pattern_data['stop_loss']:.4f},"
+                    f" TP={pattern_data['take_profit_target']:.4f}"
+                )
+
+            position = await create_position(
+                db, exchange, bot, product_id, quote_balance, quote_amount, aggregate_value,
+                pattern_data=pattern_data,
+                direction=direction  # Pass direction to position
+            )
+            logger.info(f"  ✅ Position created: ID={position.id} direction={direction} (pending trade execution)")
+
+        # Route perps bots to perps executor
+        if getattr(bot, 'market_type', 'spot') == 'perps':
+            perps_config = bot.strategy_config or {}
+            perps_leverage = perps_config.get("leverage", 1)
+            perps_margin = perps_config.get("margin_type", "CROSS")
+            perps_tp_pct = perps_config.get("default_tp_pct")
+            perps_sl_pct = perps_config.get("default_sl_pct")
+            perps_side = "SELL" if is_short else "BUY"
+
+            # Get the underlying CoinbaseClient from the exchange adapter
+            coinbase_client = getattr(exchange, '_client', None) or getattr(exchange, 'client', None)
+            if coinbase_client is None:
+                logger.error("Cannot get CoinbaseClient for perps order")
+                raise RuntimeError("Perps trading requires CoinbaseClient")
+
+            position, trade = await execute_perps_open(
+                db=db,
+                client=coinbase_client,
+                bot=bot,
+                product_id=product_id,
+                side=perps_side,
+                size_usdc=quote_amount,
+                current_price=current_price,
+                leverage=perps_leverage,
+                margin_type=perps_margin,
+                tp_pct=perps_tp_pct,
+                sl_pct=perps_sl_pct,
+                user_id=bot.user_id,
+            )
+
+            if position is None:
+                raise RuntimeError("Perps order failed")
+
+            logger.info(f"  ✅ Perps position opened: #{position.id}")
+
+        # Execute the actual trade (direction-aware) — spot path
+        elif is_short:
+            # SHORT ORDER: Sell BTC for USD
+            # Calculate how much BTC to sell based on quote_amount (USD value)
+            base_amount = quote_amount / current_price
             logger.info(
-                f"  🔨 Executing {trade_type} {action_verb} order FIRST"
-                " (position will be created after success)..."
+                f"  📉 SHORT: Selling {base_amount:.8f} BTC"
+                f" (${quote_amount:.2f} worth) @ ${current_price:.2f}"
+            )
+
+            # Execute short order using existing sell infrastructure
+            # For base orders (trade_type="initial"), we execute market sell
+            # For safety orders, we check config for limit vs market
+            from app.trading_engine.sell_executor import execute_sell_short
+
+            trade = await execute_sell_short(
+                db=db,
+                exchange=exchange,
+                trading_client=trading_client,
+                bot=bot,
+                product_id=product_id,
+                position=position,
+                base_amount=base_amount,
+                current_price=current_price,
+                trade_type=trade_type,
+                signal_data=signal_data,
+                commit_on_error=not is_new_position,
             )
         else:
-            action_verb = "sell" if is_short else "buy"
-            logger.info(f"  🔨 Executing {trade_type} {action_verb} order for existing position...")
-
-        # Execute order FIRST - don't create position until we know trade succeeds
-        try:
-            # For new positions, we need to create position for the trade to reference
-            # BUT we do it in a transaction that will rollback if trade fails
-            if is_new_position:
-                logger.info("  📝 Creating position (will commit only if trade succeeds)...")
-
-                # Extract bull_flag pattern data if present (for pattern-based TP/SL)
-                pattern_data = None
-                indicators = signal_data.get("indicators", {}) if signal_data else {}
-                if indicators.get("bull_flag") == 1:
-                    pattern_data = {
-                        "entry_price": indicators.get("bull_flag_entry"),
-                        "stop_loss": indicators.get("bull_flag_stop"),
-                        "take_profit_target": indicators.get("bull_flag_target"),
-                        "pattern_type": "bull_flag",
-                    }
-                    logger.info(
-                        f"  🎯 Bull flag pattern detected - using pattern targets:"
-                        f" SL={pattern_data['stop_loss']:.4f},"
-                        f" TP={pattern_data['take_profit_target']:.4f}"
-                    )
-
-                position = await create_position(
-                    db, exchange, bot, product_id, quote_balance, quote_amount, aggregate_value,
-                    pattern_data=pattern_data,
-                    direction=direction  # Pass direction to position
-                )
-                logger.info(f"  ✅ Position created: ID={position.id} direction={direction} (pending trade execution)")
-
-            # Route perps bots to perps executor
-            if getattr(bot, 'market_type', 'spot') == 'perps':
-                perps_config = bot.strategy_config or {}
-                perps_leverage = perps_config.get("leverage", 1)
-                perps_margin = perps_config.get("margin_type", "CROSS")
-                perps_tp_pct = perps_config.get("default_tp_pct")
-                perps_sl_pct = perps_config.get("default_sl_pct")
-                perps_side = "SELL" if is_short else "BUY"
-
-                # Get the underlying CoinbaseClient from the exchange adapter
-                coinbase_client = getattr(exchange, '_client', None) or getattr(exchange, 'client', None)
-                if coinbase_client is None:
-                    logger.error("Cannot get CoinbaseClient for perps order")
-                    raise RuntimeError("Perps trading requires CoinbaseClient")
-
-                position, trade = await execute_perps_open(
-                    db=db,
-                    client=coinbase_client,
-                    bot=bot,
-                    product_id=product_id,
-                    side=perps_side,
-                    size_usdc=quote_amount,
-                    current_price=current_price,
-                    leverage=perps_leverage,
-                    margin_type=perps_margin,
-                    tp_pct=perps_tp_pct,
-                    sl_pct=perps_sl_pct,
-                    user_id=bot.user_id,
-                )
-
-                if position is None:
-                    raise RuntimeError("Perps order failed")
-
-                logger.info(f"  ✅ Perps position opened: #{position.id}")
-
-            # Execute the actual trade (direction-aware) — spot path
-            elif is_short:
-                # SHORT ORDER: Sell BTC for USD
-                # Calculate how much BTC to sell based on quote_amount (USD value)
-                base_amount = quote_amount / current_price
-                logger.info(
-                    f"  📉 SHORT: Selling {base_amount:.8f} BTC"
-                    f" (${quote_amount:.2f} worth) @ ${current_price:.2f}"
-                )
-
-                # Execute short order using existing sell infrastructure
-                # For base orders (trade_type="initial"), we execute market sell
-                # For safety orders, we check config for limit vs market
-                from app.trading_engine.sell_executor import execute_sell_short
-
-                trade = await execute_sell_short(
-                    db=db,
-                    exchange=exchange,
-                    trading_client=trading_client,
-                    bot=bot,
-                    product_id=product_id,
-                    position=position,
-                    base_amount=base_amount,
-                    current_price=current_price,
-                    trade_type=trade_type,
-                    signal_data=signal_data,
-                    commit_on_error=not is_new_position,
-                )
-            else:
-                # Slippage guard for market buy orders
-                buy_config = bot.strategy_config or {}
-                exec_key = "base_execution_type" if trade_type == "initial" else "dca_execution_type"
-                if buy_config.get(exec_key, "market") == "market" and buy_config.get("slippage_guard", False):
-                    from app.trading_engine.book_depth_guard import check_buy_slippage
-                    proceed, guard_reason = await check_buy_slippage(
-                        exchange, product_id, quote_amount, buy_config
-                    )
-                    if not proceed:
-                        logger.warning(f"  🛡️ Slippage guard blocked buy: {guard_reason}")
-                        if is_new_position and position:
-                            position.status = "failed"
-                            position.last_error_message = f"Slippage guard: {guard_reason}"
-                            position.last_error_timestamp = datetime.utcnow()
-                            position.closed_at = datetime.utcnow()
-                            await db.commit()
-                        return {
-                            "action": "hold",
-                            "reason": f"Slippage guard: {guard_reason}",
-                            "signal": signal_data,
-                        }
-
-                # LONG ORDER: Buy BTC with USD (existing logic)
-                trade = await execute_buy(
-                    db=db,
-                    exchange=exchange,
-                    trading_client=trading_client,
-                    bot=bot,
-                    product_id=product_id,
-                    position=position,
-                    quote_amount=quote_amount,
-                    current_price=current_price,
-                    trade_type=trade_type,
-                    signal_data=signal_data,
-                    commit_on_error=not is_new_position,  # Don't commit errors for base orders
-                )
-
-            if trade is None:
-                # Limit order was placed instead
-                logger.info("  ✅ Limit order placed (pending fill)")
-            else:
-                # Market order executed immediately
-                logger.info(f"  ✅ Trade executed: ID={trade.id}, Order={trade.order_id}")
-
-        except Exception as e:
-            logger.error(f"  ❌ Trade execution failed: {e}")
-            # If this was a new position and trade failed, mark it as failed (don't leave orphaned)
-            if is_new_position and position:
-                logger.warning(f"  🗑️ Marking position {position.id} as failed (initial buy failed)")
-                # Mark position as failed instead of expunging
-                # This prevents orphaned positions showing as "open" with 0 trades
-                position.status = "failed"
-                position.last_error_message = f"Initial buy failed: {str(e)}"
-                position.last_error_timestamp = datetime.utcnow()
-                position.closed_at = datetime.utcnow()
-                await db.commit()
-                return {"action": "none", "reason": f"Buy failed: {str(e)}", "signal": signal_data}
-
-            # CRITICAL FIX: For existing positions (DCA failures), DO NOT raise exception
-            # Raising would abort the entire bot cycle and prevent sells on other positions!
-            # Instead, log the error on the position and continue processing
-            logger.error(f"  ❌ DCA buy failed for existing position: {e}")
-            logger.warning("  ⚠️ Continuing bot cycle to check for sells on other positions")
-
-            # The error is already recorded on the position by execute_buy() if commit_on_error=True
-            # Just return and let the bot continue to check for sells
-            return {"action": "none", "reason": f"DCA buy failed: {str(e)}", "signal": signal_data}
-
-        # Record signal
-        signal = Signal(
-            position_id=position.id,
-            timestamp=datetime.utcnow(),
-            signal_type=signal_data.get("signal_type", "buy"),
-            macd_value=signal_data.get("macd_value", 0),
-            macd_signal=signal_data.get("macd_signal", 0),
-            macd_histogram=signal_data.get("macd_histogram", 0),
-            price=current_price,
-            action_taken="buy",
-            reason=buy_reason,
-        )
-        db.add(signal)
-        await db.commit()
-
-        return {"action": "buy", "reason": buy_reason, "signal": signal_data, "trade": trade, "position": position}
-
-    # Check if we should sell
-    if position is not None:
-        # Debug: Log timeframes available in candles_by_timeframe
-        if candles_by_timeframe:
-            for tf, tf_candles in candles_by_timeframe.items():
-                logger.debug(f"  📊 candles_by_timeframe[{tf}]: {len(tf_candles) if tf_candles else 0} candles")
-        else:
-            logger.debug("  📊 candles_by_timeframe is None or empty")
-
-        # Calculate market context with indicators for custom sell conditions
-        market_context = _calculate_market_context_with_indicators(candles, current_price, candles_by_timeframe)
-
-        # Add previous indicators for crossing detection
-        cache_key = f"{bot.id}_{product_id}"
-        previous_context = _previous_market_context.get(cache_key)
-        market_context["_previous"] = previous_context
-        # Update cache with current context (copy to avoid mutation issues)
-        _previous_market_context[cache_key] = {k: v for k, v in market_context.items() if k != "_previous"}
-
-        should_sell, sell_reason = await strategy.should_sell(signal_data, position, current_price, market_context)
-
-        if should_sell:
-            # CRITICAL FIX: For limit orders, verify profit at MARK PRICE meets threshold
-            # should_sell checked profit at current_price (candle close), but limit orders
-            # are placed at mark price (bid/ask midpoint) which can be significantly lower
-            config = position.strategy_config_snapshot or {}
-            take_profit_order_type = config.get("take_profit_order_type", "market")
-            take_profit_mode = config.get("take_profit_mode")
-            if take_profit_mode is None:
-                # Legacy inference
-                if config.get("trailing_take_profit", False):
-                    take_profit_mode = "trailing"
-                elif config.get("min_profit_for_conditions") is not None:
-                    take_profit_mode = "minimum"
-                else:
-                    take_profit_mode = "fixed"
-
-            # For limit orders, verify profit at mark price meets threshold
-            if take_profit_order_type == "limit":
-                tp_pct = config.get("take_profit_percentage", 3.0)
-                try:
-                    ticker = await exchange.get_ticker(product_id)
-                    best_bid = float(ticker.get("best_bid", 0))
-                    best_ask = float(ticker.get("best_ask", 0))
-                    mark_price = (best_bid + best_ask) / 2 if best_bid > 0 and best_ask > 0 else current_price
-
-                    mark_value = position.total_base_acquired * mark_price
-                    mark_profit = mark_value - position.total_quote_spent
-                    mark_profit_pct = (mark_profit / position.total_quote_spent) * 100
-
-                    if mark_profit_pct < tp_pct:
-                        logger.info(
-                            f"  ⚠️ Sell conditions met BUT mark price profit ({mark_profit_pct:.2f}%) "
-                            f"< take_profit ({tp_pct}%) - HOLDING"
-                        )
-                        signal = Signal(
-                            position_id=position.id,
-                            timestamp=datetime.utcnow(),
-                            signal_type="hold",
-                            macd_value=signal_data.get("macd_value", 0),
-                            macd_signal=signal_data.get("macd_signal", 0),
-                            macd_histogram=signal_data.get("macd_histogram", 0),
-                            price=current_price,
-                            action_taken="hold",
-                            reason=(
-                                f"Conditions met but mark profit"
-                                f" {mark_profit_pct:.2f}% < {tp_pct}%"
-                            ),
-                        )
-                        db.add(signal)
-                        await db.commit()
-                        return {
-                            "action": "hold",
-                            "reason": (
-                                f"Sell blocked: mark profit"
-                                f" {mark_profit_pct:.2f}% < {tp_pct}%"
-                            ),
-                            "signal": signal_data,
-                            "position": position,
-                        }
-                    else:
-                        logger.info(
-                            f"  ✓ Mark price profit ({mark_profit_pct:.2f}%)"
-                            f" >= take_profit ({tp_pct}%)"
-                            " - proceeding"
-                        )
-                except Exception as e:
-                    logger.warning(f"Could not verify mark price profit, proceeding with sell: {e}")
-
-            # Slippage guard for market sell orders
-            if take_profit_order_type == "market" and config.get("slippage_guard", False):
-                from app.trading_engine.book_depth_guard import check_sell_slippage
-                proceed, guard_reason = await check_sell_slippage(
-                    exchange, product_id, position, config
+            # Slippage guard for market buy orders
+            buy_config = bot.strategy_config or {}
+            exec_key = "base_execution_type" if trade_type == "initial" else "dca_execution_type"
+            if buy_config.get(exec_key, "market") == "market" and buy_config.get("slippage_guard", False):
+                from app.trading_engine.book_depth_guard import check_buy_slippage
+                proceed, guard_reason = await check_buy_slippage(
+                    exchange, product_id, quote_amount, buy_config
                 )
                 if not proceed:
-                    logger.info(f"  🛡️ Slippage guard blocked sell: {guard_reason}")
+                    logger.warning(f"  🛡️ Slippage guard blocked buy: {guard_reason}")
+                    if is_new_position and position:
+                        position.status = "failed"
+                        position.last_error_message = f"Slippage guard: {guard_reason}"
+                        position.last_error_timestamp = datetime.utcnow()
+                        position.closed_at = datetime.utcnow()
+                        await db.commit()
+                    return {
+                        "action": "hold",
+                        "reason": f"Slippage guard: {guard_reason}",
+                        "signal": signal_data,
+                    }
+
+            # LONG ORDER: Buy BTC with USD (existing logic)
+            trade = await execute_buy(
+                db=db,
+                exchange=exchange,
+                trading_client=trading_client,
+                bot=bot,
+                product_id=product_id,
+                position=position,
+                quote_amount=quote_amount,
+                current_price=current_price,
+                trade_type=trade_type,
+                signal_data=signal_data,
+                commit_on_error=not is_new_position,  # Don't commit errors for base orders
+            )
+
+        if trade is None:
+            # Limit order was placed instead
+            logger.info("  ✅ Limit order placed (pending fill)")
+        else:
+            # Market order executed immediately
+            logger.info(f"  ✅ Trade executed: ID={trade.id}, Order={trade.order_id}")
+
+    except Exception as e:
+        logger.error(f"  ❌ Trade execution failed: {e}")
+        # If this was a new position and trade failed, mark it as failed (don't leave orphaned)
+        if is_new_position and position:
+            logger.warning(f"  🗑️ Marking position {position.id} as failed (initial buy failed)")
+            # Mark position as failed instead of expunging
+            # This prevents orphaned positions showing as "open" with 0 trades
+            position.status = "failed"
+            position.last_error_message = f"Initial buy failed: {str(e)}"
+            position.last_error_timestamp = datetime.utcnow()
+            position.closed_at = datetime.utcnow()
+            await db.commit()
+            return {"action": "none", "reason": f"Buy failed: {str(e)}", "signal": signal_data}
+
+        # CRITICAL FIX: For existing positions (DCA failures), DO NOT raise exception
+        # Raising would abort the entire bot cycle and prevent sells on other positions!
+        # Instead, log the error on the position and continue processing
+        logger.error(f"  ❌ DCA buy failed for existing position: {e}")
+        logger.warning("  ⚠️ Continuing bot cycle to check for sells on other positions")
+
+        # The error is already recorded on the position by execute_buy() if commit_on_error=True
+        # Just return and let the bot continue to check for sells
+        return {"action": "none", "reason": f"DCA buy failed: {str(e)}", "signal": signal_data}
+
+    # Record signal
+    signal = Signal(
+        position_id=position.id,
+        timestamp=datetime.utcnow(),
+        signal_type=signal_data.get("signal_type", "buy"),
+        macd_value=signal_data.get("macd_value", 0),
+        macd_signal=signal_data.get("macd_signal", 0),
+        macd_histogram=signal_data.get("macd_histogram", 0),
+        price=current_price,
+        action_taken="buy",
+        reason=buy_reason,
+    )
+    db.add(signal)
+    await db.commit()
+
+    return {"action": "buy", "reason": buy_reason, "signal": signal_data, "trade": trade, "position": position}
+
+
+async def _decide_and_execute_sell(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    strategy: TradingStrategy,
+    position: Position,
+    product_id: str,
+    current_price: float,
+    signal_data: Dict[str, Any],
+    candles: List[Dict[str, Any]],
+    candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]],
+) -> Optional[Dict[str, Any]]:
+    """Decide whether to sell and execute the sell if conditions are met.
+
+    Returns a result dict if sell/hold action taken, None if no position.
+    """
+    # Debug: Log timeframes available in candles_by_timeframe
+    if candles_by_timeframe:
+        for tf, tf_candles in candles_by_timeframe.items():
+            logger.debug(f"  📊 candles_by_timeframe[{tf}]: {len(tf_candles) if tf_candles else 0} candles")
+    else:
+        logger.debug("  📊 candles_by_timeframe is None or empty")
+
+    # Calculate market context with indicators for custom sell conditions
+    market_context = _calculate_market_context_with_indicators(candles, current_price, candles_by_timeframe)
+
+    # Add previous indicators for crossing detection
+    cache_key = f"{bot.id}_{product_id}"
+    previous_context = _previous_market_context.get(cache_key)
+    market_context["_previous"] = previous_context
+    # Update cache with current context (copy to avoid mutation issues)
+    _previous_market_context[cache_key] = {k: v for k, v in market_context.items() if k != "_previous"}
+
+    should_sell, sell_reason = await strategy.should_sell(signal_data, position, current_price, market_context)
+
+    if should_sell:
+        # CRITICAL FIX: For limit orders, verify profit at MARK PRICE meets threshold
+        # should_sell checked profit at current_price (candle close), but limit orders
+        # are placed at mark price (bid/ask midpoint) which can be significantly lower
+        config = position.strategy_config_snapshot or {}
+        take_profit_order_type = config.get("take_profit_order_type", "market")
+        take_profit_mode = config.get("take_profit_mode")
+        if take_profit_mode is None:
+            # Legacy inference
+            if config.get("trailing_take_profit", False):
+                take_profit_mode = "trailing"
+            elif config.get("min_profit_for_conditions") is not None:
+                take_profit_mode = "minimum"
+            else:
+                take_profit_mode = "fixed"
+
+        # For limit orders, verify profit at mark price meets threshold
+        if take_profit_order_type == "limit":
+            tp_pct = config.get("take_profit_percentage", 3.0)
+            try:
+                ticker = await exchange.get_ticker(product_id)
+                best_bid = float(ticker.get("best_bid", 0))
+                best_ask = float(ticker.get("best_ask", 0))
+                mark_price = (best_bid + best_ask) / 2 if best_bid > 0 and best_ask > 0 else current_price
+
+                mark_value = position.total_base_acquired * mark_price
+                mark_profit = mark_value - position.total_quote_spent
+                mark_profit_pct = (mark_profit / position.total_quote_spent) * 100
+
+                if mark_profit_pct < tp_pct:
+                    logger.info(
+                        f"  ⚠️ Sell conditions met BUT mark price profit ({mark_profit_pct:.2f}%) "
+                        f"< take_profit ({tp_pct}%) - HOLDING"
+                    )
                     signal = Signal(
                         position_id=position.id,
                         timestamp=datetime.utcnow(),
@@ -956,26 +924,39 @@ async def process_signal(
                         macd_histogram=signal_data.get("macd_histogram", 0),
                         price=current_price,
                         action_taken="hold",
-                        reason=f"Slippage guard: {guard_reason}",
+                        reason=(
+                            f"Conditions met but mark profit"
+                            f" {mark_profit_pct:.2f}% < {tp_pct}%"
+                        ),
                     )
                     db.add(signal)
                     await db.commit()
                     return {
                         "action": "hold",
-                        "reason": f"Slippage guard: {guard_reason}",
+                        "reason": (
+                            f"Sell blocked: mark profit"
+                            f" {mark_profit_pct:.2f}% < {tp_pct}%"
+                        ),
                         "signal": signal_data,
                         "position": position,
                     }
+                else:
+                    logger.info(
+                        f"  ✓ Mark price profit ({mark_profit_pct:.2f}%)"
+                        f" >= take_profit ({tp_pct}%)"
+                        " - proceeding"
+                    )
+            except Exception as e:
+                logger.warning(f"Could not verify mark price profit, proceeding with sell: {e}")
 
-            # Stop loss / trailing stop always execute at market (no limit orders)
-            sell_reason_lower = sell_reason.lower()
-            is_stop_loss = "stop loss" in sell_reason_lower or "tsl triggered" in sell_reason_lower
-
-            # Check if limit close order already pending
-            if position.closing_via_limit:
-                logger.warning(
-                    f"  ⚠️ Position #{position.id} already has a pending limit close order, skipping sell signal"
-                )
+        # Slippage guard for market sell orders
+        if take_profit_order_type == "market" and config.get("slippage_guard", False):
+            from app.trading_engine.book_depth_guard import check_sell_slippage
+            proceed, guard_reason = await check_sell_slippage(
+                exchange, product_id, position, config
+            )
+            if not proceed:
+                logger.info(f"  🛡️ Slippage guard blocked sell: {guard_reason}")
                 signal = Signal(
                     position_id=position.id,
                     timestamp=datetime.utcnow(),
@@ -985,134 +966,288 @@ async def process_signal(
                     macd_histogram=signal_data.get("macd_histogram", 0),
                     price=current_price,
                     action_taken="hold",
-                    reason=f"Limit close order already pending (order_id: {position.limit_close_order_id})",
+                    reason=f"Slippage guard: {guard_reason}",
                 )
                 db.add(signal)
                 await db.commit()
                 return {
                     "action": "hold",
-                    "reason": "Limit close order already pending",
+                    "reason": f"Slippage guard: {guard_reason}",
                     "signal": signal_data,
                     "position": position,
                 }
 
-            # Execute close order (direction-aware)
-            # Route perps positions to perps executor
-            if getattr(position, 'product_type', 'spot') == 'future':
-                coinbase_client = getattr(exchange, '_client', None) or getattr(exchange, 'client', None)
-                if coinbase_client is None:
-                    logger.error("Cannot get CoinbaseClient for perps close")
-                    raise RuntimeError("Perps trading requires CoinbaseClient")
+        # Stop loss / trailing stop always execute at market (no limit orders)
+        sell_reason_lower = sell_reason.lower()
+        is_stop_loss = "stop loss" in sell_reason_lower or "tsl triggered" in sell_reason_lower
 
-                success, profit_quote, profit_pct = await execute_perps_close(
-                    db=db,
-                    client=coinbase_client,
-                    position=position,
-                    current_price=current_price,
-                    reason="signal",
-                )
-                if not success:
-                    raise RuntimeError("Perps close order failed")
-                trade = None  # Trade record created inside execute_perps_close
-
-            # For long positions: sell the BTC we bought
-            # For short positions: buy back the BTC we sold
-            elif position.direction == "short":
-                # CLOSE SHORT: Buy back BTC (opposite of opening short)
-                from app.trading_engine.buy_executor import execute_buy_close_short
-
-                trade, profit_quote, profit_pct = await execute_buy_close_short(
-                    db=db,
-                    exchange=exchange,
-                    trading_client=trading_client,
-                    bot=bot,
-                    product_id=product_id,
-                    position=position,
-                    current_price=current_price,
-                    signal_data=signal_data,
-                )
-            else:
-                # CLOSE LONG: Sell the BTC we bought (existing logic)
-                trade, profit_quote, profit_pct = await execute_sell(
-                    db=db,
-                    exchange=exchange,
-                    trading_client=trading_client,
-                    bot=bot,
-                    product_id=product_id,
-                    position=position,
-                    current_price=current_price,
-                    signal_data=signal_data,
-                    force_market=is_stop_loss,
-                )
-
-            # If trade is None, a limit order was placed - position stays open
-            if trade is None:
-                logger.info(f"  📊 Limit close order placed for position #{position.id}, waiting for fill")
-                return {
-                    "action": "limit_close_pending",
-                    "reason": sell_reason,
-                    "limit_order_placed": True,
-                    "position_id": position.id,
-                }
-
-            # Record signal for market sell
+        # Check if limit close order already pending
+        if position.closing_via_limit:
+            logger.warning(
+                f"  ⚠️ Position #{position.id} already has a pending limit close order, skipping sell signal"
+            )
             signal = Signal(
                 position_id=position.id,
                 timestamp=datetime.utcnow(),
-                signal_type=signal_data.get("signal_type", "sell"),
-                macd_value=signal_data.get("macd_value", 0),
-                macd_signal=signal_data.get("macd_signal", 0),
-                macd_histogram=signal_data.get("macd_histogram", 0),
-                price=current_price,
-                action_taken="sell",
-                reason=sell_reason,
-            )
-            db.add(signal)
-            await db.commit()
-
-            # Log the SELL decision to AI logs (even if AI recommended something else)
-            # This captures what the trading engine actually did, not just what AI suggested
-            await save_ai_log(
-                db=db,
-                bot=bot,
-                product_id=product_id,
-                signal_data={
-                    **signal_data,
-                    "signal_type": "sell",
-                    "reasoning": f"SELL EXECUTED: {sell_reason}",
-                    "confidence": 100,  # Trading engine decision, not AI suggestion
-                },
-                decision="sell",
-                current_price=current_price,
-                position=position,
-            )
-
-            return {
-                "action": "sell",
-                "reason": sell_reason,
-                "signal": signal_data,
-                "trade": trade,
-                "position": position,
-                "profit_quote": profit_quote,
-                "profit_percentage": profit_pct,
-            }
-        else:
-            # Hold - record signal with no action
-            signal = Signal(
-                position_id=position.id,
-                timestamp=datetime.utcnow(),
-                signal_type=signal_data.get("signal_type", "hold"),
+                signal_type="hold",
                 macd_value=signal_data.get("macd_value", 0),
                 macd_signal=signal_data.get("macd_signal", 0),
                 macd_histogram=signal_data.get("macd_histogram", 0),
                 price=current_price,
                 action_taken="hold",
-                reason=sell_reason,
+                reason=f"Limit close order already pending (order_id: {position.limit_close_order_id})",
             )
             db.add(signal)
             await db.commit()
+            return {
+                "action": "hold",
+                "reason": "Limit close order already pending",
+                "signal": signal_data,
+                "position": position,
+            }
 
-            return {"action": "hold", "reason": sell_reason, "signal": signal_data, "position": position}
+        # Execute close order (direction-aware)
+        # Route perps positions to perps executor
+        if getattr(position, 'product_type', 'spot') == 'future':
+            coinbase_client = getattr(exchange, '_client', None) or getattr(exchange, 'client', None)
+            if coinbase_client is None:
+                logger.error("Cannot get CoinbaseClient for perps close")
+                raise RuntimeError("Perps trading requires CoinbaseClient")
+
+            success, profit_quote, profit_pct = await execute_perps_close(
+                db=db,
+                client=coinbase_client,
+                position=position,
+                current_price=current_price,
+                reason="signal",
+            )
+            if not success:
+                raise RuntimeError("Perps close order failed")
+            trade = None  # Trade record created inside execute_perps_close
+
+        # For long positions: sell the BTC we bought
+        # For short positions: buy back the BTC we sold
+        elif position.direction == "short":
+            # CLOSE SHORT: Buy back BTC (opposite of opening short)
+            from app.trading_engine.buy_executor import execute_buy_close_short
+
+            trade, profit_quote, profit_pct = await execute_buy_close_short(
+                db=db,
+                exchange=exchange,
+                trading_client=trading_client,
+                bot=bot,
+                product_id=product_id,
+                position=position,
+                current_price=current_price,
+                signal_data=signal_data,
+            )
+        else:
+            # CLOSE LONG: Sell the BTC we bought (existing logic)
+            trade, profit_quote, profit_pct = await execute_sell(
+                db=db,
+                exchange=exchange,
+                trading_client=trading_client,
+                bot=bot,
+                product_id=product_id,
+                position=position,
+                current_price=current_price,
+                signal_data=signal_data,
+                force_market=is_stop_loss,
+            )
+
+        # If trade is None, a limit order was placed - position stays open
+        if trade is None:
+            logger.info(f"  📊 Limit close order placed for position #{position.id}, waiting for fill")
+            return {
+                "action": "limit_close_pending",
+                "reason": sell_reason,
+                "limit_order_placed": True,
+                "position_id": position.id,
+            }
+
+        # Record signal for market sell
+        signal = Signal(
+            position_id=position.id,
+            timestamp=datetime.utcnow(),
+            signal_type=signal_data.get("signal_type", "sell"),
+            macd_value=signal_data.get("macd_value", 0),
+            macd_signal=signal_data.get("macd_signal", 0),
+            macd_histogram=signal_data.get("macd_histogram", 0),
+            price=current_price,
+            action_taken="sell",
+            reason=sell_reason,
+        )
+        db.add(signal)
+        await db.commit()
+
+        # Log the SELL decision to AI logs (even if AI recommended something else)
+        # This captures what the trading engine actually did, not just what AI suggested
+        await save_ai_log(
+            db=db,
+            bot=bot,
+            product_id=product_id,
+            signal_data={
+                **signal_data,
+                "signal_type": "sell",
+                "reasoning": f"SELL EXECUTED: {sell_reason}",
+                "confidence": 100,  # Trading engine decision, not AI suggestion
+            },
+            decision="sell",
+            current_price=current_price,
+            position=position,
+        )
+
+        return {
+            "action": "sell",
+            "reason": sell_reason,
+            "signal": signal_data,
+            "trade": trade,
+            "position": position,
+            "profit_quote": profit_quote,
+            "profit_percentage": profit_pct,
+        }
+    else:
+        # Hold - record signal with no action
+        signal = Signal(
+            position_id=position.id,
+            timestamp=datetime.utcnow(),
+            signal_type=signal_data.get("signal_type", "hold"),
+            macd_value=signal_data.get("macd_value", 0),
+            macd_signal=signal_data.get("macd_signal", 0),
+            macd_histogram=signal_data.get("macd_histogram", 0),
+            price=current_price,
+            action_taken="hold",
+            reason=sell_reason,
+        )
+        db.add(signal)
+        await db.commit()
+
+        return {"action": "hold", "reason": sell_reason, "signal": signal_data, "position": position}
+
+
+async def process_signal(
+    db: AsyncSession,
+    exchange: ExchangeClient,
+    trading_client: TradingClient,
+    bot: Bot,
+    strategy: TradingStrategy,
+    product_id: str,
+    candles: List[Dict[str, Any]],
+    current_price: float,
+    pre_analyzed_signal: Optional[Dict[str, Any]] = None,
+    candles_by_timeframe: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    position_override: Any = _POSITION_NOT_SET,
+) -> Dict[str, Any]:
+    """
+    Process market data with bot's strategy — orchestrator function.
+
+    Delegates to private helper functions for each phase:
+    1. Get position + analyze signal
+    2. AI failsafe (if no signal)
+    3. Calculate budget
+    4. Log AI thinking
+    5. Decide buy
+    6. Execute buy
+    7. Sell decision + execution
+
+    Args:
+        db: Database session
+        exchange: Exchange client instance (CEX or DEX)
+        trading_client: TradingClient instance
+        bot: Bot instance
+        strategy: TradingStrategy instance
+        product_id: Trading pair (e.g., 'ETH-BTC')
+        candles: Recent candle data
+        current_price: Current market price
+        pre_analyzed_signal: Optional pre-analyzed signal from batch mode (prevents duplicate AI calls)
+        candles_by_timeframe: Optional dict of {timeframe: candles} for multi-timeframe indicator calculation
+
+    Returns:
+        Dict with action taken and details
+    """
+    quote_currency = get_quote_currency(product_id)
+
+    # 1. Get current state FIRST (needed for web search context)
+    # If position_override is provided, use it (supports simultaneous same-pair deals)
+    if position_override is not _POSITION_NOT_SET:
+        position = position_override
+    else:
+        position = await get_active_position(db, bot, product_id)
+
+    # Determine action context for web search
+    action_context = "hold"  # Default for positions that exist
+    if position is None:
+        action_context = "open"  # Considering opening a new position
+    # (We'll update to "close" or "dca" later based on actual decision)
+
+    # Use pre-analyzed signal if provided (from batch mode), otherwise analyze now
+    if pre_analyzed_signal:
+        signal_data = pre_analyzed_signal
+        logger.info(f"  Using pre-analyzed signal from batch mode (confidence: {signal_data.get('confidence')}%)")
+    else:
+        # Analyze signal using strategy (with position, context, db, and user_id)
+        signal_data = await strategy.analyze_signal(
+            candles, current_price, position=position, action_context=action_context,
+            db=db, user_id=bot.user_id
+        )
+
+    # 2. AI failsafe — handle case where signal analysis returned None
+    if not signal_data:
+        failsafe_result = await _handle_ai_failsafe(
+            db, exchange, trading_client, bot, position, product_id, current_price, strategy
+        )
+        if failsafe_result:
+            return failsafe_result
+        return {"action": "none", "reason": "No signal detected", "signal": None}
+
+    # 3. Calculate budget
+    aggregate_value = None
+    quote_balance, aggregate_value = await _calculate_budget(
+        db, exchange, trading_client, bot, position, product_id, quote_currency, aggregate_value
+    )
+
+    # 4. Log AI thinking immediately after analysis (if AI bot and not already logged in batch mode)
+    if bot.strategy_type == "ai_autonomous" and not signal_data.get("_already_logged", False):
+        # DEBUG: This should NOT be called in batch mode!
+        import traceback
+
+        stack = "".join(traceback.format_stack()[-5:-1])
+        logger.warning(f"  ⚠️ save_ai_log called despite _already_logged check! Bot #{bot.id} {product_id}")
+        logger.warning(f"  _already_logged={signal_data.get('_already_logged')}")
+        logger.warning(f"  Call stack:\n{stack}")
+
+        # Log what the AI thinks, not what the bot will do
+        ai_signal = signal_data.get("signal_type", "none")
+        if ai_signal == "buy":
+            decision = "buy"
+        elif ai_signal == "sell":
+            decision = "sell"
+        else:
+            decision = "hold"
+        await save_ai_log(db, bot, product_id, signal_data, decision, current_price, position)
+
+    # 5. Decide buy
+    should_buy, quote_amount, buy_reason = await _decide_buy(
+        db, bot, strategy, signal_data, position, quote_balance, aggregate_value, product_id, current_price
+    )
+
+    # 6. Execute buy
+    if should_buy:
+        buy_result = await _execute_buy_trade(
+            db, exchange, trading_client, bot, strategy, position, product_id,
+            quote_amount, quote_balance, current_price, signal_data, aggregate_value, buy_reason
+        )
+        if buy_result:
+            return buy_result
+
+    # 7. Sell decision + execution
+    if position is not None:
+        sell_result = await _decide_and_execute_sell(
+            db, exchange, trading_client, bot, strategy, position, product_id,
+            current_price, signal_data, candles, candles_by_timeframe
+        )
+        if sell_result:
+            return sell_result
 
     # Commit any pending changes (like AI logs)
     await db.commit()

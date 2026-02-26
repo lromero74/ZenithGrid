@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.trading_engine_v2 import StrategyTradingEngine
 from app.trading_client import TradingClient
 from app.trading_engine import signal_processor
+from app.trading_engine.order_logger import OrderLogEntry
 
 
 # ---------------------------------------------------------------------------
@@ -262,7 +263,7 @@ class TestLogOrderToHistory:
     @pytest.mark.asyncio
     @patch("app.trading_engine_v2.order_logger")
     async def test_log_order_to_history_delegates(self, mock_ol, engine):
-        """Happy path: log_order_to_history delegates all args."""
+        """Happy path: log_order_to_history delegates all args via OrderLogEntry."""
         mock_ol.log_order_to_history = AsyncMock()
         mock_position = MagicMock()
 
@@ -276,16 +277,25 @@ class TestLogOrderToHistory:
             status="filled",
         )
 
-        mock_ol.log_order_to_history.assert_awaited_once_with(
-            engine.db, engine.bot, engine.product_id,
-            mock_position, "BUY", "market", "base_order",
-            0.01, 0.035, "filled",
-        )
+        mock_ol.log_order_to_history.assert_awaited_once()
+        call_args = mock_ol.log_order_to_history.call_args
+        assert call_args[0][0] is engine.db
+        assert call_args[0][1] is engine.bot
+        assert call_args[0][2] is mock_position
+        entry = call_args[0][3]
+        assert isinstance(entry, OrderLogEntry)
+        assert entry.product_id == engine.product_id
+        assert entry.side == "BUY"
+        assert entry.order_type == "market"
+        assert entry.trade_type == "base_order"
+        assert entry.quote_amount == 0.01
+        assert entry.price == 0.035
+        assert entry.status == "filled"
 
     @pytest.mark.asyncio
     @patch("app.trading_engine_v2.order_logger")
     async def test_log_order_to_history_with_kwargs(self, mock_ol, engine):
-        """Edge case: extra kwargs are forwarded."""
+        """Edge case: extra kwargs are forwarded into OrderLogEntry."""
         mock_ol.log_order_to_history = AsyncMock()
 
         await engine.log_order_to_history(
@@ -299,8 +309,10 @@ class TestLogOrderToHistory:
             order_id="extra-123",
         )
 
-        call_kwargs = mock_ol.log_order_to_history.call_args
-        assert call_kwargs.kwargs.get("order_id") == "extra-123"
+        call_args = mock_ol.log_order_to_history.call_args
+        entry = call_args[0][3]
+        assert isinstance(entry, OrderLogEntry)
+        assert entry.order_id == "extra-123"
 
 
 # ===========================================================================
@@ -579,7 +591,8 @@ class TestErrorPropagation:
         with pytest.raises(RuntimeError, match="Logging failed"):
             await engine.log_order_to_history(
                 position=None, side="BUY", order_type="market",
-                trade_type="initial", quote_amount=0.01, price=0.035, status="failed",
+                trade_type="initial", quote_amount=0.01, price=0.035,
+                status="failed",
             )
 
     @pytest.mark.asyncio

@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 
+from app.exchange_clients.factory import ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, User
 
 
@@ -140,11 +141,13 @@ class TestGetExchangeClient:
         client, account = await _get_exchange_client(db_session, user.id)
 
         mock_decrypt.assert_called_once_with("encrypted:abc123")
-        mock_create_client.assert_called_once_with(
+        mock_create_client.assert_called_once_with(ExchangeClientConfig(
             exchange_type="cex",
-            coinbase_key_name="key-name",
-            coinbase_private_key="decrypted-key",
-        )
+            coinbase=CoinbaseCredentials(
+                key_name="key-name",
+                private_key="decrypted-key",
+            ),
+        ))
 
 
 # =============================================================================

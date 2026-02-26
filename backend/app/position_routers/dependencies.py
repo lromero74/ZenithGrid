@@ -12,7 +12,7 @@ from app.coinbase_unified_client import CoinbaseClient
 from app.database import get_db
 from app.models import Account, User
 from app.encryption import decrypt_value, is_encrypted
-from app.exchange_clients.factory import create_exchange_client
+from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.auth.dependencies import get_current_user
 
 
@@ -52,11 +52,13 @@ async def get_coinbase(
         private_key = decrypt_value(private_key)
 
     # Create and return the client
-    client = create_exchange_client(
+    client = create_exchange_client(ExchangeClientConfig(
         exchange_type="cex",
-        coinbase_key_name=account.api_key_name,
-        coinbase_private_key=private_key,
-    )
+        coinbase=CoinbaseCredentials(
+            key_name=account.api_key_name,
+            private_key=private_key,
+        ),
+    ))
 
     if not client:
         raise HTTPException(

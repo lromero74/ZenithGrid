@@ -9,7 +9,7 @@ bot_crud_router create_bot() and update_bot() to deduplicate logic.
 import logging
 from typing import List, Optional, Tuple
 
-from fastapi import HTTPException
+from app.exceptions import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ def validate_quote_currency(pairs: List[str]) -> Optional[str]:
     Validate all trading pairs use the same quote currency.
 
     Returns the quote currency string, or None if no pairs.
-    Raises HTTPException if mixed quote currencies found.
+    Raises ValidationError if mixed quote currencies found.
     """
     if not pairs:
         return None
@@ -32,14 +32,11 @@ def validate_quote_currency(pairs: List[str]) -> Optional[str]:
             quote_currencies.add(quote)
 
     if len(quote_currencies) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"All trading pairs must use the same quote currency."
-                f" Found: {', '.join(sorted(quote_currencies))}."
-                f" Please use only BTC-based pairs OR only"
-                f" USD-based pairs, not a mix."
-            ),
+        raise ValidationError(
+            f"All trading pairs must use the same quote currency."
+            f" Found: {', '.join(sorted(quote_currencies))}."
+            f" Please use only BTC-based pairs OR only"
+            f" USD-based pairs, not a mix."
         )
 
     return quote_currencies.pop() if quote_currencies else None
@@ -83,19 +80,16 @@ async def validate_bidirectional_budget_config(
     Validate bidirectional budget config and calculate required reservations.
 
     Returns (required_usd, required_btc) for reservation.
-    Raises HTTPException on validation failure.
+    Raises ValidationError on validation failure.
     """
     long_pct = bot.strategy_config.get("long_budget_percentage", 50.0)
     short_pct = bot.strategy_config.get("short_budget_percentage", 50.0)
 
     if abs((long_pct + short_pct) - 100.0) > 0.01:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Long and short budget percentages must sum"
-                f" to 100% (got {long_pct}% + {short_pct}%"
-                f" = {long_pct + short_pct}%)"
-            )
+        raise ValidationError(
+            f"Long and short budget percentages must sum"
+            f" to 100% (got {long_pct}% + {short_pct}%"
+            f" = {long_pct + short_pct}%)"
         )
 
     # Get exchange client
@@ -103,11 +97,11 @@ async def validate_bidirectional_budget_config(
         from app.services.exchange_service import get_exchange_client_for_account
         exchange = await get_exchange_client_for_account(db, bot.account_id)
         if not exchange:
-            raise HTTPException(status_code=400, detail="No exchange client for account")
-    except HTTPException:
+            raise ValidationError("No exchange client for account")
+    except ValidationError:
         raise
     except Exception:
-        raise HTTPException(status_code=400, detail="Failed to connect to exchange")
+        raise ValidationError("Failed to connect to exchange")
 
     # Get balances and aggregate values
     try:
@@ -132,21 +126,15 @@ async def validate_bidirectional_budget_config(
                 aggregate_usd_value = raw_usd
 
         current_btc_price = await exchange.get_btc_usd_price()
-    except HTTPException:
+    except ValidationError:
         raise
     except Exception:
-        raise HTTPException(
-            status_code=400,
-            detail="Failed to calculate aggregate values"
-        )
+        raise ValidationError("Failed to calculate aggregate values")
 
     # Calculate required reservations
     budget_pct = bot.budget_percentage or 0.0
     if budget_pct <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Budget percentage must be > 0 for bidirectional bots"
-        )
+        raise ValidationError("Budget percentage must be > 0 for bidirectional bots")
 
     bot_budget_usd = aggregate_usd_value * (budget_pct / 100.0)
     bot_budget_btc = aggregate_btc_value * (budget_pct / 100.0)
@@ -162,6 +150,6 @@ async def validate_bidirectional_budget_config(
     )
 
     if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise ValidationError(error_msg)
 
     return required_usd, required_btc

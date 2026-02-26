@@ -4,24 +4,26 @@
  * Displays aggregated crypto news from multiple sources with 24-hour caching.
  * Sources include Reddit, CoinDesk, CoinTelegraph, Decrypt, The Block, and CryptoSlate.
  * Also includes video news from reputable crypto YouTube channels.
+ *
+ * UI sections are extracted into subcomponents under pages/news/components/:
+ *   - NewsFilterBar: seen/unseen filter pills and bulk actions
+ *   - ArticleSection: articles tab (filters, grid, pagination)
+ *   - VideoSection: videos tab (filters, grid, pagination)
+ *   - ArticlePreviewModal: article reader modal with TTS
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { Newspaper, ExternalLink, RefreshCw, Clock, Filter, Video, Play, X, BookOpen, AlertCircle, TrendingUp, ListVideo, ChevronDown, Settings, Crosshair, Volume2, Check, Eye, EyeOff, CheckCheck } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Newspaper, RefreshCw, Clock, Video, TrendingUp, Settings } from 'lucide-react'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { MarketSentimentCards } from '../components/MarketSentimentCards'
-import { useVideoPlayer, VideoItem as ContextVideoItem } from '../contexts/VideoPlayerContext'
-import { useArticleReader, ArticleItem } from '../contexts/ArticleReaderContext'
+import { useVideoPlayer } from '../contexts/VideoPlayerContext'
+import { useArticleReader } from '../contexts/ArticleReaderContext'
 import { SourceSubscriptionsModal } from '../components/news/SourceSubscriptionsModal'
-import {
-  formatRelativeTime,
-  sortSourcesByCategory,
-} from '../components/news'
-import { NewsItem, TabType, NEWS_CATEGORIES, CATEGORY_COLORS, SeenFilter } from '../types/newsTypes'
-import { useNewsData, useArticleContent, useNewsFilters, useSeenStatus } from './news/hooks'
-import { cleanupHoverHighlights, scrollToVideo, highlightVideo, unhighlightVideo, countItemsBySource, cleanupArticleHoverHighlights, scrollToArticle, highlightArticle, unhighlightArticle } from './news/helpers'
-import { ArticleContent, TTSControls } from './news/components'
-import { useTTSSync } from './news/hooks'
+import { formatRelativeTime } from '../components/news'
+import { NewsItem, TabType, NEWS_CATEGORIES } from '../types/newsTypes'
+import { useNewsData, useArticleContent, useNewsFilters, useSeenStatus, useTTSSync } from './news/hooks'
+import { cleanupArticleHoverHighlights, scrollToArticle, highlightArticle, unhighlightArticle, scrollToVideo } from './news/helpers'
+import { NewsFilterBar, ArticleSection, VideoSection, ArticlePreviewModal } from './news/components'
 import { markdownToPlainText } from './news/helpers'
 
 export default function News() {
@@ -43,32 +45,11 @@ export default function News() {
   // Track which article is being previewed (null means none)
   const [previewArticle, setPreviewArticle] = useState<NewsItem | null>(null)
 
-  // Global video player context for "Play All" feature
-  const { startPlaylist, isPlaying: isPlaylistPlaying, currentIndex: playlistIndex, playlist, currentVideo } = useVideoPlayer()
+  // Global video player context for engagement tracking
+  const { isPlaying: isPlaylistPlaying } = useVideoPlayer()
 
-  // Global article reader context for "Read All" feature
-  const {
-    openArticle,
-    startPlaylist: startArticlePlaylist,
-    isPlaying: isArticleReaderPlaying,
-    currentIndex: articleReaderIndex,
-    playlist: articlePlaylist,
-    currentArticle,
-  } = useArticleReader()
-
-  // Playlist dropdown state (for starting from specific video)
-  const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
-  const [hoveredPlaylistIndex, setHoveredPlaylistIndex] = useState<number | null>(null)
-  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const dropdownButtonRef = useRef<HTMLButtonElement>(null)
-
-  // Article playlist dropdown state
-  const [showArticleDropdown, setShowArticleDropdown] = useState(false)
-  const [hoveredArticleIndex, setHoveredArticleIndex] = useState<number | null>(null)
-  const [articleDropdownPosition, setArticleDropdownPosition] = useState<{ top: number; right: number } | null>(null)
-  const articleDropdownRef = useRef<HTMLDivElement>(null)
-  const articleDropdownButtonRef = useRef<HTMLButtonElement>(null)
+  // Global article reader context for engagement tracking
+  const { isPlaying: isArticleReaderPlaying } = useArticleReader()
 
   // TTS for reading articles aloud
   const tts = useTTSSync()
@@ -142,25 +123,6 @@ export default function News() {
 
   // Seen status mutations
   const { markSeen, bulkMarkSeen } = useSeenStatus()
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowPlaylistDropdown(false)
-        cleanupHoverHighlights()
-      }
-      if (articleDropdownRef.current && !articleDropdownRef.current.contains(e.target as Node)) {
-        setShowArticleDropdown(false)
-        setHoveredArticleIndex(null)
-        cleanupArticleHoverHighlights()
-      }
-    }
-    if (showPlaylistDropdown || showArticleDropdown) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showPlaylistDropdown, showArticleDropdown])
 
   // Reset reader mode when closing modal and stop TTS
   const handleCloseModal = useCallback(() => {
@@ -254,13 +216,7 @@ export default function News() {
     }
   }, [filteredVideos, videoPage, setVideoPage])
 
-  // Scroll to currently playing video (centered in viewport) with pulse effect
-  const scrollToPlayingVideo = () => {
-    if (!currentVideo) return
-    findVideo(currentVideo.video_id, true)
-  }
-
-  // Get unique sources from actual news items
+  // Get derived values
   const availableSources = newsData?.sources || []
   const availableVideoSources = videoData?.sources || []
 
@@ -395,938 +351,67 @@ export default function News() {
       </div>
 
       {/* Seen filter + bulk actions */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Filter pills: All / Unread|Unwatched / Read|Watched / Broken (articles only) */}
-        <div className="flex space-x-0.5 bg-slate-800 rounded-lg p-0.5">
-          {(activeTab === 'articles'
-            ? ['all', 'unseen', 'seen', 'broken'] as SeenFilter[]
-            : ['all', 'unseen', 'seen'] as SeenFilter[]
-          ).map(f => {
-            const active = (activeTab === 'articles' ? seenFilter : seenVideoFilter) === f
-            const isVideo = activeTab === 'videos'
-            const label = f === 'all' ? 'All'
-              : f === 'unseen' ? (isVideo ? 'Unwatched' : 'Unread')
-              : f === 'broken' ? 'Broken'
-              : (isVideo ? 'Watched' : 'Read')
-            return (
-              <button
-                key={f}
-                onClick={() => {
-                  if (activeTab === 'articles') {
-                    setSeenFilter(f)
-                    setCurrentPage(1)
-                  } else {
-                    setSeenVideoFilter(f)
-                    setVideoPage(1)
-                  }
-                }}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  active
-                    ? f === 'broken' ? 'bg-amber-700/60 text-amber-200' : 'bg-slate-600 text-white'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
-                }`}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Full articles only toggle (hide summary-only) */}
-        {activeTab === 'articles' && (
-          <button
-            onClick={() => {
-              setFullArticlesOnly(!fullArticlesOnly)
-              setCurrentPage(1)
-            }}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-              fullArticlesOnly
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 border-slate-700'
-            }`}
-            title={fullArticlesOnly ? 'Showing full articles only — click to show all' : 'Hide summary-only articles (sources that block full content)'}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Full articles</span>
-          </button>
-        )}
-
-        {/* Bulk mark all read/unread */}
-        {(() => {
-          const items = activeTab === 'articles' ? filteredNews : filteredVideos
-          const currentSeenFilter = activeTab === 'articles' ? seenFilter : seenVideoFilter
-          const contentType = activeTab === 'articles' ? 'article' as const : 'video' as const
-          const ids = items.map(i => i.id).filter((id): id is number => id != null)
-          // Show "Mark all read/watched" when not filtering to only seen items, otherwise "Mark all unread/unwatched"
-          const markAsRead = currentSeenFilter !== 'seen'
-          const isVideo = activeTab === 'videos'
-          const seenLabel = markAsRead
-            ? (isVideo ? 'Mark all watched' : 'Mark all read')
-            : (isVideo ? 'Mark all unwatched' : 'Mark all unread')
-          const seenTitle = markAsRead
-            ? (isVideo ? 'Mark all visible as watched' : 'Mark all visible as read')
-            : (isVideo ? 'Mark all visible as unwatched' : 'Mark all visible as unread')
-          return ids.length > 0 ? (
-            <button
-              onClick={() => bulkMarkSeen(contentType, ids, markAsRead)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700"
-              title={seenTitle}
-            >
-              <CheckCheck className="w-3.5 h-3.5" />
-              <span>{seenLabel}</span>
-            </button>
-          ) : null
-        })()}
-      </div>
+      <NewsFilterBar
+        activeTab={activeTab}
+        seenFilter={seenFilter}
+        setSeenFilter={setSeenFilter}
+        seenVideoFilter={seenVideoFilter}
+        setSeenVideoFilter={setSeenVideoFilter}
+        setCurrentPage={setCurrentPage}
+        setVideoPage={setVideoPage}
+        fullArticlesOnly={fullArticlesOnly}
+        setFullArticlesOnly={setFullArticlesOnly}
+        filteredNews={filteredNews}
+        filteredVideos={filteredVideos}
+        bulkMarkSeen={bulkMarkSeen}
+      />
 
       {/* Articles Tab */}
       {activeTab === 'articles' && (
-        <>
-          {/* Read All controls */}
-          <div className="flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg p-3 border border-slate-700">
-            <Volume2 className="w-5 h-5 text-green-400" />
-
-            {/* Read All button */}
-            <button
-              onClick={() => {
-                const articles: ArticleItem[] = filteredNews.map(item => ({
-                  id: item.id,
-                  title: item.title,
-                  url: item.url,
-                  source: item.source,
-                  source_name: item.source_name,
-                  published: item.published,
-                  thumbnail: item.thumbnail,
-                  summary: item.summary,
-                  category: item.category,
-                  has_issue: item.has_issue,
-                }))
-                const isBrokenFilter = seenFilter === 'broken'
-                startArticlePlaylist(articles, 0, false, true, false, isBrokenFilter)
-              }}
-              disabled={filteredNews.length === 0}
-              className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors"
-            >
-              <Volume2 className="w-4 h-4" />
-              <span>{seenFilter === 'broken' ? 'Retry All' : 'Read All'}</span>
-            </button>
-
-            {/* Now reading indicator and scroll button */}
-            {isArticleReaderPlaying && (
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2 text-sm text-slate-300">
-                  <span className="text-green-400 font-medium">Now reading:</span>
-                  <span>{articleReaderIndex + 1} / {articlePlaylist.length}</span>
-                </div>
-                {currentArticle && (
-                  <>
-                    <span className="text-xs text-slate-400 truncate max-w-[200px]">
-                      {currentArticle.title}
-                    </span>
-                    <button
-                      onClick={() => findArticle(currentArticle.url, true)}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 rounded-lg text-green-400 text-sm transition-colors"
-                      title="Scroll to currently reading article"
-                    >
-                      <Crosshair className="w-4 h-4" />
-                      <span className="hidden sm:inline">Find Reading</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Start from specific article dropdown */}
-            <div className="relative ml-auto" ref={articleDropdownRef}>
-              <button
-                ref={articleDropdownButtonRef}
-                onClick={() => {
-                  if (showArticleDropdown) {
-                    setShowArticleDropdown(false)
-                    setHoveredArticleIndex(null)
-                    cleanupArticleHoverHighlights()
-                  } else {
-                    if (articleDropdownButtonRef.current) {
-                      const rect = articleDropdownButtonRef.current.getBoundingClientRect()
-                      setArticleDropdownPosition({
-                        top: rect.bottom + 8,
-                        right: window.innerWidth - rect.right,
-                      })
-                    }
-                    setShowArticleDropdown(true)
-                  }
-                }}
-                className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
-              >
-                <span>Start from article...</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${showArticleDropdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showArticleDropdown && articleDropdownPosition && (
-                <div
-                  className="fixed w-80 max-h-[60vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50"
-                  style={{ top: articleDropdownPosition.top, right: articleDropdownPosition.right }}
-                >
-                  <div className="p-2 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
-                    <p className="text-xs text-slate-400">Click to start reading from article</p>
-                  </div>
-                  {filteredNews.map((article, idx) => {
-                    const isCurrentlyReading = isArticleReaderPlaying && currentArticle?.url === article.url
-                    return (
-                      <button
-                        key={`${article.source}-${idx}`}
-                        onClick={() => {
-                          const articles: ArticleItem[] = filteredNews.map(item => ({
-                            id: item.id,
-                            title: item.title,
-                            url: item.url,
-                            source: item.source,
-                            source_name: item.source_name,
-                            published: item.published,
-                            thumbnail: item.thumbnail,
-                            summary: item.summary,
-                            category: item.category,
-                            has_issue: item.has_issue,
-                          }))
-                          startArticlePlaylist(articles, idx, true)
-                          setShowArticleDropdown(false)
-                          setHoveredArticleIndex(null)
-                          cleanupArticleHoverHighlights()
-                        }}
-                        onMouseEnter={() => {
-                          setHoveredArticleIndex(idx)
-                          highlightArticle(article.url)
-                          findArticle(article.url, false)
-                        }}
-                        onMouseLeave={() => {
-                          setHoveredArticleIndex(null)
-                          unhighlightArticle(article.url)
-                        }}
-                        className={`w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left ${
-                          isCurrentlyReading ? 'bg-green-500/20' : hoveredArticleIndex === idx ? 'bg-green-500/10' : ''
-                        }`}
-                      >
-                        {isCurrentlyReading ? (
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-green-500 text-white">
-                            <Volume2 className="w-3 h-3 animate-pulse" />
-                          </span>
-                        ) : (
-                          <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                            hoveredArticleIndex === idx ? 'bg-green-500 text-white' : 'bg-slate-600 text-slate-300'
-                          }`}>
-                            {idx + 1}
-                          </span>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm truncate ${isCurrentlyReading ? 'text-green-400 font-medium' : 'text-white'}`}>{article.title}</p>
-                          <p className="text-xs text-slate-500">{article.source_name}</p>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Category filter (multi-select) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-slate-400">Category:</span>
-            <button
-              onClick={toggleAllCategories}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                allCategoriesSelected
-                  ? 'bg-white/20 text-white border-white/30'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
-              }`}
-            >
-              All
-            </button>
-            {NEWS_CATEGORIES.map((category) => (
-              <button
-                key={category}
-                onClick={() => toggleCategory(category)}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                  selectedCategories.has(category)
-                    ? CATEGORY_COLORS[category]
-                    : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-          {/* Source filter (multi-select) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <button
-              onClick={() => toggleAllSources()}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                allSourcesSelected
-                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
-              }`}
-            >
-              All
-            </button>
-            {sortSourcesByCategory(
-              availableSources.filter(source => {
-                // Only show sources that have articles in the selected categories
-                const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
-                return categoryNews.some(n => n.source === source.id)
-              }),
-            ).map((source) => {
-              const categoryNews = (newsData?.news || []).filter(n => selectedCategories.has(n.category))
-              const count = countItemsBySource(categoryNews, source.id)
-              return (
-                <button
-                  key={source.id}
-                  onClick={() => toggleSource(source.id)}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                    (allSourcesSelected || selectedSources.has(source.id))
-                      ? CATEGORY_COLORS[source.category || ''] || 'bg-slate-600 text-white border-slate-500'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
-                  }`}
-                >
-                  {source.name.replace('Reddit ', 'r/')} ({count})
-                </button>
-              )
-            })}
-          </div>
-
-          {/* News grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginatedNews.map((item, index) => {
-              const isCurrentlyReading = isArticleReaderPlaying && currentArticle?.url === item.url
-              return (
-              <div
-                key={`${item.source}-${index}`}
-                data-article-url={item.url}
-                className={`group bg-slate-800 border rounded-lg overflow-hidden transition-all hover:shadow-lg hover:shadow-slate-900/50 relative ${
-                  isCurrentlyReading
-                    ? 'border-green-500 ring-2 ring-green-500/30'
-                    : 'border-slate-700 hover:border-slate-600'
-                }`}
-              >
-                {/* Now Reading badge */}
-                {isCurrentlyReading && (
-                  <div className="absolute top-2 left-2 z-20 flex items-center space-x-1 px-2 py-1 bg-green-600 rounded-full text-xs font-medium text-white shadow-lg">
-                    <Volume2 className="w-3 h-3 animate-pulse" />
-                    <span>Now Reading</span>
-                  </div>
-                )}
-                {/* Issue badge (takes priority over seen badge) */}
-                {item.has_issue && !isCurrentlyReading && (
-                  <div className="absolute top-2 left-2 z-20 w-6 h-6 bg-amber-600/80 rounded-full flex items-center justify-center" title="Playback issue">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-200" />
-                  </div>
-                )}
-                {/* Seen badge (only if no issue badge) */}
-                {item.is_seen && !item.has_issue && !isCurrentlyReading && (
-                  <div className="absolute top-2 left-2 z-20 w-6 h-6 bg-slate-700/80 rounded-full flex items-center justify-center">
-                    <Check className="w-3.5 h-3.5 text-slate-400" />
-                  </div>
-                )}
-                {/* Thumbnail with preview/external link buttons */}
-                <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
-                  {item.thumbnail && (
-                    <img
-                      src={item.thumbnail}
-                      alt=""
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none'
-                      }}
-                    />
-                  )}
-                  {/* Click overlay to open in article reader */}
-                  <button
-                    onClick={() => {
-                      const articleItem: ArticleItem = {
-                        id: item.id,
-                        title: item.title,
-                        url: item.url,
-                        source: item.source,
-                        source_name: item.source_name,
-                        published: item.published,
-                        thumbnail: item.thumbnail,
-                        summary: item.summary,
-                        category: item.category,
-                        has_issue: item.has_issue,
-                      }
-                      const allArticles: ArticleItem[] = filteredNews.map(n => ({
-                        id: n.id,
-                        title: n.title,
-                        url: n.url,
-                        source: n.source,
-                        source_name: n.source_name,
-                        published: n.published,
-                        thumbnail: n.thumbnail,
-                        summary: n.summary,
-                        category: n.category,
-                        has_issue: n.has_issue,
-                      }))
-                      openArticle(articleItem, allArticles)
-                    }}
-                    className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/30 transition-colors cursor-pointer"
-                  />
-                  {/* Open in new tab button */}
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
-                    title="Open on website"
-                  >
-                    <ExternalLink className="w-4 h-4 text-white" />
-                  </a>
-                </div>
-
-                <button
-                  onClick={() => {
-                    const articleItem: ArticleItem = {
-                      id: item.id,
-                      title: item.title,
-                      url: item.url,
-                      source: item.source,
-                      source_name: item.source_name,
-                      published: item.published,
-                      thumbnail: item.thumbnail,
-                      summary: item.summary,
-                      category: item.category,
-                      has_issue: item.has_issue,
-                    }
-                    const allArticles: ArticleItem[] = filteredNews.map(n => ({
-                      id: n.id,
-                      title: n.title,
-                      url: n.url,
-                      source: n.source,
-                      source_name: n.source_name,
-                      published: n.published,
-                      thumbnail: n.thumbnail,
-                      summary: n.summary,
-                      category: n.category,
-                      has_issue: n.has_issue,
-                    }))
-                    openArticle(articleItem, allArticles)
-                  }}
-                  className="p-4 space-y-3 text-left w-full cursor-pointer hover:bg-slate-700/30 transition-colors"
-                >
-                  {/* Source badge and time */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                          CATEGORY_COLORS[item.category] || 'bg-slate-600 text-slate-300 border-slate-500'
-                        }`}
-                      >
-                        {item.source_name}
-                      </span>
-                      {!item.content_scrape_allowed && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-900/50 text-amber-400 border border-amber-700/50">
-                          Summary only
-                        </span>
-                      )}
-                    </div>
-                    {item.published && (
-                      <span className="text-xs text-slate-500">
-                        {formatRelativeTime(item.published)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Title */}
-                  <h3 className={`font-medium group-hover:text-blue-400 transition-colors line-clamp-3 ${item.is_seen ? 'text-slate-400' : 'text-white'}`}>
-                    {item.title}
-                  </h3>
-
-                  {/* Summary */}
-                  {item.summary && (
-                    <p className="text-sm text-slate-400 line-clamp-2">{item.summary}</p>
-                  )}
-
-                  {/* Footer: preview indicator + seen toggle */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-1 text-xs text-slate-500 group-hover:text-blue-400 transition-colors">
-                      <Newspaper className="w-3 h-3" />
-                      <span>Click to preview</span>
-                    </div>
-                  </div>
-                </button>
-                {/* Seen toggle button */}
-                {item.id != null && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      markSeen('article', item.id!, !item.is_seen)
-                    }}
-                    className="absolute bottom-3 right-3 w-7 h-7 rounded-full flex items-center justify-center bg-slate-700/80 hover:bg-slate-600 transition-colors z-10"
-                    title={item.is_seen ? 'Mark as unread' : 'Mark as read'}
-                  >
-                    {item.is_seen
-                      ? <EyeOff className="w-3.5 h-3.5 text-slate-400" />
-                      : <Eye className="w-3.5 h-3.5 text-slate-400" />
-                    }
-                  </button>
-                )}
-              </div>
-            )})}
-          </div>
-
-          {/* Pagination controls (client-side - instant page changes) */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center space-x-4 py-6">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
-              >
-                Previous
-              </button>
-              <div className="flex items-center space-x-2">
-                {/* Show page numbers with ellipsis for large page counts */}
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(pageNum => {
-                    // Always show first, last, current, and neighbors
-                    if (pageNum === 1 || pageNum === totalPages) return true
-                    if (Math.abs(pageNum - currentPage) <= 1) return true
-                    return false
-                  })
-                  .map((pageNum, idx, arr) => (
-                    <span key={pageNum} className="flex items-center">
-                      {/* Add ellipsis if there's a gap */}
-                      {idx > 0 && arr[idx - 1] !== pageNum - 1 && (
-                        <span className="px-2 text-slate-500">...</span>
-                      )}
-                      <button
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={`w-10 h-10 rounded-lg transition-colors ${
-                          currentPage === pageNum
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    </span>
-                  ))}
-              </div>
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          )}
-
-          {/* Page info */}
-          {totalFilteredItems > 0 && (
-            <div className="text-center text-sm text-slate-500">
-              Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalFilteredItems)} of {totalFilteredItems} articles
-              {newsData?.retention_days && (
-                <span className="ml-2 text-slate-600">
-                  (last {newsData.retention_days} days, min 5 per source)
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Empty state */}
-          {filteredNews.length === 0 && (
-            <div className="text-center py-12">
-              <Newspaper className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400">No news articles found</p>
-              {!allSourcesSelected && (
-                <button
-                  onClick={() => toggleAllSources()}
-                  className="mt-2 text-blue-400 hover:text-blue-300"
-                >
-                  Show all sources
-                </button>
-              )}
-            </div>
-          )}
-        </>
+        <ArticleSection
+          newsData={newsData}
+          filteredNews={filteredNews}
+          paginatedNews={paginatedNews}
+          selectedCategories={selectedCategories}
+          toggleCategory={toggleCategory}
+          toggleAllCategories={toggleAllCategories}
+          allCategoriesSelected={allCategoriesSelected}
+          selectedSources={selectedSources}
+          toggleSource={toggleSource}
+          toggleAllSources={toggleAllSources}
+          allSourcesSelected={allSourcesSelected}
+          seenFilter={seenFilter}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          totalPages={totalPages}
+          totalFilteredItems={totalFilteredItems}
+          pageSize={PAGE_SIZE}
+          markSeen={markSeen}
+          findArticle={findArticle}
+        />
       )}
 
       {/* Videos Tab */}
       {activeTab === 'videos' && (
-        <>
-          {/* Video category filter (multi-select) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-slate-400">Category:</span>
-            <button
-              onClick={toggleAllVideoCategories}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                allVideoCategoriesSelected
-                  ? 'bg-white/20 text-white border-white/30'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
-              }`}
-            >
-              All
-            </button>
-            {NEWS_CATEGORIES.map((category) => (
-              <button
-                key={category}
-                onClick={() => toggleVideoCategory(category)}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                  selectedVideoCategories.has(category)
-                    ? CATEGORY_COLORS[category]
-                    : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-          {/* Video source filter (multi-select) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <button
-              onClick={() => toggleAllVideoSources()}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                allVideoSourcesSelected
-                  ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
-              }`}
-            >
-              All
-            </button>
-            {sortSourcesByCategory(
-              availableVideoSources.filter(source => {
-                const categoryVideos = (videoData?.videos || []).filter(v => selectedVideoCategories.has(v.category))
-                return categoryVideos.some(v => v.source === source.id)
-              }),
-            ).map((source) => {
-              const categoryVideos = (videoData?.videos || []).filter(v => selectedVideoCategories.has(v.category))
-              const count = countItemsBySource(categoryVideos, source.id)
-              return (
-                <button
-                  key={source.id}
-                  onClick={() => toggleVideoSource(source.id)}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                    (allVideoSourcesSelected || selectedVideoSources.has(source.id))
-                      ? CATEGORY_COLORS[source.category || ''] || 'bg-slate-600 text-white border-slate-500'
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 border-transparent'
-                  }`}
-                >
-                  {source.name} ({count})
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Auto-play controls */}
-          <div className="flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg p-3 border border-slate-700">
-            <ListVideo className="w-5 h-5 text-red-400" />
-
-            {/* Play All button - opens mini-player */}
-            <button
-              onClick={() => startPlaylist(filteredVideos as ContextVideoItem[], 0)}
-              disabled={filteredVideos.length === 0}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors"
-            >
-              <Play className="w-4 h-4" fill="white" />
-              <span>Play All</span>
-            </button>
-
-            {/* Now playing indicator and scroll button */}
-            {isPlaylistPlaying && (
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2 text-sm text-slate-300">
-                  <span className="text-green-400 font-medium">Now playing:</span>
-                  <span>{playlistIndex + 1} / {playlist.length}</span>
-                </div>
-                <button
-                  onClick={scrollToPlayingVideo}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-red-400 text-sm transition-colors"
-                  title="Scroll to currently playing video"
-                >
-                  <Crosshair className="w-4 h-4" />
-                  <span className="hidden sm:inline">Find Playing</span>
-                </button>
-              </div>
-            )}
-
-            {/* Position selector dropdown - start from specific video */}
-            <div className="relative ml-auto" ref={dropdownRef}>
-              <button
-                ref={dropdownButtonRef}
-                onClick={() => {
-                  if (showPlaylistDropdown) {
-                    cleanupHoverHighlights()
-                    setShowPlaylistDropdown(false)
-                  } else {
-                    // Calculate position based on button location
-                    if (dropdownButtonRef.current) {
-                      const rect = dropdownButtonRef.current.getBoundingClientRect()
-                      setDropdownPosition({
-                        top: rect.bottom + 8, // 8px gap below button
-                        right: window.innerWidth - rect.right, // Align right edges
-                      })
-                    }
-                    setShowPlaylistDropdown(true)
-                  }
-                }}
-                className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition-colors"
-              >
-                <span>Start from video...</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${showPlaylistDropdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showPlaylistDropdown && dropdownPosition && (
-                <div
-                  className="fixed w-80 max-h-[60vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50"
-                  style={{ top: dropdownPosition.top, right: dropdownPosition.right }}
-                >
-                  <div className="p-2 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
-                    <p className="text-xs text-slate-400">Hover to preview - Click to play</p>
-                  </div>
-                  {filteredVideos.map((video, idx) => (
-                    <button
-                      key={`${video.source}-${video.video_id}`}
-                      onClick={() => {
-                        startPlaylist(filteredVideos as ContextVideoItem[], idx, true) // Start expanded
-                        setShowPlaylistDropdown(false)
-                        cleanupHoverHighlights()
-                      }}
-                      onMouseEnter={() => {
-                        setHoveredPlaylistIndex(idx)
-                        // Navigate to correct page, scroll to, and highlight the video in the grid
-                        highlightVideo(video.video_id)
-                        findVideo(video.video_id, false)
-                      }}
-                      onMouseLeave={() => {
-                        setHoveredPlaylistIndex(null)
-                        // Remove blue halo effect
-                        unhighlightVideo(video.video_id)
-                      }}
-                      className={`w-full flex items-start space-x-3 p-3 hover:bg-slate-700 transition-colors text-left ${
-                        hoveredPlaylistIndex === idx ? 'bg-blue-500/10' : ''
-                      }`}
-                    >
-                      <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                        hoveredPlaylistIndex === idx ? 'bg-blue-500 text-white' : 'bg-slate-600 text-slate-300'
-                      }`}>
-                        {idx + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{video.title}</p>
-                        <p className="text-xs text-slate-500">{video.channel_name}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Videos grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginatedVideos.map((video, idx) => {
-              // Use unique key combining source and video_id to avoid collisions
-              const uniqueKey = `${video.source}-${video.video_id}`
-
-              // Check if this video is currently playing in the mini player
-              const isCurrentlyPlaying = isPlaylistPlaying && currentVideo?.video_id === video.video_id
-
-              // Handler to play this specific video in expanded modal
-              // Use absolute index into filteredVideos so the full playlist plays correctly
-              const absoluteIdx = (videoPage - 1) * PAGE_SIZE + idx
-              const handlePlayVideo = () => {
-                startPlaylist(filteredVideos as ContextVideoItem[], absoluteIdx, true) // true = start expanded
-              }
-
-              return (
-                <div
-                  key={uniqueKey}
-                  data-video-id={video.video_id}
-                  className={`group bg-slate-800 rounded-lg overflow-hidden transition-all hover:shadow-lg ${
-                    isCurrentlyPlaying
-                      ? 'border-2 border-red-500 ring-4 ring-red-500/30 shadow-lg shadow-red-500/20'
-                      : 'border border-slate-700 hover:border-slate-600 hover:shadow-slate-900/50'
-                  }`}
-                >
-                  {/* Video thumbnail with play button */}
-                  <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
-                    {video.thumbnail && (
-                      <img
-                        src={video.thumbnail}
-                        alt=""
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none'
-                        }}
-                      />
-                    )}
-                    {/* Now Playing badge */}
-                    {isCurrentlyPlaying && (
-                      <div className="absolute top-2 left-2 flex items-center space-x-1.5 px-2 py-1 bg-red-600 rounded-full z-10 animate-pulse">
-                        <div className="w-2 h-2 bg-white rounded-full" />
-                        <span className="text-xs font-medium text-white">Playing</span>
-                      </div>
-                    )}
-                    {/* Seen badge */}
-                    {video.is_seen && !isCurrentlyPlaying && (
-                      <div className="absolute top-2 left-2 z-10 w-6 h-6 bg-slate-700/80 rounded-full flex items-center justify-center">
-                        <Check className="w-3.5 h-3.5 text-slate-400" />
-                      </div>
-                    )}
-                    {/* Play button overlay - click to open in expanded modal */}
-                    <button
-                      onClick={handlePlayVideo}
-                      className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors cursor-pointer"
-                    >
-                      <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Play className="w-7 h-7 text-white ml-1" fill="white" />
-                      </div>
-                    </button>
-                    {/* Open in new tab button */}
-                    <a
-                      href={video.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors z-10"
-                      title="Open on YouTube"
-                    >
-                      <ExternalLink className="w-4 h-4 text-white" />
-                    </a>
-                  </div>
-
-                  <div className="p-4 space-y-3">
-                    {/* Channel badge and time */}
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                          CATEGORY_COLORS[video.category] || 'bg-slate-600 text-slate-300 border-slate-500'
-                        }`}
-                      >
-                        {video.channel_name}
-                      </span>
-                      {video.published && (
-                        <span className="text-xs text-slate-500">
-                          {formatRelativeTime(video.published)}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Title */}
-                    <h3 className={`font-medium line-clamp-2 ${video.is_seen ? 'text-slate-400' : 'text-white'}`}>
-                      {video.title}
-                    </h3>
-
-                    {/* Description */}
-                    {video.description && (
-                      <p className="text-sm text-slate-400 line-clamp-2">{video.description}</p>
-                    )}
-
-                    {/* Footer: link + seen toggle */}
-                    <div className="flex items-center justify-between">
-                      <a
-                        href={video.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        <span>Open on YouTube</span>
-                      </a>
-                      {video.id != null && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            markSeen('video', video.id!, !video.is_seen)
-                          }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-700/80 hover:bg-slate-600 transition-colors"
-                          title={video.is_seen ? 'Mark as unwatched' : 'Mark as watched'}
-                        >
-                          {video.is_seen
-                            ? <EyeOff className="w-3.5 h-3.5 text-slate-400" />
-                            : <Eye className="w-3.5 h-3.5 text-slate-400" />
-                          }
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Video pagination controls */}
-          {videoTotalPages > 1 && (
-            <div className="flex items-center justify-center space-x-4 py-6">
-              <button
-                onClick={() => setVideoPage(p => Math.max(1, p - 1))}
-                disabled={videoPage === 1}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
-              >
-                Previous
-              </button>
-              <div className="flex items-center space-x-2">
-                {Array.from({ length: videoTotalPages }, (_, i) => i + 1)
-                  .filter(pageNum => {
-                    if (pageNum === 1 || pageNum === videoTotalPages) return true
-                    if (Math.abs(pageNum - videoPage) <= 1) return true
-                    return false
-                  })
-                  .map((pageNum, idx, arr) => (
-                    <span key={pageNum} className="flex items-center">
-                      {idx > 0 && arr[idx - 1] !== pageNum - 1 && (
-                        <span className="px-2 text-slate-500">...</span>
-                      )}
-                      <button
-                        onClick={() => setVideoPage(pageNum)}
-                        className={`w-10 h-10 rounded-lg transition-colors ${
-                          videoPage === pageNum
-                            ? 'bg-red-600 text-white'
-                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    </span>
-                  ))}
-              </div>
-              <button
-                onClick={() => setVideoPage(p => Math.min(videoTotalPages, p + 1))}
-                disabled={videoPage === videoTotalPages}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed rounded-lg transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          )}
-
-          {/* Video page info */}
-          {filteredVideos.length > 0 && (
-            <div className="text-center text-sm text-slate-500">
-              Showing {((videoPage - 1) * PAGE_SIZE) + 1}-{Math.min(videoPage * PAGE_SIZE, filteredVideos.length)} of {filteredVideos.length} videos
-            </div>
-          )}
-
-          {/* Empty state for videos */}
-          {filteredVideos.length === 0 && (
-            <div className="text-center py-12">
-              <Video className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400">No videos found</p>
-              {!allVideoSourcesSelected && (
-                <button
-                  onClick={() => toggleAllVideoSources()}
-                  className="mt-2 text-red-400 hover:text-red-300"
-                >
-                  Show all channels
-                </button>
-              )}
-            </div>
-          )}
-        </>
+        <VideoSection
+          videoData={videoData}
+          filteredVideos={filteredVideos}
+          paginatedVideos={paginatedVideos}
+          selectedVideoCategories={selectedVideoCategories}
+          toggleVideoCategory={toggleVideoCategory}
+          toggleAllVideoCategories={toggleAllVideoCategories}
+          allVideoCategoriesSelected={allVideoCategoriesSelected}
+          selectedVideoSources={selectedVideoSources}
+          toggleVideoSource={toggleVideoSource}
+          toggleAllVideoSources={toggleAllVideoSources}
+          allVideoSourcesSelected={allVideoSourcesSelected}
+          videoPage={videoPage}
+          setVideoPage={setVideoPage}
+          videoTotalPages={videoTotalPages}
+          pageSize={PAGE_SIZE}
+          markSeen={markSeen}
+          findVideo={findVideo}
+        />
       )}
 
       {/* Sources footer */}
@@ -1369,210 +454,16 @@ export default function News() {
 
       {/* Article Preview Modal */}
       {previewArticle && (
-        <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={handleCloseModal}
-        >
-          <div
-            className={`bg-slate-800 rounded-lg w-full max-h-[90vh] overflow-hidden shadow-2xl transition-all duration-300 ${
-              readerModeEnabled ? 'max-w-4xl' : 'max-w-2xl'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal header with reader mode toggle */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-700">
-              <div className="flex items-center space-x-2">
-                <span
-                  className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                    CATEGORY_COLORS[previewArticle.category] || 'bg-slate-600 text-slate-300 border-slate-500'
-                  }`}
-                >
-                  {previewArticle.source_name}
-                </span>
-                {previewArticle.published && (
-                  <span className="text-xs text-slate-500">
-                    {formatRelativeTime(previewArticle.published)}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center space-x-2">
-                {/* Reader Mode Toggle */}
-                <button
-                  onClick={() => setReaderModeEnabled(!readerModeEnabled)}
-                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                    readerModeEnabled
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                      : 'bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600'
-                  }`}
-                  title="Toggle reader mode to fetch and display full article content"
-                >
-                  <BookOpen className="w-4 h-4" />
-                  <span className="hidden sm:inline">Reader Mode</span>
-                </button>
-                <button
-                  onClick={handleCloseModal}
-                  className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors"
-                >
-                  <X className="w-5 h-5 text-slate-400" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal content */}
-            <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
-              {/* Full-size thumbnail - always show if available */}
-              {previewArticle.thumbnail && (
-                <div className="w-full aspect-video bg-slate-900">
-                  <img
-                    src={previewArticle.thumbnail}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none'
-                    }}
-                  />
-                </div>
-              )}
-
-              <div className="p-6 space-y-4">
-                {/* Title - use extracted title in reader mode if available */}
-                <h2 className="text-xl font-bold text-white leading-tight">
-                  {readerModeEnabled && articleContent?.title ? articleContent.title : previewArticle.title}
-                </h2>
-
-                {/* Author and date in reader mode */}
-                {readerModeEnabled && articleContent?.success && (articleContent.author || articleContent.date) && (
-                  <div className="flex items-center space-x-3 text-sm text-slate-400">
-                    {articleContent.author && <span>By {articleContent.author}</span>}
-                    {articleContent.author && articleContent.date && <span>•</span>}
-                    {articleContent.date && <span>{articleContent.date}</span>}
-                  </div>
-                )}
-
-                {/* Reader Mode Content */}
-                {readerModeEnabled ? (
-                  <>
-                    {/* Loading state */}
-                    {articleContentLoading && (
-                      <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                        <LoadingSpinner size="md" text="Fetching article content..." />
-                        <p className="text-sm text-slate-500">
-                          Extracting readable content from the source
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Error state */}
-                    {articleContent && !articleContent.success && (
-                      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                        <div className="flex items-start space-x-3">
-                          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-red-400 font-medium">Unable to extract article content</p>
-                            <p className="text-sm text-red-400/70 mt-1">{articleContent.error}</p>
-                            <p className="text-sm text-slate-400 mt-3">
-                              Try opening the full article on the source website instead.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Success - Full article content with word highlighting */}
-                    {articleContent?.success && articleContent.content && (
-                      <ArticleContent
-                        content={articleContent.content}
-                        words={tts.words}
-                        currentWordIndex={tts.currentWordIndex}
-                        onSeekToWord={tts.seekToWord}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {/* Default preview mode - summary only */}
-                    {previewArticle.summary && (
-                      <p className="text-slate-300 leading-relaxed">
-                        {previewArticle.summary}
-                      </p>
-                    )}
-
-                    {/* No summary message */}
-                    {!previewArticle.summary && (
-                      <p className="text-slate-500 italic">
-                        No summary available. Enable Reader Mode or click below to read the full article.
-                      </p>
-                    )}
-
-                    {/* Hint to enable reader mode */}
-                    <div className="bg-slate-700/50 rounded-lg p-4 mt-4">
-                      <div className="flex items-start space-x-3">
-                        <BookOpen className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-slate-300 font-medium">Want to read the full article here?</p>
-                          <p className="text-sm text-slate-400 mt-1">
-                            Enable <span className="text-blue-400">Reader Mode</span> above to extract and display the full article content in a clean, readable format.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Modal footer with TTS controls and actions */}
-            <div className="p-4 border-t border-slate-700">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                {/* Left side: Close + TTS Controls */}
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    onClick={handleCloseModal}
-                    className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
-                  >
-                    Close
-                  </button>
-
-                  {/* TTS Controls - only show when reader mode is active with content */}
-                  {readerModeEnabled && articleContent?.success && articleContent.content && (
-                    <TTSControls
-                      isLoading={tts.isLoading}
-                      isPlaying={tts.isPlaying}
-                      isPaused={tts.isPaused}
-                      isReady={tts.isReady}
-                      error={tts.error}
-                      currentTime={tts.currentTime}
-                      duration={tts.duration}
-                      currentVoice={tts.currentVoice}
-                      playbackRate={tts.playbackRate}
-                      onLoadAndPlay={() => tts.loadAndPlay(articlePlainText)}
-                      onPlay={tts.play}
-                      onPause={tts.pause}
-                      onResume={tts.resume}
-                      onStop={tts.stop}
-                      onReplay={tts.replay}
-                      onSkipWords={tts.skipWords}
-                      onSetVoice={tts.setVoice}
-                      onSetRate={tts.setRate}
-                    />
-                  )}
-                </div>
-
-                {/* Right side: Read on Website button */}
-                <a
-                  href={previewArticle.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium transition-colors flex-shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span className="hidden sm:inline">Read on Website</span>
-                  <span className="sm:hidden">Website</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ArticlePreviewModal
+          previewArticle={previewArticle}
+          readerModeEnabled={readerModeEnabled}
+          setReaderModeEnabled={setReaderModeEnabled}
+          articleContent={articleContent}
+          articleContentLoading={articleContentLoading}
+          articlePlainText={articlePlainText}
+          tts={tts}
+          onClose={handleCloseModal}
+        />
       )}
 
       {/* Source Subscriptions Modal */}

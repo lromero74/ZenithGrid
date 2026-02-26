@@ -17,7 +17,7 @@ from app.database import get_db
 from app.models import Account, User
 from app.auth.dependencies import get_current_user
 from app.encryption import decrypt_value, is_encrypted
-from app.exchange_clients.factory import create_exchange_client
+from app.exchange_clients.factory import create_exchange_client, ExchangeClientConfig, CoinbaseCredentials
 from app.exchange_clients.paper_trading_client import PaperTradingClient
 from app.order_validation import calculate_minimum_budget_percentage
 from app.bot_routers.schemas import (
@@ -54,11 +54,13 @@ async def _get_exchange_client(db: AsyncSession, user_id: int):
         private_key = account.api_private_key
         if private_key and is_encrypted(private_key):
             private_key = decrypt_value(private_key)
-        client = create_exchange_client(
+        client = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
-            coinbase_key_name=account.api_key_name,
-            coinbase_private_key=private_key,
-        )
+            coinbase=CoinbaseCredentials(
+                key_name=account.api_key_name,
+                private_key=private_key,
+            ),
+        ))
         return client, account
 
     # Fall back to paper trading account

@@ -16,6 +16,11 @@ from unittest.mock import MagicMock, patch
 from app.exchange_clients.factory import (
     create_exchange_client,
     create_exchange_client_from_bot_config,
+    ExchangeClientConfig,
+    CoinbaseCredentials,
+    ByBitCredentials,
+    MT5BridgeCredentials,
+    DEXCredentials,
 )
 
 
@@ -35,12 +40,11 @@ class TestCreateExchangeClient:
         mock_adapter_instance = MagicMock()
         mock_cb_adapter.return_value = mock_adapter_instance
 
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
             exchange_name="coinbase",
-            coinbase_key_name="test-key",
-            coinbase_private_key="test-secret",
-        )
+            coinbase=CoinbaseCredentials(key_name="test-key", private_key="test-secret"),
+        ))
 
         assert result is not None
         mock_cb_client.assert_called_once_with(
@@ -51,22 +55,20 @@ class TestCreateExchangeClient:
 
     def test_coinbase_client_missing_creds_returns_none(self):
         """Failure case: missing Coinbase credentials returns None."""
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
             exchange_name="coinbase",
-            coinbase_key_name=None,
-            coinbase_private_key=None,
-        )
+            coinbase=CoinbaseCredentials(key_name=None, private_key=None),
+        ))
         assert result is None
 
     def test_coinbase_client_missing_key_returns_none(self):
         """Edge case: only key_name provided, missing private_key."""
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
             exchange_name="coinbase",
-            coinbase_key_name="test-key",
-            coinbase_private_key=None,
-        )
+            coinbase=CoinbaseCredentials(key_name="test-key", private_key=None),
+        ))
         assert result is None
 
     @patch("app.exchange_clients.bybit_adapter.ByBitAdapter")
@@ -77,12 +79,11 @@ class TestCreateExchangeClient:
         mock_adapter_instance = MagicMock()
         mock_bb_adapter.return_value = mock_adapter_instance
 
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
             exchange_name="bybit",
-            bybit_api_key="bb-key",
-            bybit_api_secret="bb-secret",
-        )
+            bybit=ByBitCredentials(api_key="bb-key", api_secret="bb-secret"),
+        ))
 
         assert result is not None
         mock_bb_client.assert_called_once_with(
@@ -93,12 +94,11 @@ class TestCreateExchangeClient:
 
     def test_bybit_client_missing_creds_returns_none(self):
         """Failure case: missing ByBit credentials returns None."""
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
             exchange_name="bybit",
-            bybit_api_key=None,
-            bybit_api_secret=None,
-        )
+            bybit=ByBitCredentials(api_key=None, api_secret=None),
+        ))
         assert result is None
 
     @patch("app.exchange_clients.mt5_bridge_client.MT5BridgeClient")
@@ -107,13 +107,15 @@ class TestCreateExchangeClient:
         mock_mt5_instance = MagicMock()
         mock_mt5.return_value = mock_mt5_instance
 
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
             exchange_name="mt5_bridge",
-            mt5_bridge_url="http://localhost:5000",
-            mt5_magic_number=99999,
-            mt5_account_balance=50000.0,
-        )
+            mt5=MT5BridgeCredentials(
+                bridge_url="http://localhost:5000",
+                magic_number=99999,
+                account_balance=50000.0,
+            ),
+        ))
 
         assert result is not None
         mock_mt5.assert_called_once_with(
@@ -124,11 +126,11 @@ class TestCreateExchangeClient:
 
     def test_mt5_bridge_missing_url_returns_none(self):
         """Failure case: missing MT5 bridge URL returns None."""
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
             exchange_name="mt5_bridge",
-            mt5_bridge_url=None,
-        )
+            mt5=MT5BridgeCredentials(bridge_url=None),
+        ))
         assert result is None
 
     @patch("app.exchange_clients.dex_client.DEXClient")
@@ -137,13 +139,15 @@ class TestCreateExchangeClient:
         mock_dex_instance = MagicMock()
         mock_dex.return_value = mock_dex_instance
 
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="dex",
-            chain_id=1,
-            private_key="0xabc123",
-            rpc_url="https://mainnet.infura.io/v3/key",
-            dex_router="0xE592427A0AEce92De3Edee1F18E0157C05861564",
-        )
+            dex=DEXCredentials(
+                chain_id=1,
+                private_key="0xabc123",
+                rpc_url="https://mainnet.infura.io/v3/key",
+                dex_router="0xE592427A0AEce92De3Edee1F18E0157C05861564",
+            ),
+        ))
 
         assert result is not None
         mock_dex.assert_called_once_with(
@@ -156,18 +160,18 @@ class TestCreateExchangeClient:
     def test_dex_client_missing_config_raises(self):
         """Failure case: missing DEX config raises ValueError."""
         with pytest.raises(ValueError, match="DEX requires chain_id"):
-            create_exchange_client(
+            create_exchange_client(ExchangeClientConfig(
                 exchange_type="dex",
-                chain_id=None,
-                private_key=None,
-                rpc_url=None,
-                dex_router=None,
-            )
+                dex=DEXCredentials(
+                    chain_id=None, private_key=None,
+                    rpc_url=None, dex_router=None,
+                ),
+            ))
 
     def test_invalid_exchange_type_raises(self):
         """Failure case: unknown exchange type raises ValueError."""
         with pytest.raises(ValueError, match="Unknown exchange type: forex"):
-            create_exchange_client(exchange_type="forex")
+            create_exchange_client(ExchangeClientConfig(exchange_type="forex"))
 
     @patch("app.exchange_clients.coinbase_adapter.CoinbaseAdapter")
     @patch("app.coinbase_unified_client.CoinbaseClient")
@@ -176,11 +180,10 @@ class TestCreateExchangeClient:
         mock_cb_client.return_value = MagicMock()
         mock_cb_adapter.return_value = MagicMock()
 
-        result = create_exchange_client(
+        result = create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
-            coinbase_key_name="key",
-            coinbase_private_key="secret",
-        )
+            coinbase=CoinbaseCredentials(key_name="key", private_key="secret"),
+        ))
 
         assert result is not None
         mock_cb_client.assert_called_once()
@@ -192,13 +195,13 @@ class TestCreateExchangeClient:
         mock_cb_client.return_value = MagicMock()
         mock_cb_adapter.return_value = MagicMock()
 
-        create_exchange_client(
+        create_exchange_client(ExchangeClientConfig(
             exchange_type="cex",
             exchange_name="coinbase",
-            coinbase_key_name="key",
-            coinbase_private_key="secret",
-            account_id=42,
-        )
+            coinbase=CoinbaseCredentials(
+                key_name="key", private_key="secret", account_id=42,
+            ),
+        ))
 
         mock_cb_client.assert_called_once_with(
             key_name="key",

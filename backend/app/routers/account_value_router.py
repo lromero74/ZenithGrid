@@ -10,6 +10,8 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import AppError
+
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models import User
@@ -171,7 +173,7 @@ async def get_bidirectional_reservations(
             "btc_usd_price": current_btc_price,
         }
 
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as e:
         logger.error(f"Failed to fetch bidirectional reservations: {e}")

@@ -7,6 +7,7 @@ from app.trading_engine.order_logger import (
     _bot_uses_ai_indicators,
     log_order_to_history,
     save_ai_log,
+    OrderLogEntry,
 )
 
 
@@ -78,10 +79,12 @@ class TestLogOrderToHistory:
         position.id = 10
 
         await log_order_to_history(
-            db=db, bot=bot, product_id="ETH-BTC", position=position,
-            side="BUY", order_type="MARKET", trade_type="initial",
-            quote_amount=0.001, price=0.05, status="success",
-            order_id="order-123", base_amount=0.02,
+            db=db, bot=bot, position=position,
+            entry=OrderLogEntry(
+                product_id="ETH-BTC", side="BUY", order_type="MARKET",
+                trade_type="initial", quote_amount=0.001, price=0.05,
+                status="success", order_id="order-123", base_amount=0.02,
+            ),
         )
 
         db.add.assert_called_once()
@@ -97,10 +100,12 @@ class TestLogOrderToHistory:
         bot.id = 1
 
         await log_order_to_history(
-            db=db, bot=bot, product_id="BTC-USD", position=None,
-            side="BUY", order_type="MARKET", trade_type="initial",
-            quote_amount=100.0, price=50000.0, status="failed",
-            error_message="Insufficient funds",
+            db=db, bot=bot, position=None,
+            entry=OrderLogEntry(
+                product_id="BTC-USD", side="BUY", order_type="MARKET",
+                trade_type="initial", quote_amount=100.0, price=50000.0,
+                status="failed", error_message="Insufficient funds",
+            ),
         )
 
         order = db.add.call_args[0][0]
@@ -117,9 +122,12 @@ class TestLogOrderToHistory:
 
         # Should not raise
         await log_order_to_history(
-            db=db, bot=bot, product_id="ETH-BTC", position=None,
-            side="BUY", order_type="MARKET", trade_type="initial",
-            quote_amount=0.001, price=0.05, status="failed",
+            db=db, bot=bot, position=None,
+            entry=OrderLogEntry(
+                product_id="ETH-BTC", side="BUY", order_type="MARKET",
+                trade_type="initial", quote_amount=0.001, price=0.05,
+                status="failed",
+            ),
         )
 
 

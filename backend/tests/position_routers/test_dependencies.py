@@ -9,6 +9,7 @@ import pytest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+from app.exchange_clients.factory import ExchangeClientConfig, CoinbaseCredentials
 from app.models import Account, User
 
 
@@ -138,11 +139,13 @@ class TestGetCoinbase:
 
         result = await get_coinbase(db=db_session, current_user=user)
         assert result == mock_client
-        mock_create.assert_called_once_with(
+        mock_create.assert_called_once_with(ExchangeClientConfig(
             exchange_type="cex",
-            coinbase_key_name="my-key-name",
-            coinbase_private_key="my-private-key",
-        )
+            coinbase=CoinbaseCredentials(
+                key_name="my-key-name",
+                private_key="my-private-key",
+            ),
+        ))
 
     @pytest.mark.asyncio
     @patch("app.position_routers.dependencies.create_exchange_client")
@@ -179,11 +182,13 @@ class TestGetCoinbase:
         result = await get_coinbase(db=db_session, current_user=user)
         assert result == mock_client
         mock_decrypt.assert_called_once_with("gAAAAA_encrypted_blob")
-        mock_create.assert_called_once_with(
+        mock_create.assert_called_once_with(ExchangeClientConfig(
             exchange_type="cex",
-            coinbase_key_name="key-name",
-            coinbase_private_key="decrypted-key",
-        )
+            coinbase=CoinbaseCredentials(
+                key_name="key-name",
+                private_key="decrypted-key",
+            ),
+        ))
 
     @pytest.mark.asyncio
     @patch("app.position_routers.dependencies.create_exchange_client", return_value=None)
