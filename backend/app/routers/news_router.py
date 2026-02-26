@@ -19,6 +19,7 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -1132,6 +1133,23 @@ async def get_article_content(
                 success=False,
                 error="This source requires a subscription. Open on the website to read the full article."
             )
+
+        # Strip media player UI artifacts that trafilatura extracts from
+        # source websites' embedded audio/video players (favor_recall=True
+        # is aggressive and includes these labels as article text)
+        _player_ui_patterns = [
+            r'(?m)^Select Voice\s*$',
+            r'(?m)^Select Speed\s*$',
+            r'(?m)^(?:0\.(?:5|75)x|1\.?(?:00|25|5)?x|1\.75x|2\.?0?x)\s*$',
+            r'(?m)^Play Audio\s*$',
+            r'(?m)^Listen to this article\s*$',
+            r'(?m)^Read Aloud\s*$',
+            r'(?m)^Pause\s*$',
+        ]
+        for pattern in _player_ui_patterns:
+            extracted = re.sub(pattern, '', extracted)
+        # Collapse runs of 3+ blank lines left by removals
+        extracted = re.sub(r'\n{3,}', '\n\n', extracted).strip()
 
         title = None
         author = None
