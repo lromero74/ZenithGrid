@@ -14,7 +14,10 @@ import pytest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
+from sqlalchemy import select
+
 from app.models import (
+    Account,
     ExpenseItem,
     GoalProgressSnapshot,
     Position,
@@ -660,3 +663,321 @@ class TestExpenseGoalTrendData:
         # First point ideal should be near 0 (small fraction elapsed)
         first = result["data_points"][0]
         assert first["ideal_value"] < 20.0
+
+
+# ---- Account-level filtering tests ----
+
+async def _create_multi_account_fixtures(db_session):
+    """Helper to create user with live + paper accounts and expense goal on live."""
+    user = User(
+        email="test_multi_acct@example.com",
+        hashed_password="hashed",
+        display_name="Test Multi Account",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    live_account = Account(
+        user_id=user.id,
+        name="Live Account",
+        type="cex",
+        exchange="coinbase",
+        is_active=True,
+        is_paper_trading=False,
+    )
+    paper_account = Account(
+        user_id=user.id,
+        name="Paper Account",
+        type="cex",
+        exchange="coinbase",
+        is_active=True,
+        is_paper_trading=True,
+    )
+    db_session.add_all([live_account, paper_account])
+    await db_session.flush()
+
+    start = datetime.utcnow() - timedelta(days=10)
+    target_date = start + timedelta(days=365)
+
+    goal = ReportGoal(
+        user_id=user.id,
+        account_id=live_account.id,
+        name="Cover Expenses (Live)",
+        target_type="expenses",
+        target_currency="USD",
+        target_value=0,
+        expense_period="monthly",
+        tax_withholding_pct=10,
+        time_horizon_months=12,
+        start_date=start,
+        target_date=target_date,
+    )
+    db_session.add(goal)
+    await db_session.flush()
+
+    rent = ExpenseItem(
+        goal_id=goal.id,
+        user_id=user.id,
+        category="Housing",
+        name="Rent",
+        amount=500.0,
+        frequency="monthly",
+        is_active=True,
+        sort_order=0,
+    )
+    db_session.add(rent)
+    await db_session.flush()
+
+    return user, live_account, paper_account, goal
+
+
+class TestExpenseSnapshotAccountFiltering:
+    """Tests that expense snapshots only count positions from the goal's account."""
+
+    @pytest.mark.asyncio
+    async def test_expense_snapshot_excludes_paper_account_profits(self, db_session):
+        """Expense snapshot should only include profits from the goal's account_id,
+        not paper trading profits from other accounts."""
+        user, live_acct, paper_acct, goal = await _create_multi_account_fixtures(
+            db_session,
+        )
+
+        # Live account: small profit ($10)
+        live_pos = Position(
+            user_id=user.id,
+            account_id=live_acct.id,
+            product_id="BTC-USD",
+            status="closed",
+            profit_usd=10.0,
+            closed_at=datetime.utcnow() - timedelta(days=2),
+        )
+        # Paper account: huge profit ($5000) — should be EXCLUDED
+        paper_pos = Position(
+            user_id=user.id,
+            account_id=paper_acct.id,
+            product_id="BTC-USD",
+            status="closed",
+            profit_usd=5000.0,
+            closed_at=datetime.utcnow() - timedelta(days=2),
+        )
+        db_session.add_all([live_pos, paper_pos])
+        await db_session.flush()
+
+        income_at, total_exp = await _get_expense_snapshot_values(
+            db_session, goal,
+        )
+
+        # income_after_tax should reflect only live account profit ($10)
+        # NOT the combined $5010
+        # daily_income = $10 / 10 days = $1/day
+        # projected_monthly = $1 * 30 = $30
+        # income_after_tax = $30 * 0.9 = $27
+        assert income_at < 100.0, (
+            f"income_after_tax={income_at} is too high — "
+            "paper account profits are leaking into expense snapshot"
+        )
+
+    @pytest.mark.asyncio
+    async def test_expense_snapshot_no_account_id_uses_all(self, db_session):
+        """Expense goal with no account_id should use all accounts (backwards compat)."""
+        user = User(
+            email="test_no_acct_filter@example.com",
+            hashed_password="hashed",
+            display_name="Test User",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        acct = Account(
+            user_id=user.id,
+            name="Acct1",
+            type="cex",
+            exchange="coinbase",
+            is_active=True,
+            is_paper_trading=False,
+        )
+        db_session.add(acct)
+        await db_session.flush()
+
+        start = datetime.utcnow() - timedelta(days=10)
+        goal = ReportGoal(
+            user_id=user.id,
+            account_id=None,  # No account filter
+            name="All Accounts",
+            target_type="expenses",
+            target_currency="USD",
+            target_value=0,
+            expense_period="monthly",
+            tax_withholding_pct=0,
+            time_horizon_months=12,
+            start_date=start,
+            target_date=start + timedelta(days=365),
+        )
+        db_session.add(goal)
+        await db_session.flush()
+
+        item = ExpenseItem(
+            goal_id=goal.id,
+            user_id=user.id,
+            category="Test",
+            name="Test",
+            amount=100.0,
+            frequency="monthly",
+            is_active=True,
+            sort_order=0,
+        )
+        db_session.add(item)
+
+        pos = Position(
+            user_id=user.id,
+            account_id=acct.id,
+            product_id="BTC-USD",
+            status="closed",
+            profit_usd=300.0,
+            closed_at=datetime.utcnow() - timedelta(days=2),
+        )
+        db_session.add(pos)
+        await db_session.flush()
+
+        income_at, total_exp = await _get_expense_snapshot_values(
+            db_session, goal,
+        )
+        # Should include the position profit (no account filter)
+        assert income_at > 0.0
+
+
+class TestBackfillExpenseAccountFiltering:
+    """Tests that expense backfill only counts positions from the goal's account."""
+
+    @pytest.mark.asyncio
+    async def test_backfill_excludes_paper_account_profits(self, db_session):
+        """Backfill should only use profits from the goal's account_id."""
+        user, live_acct, paper_acct, goal = await _create_multi_account_fixtures(
+            db_session,
+        )
+
+        # Live account: $10 profit
+        live_pos = Position(
+            user_id=user.id,
+            account_id=live_acct.id,
+            product_id="BTC-USD",
+            status="closed",
+            profit_usd=10.0,
+            closed_at=goal.start_date + timedelta(days=3),
+        )
+        # Paper account: $5000 profit — should be EXCLUDED
+        paper_pos = Position(
+            user_id=user.id,
+            account_id=paper_acct.id,
+            product_id="BTC-USD",
+            status="closed",
+            profit_usd=5000.0,
+            closed_at=goal.start_date + timedelta(days=3),
+        )
+        db_session.add_all([live_pos, paper_pos])
+        await db_session.flush()
+
+        count = await _backfill_expense_goal_snapshots(db_session, goal)
+        assert count >= 1
+
+        # Verify snapshot values are based on live-only profit
+        result = await db_session.execute(
+            select(GoalProgressSnapshot).where(
+                GoalProgressSnapshot.goal_id == goal.id,
+            ).order_by(GoalProgressSnapshot.snapshot_date.desc()).limit(1)
+        )
+        latest = result.scalar_one()
+        # income_after_tax should be tiny (based on $10 profit)
+        # NOT huge (based on $5010 combined)
+        assert latest.current_value < 200.0, (
+            f"current_value={latest.current_value} is too high — "
+            "paper account profits are leaking into backfill"
+        )
+
+
+class TestCaptureSnapshotAccountFiltering:
+    """Tests that capture_goal_snapshots filters profit queries by account_id."""
+
+    @pytest.mark.asyncio
+    async def test_profit_goal_excludes_other_accounts(self, db_session):
+        """Profit goal with account_id should only count that account's positions."""
+        user = User(
+            email="test_profit_acct@example.com",
+            hashed_password="hashed",
+            display_name="Test User",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        live_acct = Account(
+            user_id=user.id,
+            name="Live",
+            type="cex",
+            exchange="coinbase",
+            is_active=True,
+            is_paper_trading=False,
+        )
+        paper_acct = Account(
+            user_id=user.id,
+            name="Paper",
+            type="cex",
+            exchange="coinbase",
+            is_active=True,
+            is_paper_trading=True,
+        )
+        db_session.add_all([live_acct, paper_acct])
+        await db_session.flush()
+
+        goal = ReportGoal(
+            user_id=user.id,
+            account_id=live_acct.id,
+            name="Profit Goal (Live Only)",
+            target_type="profit",
+            target_currency="USD",
+            target_value=10000.0,
+            time_horizon_months=12,
+            start_date=datetime.utcnow() - timedelta(days=30),
+            target_date=datetime.utcnow() + timedelta(days=335),
+        )
+        db_session.add(goal)
+        await db_session.flush()
+
+        # Live account: $50 profit
+        live_pos = Position(
+            user_id=user.id,
+            account_id=live_acct.id,
+            product_id="BTC-USD",
+            status="closed",
+            profit_usd=50.0,
+            closed_at=datetime.utcnow() - timedelta(days=5),
+        )
+        # Paper account: $9000 profit — should be EXCLUDED
+        paper_pos = Position(
+            user_id=user.id,
+            account_id=paper_acct.id,
+            product_id="BTC-USD",
+            status="closed",
+            profit_usd=9000.0,
+            closed_at=datetime.utcnow() - timedelta(days=5),
+        )
+        db_session.add_all([live_pos, paper_pos])
+        await db_session.flush()
+
+        count = await capture_goal_snapshots(
+            db_session, user.id, 50000.0, 1.5,
+        )
+        assert count == 1
+
+        # Verify snapshot uses only live account profit
+        result = await db_session.execute(
+            select(GoalProgressSnapshot).where(
+                GoalProgressSnapshot.goal_id == goal.id,
+            )
+        )
+        snap = result.scalar_one()
+        # $50 / $10000 = 0.5% — NOT ($50+$9000)/$10000 = 90.5%
+        assert snap.current_value == pytest.approx(50.0, abs=1.0)
+        assert snap.progress_pct < 5.0, (
+            f"progress_pct={snap.progress_pct} is too high — "
+            "paper account profits are leaking into profit goal snapshot"
+        )

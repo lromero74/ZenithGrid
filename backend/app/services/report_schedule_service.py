@@ -64,8 +64,11 @@ async def create_schedule_record(
             raise ValidationError(f"Invalid goal IDs: {list(invalid)}")
 
     next_run = compute_next_run_for_new_schedule(body)
-    # Serialize recipients as plain email strings for JSON storage
-    recipients_data = [r.email for r in body.recipients]
+    # Serialize recipients as dicts with email + color_scheme
+    recipients_data = [
+        {"email": r.email, "color_scheme": r.color_scheme}
+        for r in body.recipients
+    ]
     # Build human-readable periodicity label
     schedule_days_json = (
         json.dumps(body.schedule_days) if body.schedule_days else None
@@ -147,10 +150,12 @@ async def update_schedule_record(
     update_data = body.model_dump(exclude_unset=True)
     goal_ids = update_data.pop("goal_ids", None)
 
-    # Serialize recipients as plain email strings
+    # Serialize recipients as dicts with email + color_scheme
     if "recipients" in update_data and update_data["recipients"] is not None:
         update_data["recipients"] = [
-            r.email if hasattr(r, "email") else str(r)
+            {"email": r.email, "color_scheme": r.color_scheme}
+            if hasattr(r, "email")
+            else {"email": str(r), "color_scheme": "dark"}
             for r in update_data["recipients"]
         ]
 

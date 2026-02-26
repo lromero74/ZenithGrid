@@ -90,6 +90,9 @@ class GoalUpdate(BaseModel):
 
 class RecipientItem(BaseModel):
     email: str = Field(..., min_length=5)
+    color_scheme: str = Field(
+        "dark", pattern="^(dark|clean)$",
+    )
 
 
 class ScheduleCreate(BaseModel):
@@ -232,16 +235,18 @@ class ExpenseItemUpdate(BaseModel):
 
 # ----- Helper Functions -----
 
-def _normalize_recipient_for_api(item) -> str:
+def _normalize_recipient_for_api(item) -> dict:
     """
-    Extract email string from a stored recipient.
+    Normalize a stored recipient to {email, color_scheme} dict.
 
-    Handles both legacy object format {"email": ..., "level": ...}
-    and plain string format.
+    Handles legacy plain string format and old object format.
     """
     if isinstance(item, dict) and "email" in item:
-        return item["email"]
-    return str(item)
+        return {
+            "email": item["email"],
+            "color_scheme": item.get("color_scheme", "dark"),
+        }
+    return {"email": str(item), "color_scheme": "dark"}
 
 
 def _goal_to_dict(goal: ReportGoal) -> dict:

@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.60.3] - 2026-02-26
+
+### Fixed
+- **Expense coverage chart mixing accounts**: Goal progress snapshots for expense and profit goals now correctly filter by the goal's assigned account. Previously, paper trading profits leaked into live account goal charts (and vice versa), inflating the coverage values shown in the trend chart.
+
+### Added
+- **Email report color scheme toggle**: Each email recipient can now be set to receive reports in "Dark" (default) or "Clean" (white background, dark text) theme. The clean theme is easier to read on paper or in email clients that struggle with dark backgrounds.
+
 ## [v2.60.2] - 2026-02-26
 
 ### Fixed
