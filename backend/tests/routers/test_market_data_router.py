@@ -214,8 +214,25 @@ class TestGetProductPrecision:
 class TestGetOrderbook:
     """Tests for GET /api/orderbook/{product_id}"""
 
+    def _mock_db_and_user(self, mock_coinbase):
+        """Helper: create mock db session and user that return an authenticated exchange client."""
+        mock_account = MagicMock()
+        mock_account.id = 1
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_account
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        mock_user = MagicMock()
+        mock_user.id = 1
+
+        return mock_db, mock_user
+
     @pytest.mark.asyncio
-    async def test_returns_formatted_orderbook(self):
+    @patch("app.routers.market_data_router.get_exchange_client_for_account")
+    async def test_returns_formatted_orderbook(self, mock_get_client):
         """Happy path: returns formatted bids and asks."""
         from app.routers.market_data_router import get_orderbook
 
@@ -232,9 +249,11 @@ class TestGetOrderbook:
                 ],
             }
         })
+        mock_get_client.return_value = mock_coinbase
+        mock_db, mock_user = self._mock_db_and_user(mock_coinbase)
 
         result = await get_orderbook(
-            product_id="BTC-USD", limit=25, coinbase=mock_coinbase
+            product_id="BTC-USD", limit=25, db=mock_db, current_user=mock_user
         )
         assert result["product_id"] == "BTC-USD"
         assert len(result["bids"]) == 2
@@ -243,7 +262,8 @@ class TestGetOrderbook:
         assert result["asks"][0] == [50001.0, 0.5]
 
     @pytest.mark.asyncio
-    async def test_filters_zero_price_entries(self):
+    @patch("app.routers.market_data_router.get_exchange_client_for_account")
+    async def test_filters_zero_price_entries(self, mock_get_client):
         """Edge case: entries with zero price or size are filtered."""
         from app.routers.market_data_router import get_orderbook
 
@@ -258,25 +278,47 @@ class TestGetOrderbook:
                 "asks": [],
             }
         })
+        mock_get_client.return_value = mock_coinbase
+        mock_db, mock_user = self._mock_db_and_user(mock_coinbase)
 
         result = await get_orderbook(
-            product_id="BTC-USD", limit=25, coinbase=mock_coinbase
+            product_id="BTC-USD", limit=25, db=mock_db, current_user=mock_user
         )
         assert len(result["bids"]) == 1
         assert result["bids"][0] == [49999.0, 2.0]
 
     @pytest.mark.asyncio
-    async def test_exchange_error_returns_500(self):
+    @patch("app.routers.market_data_router.get_exchange_client_for_account")
+    async def test_exchange_error_returns_500(self, mock_get_client):
         """Failure: exchange error returns 500."""
         from fastapi import HTTPException
         from app.routers.market_data_router import get_orderbook
 
         mock_coinbase = MagicMock()
         mock_coinbase.get_product_book = AsyncMock(side_effect=RuntimeError("timeout"))
+        mock_get_client.return_value = mock_coinbase
+        mock_db, mock_user = self._mock_db_and_user(mock_coinbase)
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_orderbook(product_id="BTC-USD", limit=25, coinbase=mock_coinbase)
+            await get_orderbook(product_id="BTC-USD", limit=25, db=mock_db, current_user=mock_user)
         assert exc_info.value.status_code == 500
+
+    @pytest.mark.asyncio
+    async def test_no_account_returns_503(self):
+        """Failure: no exchange account configured returns 503."""
+        from fastapi import HTTPException
+        from app.routers.market_data_router import get_orderbook
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_user = MagicMock()
+        mock_user.id = 1
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_orderbook(product_id="BTC-USD", limit=25, db=mock_db, current_user=mock_user)
+        assert exc_info.value.status_code == 503
 
 
 # =============================================================================
