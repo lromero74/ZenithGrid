@@ -1146,8 +1146,8 @@ class IndicatorBasedStrategy(TradingStrategy):
         """
         Check DCA/safety order conditions for an existing position.
 
-        Validates pattern position exclusion, max safety orders, price target,
-        indicator conditions, and balance sufficiency.
+        Supports cascade execution: if price has dropped past multiple SO
+        trigger levels, all eligible SOs are combined into a single order.
         """
         current_price = signal_data.get("price", 0)
         safety_order_signal = signal_data.get("safety_order_signal", False)
@@ -1166,52 +1166,70 @@ class IndicatorBasedStrategy(TradingStrategy):
         if safety_orders_count >= max_safety:
             return False, 0.0, f"Max safety orders reached ({safety_orders_count}/{max_safety})"
 
-        next_order_number = safety_orders_count + 1
-
         # Determine reference price for DCA target calculation
         reference_price = self._get_dca_reference_price(position, buy_trades)
-
-        # Always check price target as minimum threshold (direction-aware)
         direction = getattr(position, "direction", "long")
-        trigger_price = self.calculate_safety_order_price(reference_price, next_order_number, direction)
 
-        # Check price target based on direction
+        # Check if at least the next SO trigger is met
+        first_so = safety_orders_count + 1
+        first_trigger = self.calculate_safety_order_price(reference_price, first_so, direction)
+
         if direction == "long":
-            price_target_met = current_price <= trigger_price
-            reason = f"Price not low enough for SO #{next_order_number} (need \u2264{trigger_price:.8f})"
-        else:  # short
-            price_target_met = current_price >= trigger_price
-            reason = f"Price not high enough for SO #{next_order_number} (need \u2265{trigger_price:.8f})"
+            price_target_met = current_price <= first_trigger
+        else:
+            price_target_met = current_price >= first_trigger
 
         if not price_target_met:
-            return False, 0.0, reason
+            if direction == "long":
+                return False, 0.0, f"Price not low enough for SO #{first_so} (need \u2264{first_trigger:.8f})"
+            else:
+                return False, 0.0, f"Price not high enough for SO #{first_so} (need \u2265{first_trigger:.8f})"
 
         # If safety order conditions exist (like AI_BUY), also check them
         if self.safety_order_conditions:
             if not safety_order_signal:
-                return False, 0.0, f"SO #{next_order_number} price target met but conditions not met"
+                return False, 0.0, f"SO #{first_so} price target met but conditions not met"
 
-        # Calculate safety order size
-        safety_size = self._calculate_safety_order_amount(position, safety_orders_count, next_order_number)
+        # Cascade: check all remaining SO levels that current price has passed
+        total_amount = 0.0
+        orders_to_execute = 0
+        remaining_balance = balance
 
-        if safety_size > balance:
-            logger.warning(f"💰 BUDGET BLOCKER: Insufficient balance for safety order #{next_order_number}")
-            logger.warning(f"   Available balance: {balance:.8f} BTC")
-            logger.warning(f"   Required for SO #{next_order_number}: {safety_size:.8f} BTC")
-            logger.warning(f"   Position allocated budget: {position.max_quote_allowed:.8f} BTC")
-            logger.warning(f"   Position spent so far: {position.total_quote_spent:.8f} BTC")
-            shortfall = safety_size - balance
-            shortfall_pct = shortfall / safety_size * 100
-            logger.warning(
-                f"   Shortfall: {shortfall:.8f} BTC ({shortfall_pct:.1f}%)"
-            )
-            return (
-                False, 0.0,
-                f"Insufficient balance for safety order #{next_order_number}"
-                f" (need {safety_size:.8f} BTC, have {balance:.8f} BTC)"
-            )
+        for so_num in range(first_so, max_safety + 1):
+            trigger = self.calculate_safety_order_price(reference_price, so_num, direction)
 
-        return True, safety_size, f"Safety order #{next_order_number}"
+            if direction == "long" and current_price > trigger:
+                break  # Price hasn't reached this level
+            elif direction == "short" and current_price < trigger:
+                break
+
+            so_size = self._calculate_safety_order_amount(position, safety_orders_count + orders_to_execute, so_num)
+
+            if so_size > remaining_balance:
+                # Budget only covers partial cascade — execute what fits
+                if orders_to_execute == 0:
+                    # Can't even afford the first SO
+                    logger.warning(f"\U0001f4b0 BUDGET BLOCKER: Insufficient balance for safety order #{so_num}")
+                    logger.warning(f"   Available balance: {balance:.8f}")
+                    logger.warning(f"   Required for SO #{so_num}: {so_size:.8f}")
+                    return (
+                        False, 0.0,
+                        f"Insufficient balance for safety order #{so_num}"
+                        f" (need {so_size:.8f}, have {balance:.8f})"
+                    )
+                break  # Stop cascade, execute what we've accumulated
+
+            total_amount += so_size
+            remaining_balance -= so_size
+            orders_to_execute += 1
+
+        last_so = first_so + orders_to_execute - 1
+        if orders_to_execute == 1:
+            reason = f"Safety order #{first_so}"
+        else:
+            reason = f"Safety order #{first_so}-#{last_so} (cascade: {orders_to_execute} orders)"
+
+        return True, total_amount, reason
 
     def _calculate_safety_order_amount(
         self, position: Any, safety_orders_count: int, next_order_number: int
