@@ -30,6 +30,8 @@ export interface ScheduleFormData {
   goal_ids: number[]
   is_enabled: boolean
   show_expense_lookahead: boolean
+  chart_horizon?: string
+  chart_lookahead_multiplier?: number
 }
 
 const SCHEDULE_TYPE_OPTIONS: { value: ScheduleType; label: string }[] = [
@@ -111,6 +113,9 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
   const [selectedGoalIds, setSelectedGoalIds] = useState<number[]>([])
   const [isEnabled, setIsEnabled] = useState(true)
   const [showExpenseLookahead, setShowExpenseLookahead] = useState(true)
+  const [chartHorizon, setChartHorizon] = useState<string>('auto')
+  const [customHorizonDays, setCustomHorizonDays] = useState('90')
+  const [lookaheadMultiplier, setLookaheadMultiplier] = useState('1')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -128,6 +133,16 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setSelectedGoalIds(initialData.goal_ids || [])
       setIsEnabled(initialData.is_enabled)
       setShowExpenseLookahead(initialData.show_expense_lookahead ?? true)
+
+      // Chart display settings
+      const ch = initialData.chart_horizon || 'auto'
+      if (ch === 'auto' || ch === 'full') {
+        setChartHorizon(ch)
+      } else {
+        setChartHorizon('custom')
+        setCustomHorizonDays(ch)
+      }
+      setLookaheadMultiplier(String(initialData.chart_lookahead_multiplier ?? 1))
 
       // Parse schedule_days based on type
       const days = initialData.schedule_days || []
@@ -163,6 +178,9 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
       setSelectedGoalIds([])
       setIsEnabled(true)
       setShowExpenseLookahead(true)
+      setChartHorizon('auto')
+      setCustomHorizonDays('90')
+      setLookaheadMultiplier('1')
     }
   }, [initialData, isOpen])
 
@@ -321,6 +339,8 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
         goal_ids: selectedGoalIds,
         is_enabled: isEnabled,
         show_expense_lookahead: showExpenseLookahead,
+        chart_horizon: chartHorizon === 'custom' ? customHorizonDays : chartHorizon,
+        chart_lookahead_multiplier: parseFloat(lookaheadMultiplier) || 1,
       })
       onClose()
     } finally {
@@ -734,6 +754,78 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
               </div>
             </div>
           )}
+
+          {/* Chart Display Settings */}
+          <div className="border border-slate-600/50 rounded-lg p-3 space-y-3">
+            <h4 className="text-sm font-medium text-slate-300">Chart Display</h4>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Chart Horizon</label>
+              <select
+                value={chartHorizon}
+                onChange={e => setChartHorizon(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="auto">Auto (Period x Multiplier)</option>
+                <option value="elapsed">Elapsed (Fraction of days so far)</option>
+                <option value="full">Full Timeline</option>
+                <option value="custom">Custom Days</option>
+              </select>
+            </div>
+
+            {(chartHorizon === 'auto' || chartHorizon === 'elapsed') && (
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  {chartHorizon === 'auto' ? 'Look-ahead Multiplier' : 'Elapsed Fraction'}
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  max="10"
+                  value={lookaheadMultiplier}
+                  onChange={e => setLookaheadMultiplier(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {chartHorizon === 'auto'
+                    ? (() => {
+                        const periodDays: Record<string, number> = {
+                          daily: 1, weekly: 7, monthly: 30, quarterly: 90, yearly: 365,
+                        }
+                        const days = periodDays[scheduleType] || 30
+                        const mult = parseFloat(lookaheadMultiplier) || 1
+                        const ahead = Math.max(Math.round(days * mult), 1)
+                        return `${scheduleType} (${days}d) x ${mult} = ${ahead} day${ahead !== 1 ? 's' : ''} look-ahead`
+                      })()
+                    : (() => {
+                        const mult = parseFloat(lookaheadMultiplier) || 1
+                        return `e.g. 12 days elapsed x ${mult} = ${Math.max(Math.round(12 * mult), 1)} days look-ahead`
+                      })()
+                  }
+                </p>
+              </div>
+            )}
+
+            {chartHorizon === 'custom' && (
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Days Ahead</label>
+                <input
+                  type="number"
+                  min="7"
+                  max="3650"
+                  value={customHorizonDays}
+                  onChange={e => setCustomHorizonDays(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                  placeholder="Days ahead to show"
+                />
+              </div>
+            )}
+
+            {chartHorizon === 'full' && (
+              <p className="text-xs text-slate-500">Shows entire timeline from start to target date</p>
+            )}
+          </div>
 
           <div className="flex justify-end space-x-3 pt-2">
             <button

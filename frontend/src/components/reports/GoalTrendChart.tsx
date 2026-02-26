@@ -29,12 +29,20 @@ function computeHorizonDate(
 
   if (!realDates.length) return targetDate
 
+  const firstDataTs = Math.min(...realDates)
   const lastDataTs = Math.max(...realDates)
-  const firstTs = new Date(points[0].date + 'T00:00:00').getTime()
   const targetTs = new Date(targetDate + 'T00:00:00').getTime()
   const DAY_MS = 86400000
 
   if (horizon === 'full') return targetDate
+
+  if (horizon === 'elapsed') {
+    // Look-ahead = fraction of elapsed days (default 0.33 for frontend fallback)
+    const elapsedDays = Math.max(Math.round((lastDataTs - firstDataTs) / DAY_MS), 1)
+    const lookAhead = Math.max(Math.round(elapsedDays * 0.33), 1)
+    const h = lastDataTs + lookAhead * DAY_MS
+    return new Date(Math.min(h, targetTs)).toISOString().split('T')[0]
+  }
 
   if (horizon !== 'auto') {
     const days = parseInt(horizon)
@@ -44,10 +52,8 @@ function computeHorizonDate(
     }
   }
 
-  // Auto: 1/3 rule
-  const spanDays = (lastDataTs - firstTs) / DAY_MS
-  const lookAhead = Math.max(spanDays / 2, 7)
-  const h = lastDataTs + lookAhead * DAY_MS
+  // Auto: 30-day look-ahead from last data point (no schedule context)
+  const h = lastDataTs + 30 * DAY_MS
   return new Date(Math.min(h, targetTs)).toISOString().split('T')[0]
 }
 

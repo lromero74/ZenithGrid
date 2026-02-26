@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.63.0] - 2026-02-26
+
+### Added
+- **Schedule-level chart horizon**: Chart horizon settings (Auto, Elapsed, Full, Custom) are now configured per schedule instead of per goal, letting you use different zoom levels for the same goal across different report schedules.
+- **Period-aware auto horizon**: Auto mode calculates look-ahead as schedule period days multiplied by a configurable multiplier. For example, a quarterly schedule with multiplier 0.33 shows ~1 month ahead.
+- **Elapsed fraction horizon**: New "Elapsed" mode sets look-ahead as a fraction of the days elapsed since the goal started. For example, 12 days into a goal with fraction 0.33 shows ~4 days ahead.
+- **Look-ahead multiplier in schedule form**: New "Chart Display" section in the schedule modal with horizon mode select and multiplier/fraction input, including computed look-ahead preview text.
+
+### Changed
+- **Chart horizon moved from goal to schedule**: The chart horizon select has been removed from the goal form. Minimap settings (toggle + threshold) remain on the goal. A note in the goal form's chart settings directs users to the schedule settings.
+
+### Fixed
+- **PDF report generation crash**: Fixed crash when generating PDF reports with trend chart minimaps. The `set_alpha()` method doesn't exist in fpdf2 v2.8.6 — replaced with `local_context(fill_opacity=...)`.
+
 ## [v2.62.0] - 2026-02-26
 
 ### Added
