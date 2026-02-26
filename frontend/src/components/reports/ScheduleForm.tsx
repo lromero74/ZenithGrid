@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
 import { useAccount } from '../../contexts/AccountContext'
 import type {
-  ReportGoal, ReportSchedule,
+  RecipientEntry, ReportGoal, ReportSchedule,
   ScheduleType, PeriodWindow, LookbackUnit,
 } from '../../types'
 
@@ -24,7 +24,7 @@ export interface ScheduleFormData {
   lookback_unit: LookbackUnit | null
   force_standard_days: number[] | null
   account_id?: number | null
-  recipients: string[]
+  recipients: RecipientEntry[]
   ai_provider?: string | null
   generate_ai_summary: boolean
   goal_ids: number[]
@@ -70,14 +70,17 @@ const AI_PROVIDERS = [
   { value: 'gemini', label: 'Google Gemini' },
 ]
 
-function normalizeRecipients(raw: unknown[]): string[] {
+function normalizeRecipients(raw: unknown[]): RecipientEntry[] {
   if (!raw || !Array.isArray(raw)) return []
   return raw.map(item => {
-    if (typeof item === 'string') return item
     if (typeof item === 'object' && item !== null && 'email' in item) {
-      return String((item as Record<string, unknown>).email)
+      const obj = item as Record<string, unknown>
+      return {
+        email: String(obj.email),
+        color_scheme: (obj.color_scheme === 'clean' ? 'clean' : 'dark') as 'dark' | 'clean',
+      }
     }
-    return String(item)
+    return { email: String(item), color_scheme: 'dark' as const }
   })
 }
 
@@ -101,7 +104,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
   const [lookbackValue, setLookbackValue] = useState<number>(7)
   const [lookbackUnit, setLookbackUnit] = useState<LookbackUnit>('days')
   const [forceStandardDays, setForceStandardDays] = useState<number[]>([])
-  const [recipients, setRecipients] = useState<string[]>([])
+  const [recipients, setRecipients] = useState<RecipientEntry[]>([])
   const [newRecipient, setNewRecipient] = useState('')
   const [aiProvider, setAiProvider] = useState('')
   const [generateAiSummary, setGenerateAiSummary] = useState(true)
@@ -167,14 +170,14 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
 
   const addRecipient = () => {
     const email = newRecipient.trim()
-    if (email && !recipients.includes(email) && email.includes('@')) {
-      setRecipients([...recipients, email])
+    if (email && !recipients.some(r => r.email === email) && email.includes('@')) {
+      setRecipients([...recipients, { email, color_scheme: 'dark' }])
       setNewRecipient('')
     }
   }
 
   const removeRecipient = (email: string) => {
-    setRecipients(recipients.filter(r => r !== email))
+    setRecipients(recipients.filter(r => r.email !== email))
   }
 
   const toggleGoal = (goalId: number) => {
@@ -677,18 +680,30 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData }: 
               </button>
             </div>
             {recipients.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {recipients.map(email => (
-                  <span key={email} className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-700 border border-slate-600 rounded-full text-sm text-slate-300">
-                    {email}
+              <div className="flex flex-col gap-2 mt-2">
+                {recipients.map(r => (
+                  <div key={r.email} className="flex items-center gap-2 px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-slate-300">
+                    <span className="flex-1 truncate">{r.email}</span>
+                    <select
+                      value={r.color_scheme}
+                      onChange={e => setRecipients(recipients.map(
+                        rc => rc.email === r.email
+                          ? { ...rc, color_scheme: e.target.value as 'dark' | 'clean' }
+                          : rc
+                      ))}
+                      className="px-1.5 py-0.5 bg-slate-600 border border-slate-500 rounded text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="dark">Dark</option>
+                      <option value="clean">Clean</option>
+                    </select>
                     <button
                       type="button"
-                      onClick={() => removeRecipient(email)}
+                      onClick={() => removeRecipient(r.email)}
                       className="text-slate-500 hover:text-red-400 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
-                  </span>
+                  </div>
                 ))}
               </div>
             )}

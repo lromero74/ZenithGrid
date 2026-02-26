@@ -24,6 +24,59 @@ _TIER_LABELS = {
     "detailed": "Detailed Analysis",
 }
 
+# Clean theme: white background, dark text, minimal color.
+# Applied as post-processing replacements on the dark-theme HTML.
+# Order matters: more specific patterns first to avoid partial matches.
+_CLEAN_THEME_REPLACEMENTS = [
+    # Body / outer background
+    ("background-color: #0f172a", "background-color: #ffffff"),
+    # Card backgrounds
+    ("background-color: #1e293b", "background-color: #f8fafc"),
+    # Borders (various styles)
+    ("border: 1px solid #334155", "border: 1px solid #e2e8f0"),
+    ("border-bottom: 1px solid #334155", "border-bottom: 1px solid #e2e8f0"),
+    ("border-bottom: 2px solid #475569", "border-bottom: 2px solid #d1d5db"),
+    ("border-top: 1px solid #334155", "border-top: 1px solid #e2e8f0"),
+    ("border-top: 1px dashed #334155", "border-top: 1px dashed #e2e8f0"),
+    # Badge backgrounds (expense coverage)
+    ("background-color: #065f46", "background-color: #d1fae5"),
+    ("background-color: #78350f", "background-color: #fef3c7"),
+    ("background-color: #7f1d1d", "background-color: #fee2e2"),
+    # Badge text for clean
+    ("color: #6ee7b7", "color: #065f46"),
+    ("color: #fcd34d", "color: #92400e"),
+    ("color: #fca5a5", "color: #991b1b"),
+    # Primary text (bright white/near-white → dark)
+    ("color: #f1f5f9", "color: #111827"),
+    ("color: #e2e8f0", "color: #1f2937"),
+    # Body text for markdown sections
+    ("color: #cbd5e1", "color: #374151"),
+    # Secondary text (medium gray → darker gray)
+    ("color: #94a3b8", "color: #6b7280"),
+    # Muted text
+    ("color: #64748b", "color: #9ca3af"),
+    ("color: #475569", "color: #9ca3af"),
+    # Semantic colors (slightly adjusted for white background contrast)
+    ("color: #10b981", "color: #059669"),
+    ("color: #ef4444", "color: #dc2626"),
+    ("color: #f59e0b", "color: #d97706"),
+    ("color: #a78bfa", "color: #7c3aed"),
+    # Progress bar backgrounds
+    ("background-color: #334155", "background-color: #e2e8f0"),
+    ("background-color: #10b981", "background-color: #059669"),
+    ("background-color: #f59e0b", "background-color: #d97706"),
+    ("background-color: #ef4444", "background-color: #dc2626"),
+    # Text-decoration color for links
+    ("text-decoration-color: #475569", "text-decoration-color: #d1d5db"),
+]
+
+
+def _apply_clean_theme(html: str) -> str:
+    """Convert dark-theme HTML to clean (light) theme via color replacements."""
+    for dark, clean in _CLEAN_THEME_REPLACEMENTS:
+        html = html.replace(dark, clean)
+    return html
+
 
 def _md_to_styled_html(text: str, brand_color: str) -> str:
     """Convert markdown text to dark-theme styled HTML for report display.
@@ -128,6 +181,7 @@ def build_report_html(
     email_mode: bool = False,
     account_name: Optional[str] = None,
     inline_images: Optional[List[Tuple[str, bytes]]] = None,
+    color_scheme: str = "dark",
 ) -> str:
     """
     Build the full HTML report.
@@ -142,6 +196,7 @@ def build_report_html(
         email_mode: If True, show only the default tier (email clients strip JS)
         inline_images: Mutable list; PNG chart images are appended as (cid, bytes)
             tuples for CID embedding in email. Only used when email_mode=True.
+        color_scheme: "dark" (default) or "clean" (white bg, dark text)
 
     Returns:
         Complete HTML string
@@ -192,7 +247,7 @@ def build_report_html(
                 Add AI provider credentials in Settings to enable AI-powered insights.</p>
         </div>"""
 
-    return f"""<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -213,6 +268,11 @@ def build_report_html(
 </div>
 </body>
 </html>"""
+
+    if color_scheme == "clean":
+        html = _apply_clean_theme(html)
+
+    return html
 
 
 def _build_tabbed_ai_section(

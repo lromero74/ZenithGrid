@@ -528,6 +528,11 @@ export type ScheduleType = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearl
 export type PeriodWindow = 'full_prior' | 'wtd' | 'mtd' | 'qtd' | 'ytd' | 'trailing'
 export type LookbackUnit = 'days' | 'weeks' | 'months' | 'years'
 
+export interface RecipientEntry {
+  email: string
+  color_scheme: 'dark' | 'clean'
+}
+
 export interface ReportSchedule {
   id: number
   name: string
@@ -542,7 +547,7 @@ export interface ReportSchedule {
   show_expense_lookahead: boolean
   account_id?: number | null
   is_enabled: boolean
-  recipients: string[]
+  recipients: RecipientEntry[]
   ai_provider?: string | null
   generate_ai_summary: boolean
   goal_ids: number[]

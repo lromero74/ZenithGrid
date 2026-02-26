@@ -368,22 +368,32 @@ async def _deliver_report(
         if report.period_end else "performance_report.pdf"
     )
 
-    # Build one HTML for all recipients (email mode shows Summary tier)
-    # inline_images collects (cid, png_bytes) tuples for CID embedding
-    inline_images = []
-    email_html = build_report_html(
-        report_data, ai_summary, user_name, period_label,
-        default_level="simple",
-        schedule_name=schedule_name,
-        email_mode=True,
-        account_name=account_name,
-        inline_images=inline_images,
-    )
-
+    # Build HTML per color scheme (cache to avoid re-generating)
+    html_cache: dict = {}  # color_scheme → (html, inline_images)
     any_sent = False
 
     for recipient in recipients:
-        email = recipient if isinstance(recipient, str) else recipient.get("email", recipient)
+        if isinstance(recipient, dict):
+            email = recipient.get("email", "")
+            scheme = recipient.get("color_scheme", "dark")
+        else:
+            email = str(recipient)
+            scheme = "dark"
+
+        if scheme not in html_cache:
+            imgs: list = []
+            html = build_report_html(
+                report_data, ai_summary, user_name, period_label,
+                default_level="simple",
+                schedule_name=schedule_name,
+                email_mode=True,
+                account_name=account_name,
+                inline_images=imgs,
+                color_scheme=scheme,
+            )
+            html_cache[scheme] = (html, imgs)
+
+        email_html, inline_images = html_cache[scheme]
 
         try:
             sent = send_report_email(
@@ -399,7 +409,7 @@ async def _deliver_report(
             if sent:
                 any_sent = True
                 logger.info(
-                    f"Report email sent to {email}"
+                    f"Report email sent to {email} (scheme={scheme})"
                 )
             else:
                 logger.warning(

@@ -54,33 +54,45 @@ async def capture_goal_snapshots(
     if not goals:
         return 0
 
-    # Calculate cumulative profit for profit-type goals
-    profit_usd = 0.0
-    profit_btc = 0.0
+    # Group goals by account_id for efficient profit queries
+    account_ids = {g.account_id for g in goals}
 
-    profit_result = await db.execute(
-        select(func.sum(Position.profit_usd)).where(
+    # Pre-compute profits per account_id (None = all accounts)
+    profit_cache: dict = {}
+    for acct_id in account_ids:
+        usd_filters = [
             Position.user_id == user_id,
             Position.status == "closed",
-        )
-    )
-    row = profit_result.one_or_none()
-    if row and row[0] is not None:
-        profit_usd = row[0]
-
-    btc_profit_result = await db.execute(
-        select(func.sum(Position.profit_quote)).where(
+        ]
+        btc_filters = [
             Position.user_id == user_id,
             Position.status == "closed",
             Position.product_id.like("%-BTC"),
+        ]
+        if acct_id is not None:
+            usd_filters.append(Position.account_id == acct_id)
+            btc_filters.append(Position.account_id == acct_id)
+
+        profit_result = await db.execute(
+            select(func.sum(Position.profit_usd)).where(*usd_filters)
         )
-    )
-    btc_row = btc_profit_result.one_or_none()
-    if btc_row and btc_row[0] is not None:
-        profit_btc = btc_row[0]
+        row = profit_result.one_or_none()
+        p_usd = (row[0] or 0.0) if row else 0.0
+
+        btc_profit_result = await db.execute(
+            select(func.sum(Position.profit_quote)).where(*btc_filters)
+        )
+        btc_row = btc_profit_result.one_or_none()
+        p_btc = (btc_row[0] or 0.0) if btc_row else 0.0
+
+        profit_cache[acct_id] = {"usd": p_usd, "btc": p_btc}
 
     count = 0
     for goal in goals:
+        profits = profit_cache.get(goal.account_id, {"usd": 0.0, "btc": 0.0})
+        profit_usd = profits["usd"]
+        profit_btc = profits["btc"]
+
         if goal.target_type == "expenses":
             current_value, target = await _get_expense_snapshot_values(
                 db, goal,
@@ -179,13 +191,17 @@ async def _get_expense_snapshot_values(
     now = datetime.utcnow()
     days_elapsed = max((now - goal.start_date).days, 1)
 
+    profit_filters = [
+        Position.user_id == goal.user_id,
+        Position.status == "closed",
+        Position.closed_at >= goal.start_date,
+        Position.closed_at <= now,
+    ]
+    if goal.account_id is not None:
+        profit_filters.append(Position.account_id == goal.account_id)
+
     profit_result = await db.execute(
-        select(func.sum(Position.profit_usd)).where(
-            Position.user_id == goal.user_id,
-            Position.status == "closed",
-            Position.closed_at >= goal.start_date,
-            Position.closed_at <= now,
-        )
+        select(func.sum(Position.profit_usd)).where(*profit_filters)
     )
     row = profit_result.one_or_none()
     total_profit = (row[0] or 0.0) if row else 0.0
@@ -268,26 +284,34 @@ async def backfill_goal_snapshots(
     # For profit goals, get cumulative closed-position profit up to each date
     profit_by_date: Dict[str, Dict[str, float]] = {}
     if goal.target_type in ("profit", "both"):
+        bf_pos_filters = [
+            Position.user_id == goal.user_id,
+            Position.status == "closed",
+            Position.closed_at >= start,
+            Position.closed_at <= today + timedelta(days=1),
+        ]
+        if goal.account_id is not None:
+            bf_pos_filters.append(Position.account_id == goal.account_id)
+
         pos_result = await db.execute(
             select(Position)
-            .where(
-                Position.user_id == goal.user_id,
-                Position.status == "closed",
-                Position.closed_at >= start,
-                Position.closed_at <= today + timedelta(days=1),
-            )
+            .where(*bf_pos_filters)
             .order_by(Position.closed_at)
         )
         positions = pos_result.scalars().all()
 
         # Pre-start cumulative profit
+        bf_pre_filters = [
+            Position.user_id == goal.user_id,
+            Position.status == "closed",
+            Position.closed_at < start,
+        ]
+        if goal.account_id is not None:
+            bf_pre_filters.append(Position.account_id == goal.account_id)
+
         pre_result = await db.execute(
             select(func.sum(Position.profit_usd))
-            .where(
-                Position.user_id == goal.user_id,
-                Position.status == "closed",
-                Position.closed_at < start,
-            )
+            .where(*bf_pre_filters)
         )
         pre_row = pre_result.one_or_none()
         cumulative_usd = (pre_row[0] or 0.0) if pre_row else 0.0
@@ -437,25 +461,33 @@ async def _backfill_expense_goal_snapshots(
         return 0
 
     # Get all closed positions from start to today for cumulative profit
+    pos_filters = [
+        Position.user_id == goal.user_id,
+        Position.status == "closed",
+        Position.closed_at >= start,
+        Position.closed_at <= today + timedelta(days=1),
+    ]
+    if goal.account_id is not None:
+        pos_filters.append(Position.account_id == goal.account_id)
+
     pos_result = await db.execute(
         select(Position)
-        .where(
-            Position.user_id == goal.user_id,
-            Position.status == "closed",
-            Position.closed_at >= start,
-            Position.closed_at <= today + timedelta(days=1),
-        )
+        .where(*pos_filters)
         .order_by(Position.closed_at)
     )
     positions = pos_result.scalars().all()
 
     # Pre-start cumulative profit
+    pre_filters = [
+        Position.user_id == goal.user_id,
+        Position.status == "closed",
+        Position.closed_at < start,
+    ]
+    if goal.account_id is not None:
+        pre_filters.append(Position.account_id == goal.account_id)
+
     pre_result = await db.execute(
-        select(func.sum(Position.profit_usd)).where(
-            Position.user_id == goal.user_id,
-            Position.status == "closed",
-            Position.closed_at < start,
-        )
+        select(func.sum(Position.profit_usd)).where(*pre_filters)
     )
     pre_row = pre_result.one_or_none()
     cumulative_profit = (pre_row[0] or 0.0) if pre_row else 0.0
