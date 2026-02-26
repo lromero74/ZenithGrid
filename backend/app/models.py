@@ -1356,6 +1356,11 @@ class ReportGoal(Base):
     tax_withholding_pct = Column(Float, nullable=True, default=0)  # 0-100
     expense_sort_mode = Column(String, default="custom")  # amount_asc | amount_desc | custom
 
+    # Chart display settings
+    chart_horizon = Column(String, default="auto")  # "auto", "full", or integer days as string
+    show_minimap = Column(Boolean, default=True)
+    minimap_threshold_days = Column(Integer, default=90)  # Show minimap when >N days from target
+
     # Relationships
     user = relationship("User", back_populates="report_goals")
     schedule_links = relationship(

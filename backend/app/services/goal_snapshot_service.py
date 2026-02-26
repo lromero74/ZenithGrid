@@ -655,3 +655,84 @@ async def get_goal_trend_data(
         "ideal_end_value": target,
         "data_points": data_points,
     }
+
+
+def compute_horizon_date(
+    data_points: list,
+    target_date_str: str,
+    chart_horizon: str = "auto",
+) -> str:
+    """Compute the chart's visible end date based on horizon setting.
+
+    Returns a date string (YYYY-MM-DD) for the rightmost point of the chart.
+    """
+    if not data_points:
+        return target_date_str
+
+    target_date = datetime.strptime(target_date_str, "%Y-%m-%d")
+
+    # Find last real data date
+    real_dates = [
+        datetime.strptime(p["date"], "%Y-%m-%d")
+        for p in data_points if p.get("current_value") is not None
+    ]
+    if not real_dates:
+        # All points are ideal-only projections; use last point date
+        real_dates = [datetime.strptime(data_points[-1]["date"], "%Y-%m-%d")]
+
+    last_data_date = max(real_dates)
+    first_date = datetime.strptime(data_points[0]["date"], "%Y-%m-%d")
+
+    if chart_horizon == "full":
+        return target_date_str
+
+    if chart_horizon != "auto":
+        # Custom integer days
+        try:
+            days = int(chart_horizon)
+            horizon = last_data_date + timedelta(days=days)
+            return min(horizon, target_date).strftime("%Y-%m-%d")
+        except ValueError:
+            pass  # Fall through to auto
+
+    # Auto: 1/3 rule
+    data_span = (last_data_date - first_date).days
+    look_ahead = max(data_span / 2, 7)
+    horizon = last_data_date + timedelta(days=int(look_ahead))
+    return min(horizon, target_date).strftime("%Y-%m-%d")
+
+
+def clip_trend_data(trend_data: dict, horizon_date_str: str) -> dict:
+    """Return a copy of trend_data with data_points clipped to horizon_date.
+
+    Keeps one ideal-only point at or after the horizon for line continuity.
+    """
+    data_points = trend_data.get("data_points", [])
+    if not data_points:
+        return {**trend_data, "data_points": []}
+
+    horizon = datetime.strptime(horizon_date_str, "%Y-%m-%d")
+
+    # Separate real points (with current_value) and ideal-only endpoints
+    clipped = []
+    for p in data_points:
+        p_date = datetime.strptime(p["date"], "%Y-%m-%d")
+        if p_date <= horizon:
+            clipped.append(p)
+        elif p.get("current_value") is None:
+            # Keep the first ideal-only point beyond horizon for line continuity
+            if not clipped or clipped[-1].get("current_value") is not None:
+                clipped.append(p)
+            break  # Only keep one
+        # Skip real data points beyond horizon
+
+    # If the last point is a real data point, add an ideal endpoint at horizon
+    # for line continuity (interpolated from original ideal trajectory)
+    if clipped and clipped[-1].get("current_value") is not None:
+        # Find the target endpoint from original data
+        ideal_endpoints = [p for p in data_points if p.get("current_value") is None]
+        if ideal_endpoints:
+            clipped.append(ideal_endpoints[-1])
+
+    result = {**trend_data, "data_points": list(clipped)}
+    return result

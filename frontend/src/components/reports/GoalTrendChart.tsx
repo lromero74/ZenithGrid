@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend,
+  CartesianGrid, Tooltip, Legend, ReferenceArea,
 } from 'recharts'
 import { TrendingUp, X } from 'lucide-react'
 import { reportsApi } from '../../services/api'
@@ -13,6 +13,69 @@ interface GoalTrendChartProps {
   goalName: string
   targetCurrency: 'USD' | 'BTC'
   onClose: () => void
+}
+
+/** Compute the chart's visible end date based on horizon setting. */
+function computeHorizonDate(
+  points: GoalTrendPoint[],
+  targetDate: string,
+  horizon: string,
+): string {
+  if (!points.length) return targetDate
+
+  const realDates = points
+    .filter(p => p.current_value != null)
+    .map(p => new Date(p.date + 'T00:00:00').getTime())
+
+  if (!realDates.length) return targetDate
+
+  const lastDataTs = Math.max(...realDates)
+  const firstTs = new Date(points[0].date + 'T00:00:00').getTime()
+  const targetTs = new Date(targetDate + 'T00:00:00').getTime()
+  const DAY_MS = 86400000
+
+  if (horizon === 'full') return targetDate
+
+  if (horizon !== 'auto') {
+    const days = parseInt(horizon)
+    if (!isNaN(days)) {
+      const h = lastDataTs + days * DAY_MS
+      return new Date(Math.min(h, targetTs)).toISOString().split('T')[0]
+    }
+  }
+
+  // Auto: 1/3 rule
+  const spanDays = (lastDataTs - firstTs) / DAY_MS
+  const lookAhead = Math.max(spanDays / 2, 7)
+  const h = lastDataTs + lookAhead * DAY_MS
+  return new Date(Math.min(h, targetTs)).toISOString().split('T')[0]
+}
+
+/** Clip data points to horizon date, keeping one ideal-only endpoint. */
+function clipPoints(
+  points: GoalTrendPoint[],
+  horizonDate: string,
+): GoalTrendPoint[] {
+  const horizonTs = new Date(horizonDate + 'T00:00:00').getTime()
+  const clipped: GoalTrendPoint[] = []
+
+  for (const p of points) {
+    const pTs = new Date(p.date + 'T00:00:00').getTime()
+    if (pTs <= horizonTs) {
+      clipped.push(p)
+    } else if (p.current_value == null) {
+      clipped.push(p)
+      break
+    }
+  }
+
+  // Ensure we have an ideal-only endpoint for line continuity
+  if (clipped.length && clipped[clipped.length - 1].current_value != null) {
+    const idealEnd = points.find(p => p.current_value == null)
+    if (idealEnd) clipped.push(idealEnd)
+  }
+
+  return clipped
 }
 
 function CustomTooltip({ active, payload, label, targetCurrency }: {
@@ -92,6 +155,38 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
+  // Compute horizon and clipped points
+  const { clippedPoints, fullPoints, horizonDate, showMinimap } = useMemo(() => {
+    if (!data || data.data_points.length < 2) {
+      return { clippedPoints: [], fullPoints: [], horizonDate: '', showMinimap: false }
+    }
+
+    const settings = data.chart_settings
+    const horizon = settings?.chart_horizon || 'auto'
+    const targetDate = data.goal.target_date
+    const allPoints = data.data_points
+
+    const hDate = computeHorizonDate(allPoints, targetDate, horizon)
+    const clipped = clipPoints(allPoints, hDate)
+
+    // Minimap: show when enabled and far from target
+    let showMm = false
+    if (settings?.show_minimap !== false) {
+      const now = new Date()
+      const target = new Date(targetDate + 'T00:00:00')
+      const daysToTarget = Math.floor((target.getTime() - now.getTime()) / 86400000)
+      const threshold = settings?.minimap_threshold_days || 90
+      showMm = daysToTarget > threshold
+    }
+
+    return {
+      clippedPoints: clipped,
+      fullPoints: allPoints,
+      horizonDate: hDate,
+      showMinimap: showMm,
+    }
+  }, [data])
+
   if (isLoading) {
     return (
       <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
@@ -144,9 +239,12 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
   }
 
   // Use the last real data point (skip projected endpoint where on_track is null)
-  const realPoints = points.filter(p => p.on_track != null)
-  const lastPoint = realPoints.length > 0 ? realPoints[realPoints.length - 1] : points[0]
-  const isOnTrack = lastPoint.on_track
+  const realPoints = clippedPoints.filter(p => p.on_track != null)
+  const lastPoint = realPoints.length > 0 ? realPoints[realPoints.length - 1] : clippedPoints[0]
+  const isOnTrack = lastPoint?.on_track
+
+  // Minimap viewport boundaries (date strings)
+  const minimapFirstDate = fullPoints.length > 0 ? fullPoints[0].date : ''
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 sm:p-6">
@@ -174,10 +272,11 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
         </button>
       </div>
 
+      {/* Main chart — clipped to horizon */}
       <div className="h-[280px] sm:h-[320px]">
         {mounted && (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={points} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+            <ComposedChart data={clippedPoints} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
               <defs>
                 <linearGradient id={`goalActual-${goalId}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.15} />
@@ -230,6 +329,57 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* Minimap — full timeline with viewport indicator */}
+      {showMinimap && mounted && fullPoints.length >= 2 && (
+        <div className="mt-2">
+          <div className="text-[10px] text-slate-500 mb-1">Full Timeline</div>
+          <div className="h-[50px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={fullPoints} margin={{ top: 2, right: 5, left: 5, bottom: 2 }}>
+                {/* Viewport highlight */}
+                <ReferenceArea
+                  x1={minimapFirstDate}
+                  x2={horizonDate}
+                  fill="#3b82f6"
+                  fillOpacity={0.08}
+                  stroke="#3b82f6"
+                  strokeOpacity={0.3}
+                />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#475569', fontSize: 8 }}
+                  tickFormatter={formatDate}
+                  interval="preserveStartEnd"
+                  axisLine={{ stroke: '#334155' }}
+                  tickLine={false}
+                />
+                <YAxis hide />
+                {/* Full ideal line */}
+                <Line
+                  type="linear"
+                  dataKey="ideal_value"
+                  stroke="#64748b"
+                  strokeWidth={1}
+                  strokeDasharray="4 3"
+                  dot={false}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+                {/* Full actual line */}
+                <Area
+                  type="monotone"
+                  dataKey="current_value"
+                  stroke="#10b981"
+                  strokeWidth={1.5}
+                  fill="transparent"
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
